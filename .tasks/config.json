@@ -1,0 +1,8 @@
+{
+  "idPrefix": "TASK",
+  "nextId": 8,
+  "states": ["Backlog", "Next", "In Progress", "Done", "Rejected"],
+  "settings": {
+    "aiPlanRequired": false
+  }
+}

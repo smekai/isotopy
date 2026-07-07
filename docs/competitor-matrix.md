@@ -1,7 +1,7 @@
-# Competitor Matrix: Artificial Developer
+# Competitor Matrix: ADHD
 
 **Last updated:** June 2026  
-**Purpose:** Map adjacent products, explain what each category misses, and show where Artificial Developer wins on **ongoing local ownership** — not just first-version generation.
+**Purpose:** Map adjacent products, explain what each category misses, and show where ADHD wins on **ongoing local ownership** — not just first-version generation.
 
 ---
 
@@ -50,7 +50,7 @@
 
 **Gap:** Strong on artifacts and gates; weak on orchestrating implementation, Playwright E2E, deploy, and release as a unified runnable pipeline.
 
-**Our built-in tasks:** Artificial Developer includes repo-native task backlog (`.adev/tasks/`) that feeds the lifecycle pipeline — not a standalone kanban or Jira clone. We compete with spec/task layers only at **intake**; our differentiator remains full lifecycle execution through deploy. Borrow task contracts from Sikula, artifact hierarchy from spec-manager, kanban mental model from spec-intelligence — but tasks spawn runs, not the reverse.
+**Our built-in tasks:** ADHD includes repo-native task backlog (`.adhd/tasks/`) that feeds the lifecycle pipeline — not a standalone kanban or Jira clone. We compete with spec/task layers only at **intake**; our differentiator remains full lifecycle execution through deploy. Borrow task contracts from Sikula, artifact hierarchy from spec-manager, kanban mental model from spec-intelligence — but tasks spawn runs, not the reverse.
 
 ---
 
@@ -149,7 +149,7 @@
 ```
 High control / low-level                    High speed / low-level
         │                                              │
-        │   [Artificial Developer]                   │
+        │   [ADHD]                   │
         │   Local app builder + evolution            │
         │                                              │
         │   Sikula, aiagentflow,                     │

@@ -1,12 +1,14 @@
-# Artificial Developer — Product Discovery
+# ADHD — Artificial Development, Human Directed
 
-Research and planning artifacts for **Artificial Developer** — an open-source, local-first AI app builder for creating the first version of a product and evolving it over time.
+Research and planning artifacts for **ADHD** — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
+
+> Previously named *Artificial Developer* (`artificial_developer`).
 
 ## Summary
 
-**Artificial Developer** is an open-source, local-running app builder for real projects — model-agnostic, deployable to any platform, and built for long-term ownership.
+**ADHD** is an open-source, local-running development team for real projects — model-agnostic, deployable to any platform, and built for long-term ownership.
 
-Most hosted and local app builders excel at getting to a first version quickly. The hard part is everything after: unpredictable changes, lost context, fragile debugging loops, and infrastructure you don't fully control. Artificial Developer targets **ongoing evolution** — the same prepared agents help you build v1 and keep improving the product with predictable, restartable stages.
+Most hosted and local app builders excel at getting to a first version quickly. The hard part is everything after: unpredictable changes, lost context, fragile debugging loops, and infrastructure you don't fully control. ADHD targets **ongoing evolution** — the same prepared agents help you build v1 and keep improving the product with predictable, restartable stages.
 
 **Tradeoff:** you bring more project context (specs, repo history, acceptance criteria). In return you get pre-configured agents you can adjust, artifacts stored in git, built-in task backlog, stage restart, Playwright E2E testing, and deployment adapters for any platform.
 
@@ -21,20 +23,11 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 **What nobody owns cleanly:** open-source + local + model-agnostic + fast first-run + **predictable ongoing evolution** with repo-native context, Playwright E2E, deploy-anywhere, and stage restart.
 
-**Why adjacent tools stay niche:**
-
-| Reason | Detail |
-|--------|--------|
-| Fragmentation | Users must assemble harness + spec tool + CI + deploy themselves |
-| Wrong optimization | App builders optimize demo speed; orchestrators optimize governance; neither optimizes both |
-| Early OSS maturity | Most lifecycle tools are CLI-only, pre-1.0, or single-harness |
-| Context tax | Governing evolution requires richer input — many tools hide that behind chat instead of making it explicit |
-| No durable runtime | Long runs, human gates, and crash recovery need infrastructure most prototypes skip |
-
 ## Documents
 
 | Document | Description |
 |----------|-------------|
+| [prototype-plan.md](docs/prototype-plan.md) | Temporary prototype roadmap (UI-first demo) |
 | [competitor-matrix.md](docs/competitor-matrix.md) | What existing tools miss and why none fully owns ongoing local development |
 | [product-brief.md](docs/product-brief.md) | Positioning, app-builder gap, target user, workflow, differentiation |
 | [mvp-scope.md](docs/mvp-scope.md) | Smallest useful MVP: stages, built-in tasks, Playwright E2E, deploy adapters, dashboard |
@@ -43,8 +36,17 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 ## One-line pitch
 
-> Artificial Developer is an open-source, local-running app builder for real projects: build the first version, keep evolving it with prepared agents, test it end-to-end, and deploy anywhere with your own models and tools.
+> ADHD is an open-source, local-running AI development team for real projects: build the first version, keep evolving it with prepared agents, test it end-to-end, and deploy anywhere with your own models and tools.
 
 ## Status
 
-Planning complete. Ready for implementation kickoff.
+Planning complete. Prototype implementation in progress.
+
+## Quick start (prototype)
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Open http://localhost:5173 for the live pipeline dashboard (API on port 9477).

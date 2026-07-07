@@ -1,4 +1,4 @@
-# Technical Architecture: Artificial Developer
+# Technical Architecture: ADHD
 
 **Version:** 0.1 draft  
 **Stack recommendation:** TypeScript (CLI + API + UI) on Node.js; pnpm workspaces monorepo; Hono API; React/Vite dashboard; file-based persistence. Python acceptable for agent subprocess glue. Optional future Tauri desktop shell — not MVP.
@@ -10,7 +10,7 @@
 ```mermaid
 flowchart TB
     subgraph userMachine [User Machine]
-        CLI[CLI adev]
+        CLI[CLI adhd]
         UI[Local Dashboard]
         Orch[Orchestrator Core]
         TaskMgr[TaskManager]
@@ -83,8 +83,8 @@ Central state machine. Responsibilities:
 
 | File | Purpose |
 |------|---------|
-| `.adev/tasks/index.json` | Machine-readable summaries for fast listing and filtering |
-| `.adev/tasks/<task-id>.md` | Human-readable detail: title, description, acceptance criteria, run history |
+| `.adhd/tasks/index.json` | Machine-readable summaries for fast listing and filtering |
+| `.adhd/tasks/<task-id>.md` | Human-readable detail: title, description, acceptance criteria, run history |
 
 **index.json shape:**
 
@@ -109,7 +109,7 @@ Central state machine. Responsibilities:
 
 **Task statuses:** `backlog` | `ready` | `in_progress` | `blocked` | `done` | `rejected`
 
-**Task markdown format** (`.adev/tasks/TASK-001.md`):
+**Task markdown format** (`.adhd/tasks/TASK-001.md`):
 
 ```markdown
 # TASK-001: Add dark mode toggle
@@ -145,7 +145,7 @@ When a run completes or fails, TaskManager can update task status (configurable;
 
 ### 3. Workflow state
 
-**File:** `.adev/runs/<run-id>/state.json`
+**File:** `.adhd/runs/<run-id>/state.json`
 
 ```json
 {
@@ -156,8 +156,8 @@ When a run completes or fails, TaskManager can update task status (configurable;
   "currentStage": "implementation",
   "inputRef": "intake/raw-input.md",
   "worktree": {
-    "path": ".adev/worktrees/a1b2c3",
-    "branch": "adev/dark-mode-toggle-a1b2c3",
+    "path": ".adhd/worktrees/a1b2c3",
+    "branch": "adhd/dark-mode-toggle-a1b2c3",
     "baseBranch": "main"
   },
   "stages": {
@@ -189,7 +189,7 @@ When a run completes or fails, TaskManager can update task status (configurable;
 
 ### 4. Event log (audit trail)
 
-**File:** `.adev/runs/<run-id>/events.jsonl`
+**File:** `.adhd/runs/<run-id>/events.jsonl`
 
 One JSON object per line:
 
@@ -223,7 +223,7 @@ Enables dashboard live tail and post-run forensics.
 
 ```
 ┌─────────────────────────────────────────┐
-│  Artificial Developer domain layer      │
+│  ADHD domain layer      │
 │  stages, agents, artifacts, gates,      │
 │  worktrees, harness + deploy adapters   │
 ├─────────────────────────────────────────┤
@@ -250,7 +250,7 @@ sequenceDiagram
     participant WT as Worktree
     participant Harness as Harness Adapter
 
-    Orch->>Git: git worktree add .adev/worktrees/runId -b adev/slug-runId
+    Orch->>Git: git worktree add .adhd/worktrees/runId -b adhd/slug-runId
     Orch->>Harness: run(worktreePath, implementationPrompt)
     Harness->>WT: edit files, commit
     Orch->>Git: run tests in worktree
@@ -277,8 +277,8 @@ Two agent kinds:
 
 ### LLM stage agents (requirements, design, review, release, deploy)
 
-- Prompt templates in `.adev/agents/<stage>.md`
-- Context injected: prior artifacts, project `AGENTS.md`, `.adev/context/*`
+- Prompt templates in `.adhd/agents/<stage>.md`
+- Context injected: prior artifacts, project `AGENTS.md`, `.adhd/context/*`
 - Provider via LiteLLM or direct API (Anthropic, OpenAI, Ollama)
 - Output written to stage artifact paths; parsed for gate checks
 
@@ -393,10 +393,10 @@ harness:
 
 | Command | Behavior |
 |---------|----------|
-| `adev run` (new) | New `runId`, fresh state |
-| `adev resume <runId>` | Continue from `currentStage` if paused/failed |
-| `adev restart <runId> --from <stage>` | Mark stage and all downstream as `pending`; keep upstream artifacts |
-| `adev restart <runId> --from <stage> --fresh` | Delete downstream artifacts; re-run stage from scratch |
+| `adhd run` (new) | New `runId`, fresh state |
+| `adhd resume <runId>` | Continue from `currentStage` if paused/failed |
+| `adhd restart <runId> --from <stage>` | Mark stage and all downstream as `pending`; keep upstream artifacts |
+| `adhd restart <runId> --from <stage> --fresh` | Delete downstream artifacts; re-run stage from scratch |
 
 **Implementation detail:** Restart invalidates stage entries in `state.json` from the target stage forward; does not delete upstream artifact files (unless `--fresh`).
 
@@ -406,12 +406,12 @@ harness:
 
 | Artifact type | Location | Git tracked? |
 |---------------|----------|--------------|
-| Tasks | `.adev/tasks/` | Optional (gitignore by default) |
-| Run state, events | `.adev/runs/` | Optional (gitignore by default) |
+| Tasks | `.adhd/tasks/` | Optional (gitignore by default) |
+| Run state, events | `.adhd/runs/` | Optional (gitignore by default) |
 | Approved specs | `specs/<slug>/` | Yes (on user opt-in) |
-| Code changes | `adev/*` branch | Yes (normal git) |
-| Agent prompts | `.adev/agents/` | Yes (team customization) |
-| Project context | `.adev/context/` | Yes |
+| Code changes | `adhd/*` branch | Yes (normal git) |
+| Agent prompts | `.adhd/agents/` | Yes (team customization) |
+| Project context | `.adhd/context/` | Yes |
 
 **Principle:** Machine state is local and reproducible; human-approved artifacts promote into tracked repo paths.
 
@@ -440,7 +440,7 @@ harness:
 └─────────────────────────────────────────┘
 ```
 
-Single binary or `adev ui` spawns API + static UI. No external database — reads `index.json`, task markdown, `state.json`, and `events.jsonl` directly.
+Single binary or `adhd ui` spawns API + static UI. No external database — reads `index.json`, task markdown, `state.json`, and `events.jsonl` directly.
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 
@@ -448,7 +448,7 @@ Single binary or `adev ui` spawns API + static UI. No external database — read
 
 ## Default pipeline definition
 
-**File:** `.adev/workflows/default.yaml`
+**File:** `.adhd/workflows/default.yaml`
 
 ```yaml
 id: default
@@ -505,14 +505,14 @@ Custom workflows: copy YAML, edit stage list (v0.2 visual editor).
 ```
 artificial-developer/
   packages/
-    cli/              # adev CLI entry (Commander or CAC)
+    cli/              # adhd CLI entry (Commander or CAC)
     core/             # orchestrator, TaskManager, state machine, gates
     adapters/         # harness adapters
     agents/           # stage agent runners
     server/           # Hono local API for dashboard
     ui/               # React/Vite dashboard SPA
   templates/
-    default/          # scaffold .adev/ on init (incl. tasks/)
+    default/          # scaffold .adhd/ on init (incl. tasks/)
   docs/               # product docs (this folder)
 ```
 
@@ -546,7 +546,7 @@ artificial-developer/
 | CLI framework | Commander or CAC | Lightweight, widely used |
 | API framework | Hono | Compact, typed, good SSE support |
 | UI | React + Vite | Fast dev, aligns with dashboard needs |
-| Persistence | File-based `.adev/` | No DB for MVP; index.json + markdown for tasks |
+| Persistence | File-based `.adhd/` | No DB for MVP; index.json + markdown for tasks |
 | Desktop packaging | Defer (Tauri later) | Server + Web UI sufficient; Tauri can wrap same stack |
 | LLM abstraction | LiteLLM or Vercel AI SDK | Multi-provider, local Ollama |
 | Worktree at run start vs impl stage | At implementation | Spec stages don't need branch |

@@ -1,0 +1,18 @@
+{
+  "name": "adhd",
+  "private": true,
+  "version": "0.0.1",
+  "description": "ADHD — Artificial Development, Human Directed",
+  "scripts": {
+    "dev": "concurrently -n server,ui -c blue,green \"pnpm --filter @adhd/server dev\" \"pnpm --filter @adhd/ui dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

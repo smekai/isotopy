@@ -1,6 +1,6 @@
-# Product Brief: Artificial Developer
+# Product Brief: ADHD
 
-**Product name:** Artificial Developer  
+**Product name:** ADHD (Artificial Development, Human Directed)  
 **One-liner:** An open-source, local-first app builder and evolution workflow — build the first version, test end-to-end, deploy anywhere, and keep improving with prepared agents and your choice of models and coding tools.
 
 ---
@@ -34,7 +34,7 @@ A **local-first AI app builder and evolution workflow**: predefined, editable st
 
 ## The App Builder Gap (Our Wedge)
 
-| Phase | Hosted app builders | Artificial Developer |
+| Phase | Hosted app builders | ADHD |
 |-------|------------------------|----------------------|
 | First version | Fast, impressive demos | Comparable speed with prepared agents |
 | Iteration 2+ | Unpredictable side effects, debug loops | Restartable stages, explicit artifacts |
@@ -84,7 +84,7 @@ flowchart LR
     deploy --> task
 ```
 
-**Input paths:** Tasks from the built-in backlog (`adev task create`, dashboard), plain text (`adev run "..."`), markdown files, or GitHub issue URLs. All paths normalize through the intake stage before requirements.
+**Input paths:** Tasks from the built-in backlog (`adhd task create`, dashboard), plain text (`adhd run "..."`), markdown files, or GitHub issue URLs. All paths normalize through the intake stage before requirements.
 
 | Stage | Agent role | Primary outputs |
 |-------|------------|-----------------|
@@ -118,7 +118,7 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 
 **Positioning statement:**
 
-> For developers who liked hosted app-builder speed but hit a wall on iteration, Artificial Developer is the open-source local alternative that builds the first version and keeps the project evolvable — with prepared agents, Playwright E2E, deploy-anywhere adapters, and restartable stages — without replacing Cursor or Claude Code.
+> For developers who liked hosted app-builder speed but hit a wall on iteration, ADHD is the open-source local alternative that builds the first version and keeps the project evolvable — with prepared agents, Playwright E2E, deploy-anywhere adapters, and restartable stages — without replacing Cursor or Claude Code.
 
 ---
 
@@ -129,7 +129,7 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 3. **Auditability** — State file plus git history show what each agent did and why.
 4. **Speed with guardrails** — Automation where safe; human gates where judgment matters.
 5. **No lock-in** — Markdown specs, standard git, pluggable agents, your deployment target.
-6. **Persistent backlog** — Tasks live in the repo (`.adev/tasks/`), link to runs, and survive across sessions — not a separate Jira clone, but intake that feeds the pipeline.
+6. **Persistent backlog** — Tasks live in the repo (`.adhd/tasks/`), link to runs, and survive across sessions — not a separate Jira clone, but intake that feeds the pipeline.
 
 ---
 
@@ -172,4 +172,4 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 1. Ship MVP scope (see mvp-scope.md)
 2. Implement architecture with Aiki workflow runtime (see technical-architecture.md)
 3. Validate with 3-5 developers running one real feature end-to-end including deploy
-4. Publish docs and open-source repo under Artificial Developer
+4. Publish docs and open-source repo under ADHD

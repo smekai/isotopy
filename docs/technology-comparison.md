@@ -1,6 +1,6 @@
 # Technology Comparison: TypeScript vs Python vs Rust vs Go
 
-**Purpose:** Compare implementation stacks for Artificial Developer across multiplatform UI, workflow orchestration, runtime speed, AI-agent integration, and RPC/gRPC fit.
+**Purpose:** Compare implementation stacks for ADHD across multiplatform UI, workflow orchestration, runtime speed, AI-agent integration, and RPC/gRPC fit.
 
 ## Executive Recommendation
 
@@ -54,13 +54,13 @@ This keeps the product simple, cross-platform, web-friendly, and close to the cu
 - CPU-heavy work should not run in the main Node process.
 - Native binary distribution is less clean than Go/Rust unless using a packager.
 
-### Fit For Artificial Developer
+### Fit For ADHD
 
 TypeScript is the best MVP default because the product is dashboard-heavy, agent-adapter-heavy, and workflow-driven rather than CPU-bound. It also keeps shared domain types close to the UI and API.
 
 Recommended usage:
 
-- `packages/cli` - `adev` CLI
+- `packages/cli` - `adhd` CLI
 - `packages/core` - orchestrator, TaskManager, run state, adapter contracts
 - `packages/server` - Hono local API
 - `packages/ui` - React/Vite dashboard
@@ -82,7 +82,7 @@ Recommended usage:
 - Dependency conflicts are more likely when users already have Python environments.
 - Runtime speed is fine for orchestration, but worse for file-heavy or concurrent worker scenarios unless carefully structured.
 
-### Fit For Artificial Developer
+### Fit For ADHD
 
 Python should be optional, not the primary product runtime. It is useful as subprocess glue for model tooling, evaluation, prompt experiments, or integrations where Python libraries are clearly better.
 
@@ -110,7 +110,7 @@ Recommended usage:
 - Workflow engine ecosystem is less mature for durable, human-in-the-loop product workflows.
 - UI still likely becomes Web UI inside Tauri, which means TypeScript remains necessary.
 
-### Fit For Artificial Developer
+### Fit For ADHD
 
 Rust is a strong future sidecar/runtime candidate, especially for a secure local daemon or desktop shell, but it is too heavy as the main MVP language.
 
@@ -139,7 +139,7 @@ Recommended usage later:
 - If the UI is TypeScript anyway, Go introduces a cross-language boundary from day one.
 - Less natural for prompt/template-heavy agent product code than TypeScript/Python.
 
-### Fit For Artificial Developer
+### Fit For ADHD
 
 Go is the strongest alternative if the product becomes a **local daemon first** with strict process supervision and gRPC worker APIs. For the MVP, it adds complexity because the UI and much of the AI-agent ecosystem still pull toward TypeScript.
 
