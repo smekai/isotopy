@@ -2,7 +2,7 @@
 
 Research and planning artifacts for **ADHD** — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
 
-> Previously named *Artificial Developer* (`artificial_developer`).
+> Previously named *Artificial Developer*. Local folder and repo: `adhd`.
 
 ## Summary
 
