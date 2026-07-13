@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type {
+  LogLevel,
   PipelineDefinition,
   RunEvent,
   RunState,
+  StageDefinition,
   StageState,
 } from "@adhd/core";
 import {
   DEMO_PIPELINES,
+  agentForStage,
   createInitialRunState,
+  flattenPipelineStages,
 } from "@adhd/core";
 
 type RunListener = (event: RunEvent) => void;
@@ -18,11 +22,18 @@ interface SimulationOptions {
   failProbability?: number;
 }
 
+export interface StartRunOptions extends SimulationOptions {
+  task?: string;
+  disabledStages?: string[];
+}
+
 const DEFAULT_OPTIONS: Required<SimulationOptions> = {
   minDurationMs: 2000,
   maxDurationMs: 8000,
   failProbability: 0.05,
 };
+
+type StageOutcome = "passed" | "failed" | "cancelled";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -39,6 +50,10 @@ function randomBetween(min: number, max: number): number {
 export class MockOrchestrator {
   private readonly runs = new Map<string, RunState>();
   private readonly listeners = new Map<string, Set<RunListener>>();
+  private readonly runOptions = new Map<string, Required<SimulationOptions>>();
+  private readonly cancelled = new Set<string>();
+  private readonly gateWaiters = new Map<string, () => void>();
+  private nextRunNumber = 1;
 
   listPipelines(): PipelineDefinition[] {
     return DEMO_PIPELINES;
@@ -72,19 +87,156 @@ export class MockOrchestrator {
 
   async startRun(
     pipelineId: string,
-    options: SimulationOptions = {},
+    options: StartRunOptions = {},
   ): Promise<RunState> {
     const pipeline = this.getPipeline(pipelineId);
     if (!pipeline) {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
 
+    const { task, disabledStages, ...simOptions } = options;
     const runId = randomUUID().slice(0, 8);
-    const run = createInitialRunState(runId, pipeline);
+    const run = createInitialRunState(
+      runId,
+      this.nextRunNumber++,
+      pipeline,
+      task,
+      disabledStages,
+    );
     this.runs.set(runId, run);
 
-    const merged = { ...DEFAULT_OPTIONS, ...options };
+    const merged = { ...DEFAULT_OPTIONS, ...simOptions };
+    this.runOptions.set(runId, merged);
     void this.simulateRun(runId, pipeline, merged);
+    return structuredClone(run);
+  }
+
+  approveGate(runId: string, stageId: string): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stage = this.getStage(runId, stageId);
+    if (stage.status !== "awaiting") {
+      throw new Error(`Stage ${stageId} is not awaiting approval`);
+    }
+
+    const profession = agentForStage(stageId).profession;
+    stage.status = "passed";
+    stage.completedAt = nowIso();
+    run.status = "running";
+    this.log(runId, stageId, "pass", `✓ Gate approved — ${profession} cleared to proceed`);
+    this.emit({
+      ts: nowIso(),
+      type: "stage.approved",
+      runId,
+      stageId,
+      status: "passed",
+      message: `Gate approved for ${profession}`,
+    });
+
+    const waiterKey = `${runId}:${stageId}`;
+    const resume = this.gateWaiters.get(waiterKey);
+    this.gateWaiters.delete(waiterKey);
+    resume?.();
+    return structuredClone(run);
+  }
+
+  abortRun(runId: string): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (
+      run.status === "completed" ||
+      run.status === "failed" ||
+      run.status === "cancelled"
+    ) {
+      throw new Error(`Run ${runId} is already finished`);
+    }
+
+    this.cancelled.add(runId);
+    for (const [key, resume] of [...this.gateWaiters]) {
+      if (key.startsWith(`${runId}:`)) {
+        this.gateWaiters.delete(key);
+        resume();
+      }
+    }
+
+    for (const stage of run.stages) {
+      if (
+        stage.status === "pending" ||
+        stage.status === "running" ||
+        stage.status === "awaiting"
+      ) {
+        stage.status = "skipped";
+        this.emit({
+          ts: nowIso(),
+          type: "stage.skipped",
+          runId,
+          stageId: stage.id,
+          status: "skipped",
+        });
+      }
+    }
+
+    run.status = "cancelled";
+    run.completedAt = nowIso();
+    this.emit({
+      ts: nowIso(),
+      type: "run.completed",
+      runId,
+      status: "cancelled",
+      message: "Run aborted",
+    });
+    return structuredClone(run);
+  }
+
+  restartRun(runId: string, stageId: string): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (run.status !== "failed" && run.status !== "cancelled") {
+      throw new Error(`Run ${runId} can only be restarted after failing or being aborted`);
+    }
+    const pipeline = this.getPipeline(run.pipelineId);
+    if (!pipeline) {
+      throw new Error(`Unknown pipeline: ${run.pipelineId}`);
+    }
+    const startIndex = run.stages.findIndex((stage) => stage.id === stageId);
+    if (startIndex === -1) {
+      throw new Error(`Stage not found: ${stageId}`);
+    }
+    const disabled = new Set(run.disabledStages ?? []);
+    if (disabled.has(stageId)) {
+      throw new Error(`Stage ${stageId} is disabled for this run`);
+    }
+
+    this.cancelled.delete(runId);
+    for (const stage of run.stages.slice(startIndex)) {
+      if (disabled.has(stage.id)) {
+        continue;
+      }
+      stage.status = "pending";
+      stage.logs = [];
+      stage.startedAt = undefined;
+      stage.completedAt = undefined;
+    }
+    run.status = "running";
+    run.completedAt = undefined;
+
+    const profession = agentForStage(stageId).profession;
+    this.emit({
+      ts: nowIso(),
+      type: "run.started",
+      runId,
+      status: "running",
+      message: `Restarted from ${profession}`,
+    });
+
+    const options = this.runOptions.get(runId) ?? DEFAULT_OPTIONS;
+    void this.runStages(runId, pipeline, options, stageId);
     return structuredClone(run);
   }
 
@@ -96,6 +248,18 @@ export class MockOrchestrator {
     for (const listener of listeners) {
       listener(event);
     }
+  }
+
+  private log(
+    runId: string,
+    stageId: string,
+    level: LogLevel,
+    message: string,
+  ): void {
+    const stage = this.getStage(runId, stageId);
+    const ts = nowIso();
+    stage.logs.push({ ts, level, message });
+    this.emit({ ts, type: "stage.log", runId, stageId, message, level });
   }
 
   private updateRun(runId: string, updater: (run: RunState) => void): RunState {
@@ -118,10 +282,16 @@ export class MockOrchestrator {
 
   private async simulateStage(
     runId: string,
-    stageId: string,
+    stageDef: StageDefinition,
     options: Required<SimulationOptions>,
-  ): Promise<boolean> {
-    const stage = this.getStage(runId, stageId);
+  ): Promise<StageOutcome> {
+    const run = this.runs.get(runId);
+    const stage = this.getStage(runId, stageDef.id);
+    if (!run || stage.status === "skipped") {
+      return "passed";
+    }
+
+    const profession = agentForStage(stageDef.id).profession;
     stage.status = "running";
     stage.startedAt = nowIso();
 
@@ -129,69 +299,125 @@ export class MockOrchestrator {
       ts: nowIso(),
       type: "stage.started",
       runId,
-      stageId,
+      stageId: stageDef.id,
       status: "running",
     });
 
-    const logLines = [
-      `${stage.label} agent starting...`,
-      `Loading context for ${stageId}`,
-      `Executing ${stage.label.toLowerCase()} workflow step`,
-      `${stage.label} agent finishing up`,
+    const logLines: Array<[LogLevel, string]> = [
+      ["info", `${profession} online · run #${run.number}`],
+      ["info", `Reading context for ${stage.label.toLowerCase()}`],
+      ["run", `▶ Executing ${stage.label.toLowerCase()} workflow`],
+      ["info", `${profession} finishing up`],
     ];
 
     const duration = randomBetween(options.minDurationMs, options.maxDurationMs);
     const stepDelay = Math.max(300, Math.floor(duration / logLines.length));
 
-    for (const line of logLines) {
+    for (const [level, message] of logLines) {
       await sleep(stepDelay);
-      stage.logs.push(line);
-      this.emit({
-        ts: nowIso(),
-        type: "stage.log",
-        runId,
-        stageId,
-        message: line,
-      });
+      if (this.cancelled.has(runId)) {
+        return "cancelled";
+      }
+      this.log(runId, stageDef.id, level, message);
     }
 
     const failed = Math.random() < options.failProbability;
+    if (failed) {
+      stage.completedAt = nowIso();
+      stage.status = "failed";
+      this.log(runId, stageDef.id, "fail", `✗ ${profession} failed (simulated)`);
+      this.emit({
+        ts: nowIso(),
+        type: "stage.failed",
+        runId,
+        stageId: stageDef.id,
+        status: "failed",
+        message: `${profession} failed (simulated)`,
+      });
+      return "failed";
+    }
+
+    if (stageDef.gateAfter) {
+      stage.status = "awaiting";
+      this.updateRun(runId, (current) => {
+        current.status = "awaiting";
+      });
+      this.log(runId, stageDef.id, "warn", `${profession} is waiting for your approval`);
+      this.emit({
+        ts: nowIso(),
+        type: "stage.awaiting",
+        runId,
+        stageId: stageDef.id,
+        status: "awaiting",
+        message: `${profession} is waiting for your approval`,
+      });
+      await new Promise<void>((resolve) => {
+        this.gateWaiters.set(`${runId}:${stageDef.id}`, resolve);
+      });
+      if (this.cancelled.has(runId)) {
+        return "cancelled";
+      }
+      return "passed";
+    }
+
     stage.completedAt = nowIso();
-    stage.status = failed ? "failed" : "passed";
+    stage.status = "passed";
+    this.log(runId, stageDef.id, "pass", `✓ ${profession} finished — ${stage.label.toLowerCase()} complete`);
+    this.emit({
+      ts: nowIso(),
+      type: "stage.completed",
+      runId,
+      stageId: stageDef.id,
+      status: "passed",
+      message: `${profession} completed`,
+    });
+    return "passed";
+  }
+
+  private async runStages(
+    runId: string,
+    pipeline: PipelineDefinition,
+    options: Required<SimulationOptions>,
+    startStageId?: string,
+  ): Promise<void> {
+    const stageDefs = flattenPipelineStages(pipeline);
+    let started = startStageId == null;
+    let success = true;
+
+    for (const stageDef of stageDefs) {
+      if (!started) {
+        if (stageDef.id === startStageId) {
+          started = true;
+        } else {
+          continue;
+        }
+      }
+      const outcome = await this.simulateStage(runId, stageDef, options);
+      if (outcome === "cancelled") {
+        return;
+      }
+      if (outcome === "failed") {
+        success = false;
+        break;
+      }
+    }
+
+    if (this.cancelled.has(runId)) {
+      return;
+    }
+
+    this.updateRun(runId, (run) => {
+      run.status = success ? "completed" : "failed";
+      run.completedAt = nowIso();
+    });
 
     this.emit({
       ts: nowIso(),
-      type: failed ? "stage.failed" : "stage.completed",
+      type: "run.completed",
       runId,
-      stageId,
-      status: stage.status,
-      message: failed
-        ? `${stage.label} agent failed (simulated)`
-        : `${stage.label} agent completed`,
+      status: success ? "completed" : "failed",
+      message: success ? "Run completed successfully" : "Run failed",
     });
-
-    return !failed;
-  }
-
-  private async simulateGroup(
-    runId: string,
-    group: PipelineDefinition["groups"][number],
-    options: Required<SimulationOptions>,
-  ): Promise<boolean> {
-    if (group.mode === "parallel") {
-      const results = await Promise.all(
-        group.stages.map((stage) => this.simulateStage(runId, stage.id, options)),
-      );
-      return results.every(Boolean);
-    }
-
-    for (const stage of group.stages) {
-      const ok = await this.simulateStage(runId, stage.id, options);
-      if (!ok) {
-        return false;
-      }
-    }
-    return true;
   }
 
   private async simulateRun(
@@ -211,27 +437,7 @@ export class MockOrchestrator {
       message: `Started pipeline: ${pipeline.name}`,
     });
 
-    let success = true;
-    for (const group of pipeline.groups) {
-      const groupOk = await this.simulateGroup(runId, group, options);
-      if (!groupOk) {
-        success = false;
-        break;
-      }
-    }
-
-    this.updateRun(runId, (run) => {
-      run.status = success ? "completed" : "failed";
-      run.completedAt = nowIso();
-    });
-
-    this.emit({
-      ts: nowIso(),
-      type: "run.completed",
-      runId,
-      status: success ? "completed" : "failed",
-      message: success ? "Run completed successfully" : "Run failed",
-    });
+    await this.runStages(runId, pipeline, options);
   }
 }
 

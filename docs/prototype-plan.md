@@ -53,6 +53,7 @@ packages/
 
 **Pipeline chart (UI):**
 
+- Workspace design brief: [design-desktop-shell.md](design-desktop-shell.md) (TASK-008) — conversational pipeline workspace, generated agentically in Figma
 - Hand-rolled SVG chart with live status colors
 - Side panel with live scrolling logs per agent
 - "Start run" button plus toggle between sequential and parallel demo pipelines

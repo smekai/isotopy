@@ -1,34 +1,54 @@
-import type { PipelineDefinition, RunEvent, RunState } from "@adhd/core";
+import type { RunEvent, RunState } from "@adhd/core";
+import { RUN_EVENT_TYPES } from "@adhd/core";
 
 const API_BASE = "";
 
-export async function fetchPipelines(): Promise<PipelineDefinition[]> {
-  const response = await fetch(`${API_BASE}/pipelines`);
-  if (!response.ok) {
-    throw new Error("Failed to load pipelines");
-  }
-  return response.json() as Promise<PipelineDefinition[]>;
-}
-
-export async function startRun(pipelineId: string): Promise<RunState> {
-  const response = await fetch(`${API_BASE}/runs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pipelineId }),
-  });
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? "Failed to start run");
+    throw new Error(body.error ?? `Request failed: ${path}`);
   }
-  return response.json() as Promise<RunState>;
+  return response.json() as Promise<T>;
 }
 
-export async function fetchRun(runId: string): Promise<RunState> {
-  const response = await fetch(`${API_BASE}/runs/${runId}`);
-  if (!response.ok) {
-    throw new Error("Failed to load run");
-  }
-  return response.json() as Promise<RunState>;
+function postJson<T>(path: string, body?: unknown): Promise<T> {
+  return requestJson<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+export function fetchRuns(): Promise<RunState[]> {
+  return requestJson<RunState[]>("/runs");
+}
+
+export function fetchRun(runId: string): Promise<RunState> {
+  return requestJson<RunState>(`/runs/${runId}`);
+}
+
+export interface StartRunOptions {
+  pipelineId?: string;
+  task?: string;
+  disabledStages?: string[];
+  failProbability?: number;
+}
+
+export function startRun(options: StartRunOptions = {}): Promise<RunState> {
+  return postJson<RunState>("/runs", { pipelineId: "sequential", ...options });
+}
+
+export function approveGate(runId: string, stageId: string): Promise<RunState> {
+  return postJson<RunState>(`/runs/${runId}/gates/${stageId}/approve`);
+}
+
+export function abortRun(runId: string): Promise<RunState> {
+  return postJson<RunState>(`/runs/${runId}/abort`);
+}
+
+export function restartRun(runId: string, stageId: string): Promise<RunState> {
+  return postJson<RunState>(`/runs/${runId}/restart`, { stageId });
 }
 
 export function subscribeRunEvents(
@@ -37,25 +57,7 @@ export function subscribeRunEvents(
 ): () => void {
   const source = new EventSource(`${API_BASE}/runs/${runId}/events`);
 
-  source.onmessage = (message) => {
-    if (!message.data) {
-      return;
-    }
-    try {
-      onEvent(JSON.parse(message.data) as RunEvent);
-    } catch {
-      // ignore malformed events
-    }
-  };
-
-  for (const type of [
-    "run.started",
-    "run.completed",
-    "stage.started",
-    "stage.log",
-    "stage.completed",
-    "stage.failed",
-  ]) {
+  for (const type of RUN_EVENT_TYPES) {
     source.addEventListener(type, (message) => {
       if (!(message instanceof MessageEvent) || !message.data) {
         return;

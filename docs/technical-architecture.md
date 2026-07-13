@@ -347,6 +347,8 @@ Deploy stage runs after release gate approval. Production deploy requires explic
 
 ## Harness adapter layer
 
+For when to use Claude Code vs Cursor and stage-to-tool mapping, see [model-and-harness-strategy.md](model-and-harness-strategy.md).
+
 ```mermaid
 classDiagram
     class HarnessAdapter {

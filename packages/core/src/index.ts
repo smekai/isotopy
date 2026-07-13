@@ -1,9 +1,51 @@
-export type StageStatus = "pending" | "running" | "passed" | "failed";
-export type RunStatus = "pending" | "running" | "completed" | "failed";
+export type StageStatus =
+  | "pending"
+  | "running"
+  | "passed"
+  | "failed"
+  | "awaiting"
+  | "skipped";
+export type RunStatus =
+  | "pending"
+  | "running"
+  | "awaiting"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type LogLevel = "info" | "run" | "pass" | "fail" | "warn" | "error";
+
+export interface StageLogEntry {
+  ts: string;
+  level: LogLevel;
+  message: string;
+}
+
+export interface AgentDefinition {
+  stageId: string;
+  profession: string;
+  glyph: string;
+}
+
+export const AGENTS: Record<string, AgentDefinition> = {
+  intake: { stageId: "intake", profession: "Project Manager", glyph: "◈" },
+  requirements: { stageId: "requirements", profession: "Business Analyst", glyph: "◉" },
+  design: { stageId: "design", profession: "Software Architect", glyph: "◇" },
+  implementation: { stageId: "implementation", profession: "Developer", glyph: "⬡" },
+  review: { stageId: "review", profession: "Code Reviewer", glyph: "◎" },
+  test: { stageId: "test", profession: "QA Engineer", glyph: "⊕" },
+  release: { stageId: "release", profession: "Release Manager", glyph: "◆" },
+  deploy: { stageId: "deploy", profession: "SRE", glyph: "▲" },
+};
+
+export function agentForStage(stageId: string): AgentDefinition {
+  return AGENTS[stageId] ?? { stageId, profession: stageId, glyph: "◈" };
+}
 
 export interface StageDefinition {
   id: string;
   label: string;
+  gateAfter?: boolean;
 }
 
 export interface PipelineGroup {
@@ -22,16 +64,19 @@ export interface StageState {
   id: string;
   label: string;
   status: StageStatus;
-  logs: string[];
+  logs: StageLogEntry[];
   startedAt?: string;
   completedAt?: string;
 }
 
 export interface RunState {
   id: string;
+  number: number;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
+  task?: string;
+  disabledStages?: string[];
   stages: StageState[];
   createdAt: string;
   completedAt?: string;
@@ -43,7 +88,22 @@ export type RunEventType =
   | "stage.started"
   | "stage.log"
   | "stage.completed"
-  | "stage.failed";
+  | "stage.failed"
+  | "stage.awaiting"
+  | "stage.approved"
+  | "stage.skipped";
+
+export const RUN_EVENT_TYPES: RunEventType[] = [
+  "run.started",
+  "run.completed",
+  "stage.started",
+  "stage.log",
+  "stage.completed",
+  "stage.failed",
+  "stage.awaiting",
+  "stage.approved",
+  "stage.skipped",
+];
 
 export interface RunEvent {
   ts: string;
@@ -52,16 +112,17 @@ export interface RunEvent {
   stageId?: string;
   message?: string;
   status?: StageStatus | RunStatus;
+  level?: LogLevel;
 }
 
-const LIFECYCLE_STAGES: StageDefinition[] = [
+export const LIFECYCLE_STAGES: StageDefinition[] = [
   { id: "intake", label: "Intake" },
-  { id: "requirements", label: "Requirements" },
-  { id: "design", label: "Design" },
+  { id: "requirements", label: "Requirements", gateAfter: true },
+  { id: "design", label: "Design", gateAfter: true },
   { id: "implementation", label: "Implementation" },
   { id: "review", label: "Review" },
   { id: "test", label: "Test" },
-  { id: "release", label: "Release" },
+  { id: "release", label: "Release", gateAfter: true },
   { id: "deploy", label: "Deploy" },
 ];
 
@@ -77,41 +138,7 @@ export const SEQUENTIAL_PIPELINE: PipelineDefinition = {
   ],
 };
 
-export const PARALLEL_PIPELINE: PipelineDefinition = {
-  id: "parallel",
-  name: "Parallel + sequential mix",
-  description:
-    "Requirements and design run in parallel, then implementation chain, then release and deploy in parallel.",
-  groups: [
-    {
-      mode: "parallel",
-      stages: [
-        { id: "requirements", label: "Requirements" },
-        { id: "design", label: "Design" },
-      ],
-    },
-    {
-      mode: "sequential",
-      stages: [
-        { id: "implementation", label: "Implementation" },
-        { id: "review", label: "Review" },
-        { id: "test", label: "Test" },
-      ],
-    },
-    {
-      mode: "parallel",
-      stages: [
-        { id: "release", label: "Release" },
-        { id: "deploy", label: "Deploy" },
-      ],
-    },
-  ],
-};
-
-export const DEMO_PIPELINES: PipelineDefinition[] = [
-  SEQUENTIAL_PIPELINE,
-  PARALLEL_PIPELINE,
-];
+export const DEMO_PIPELINES: PipelineDefinition[] = [SEQUENTIAL_PIPELINE];
 
 export function flattenPipelineStages(
   pipeline: PipelineDefinition,
@@ -121,18 +148,25 @@ export function flattenPipelineStages(
 
 export function createInitialRunState(
   runId: string,
+  number: number,
   pipeline: PipelineDefinition,
+  task?: string,
+  disabledStages?: string[],
 ): RunState {
+  const disabled = new Set(disabledStages ?? []);
   return {
     id: runId,
+    number,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",
+    task,
+    disabledStages,
     createdAt: new Date().toISOString(),
     stages: flattenPipelineStages(pipeline).map((stage) => ({
       id: stage.id,
       label: stage.label,
-      status: "pending",
+      status: disabled.has(stage.id) ? "skipped" : "pending",
       logs: [],
     })),
   };

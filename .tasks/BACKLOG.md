@@ -1,5 +1,20 @@
 # Backlog
 
+## TASK-008: Design the conversational pipeline workspace (Figma-agentic)
+**Priority:** P1 | **Tags:** design, ux, ui, figma, design-system, voice
+
+Design the ADHD desktop workspace as a **UI + speaking interface for directing an AI development team** across the full lifecycle: the fixed pipeline canvas is the hero (and *is* the stage/run view), with conversational + voice steering at two scopes — per-stage and whole-pipeline. Generated agentically in Figma from a prompt; the chosen direction replaces the old desktop-shell design; fresh Agent-proposed design system. Full brief in [docs/design-desktop-shell.md](../docs/design-desktop-shell.md); prompt in [docs/figma-agent-prompt.md](../docs/figma-agent-prompt.md).
+
+### Deliverables
+- Figma Agent generation prompt ([docs/figma-agent-prompt.md](../docs/figma-agent-prompt.md))
+- 3 generated design options in Figma; one selected to replace the old design
+- Fresh design system (color / type / spacing / status + gate + voice tokens) as Figma styles/variables
+- Primary screens: pipeline canvas, focused stage (artifacts / logs / reasoning + per-stage steering), pipeline-level steering, setup/settings, human-gate approve/reject, run history/restart, empty state
+- Voice affordance spec (mic control; idle/listening/transcribing/speaking states)
+- Engineer handoff notes — map to `packages/ui`; SSE live status; Tauri + browser parity (no implementation in this task)
+
+---
+
 ## TASK-001: Rebrand to ADHD (docs + repo)
 **Priority:** P0 | **Tags:** docs, branding
 
