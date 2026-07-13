@@ -1,6 +1,6 @@
 # Competitor Matrix: ADHD
 
-**Last updated:** June 2026  
+**Last updated:** July 2026  
 **Purpose:** Map adjacent products, explain what each category misses, and show where ADHD wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -15,6 +15,7 @@
 | **Enterprise lifecycle platforms** | Org-scale agent coordination | Adjacent (cloud/team-first) |
 | **Agent frameworks** | Build custom multi-agent graphs | Building blocks, not product |
 | **Coding-agent runtimes** | Single-session implementation | Harnesses we would orchestrate |
+| **Agent-workforce platforms** | Horizontal agent org coordination | Indirect but high-gravity (same buyer) |
 
 ---
 
@@ -125,6 +126,26 @@
 
 ---
 
+## 7. Agent-Workforce Platforms (Horizontal / Indirect)
+
+| Product | Local | OSS | Focus | Lifecycle coverage | Harness support | Maturity |
+|---------|-------|-----|-------|--------------------|-----------------|----------|
+| **Paperclip** | Yes (self-hosted, embedded Postgres) | Yes (MIT) | Agent org: org chart, roles, budgets, heartbeats, audit trails | None (explicitly "orchestrates work, not pull requests") | Claude Code, Codex, Cursor, HTTP bots, bash — "if it can receive a heartbeat, it's hired" | 73k+ stars, 3k+ commits, plugin system shipped; desktop app + cloud agents in progress |
+
+**What it is:** A horizontal platform for running teams of AI agents as an "autonomous business" — org hierarchy with reporting lines, per-agent budget hard-stops, scheduled heartbeat execution with persistent session state, atomic task checkout with goal tracing, approval workflows, multi-company isolation, immutable audit logs. Pitch: "If OpenClaw is an *employee*, Paperclip is the *company*."
+
+**What it misses (our wedge):** No SDLC pipeline or stage restart, no pipeline/run visualization (UI is deliberately a task manager + org chart), approval gates govern agent authorization and spend rather than code artifacts, no repo-native artifact handoff, no Playwright E2E in the loop, no deploy adapters, no v1→evolution story.
+
+**Why it matters anyway:**
+
+- **Same buyer, same mental model.** A self-hoster who wants "a team of role-named AI agents running on Claude Code/Cursor" is our target user too; its org-chart-of-professions framing overlaps our PM → Dev → SRE agent identity. Found first, it makes us look like a subset.
+- **Community gravity.** With its plugin system, a community-built "software dev company template" on Paperclip could compete with us without Paperclip Labs lifting a finger — the realistic threat vector.
+- **Shared plumbing validated at scale:** git worktrees for isolated execution, persistent sessions, harness adapters, approval workflows, cost tracking — several items from our "required" list proven in the wild.
+
+**Positioning response:** We own **the dev pipeline, not the company** — the artifact-producing lifecycle with visual run control and restartable stages. Complementary framing is available: an ADHD pipeline could be a "department" a Paperclip agent triggers. Watch their desktop app and plugin ecosystem for scope creep toward SDLC.
+
+---
+
 ## Feature Comparison (Our Target vs Best-in-Class)
 
 | Capability | Our target | Closest existing | Notes |
@@ -163,6 +184,9 @@ High control / low-level                    High speed / low-level
         │   Augment Cosmos, Factory, Codegen           │
         │   (enterprise cloud)                         │
         │                                              │
+        │   Paperclip                                  │
+        │   (horizontal agent workforce, self-host)    │
+        │                                              │
 Low abstraction                             High abstraction
 ```
 
@@ -170,9 +194,9 @@ Low abstraction                             High abstraction
 
 ## Strategic Takeaways
 
-1. **The idea is validated** — hosted app builders prove demand for AI app building; Dyad/Locode prove local OSS appetite; Sikula/autonomous-sdlc prove lifecycle orchestration demand. The gap is **combining them**.
+1. **The idea is validated** — hosted app builders prove demand for AI app building; Dyad/Locode prove local OSS appetite; Sikula/autonomous-sdlc prove lifecycle orchestration demand; Paperclip (73k+ stars) proves self-hosters want role-named agent teams with governance. The gap is **combining them** into a dev-lifecycle product.
 
-2. **Compete on iteration, not just v1 speed** — message: "build the first version, then keep building without losing control."
+2. **Compete on iteration, not just v1 speed** — message: "build the first version, then keep building without losing control." Against Paperclip specifically: **the dev pipeline, not the company**.
 
 3. **Borrow patterns from:**
    - **Dyad** — first-run UX and speed expectations
@@ -205,5 +229,6 @@ Low abstraction                             High abstraction
 | Tinykit | https://github.com/tinykit-studio/tinykit |
 | Singulary | https://github.com/sammwyy/singulary |
 | Aiki | https://github.com/aikirun/aiki |
+| Paperclip | https://github.com/paperclipai/paperclip |
 | LangGraph | https://langchain.com/langgraph |
 | OpenHands | https://www.openhands.dev |
