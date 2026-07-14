@@ -1,13 +1,28 @@
 {
   "version": 2,
   "idPrefix": "TASK",
-  "nextId": 9,
+  "nextId": 23,
   "states": [
-    "Backlog",
-    "Next",
-    "In Progress",
-    "Done",
-    "Rejected",
+    {
+      "name": "Backlog",
+      "fileName": "BACKLOG.md",
+      "order": 0
+    },
+    {
+      "name": "Next",
+      "fileName": "NEXT.md",
+      "order": 1
+    },
+    {
+      "name": "In Progress",
+      "fileName": "IN_PROGRESS.md",
+      "order": 2
+    },
+    {
+      "name": "Done",
+      "fileName": "DONE.md",
+      "order": 3
+    },
     {
       "name": "Rejected",
       "fileName": "REJECTED.md",
@@ -21,11 +36,18 @@
     "P3",
     "P4"
   ],
-  "tags": [],
+  "tags": [
+    "core",
+    "ui",
+    "server",
+    "adapters",
+    "engine",
+    "infra",
+    "setup",
+    "testing",
+    "milestone-c"
+  ],
   "insertPosition": "top",
-  "aiPlanRequired": true,
-  "sortBy": "priority",
-  "settings": {
-    "aiPlanRequired": false
-  }
+  "aiPlanRequired": false,
+  "sortBy": "priority"
 }

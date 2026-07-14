@@ -32,6 +32,10 @@ export interface StartRunOptions {
   pipelineId?: string;
   task?: string;
   disabledStages?: string[];
+  engine?: string;
+  model?: string;
+  workspaceDir?: string;
+  permissionMode?: string;
   failProbability?: number;
 }
 

@@ -18,6 +18,9 @@ function applyEvent(run: RunState, event: RunEvent): RunState {
         ? event.status
         : "completed";
     next.completedAt = event.ts;
+    if (event.result !== undefined) {
+      next.result = event.result;
+    }
   }
 
   if (!event.stageId) {

@@ -42,6 +42,41 @@ export function agentForStage(stageId: string): AgentDefinition {
   return AGENTS[stageId] ?? { stageId, profession: stageId, glyph: "◈" };
 }
 
+export type EngineId = "claude-code" | "cursor" | "codex";
+
+/** "skip" never blocks on permission prompts (default); "acceptEdits" auto-approves edits only. */
+export type EnginePermissionMode = "skip" | "acceptEdits";
+
+export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";
+
+export interface EngineDefinition {
+  id: EngineId;
+  label: string;
+  description: string;
+  available: boolean;
+}
+
+export const ENGINES: Record<EngineId, EngineDefinition> = {
+  "claude-code": {
+    id: "claude-code",
+    label: "Claude Code",
+    description: "Anthropic's agentic coding CLI",
+    available: true,
+  },
+  cursor: {
+    id: "cursor",
+    label: "Cursor",
+    description: "Cursor CLI agent",
+    available: false,
+  },
+  codex: {
+    id: "codex",
+    label: "Codex",
+    description: "OpenAI Codex CLI",
+    available: false,
+  },
+};
+
 export interface StageDefinition {
   id: string;
   label: string;
@@ -77,6 +112,10 @@ export interface RunState {
   status: RunStatus;
   task?: string;
   disabledStages?: string[];
+  engine?: EngineId;
+  model?: string;
+  result?: string;
+  workspacePath?: string;
   stages: StageState[];
   createdAt: string;
   completedAt?: string;
@@ -113,6 +152,7 @@ export interface RunEvent {
   message?: string;
   status?: StageStatus | RunStatus;
   level?: LogLevel;
+  result?: string;
 }
 
 export const LIFECYCLE_STAGES: StageDefinition[] = [
@@ -138,7 +178,22 @@ export const SEQUENTIAL_PIPELINE: PipelineDefinition = {
   ],
 };
 
-export const DEMO_PIPELINES: PipelineDefinition[] = [SEQUENTIAL_PIPELINE];
+export const ONE_BOX_PIPELINE: PipelineDefinition = {
+  id: "one-box",
+  name: "Single agent",
+  description: "One Developer box: prompt in, result out — runs a real engine.",
+  groups: [
+    {
+      mode: "sequential",
+      stages: [{ id: "implementation", label: "Implementation" }],
+    },
+  ],
+};
+
+export const DEMO_PIPELINES: PipelineDefinition[] = [
+  SEQUENTIAL_PIPELINE,
+  ONE_BOX_PIPELINE,
+];
 
 export function flattenPipelineStages(
   pipeline: PipelineDefinition,

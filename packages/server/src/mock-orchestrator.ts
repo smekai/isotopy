@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  EnginePermissionMode,
   LogLevel,
   PipelineDefinition,
   RunEvent,
@@ -8,11 +9,17 @@ import type {
   StageState,
 } from "@adhd/core";
 import {
+  DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
+  ENGINES,
+  ONE_BOX_PIPELINE,
   agentForStage,
   createInitialRunState,
   flattenPipelineStages,
 } from "@adhd/core";
+import { assertEngineId, getEngineAdapter } from "./engines/registry.js";
+import type { EngineRunResult } from "./engines/types.js";
+import { resolveWorkspace } from "./paths.js";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -25,7 +32,13 @@ interface SimulationOptions {
 export interface StartRunOptions extends SimulationOptions {
   task?: string;
   disabledStages?: string[];
+  engine?: string;
+  model?: string;
+  workspaceDir?: string;
+  permissionMode?: string;
 }
+
+const ENGINE_TIMEOUT_MS = Number(process.env.ADHD_ENGINE_TIMEOUT_MS ?? 600000);
 
 const DEFAULT_OPTIONS: Required<SimulationOptions> = {
   minDurationMs: 2000,
@@ -53,6 +66,8 @@ export class MockOrchestrator {
   private readonly runOptions = new Map<string, Required<SimulationOptions>>();
   private readonly cancelled = new Set<string>();
   private readonly gateWaiters = new Map<string, () => void>();
+  private readonly engineAborts = new Map<string, AbortController>();
+  private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
   private nextRunNumber = 1;
 
   listPipelines(): PipelineDefinition[] {
@@ -94,7 +109,15 @@ export class MockOrchestrator {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
 
-    const { task, disabledStages, ...simOptions } = options;
+    const { task, disabledStages, engine, model, workspaceDir, permissionMode, ...simOptions } =
+      options;
+
+    const isOneBox = pipeline.id === ONE_BOX_PIPELINE.id;
+    if (isOneBox) {
+      // Validate the engine before the run exists so bad requests fail fast.
+      getEngineAdapter(engine ?? "claude-code");
+    }
+
     const runId = randomUUID().slice(0, 8);
     const run = createInitialRunState(
       runId,
@@ -103,6 +126,19 @@ export class MockOrchestrator {
       task,
       disabledStages,
     );
+
+    if (isOneBox) {
+      const engineId = engine ?? "claude-code";
+      assertEngineId(engineId);
+      run.engine = engineId;
+      run.model = model;
+      run.workspacePath = await resolveWorkspace(runId, workspaceDir);
+      this.enginePermissionModes.set(
+        runId,
+        permissionMode === "acceptEdits" ? "acceptEdits" : DEFAULT_PERMISSION_MODE,
+      );
+    }
+
     this.runs.set(runId, run);
 
     const merged = { ...DEFAULT_OPTIONS, ...simOptions };
@@ -156,6 +192,7 @@ export class MockOrchestrator {
     }
 
     this.cancelled.add(runId);
+    this.engineAborts.get(runId)?.abort();
     for (const [key, resume] of [...this.gateWaiters]) {
       if (key.startsWith(`${runId}:`)) {
         this.gateWaiters.delete(key);
@@ -374,6 +411,92 @@ export class MockOrchestrator {
     return "passed";
   }
 
+  private async executeEngineStage(
+    runId: string,
+    stageDef: StageDefinition,
+  ): Promise<StageOutcome> {
+    const run = this.runs.get(runId);
+    const stage = this.getStage(runId, stageDef.id);
+    if (!run || !run.engine || stage.status === "skipped") {
+      return "passed";
+    }
+
+    const profession = agentForStage(stageDef.id).profession;
+    stage.status = "running";
+    stage.startedAt = nowIso();
+    this.emit({
+      ts: nowIso(),
+      type: "stage.started",
+      runId,
+      stageId: stageDef.id,
+      status: "running",
+    });
+    this.log(
+      runId,
+      stageDef.id,
+      "info",
+      `${profession} online · ${ENGINES[run.engine].label}${run.model ? ` · ${run.model}` : ""}`,
+    );
+
+    const controller = new AbortController();
+    this.engineAborts.set(runId, controller);
+    let outcome: EngineRunResult;
+    try {
+      const adapter = getEngineAdapter(run.engine);
+      outcome = await adapter.run({
+        runId,
+        prompt: run.task ?? "",
+        cwd: run.workspacePath ?? process.cwd(),
+        model: run.model,
+        permissionMode: this.enginePermissionModes.get(runId) ?? DEFAULT_PERMISSION_MODE,
+        timeoutMs: ENGINE_TIMEOUT_MS,
+        signal: controller.signal,
+        onLog: (level, message) => this.log(runId, stageDef.id, level, message),
+      });
+    } catch (error) {
+      outcome = {
+        success: false,
+        exitCode: null,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      };
+    } finally {
+      this.engineAborts.delete(runId);
+    }
+
+    if (this.cancelled.has(runId)) {
+      // abortRun already marked the stage skipped — don't overwrite it.
+      return "cancelled";
+    }
+
+    stage.completedAt = nowIso();
+    if (outcome.success) {
+      run.result = outcome.result;
+      stage.status = "passed";
+      this.log(runId, stageDef.id, "pass", `✓ ${profession} finished — result ready`);
+      this.emit({
+        ts: nowIso(),
+        type: "stage.completed",
+        runId,
+        stageId: stageDef.id,
+        status: "passed",
+        message: `${profession} completed`,
+      });
+      return "passed";
+    }
+
+    stage.status = "failed";
+    this.log(runId, stageDef.id, "fail", `✗ ${outcome.errorMessage ?? `${profession} failed`}`);
+    this.emit({
+      ts: nowIso(),
+      type: "stage.failed",
+      runId,
+      stageId: stageDef.id,
+      status: "failed",
+      message: outcome.errorMessage ?? `${profession} failed`,
+    });
+    return "failed";
+  }
+
   private async runStages(
     runId: string,
     pipeline: PipelineDefinition,
@@ -392,7 +515,9 @@ export class MockOrchestrator {
           continue;
         }
       }
-      const outcome = await this.simulateStage(runId, stageDef, options);
+      const outcome = this.runs.get(runId)?.engine
+        ? await this.executeEngineStage(runId, stageDef)
+        : await this.simulateStage(runId, stageDef, options);
       if (outcome === "cancelled") {
         return;
       }
@@ -406,7 +531,7 @@ export class MockOrchestrator {
       return;
     }
 
-    this.updateRun(runId, (run) => {
+    const finished = this.updateRun(runId, (run) => {
       run.status = success ? "completed" : "failed";
       run.completedAt = nowIso();
     });
@@ -417,6 +542,7 @@ export class MockOrchestrator {
       runId,
       status: success ? "completed" : "failed",
       message: success ? "Run completed successfully" : "Run failed",
+      ...(finished.result !== undefined ? { result: finished.result } : {}),
     });
   }
 

@@ -1,20 +1,36 @@
 import { useState } from "react";
 import { Server, ToggleLeft, ToggleRight, X } from "lucide-react";
-import { LIFECYCLE_STAGES, agentForStage } from "@adhd/core";
-import { loadDisabledStages, saveDisabledStages } from "../settings";
+import type { EngineId, EnginePermissionMode } from "@adhd/core";
+import { ENGINES, LIFECYCLE_STAGES, agentForStage } from "@adhd/core";
+import {
+  loadDisabledStages,
+  loadEngine,
+  loadEngineModel,
+  loadPermissionMode,
+  saveDisabledStages,
+  saveEngine,
+  saveEngineModel,
+  savePermissionMode,
+} from "../settings";
 import { useTheme } from "../ThemeContext";
 import { DIRS, MONO, SANS, specColor } from "../theme";
 import type { Dir } from "../theme";
 
 const GATED_STAGES = LIFECYCLE_STAGES.filter((stage) => stage.gateAfter);
 
+const PERMISSION_MODES: { id: EnginePermissionMode; label: string; desc: string }[] = [
+  { id: "skip", label: "Never block (recommended)", desc: "The engine runs fully autonomously — no permission prompts." },
+  { id: "acceptEdits", label: "Accept edits only", desc: "File edits auto-approved; shell commands may stall the run." },
+];
+
 export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   const { dirId, setDirId } = useTheme();
   const [sec, setSec] = useState("appearance");
   const [disabledStages, setDisabledStages] = useState<string[]>(loadDisabledStages);
-  // Harness, keys and deploy target are display-only mocks for now.
-  const [harness, setHarness] = useState("claude-code");
-  const [model, setModel] = useState("claude-opus-4-8");
+  // Keys and deploy target are display-only mocks for now.
+  const [harness, setHarness] = useState<EngineId>(loadEngine);
+  const [model, setModel] = useState(loadEngineModel);
+  const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(loadPermissionMode);
 
   const sections = [
     { id: "appearance", label: "Appearance" },
@@ -163,26 +179,63 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
           {sec === "harness" && (
             <div>
               <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>AI Harness</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>The implementation tool used by the Developer.</div>
+              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>The engine used by the Developer in single-agent runs.</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-                {[{ id: "claude-code", label: "Claude Code", desc: "Anthropic's agentic coding CLI" }, { id: "cursor", label: "Cursor", desc: "AI-first code editor" }].map((opt) => (
-                  <button key={opt.id} onClick={() => setHarness(opt.id)}
-                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${harness === opt.id ? d.accent : d.border}`, borderRadius: 12, background: harness === opt.id ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
-                    <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${harness === opt.id ? d.accent : d.border}`, background: harness === opt.id ? d.accent : "transparent", flexShrink: 0 }} />
-                    <div>
-                      <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
-                      <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.desc}</div>
-                    </div>
-                  </button>
-                ))}
+                {Object.values(ENGINES).map((opt) => {
+                  const sel = harness === opt.id;
+                  return (
+                    <button key={opt.id}
+                      onClick={() => {
+                        if (opt.available) {
+                          setHarness(opt.id);
+                          saveEngine(opt.id);
+                        }
+                      }}
+                      disabled={!opt.available}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: opt.available ? "pointer" : "default", textAlign: "left", opacity: opt.available ? 1 : 0.45 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
+                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                      </div>
+                      {!opt.available && (
+                        <div style={{ background: d.accentSoft, color: d.accent, borderRadius: 20, padding: "2px 10px", fontFamily: MONO, fontSize: 9, fontWeight: 700 }}>SOON</div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
               <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Model</div>
-              <select value={model} onChange={(e) => setModel(e.target.value)}
-                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none" }}>
+              <select value={model}
+                onChange={(e) => {
+                  setModel(e.target.value);
+                  saveEngineModel(e.target.value);
+                }}
+                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: 20 }}>
                 <option value="claude-opus-4-8">claude-opus-4-8 (most capable)</option>
                 <option value="claude-sonnet-4-6">claude-sonnet-4-6 (balanced)</option>
                 <option value="claude-haiku-4-5">claude-haiku-4-5 (fastest)</option>
               </select>
+              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Permissions</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {PERMISSION_MODES.map((opt) => {
+                  const sel = permissionMode === opt.id;
+                  return (
+                    <button key={opt.id}
+                      onClick={() => {
+                        setPermissionMode(opt.id);
+                        savePermissionMode(opt.id);
+                      }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
+                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
+                      <div>
+                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
+                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

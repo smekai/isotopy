@@ -37,6 +37,10 @@ app.post("/runs", async (c) => {
       pipelineId?: string;
       task?: string;
       disabledStages?: string[];
+      engine?: string;
+      model?: string;
+      workspaceDir?: string;
+      permissionMode?: string;
       failProbability?: number;
       minDurationMs?: number;
       maxDurationMs?: number;
@@ -48,6 +52,10 @@ app.post("/runs", async (c) => {
     const run = await orchestrator.startRun(pipelineId, {
       task: body.task,
       disabledStages: body.disabledStages,
+      engine: body.engine,
+      model: body.model,
+      workspaceDir: body.workspaceDir,
+      permissionMode: body.permissionMode,
       ...(body.failProbability !== undefined
         ? { failProbability: body.failProbability }
         : {}),

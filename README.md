@@ -2,7 +2,9 @@
 
 Research and planning artifacts for **ADHD** — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
 
-> Previously named *Artificial Developer*. Local folder and repo: `adhd`.
+## One-line pitch
+
+> ADHD is an open-source, local-running AI development team for real projects: build the first version, keep evolving it with prepared agents, test it end-to-end, and deploy anywhere with your own models and tools.
 
 ## Summary
 
@@ -44,9 +46,6 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 | [figma-agent-prompt.md](docs/figma-agent-prompt.md) | Paste-ready Figma Agent prompt that generates the workspace + a fresh design system |
 | [model-and-harness-strategy.md](docs/model-and-harness-strategy.md) | When to use Claude Code vs Cursor, stage-to-tool mapping, BYOK models |
 
-## One-line pitch
-
-> ADHD is an open-source, local-running AI development team for real projects: build the first version, keep evolving it with prepared agents, test it end-to-end, and deploy anywhere with your own models and tools.
 
 ## Status
 

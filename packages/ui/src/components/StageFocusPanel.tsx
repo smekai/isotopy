@@ -31,10 +31,14 @@ export function StageFocusPanel({
   const agent = agentForStage(stage.id);
   const sc = specColor(stage.id);
   const st = statusClr(stage.status);
-  // Reasoning and artifacts are static design samples — the mock orchestrator
-  // doesn't produce them yet.
-  const artifacts = ARTIFACTS[stage.id] ?? [];
-  const reasoning = REASONING[stage.id] ?? [];
+  // Engine runs show the real result; mock runs still show static design samples.
+  const isEngineRun = run.engine != null;
+  const artifacts = isEngineRun
+    ? run.result
+      ? [{ name: "result.md", size: `${new Blob([run.result]).size} B`, preview: run.result }]
+      : []
+    : (ARTIFACTS[stage.id] ?? []);
+  const reasoning = isEngineRun ? [] : (REASONING[stage.id] ?? []);
   const [artIdx, setArtIdx] = useState(0);
 
   const restartable =

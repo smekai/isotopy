@@ -13,7 +13,12 @@ import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useRunEvents } from "./hooks/useRunEvents";
-import { loadDisabledStages } from "./settings";
+import {
+  loadDisabledStages,
+  loadEngine,
+  loadEngineModel,
+  loadPermissionMode,
+} from "./settings";
 import { SANS } from "./theme";
 import { useTheme } from "./ThemeContext";
 
@@ -72,11 +77,23 @@ export function App() {
     setFocusTab("log");
   }
 
-  async function handleStart(task: string) {
+  async function handleStart(task: string, pipelineId: string, workspaceDir?: string) {
     setError(null);
     setStarting(true);
     try {
-      const created = await startRun({ task, disabledStages: loadDisabledStages() });
+      const oneBox = pipelineId === "one-box";
+      const created = await startRun({
+        task,
+        pipelineId,
+        ...(oneBox
+          ? {
+              engine: loadEngine(),
+              model: loadEngineModel(),
+              permissionMode: loadPermissionMode(),
+              ...(workspaceDir ? { workspaceDir } : {}),
+            }
+          : { disabledStages: loadDisabledStages() }),
+      });
       setFocusedId(null);
       attachRun(created.id);
     } catch (err) {
@@ -184,7 +201,13 @@ export function App() {
       {/* ── Main canvas ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundImage: dotGrid, backgroundSize: "26px 26px" }}>
         {showEmpty ? (
-          <EmptyState d={d} onStart={(task) => void handleStart(task)} starting={starting} />
+          <EmptyState
+            d={d}
+            onStart={(task, pipelineId, workspaceDir) =>
+              void handleStart(task, pipelineId, workspaceDir)
+            }
+            starting={starting}
+          />
         ) : run ? (
           <>
             <RunStatusBar run={run} d={d} />

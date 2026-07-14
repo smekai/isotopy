@@ -1,4 +1,5 @@
 import type { RunState } from "@adhd/core";
+import { ENGINES } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
 import { MONO, SANS, runDot } from "../theme";
@@ -15,6 +16,14 @@ export function RunStatusBar({ run, d }: { run: RunState; d: Dir }) {
       <span style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {run.task ?? run.pipelineName}
       </span>
+      {run.engine && (
+        <>
+          <div style={{ width: 1, height: 14, background: d.border }} />
+          <span style={{ color: d.textMid, fontFamily: MONO, fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}>
+            ⬡ {ENGINES[run.engine].label}{run.model ? ` · ${run.model}` : ""}
+          </span>
+        </>
+      )}
       <div style={{ width: 1, height: 14, background: d.border }} />
       <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10 }}>{elapsed}</span>
       <div style={{ flex: 1 }} />
