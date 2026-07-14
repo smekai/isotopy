@@ -1,5 +1,64 @@
 # Done
 
+## TASK-023: Adopt TASK-020 verification assets — test plan, run skill, free-tier E2E
+**Priority:** P1
+**Tags:** testing, infra
+**Updated:** 2026-07-14 16:20
+
+Fold the throwaway TASK-020 verification work into the project: test plan doc, project run skill, free-tier Playwright suite (live tier stays manual/documented).
+
+Done: (1) `docs/e2e-test-plan.md` — the TASK-020 checklist split into a free tier (automated) and a manual live tier (real one-box run, abort path, known non-bugs). (2) `.claude/skills/run-app/SKILL.md` — dev command, ports 9477/5173, `/health`-via-proxy readiness check, stop/port-cleanup, the sandboxed-spawn 0xC0000142 gotcha for engine runs, headless-Chromium driving notes (selector gotchas), and curl recipes for engine runs without the UI. (3) Free-tier E2E in `packages/ui`: `@playwright/test` devDependency, `playwright.config.ts` (webServer auto-starts `pnpm dev` from the repo root, waits on the proxied `/health`), `e2e/ui-smoke.spec.ts` with 5 tests — picker + disabled start, single-agent mode, Setup/AI Harness contents, persistence across reload (pipeline, model, permission mode), history drawer. `pnpm --filter @adhd/ui e2e`: 5/5 passed in ~8s, no engine spend; typecheck clean; playwright artifacts gitignored.
+
+---
+
+## TASK-008: Design the conversational pipeline workspace (Figma-agentic)
+**Priority:** P1 | **Tags:** design, ux, ui, figma, design-system, voice
+**Updated:** 2026-07-14 15:17
+
+Design the ADHD desktop workspace as a UI + speaking interface for directing an AI development team; pipeline canvas as hero, conversational + voice steering at stage and pipeline scope. Brief in [docs/design-desktop-shell.md](../docs/design-desktop-shell.md); prompt in [docs/figma-agent-prompt.md](../docs/figma-agent-prompt.md).
+
+Done: delivered end-to-end (commit bed7fac "first design"). Figma Agent prompt written (`docs/figma-agent-prompt.md`); generated design lives in Figma ("Design System for ADHD App") with its interactive code export committed under `design/Design System for ADHD App/` — a working prototype covering all primary screens (pipeline canvas, focused stage with artifacts/log/reasoning/steer tabs, pipeline-level steering, setup, gate approve/reject, run history, empty state) and voice states (idle/listening/transcribing/speaking). Deltas from the original deliverable list: the 3 options manifest as 3 accent directions (Indigo/Sakura/Forest) within one system rather than 3 separate designs; design tokens live as code (`Dir` palettes) rather than Figma styles/variables; engineer handoff happened as a direct port — `packages/ui/src/theme.ts` and the component set (PipelineRow, StageFocusPanel, VoiceControls, SteerChat, TeamController, HistoryDrawer, SetupModal, EmptyState) mirror the export and are wired to the live SSE backend.
+
+---
+
+## TASK-004: Pipeline chart UI (live agent statuses)
+**Priority:** P0 | **Tags:** prototype, ui
+**Updated:** 2026-07-14 15:17
+
+Hand-rolled SVG pipeline chart, log panel, sequential vs parallel demo toggle.
+
+Done: delivered by the prototype dashboard and the TASK-014..020 milestone-c work, verified live in the TASK-020 UI pass. The pipeline chart renders live stage statuses with gate markers (`PipelineRow`/`StageNode`/`GateMarker` — implemented as DOM/flexbox rather than SVG); the log panel streams live stage logs in `StageFocusPanel`. The "sequential vs parallel demo toggle" became the pipeline picker ("Full team · mock" / "Single agent") from TASK-017; no parallel demo group was built (`PipelineGroup.mode` supports `"parallel"` in core but no pipeline uses it yet — a future task if ever needed).
+
+---
+
+## TASK-020: End-to-end verification of the one-box Claude run
+**Priority:** P0 | **Tags:** testing, milestone-c
+**Updated:** 2026-07-14 15:15
+
+Server-level verification complete: happy path (haiku created hello.txt in the scratch workspace, live SSE logs, result + cost captured on run.completed), custom workspaceDir run (file landed there; nonexistent dir → 400), abort mid-run (claude process tree killed, no orphans, stage skipped), `engine: cursor` → 400 not implemented, sequential mock pipeline regression (8 stages, gates, approve — untouched).
+
+Done: visual UI pass completed with headless Chromium (Playwright) against `pnpm dev` — 18/18 checks passed, zero console errors, screenshots reviewed. Verified: pipeline picker (Full team · mock / Single agent) with persisted selection; Setup → AI Harness (Claude Code selected, Cursor/Codex marked SOON, model + permission mode persist across page reload via localStorage); live one-box run with `claude-haiku-4-5` in a custom workspaceDir — engine pill `⬡ Claude Code · claude-haiku-4-5` in the status bar, live log streamed into the focus panel, run COMPLETED, stage PASSED, `result.md` artifact listed with preview, and `hello-ui.txt` written to the workspace; History drawer lists the completed run and re-attaches on click. TaskPlanner sidebar reload confirmed by driving the extension's own activation path (ConfigManager + TaskStore) against `.tasks/`: config loads, 22 tasks visible across states, zero parse warnings. Note: spawning `claude.exe` from a sandboxed shell fails with 0xC0000142 — the dev server must run in a normal user shell.
+
+---
+
+## TASK-003: Mock orchestrator with SSE events
+**Priority:** P0 | **Tags:** prototype, server
+**Updated:** 2026-07-14 12:45
+
+`POST /runs`, fake agents with sleep/log, `GET /runs/:id/events` SSE stream.
+
+Done: implementation landed with the prototype dashboard (commit 5f63631, extended by TASK-014/015) in `packages/server` — `MockOrchestrator` simulates profession agents with randomized sleep + timed log lines per stage; Hono routes `POST /runs`, `GET /runs`, `GET /runs/:id`, gate approve/abort/restart, and `GET /runs/:id/events` SSE. Verified end-to-end this pass: started a `sequential` run, approved the requirements/design/release gates, captured 49 typed SSE events (stage.started/log/awaiting/approved/completed, run.completed); stream closes cleanly on terminal status.
+
+---
+
+## TASK-002: Scaffold pnpm monorepo (server, ui, core)
+**Priority:** P0 | **Tags:** infra, prototype
+**Updated:** 2026-07-14 09:33
+
+Set up `packages/core`, `packages/server` (Node + Hono), `packages/ui` (React + Vite).
+
+---
+
 ## TASK-001: Rebrand to ADHD (docs + repo)
 **Priority:** P0 | **Tags:** docs, branding
 **Updated:** 2026-07-14 12:23
