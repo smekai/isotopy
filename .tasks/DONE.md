@@ -1,5 +1,15 @@
 # Done
 
+## TASK-001: Rebrand to ADHD (docs + repo)
+**Priority:** P0 | **Tags:** docs, branding
+**Updated:** 2026-07-14 12:23
+
+Rename project to ADHD (Artificial Development, Human Directed). Update docs, CLI name, and `.adhd/` paths.
+
+Done: bulk rebrand landed earlier (commits 5f63631, a51b87e — docs, `@adhd/*` packages, `adhd` CLI examples, `.adhd/` paths, GitHub repo/remote). This pass fixed the last leftovers: repo layout tree root in `docs/technical-architecture.md` (`artificial-developer/` → `adhd/`) and added the "formerly Artificial Developer" historical note to the README intro.
+
+---
+
 ## TASK-019: Result display — result.md artifact, engine pill, result on run.completed
 **Priority:** P0 | **Tags:** ui, milestone-c
 **Updated:** 2026-07-13 21:40

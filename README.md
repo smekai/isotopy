@@ -1,6 +1,6 @@
 # ADHD — Artificial Development, Human Directed
 
-Research and planning artifacts for **ADHD** — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
+Research and planning artifacts for **ADHD** (formerly **Artificial Developer**) — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
 
 ## One-line pitch
 

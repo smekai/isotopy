@@ -505,7 +505,7 @@ Custom workflows: copy YAML, edit stage list (v0.2 visual editor).
 ## Repository layout (implementation)
 
 ```
-artificial-developer/
+adhd/
   packages/
     cli/              # adhd CLI entry (Commander or CAC)
     core/             # orchestrator, TaskManager, state machine, gates

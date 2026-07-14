@@ -37,13 +37,6 @@ Design the ADHD desktop workspace as a **UI + speaking interface for directing a
 
 ---
 
-## TASK-001: Rebrand to ADHD (docs + repo)
-**Priority:** P0 | **Tags:** docs, branding
-
-Rename project to ADHD (Artificial Development, Human Directed). Update docs, CLI name, and `.adhd/` paths.
-
----
-
 ## TASK-002: Scaffold pnpm monorepo (server, ui, core)
 **Priority:** P0 | **Tags:** infra, prototype
 
