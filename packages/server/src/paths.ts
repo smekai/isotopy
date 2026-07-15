@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 // Anchored to the repo root, not process.cwd() — the dev server runs with
 // cwd = packages/server (pnpm --filter), so cwd-relative paths would land there.
-const REPO_ROOT = path.resolve(
+export const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );

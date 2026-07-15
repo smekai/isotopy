@@ -77,6 +77,88 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
   },
 };
 
+export interface EngineModelOption {
+  /** Value passed verbatim to the engine CLI (e.g. `claude --model <id>`). */
+  id: string;
+  label: string;
+  hint: string;
+  /** 1M-context variants are gated behind usage credits on subscription plans. */
+  requiresUsageCredits?: boolean;
+}
+
+export const CLAUDE_MODEL_OPTIONS: EngineModelOption[] = [
+  { id: "opus", label: "Opus", hint: "most capable" },
+  { id: "sonnet", label: "Sonnet", hint: "balanced (default)" },
+  { id: "haiku", label: "Haiku", hint: "fastest" },
+  {
+    id: "sonnet[1m]",
+    label: "Sonnet · 1M context",
+    hint: "requires usage credits or API billing",
+    requiresUsageCredits: true,
+  },
+];
+
+export const DEFAULT_CLAUDE_MODEL = "sonnet";
+
+/**
+ * Full model IDs previously offered in Setup. They resolve to 1M-context
+ * variants in Claude Code, which subscription plans reject — migrate to
+ * the standard-context CLI aliases.
+ */
+export const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  "claude-opus-4-8": "opus",
+  "claude-sonnet-4-6": "sonnet",
+  "claude-haiku-4-5": "haiku",
+};
+
+export interface EngineConnectionDefinition {
+  id: string;
+  label: string;
+  description: string;
+  requiresApiKey: boolean;
+}
+
+export const ENGINE_CONNECTIONS: Record<EngineId, EngineConnectionDefinition[]> = {
+  "claude-code": [
+    {
+      id: "subscription",
+      label: "Claude subscription",
+      description: "Uses your Claude Code CLI login (claude /login). Billed to your Pro/Max plan.",
+      requiresApiKey: false,
+    },
+    {
+      id: "api-key",
+      label: "Anthropic API key",
+      description:
+        "Injects a stored ANTHROPIC_API_KEY (CLI runs in bare mode, ignoring your CLI login). Billed to the key.",
+      requiresApiKey: true,
+    },
+  ],
+  cursor: [],
+  codex: [],
+};
+
+export const DEFAULT_CONNECTION_MODE = "subscription";
+
+/** What the UI sees — the API key itself never leaves the server. */
+export interface EngineConnectionSettingsView {
+  connectionMode: string;
+  apiKeyConfigured: boolean;
+}
+
+export interface SettingsView {
+  engines: Partial<Record<EngineId, EngineConnectionSettingsView>>;
+}
+
+export interface EngineStatus {
+  engine: EngineId;
+  installed: boolean;
+  path?: string;
+  version?: string;
+  source?: "env" | "path" | "ide-extension";
+  message?: string;
+}
+
 export interface StageDefinition {
   id: string;
   label: string;

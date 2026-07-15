@@ -11,11 +11,8 @@ import {
 } from "../settings";
 import type { Dir } from "../theme";
 import { SANS, specColor } from "../theme";
-
-const PIPELINE_OPTIONS = [
-  { id: "sequential", label: "Full team · mock" },
-  { id: "one-box", label: "Single agent" },
-];
+import { PipelineDropdown } from "./PipelineDropdown";
+import type { PipelineOption } from "./PipelineDropdown";
 
 export function EmptyState({
   d, onStart, starting = false,
@@ -33,6 +30,19 @@ export function EmptyState({
     ? LIFECYCLE_STAGES.filter((stage) => stage.id === "implementation")
     : LIFECYCLE_STAGES;
   const engine = ENGINES[loadEngine()];
+
+  const pipelineOptions: PipelineOption[] = [
+    {
+      id: "sequential",
+      label: "Full team",
+      description: "8 simulated stages with approval gates (mock)",
+    },
+    {
+      id: "one-box",
+      label: "Single agent",
+      description: `Real engine — ${engine.label}`,
+    },
+  ];
 
   function selectPipeline(id: string) {
     setPipelineId(id);
@@ -75,25 +85,7 @@ export function EmptyState({
       </div>
 
       {/* Pipeline picker */}
-      <div style={{ display: "flex", background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 12, padding: 3, gap: 2 }}>
-        {PIPELINE_OPTIONS.map((opt) => {
-          const sel = opt.id === pipelineId;
-          return (
-            <button
-              key={opt.id}
-              onClick={() => selectPipeline(opt.id)}
-              style={{
-                border: "none", borderRadius: 9, padding: "7px 16px",
-                background: sel ? "#FFF" : "transparent",
-                color: sel ? d.accent : d.textMuted,
-                fontFamily: SANS, fontSize: 12, fontWeight: sel ? 700 : 500,
-                cursor: "pointer", boxShadow: sel ? d.shadowSm : "none",
-                transition: "all 0.15s",
-              }}
-            >{opt.label}</button>
-          );
-        })}
-      </div>
+      <PipelineDropdown d={d} options={pipelineOptions} value={pipelineId} onSelect={selectPipeline} />
 
       <div style={{ maxWidth: 540, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ background: "#FFF", border: `1.5px solid ${d.border}`, borderRadius: 16, display: "flex", alignItems: "center", gap: 12, padding: "10px 10px 10px 18px", boxShadow: d.shadow }}>

@@ -1,4 +1,10 @@
-import type { EngineId, EnginePermissionMode, LogLevel } from "@adhd/core";
+import type { EngineId, EnginePermissionMode, EngineStatus, LogLevel } from "@adhd/core";
+
+/** How the engine authenticates/bills — resolved from server settings per run. */
+export interface EngineConnection {
+  mode: string;
+  apiKey?: string;
+}
 
 export interface EngineRunContext {
   runId: string;
@@ -7,6 +13,7 @@ export interface EngineRunContext {
   cwd: string;
   model?: string;
   permissionMode: EnginePermissionMode;
+  connection?: EngineConnection;
   timeoutMs: number;
   /** Aborting the signal must terminate the engine process tree. */
   signal: AbortSignal;
@@ -28,4 +35,6 @@ export interface EngineRunResult {
 export interface EngineAdapter {
   id: EngineId;
   run(ctx: EngineRunContext): Promise<EngineRunResult>;
+  /** Reports whether the engine's CLI is installed and usable. */
+  detect?(): Promise<EngineStatus>;
 }

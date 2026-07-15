@@ -8,8 +8,8 @@ description: Launch and drive the ADHD app (Hono server :9477 + Vite UI :5173) �
 Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@adhd/server` (Hono, port **9477**) and `@adhd/ui`
 (Vite + React, port **5173**). The UI proxies `/pipelines`, `/runs`,
-`/health` to the server, so `http://localhost:5173/health` proves both
-are up.
+`/health`, `/settings`, `/engines` to the server, so
+`http://localhost:5173/health` proves both are up.
 
 ## Launch
 
@@ -38,6 +38,11 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
 
 - API: `curl http://localhost:9477/health` → `{"ok":true,...}`;
   `curl http://localhost:9477/pipelines` → `sequential` + `one-box`.
+- CLI detection: `curl http://localhost:9477/engines/claude-code/status`
+  → `{"installed":true,"path":...,"version":...}`.
+- Connection settings: `GET /settings`, `PUT /settings/engines/claude-code`
+  (`{"connectionMode":"subscription"|"api-key","apiKey":"..."|null}`);
+  stored in gitignored `.adhd/settings.json`, key never echoed back.
 - UI free-tier E2E (no engine spend, auto-starts the dev server):
   `pnpm --filter @adhd/ui e2e`
 - Full checklist incl. the manual live tier: `docs/e2e-test-plan.md`.
@@ -47,9 +52,10 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
 `@playwright/test` is a devDependency of `packages/ui`; browsers live
 in the user-level ms-playwright cache (`npx playwright install
 chromium --only-shell` inside `packages/ui` if missing). Useful
-selectors: pipeline picker buttons "Full team · mock" / "Single
-agent"; header buttons "Setup" / "History"; task input placeholder
-"Describe the task..."; status-bar engine pill matches
+selectors: the pipeline picker is a dropdown — trigger button shows
+the selected label ("Full team" / "Single agent"), menu entries are
+`role=option`; header buttons "Setup" / "History"; task input
+placeholder "Describe the task..."; status-bar engine pill matches
 `/^⬡ Claude Code · /`. History run cards are clickable divs (no View
 button). Text like "Claude Code · <model>" appears in both the pill
 and the team-controller line — anchor or `.first()` your locators.
@@ -58,9 +64,20 @@ and the team-controller line — anchor or `.first()` your locators.
 
 ```bash
 curl -s -X POST http://localhost:9477/runs -H "content-type: application/json" \
-  -d '{"pipelineId":"one-box","task":"...","engine":"claude-code","model":"claude-haiku-4-5","workspaceDir":"C:/some/existing/dir"}'
+  -d '{"pipelineId":"one-box","task":"...","engine":"claude-code","model":"haiku","workspaceDir":"C:/some/existing/dir"}'
 # then stream: curl -N http://localhost:9477/runs/<id>/events
 ```
 
 `workspaceDir` must exist (else 400); omit it for a scratch workspace
-per run.
+per run. `model` takes standard-context CLI aliases (`opus`/`sonnet`/
+`haiku`); full model IDs resolve to 1M-context variants that
+subscription plans reject ("Usage credits required for 1M context").
+
+## Auth gotcha: subscription vs API key
+
+The spawned CLI strips `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` from
+its env. Subscription mode (default) uses the user's `claude /login`
+OAuth. api-key mode injects the stored key **and passes `--bare`** —
+without `--bare`, a logged-in CLI silently ignores the env key and
+bills the plan (keys otherwise need interactive approval into
+`~/.claude.json` `customApiKeyResponses`).

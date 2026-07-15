@@ -2,8 +2,11 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import type { RunEvent, RunStatus } from "@adhd/core";
+import { ENGINE_CONNECTIONS, ENGINES } from "@adhd/core";
+import type { EngineId, EngineStatus, RunEvent, RunStatus } from "@adhd/core";
+import { findEngineAdapter } from "./engines/registry.js";
 import { orchestrator } from "./mock-orchestrator.js";
+import { getSettingsView, updateEngineConnection } from "./settings.js";
 
 const PORT = Number(process.env.PORT ?? 9477);
 const app = new Hono();
@@ -20,6 +23,47 @@ app.use(
 app.get("/health", (c) => c.json({ ok: true, service: "adhd-server" }));
 
 app.get("/pipelines", (c) => c.json(orchestrator.listPipelines()));
+
+app.get("/engines/:engineId/status", async (c) => {
+  const engineId = c.req.param("engineId");
+  if (!(engineId in ENGINES)) {
+    return c.json({ error: `Unknown engine: ${engineId}` }, 400);
+  }
+  const id = engineId as EngineId;
+  const adapter = findEngineAdapter(id);
+  if (!adapter?.detect) {
+    const status: EngineStatus = {
+      engine: id,
+      installed: false,
+      message: `Engine "${ENGINES[id].label}" is not implemented yet`,
+    };
+    return c.json(status);
+  }
+  return c.json(await adapter.detect());
+});
+
+app.get("/settings", (c) => c.json(getSettingsView()));
+
+app.put("/settings/engines/:engineId", async (c) => {
+  const engineId = c.req.param("engineId");
+  if (!(engineId in ENGINE_CONNECTIONS)) {
+    return c.json({ error: `Unknown engine: ${engineId}` }, 400);
+  }
+  const id = engineId as EngineId;
+  const body = await c.req
+    .json<{ connectionMode?: string; apiKey?: string | null }>()
+    .catch(() => ({}) as Record<string, never>);
+  if (body.connectionMode !== undefined) {
+    const known = ENGINE_CONNECTIONS[id].some((mode) => mode.id === body.connectionMode);
+    if (!known) {
+      return c.json(
+        { error: `Unknown connection mode for ${id}: ${body.connectionMode}` },
+        400,
+      );
+    }
+  }
+  return c.json(updateEngineConnection(id, body));
+});
 
 app.get("/runs", (c) => c.json(orchestrator.listRuns()));
 

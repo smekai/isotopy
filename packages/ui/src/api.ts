@@ -1,4 +1,4 @@
-import type { RunEvent, RunState } from "@adhd/core";
+import type { EngineStatus, RunEvent, RunState, SettingsView } from "@adhd/core";
 import { RUN_EVENT_TYPES } from "@adhd/core";
 
 const API_BASE = "";
@@ -18,6 +18,31 @@ function postJson<T>(path: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+export function fetchSettings(): Promise<SettingsView> {
+  return requestJson<SettingsView>("/settings");
+}
+
+export interface EngineConnectionUpdate {
+  connectionMode?: string;
+  /** A string sets the key, `null` clears it. */
+  apiKey?: string | null;
+}
+
+export function updateEngineConnection(
+  engineId: string,
+  update: EngineConnectionUpdate,
+): Promise<SettingsView> {
+  return requestJson<SettingsView>(`/settings/engines/${engineId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+}
+
+export function fetchEngineStatus(engineId: string): Promise<EngineStatus> {
+  return requestJson<EngineStatus>(`/engines/${engineId}/status`);
 }
 
 export function fetchRuns(): Promise<RunState[]> {

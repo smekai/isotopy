@@ -1,5 +1,69 @@
 # Done
 
+## TASK-031: UI: EmptyState pipeline dropdown
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-15 13:40
+
+Done: new `PipelineDropdown.tsx` replaces the segmented pill tabs in EmptyState — visible trigger (selected label + rotating chevron, accent ring when open), menu with label + description rows ("Full team — 8 simulated stages…", "Single agent — Real engine — Claude Code"), check mark + accent on the selected row, hover via state, closes on outside-click and Escape, `role=listbox/option` for a11y. `adhd.pipelineId` persistence and one-box branching untouched. E2E updated + extended (dropdown open/close, selection, persistence) — 7/7 green.
+
+---
+
+## TASK-030: UI: SetupModal Connection flow + api.ts + Vite proxy
+**Priority:** P1 | **Tags:** ui, setup
+**Updated:** 2026-07-15 13:40
+
+Done: mock "API Keys" section replaced by a functional "Connection" section — connection-mode radio cards from `ENGINE_CONNECTIONS` (PUT on select), API key save/remove (Enter submits; input cleared on success), "KEY CONFIGURED ✓" chip from `apiKeyConfigured`, inline error line; fake GitHub Client ID input dropped. AI Harness section gained an Engine-status card (green Installed · version + binary path, red Not-detected + install instructions, Re-check button re-fetching `GET /engines/:id/status`). `api.ts`: `fetchSettings`/`updateEngineConnection`/`fetchEngineStatus`; Vite proxy now forwards `/settings` + `/engines`. Verified live: mode roundtrip, key never echoed, invalid-key run surfaces the mapped message.
+
+---
+
+## TASK-029: UI: model alias migration + catalog-driven model select
+**Priority:** P1 | **Tags:** ui
+**Updated:** 2026-07-15 13:40
+
+Done: `loadEngineModel()` migrates stored legacy full IDs (`claude-sonnet-4-6` etc.) to standard-context CLI aliases via `LEGACY_MODEL_ALIASES`, writes the alias back, and defaults to `sonnet` — this fixes the reported "API Error: Usage credits required for 1M context" on subscription plans (verified live: one-box run with `sonnet` completed on subscription; previously failed). SetupModal model select renders from `CLAUDE_MODEL_OPTIONS` (Opus/Sonnet/Haiku + advanced `sonnet[1m]` with a gold usage-credits warning; unknown stored values render as "(custom)"). E2E migration test added.
+
+---
+
+## TASK-028: Adapter: friendly error mapping (1M credits, invalid key, /login, low balance)
+**Priority:** P2 | **Tags:** adapters, engine
+**Updated:** 2026-07-15 12:50
+
+Done: `ERROR_HINTS` in the claude-code adapter map known failure signatures (case-insensitive, matched against the final result event and stderr tail) to actionable guidance: 1M-context usage credits → switch model in Setup → AI Harness; invalid API key / authentication_error → Setup → Connection; not logged in → `claude /login` or API key; low credit balance → top up or subscription. Also handles error results that arrive as `is_error` on a "success" result event. The raw error line is logged at `warn` before the friendly message replaces `errorMessage`.
+
+---
+
+## TASK-026: Server: connection-aware spawn env + orchestrator wiring
+**Priority:** P1 | **Tags:** server, adapters, engine
+**Updated:** 2026-07-15 12:40
+
+Done: `EngineRunContext` carries `connection` (from `engines/types.ts`, re-used by the settings store). claude-code spawn now uses `buildChildEnv()` — strips `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` from the inherited env (subscription mode = CLI login; stray server-env keys no longer silently switch billing to API) and injects the stored key only in api-key mode. Orchestrator: `startRun` fails fast (400) when the selected mode `requiresApiKey` but none is stored; `executeEngineStage` reads `getEngineConnection(run.engine)` fresh per stage.
+
+---
+
+## TASK-027: Server: engine detection — adapter.detect() + status route
+**Priority:** P1 | **Tags:** server, adapters
+**Updated:** 2026-07-15 12:30
+
+Done: `EngineAdapter` gained optional `detect()`; claude-code implements it — resets the binary cache (so Re-check picks up fresh installs), resolves with `source` (`env`/`path`/`ide-extension`), validates `ADHD_CLAUDE_PATH` exists up front, and runs `claude --version` via async `execFile` (10s timeout, `.cmd/.bat` shell rule mirrored from spawn). Route `GET /engines/:engineId/status` returns `EngineStatus`; engines without `detect` report "not implemented yet" (new `findEngineAdapter` in registry). Install hint extracted to `INSTALL_HINT`.
+
+---
+
+## TASK-025: Server: settings store (.adhd/settings.json) + settings routes
+**Priority:** P1 | **Tags:** server
+**Updated:** 2026-07-15 12:20
+
+Done: new `packages/server/src/settings.ts` — JSON store at `<repo>/.adhd/settings.json` (gitignored; mode 0600 best-effort) with per-engine `{ connectionMode, apiKey? }`, atomic tmp+rename writes, lazy reads. `getEngineConnection` (defaults to subscription), `getSettingsView` (booleans only — key never serialized to the UI), `updateEngineConnection` (string sets, `null` clears, absent keeps). Routes in `index.ts`: `GET /settings`, `PUT /settings/engines/:engineId` (400 on unknown engine or mode not in `ENGINE_CONNECTIONS`). `REPO_ROOT` exported from `paths.ts`.
+
+---
+
+## TASK-024: Core: model alias catalog, connection definitions, settings/status types
+**Priority:** P1 | **Tags:** core
+**Updated:** 2026-07-15 12:10
+
+Done: added to `packages/core/src/index.ts` — `EngineModelOption` + `CLAUDE_MODEL_OPTIONS` (CLI aliases `opus`/`sonnet`/`haiku` plus `sonnet[1m]` flagged `requiresUsageCredits`), `DEFAULT_CLAUDE_MODEL = "sonnet"`, `LEGACY_MODEL_ALIASES` (old full model IDs → aliases), `EngineConnectionDefinition` + `ENGINE_CONNECTIONS` (claude-code: `subscription` default / `api-key`; cursor & codex empty for later), `DEFAULT_CONNECTION_MODE`, `EngineConnectionSettingsView`/`SettingsView` (booleans only — the key never leaves the server), and `EngineStatus` for CLI detection.
+
+---
+
 ## TASK-023: Adopt TASK-020 verification assets — test plan, run skill, free-tier E2E
 **Priority:** P1
 **Tags:** testing, infra

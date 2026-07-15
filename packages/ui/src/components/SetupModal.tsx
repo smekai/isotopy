@@ -1,7 +1,16 @@
-import { useState } from "react";
-import { Server, ToggleLeft, ToggleRight, X } from "lucide-react";
-import type { EngineId, EnginePermissionMode } from "@adhd/core";
-import { ENGINES, LIFECYCLE_STAGES, agentForStage } from "@adhd/core";
+import { useEffect, useState } from "react";
+import { AlertTriangle, CheckCircle2, RefreshCw, Server, ToggleLeft, ToggleRight, X } from "lucide-react";
+import type { EngineId, EnginePermissionMode, EngineStatus, SettingsView } from "@adhd/core";
+import {
+  CLAUDE_MODEL_OPTIONS,
+  DEFAULT_CONNECTION_MODE,
+  ENGINE_CONNECTIONS,
+  ENGINES,
+  LIFECYCLE_STAGES,
+  agentForStage,
+} from "@adhd/core";
+import { fetchEngineStatus, fetchSettings, updateEngineConnection } from "../api";
+import type { EngineConnectionUpdate } from "../api";
 import {
   loadDisabledStages,
   loadEngine,
@@ -13,7 +22,7 @@ import {
   savePermissionMode,
 } from "../settings";
 import { useTheme } from "../ThemeContext";
-import { DIRS, MONO, SANS, specColor } from "../theme";
+import { DIRS, GOLD, MONO, SANS, specColor } from "../theme";
 import type { Dir } from "../theme";
 
 const GATED_STAGES = LIFECYCLE_STAGES.filter((stage) => stage.gateAfter);
@@ -27,19 +36,53 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   const { dirId, setDirId } = useTheme();
   const [sec, setSec] = useState("appearance");
   const [disabledStages, setDisabledStages] = useState<string[]>(loadDisabledStages);
-  // Keys and deploy target are display-only mocks for now.
+  // Deploy target is a display-only mock for now.
   const [harness, setHarness] = useState<EngineId>(loadEngine);
   const [model, setModel] = useState(loadEngineModel);
   const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(loadPermissionMode);
+  const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusNonce, setStatusNonce] = useState(0);
+  const [settingsView, setSettingsView] = useState<SettingsView | null>(null);
+  const [keyInput, setKeyInput] = useState("");
+  const [keySaving, setKeySaving] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const sections = [
     { id: "appearance", label: "Appearance" },
     { id: "pipeline", label: "Pipeline" },
     { id: "gates", label: "Gates" },
     { id: "harness", label: "AI Harness" },
-    { id: "keys", label: "API Keys" },
+    { id: "connection", label: "Connection" },
     { id: "deploy", label: "Deploy Target" },
   ];
+
+  useEffect(() => {
+    fetchSettings()
+      .then(setSettingsView)
+      .catch(() => setSettingsView(null));
+  }, []);
+
+  useEffect(() => {
+    if (sec !== "harness") {
+      return;
+    }
+    let stale = false;
+    setStatusLoading(true);
+    fetchEngineStatus(harness)
+      .then((status) => {
+        if (!stale) setEngineStatus(status);
+      })
+      .catch(() => {
+        if (!stale) setEngineStatus(null);
+      })
+      .finally(() => {
+        if (!stale) setStatusLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [sec, harness, statusNonce]);
 
   function toggleStage(stageId: string) {
     setDisabledStages((current) => {
@@ -50,6 +93,37 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
       return next;
     });
   }
+
+  async function applyConnectionUpdate(update: EngineConnectionUpdate): Promise<boolean> {
+    setConnectionError(null);
+    try {
+      setSettingsView(await updateEngineConnection(harness, update));
+      return true;
+    } catch (error) {
+      setConnectionError(
+        error instanceof Error ? error.message : "Failed to save connection settings",
+      );
+      return false;
+    }
+  }
+
+  async function saveApiKey() {
+    const key = keyInput.trim();
+    if (!key || keySaving) {
+      return;
+    }
+    setKeySaving(true);
+    if (await applyConnectionUpdate({ apiKey: key })) {
+      setKeyInput("");
+    }
+    setKeySaving(false);
+  }
+
+  const connectionModes = ENGINE_CONNECTIONS[harness];
+  const connectionView = settingsView?.engines[harness];
+  const connectionMode = connectionView?.connectionMode ?? DEFAULT_CONNECTION_MODE;
+  const apiKeyConfigured = connectionView?.apiKeyConfigured ?? false;
+  const modelOption = CLAUDE_MODEL_OPTIONS.find((opt) => opt.id === model);
 
   return (
     <div
@@ -205,17 +279,62 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                   );
                 })}
               </div>
+              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Engine status</div>
+              <div style={{
+                border: `1px solid ${engineStatus && !engineStatus.installed ? "rgba(220,38,38,0.35)" : d.border}`,
+                background: engineStatus && !engineStatus.installed ? "rgba(220,38,38,0.06)" : "transparent",
+                borderRadius: 12, padding: "12px 14px", marginBottom: 20,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {statusLoading ? (
+                      <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>Checking CLI…</span>
+                    ) : engineStatus?.installed ? (
+                      <>
+                        <CheckCircle2 size={14} style={{ color: "#059669", flexShrink: 0 }} />
+                        <span style={{ color: "#059669", fontFamily: SANS, fontSize: 12, fontWeight: 700 }}>
+                          Installed{engineStatus.version ? ` · ${engineStatus.version}` : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={14} style={{ color: "#DC2626", flexShrink: 0 }} />
+                        <span style={{ color: "#DC2626", fontFamily: SANS, fontSize: 12, fontWeight: 700 }}>Not detected</span>
+                      </>
+                    )}
+                  </div>
+                  <button onClick={() => setStatusNonce((n) => n + 1)}
+                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, borderRadius: 8, background: "transparent", color: d.textMid, fontFamily: SANS, fontSize: 11, fontWeight: 600, padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}>
+                    <RefreshCw size={11} /> Re-check
+                  </button>
+                </div>
+                {!statusLoading && engineStatus?.installed && engineStatus.path && (
+                  <div style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, marginTop: 6, wordBreak: "break-all" }}>{engineStatus.path}</div>
+                )}
+                {!statusLoading && engineStatus && !engineStatus.installed && (
+                  <div style={{ color: d.textMid, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>{engineStatus.message}</div>
+                )}
+                {!statusLoading && !engineStatus && (
+                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>Status unavailable — is the server running?</div>
+                )}
+              </div>
               <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Model</div>
               <select value={model}
                 onChange={(e) => {
                   setModel(e.target.value);
                   saveEngineModel(e.target.value);
                 }}
-                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: 20 }}>
-                <option value="claude-opus-4-8">claude-opus-4-8 (most capable)</option>
-                <option value="claude-sonnet-4-6">claude-sonnet-4-6 (balanced)</option>
-                <option value="claude-haiku-4-5">claude-haiku-4-5 (fastest)</option>
+                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }}>
+                {CLAUDE_MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label} — {opt.hint}</option>
+                ))}
+                {!modelOption && <option value={model}>{model} (custom)</option>}
               </select>
+              {modelOption?.requiresUsageCredits && (
+                <div style={{ color: GOLD, fontFamily: SANS, fontSize: 11, marginBottom: 20 }}>
+                  1M context requires usage credits on your Claude plan (claude.ai/settings/usage) or an API key connection.
+                </div>
+              )}
               <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Permissions</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {PERMISSION_MODES.map((opt) => {
@@ -239,20 +358,64 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
             </div>
           )}
 
-          {sec === "keys" && (
+          {sec === "connection" && (
             <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>API Keys</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>Stored locally. Never transmitted to external servers.</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {[{ label: "Anthropic API Key", ph: "sk-ant-api03-...", desc: "Required for all AI stages" }, { label: "GitHub Client ID", ph: "Oauth_...", desc: "Optional — GitHub integration" }].map((f) => (
-                  <div key={f.label}>
-                    <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{f.label}</div>
-                    <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 6 }}>{f.desc}</div>
-                    <input type="password" placeholder={f.ph}
-                      style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 11, color: d.text, outline: "none", background: d.surface2 }} />
-                  </div>
-                ))}
+              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Connection</div>
+              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>
+                How {ENGINES[harness].label} authenticates and bills usage.
               </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                {connectionModes.map((opt) => {
+                  const sel = connectionMode === opt.id;
+                  return (
+                    <button key={opt.id}
+                      onClick={() => void applyConnectionUpdate({ connectionMode: opt.id })}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
+                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
+                      <div>
+                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
+                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {connectionModes.length === 0 && (
+                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
+                    No connection options for {ENGINES[harness].label} yet.
+                  </div>
+                )}
+              </div>
+              {connectionMode === "api-key" && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>Anthropic API Key</div>
+                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 }}>
+                    Stored server-side in .adhd/settings.json (plaintext, gitignored) — never sent back to the browser.
+                  </div>
+                  {apiKeyConfigured && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <span style={{ background: "rgba(5,150,105,0.10)", color: "#059669", borderRadius: 20, padding: "3px 10px", fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>KEY CONFIGURED ✓</span>
+                      <button onClick={() => void applyConnectionUpdate({ apiKey: null })}
+                        style={{ border: "none", background: "transparent", color: "#DC2626", fontFamily: SANS, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input type="password" value={keyInput}
+                      onChange={(e) => setKeyInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && void saveApiKey()}
+                      placeholder={apiKeyConfigured ? "Replace key…" : "sk-ant-api03-..."}
+                      style={{ flex: 1, border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 11, color: d.text, outline: "none", background: d.surface2 }} />
+                    <button onClick={() => void saveApiKey()} disabled={keySaving || keyInput.trim() === ""}
+                      style={{ border: "none", borderRadius: 10, padding: "9px 14px", background: keyInput.trim() && !keySaving ? d.accent : d.surface2, color: keyInput.trim() && !keySaving ? "#FFF" : d.textMuted, fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: keyInput.trim() && !keySaving ? "pointer" : "default", flexShrink: 0 }}>
+                      {keySaving ? "Saving…" : "Save key"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {connectionError && (
+                <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11 }}>{connectionError}</div>
+              )}
             </div>
           )}
 

@@ -1,13 +1,28 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineAdapter, EngineRunContext, EngineRunResult } from "./types.js";
+import type { EngineStatus } from "@adhd/core";
+import type {
+  EngineAdapter,
+  EngineConnection,
+  EngineRunContext,
+  EngineRunResult,
+} from "./types.js";
 
 const MAX_LOG_MESSAGE_LENGTH = 300;
 
-let cachedBinary: string | undefined;
+const INSTALL_HINT =
+  "Claude Code CLI not found. Install it (npm i -g @anthropic-ai/claude-code) " +
+  "or set ADHD_CLAUDE_PATH to the claude executable.";
+
+interface ResolvedBinary {
+  path: string;
+  source: "env" | "path" | "ide-extension";
+}
+
+let cachedBinary: ResolvedBinary | undefined;
 
 /** Last resort: the native binary bundled with the Claude Code IDE extension. */
 function findIdeExtensionBinary(): string | undefined {
@@ -34,13 +49,17 @@ function findIdeExtensionBinary(): string | undefined {
   return undefined;
 }
 
-function resolveClaudeBinary(): string {
+function resolveClaudeBinary(): ResolvedBinary {
   if (cachedBinary) {
     return cachedBinary;
   }
   const fromEnv = process.env.ADHD_CLAUDE_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
-    cachedBinary = fromEnv.trim();
+    const envPath = fromEnv.trim();
+    if (!existsSync(envPath)) {
+      throw new Error(`ADHD_CLAUDE_PATH points to a missing file: ${envPath}`);
+    }
+    cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;
   }
   try {
@@ -48,7 +67,7 @@ function resolveClaudeBinary(): string {
     const output = execFileSync(lookup, ["claude"], { encoding: "utf8" });
     const first = output.split(/\r?\n/).find((line) => line.trim() !== "");
     if (first) {
-      cachedBinary = first.trim();
+      cachedBinary = { path: first.trim(), source: "path" };
       return cachedBinary;
     }
   } catch {
@@ -56,13 +75,76 @@ function resolveClaudeBinary(): string {
   }
   const fromIde = findIdeExtensionBinary();
   if (fromIde) {
-    cachedBinary = fromIde;
+    cachedBinary = { path: fromIde, source: "ide-extension" };
     return cachedBinary;
   }
-  throw new Error(
-    "Claude Code CLI not found. Install it (npm i -g @anthropic-ai/claude-code) " +
-      "or set ADHD_CLAUDE_PATH to the claude executable.",
-  );
+  throw new Error(INSTALL_HINT);
+}
+
+function claudeVersion(binary: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // Same Node >= 20 rule as the run spawn: .cmd/.bat shims need a shell.
+    const useShell = /\.(cmd|bat)$/i.test(binary);
+    execFile(
+      useShell ? `"${binary}"` : binary,
+      ["--version"],
+      { encoding: "utf8", timeout: 10_000, shell: useShell },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(stdout.split(/\r?\n/).find((line) => line.trim() !== "")?.trim() ?? "");
+      },
+    );
+  });
+}
+
+/** Known CLI failure signatures mapped to actionable guidance. */
+const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
+  {
+    pattern: /usage credits required|switch to standard context/i,
+    message:
+      "Your plan doesn't include 1M context. Switch the model to Sonnet (standard) in Setup → AI Harness, or enable usage credits / use an API key.",
+  },
+  {
+    pattern: /invalid api key|authentication_error/i,
+    message: "Invalid Anthropic API key — update it in Setup → Connection.",
+  },
+  {
+    pattern: /please run \/login|not logged in/i,
+    message:
+      "Claude CLI isn't logged in. Run `claude /login` in a terminal, or configure an API key in Setup → Connection.",
+  },
+  {
+    pattern: /credit balance is too low/i,
+    message:
+      "API credit balance too low — top up or switch to subscription mode in Setup → Connection.",
+  },
+  {
+    pattern: /session limit/i,
+    message:
+      "Claude subscription session limit reached — wait for the reset time shown in the log, or switch to an API key in Setup → Connection.",
+  },
+];
+
+function mapKnownError(raw: string): string | undefined {
+  return ERROR_HINTS.find((hint) => hint.pattern.test(raw))?.message;
+}
+
+/**
+ * Environment for the spawned CLI. Anthropic credentials are stripped so a
+ * stray key in the server env can't silently switch billing away from the
+ * user's CLI login (subscription mode); api-key mode injects the stored key.
+ */
+function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.ANTHROPIC_API_KEY;
+  delete env.ANTHROPIC_AUTH_TOKEN; // setting both makes the CLI reject requests
+  if (connection?.mode === "api-key" && connection.apiKey) {
+    env.ANTHROPIC_API_KEY = connection.apiKey;
+  }
+  return env;
 }
 
 function truncate(text: string, max = MAX_LOG_MESSAGE_LENGTH): string {
@@ -114,10 +196,40 @@ interface ClaudeStreamEvent {
 export const claudeCodeAdapter: EngineAdapter = {
   id: "claude-code",
 
+  async detect(): Promise<EngineStatus> {
+    cachedBinary = undefined; // re-check must pick up a newly installed CLI
+    let resolved: ResolvedBinary;
+    try {
+      resolved = resolveClaudeBinary();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { engine: "claude-code", installed: false, message };
+    }
+    try {
+      const version = await claudeVersion(resolved.path);
+      return {
+        engine: "claude-code",
+        installed: true,
+        path: resolved.path,
+        version,
+        source: resolved.source,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        engine: "claude-code",
+        installed: false,
+        path: resolved.path,
+        source: resolved.source,
+        message: `Found ${resolved.path} but "claude --version" failed: ${message}`,
+      };
+    }
+  },
+
   run(ctx: EngineRunContext): Promise<EngineRunResult> {
     let binary: string;
     try {
-      binary = resolveClaudeBinary();
+      binary = resolveClaudeBinary().path;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       ctx.onLog("fail", message);
@@ -129,6 +241,9 @@ export const claudeCodeAdapter: EngineAdapter = {
       "--output-format",
       "stream-json",
       "--verbose",
+      // Bare mode reads auth strictly from ANTHROPIC_API_KEY — without it a
+      // logged-in CLI silently ignores the injected key and bills the plan.
+      ...(ctx.connection?.mode === "api-key" ? ["--bare"] : []),
       ...(ctx.model ? ["--model", ctx.model] : []),
       ...(ctx.permissionMode === "acceptEdits"
         ? ["--permission-mode", "acceptEdits"]
@@ -141,7 +256,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       const child = spawn(useShell ? `"${binary}"` : binary, args, {
         cwd: ctx.cwd,
         shell: useShell,
-        env: process.env,
+        env: buildChildEnv(ctx.connection),
         stdio: ["pipe", "pipe", "pipe"],
       });
 
@@ -246,14 +361,22 @@ export const claudeCodeAdapter: EngineAdapter = {
             errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
           } else if (ctx.signal.aborted) {
             errorMessage = "Aborted";
-          } else if (finalEvent && finalEvent.subtype !== "success") {
-            errorMessage = truncate(finalEvent.result ?? `Claude Code ended with ${finalEvent.subtype}`);
           } else {
             const stderr = stderrTail.join(" ").trim();
-            errorMessage = truncate(
-              `Claude Code exited with code ${exitCode}${stderr ? ` — ${stderr}` : ""}`,
-              500,
-            );
+            // An error result can arrive as a non-success subtype or as
+            // is_error on a "success" result event — take the text either way.
+            const raw =
+              finalEvent && (finalEvent.subtype !== "success" || finalEvent.is_error)
+                ? (finalEvent.result ?? `Claude Code ended with ${finalEvent.subtype}`)
+                : `Claude Code exited with code ${exitCode}${stderr ? ` — ${stderr}` : ""}`;
+            const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
+            if (mapped) {
+              // Keep the raw error visible in the log; surface the guidance.
+              ctx.onLog("warn", truncate(raw, 500));
+              errorMessage = mapped;
+            } else {
+              errorMessage = truncate(raw, 500);
+            }
           }
         }
         finish({

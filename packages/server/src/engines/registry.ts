@@ -13,6 +13,11 @@ export function assertEngineId(id: string): asserts id is EngineId {
   }
 }
 
+/** Like getEngineAdapter, but returns undefined for engines without an implementation. */
+export function findEngineAdapter(id: EngineId): EngineAdapter | undefined {
+  return adapters.get(id);
+}
+
 export function getEngineAdapter(id: string): EngineAdapter {
   assertEngineId(id);
   const adapter = adapters.get(id);

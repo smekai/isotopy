@@ -11,6 +11,7 @@ import type {
 import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
+  ENGINE_CONNECTIONS,
   ENGINES,
   ONE_BOX_PIPELINE,
   agentForStage,
@@ -20,6 +21,7 @@ import {
 import { assertEngineId, getEngineAdapter } from "./engines/registry.js";
 import type { EngineRunResult } from "./engines/types.js";
 import { resolveWorkspace } from "./paths.js";
+import { getEngineConnection } from "./settings.js";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -115,7 +117,16 @@ export class MockOrchestrator {
     const isOneBox = pipeline.id === ONE_BOX_PIPELINE.id;
     if (isOneBox) {
       // Validate the engine before the run exists so bad requests fail fast.
-      getEngineAdapter(engine ?? "claude-code");
+      const engineId = engine ?? "claude-code";
+      getEngineAdapter(engineId);
+      assertEngineId(engineId);
+      const connection = getEngineConnection(engineId);
+      const mode = ENGINE_CONNECTIONS[engineId].find((m) => m.id === connection.mode);
+      if (mode?.requiresApiKey && !connection.apiKey) {
+        throw new Error(
+          `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
+        );
+      }
     }
 
     const runId = randomUUID().slice(0, 8);
@@ -449,6 +460,8 @@ export class MockOrchestrator {
         cwd: run.workspacePath ?? process.cwd(),
         model: run.model,
         permissionMode: this.enginePermissionModes.get(runId) ?? DEFAULT_PERMISSION_MODE,
+        // Read fresh per stage so settings changes apply to restarted runs.
+        connection: getEngineConnection(run.engine),
         timeoutMs: ENGINE_TIMEOUT_MS,
         signal: controller.signal,
         onLog: (level, message) => this.log(runId, stageDef.id, level, message),

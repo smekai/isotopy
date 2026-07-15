@@ -15,6 +15,8 @@ export default defineConfig({
       "/pipelines": "http://localhost:9477",
       "/runs": "http://localhost:9477",
       "/health": "http://localhost:9477",
+      "/settings": "http://localhost:9477",
+      "/engines": "http://localhost:9477",
     },
   },
 });
