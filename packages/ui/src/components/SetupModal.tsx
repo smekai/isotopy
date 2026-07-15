@@ -3,11 +3,10 @@ import { AlertTriangle, CheckCircle2, RefreshCw, Server, ToggleLeft, ToggleRight
 import type { EngineId, EnginePermissionMode, EngineStatus, SettingsView } from "@adhd/core";
 import {
   CLAUDE_MODEL_OPTIONS,
-  DEFAULT_CONNECTION_MODE,
-  ENGINE_CONNECTIONS,
   ENGINES,
   LIFECYCLE_STAGES,
   agentForStage,
+  defaultConnectionMode,
 } from "@adhd/core";
 import { fetchEngineStatus, fetchSettings, updateEngineConnection } from "../api";
 import type { EngineConnectionUpdate } from "../api";
@@ -119,9 +118,9 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
     setKeySaving(false);
   }
 
-  const connectionModes = ENGINE_CONNECTIONS[harness];
+  const connectionModes = ENGINES[harness].connections;
   const connectionView = settingsView?.engines[harness];
-  const connectionMode = connectionView?.connectionMode ?? DEFAULT_CONNECTION_MODE;
+  const connectionMode = connectionView?.connectionMode ?? defaultConnectionMode(harness);
   const apiKeyConfigured = connectionView?.apiKeyConfigured ?? false;
   const modelOption = CLAUDE_MODEL_OPTIONS.find((opt) => opt.id === model);
 

@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import { ENGINE_CONNECTIONS, ENGINES } from "@adhd/core";
+import { ENGINES } from "@adhd/core";
 import type { EngineId, EngineStatus, RunEvent, RunStatus } from "@adhd/core";
 import { findEngineAdapter } from "./engines/registry.js";
 import { orchestrator } from "./mock-orchestrator.js";
@@ -46,7 +46,7 @@ app.get("/settings", (c) => c.json(getSettingsView()));
 
 app.put("/settings/engines/:engineId", async (c) => {
   const engineId = c.req.param("engineId");
-  if (!(engineId in ENGINE_CONNECTIONS)) {
+  if (!(engineId in ENGINES)) {
     return c.json({ error: `Unknown engine: ${engineId}` }, 400);
   }
   const id = engineId as EngineId;
@@ -54,7 +54,7 @@ app.put("/settings/engines/:engineId", async (c) => {
     .json<{ connectionMode?: string; apiKey?: string | null }>()
     .catch(() => ({}) as Record<string, never>);
   if (body.connectionMode !== undefined) {
-    const known = ENGINE_CONNECTIONS[id].some((mode) => mode.id === body.connectionMode);
+    const known = ENGINES[id].connections.some((mode) => mode.id === body.connectionMode);
     if (!known) {
       return c.json(
         { error: `Unknown connection mode for ${id}: ${body.connectionMode}` },

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { DEFAULT_CONNECTION_MODE, ENGINE_CONNECTIONS } from "@adhd/core";
+import { ENGINES, defaultConnectionMode } from "@adhd/core";
 import type { EngineId, SettingsView } from "@adhd/core";
 import type { EngineConnection } from "./engines/types.js";
 import { REPO_ROOT } from "./paths.js";
@@ -54,7 +54,7 @@ function writeSettings(settings: SettingsFile): void {
 export function getEngineConnection(engineId: EngineId): EngineConnection {
   const stored = readSettings().engines[engineId];
   return {
-    mode: stored?.connectionMode ?? DEFAULT_CONNECTION_MODE,
+    mode: stored?.connectionMode ?? defaultConnectionMode(engineId),
     ...(stored?.apiKey ? { apiKey: stored.apiKey } : {}),
   };
 }
@@ -63,13 +63,13 @@ export function getEngineConnection(engineId: EngineId): EngineConnection {
 export function getSettingsView(): SettingsView {
   const stored = readSettings().engines;
   const view: SettingsView = { engines: {} };
-  for (const engineId of Object.keys(ENGINE_CONNECTIONS) as EngineId[]) {
-    if (ENGINE_CONNECTIONS[engineId].length === 0) {
+  for (const engineId of Object.keys(ENGINES) as EngineId[]) {
+    if (ENGINES[engineId].connections.length === 0) {
       continue; // engine has no connection methods yet
     }
     const entry = stored[engineId];
     view.engines[engineId] = {
-      connectionMode: entry?.connectionMode ?? DEFAULT_CONNECTION_MODE,
+      connectionMode: entry?.connectionMode ?? defaultConnectionMode(engineId),
       apiKeyConfigured: Boolean(entry?.apiKey),
     };
   }
@@ -82,7 +82,7 @@ export function updateEngineConnection(
 ): SettingsView {
   const settings = readSettings();
   const current = settings.engines[engineId] ?? {
-    connectionMode: DEFAULT_CONNECTION_MODE,
+    connectionMode: defaultConnectionMode(engineId),
   };
   if (update.connectionMode !== undefined) {
     current.connectionMode = update.connectionMode;

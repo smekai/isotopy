@@ -49,11 +49,20 @@ export type EnginePermissionMode = "skip" | "acceptEdits";
 
 export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";
 
+export interface EngineConnectionDefinition {
+  id: string;
+  label: string;
+  description: string;
+  requiresApiKey: boolean;
+}
+
 export interface EngineDefinition {
   id: EngineId;
   label: string;
   description: string;
   available: boolean;
+  /** How this harness authenticates/bills. Empty when it has no run implementation yet. */
+  connections: EngineConnectionDefinition[];
 }
 
 export const ENGINES: Record<EngineId, EngineDefinition> = {
@@ -62,20 +71,42 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Claude Code",
     description: "Anthropic's agentic coding CLI",
     available: true,
+    connections: [
+      {
+        id: "subscription",
+        label: "Claude subscription",
+        description: "Uses your Claude Code CLI login (claude /login). Billed to your Pro/Max plan.",
+        requiresApiKey: false,
+      },
+      {
+        id: "api-key",
+        label: "Anthropic API key",
+        description:
+          "Injects a stored ANTHROPIC_API_KEY (CLI runs in bare mode, ignoring your CLI login). Billed to the key.",
+        requiresApiKey: true,
+      },
+    ],
   },
   cursor: {
     id: "cursor",
     label: "Cursor",
     description: "Cursor CLI agent",
     available: false,
+    connections: [],
   },
   codex: {
     id: "codex",
     label: "Codex",
     description: "OpenAI Codex CLI",
     available: false,
+    connections: [],
   },
 };
+
+/** Fallback connection mode when a harness has no stored preference yet. */
+export function defaultConnectionMode(engineId: EngineId): string {
+  return ENGINES[engineId].connections[0]?.id ?? "subscription";
+}
 
 export interface EngineModelOption {
   /** Value passed verbatim to the engine CLI (e.g. `claude --model <id>`). */
@@ -110,35 +141,6 @@ export const LEGACY_MODEL_ALIASES: Record<string, string> = {
   "claude-sonnet-4-6": "sonnet",
   "claude-haiku-4-5": "haiku",
 };
-
-export interface EngineConnectionDefinition {
-  id: string;
-  label: string;
-  description: string;
-  requiresApiKey: boolean;
-}
-
-export const ENGINE_CONNECTIONS: Record<EngineId, EngineConnectionDefinition[]> = {
-  "claude-code": [
-    {
-      id: "subscription",
-      label: "Claude subscription",
-      description: "Uses your Claude Code CLI login (claude /login). Billed to your Pro/Max plan.",
-      requiresApiKey: false,
-    },
-    {
-      id: "api-key",
-      label: "Anthropic API key",
-      description:
-        "Injects a stored ANTHROPIC_API_KEY (CLI runs in bare mode, ignoring your CLI login). Billed to the key.",
-      requiresApiKey: true,
-    },
-  ],
-  cursor: [],
-  codex: [],
-};
-
-export const DEFAULT_CONNECTION_MODE = "subscription";
 
 /** What the UI sees — the API key itself never leaves the server. */
 export interface EngineConnectionSettingsView {

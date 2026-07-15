@@ -11,7 +11,6 @@ import type {
 import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
-  ENGINE_CONNECTIONS,
   ENGINES,
   ONE_BOX_PIPELINE,
   agentForStage,
@@ -121,7 +120,7 @@ export class MockOrchestrator {
       getEngineAdapter(engineId);
       assertEngineId(engineId);
       const connection = getEngineConnection(engineId);
-      const mode = ENGINE_CONNECTIONS[engineId].find((m) => m.id === connection.mode);
+      const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
       if (mode?.requiresApiKey && !connection.apiKey) {
         throw new Error(
           `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
