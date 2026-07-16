@@ -6,11 +6,18 @@
   "scripts": {
     "dev": "concurrently -n server,ui -c blue,green \"pnpm --filter @adhd/server dev\" \"pnpm --filter @adhd/ui dev\"",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "concurrently": "^9.1.2",
-    "typescript": "^5.8.2"
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.64.0"
   },
   "engines": {
     "node": ">=20"

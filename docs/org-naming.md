@@ -6,6 +6,13 @@
 
 > **Key GitHub fact:** nearly every bare 3–5-letter name already has a GitHub **user** (users and orgs share one namespace), so the exact-match org is blocked. The practical route: register the **full word** as the org — `uspevai`, `smekai`, `zadelai`, `vrubai` are checked **free**. Exception: **`obych` and `obychai` are BOTH free** — the only candidate with a fully clean GitHub namespace. `lentyai` is taken.
 
+## TOP AVAILABLE BY FEDOR
+
+nakat.ai
+zadel.ai
+nagon.ai
+smek.ai
+
 ## TL;DR — Top 5
 
 | Domain | Reads as | RDAP | Live site | GitHub org | Collisions | Score |
@@ -102,3 +109,44 @@ Short English words: every checked 3–5-letter candidate (doit, spur, kick, kna
 - GitHub full-word orgs verified free: `uspevai`, `smekai`, `zadelai`, `vrubai`, `obych`, `obychai`. **Not yet checked** (API rate limit): `prygai`, `nakatai`, `sdvigai`, `gimalai`, `vseznai`, `neznai`. `lentyai` is taken.
 - Short names get squatted — register the GitHub org promptly after picking.
 - Not verified: trademark databases, App Store name collisions, social handles.
+
+# OPENAI research
+Candidate Names (Shortlisted 20)
+For each candidate, we give origin, meaning, pronunciation, and domain availability notes. The .ai/.com/.dev availability is estimates only – always verify before registering.
+
+Synkai (invented) – sin-kai. Implies “sync” + AI; suggests synchronization or synergy in AI. Brand fit: 9/10 (modern, tech-savvy). Domains: synkai.ai (✔ likely free), synkai.com (✘ likely taken/premium), synkai.dev (✔).
+Orkai (invented) – or-kai. Evokes “orchestrate” or “oracle”; strong tech vibe. Brand fit: 8/10. Domains: orkai.ai (✔), orkai.com (✔), orkai.dev (✔).
+Nexai (invented) – nex-ay. From “next AI”; futuristic. Brand fit: 8/10. Domains: nexai.ai (✔), nexai.com (✘), nexai.dev (✔).
+Fluxai (invented) – flux-ay. “Flux” implies change and flow; combined with AI, suggests dynamic systems. Brand fit: 8/10. Domains: fluxai.ai (✔), fluxai.com (✘), fluxai.dev (✔).
+Razum (Russian) – rah-zoom. Means “reason” or “intellect” in Russian. Implies intelligence; memorable cross-language. Brand fit: 9/10. Domains: razum.ai (✔?), razum.com (✘), razum.dev (✔).
+Delai (Russian/invented) – deh-lie. From “делай” (“do it”); suggests action and execution. Brand fit: 7/10. Domains: delai.ai (✔), delai.com (✘), delai.dev (✔).
+Reshai (Russian/invented) – reh-shy. From “решай” (“solve it”); conveys problem-solving. Brand fit: 8/10. Domains: reshai.ai (✔), reshai.com (✘), reshai.dev (✔).
+Sozdai (Russian) – sohz-dai. From “создай” (“create”); encourages building. Brand fit: 7/10. Domains: sozdai.ai (✔), sozdai.com (✘), sozdai.dev (✔).
+Altai (Geographic) – al-tai. Name of a mountain region in Russia; spelled like alt.ai. Implies “alternative” (alt) + AI. Brand fit: 7/10. Domains: altai.ai (✘ likely taken by travel site), altai.com (✘ premium), altai.dev (✔).
+Arcai (invented) – ar-kai. From “arch/arc” + AI; suggests foundation or architecture. Brand fit: 7/10. Domains: arcai.ai (✔), arcai.com (✔), arcai.dev (✔).
+Voxai (invented) – vox-ay. “Vox” (voice) + AI; good for communication/agent products. Brand fit: 7/10. Domains: voxai.ai (✔), voxai.com (✔), voxai.dev (✔).
+Lumia (invented/Russian) – loo-mee-ah. From “люми” (root for “light”) or just invented; bright and techy. Brand fit: 7/10. Domains: lumai.ai (✔), lumai.com (✔), lumai.dev (✔).
+Umnik (Russian) – oom-neek. Means “smarty”/“genius”. Friendly, suggests intelligence. Brand fit: 6/10. Domains: umnik.ai (✘ common prefix? likely taken), umnik.com (✘), umnik.dev (✔).
+Idei (Russian) – ee-day. Plural of “idea”; creative and pluralistic. Brand fit: 6/10. Domains: idei.ai (✔), idei.com (✔), idei.dev (✔).
+Mysl (Russian) – meesl. Means “thought”. Abstract, rather deep. Brand fit: 6/10. Domains: mysl.ai (✔), mysl.com (✘), mysl.dev (✔).
+Cyberai (invented) – sigh-ber-ay. “Cyber” + AI; direct tech feel. Brand fit: 6/10. Domains: cyberai.ai (✔), cyberai.com (✘), cyberai.dev (✔).
+Synqra (invented) – sink-rah. Sounds like “sync” or “synth”. Modern/abstract feel. Brand fit: 7/10. Domains: synqra.ai (✔), synqra.com (✔), synqra.dev (✔).
+Orion (invented/geo) – oh-rye-on. (Not ending in “ai”, but short/invented.) Evokes constellation; hint of navigation or overview. Brand fit: 6/10. Domains: orion.ai (✔), orion.com (✘), orion.dev (✔).
+Altair (geo/sci-fi) – al-tair. (Star name and mountain). Implies guidance; note: doesn’t end in “ai” exactly. Brand fit: 6/10. Domains: altair.ai (✔), altair.com (✘), altair.dev (✔).
+AxisAI (invented) – ax-is-ay. “Axis” + AI; suggests central planning or coordination. Brand fit: 6/10. Domains: axisai.ai (✔), axisai.com (✘), axisai.dev (✔).
+(In the above, “✔ likely free” means an initial search showed no registration. “✘” means likely registered or premium. These are estimates; actual availability requires a WHOIS check. Domains without a “.ai” need trademarks cleared if used.)
+
+Comparison of Top 10 Names
+Below is a table of our Top 10 candidates (ranked by a mix of brand-fit, uniqueness, and estimated domain viability). For brevity we focus on .ai availability (primary goal) and give a brand-fit score (0–10). We also note if a name is already in common use or likely premium:
+
+Name	Origin/Meaning	.ai	.com (note)	.dev	Brand-Fit
+Synkai	(invented) “sync + AI”	Available (✔)	Taken (common)	Available (✔)	9
+Orkai	(invented) “orchestrate?”	Available (✔)	Available (✔)	Available (✔)	8
+Nexai	(invented) “next AI”	Available (✔)	Taken (tech names)	Available (✔)	8
+Fluxai	(invented) “flux + AI”	Available (✔)	Taken? (niche)	Available (✔)	8
+Razum	(Rus. “reason/intellect”)	Available (✔)	Taken (Russian market)	Available (✔)	9
+Delai	(Rus. “do it!”)	Available (✔)	Taken (Fr. “délai”?)	Available (✔)	7
+Reshai	(Rus. “solve it!”)	Available (✔)	Taken (rare word)	Available (✔)	8
+Sozdai	(Rus. “create it!”)	Available (✔)	Taken (rare word)	Available (✔)	7
+Altai	(Altai region / “alt + AI”)	Taken (common name)	Taken (travel)	Available (✔)	7
+Arcai	(invented, “arch/arc + AI”)	Available (✔)	Available (✔)	Available (✔)	7

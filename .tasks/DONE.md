@@ -1,5 +1,13 @@
 # Done
 
+## TASK-032: Code quality
+**Priority:** P1 | **Tags:** code, qualtiy, beauty | **Assignee:** Fedor
+**Updated:** 2026-07-15 22:53
+
+Done: ESLint 10 flat config at root (`eslint.config.mjs`: JS + typescript-eslint recommended, react-hooks for UI; `pnpm lint`/`lint:fix`) — clean. Code segregated by role: `@adhd/core` split into domain modules (`agents/engines/pipelines/runs/settings.ts`, barrel `index.ts`); server split into bootstrap-only `index.ts` → `app.ts` (composition) → `routes/` (controllers: health, pipelines, engines, settings, runs) → `services/run-orchestrator.ts` (ex mock-orchestrator) → pure helpers in `utils.ts`. All hosts/ports/timeouts moved to env-driven `config.ts` (reads root `.env`; `ADHD_HOST/ADHD_PORT/ADHD_CORS_ORIGINS/ADHD_ENGINE_TIMEOUT_MS/ADHD_UI_PORT/ADHD_SERVER_URL`) + `.env.example`; Vite proxy and Playwright baseURL env-driven too. Core relative imports use `.ts` extensions with `rewriteRelativeImportExtensions` (needed for Node type-stripping of source-served core). Conventions + next-steps recommendations in `docs/code-quality.md`. Verified: lint/typecheck/build green, UI bundle byte-identical, live smoke of all routes incl. SSE, gate approve, abort, and `ADHD_PORT` override.
+
+---
+
 ## TASK-031: UI: EmptyState pipeline dropdown
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-15 13:40

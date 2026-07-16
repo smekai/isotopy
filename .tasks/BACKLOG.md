@@ -1,15 +1,5 @@
 # Backlog
 
-## TASK-032: Code quality
-**Priority:** P1 | **Tags:** code, qualtiy, beauty | **Assignee:** Fedor
-**Updated:** 2026-07-15 07:46
-
-We need to make and maintaine a hight code quality standatds. First - linter with base rules, second we should segregate code by some rules for exaple models stay sepparetly from services and entry endpoints stays aside like controllers. 
-Move pure functions aside of context depended - domain logic and services should be spread. One file should be a bootstrapp or app, wehre we see what happening in service start.
-Then please advice of other common practices. Maybe move constants away from code, dont lock on localhost _ ports, store this in the env files.
-
----
-
 ## TASK-022: Introduce a logger across the system
 **Priority:** P2 | **Tags:** core, server, ui, infra
 **Updated:** 2026-07-14 10:51

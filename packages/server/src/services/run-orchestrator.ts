@@ -16,11 +16,14 @@ import {
   agentForStage,
   createInitialRunState,
   flattenPipelineStages,
+  isTerminalRunStatus,
 } from "@adhd/core";
-import { assertEngineId, getEngineAdapter } from "./engines/registry.js";
-import type { EngineRunResult } from "./engines/types.js";
-import { resolveWorkspace } from "./paths.js";
-import { getEngineConnection } from "./settings.js";
+import { config } from "../config.js";
+import { assertEngineId, getEngineAdapter } from "../engines/registry.js";
+import type { EngineRunResult } from "../engines/types.js";
+import { resolveWorkspace } from "../paths.js";
+import { getEngineConnection } from "../settings.js";
+import { nowIso, randomBetween, sleep } from "../utils.js";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -39,8 +42,6 @@ export interface StartRunOptions extends SimulationOptions {
   permissionMode?: string;
 }
 
-const ENGINE_TIMEOUT_MS = Number(process.env.ADHD_ENGINE_TIMEOUT_MS ?? 600000);
-
 const DEFAULT_OPTIONS: Required<SimulationOptions> = {
   minDurationMs: 2000,
   maxDurationMs: 8000,
@@ -49,19 +50,12 @@ const DEFAULT_OPTIONS: Required<SimulationOptions> = {
 
 type StageOutcome = "passed" | "failed" | "cancelled";
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function randomBetween(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-export class MockOrchestrator {
+/**
+ * Owns run lifecycle: starts pipelines, streams stage events to subscribers,
+ * and executes stages either as simulations or through a real engine adapter
+ * (one-box pipeline). State is in-memory for the prototype.
+ */
+export class RunOrchestrator {
   private readonly runs = new Map<string, RunState>();
   private readonly listeners = new Map<string, Set<RunListener>>();
   private readonly runOptions = new Map<string, Required<SimulationOptions>>();
@@ -193,11 +187,7 @@ export class MockOrchestrator {
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
     }
-    if (
-      run.status === "completed" ||
-      run.status === "failed" ||
-      run.status === "cancelled"
-    ) {
+    if (isTerminalRunStatus(run.status)) {
       throw new Error(`Run ${runId} is already finished`);
     }
 
@@ -461,7 +451,7 @@ export class MockOrchestrator {
         permissionMode: this.enginePermissionModes.get(runId) ?? DEFAULT_PERMISSION_MODE,
         // Read fresh per stage so settings changes apply to restarted runs.
         connection: getEngineConnection(run.engine),
-        timeoutMs: ENGINE_TIMEOUT_MS,
+        timeoutMs: config.engineTimeoutMs,
         signal: controller.signal,
         onLog: (level, message) => this.log(runId, stageDef.id, level, message),
       });
@@ -579,4 +569,4 @@ export class MockOrchestrator {
   }
 }
 
-export const orchestrator = new MockOrchestrator();
+export const orchestrator = new RunOrchestrator();
