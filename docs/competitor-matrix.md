@@ -101,10 +101,13 @@
 | **CrewAI** | Code (Python) | Role-based crews | Yes | Rapid multi-agent prototypes |
 | **AutoGen** | Code (Python) | Conversation-centric | Yes | Research / open-ended tasks |
 | **n8n** | Visual + self-host | Generic automation | Yes | Integrations + AI nodes |
+| **Manifold** | Visual + self-host (Go/Vue) | None (long-horizon agent workflows) | Yes | Teams of "specialist" agents; MCP tools auto-exposed as nodes; saved workflows become reusable tools |
 | **Langflow / Flowise** | Visual | LLM flows | Yes | Prototyping chains |
 | **Rivet** | Visual logic | Agent logic design | Yes | TypeScript teams |
 
 **What they miss:** Product-level stages, git isolation, harness adapters, deploy adapters, and dashboard out of the box. **Why not popular as products:** frameworks require engineering to become a product.
+
+**Manifold note:** The most product-like entry here — self-hosted (Go + Vue, SQLite/Postgres, MIT), ships a visual flow editor, specialist chat, observability dashboard, and scheduled runs (Pulse) out of the box. But it is model-API-driven (OpenAI/Anthropic/Google/llama.cpp/vLLM), not harness-driven: no Claude Code/Cursor adapters, no git/repo artifacts, no SDLC stages, no E2E or deploy story. Self-described **experimental** (~500 stars). Watch it as a pattern source for "workflows as reusable tools" and MCP-tools-as-nodes, not as a direct competitor.
 
 **Gap:** Frameworks give flexibility; they do not ship app-builder stages, git isolation, Playwright E2E, or deploy adapters out of the box.
 
@@ -230,5 +233,6 @@ Low abstraction                             High abstraction
 | Singulary | https://github.com/sammwyy/singulary |
 | Aiki | https://github.com/aikirun/aiki |
 | Paperclip | https://github.com/paperclipai/paperclip |
+| Manifold | https://github.com/intelligencedev/manifold |
 | LangGraph | https://langchain.com/langgraph |
 | OpenHands | https://www.openhands.dev |
