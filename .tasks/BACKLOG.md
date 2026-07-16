@@ -1,34 +1,37 @@
 # Backlog
 
-## TASK-033: Migrate repos to the `smekai` GitHub org (fix all references)
-**Priority:** P2 | **Tags:** setup, infra
-**Updated:** 2026-07-16 16:04
+## TASK-034: Design the `smek.ai` brand icon (comic "SMEK" burst)
+**Priority:** P2 | **Tags:** setup, ui
+**Updated:** 2026-07-16 16:38
 
-Transfer `adhd` and `taskplanner` from the personal account into the `smekai` GitHub org (domain: `smek.ai`), and fix every reference that assumes the old owner. Redirects keep old URLs working, but they die the moment a repo with the old name is recreated — so update everything explicitly.
+Design the icon/logo mark for the `smekai` GitHub org and the `smek.ai` brand. One master SVG that scales into the org avatar, the site favicon, and the VS Code extension icon.
 
-GitHub transfer:
+Org context (for the designer):
 
-- Repo → Settings → Transfer → target org `smekai` (do both repos).
-- Do NOT recreate a repo with the old name on the personal account afterwards (kills the redirect).
+- `smek.ai` is a small studio building AI-native, local-first tools for focused, low-friction work. Everything we make stays in the user's repo, in open formats, and is legible to both people and AI agents.
+- Current products: **TaskPlanner** (task management as plain markdown inside the editor) and **ADHD** (an agent workspace where AI agents work as a team of professions — PM plans, dev builds, SRE ships).
+- Brand personality: punchy, energetic, a little playful — tools that *get work done*, not another passive dashboard. The name plays on the comic-book sound effect "SMACK!".
 
-Code / manifest references:
+Visual direction:
 
-- `taskplanner/package.json` → set `repository.url` to `https://github.com/smekai/taskplanner` (currently `refined/taskplanner`); add/adjust `homepage` + `bugs.url` if present.
-- `adhd/package.json` → no repo field today; add `repository`/`homepage` pointing at `smekai/adhd` if we want it.
-- Sweep both repos for hardcoded `github.com/<old-owner>/…` (also in `CLAUDE.md`, `.cursorrules`, docs) and repoint to `smekai`.
+- **Concept:** a retro comic-book onomatopoeia / impact burst — the classic jagged "POW! / BAM! / SMACK!" explosion shape — but the word inside reads **SMEK**.
+- **Keep the wordmark "SMEK"** integrated into the burst (bold retro display lettering).
+- **Palette:** bright comic yellow + blue, with a thick black inked outline. Two primaries max besides the black/white.
+- **Style cues:** Golden/Silver-age comics — heavy black outlines, Ben-Day / halftone dots, slight offset/drop shadow, punchy energetic angle. Avoid gradients and fine detail.
 
-Local / tooling:
+Constraints:
 
-- `git remote set-url origin https://github.com/smekai/<repo>.git` on all working copies.
-- Re-issue fine-grained PATs scoped to the `smekai` org (personal-scoped ones won't cover org repos).
-- Re-approve required third-party OAuth/GitHub Apps under the org (Settings → Third-party access); reconnect any external CI/deploy integrations bound to `personal/repo`.
-- Check for GitHub Pages / custom-domain (`smek.ai`) CNAME that needs repointing.
+- Square, full-bleed to the edges (GitHub crops to a rounded square — no transparent margins).
+- Must read at **40–60px** (avatar in lists/PRs) and stay legible in **black & white**.
+- "SMEK" text will not survive at favicon size — deliver **two lockups**: (a) full burst-with-SMEK for large/hero use, and (b) a simplified small-size mark (bare burst silhouette or single-letter monogram) for favicon/tiny avatar.
 
-Out of scope (decide separately):
+Deliverables:
 
-- VS Code Marketplace `publisher` (`refined`) is independent of GitHub — the transfer does not change it. Renaming the publisher is a separate, riskier operation; do not bundle it here.
+- Master **SVG** (editable), plus exports: org avatar **512×512 PNG**, favicon (`.ico` / 32px + 16px), VS Code extension icon **128×128 PNG**.
+- Light- and dark-background versions (or one that survives both).
+- 2 initial concept directions to choose from before final polish.
 
-Done when: both repos live under `smekai`, all manifests/docs/remotes point at the new owner, CI + integrations green, and no stale `github.com/refined|<personal>` references remain.
+Done when: a final icon set is exported, the `smekai` org avatar + `smek.ai` favicon are updated, and the master SVG is committed to the repo.
 
 ---
 

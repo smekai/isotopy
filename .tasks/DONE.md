@@ -1,5 +1,13 @@
 # Done
 
+## TASK-033: Migrate repos to the `smekai` GitHub org (fix all references)
+**Priority:** P2 | **Tags:** setup, infra
+**Updated:** 2026-07-16 16:38
+
+Done (adhd repo only — `taskplanner` migrated in a parallel stream): repos already transferred `refined` → `smekai` org, so this covered references + local remote. Repointed the two generated `refined/taskplanner` links to `smekai/taskplanner` in `CLAUDE.md` and `.cursorrules`; added `repository`/`homepage`/`bugs` (→ `smekai/adhd`) to root `package.json`; set local `origin` to `https://github.com/smekai/adhd.git`. No `.github/`, `CNAME`/Pages, or VS Code `publisher` in this repo, so those ticket items were N/A here. Publisher/author/personal-profile identities left as `refined` per decision. Durability caveat: `CLAUDE.md`/`.cursorrules` are generated from TaskPlanner's `aiInstructions.ts` template (still hardcodes `refined/taskplanner`); a future init/sync would re-inject `refined` until the parallel taskplanner-template fix ships.
+
+---
+
 ## TASK-032: Code quality
 **Priority:** P1 | **Tags:** code, qualtiy, beauty | **Assignee:** Fedor
 **Updated:** 2026-07-15 22:53
