@@ -1,5 +1,13 @@
 # Done
 
+## TASK-006: First harness adapter (generic subprocess)
+**Priority:** P1 | **Tags:** milestone-c, adapters
+**Updated:** 2026-07-17 18:45
+
+Done: Added `packages/server/src/engines/subprocess.ts` — a generic `runSubprocess(spec)` harness that runs any CLI command in a worktree (cwd), streaming stdout/stderr line-by-line via `onLine`, with a hard `timeoutMs`, `AbortSignal` support, and cross-platform process-tree kill (`taskkill /T` on Windows, SIGTERM→SIGKILL on POSIX). It never rejects — spawn errors, non-zero exit, timeout, and abort are all reported in the resolved `SubprocessResult` (success/exitCode/timedOut/aborted/stdout/stderrTail/durationMs/errorMessage). This is the reusable core the concrete engine adapters build on. Refactored `claude-code.ts` onto it: `killProcessTree` and the whole spawn/timeout/abort/stderr/line-buffering block moved into the primitive; the adapter now just resolves its binary, builds Claude args + env, and parses stream-json off each line (`handleClaudeEvent`). Cursor/Codex (TASK-037/038) reuse this. Verified: 15 direct `runSubprocess` checks (success, full-stdout capture, per-line streaming, non-zero exit + stderr tail, stdin delivery/EOF, timeout kill <5s, abort kill <5s, ENOENT bad command) all pass; a fake-CLI end-to-end one-box run through the server drove the refactored Claude adapter to `completed` with stream-json logs, `result`, and cost/turns captured — no real CLI or spend; `pnpm typecheck` + `pnpm lint` clean.
+
+---
+
 ## TASK-005: File-backed workflow engine (state.json + events.jsonl)
 **Priority:** P1 | **Tags:** milestone-b
 **Updated:** 2026-07-17 18:25

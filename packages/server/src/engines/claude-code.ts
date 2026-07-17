@@ -1,9 +1,9 @@
-import { execFile, execFileSync, spawn } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineStatus } from "@adhd/core";
+import { runSubprocess } from "./subprocess.js";
 import type {
   EngineAdapter,
   EngineConnection,
@@ -157,20 +157,6 @@ function toolUseSummary(name: string, input: Record<string, unknown>): string {
   return truncate(`▶ ${name} ${String(detail)}`);
 }
 
-function killProcessTree(child: ChildProcess): void {
-  if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) {
-    return;
-  }
-  if (process.platform === "win32") {
-    // child.kill() would leave grandchildren alive under the .cmd shim.
-    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
-  } else {
-    child.kill("SIGTERM");
-    const escalate = setTimeout(() => child.kill("SIGKILL"), 5000);
-    escalate.unref();
-  }
-}
-
 interface ClaudeStreamEvent {
   type?: string;
   subtype?: string;
@@ -191,6 +177,47 @@ interface ClaudeStreamEvent {
       content?: unknown;
     }>;
   };
+}
+
+/**
+ * Render one Claude stream-json event to the run log. Returns the event when
+ * it's the final `result` event so the caller can capture cost/turns/result.
+ */
+function handleClaudeEvent(
+  event: ClaudeStreamEvent,
+  onLog: EngineRunContext["onLog"],
+): ClaudeStreamEvent | undefined {
+  if (event.type === "system" && event.subtype === "init") {
+    const tools = Array.isArray(event.tools) ? `${event.tools.length} tools` : "";
+    onLog("info", truncate(`Claude Code online · ${event.model ?? "default model"} · ${tools}`));
+    return undefined;
+  }
+  if (event.type === "assistant") {
+    for (const item of event.message?.content ?? []) {
+      if (item.type === "text" && item.text) {
+        onLog("info", truncate(item.text));
+      } else if (item.type === "tool_use" && item.name) {
+        onLog("run", toolUseSummary(item.name, item.input ?? {}));
+      }
+    }
+    return undefined;
+  }
+  if (event.type === "user") {
+    for (const item of event.message?.content ?? []) {
+      if (item.type === "tool_result" && item.is_error) {
+        onLog("warn", truncate(`Tool error: ${JSON.stringify(item.content)}`));
+      }
+    }
+    return undefined;
+  }
+  if (event.type === "result") {
+    const cost = event.total_cost_usd !== undefined ? `$${event.total_cost_usd.toFixed(4)}` : "?";
+    const turns = event.num_turns ?? "?";
+    const secs = event.duration_ms !== undefined ? `${Math.round(event.duration_ms / 1000)}s` : "?";
+    onLog("info", `cost ${cost} · ${turns} turns · ${secs}`);
+    return event;
+  }
+  return undefined;
 }
 
 export const claudeCodeAdapter: EngineAdapter = {
@@ -226,14 +253,14 @@ export const claudeCodeAdapter: EngineAdapter = {
     }
   },
 
-  run(ctx: EngineRunContext): Promise<EngineRunResult> {
+  async run(ctx: EngineRunContext): Promise<EngineRunResult> {
     let binary: string;
     try {
       binary = resolveClaudeBinary().path;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       ctx.onLog("fail", message);
-      return Promise.resolve({ success: false, exitCode: null, errorMessage: message });
+      return { success: false, exitCode: null, errorMessage: message };
     }
 
     const args = [
@@ -250,151 +277,74 @@ export const claudeCodeAdapter: EngineAdapter = {
         : ["--dangerously-skip-permissions"]),
     ];
 
-    return new Promise<EngineRunResult>((resolve) => {
-      // Node >= 20 refuses to spawn .cmd/.bat shims without a shell.
-      const useShell = /\.(cmd|bat)$/i.test(binary);
-      const child = spawn(useShell ? `"${binary}"` : binary, args, {
-        cwd: ctx.cwd,
-        shell: useShell,
-        env: buildChildEnv(ctx.connection),
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-
-      let settled = false;
-      let stdoutBuffer = "";
-      let stderrTail: string[] = [];
-      let timedOut = false;
-      let finalEvent: ClaudeStreamEvent | undefined;
-
-      const finish = (result: EngineRunResult) => {
-        if (settled) {
+    // The generic harness owns the process lifecycle (spawn, timeout, abort,
+    // process-tree kill); we parse Claude's stream-json output off each line.
+    let finalEvent: ClaudeStreamEvent | undefined;
+    const result = await runSubprocess({
+      command: binary,
+      args,
+      cwd: ctx.cwd,
+      env: buildChildEnv(ctx.connection),
+      input: ctx.prompt,
+      timeoutMs: ctx.timeoutMs,
+      signal: ctx.signal,
+      onLine: (stream, line) => {
+        if (stream !== "stdout") {
           return;
         }
-        settled = true;
-        clearTimeout(timeout);
-        ctx.signal.removeEventListener("abort", onAbort);
-        resolve(result);
-      };
-
-      const onAbort = () => killProcessTree(child);
-      ctx.signal.addEventListener("abort", onAbort, { once: true });
-
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        killProcessTree(child);
-      }, ctx.timeoutMs);
-      timeout.unref();
-
-      const handleEvent = (event: ClaudeStreamEvent) => {
-        if (event.type === "system" && event.subtype === "init") {
-          const tools = Array.isArray(event.tools) ? `${event.tools.length} tools` : "";
-          ctx.onLog(
-            "info",
-            truncate(`Claude Code online · ${event.model ?? "default model"} · ${tools}`),
-          );
+        const trimmed = line.trim();
+        if (!trimmed) {
           return;
         }
-        if (event.type === "assistant") {
-          for (const item of event.message?.content ?? []) {
-            if (item.type === "text" && item.text) {
-              ctx.onLog("info", truncate(item.text));
-            } else if (item.type === "tool_use" && item.name) {
-              ctx.onLog("run", toolUseSummary(item.name, item.input ?? {}));
-            }
+        try {
+          const captured = handleClaudeEvent(JSON.parse(trimmed) as ClaudeStreamEvent, ctx.onLog);
+          if (captured) {
+            finalEvent = captured;
           }
-          return;
+        } catch {
+          // non-JSON output line — ignore
         }
-        if (event.type === "user") {
-          for (const item of event.message?.content ?? []) {
-            if (item.type === "tool_result" && item.is_error) {
-              ctx.onLog("warn", truncate(`Tool error: ${JSON.stringify(item.content)}`));
-            }
-          }
-          return;
-        }
-        if (event.type === "result") {
-          finalEvent = event;
-          const cost = event.total_cost_usd !== undefined ? `$${event.total_cost_usd.toFixed(4)}` : "?";
-          const turns = event.num_turns ?? "?";
-          const secs = event.duration_ms !== undefined ? `${Math.round(event.duration_ms / 1000)}s` : "?";
-          ctx.onLog("info", `cost ${cost} · ${turns} turns · ${secs}`);
-        }
-      };
-
-      const consumeLines = (chunk: string, flush = false) => {
-        stdoutBuffer += chunk;
-        const lines = stdoutBuffer.split("\n");
-        stdoutBuffer = flush ? "" : (lines.pop() ?? "");
-        for (const line of [...lines, ...(flush && stdoutBuffer ? [stdoutBuffer] : [])]) {
-          const trimmed = line.trim();
-          if (!trimmed) {
-            continue;
-          }
-          try {
-            handleEvent(JSON.parse(trimmed) as ClaudeStreamEvent);
-          } catch {
-            // non-JSON output line — ignore
-          }
-        }
-      };
-
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => consumeLines(chunk));
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk: string) => {
-        stderrTail = [...stderrTail, ...chunk.split(/\r?\n/)].filter(Boolean).slice(-10);
-      });
-
-      child.on("error", (error) => {
-        const message = `Failed to start Claude Code: ${error.message}`;
-        ctx.onLog("fail", message);
-        finish({ success: false, exitCode: null, errorMessage: message });
-      });
-
-      child.on("close", (exitCode) => {
-        consumeLines("", true);
-        const success =
-          exitCode === 0 && finalEvent?.subtype === "success" && !finalEvent.is_error;
-        let errorMessage: string | undefined;
-        if (!success) {
-          if (timedOut) {
-            errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
-          } else if (ctx.signal.aborted) {
-            errorMessage = "Aborted";
-          } else {
-            const stderr = stderrTail.join(" ").trim();
-            // An error result can arrive as a non-success subtype or as
-            // is_error on a "success" result event — take the text either way.
-            const raw =
-              finalEvent && (finalEvent.subtype !== "success" || finalEvent.is_error)
-                ? (finalEvent.result ?? `Claude Code ended with ${finalEvent.subtype}`)
-                : `Claude Code exited with code ${exitCode}${stderr ? ` — ${stderr}` : ""}`;
-            const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
-            if (mapped) {
-              // Keep the raw error visible in the log; surface the guidance.
-              ctx.onLog("warn", truncate(raw, 500));
-              errorMessage = mapped;
-            } else {
-              errorMessage = truncate(raw, 500);
-            }
-          }
-        }
-        finish({
-          success,
-          result: finalEvent?.result,
-          exitCode,
-          errorMessage,
-          costUsd: finalEvent?.total_cost_usd,
-          durationMs: finalEvent?.duration_ms,
-          numTurns: finalEvent?.num_turns,
-        });
-      });
-
-      child.stdin.on("error", () => {
-        // stdin may close early if the process dies immediately; 'close' handles it.
-      });
-      child.stdin.write(ctx.prompt);
-      child.stdin.end();
+      },
     });
+
+    const success = result.success && finalEvent?.subtype === "success" && !finalEvent.is_error;
+    let errorMessage: string | undefined;
+    if (!success) {
+      if (result.timedOut) {
+        errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
+      } else if (result.aborted) {
+        errorMessage = "Aborted";
+      } else if (result.exitCode === null && !finalEvent) {
+        // The CLI never started (bad binary, etc.) — surface the spawn reason.
+        errorMessage = result.errorMessage ?? "Failed to start Claude Code";
+        ctx.onLog("fail", errorMessage);
+      } else {
+        const stderr = result.stderrTail.join(" ").trim();
+        // An error result can arrive as a non-success subtype or as is_error on
+        // a "success" result event — take the text either way.
+        const raw =
+          finalEvent && (finalEvent.subtype !== "success" || finalEvent.is_error)
+            ? (finalEvent.result ?? `Claude Code ended with ${finalEvent.subtype}`)
+            : `Claude Code exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
+        const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
+        if (mapped) {
+          // Keep the raw error visible in the log; surface the guidance.
+          ctx.onLog("warn", truncate(raw, 500));
+          errorMessage = mapped;
+        } else {
+          errorMessage = truncate(raw, 500);
+        }
+      }
+    }
+
+    return {
+      success,
+      result: finalEvent?.result,
+      exitCode: result.exitCode,
+      errorMessage,
+      costUsd: finalEvent?.total_cost_usd,
+      durationMs: finalEvent?.duration_ms,
+      numTurns: finalEvent?.num_turns,
+    };
   },
 };

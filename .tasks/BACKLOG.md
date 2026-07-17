@@ -82,12 +82,3 @@ Evaluate [gastownhall/beads](https://github.com/gastownhall/beads) (`bd`) as the
 - What do we lose by staying markdown (`.tasks/*.md`) — is the dependency graph worth the dep?
 
 **Deliverable:** short recommendation (adopt / borrow model / stay markdown) + backlog data-model implications. Pure intake/memory layer, not a competitor; see docs/competitor-matrix.md §2.
-
----
-
-## TASK-006: First harness adapter (generic subprocess)
-**Priority:** P1 | **Tags:** milestone-c, adapters
-
-Generic subprocess `HarnessAdapter` for any CLI command in a worktree.
-
----
