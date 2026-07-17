@@ -1,5 +1,13 @@
 # Done
 
+## TASK-005: File-backed workflow engine (state.json + events.jsonl)
+**Priority:** P1 | **Tags:** milestone-b
+**Updated:** 2026-07-17 18:25
+
+Done: Run state was entirely in-memory (lost on restart). Added file-backed persistence under `.adhd/runs/<id>/` — new `packages/server/src/services/run-store.ts` writes an atomically-rewritten `state.json` snapshot (tmp+rename, serialized per run) and an append-only `events.jsonl` (serialized, ENOENT-healing). The orchestrator persists from `emit()` — immediate on transitions, debounced (150ms) for log spam — plus an initial snapshot in `startRun`. New `orchestrator.init()` (awaited in `index.ts` before `serve`) reloads runs on boot, restores `nextRunNumber`, and reconciles interrupted (non-terminal) runs to `failed`. Verified end-to-end: runs survive restart with full stages/logs; a run killed at a gate reloads as "failed — Interrupted by server restart" (running/awaiting stages → failed, pending left pending); run numbering restored (next run = #2); restart-from-stage re-runs and re-persists; happy path persists as `completed` (64 events, 8 stages, 3 gate approvals); typecheck + lint clean. The "real subprocess stages" half already shipped for the one-box pipeline (TASK-018/019/020); mock pipelines stay simulations by design. Follow-up TASK-039 makes the store pluggable (JSON default + a real DB adapter).
+
+---
+
 ## TASK-034: Design the `smek.ai` brand icon (comic "SMEK" burst)
 **Priority:** P2 | **Tags:** setup, ui
 **Updated:** 2026-07-16 17:50

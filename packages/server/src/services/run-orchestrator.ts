@@ -23,7 +23,12 @@ import { assertEngineId, getEngineAdapter } from "../engines/registry.js";
 import type { EngineRunResult } from "../engines/types.js";
 import { resolveWorkspace } from "../paths.js";
 import { getEngineConnection } from "../settings.js";
+import { appendEvent, loadAllRuns, writeState } from "./run-store.js";
+import type { PersistedRun } from "./run-store.js";
 import { nowIso, randomBetween, sleep } from "../utils.js";
+
+/** Coalesce log-driven state writes; transitions flush immediately regardless. */
+const PERSIST_DEBOUNCE_MS = 150;
 
 type RunListener = (event: RunEvent) => void;
 
@@ -63,7 +68,106 @@ export class RunOrchestrator {
   private readonly gateWaiters = new Map<string, () => void>();
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
+  private readonly persistTimers = new Map<string, NodeJS.Timeout>();
   private nextRunNumber = 1;
+
+  /**
+   * Restore persisted runs from disk. Call once before the server accepts
+   * requests so run history survives restarts. Runs left mid-flight (their
+   * subprocess/timer died with the old process) are reconciled to failed.
+   */
+  async init(): Promise<void> {
+    const loaded = await loadAllRuns();
+    let maxNumber = 0;
+    for (const persisted of loaded) {
+      const { run } = persisted;
+      this.runs.set(run.id, run);
+      if (persisted.permissionMode) {
+        this.enginePermissionModes.set(run.id, persisted.permissionMode);
+      }
+      if (persisted.simOptions) {
+        this.runOptions.set(run.id, { ...DEFAULT_OPTIONS, ...persisted.simOptions });
+      }
+      maxNumber = Math.max(maxNumber, run.number);
+      if (!isTerminalRunStatus(run.status)) {
+        this.reconcileInterrupted(run);
+      }
+    }
+    this.nextRunNumber = maxNumber + 1;
+  }
+
+  /** A run reloaded in a non-terminal state can't resume — mark it failed. */
+  private reconcileInterrupted(run: RunState): void {
+    const ts = nowIso();
+    for (const stage of run.stages) {
+      if (stage.status === "running" || stage.status === "awaiting") {
+        stage.status = "failed";
+        stage.completedAt = ts;
+        stage.logs.push({ ts, level: "fail", message: "✗ Interrupted by server restart" });
+      }
+    }
+    run.status = "failed";
+    run.completedAt = ts;
+    void appendEvent(run.id, {
+      ts,
+      type: "run.completed",
+      runId: run.id,
+      status: "failed",
+      message: "Interrupted by server restart",
+    });
+    void this.flushPersist(run.id);
+  }
+
+  private buildPersisted(runId: string): PersistedRun | undefined {
+    const run = this.runs.get(runId);
+    if (!run) {
+      return undefined;
+    }
+    const persisted: PersistedRun = { version: 1, run: structuredClone(run) };
+    const permissionMode = this.enginePermissionModes.get(runId);
+    if (permissionMode) {
+      persisted.permissionMode = permissionMode;
+    }
+    const simOptions = this.runOptions.get(runId);
+    if (simOptions) {
+      persisted.simOptions = simOptions;
+    }
+    return persisted;
+  }
+
+  private async flushPersist(runId: string): Promise<void> {
+    const timer = this.persistTimers.get(runId);
+    if (timer) {
+      clearTimeout(timer);
+      this.persistTimers.delete(runId);
+    }
+    const persisted = this.buildPersisted(runId);
+    if (!persisted) {
+      return;
+    }
+    try {
+      await writeState(runId, persisted);
+    } catch (error) {
+      console.warn(`Failed to persist run ${runId}:`, error);
+    }
+  }
+
+  /** Persist run state. Transitions flush now; log spam is debounced. */
+  private schedulePersist(runId: string, immediate: boolean): void {
+    if (immediate) {
+      void this.flushPersist(runId);
+      return;
+    }
+    if (this.persistTimers.has(runId)) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.persistTimers.delete(runId);
+      void this.flushPersist(runId);
+    }, PERSIST_DEBOUNCE_MS);
+    timer.unref();
+    this.persistTimers.set(runId, timer);
+  }
 
   listPipelines(): PipelineDefinition[] {
     return DEMO_PIPELINES;
@@ -147,6 +251,9 @@ export class RunOrchestrator {
 
     const merged = { ...DEFAULT_OPTIONS, ...simOptions };
     this.runOptions.set(runId, merged);
+    // Persist the initial snapshot before the run emits anything, so the run
+    // dir and state.json exist and a crash during stage 0 still leaves a record.
+    await this.flushPersist(runId);
     void this.simulateRun(runId, pipeline, merged);
     return structuredClone(run);
   }
@@ -278,6 +385,11 @@ export class RunOrchestrator {
   }
 
   private emit(event: RunEvent): void {
+    // Durable trail first, then live subscribers. High-frequency stage logs are
+    // coalesced into a debounced state write; every other event is a transition
+    // worth flushing immediately so a crash can't lose it.
+    void appendEvent(event.runId, event);
+    this.schedulePersist(event.runId, event.type !== "stage.log");
     const listeners = this.listeners.get(event.runId);
     if (!listeners) {
       return;
