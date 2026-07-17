@@ -1,51 +1,36 @@
 # Backlog
 
-## TASK-034: Design the `smek.ai` brand icon (comic "SMEK" burst)
-**Priority:** P2 | **Tags:** setup, ui
-**Updated:** 2026-07-16 16:38
+## TASK-036: Spike — sandcastle as the implement-stage harness/sandbox layer
+**Priority:** P2 | **Tags:** adapters, engine, milestone-c
+**Updated:** 2026-07-16 00:00
 
-Design the icon/logo mark for the `smekai` GitHub org and the `smek.ai` brand. One master SVG that scales into the org avatar, the site favicon, and the VS Code extension icon.
+Evaluate [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle) as the execution layer behind the implementation stage instead of building the subprocess harness (TASK-006) from scratch. It's a TS library (`sandcastle.run()`) that runs a coding agent in an isolated sandbox and merges commits back: Docker/Podman/Vercel-Firecracker providers, git-worktree isolation, branch strategies, session capture/resume, typed structured-output extraction, lifecycle hooks — provider-agnostic (Claude Code, Codex, Cursor).
 
-Org context (for the designer):
+**Questions to answer:**
+- Does its `HarnessAdapter`-shaped surface map cleanly onto our EngineAdapter interface? What do we still own (stage handoff, artifacts, gates, dashboard)?
+- Wrap `sandcastle.run()` vs. build generic subprocess harness (TASK-006) — cost, control, and lock-in tradeoff.
+- Session resume + structured output: do they cover our restart-single-stage and artifact-capture needs?
+- Sandbox providers: does Vercel/Firecracker help our deploy-anywhere story or is it out of scope?
+- Maturity/API stability and dependency weight.
 
-- `smek.ai` is a small studio building AI-native, local-first tools for focused, low-friction work. Everything we make stays in the user's repo, in open formats, and is legible to both people and AI agents.
-- Current products: **TaskPlanner** (task management as plain markdown inside the editor) and **ADHD** (an agent workspace where AI agents work as a team of professions — PM plans, dev builds, SRE ships).
-- Brand personality: punchy, energetic, a little playful — tools that *get work done*, not another passive dashboard. The name plays on the comic-book sound effect "SMACK!".
-
-Visual direction:
-
-- **Concept:** a retro comic-book onomatopoeia / impact burst — the classic jagged "POW! / BAM! / SMACK!" explosion shape — but the word inside reads **SMEK**.
-- **Keep the wordmark "SMEK"** integrated into the burst (bold retro display lettering).
-- **Palette:** bright comic yellow + blue, with a thick black inked outline. Two primaries max besides the black/white.
-- **Style cues:** Golden/Silver-age comics — heavy black outlines, Ben-Day / halftone dots, slight offset/drop shadow, punchy energetic angle. Avoid gradients and fine detail.
-
-Constraints:
-
-- Square, full-bleed to the edges (GitHub crops to a rounded square — no transparent margins).
-- Must read at **40–60px** (avatar in lists/PRs) and stay legible in **black & white**.
-- "SMEK" text will not survive at favicon size — deliver **two lockups**: (a) full burst-with-SMEK for large/hero use, and (b) a simplified small-size mark (bare burst silhouette or single-letter monogram) for favicon/tiny avatar.
-
-Deliverables:
-
-- Master **SVG** (editable), plus exports: org avatar **512×512 PNG**, favicon (`.ico` / 32px + 16px), VS Code extension icon **128×128 PNG**.
-- Light- and dark-background versions (or one that survives both).
-- 2 initial concept directions to choose from before final polish.
-
-Done when: a final icon set is exported, the `smekai` org avatar + `smek.ai` favicon are updated, and the master SVG is committed to the repo.
+**Deliverable:** short recommendation (adopt / borrow patterns / pass) + impact on TASK-006/TASK-021. Not a competitor — a build-on candidate; see docs/competitor-matrix.md §6.
 
 ---
 
-## TASK-022: Introduce a logger across the system
-**Priority:** P2 | **Tags:** core, server, ui, infra
-**Updated:** 2026-07-14 10:51
+## TASK-035: Spike — beads (bd) vs. TS-native task-graph backlog
+**Priority:** P2 | **Tags:** core, server
+**Updated:** 2026-07-16 00:00
 
-Replace ad-hoc `console.log`/`console.error` calls with a small structured logger used across all packages.
+Evaluate [gastownhall/beads](https://github.com/gastownhall/beads) (`bd`) as the engine for our repo-native task backlog (`.adhd/tasks/`) that feeds pipeline runs. It's a distributed graph issue tracker for AI agents (Go + Dolt): dependency-aware task graph, hash-based IDs (multi-agent merge-safe), hierarchical epics/tasks/subtasks, `bd ready`/`bd prime` ready-work detection, semantic compaction of closed tasks, git-remote sync.
 
-- Define the logger interface in `@adhd/core` (levels: debug/info/warn/error; per-module scope/prefix; timestamps).
-- Server (`@adhd/server`): log HTTP requests, orchestrator/engine lifecycle events, and errors; level configurable via env (e.g. `LOG_LEVEL`), default `info`.
-- UI (`@adhd/ui`): thin console-backed implementation of the same interface, silenced in production builds except warn/error.
-- Keep it dependency-light (plain implementation or a minimal lib like `pino` on the server only); no log files yet — stdout/console is enough for the prototype.
-- Sweep existing `console.*` usages and migrate them.
+**Questions to answer:**
+- Adopt `bd` as-is (shell out via subprocess) vs. absorb its model (dependency graph + ready-detection + compaction) into our TS/git-native backlog.
+- Go + Dolt dependency weight in a TS/Hono local-first product — acceptable, or does it break the "one install" story?
+- How would tasks-spawn-runs work: does `bd ready` become the intake queue for the pipeline?
+- Merge/sync model vs. our git-native artifact approach — conflicts or synergy?
+- What do we lose by staying markdown (`.tasks/*.md`) — is the dependency graph worth the dep?
+
+**Deliverable:** short recommendation (adopt / borrow model / stay markdown) + backlog data-model implications. Pure intake/memory layer, not a competitor; see docs/competitor-matrix.md §2.
 
 ---
 

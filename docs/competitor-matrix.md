@@ -45,11 +45,14 @@
 | **Specmint** | Research-first SPEC.md | Specify → plan → implement | Yes (`.specs/`) | Universal skill (any agent) |
 | **spec-intelligence** | Visual spec + kanban | Specify → clarify → plan → tasks | Yes (Tauri desktop) | File-first, agent-agnostic |
 | **SpecMaker** | Multi-agent doc authoring | Requirements → design → tasks | Yes (SQLite) | Claude, Codex, Cursor |
+| **beads (bd)** | Dependency-aware issue graph for agents | Task intake / persistent agent memory | Yes (Go + Dolt, git-sync) | Agent-agnostic (JSON output) |
 | **OpenSpec / BMAD-style flows** | Spec-driven dev patterns | Varies | Repo-local | Depends on IDE |
 
 **What they miss:** Implementation, E2E testing, deployment, and a runnable end-to-end pipeline. **Why not popular:** upstream-only tools feel like extra process, not a product.
 
 **Gap:** Strong on artifacts and gates; weak on orchestrating implementation, Playwright E2E, deploy, and release as a unified runnable pipeline.
+
+**beads note:** Not a competitor — a **build-on candidate for our task backlog**. `beads` (`bd`) is a *distributed graph issue tracker for AI agents* (Go + Dolt): dependency-aware task graph replacing markdown plans, hash-based IDs to avoid multi-agent merge conflicts, hierarchical epics/tasks/subtasks, `bd ready`/`bd prime` "ready work" detection, and semantic compaction of closed tasks to preserve context. It is pure **intake/memory — it does not implement, test, or ship anything** — so it slots exactly into our `.adhd/tasks/` backlog role (tasks feed runs, not the reverse). Decision to make (see TASK-035): adopt `bd` as-is via subprocess vs. absorb its dependency-graph + ready-detection model into our TS/git-native backlog. Tension: Go + Dolt is a heavier, non-TS dependency. High-profile / real community buzz → validation + pattern source, not a threat.
 
 **Our built-in tasks:** ADHD includes repo-native task backlog (`.adhd/tasks/`) that feeds the lifecycle pipeline — not a standalone kanban or Jira clone. We compete with spec/task layers only at **intake**; our differentiator remains full lifecycle execution through deploy. Borrow task contracts from Sikula, artifact hierarchy from spec-manager, kanban mental model from spec-intelligence — but tasks spawn runs, not the reverse.
 
@@ -124,8 +127,11 @@
 | **Cline** | VS Code ext | Medium (plan/act) | Yes | Implementation harness |
 | **SWE-agent** | Headless | High (benchmark-oriented) | Yes | Research / CI harness |
 | **Codex (OpenAI)** | CLI/API | High | Partial | Implementation harness |
+| **sandcastle** | TS library | High (sandboxed) | Yes (Docker/Podman/Vercel) | Sandbox/execution layer (build-on candidate) |
 
 **Gap:** Single-task, single-session tools. No cross-stage artifact handoff or workflow dashboard.
+
+**sandcastle note:** Not a competitor — the **closest-fit build-on candidate for our implementation-stage adapter**. A TypeScript library (`sandcastle.run()`) that runs a coding agent in an isolated sandbox and merges commits back: pluggable sandbox providers (Docker, Podman, Vercel Firecracker VMs), git-worktree isolation, branch strategies, session capture/resume, typed structured-output extraction, TUI, and lifecycle hooks — provider-agnostic (Claude Code, Codex, Cursor, etc.). It has **no SDLC stages, no requirements/design/review, no Playwright, no deploy, no visual run control, no v1→evolution story** — orchestration on top is *our* value. Same TS stack as us, so it directly covers several "required" rows below (worktree isolation, harness adapter, session resume). See TASK-036: evaluate wrapping `sandcastle.run()` for the implement stage vs. building the subprocess harness (TASK-006) ourselves.
 
 ---
 
@@ -209,6 +215,8 @@ Low abstraction                             High abstraction
    - **spec-intelligence** — kanban/backlog mental model (tasks feed runs, not standalone PM)
    - **Aiki** — durable TypeScript workflows, HITL event suspension, crash recovery
    - **n8n** — visual workflow mental model (stages as nodes)
+   - **sandcastle** — sandbox/worktree execution primitive for the implement stage (same TS stack; candidate to wrap rather than rebuild)
+   - **beads** — dependency-aware task graph + "ready work" detection + semantic compaction for the repo-native backlog
 
 4. **MVP wedge:** "Capture tasks in repo-native backlog, run a feature through requirements → design → implement → review → test (Playwright E2E) → release → deploy" on your machine, with one-click restart of any stage.
 
@@ -233,6 +241,8 @@ Low abstraction                             High abstraction
 | Singulary | https://github.com/sammwyy/singulary |
 | Aiki | https://github.com/aikirun/aiki |
 | Paperclip | https://github.com/paperclipai/paperclip |
+| sandcastle | https://github.com/mattpocock/sandcastle |
+| beads (bd) | https://github.com/gastownhall/beads |
 | Manifold | https://github.com/intelligencedev/manifold |
 | LangGraph | https://langchain.com/langgraph |
 | OpenHands | https://www.openhands.dev |

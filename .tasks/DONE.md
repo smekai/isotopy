@@ -1,5 +1,13 @@
 # Done
 
+## TASK-034: Design the `smek.ai` brand icon (comic "SMEK" burst)
+**Priority:** P2 | **Tags:** setup, ui
+**Updated:** 2026-07-16 17:50
+
+Done: Chose Concept A (yellow burst on blue) over B (blue burst / red accents — third primary). Hand-built master SVGs in `brand/smek/master/` — `smek-burst.svg` (hero + SMEK wordmark) and `smek-mark.svg` (bare burst for tiny sizes), plus B&W twins. Exports in `brand/smek/exports/` (512 avatar, 128 extension, 32/16 + favicon.ico). ADHD UI favicon wired via `packages/ui/public/favicon.*`. Docs in `brand/smek/README.md`. **Manual follow-up:** upload `brand/smek/exports/org-avatar.png` at github.com/organizations/smekai/settings/profile (no org-avatar REST API; browser session not logged in). No separate smek.ai site repo yet — favicon assets ready for when it lands.
+
+---
+
 ## TASK-033: Migrate repos to the `smekai` GitHub org (fix all references)
 **Priority:** P2 | **Tags:** setup, infra
 **Updated:** 2026-07-16 16:38
