@@ -45,6 +45,20 @@ export function fetchEngineStatus(engineId: string): Promise<EngineStatus> {
   return requestJson<EngineStatus>(`/engines/${engineId}/status`);
 }
 
+export interface EngineActionResult {
+  ok: boolean;
+  output?: string;
+  message?: string;
+}
+
+export function installEngine(engineId: string): Promise<EngineActionResult> {
+  return postJson<EngineActionResult>(`/engines/${engineId}/install`);
+}
+
+export function loginEngine(engineId: string): Promise<EngineActionResult> {
+  return postJson<EngineActionResult>(`/engines/${engineId}/login`);
+}
+
 export function fetchRuns(): Promise<RunState[]> {
   return requestJson<RunState[]>("/runs");
 }

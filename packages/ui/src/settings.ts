@@ -1,7 +1,7 @@
 import type { EngineId, EnginePermissionMode } from "@adhd/core";
 import {
-  DEFAULT_CLAUDE_MODEL,
   DEFAULT_PERMISSION_MODE,
+  defaultModelFor,
   ENGINES,
   LEGACY_MODEL_ALIASES,
 } from "@adhd/core";
@@ -56,23 +56,28 @@ export function saveEngine(engine: EngineId): void {
   saveString("adhd.engine", engine);
 }
 
-export function loadEngineModel(): string {
-  const raw = loadString("adhd.engineModel");
+export function loadEngineModel(engineId: EngineId): string {
+  const raw =
+    loadString(`adhd.engineModel.${engineId}`) ??
+    // Pre-TASK-037 the model was stored in a single un-namespaced key.
+    (engineId === "claude-code" ? loadString("adhd.engineModel") : null);
   if (!raw) {
-    return DEFAULT_CLAUDE_MODEL;
+    return defaultModelFor(engineId);
   }
-  // Full model IDs resolve to 1M-context variants in Claude Code, which
-  // subscription plans reject — migrate them to standard-context aliases.
-  const migrated = LEGACY_MODEL_ALIASES[raw];
-  if (migrated) {
-    saveString("adhd.engineModel", migrated);
-    return migrated;
+  if (engineId === "claude-code") {
+    // Full model IDs resolve to 1M-context variants in Claude Code, which
+    // subscription plans reject — migrate them to standard-context aliases.
+    const migrated = LEGACY_MODEL_ALIASES[raw];
+    if (migrated) {
+      saveString("adhd.engineModel.claude-code", migrated);
+      return migrated;
+    }
   }
   return raw;
 }
 
-export function saveEngineModel(model: string): void {
-  saveString("adhd.engineModel", model);
+export function saveEngineModel(engineId: EngineId, model: string): void {
+  saveString(`adhd.engineModel.${engineId}`, model);
 }
 
 export function loadPermissionMode(): EnginePermissionMode {

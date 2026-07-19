@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, RefreshCw, Server, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw, Server, ToggleLeft, ToggleRight, X } from "lucide-react";
 import type { EngineId, EnginePermissionMode, EngineStatus, SettingsView } from "@adhd/core";
 import {
-  CLAUDE_MODEL_OPTIONS,
   ENGINES,
   LIFECYCLE_STAGES,
   agentForStage,
   defaultConnectionMode,
+  modelOptionsFor,
 } from "@adhd/core";
-import { fetchEngineStatus, fetchSettings, updateEngineConnection } from "../api";
+import { fetchEngineStatus, fetchSettings, installEngine, loginEngine, updateEngineConnection } from "../api";
 import type { EngineConnectionUpdate } from "../api";
 import {
   loadDisabledStages,
@@ -33,11 +33,11 @@ const PERMISSION_MODES: { id: EnginePermissionMode; label: string; desc: string 
 
 export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   const { dirId, setDirId } = useTheme();
-  const [sec, setSec] = useState("appearance");
+  const [sec, setSec] = useState("harness");
   const [disabledStages, setDisabledStages] = useState<string[]>(loadDisabledStages);
   // Deploy target is a display-only mock for now.
   const [harness, setHarness] = useState<EngineId>(loadEngine);
-  const [model, setModel] = useState(loadEngineModel);
+  const [model, setModel] = useState(() => loadEngineModel(loadEngine()));
   const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(loadPermissionMode);
   const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -46,13 +46,17 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   const [keyInput, setKeyInput] = useState("");
   const [keySaving, setKeySaving] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const sections = [
-    { id: "appearance", label: "Appearance" },
+    { id: "harness", label: "AI Harness" },
     { id: "pipeline", label: "Pipeline" },
     { id: "gates", label: "Gates" },
-    { id: "harness", label: "AI Harness" },
-    { id: "connection", label: "Connection" },
+    { id: "appearance", label: "Appearance" },
     { id: "deploy", label: "Deploy Target" },
   ];
 
@@ -118,11 +122,66 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
     setKeySaving(false);
   }
 
+  async function runInstall() {
+    if (installing) {
+      return;
+    }
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      const result = await installEngine(harness);
+      if (result.ok) {
+        setStatusNonce((n) => n + 1); // re-check picks up the freshly installed CLI
+      } else {
+        setInstallError(result.message ?? "Install failed");
+      }
+    } catch (error) {
+      setInstallError(error instanceof Error ? error.message : "Install failed");
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  async function runLogin() {
+    if (loggingIn) {
+      return;
+    }
+    setLoggingIn(true);
+    setLoginError(null);
+    try {
+      const result = await loginEngine(harness);
+      if (result.ok) {
+        setStatusNonce((n) => n + 1); // re-check reflects the new auth state
+      } else {
+        setLoginError(result.message ?? "Login failed");
+      }
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Login failed");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
+  async function copyInstallCommand() {
+    if (!engineStatus?.installCommand) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(engineStatus.installCommand);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard blocked — the command is still visible in the message
+    }
+  }
+
   const connectionModes = ENGINES[harness].connections;
   const connectionView = settingsView?.engines[harness];
   const connectionMode = connectionView?.connectionMode ?? defaultConnectionMode(harness);
   const apiKeyConfigured = connectionView?.apiKeyConfigured ?? false;
-  const modelOption = CLAUDE_MODEL_OPTIONS.find((opt) => opt.id === model);
+  const apiKeyMode = connectionModes.find((opt) => opt.requiresApiKey);
+  const modelOptions = modelOptionsFor(harness);
+  const modelOption = modelOptions.find((opt) => opt.id === model);
 
   return (
     <div
@@ -262,6 +321,8 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                         if (opt.available) {
                           setHarness(opt.id);
                           saveEngine(opt.id);
+                          // Each engine keeps its own model choice — swap to it.
+                          setModel(loadEngineModel(opt.id));
                         }
                       }}
                       disabled={!opt.available}
@@ -310,21 +371,122 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                 {!statusLoading && engineStatus?.installed && engineStatus.path && (
                   <div style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, marginTop: 6, wordBreak: "break-all" }}>{engineStatus.path}</div>
                 )}
-                {!statusLoading && engineStatus && !engineStatus.installed && (
-                  <div style={{ color: d.textMid, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>{engineStatus.message}</div>
+                {!statusLoading && engineStatus?.message && (
+                  <div style={{ color: engineStatus.installed ? d.textMuted : d.textMid, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>{engineStatus.message}</div>
+                )}
+                {!statusLoading && engineStatus?.installed && engineStatus.loggedIn === false && harness === "cursor" && (
+                  <div style={{ marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                      <button onClick={() => void runLogin()} disabled={loggingIn}
+                        style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "7px 12px", background: loggingIn ? d.surface2 : d.accent, color: loggingIn ? d.textMuted : "#FFF", fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: loggingIn ? "default" : "pointer" }}>
+                        <LogIn size={12} /> {loggingIn ? "Finish sign-in in your browser…" : "Log in to Cursor"}
+                      </button>
+                      <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10 }}>Opens the Cursor sign-in in your browser.</span>
+                    </div>
+                    {loginError && (
+                      <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginTop: 8 }}>{loginError}</div>
+                    )}
+                  </div>
+                )}
+                {!statusLoading && engineStatus && !engineStatus.installed && (engineStatus.installCommand || harness === "cursor") && (
+                  <div style={{ marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 }}>
+                    <div style={{ color: d.text, fontFamily: SANS, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>Recommended actions</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                      {harness === "cursor" && (
+                        <button onClick={() => void runInstall()} disabled={installing}
+                          style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "7px 12px", background: installing ? d.surface2 : d.accent, color: installing ? d.textMuted : "#FFF", fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: installing ? "default" : "pointer" }}>
+                          <Download size={12} /> {installing ? "Installing… (~30s)" : "Install Cursor CLI"}
+                        </button>
+                      )}
+                      {engineStatus.installCommand && (
+                        <button onClick={() => void copyInstallCommand()}
+                          style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${d.border}`, borderRadius: 8, padding: "7px 12px", background: "transparent", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                          <Copy size={12} /> {copied ? "Copied ✓" : "Copy install command"}
+                        </button>
+                      )}
+                      {engineStatus.docsUrl && (
+                        <a href={engineStatus.docsUrl} target="_blank" rel="noreferrer"
+                          style={{ color: d.accent, fontFamily: SANS, fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Docs ↗</a>
+                      )}
+                    </div>
+                    {installError && (
+                      <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginTop: 8 }}>{installError}</div>
+                    )}
+                    {harness === "cursor" && (
+                      <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.5 }}>
+                        After install, run <span style={{ fontFamily: MONO }}>agent login</span> once — or point <span style={{ fontFamily: MONO }}>ADHD_CURSOR_PATH</span> at an existing binary.
+                      </div>
+                    )}
+                  </div>
                 )}
                 {!statusLoading && !engineStatus && (
                   <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>Status unavailable — is the server running?</div>
                 )}
               </div>
+              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Connection</div>
+              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 10 }}>
+                How {ENGINES[harness].label} authenticates and bills usage.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: connectionMode === "api-key" ? 12 : 20 }}>
+                {connectionModes.map((opt) => {
+                  const sel = connectionMode === opt.id;
+                  return (
+                    <button key={opt.id}
+                      onClick={() => void applyConnectionUpdate({ connectionMode: opt.id })}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
+                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
+                      <div>
+                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
+                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {connectionModes.length === 0 && (
+                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
+                    No connection options for {ENGINES[harness].label} yet.
+                  </div>
+                )}
+              </div>
+              {connectionMode === "api-key" && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{apiKeyMode?.label ?? "API key"}</div>
+                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 }}>
+                    Stored server-side in .adhd/settings.json (plaintext, gitignored) — never sent back to the browser.
+                  </div>
+                  {apiKeyConfigured && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <span style={{ background: "rgba(5,150,105,0.10)", color: "#059669", borderRadius: 20, padding: "3px 10px", fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>KEY CONFIGURED ✓</span>
+                      <button onClick={() => void applyConnectionUpdate({ apiKey: null })}
+                        style={{ border: "none", background: "transparent", color: "#DC2626", fontFamily: SANS, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input type="password" value={keyInput}
+                      onChange={(e) => setKeyInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && void saveApiKey()}
+                      placeholder={apiKeyConfigured ? "Replace key…" : harness === "claude-code" ? "sk-ant-api03-..." : "Paste your API key…"}
+                      style={{ flex: 1, border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 11, color: d.text, outline: "none", background: d.surface2 }} />
+                    <button onClick={() => void saveApiKey()} disabled={keySaving || keyInput.trim() === ""}
+                      style={{ border: "none", borderRadius: 10, padding: "9px 14px", background: keyInput.trim() && !keySaving ? d.accent : d.surface2, color: keyInput.trim() && !keySaving ? "#FFF" : d.textMuted, fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: keyInput.trim() && !keySaving ? "pointer" : "default", flexShrink: 0 }}>
+                      {keySaving ? "Saving…" : "Save key"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {connectionError && (
+                <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginBottom: 12 }}>{connectionError}</div>
+              )}
               <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Model</div>
               <select value={model}
                 onChange={(e) => {
                   setModel(e.target.value);
-                  saveEngineModel(e.target.value);
+                  saveEngineModel(harness, e.target.value);
                 }}
                 style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }}>
-                {CLAUDE_MODEL_OPTIONS.map((opt) => (
+                {modelOptions.map((opt) => (
                   <option key={opt.id} value={opt.id}>{opt.label} — {opt.hint}</option>
                 ))}
                 {!modelOption && <option value={model}>{model} (custom)</option>}
@@ -354,67 +516,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {sec === "connection" && (
-            <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Connection</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>
-                How {ENGINES[harness].label} authenticates and bills usage.
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-                {connectionModes.map((opt) => {
-                  const sel = connectionMode === opt.id;
-                  return (
-                    <button key={opt.id}
-                      onClick={() => void applyConnectionUpdate({ connectionMode: opt.id })}
-                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
-                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
-                      <div>
-                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
-                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-                {connectionModes.length === 0 && (
-                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
-                    No connection options for {ENGINES[harness].label} yet.
-                  </div>
-                )}
-              </div>
-              {connectionMode === "api-key" && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>Anthropic API Key</div>
-                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 }}>
-                    Stored server-side in .adhd/settings.json (plaintext, gitignored) — never sent back to the browser.
-                  </div>
-                  {apiKeyConfigured && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <span style={{ background: "rgba(5,150,105,0.10)", color: "#059669", borderRadius: 20, padding: "3px 10px", fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>KEY CONFIGURED ✓</span>
-                      <button onClick={() => void applyConnectionUpdate({ apiKey: null })}
-                        style={{ border: "none", background: "transparent", color: "#DC2626", fontFamily: SANS, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}>
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input type="password" value={keyInput}
-                      onChange={(e) => setKeyInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && void saveApiKey()}
-                      placeholder={apiKeyConfigured ? "Replace key…" : "sk-ant-api03-..."}
-                      style={{ flex: 1, border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 11, color: d.text, outline: "none", background: d.surface2 }} />
-                    <button onClick={() => void saveApiKey()} disabled={keySaving || keyInput.trim() === ""}
-                      style={{ border: "none", borderRadius: 10, padding: "9px 14px", background: keyInput.trim() && !keySaving ? d.accent : d.surface2, color: keyInput.trim() && !keySaving ? "#FFF" : d.textMuted, fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: keyInput.trim() && !keySaving ? "pointer" : "default", flexShrink: 0 }}>
-                      {keySaving ? "Saving…" : "Save key"}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {connectionError && (
-                <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11 }}>{connectionError}</div>
-              )}
             </div>
           )}
 

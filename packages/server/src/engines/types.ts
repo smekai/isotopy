@@ -32,9 +32,22 @@ export interface EngineRunResult {
   numTurns?: number;
 }
 
+/** Outcome of a one-click CLI action (install, login) triggered from Setup. */
+export interface EngineActionResult {
+  ok: boolean;
+  /** Tail of command output, for the run/status log. */
+  output?: string;
+  /** Human-readable summary or failure reason. */
+  message?: string;
+}
+
 export interface EngineAdapter {
   id: EngineId;
   run(ctx: EngineRunContext): Promise<EngineRunResult>;
   /** Reports whether the engine's CLI is installed and usable. */
   detect?(): Promise<EngineStatus>;
+  /** Installs the engine's CLI (best-effort, platform-specific). */
+  install?(): Promise<EngineActionResult>;
+  /** Authenticates the CLI — opens the provider's login flow, blocks until done. */
+  login?(): Promise<EngineActionResult>;
 }

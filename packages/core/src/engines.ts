@@ -47,8 +47,23 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     id: "cursor",
     label: "Cursor",
     description: "Cursor CLI agent",
-    available: false,
-    connections: [],
+    available: true,
+    connections: [
+      {
+        id: "subscription",
+        label: "Cursor subscription",
+        description:
+          "Uses your Cursor CLI login (run `agent login` once in a terminal). Billed to your Cursor plan.",
+        requiresApiKey: false,
+      },
+      {
+        id: "api-key",
+        label: "Cursor API key",
+        description:
+          "Injects a stored CURSOR_API_KEY for the run, overriding the CLI login. Usage-based billing.",
+        requiresApiKey: true,
+      },
+    ],
   },
   codex: {
     id: "codex",
@@ -88,6 +103,39 @@ export const CLAUDE_MODEL_OPTIONS: EngineModelOption[] = [
 export const DEFAULT_CLAUDE_MODEL = "sonnet";
 
 /**
+ * Cursor's model roster churns fast — the named entries are a snapshot; `auto`
+ * always works. True up against `agent models` when they drift.
+ */
+export const CURSOR_MODEL_OPTIONS: EngineModelOption[] = [
+  { id: "auto", label: "Auto", hint: "Cursor picks the model (default)" },
+  { id: "composer-1", label: "Composer 1", hint: "Cursor's fast agent model" },
+  { id: "sonnet-4.5", label: "Claude Sonnet 4.5", hint: "Anthropic" },
+  { id: "gpt-5", label: "GPT-5", hint: "OpenAI" },
+];
+
+export const DEFAULT_CURSOR_MODEL = "auto";
+
+const MODEL_OPTIONS: Record<EngineId, EngineModelOption[]> = {
+  "claude-code": CLAUDE_MODEL_OPTIONS,
+  cursor: CURSOR_MODEL_OPTIONS,
+  codex: [],
+};
+
+/** Model choices for the Setup picker. Empty for engines without a run implementation. */
+export function modelOptionsFor(engineId: EngineId): EngineModelOption[] {
+  return MODEL_OPTIONS[engineId];
+}
+
+const DEFAULT_MODELS: Partial<Record<EngineId, string>> = {
+  "claude-code": DEFAULT_CLAUDE_MODEL,
+  cursor: DEFAULT_CURSOR_MODEL,
+};
+
+export function defaultModelFor(engineId: EngineId): string {
+  return DEFAULT_MODELS[engineId] ?? MODEL_OPTIONS[engineId][0]?.id ?? "";
+}
+
+/**
  * Full model IDs previously offered in Setup. They resolve to 1M-context
  * variants in Claude Code, which subscription plans reject — migrate to
  * the standard-context CLI aliases.
@@ -103,6 +151,12 @@ export interface EngineStatus {
   installed: boolean;
   path?: string;
   version?: string;
-  source?: "env" | "path" | "ide-extension";
+  source?: "env" | "path" | "ide-extension" | "install-dir";
   message?: string;
+  /** Whether the CLI has valid auth. `undefined` when auth state can't be determined. */
+  loggedIn?: boolean;
+  /** Shell command that installs the CLI — powers the Setup "copy install command" button. */
+  installCommand?: string;
+  /** Docs link for manual install/setup. */
+  docsUrl?: string;
 }

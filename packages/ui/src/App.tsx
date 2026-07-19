@@ -88,7 +88,7 @@ export function App() {
         ...(oneBox
           ? {
               engine: loadEngine(),
-              model: loadEngineModel(),
+              model: loadEngineModel(loadEngine()),
               permissionMode: loadPermissionMode(),
               ...(workspaceDir ? { workspaceDir } : {}),
             }

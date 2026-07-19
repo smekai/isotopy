@@ -133,7 +133,7 @@ export function EmptyState({
 
       <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
         {oneBox
-          ? <>Engine: {engine.label} · {loadEngineModel()} — change in Setup</>
+          ? <>Engine: {engine.label} · {loadEngineModel(engine.id)} — change in Setup</>
           : <>↵ to start · ⌘⇧V for voice</>}
       </div>
     </div>

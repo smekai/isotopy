@@ -38,11 +38,13 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   await page.getByRole("button", { name: "AI Harness" }).click();
 
   await expect(page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ })).toBeVisible();
-  await expect(page.getByText("SOON", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Cursor Cursor CLI agent/ })).toBeEnabled();
+  await expect(page.getByText("SOON", { exact: true })).toHaveCount(1); // only Codex remains
 
   await expect(page.getByText("Engine status")).toBeVisible();
   await expect(page.getByRole("button", { name: /Re-check/ })).toBeVisible();
 
+  // default engine is claude-code
   const model = page.locator("select");
   await expect(model).toBeVisible();
   await expect(model.locator("option")).toHaveCount(4); // opus, sonnet, haiku, sonnet[1m]
@@ -51,13 +53,33 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   await expect(page.getByRole("button", { name: /Accept edits only/ })).toBeVisible();
 });
 
-test("Setup → Connection lists the Claude connection modes", async ({ page }) => {
+test("AI Harness lists the Claude connection modes inline", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Setup" }).click();
-  await page.getByRole("button", { name: "Connection", exact: true }).click();
+  await page.getByRole("button", { name: "AI Harness" }).click();
 
+  // Connection modes now live inside the AI Harness section (no separate tab).
   await expect(page.getByRole("button", { name: /Claude subscription/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Anthropic API key/ })).toBeVisible();
+});
+
+test("selecting Cursor swaps the model options and connection modes", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup" }).click();
+  await page.getByRole("button", { name: "AI Harness" }).click();
+  await page.getByRole("button", { name: /Cursor Cursor CLI agent/ }).click();
+
+  const model = page.locator("select");
+  await expect(model).toHaveValue("auto");
+  await expect(model.locator("option")).toHaveCount(4); // auto, composer-1, sonnet-4.5, gpt-5
+
+  // connection modes render in the same section — visibility only (clicking persists)
+  await expect(page.getByRole("button", { name: /Cursor subscription/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cursor API key/ })).toBeVisible();
+
+  // engine choice is localStorage-only; restore the default for later tests
+  await page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ }).click();
+  await expect(page.locator("select")).toHaveValue("sonnet");
 });
 
 test("pipeline, model, and permission mode persist across a reload", async ({ page }) => {
@@ -96,7 +118,8 @@ test("legacy full model IDs migrate to standard-context CLI aliases", async ({ p
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
-  const stored = await page.evaluate(() => localStorage.getItem("adhd.engineModel"));
+  // the migrated value lands in the per-engine key introduced in TASK-037
+  const stored = await page.evaluate(() => localStorage.getItem("adhd.engineModel.claude-code"));
   expect(stored).toBe("sonnet");
 });
 

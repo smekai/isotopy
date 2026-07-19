@@ -1,5 +1,13 @@
 # Done
 
+## TASK-037: Cursor CLI engine adapter
+**Priority:** P2 | **Tags:** adapters, milestone-c
+**Updated:** 2026-07-18 20:00
+
+Done: Added `packages/server/src/engines/cursor.ts` — a real `cursorAdapter` on the `EngineAdapter` contract, built on `runSubprocess` (TASK-006). Targets Cursor's native Windows CLI (binary `agent`, older installs `cursor-agent`) in headless mode: `-p --output-format stream-json --force [--trust] [--model]`, prompt as positional arg, stream-json events (system/init, assistant text, tool_call started, result) mapped to `ctx.onLog`; result event has no cost/turns fields so only `durationMs` is captured. Binary resolution: `ADHD_CURSOR_PATH` → PATH (`cursor-agent`, `agent`) → `~/.local/bin`; failure message lists everything tried + the PowerShell install one-liner. `detect()` probes `--version` and best-effort `status` (auth state shown in the Setup status card — message now renders even when installed). Subscription mode strips `CURSOR_API_KEY` from the child env; api-key mode injects the stored key. Experimentation knobs for the Windows/base-subscription environment: `ADHD_CURSOR_ARGS`, `ADHD_CURSOR_PROMPT_VIA=stdin`, `ADHD_CURSOR_TRUST=0` (documented in `.env.example`). Core: `cursor.available = true` (SOON badge gone), subscription/api-key connections, `CURSOR_MODEL_OPTIONS` (auto default), engine-aware `modelOptionsFor()`/`defaultModelFor()` helpers used by SetupModal (TASK-038 reuses); per-engine model persistence (`adhd.engineModel.<engineId>` with legacy-key migration). Verified: typecheck + lint clean; live server — `/engines/cursor/status` returns the tried-list hint, settings round-trip + invalid-mode rejection, pre-flight api-key guard, one-box cursor run fails fast with the install hint; 8/8 Playwright e2e incl. new Cursor model/connection-swap test. Live run against an installed CLI still pending (CLI not yet installed on this machine — install, `agent login`, Re-check, then true up `CURSOR_MODEL_OPTIONS` against `agent models`).
+
+---
+
 ## TASK-006: First harness adapter (generic subprocess)
 **Priority:** P1 | **Tags:** milestone-c, adapters
 **Updated:** 2026-07-17 18:45
