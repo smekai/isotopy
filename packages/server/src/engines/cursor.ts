@@ -2,9 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineStatus } from "@adhd/core";
+import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
+import type { EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
 import { firstLine, truncate } from "./log-text.js";
-import { runSubprocess } from "./subprocess.js";
+import { probeCommand, runSubprocess } from "./subprocess.js";
 import type {
   EngineActionResult,
   EngineAdapter,
@@ -254,18 +255,61 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Short probes (--version, status) share the run harness for .cmd/timeout handling. */
-function probe(binary: string, args: string[]) {
-  return runSubprocess({
-    command: binary,
-    args,
-    cwd: os.homedir(),
-    timeoutMs: 10_000,
-  });
+/**
+ * Parse `agent models` output. It prints an "Available models" banner followed
+ * by one `<id> - <Label>` line per model, the active one tagged
+ * "(current, default)". Unrecognised lines are skipped so a banner or footer
+ * change doesn't poison the roster.
+ */
+function parseCursorModels(stdout: string): EngineModelOption[] {
+  const options: EngineModelOption[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = /^\s*([\w.:-]+)\s+-\s+(.+?)\s*$/.exec(line);
+    if (!match) {
+      continue;
+    }
+    const [, id, label] = match;
+    const current = /\(current[^)]*\)/i.test(label);
+    const clean = label.replace(/\s*\(current[^)]*\)\s*/i, "").trim() || id;
+    options.push({
+      id,
+      // Cursor's own `auto` router model is a different thing from our Auto
+      // (which sends no --model at all) — don't let both read "Auto".
+      label: id === "auto" ? `Cursor ${clean}` : clean,
+      hint: current ? "the CLI's current default" : "",
+    });
+  }
+  return options;
 }
 
 export const cursorAdapter: EngineAdapter = {
   id: "cursor",
+
+  /** Cursor's CLI can enumerate its own roster, so ask it rather than guessing. */
+  async listModels(): Promise<EngineModelList> {
+    let binary: string;
+    try {
+      binary = resolveCursorBinary().path;
+    } catch {
+      return {
+        options: CURSOR_MODEL_OPTIONS,
+        source: "static",
+        note: "Cursor CLI not found — showing the built-in list.",
+      };
+    }
+    const result = await probeCommand(binary, ["models"]);
+    const parsed = result.success ? parseCursorModels(result.stdout) : [];
+    if (parsed.length === 0) {
+      return {
+        options: CURSOR_MODEL_OPTIONS,
+        source: "static",
+        note: "`agent models` returned nothing usable — showing the built-in list.",
+      };
+    }
+    // Our Auto (no --model at all) is distinct from Cursor's own `auto` router
+    // model, so it is prepended rather than assumed to be in the CLI output.
+    return { options: [AUTO_MODEL_OPTION, ...parsed], source: "cli" };
+  },
 
   async detect(): Promise<EngineStatus> {
     cachedBinary = undefined; // re-check must pick up a newly installed CLI
@@ -284,7 +328,7 @@ export const cursorAdapter: EngineAdapter = {
         docsUrl: DOCS_URL,
       };
     }
-    const version = await probe(resolved.path, ["--version"]);
+    const version = await probeCommand(resolved.path, ["--version"]);
     if (!version.success) {
       const reason = version.errorMessage ?? version.stderrTail.join(" ").trim();
       return {
@@ -299,7 +343,7 @@ export const cursorAdapter: EngineAdapter = {
     }
     // Best-effort auth probe — surfaces login state in the status card.
     // `status` exits 0 either way, so the answer is in the text.
-    const auth = await probe(resolved.path, ["status"]);
+    const auth = await probeCommand(resolved.path, ["status"]);
     const authText = firstLine(auth.stdout) ?? firstLine(auth.stderrTail.join("\n"));
     const loggedIn = authText ? !/not logged in|logged out|no.*auth/i.test(authText) : undefined;
     return {

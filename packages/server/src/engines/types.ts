@@ -1,4 +1,10 @@
-import type { EngineId, EnginePermissionMode, EngineStatus, LogLevel } from "@adhd/core";
+import type {
+  EngineId,
+  EngineModelList,
+  EnginePermissionMode,
+  EngineStatus,
+  LogLevel,
+} from "@adhd/core";
 
 /** How the engine authenticates/bills — resolved from server settings per run. */
 export interface EngineConnection {
@@ -46,6 +52,13 @@ export interface EngineAdapter {
   run(ctx: EngineRunContext): Promise<EngineRunResult>;
   /** Reports whether the engine's CLI is installed and usable. */
   detect?(): Promise<EngineStatus>;
+  /**
+   * Model roster for the Setup picker, resolved from the CLI or its config
+   * rather than our static snapshot. Optional: engines whose CLI can't report
+   * one fall back to `modelOptionsFor()`. Must not throw — degrade to the
+   * static list with a `note` instead.
+   */
+  listModels?(): Promise<EngineModelList>;
   /** Installs the engine's CLI (best-effort, platform-specific). */
   install?(): Promise<EngineActionResult>;
   /** Authenticates the CLI — opens the provider's login flow, blocks until done. */

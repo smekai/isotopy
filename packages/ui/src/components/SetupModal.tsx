@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw, Server, ToggleLeft, ToggleRight, X } from "lucide-react";
-import type { EngineId, EnginePermissionMode, EngineStatus, SettingsView } from "@adhd/core";
+import type {
+  EngineId,
+  EngineModelList,
+  EnginePermissionMode,
+  EngineStatus,
+  SettingsView,
+} from "@adhd/core";
 import {
   ENGINES,
   LIFECYCLE_STAGES,
@@ -8,7 +14,14 @@ import {
   defaultConnectionMode,
   modelOptionsFor,
 } from "@adhd/core";
-import { fetchEngineStatus, fetchSettings, installEngine, loginEngine, updateEngineConnection } from "../api";
+import {
+  fetchEngineModels,
+  fetchEngineStatus,
+  fetchSettings,
+  installEngine,
+  loginEngine,
+  updateEngineConnection,
+} from "../api";
 import type { EngineConnectionUpdate } from "../api";
 import {
   loadDisabledStages,
@@ -31,6 +44,24 @@ const PERMISSION_MODES: { id: EnginePermissionMode; label: string; desc: string 
   { id: "acceptEdits", label: "Accept edits only", desc: "File edits auto-approved; shell commands may stall the run." },
 ];
 
+/** Where the shown roster came from — the picker says so, since a stale list is what breaks runs. */
+const MODEL_SOURCE_LABEL: Record<EngineModelList["source"], string> = {
+  cli: "from the CLI",
+  config: "from the CLI's config",
+  static: "built-in list",
+};
+
+/** Model list before the server answers — keeps the picker from flashing empty. */
+function seedModelList(engineId: EngineId): EngineModelList {
+  return { options: modelOptionsFor(engineId), source: "static" };
+}
+
+/** Engines with a one-click `install()` — drives the Setup install button + hint. */
+const INSTALLERS: Partial<Record<EngineId, { label: string; loginCmd: string; envVar: string }>> = {
+  cursor: { label: "Install Cursor CLI", loginCmd: "agent login", envVar: "ADHD_CURSOR_PATH" },
+  codex: { label: "Install Codex CLI", loginCmd: "codex login", envVar: "ADHD_CODEX_PATH" },
+};
+
 export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   const { dirId, setDirId } = useTheme();
   const [sec, setSec] = useState("harness");
@@ -38,6 +69,8 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   // Deploy target is a display-only mock for now.
   const [harness, setHarness] = useState<EngineId>(loadEngine);
   const [model, setModel] = useState(() => loadEngineModel(loadEngine()));
+  const [modelList, setModelList] = useState<EngineModelList>(() => seedModelList(loadEngine()));
+  const [customModel, setCustomModel] = useState(false);
   const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(loadPermissionMode);
   const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -81,6 +114,26 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
       })
       .finally(() => {
         if (!stale) setStatusLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [sec, harness, statusNonce]);
+
+  // Roster is resolved server-side (the CLI can't be asked from the browser) and
+  // re-fetched after an install/login, since that's when it can start answering.
+  useEffect(() => {
+    if (sec !== "harness") {
+      return;
+    }
+    let stale = false;
+    setModelList(seedModelList(harness));
+    fetchEngineModels(harness)
+      .then((list) => {
+        if (!stale && list.options.length > 0) setModelList(list);
+      })
+      .catch(() => {
+        // keep the seeded static list — the picker must never be empty
       });
     return () => {
       stale = true;
@@ -180,8 +233,9 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
   const connectionMode = connectionView?.connectionMode ?? defaultConnectionMode(harness);
   const apiKeyConfigured = connectionView?.apiKeyConfigured ?? false;
   const apiKeyMode = connectionModes.find((opt) => opt.requiresApiKey);
-  const modelOptions = modelOptionsFor(harness);
+  const modelOptions = modelList.options;
   const modelOption = modelOptions.find((opt) => opt.id === model);
+  const installer = INSTALLERS[harness];
 
   return (
     <div
@@ -388,14 +442,14 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                     )}
                   </div>
                 )}
-                {!statusLoading && engineStatus && !engineStatus.installed && (engineStatus.installCommand || harness === "cursor") && (
+                {!statusLoading && engineStatus && !engineStatus.installed && (engineStatus.installCommand || installer) && (
                   <div style={{ marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 }}>
                     <div style={{ color: d.text, fontFamily: SANS, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>Recommended actions</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                      {harness === "cursor" && (
+                      {installer && (
                         <button onClick={() => void runInstall()} disabled={installing}
                           style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "7px 12px", background: installing ? d.surface2 : d.accent, color: installing ? d.textMuted : "#FFF", fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: installing ? "default" : "pointer" }}>
-                          <Download size={12} /> {installing ? "Installing… (~30s)" : "Install Cursor CLI"}
+                          <Download size={12} /> {installing ? "Installing… (up to ~1 min)" : installer.label}
                         </button>
                       )}
                       {engineStatus.installCommand && (
@@ -412,9 +466,9 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                     {installError && (
                       <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginTop: 8 }}>{installError}</div>
                     )}
-                    {harness === "cursor" && (
+                    {installer && (
                       <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.5 }}>
-                        After install, run <span style={{ fontFamily: MONO }}>agent login</span> once — or point <span style={{ fontFamily: MONO }}>ADHD_CURSOR_PATH</span> at an existing binary.
+                        After install, run <span style={{ fontFamily: MONO }}>{installer.loginCmd}</span> once — or point <span style={{ fontFamily: MONO }}>{installer.envVar}</span> at an existing binary.
                       </div>
                     )}
                   </div>
@@ -485,12 +539,32 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                   setModel(e.target.value);
                   saveEngineModel(harness, e.target.value);
                 }}
-                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }}>
+                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: 6 }}>
                 {modelOptions.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label} — {opt.hint}</option>
+                  <option key={opt.id} value={opt.id}>{opt.hint ? `${opt.label} — ${opt.hint}` : opt.label}</option>
                 ))}
                 {!modelOption && <option value={model}>{model} (custom)</option>}
               </select>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: modelOption?.requiresUsageCredits || customModel ? 6 : 20 }}>
+                <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>
+                  {MODEL_SOURCE_LABEL[modelList.source]}{modelList.note ? ` · ${modelList.note}` : ""}
+                </span>
+                <button onClick={() => setCustomModel((on) => !on)}
+                  style={{ border: "none", background: "transparent", padding: 0, color: d.accent, fontFamily: SANS, fontSize: 11, cursor: "pointer", marginLeft: "auto", flexShrink: 0 }}>
+                  {customModel ? "Hide custom ID" : "Custom ID…"}
+                </button>
+              </div>
+              {customModel && (
+                // Rosters go stale between releases — this is the escape hatch so a
+                // model we don't list yet never blocks a run.
+                <input value={model}
+                  onChange={(e) => {
+                    setModel(e.target.value);
+                    saveEngineModel(harness, e.target.value);
+                  }}
+                  placeholder="Exact model ID passed to the CLI (blank = Auto)"
+                  style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: d.surface2, outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }} />
+              )}
               {modelOption?.requiresUsageCredits && (
                 <div style={{ color: GOLD, fontFamily: SANS, fontSize: 11, marginBottom: 20 }}>
                   1M context requires usage credits on your Claude plan (claude.ai/settings/usage) or an API key connection.

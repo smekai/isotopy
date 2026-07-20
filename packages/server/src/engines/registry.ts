@@ -1,12 +1,14 @@
 import { ENGINES } from "@adhd/core";
 import type { EngineId } from "@adhd/core";
 import { claudeCodeAdapter } from "./claude-code.js";
+import { codexAdapter } from "./codex.js";
 import { cursorAdapter } from "./cursor.js";
 import type { EngineAdapter } from "./types.js";
 
 const adapters = new Map<EngineId, EngineAdapter>([
   [claudeCodeAdapter.id, claudeCodeAdapter],
   [cursorAdapter.id, cursorAdapter],
+  [codexAdapter.id, codexAdapter],
 ]);
 
 export function assertEngineId(id: string): asserts id is EngineId {

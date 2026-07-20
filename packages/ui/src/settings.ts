@@ -61,17 +61,17 @@ export function loadEngineModel(engineId: EngineId): string {
     loadString(`adhd.engineModel.${engineId}`) ??
     // Pre-TASK-037 the model was stored in a single un-namespaced key.
     (engineId === "claude-code" ? loadString("adhd.engineModel") : null);
-  if (!raw) {
+  // `""` is a real stored value (AUTO_MODEL_ID — let the CLI decide), so only a
+  // missing key falls back to the default.
+  if (raw === null) {
     return defaultModelFor(engineId);
   }
-  if (engineId === "claude-code") {
-    // Full model IDs resolve to 1M-context variants in Claude Code, which
-    // subscription plans reject — migrate them to standard-context aliases.
-    const migrated = LEGACY_MODEL_ALIASES[raw];
-    if (migrated) {
-      saveString("adhd.engineModel.claude-code", migrated);
-      return migrated;
-    }
+  // Retired model IDs are rewritten on read so a stale preference can't keep
+  // failing runs — see LEGACY_MODEL_ALIASES for why each one is retired.
+  const migrated = LEGACY_MODEL_ALIASES[engineId][raw];
+  if (migrated !== undefined) {
+    saveString(`adhd.engineModel.${engineId}`, migrated);
+    return migrated;
   }
   return raw;
 }

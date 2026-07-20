@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { ENGINES } from "@adhd/core";
-import type { EngineId, EngineStatus } from "@adhd/core";
+import { ENGINES, modelOptionsFor } from "@adhd/core";
+import type { EngineId, EngineModelList, EngineStatus } from "@adhd/core";
 import { findEngineAdapter } from "../engines/registry.js";
 
 export const engineRoutes = new Hono()
@@ -20,6 +20,27 @@ export const engineRoutes = new Hono()
       return c.json(status);
     }
     return c.json(await adapter.detect());
+  })
+  // Model roster for the Setup picker. Never fails hard: an engine without a
+  // listModels() capability, or one whose probe blows up, falls back to the
+  // static snapshot in core so the picker always has something to render.
+  .get("/:engineId/models", async (c) => {
+    const engineId = c.req.param("engineId");
+    if (!(engineId in ENGINES)) {
+      return c.json({ error: `Unknown engine: ${engineId}` }, 400);
+    }
+    const id = engineId as EngineId;
+    const fallback: EngineModelList = { options: modelOptionsFor(id), source: "static" };
+    const adapter = findEngineAdapter(id);
+    if (!adapter?.listModels) {
+      return c.json(fallback);
+    }
+    try {
+      return c.json(await adapter.listModels());
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return c.json({ ...fallback, note: `Model lookup failed (${reason}).` });
+    }
   })
   .post("/:engineId/install", async (c) => {
     const engineId = c.req.param("engineId");

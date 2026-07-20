@@ -69,8 +69,23 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     id: "codex",
     label: "Codex",
     description: "OpenAI Codex CLI",
-    available: false,
-    connections: [],
+    available: true,
+    connections: [
+      {
+        id: "subscription",
+        label: "ChatGPT subscription",
+        description:
+          "Uses your Codex CLI login (run `codex login` once in a terminal). Billed to your ChatGPT Plus/Pro plan.",
+        requiresApiKey: false,
+      },
+      {
+        id: "api-key",
+        label: "OpenAI API key",
+        description:
+          "Injects a stored OPENAI_API_KEY for the run, overriding the CLI login. Usage-based billing.",
+        requiresApiKey: true,
+      },
+    ],
   },
 };
 
@@ -88,7 +103,31 @@ export interface EngineModelOption {
   requiresUsageCredits?: boolean;
 }
 
+/**
+ * "let the CLI decide" — no `--model` flag is passed, so the engine's own
+ * configured default wins (e.g. `model = "…"` in `~/.codex/config.toml`).
+ * Always safer than a snapshot ID our roster may have outlived.
+ */
+export const AUTO_MODEL_ID = "";
+
+export const AUTO_MODEL_OPTION: EngineModelOption = {
+  id: AUTO_MODEL_ID,
+  label: "Auto",
+  hint: "use the CLI's own configured default",
+};
+
+/** Where a model roster came from — surfaced in Setup so a stale list is visible. */
+export type EngineModelSource = "cli" | "config" | "static";
+
+export interface EngineModelList {
+  options: EngineModelOption[];
+  source: EngineModelSource;
+  /** Why the source is what it is (probe failure, config path, …). */
+  note?: string;
+}
+
 export const CLAUDE_MODEL_OPTIONS: EngineModelOption[] = [
+  AUTO_MODEL_OPTION,
   { id: "opus", label: "Opus", hint: "most capable" },
   { id: "sonnet", label: "Sonnet", hint: "balanced (default)" },
   { id: "haiku", label: "Haiku", hint: "fastest" },
@@ -107,18 +146,33 @@ export const DEFAULT_CLAUDE_MODEL = "sonnet";
  * always works. True up against `agent models` when they drift.
  */
 export const CURSOR_MODEL_OPTIONS: EngineModelOption[] = [
-  { id: "auto", label: "Auto", hint: "Cursor picks the model (default)" },
+  AUTO_MODEL_OPTION,
+  { id: "auto", label: "Cursor Auto", hint: "Cursor's own model router" },
   { id: "composer-1", label: "Composer 1", hint: "Cursor's fast agent model" },
   { id: "sonnet-4.5", label: "Claude Sonnet 4.5", hint: "Anthropic" },
   { id: "gpt-5", label: "GPT-5", hint: "OpenAI" },
 ];
 
-export const DEFAULT_CURSOR_MODEL = "auto";
+export const DEFAULT_CURSOR_MODEL = AUTO_MODEL_ID;
+
+/**
+ * The Codex CLI has no `models` subcommand to query, and model availability
+ * differs between ChatGPT-subscription and API-key auth — so any named entry
+ * here is a guess that can 400 at run time. Auto (no `--model`) is the default;
+ * the adapter's listModels() adds whatever `~/.codex/config.toml` actually sets.
+ */
+export const CODEX_MODEL_OPTIONS: EngineModelOption[] = [
+  AUTO_MODEL_OPTION,
+  { id: "gpt-5", label: "GPT-5", hint: "OpenAI flagship" },
+  { id: "gpt-5-mini", label: "GPT-5 Mini", hint: "faster, cheaper" },
+];
+
+export const DEFAULT_CODEX_MODEL = AUTO_MODEL_ID;
 
 const MODEL_OPTIONS: Record<EngineId, EngineModelOption[]> = {
   "claude-code": CLAUDE_MODEL_OPTIONS,
   cursor: CURSOR_MODEL_OPTIONS,
-  codex: [],
+  codex: CODEX_MODEL_OPTIONS,
 };
 
 /** Model choices for the Setup picker. Empty for engines without a run implementation. */
@@ -126,24 +180,36 @@ export function modelOptionsFor(engineId: EngineId): EngineModelOption[] {
   return MODEL_OPTIONS[engineId];
 }
 
-const DEFAULT_MODELS: Partial<Record<EngineId, string>> = {
+const DEFAULT_MODELS: Record<EngineId, string> = {
   "claude-code": DEFAULT_CLAUDE_MODEL,
   cursor: DEFAULT_CURSOR_MODEL,
+  codex: DEFAULT_CODEX_MODEL,
 };
 
 export function defaultModelFor(engineId: EngineId): string {
-  return DEFAULT_MODELS[engineId] ?? MODEL_OPTIONS[engineId][0]?.id ?? "";
+  return DEFAULT_MODELS[engineId];
 }
 
 /**
- * Full model IDs previously offered in Setup. They resolve to 1M-context
- * variants in Claude Code, which subscription plans reject — migrate to
- * the standard-context CLI aliases.
+ * Model IDs previously offered in Setup that are now known-bad, mapped to a
+ * working replacement. Stored preferences are migrated through this on read so
+ * a user who picked a since-retired model isn't stuck with failing runs.
+ *
+ * - Claude: full IDs resolve to 1M-context variants, which subscription plans reject.
+ * - Codex: `gpt-5-codex` is rejected outright on ChatGPT-account auth — fall back
+ *   to Auto so the CLI's own configured default wins.
  */
-export const LEGACY_MODEL_ALIASES: Record<string, string> = {
-  "claude-opus-4-8": "opus",
-  "claude-sonnet-4-6": "sonnet",
-  "claude-haiku-4-5": "haiku",
+export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
+  "claude-code": {
+    "claude-opus-4-8": "opus",
+    "claude-sonnet-4-6": "sonnet",
+    "claude-haiku-4-5": "haiku",
+  },
+  cursor: {},
+  codex: {
+    "gpt-5-codex": AUTO_MODEL_ID,
+    "o4-mini": AUTO_MODEL_ID,
+  },
 };
 
 export interface EngineStatus {

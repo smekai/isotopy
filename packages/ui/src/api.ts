@@ -1,4 +1,4 @@
-import type { EngineStatus, RunEvent, RunState, SettingsView } from "@adhd/core";
+import type { EngineModelList, EngineStatus, RunEvent, RunState, SettingsView } from "@adhd/core";
 import { RUN_EVENT_TYPES } from "@adhd/core";
 
 const API_BASE = "";
@@ -43,6 +43,11 @@ export function updateEngineConnection(
 
 export function fetchEngineStatus(engineId: string): Promise<EngineStatus> {
   return requestJson<EngineStatus>(`/engines/${engineId}/status`);
+}
+
+/** Model roster resolved server-side (from the CLI where possible, else static). */
+export function fetchEngineModels(engineId: string): Promise<EngineModelList> {
+  return requestJson<EngineModelList>(`/engines/${engineId}/models`);
 }
 
 export interface EngineActionResult {

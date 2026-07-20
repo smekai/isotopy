@@ -5,6 +5,7 @@
 // resolution, argument construction, and output parsing on top.
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import os from "node:os";
 
 /** How many trailing stderr lines to retain for failure diagnostics. */
 const STDERR_TAIL_LINES = 10;
@@ -87,6 +88,24 @@ function createLineReader(emit: (line: string) => void): (chunk: string, flush?:
       }
     }
   };
+}
+
+/** Default ceiling for short informational CLI calls (--version, status, models). */
+const PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * Run a short informational CLI command (`--version`, `login status`,
+ * `models`). Goes through runSubprocess so it inherits the Windows `.cmd`
+ * shim handling and the timeout/tree-kill behaviour; the home directory is used
+ * as cwd so a probe never depends on a workspace existing.
+ */
+export function probeCommand(binary: string, args: string[]): Promise<SubprocessResult> {
+  return runSubprocess({
+    command: binary,
+    args,
+    cwd: os.homedir(),
+    timeoutMs: PROBE_TIMEOUT_MS,
+  });
 }
 
 /**
