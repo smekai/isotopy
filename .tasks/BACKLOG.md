@@ -1,5 +1,90 @@
 # Backlog
 
+## TASK-043: Dev+Test flow — per-stage skill + context model + DEV_TEST_PIPELINE
+**Priority:** P1 | **Tags:** core
+**Updated:** 2026-07-20 12:40
+
+First real two-box workflow (Developer → Tester). Foundational data-model changes in `@adhd/core`. See plan: `for-a-next-step-pure-floyd.md`.
+
+- `pipelines.ts`: extend `StageDefinition` with optional `skill?: string`. Add `DEV_TEST_PIPELINE` (`id: "dev-test"`, name "Developer + Tester") with one sequential group: `implementation`/label "Developer"/skill "developer", then `test`/label "Tester"/skill "tester". Register in `DEMO_PIPELINES`. Give `ONE_BOX_PIPELINE`'s stage `skill: "developer"`.
+- `runs.ts`: add `stageOutputs?: Record<string, string>` to `RunState` (cross-box memory); initialize `{}` in `createInitialRunState`.
+- `agents.ts`: rename the `test` profession to "Tester".
+
+Blocks TASK-044/045/046.
+
+---
+
+## TASK-044: Skills layer — markdown persona loader + author developer/tester skills
+**Priority:** P1 | **Tags:** server
+**Updated:** 2026-07-20 12:40
+
+Editable markdown personas under `.adhd/skills/`, read at run time so they can be tweaked without a rebuild.
+
+- New `packages/server/src/services/skills.ts`: `loadSkill(id)` reads `.adhd/skills/<id>.md` (via `path.join(REPO_ROOT, ...)`), falls back to a bundled default string when the file is missing; small mtime-checked cache so edits apply on next run.
+- Author `.adhd/skills/developer.md` (multitool: read context → implement → self-check) and `.adhd/skills/tester.md` (inspect diff → write/run tests → report PASS/FAIL + findings) — strong, real persona prompts.
+- Bundled defaults must match the seeded files so the flow works out of the box.
+
+Depends on TASK-043.
+
+---
+
+## TASK-045: Prompt composition + context handoff + appendSystemPrompt
+**Priority:** P1 | **Tags:** server, adapters
+**Updated:** 2026-07-20 12:40
+
+Give each box its persona and the previous box's work.
+
+- `EngineRunContext` (`engines/types.ts`): add optional `appendSystemPrompt?: string`. Claude adapter passes `--append-system-prompt <persona>`; Cursor/Codex adapters prepend the persona to the prompt (engine-agnostic fallback).
+- Helper `buildStagePrompt({ task, upstream })`: user prompt = task + a "Previous step handoff" block built from prior `stageOutputs`.
+- After each engine stage: capture `result` into `run.stageOutputs[stageId]`, persist, and write `.adhd/runs/<id>/<stageId>/handoff.md`. Shared workspace stays the source of truth; the handoff summary is the injected memory.
+
+Depends on TASK-043, TASK-044.
+
+---
+
+## TASK-046: Orchestrator — engine-per-skill-stage + shared workspace + StageExecutor seam
+**Priority:** P1 | **Tags:** server, engine
+**Updated:** 2026-07-20 12:40
+
+Make the two boxes actually run on the plain-TS FSM.
+
+- `run-orchestrator.ts`: run the real engine for any stage that has a `skill` (not only whole-run engine mode), so both boxes execute. Both share one `run.workspacePath` (Tester sees Developer's code). v1 uses one `run.engine`/`run.model` for both boxes; per-box engine selection deferred.
+- `executeEngineStage`: load the stage's skill → `appendSystemPrompt`; build prompt via `buildStagePrompt` with upstream context; capture output → `stageOutputs` + `handoff.md`.
+- Factor the engine-vs-sim decision behind a small `StageExecutor`-shaped boundary so an Aiki executor can replace it later without touching adapters (v0.2 door).
+- `startRun`: accept `"dev-test"` like `one-box` for engine validation + single shared workspace resolution. Keep gate/restart/persistence unchanged.
+
+Depends on TASK-043, TASK-044, TASK-045.
+
+---
+
+## TASK-047: UI — surface per-box persona + render handoff in run view
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-20 12:40
+
+Polish once the flow runs. The `dev-test` pipeline appears in the picker automatically; add persona/handoff visibility.
+
+- Show each box's persona name (Developer / Tester) in the run view.
+- Render `handoff.md` (or `stageOutputs[stageId]`) in the box's log/detail so the hand-off between boxes is visible.
+
+Depends on TASK-046.
+
+---
+
+## TASK-048: Verify the two-box Developer→Tester flow end-to-end
+**Priority:** P2 | **Tags:** testing
+**Updated:** 2026-07-20 12:40
+
+Manual/e2e verification via the run-app skill.
+
+- `pnpm typecheck && pnpm lint`; `pnpm dev`.
+- Start a "Developer + Tester" run on a small task (e.g. "add a `sum(a,b)` util with a test") against a scratch workspace.
+- Confirm Developer writes code → Tester (separate persona) inspects the shared workspace, writes/runs a test, reports PASS/FAIL. Inspect `.adhd/runs/<id>/implementation/handoff.md`, `.adhd/runs/<id>/test/handoff.md`, and `state.json.stageOutputs`.
+- Edit `.adhd/skills/tester.md`, re-run, confirm the change applies without a rebuild.
+
+Depends on TASK-046.
+
+---
+
 ## TASK-039: Pluggable run persistence — storage adapter + selectable DB backend
 **Priority:** P2 | **Tags:** server, core, infra
 **Updated:** 2026-07-17 00:00
@@ -34,19 +119,3 @@ Evaluate [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle) as th
 
 ---
 
-## TASK-035: Spike — beads (bd) vs. TS-native task-graph backlog
-**Priority:** P2 | **Tags:** core, server
-**Updated:** 2026-07-19 18:22
-
-Take Task Plan UI and Evaluate [gastownhall/beads](https://github.com/gastownhall/beads) (`bd`) as the engine for our repo-native task backlog (`.adhd/tasks/`) that feeds pipeline runs. We need compersion and choose a best task tracker
-
-**Questions to answer:**
-- Adopt `bd` as-is (shell out via subprocess) vs. absorb its model (dependency graph + ready-detection + compaction) into our TS/git-native backlog.
-- Go + Dolt dependency weight in a TS/Hono local-first product — acceptable, or does it break the "one install" story?
-- How would tasks-spawn-runs work: does `bd ready` become the intake queue for the pipeline?
-- Merge/sync model vs. our git-native artifact approach — conflicts or synergy?
-- What do we lose by staying markdown (`.tasks/*.md`) — is the dependency graph worth the dep?
-
-**Deliverable:** short recommendation (adopt / borrow model / stay markdown) + backlog data-model implications. Pure intake/memory layer, not a competitor; see docs/competitor-matrix.md §2.
-
----

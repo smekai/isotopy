@@ -1,5 +1,19 @@
 # Done
 
+## TASK-035: Spike — beads (bd) vs. TS-native task-graph backlog
+**Priority:** P2 | **Tags:** core, server
+**Updated:** 2026-07-20 12:20
+
+Spike complete. **Recommendation: borrow the model, stay TS/git-native** — do not take a Go/Dolt runtime dependency.
+
+Measured `@beads/bd@1.1.0` on Windows: 145 MB native binary (+140 MB `node_modules`), embedded Dolt as source of truth (gitignored), synced through a separate `refs/dolt/data` channel — breaks our "one install" promise and conflicts with the git-native-artifact model. `bd init` is also invasive (writes AGENTS.md, CLAUDE.md, .claude/, .codex/, git hooks). The dependency graph + `bd ready` intake queue is genuinely valuable and worth reimplementing in ~1 day in `TaskManager`.
+
+Absorb three ideas into `.adhd/tasks/`: (1) `dependsOn` dependency edges, (2) `ready` detection as the pipeline intake queue (task is `ready` iff all deps `done`), (3) closed-task compaction (v0.2, optional). Keep sequential `TASK-xxx` IDs and markdown+index.json; skip hash IDs, Dolt, and the parallel sync channel.
+
+Deliverable: [docs/spike-beads-vs-ts-backlog.md](../docs/spike-beads-vs-ts-backlog.md). Competitor matrix §2 updated with the decision. Follow-up worth filing: add `dependsOn` + `ready` queue to TaskManager and wire `ready` into the intake stage.
+
+---
+
 ## TASK-042: Unified model discovery across harnesses
 **Priority:** P1 | **Tags:** core, server, adapters, setup
 **Updated:** 2026-07-20 11:55
