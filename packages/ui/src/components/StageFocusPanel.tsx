@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Brain, FileText, MessageSquare, RotateCcw, Terminal, X } from "lucide-react";
 import type { LogLevel, RunState, StageState } from "@adhd/core";
 import { agentForStage } from "@adhd/core";
+import { renderInlineMarkdown } from "../inline-md";
 import { ARTIFACTS, REASONING } from "../mock-content";
 import type { Dir } from "../theme";
 import { MONO, SANS, sLabel, specColor, statusClr } from "../theme";
@@ -165,7 +166,7 @@ export function StageFocusPanel({
               : stage.logs.map((entry, i) => (
                 <div key={i} style={{ display: "flex", gap: 12, marginBottom: 5 }}>
                   <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, flexShrink: 0, paddingTop: 2 }}>{formatTs(entry.ts)}</span>
-                  <span style={{ color: logColor(entry.level), fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>{entry.message}</span>
+                  <span style={{ color: logColor(entry.level), fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>{renderInlineMarkdown(entry.message)}</span>
                 </div>
               ))
             }
@@ -182,7 +183,7 @@ export function StageFocusPanel({
               : reasoning.map((t, i) => (
                 <div key={i} style={{ display: "flex", gap: 12 }}>
                   <div style={{ width: 2, background: sc.soft, borderRadius: 1, flexShrink: 0, alignSelf: "stretch" }} />
-                  <p style={{ color: d.textMid, fontSize: 12, lineHeight: 1.75, fontFamily: SANS, margin: 0 }}>{t}</p>
+                  <p style={{ color: d.textMid, fontSize: 12, lineHeight: 1.75, fontFamily: SANS, margin: 0 }}>{renderInlineMarkdown(t)}</p>
                 </div>
               ))
             }

@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineStatus } from "@adhd/core";
+import { firstLine, truncate } from "./log-text.js";
 import { runSubprocess } from "./subprocess.js";
 import type {
   EngineAdapter,
@@ -10,8 +11,6 @@ import type {
   EngineRunContext,
   EngineRunResult,
 } from "./types.js";
-
-const MAX_LOG_MESSAGE_LENGTH = 300;
 
 const INSTALL_HINT =
   "Claude Code CLI not found. Install it (npm i -g @anthropic-ai/claude-code) " +
@@ -65,9 +64,9 @@ function resolveClaudeBinary(): ResolvedBinary {
   try {
     const lookup = process.platform === "win32" ? "where" : "which";
     const output = execFileSync(lookup, ["claude"], { encoding: "utf8" });
-    const first = output.split(/\r?\n/).find((line) => line.trim() !== "");
+    const first = firstLine(output);
     if (first) {
-      cachedBinary = { path: first.trim(), source: "path" };
+      cachedBinary = { path: first, source: "path" };
       return cachedBinary;
     }
   } catch {
@@ -94,7 +93,7 @@ function claudeVersion(binary: string): Promise<string> {
           reject(error);
           return;
         }
-        resolve(stdout.split(/\r?\n/).find((line) => line.trim() !== "")?.trim() ?? "");
+        resolve(firstLine(stdout) ?? "");
       },
     );
   });
@@ -145,11 +144,6 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
     env.ANTHROPIC_API_KEY = connection.apiKey;
   }
   return env;
-}
-
-function truncate(text: string, max = MAX_LOG_MESSAGE_LENGTH): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 function toolUseSummary(name: string, input: Record<string, unknown>): string {
@@ -329,10 +323,10 @@ export const claudeCodeAdapter: EngineAdapter = {
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
           // Keep the raw error visible in the log; surface the guidance.
-          ctx.onLog("warn", truncate(raw, 500));
+          ctx.onLog("warn", truncate(raw));
           errorMessage = mapped;
         } else {
-          errorMessage = truncate(raw, 500);
+          errorMessage = truncate(raw);
         }
       }
     }

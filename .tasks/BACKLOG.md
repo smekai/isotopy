@@ -72,9 +72,9 @@ Evaluate [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle) as th
 
 ## TASK-035: Spike — beads (bd) vs. TS-native task-graph backlog
 **Priority:** P2 | **Tags:** core, server
-**Updated:** 2026-07-16 00:00
+**Updated:** 2026-07-19 18:22
 
-Evaluate [gastownhall/beads](https://github.com/gastownhall/beads) (`bd`) as the engine for our repo-native task backlog (`.adhd/tasks/`) that feeds pipeline runs. It's a distributed graph issue tracker for AI agents (Go + Dolt): dependency-aware task graph, hash-based IDs (multi-agent merge-safe), hierarchical epics/tasks/subtasks, `bd ready`/`bd prime` ready-work detection, semantic compaction of closed tasks, git-remote sync.
+Take Task Plan UI and Evaluate [gastownhall/beads](https://github.com/gastownhall/beads) (`bd`) as the engine for our repo-native task backlog (`.adhd/tasks/`) that feeds pipeline runs. We need compersion and choose a best task tracker
 
 **Questions to answer:**
 - Adopt `bd` as-is (shell out via subprocess) vs. absorb its model (dependency graph + ready-detection + compaction) into our TS/git-native backlog.
@@ -84,3 +84,5 @@ Evaluate [gastownhall/beads](https://github.com/gastownhall/beads) (`bd`) as the
 - What do we lose by staying markdown (`.tasks/*.md`) — is the dependency graph worth the dep?
 
 **Deliverable:** short recommendation (adopt / borrow model / stay markdown) + backlog data-model implications. Pure intake/memory layer, not a competitor; see docs/competitor-matrix.md §2.
+
+---

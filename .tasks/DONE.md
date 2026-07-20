@@ -1,5 +1,13 @@
 # Done
 
+## TASK-041: Longer engine log messages + basic markdown rendering in log view
+**Priority:** P2 | **Tags:** ui, server, adapters
+**Updated:** 2026-07-19 21:25
+
+Done: Raised the run-log message cap from 300 to 1000 chars and deduplicated the copy-pasted text helpers into a new shared module `packages/server/src/engines/log-text.ts` (`MAX_LOG_MESSAGE_LENGTH = 1000`, `truncate()`, `firstLine()`). Both adapters (`cursor.ts`, `claude-code.ts`) now import from it; their local copies and inline first-line `split(/\r?\n/)` patterns are gone, and the explicit `truncate(x, 500)` error paths use the shared 1000 cap. UI: new `packages/ui/src/inline-md.tsx` — a dependency-free regex tokenizer `renderInlineMarkdown()` that renders `**bold**`, `*italic*`/`_italic_`, `~~strikethrough~~`, and `` `code` `` as React elements (no `dangerouslySetInnerHTML`; React escaping keeps it XSS-safe; underscore italics require non-word neighbours so snake_case stays plain; code spans shield their contents; bold/strike render nested inline styles). Wired into StageFocusPanel's Live Log and Reasoning tabs. Verified: typecheck + lint clean; 14-case tokenizer test; 8/8 free-tier Playwright e2e; live one-box haiku run — a ~1300-char assistant reply reached the UI as a single 1000-char log entry (ellipsis at the cap) with bold/italic/strike/code rendered as styling (screenshot-checked via a throwaway Playwright spec, since removed).
+
+---
+
 ## TASK-037: Cursor CLI engine adapter
 **Priority:** P2 | **Tags:** adapters, milestone-c
 **Updated:** 2026-07-18 20:00
