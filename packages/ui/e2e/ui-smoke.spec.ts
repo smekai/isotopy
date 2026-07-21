@@ -11,10 +11,12 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
   await expect(page.getByText("What should the team build?")).toBeVisible();
   await expect(page.getByRole("button", { name: /Start run/ })).toBeDisabled();
 
-  // the dropdown opens with both options and closes on Escape
+  // the dropdown opens with every pipeline and closes on Escape
   await page.getByRole("button", { name: "Full team" }).click();
-  await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
+  await expect(page.getByRole("option")).toHaveCount(3);
   await expect(page.getByRole("option", { name: /Full team/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Developer \+ Tester/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeHidden();
 
@@ -37,17 +39,23 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
 
-  await expect(page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ })).toBeVisible();
+  // All three harnesses ship now — nothing is left behind a SOON pill.
+  await expect(page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ })).toBeEnabled();
   await expect(page.getByRole("button", { name: /Cursor Cursor CLI agent/ })).toBeEnabled();
-  await expect(page.getByText("SOON", { exact: true })).toHaveCount(1); // only Codex remains
+  await expect(page.getByRole("button", { name: /Codex OpenAI Codex CLI/ })).toBeEnabled();
+  await expect(page.getByText("SOON", { exact: true })).toHaveCount(0);
 
   await expect(page.getByText("Engine status")).toBeVisible();
   await expect(page.getByRole("button", { name: /Re-check/ })).toBeVisible();
 
-  // default engine is claude-code
+  // Default engine is claude-code. The roster is resolved server-side and can
+  // come from the CLI, so assert the entries that matter rather than a count.
   const model = page.locator("select");
   await expect(model).toBeVisible();
-  await expect(model.locator("option")).toHaveCount(4); // opus, sonnet, haiku, sonnet[1m]
+  await expect(model).toHaveValue("sonnet");
+  for (const id of ["", "opus", "sonnet", "haiku"]) {
+    await expect(model.locator(`option[value="${id}"]`)).toHaveCount(1);
+  }
 
   await expect(page.getByRole("button", { name: /Never block \(recommended\)/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Accept edits only/ })).toBeVisible();
@@ -69,9 +77,11 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
   await page.getByRole("button", { name: "AI Harness" }).click();
   await page.getByRole("button", { name: /Cursor Cursor CLI agent/ }).click();
 
+  // Cursor defaults to Auto (""), which lets the CLI pick. Its roster comes
+  // from `agent models` when the CLI is installed, so only Auto is guaranteed.
   const model = page.locator("select");
-  await expect(model).toHaveValue("auto");
-  await expect(model.locator("option")).toHaveCount(4); // auto, composer-1, sonnet-4.5, gpt-5
+  await expect(model).toHaveValue("");
+  await expect(model.locator('option[value=""]')).toHaveText(/Auto/);
 
   // connection modes render in the same section — visibility only (clicking persists)
   await expect(page.getByRole("button", { name: /Cursor subscription/ })).toBeVisible();

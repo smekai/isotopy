@@ -1,5 +1,46 @@
 # Done
 
+## TASK-062: Component tests (AAAAA) for the server + testing-layer policy
+**Priority:** P1 | **Tags:** testing, server, infra
+**Updated:** 2026-07-21 19:30
+
+Made component tests the primary test level and introduced the repo's first test runner (Vitest). **60 tests in ~1.5s**, no browser, no CLI, no spend.
+
+**Layer policy** (`docs/testing.md`): comp (`packages/server/test/*.comp.ts`) is the default; `*.spec.ts` is narrowed to complicated pure functions; Playwright keeps only what needs a browser; the live test is demoted to a "does the real CLI still integrate" canary. **AAAAA** structure throughout — Arrange → Anticipate → Act → Assert — with the two hard rules enforced: one action per test, no branching in a test body (all polling lives in `test/support/harness.ts`).
+
+**Three seams added:** `ADHD_HOME` lazy accessors in `paths.ts` (a real feature, not just a test hook — also documented in `.env.example`); `setEngineAdapter`/`resetEngineAdapters` on the engine registry; `createApp({ orchestrator })` with `createRunRoutes`/`createPipelineRoutes` factories, deleting the module-level singleton. Plus `settleWrites()` + `RunOrchestrator.shutdown()` so a caller knows when the disk has caught up.
+
+**26 comp tests** over three suites. `dev-test-pipeline.comp.ts` proves for free what the live test used to buy with money: the Tester's prompt quotes the Developer's report under a handoff heading, both boxes share one workspace, `VERDICT: FAIL` on exit 0 fails the run, a failing Developer stops the run before the Tester is called. **34 unit specs** for `parseStageVerdict` (backwards scan, markdown wrapping, CRLF), `run-utils`, `pipelines`.
+
+**Two product bugs found by writing the tests:**
+- Aborting during persona resolution left no `AbortController` registered, so the CLI was spawned anyway and ran to completion for an already-cancelled run. Fixed by registering the handle before the first await plus a cancelled check.
+- `simulateStage` floored its per-line delay at 300ms, silently overriding any caller asking for faster timings. The floor was dead code for the 2–8s defaults and only ever bit when the option was used deliberately. Removing it took the suite from 14s to 1.4s.
+
+**Verified:** mutation-tested — reintroducing the stale-`stageOutputs` bug and the ignored-`FAIL`-verdict bug each turns the suite red (the first exposed a gap, which added a test); real `.adhd/runs` untouched and zero leftover temp dirs after a run; 5 consecutive green runs; `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm e2e` (14 passed, live skipped) all green.
+
+**Cross-platform:** temp roots via `os.tmpdir()` + `mkdtemp`; `dispose()` drains queued writes before `fs.rm`, which also retries and tolerates failure (Windows `EBUSY`); scripts are `vitest run` only. The comp suite never reaches `subprocess.ts`, so it has no platform branch to diverge on. Run on **Windows**; **untested on macOS**.
+
+**Known gap:** the abort-during-persona-resolution window is a genuine race and is not deterministically reproducible in a test — the adjacent case (abort before the stage is entered) is covered. Engine *adapter* output parsing also remains untested, since the fake adapter substitutes for it; noted as the next gap in `docs/code-quality.md`.
+
+---
+
+## TASK-050: Test phase — extend Playwright e2e to the Developer+Tester flow
+**Priority:** P1 | **Tags:** testing, ui
+**Updated:** 2026-07-21 18:00
+
+Extended the existing Playwright suite from 8 free-tier tests to 16 free/seeded tests plus one opt-in live smoke, covering the two-box Developer→Tester flow. 27s, zero engine spend.
+
+**Done:**
+- **Regression check** — the picker tests never asserted a two-entry list, so TASK-043 did not break them. Two *other* assertions were stale and failing: the `SOON` pill (all three harnesses now ship) and Cursor's model roster (`agent models` returns 170+ live entries; default is now Auto `""`). Both repaired and made resilient to roster churn. Picker test now asserts all three pipelines.
+- **New free tier** — `e2e/run-lifecycle.spec.ts`: composer start → run view, Abort → CANCELLED, run → COMPLETED with per-stage statuses, gate AWAITING → Approve Gate, Resume from a cancelled run, history re-attach. All on the simulated `sequential` pipeline, driven through the API with `minDurationMs`/`maxDurationMs`/`failProbability: 0` so runs finish in seconds. This promotes what used to be the manual live tier.
+- **New seeded tier** — `e2e/dev-test-flow.spec.ts`: picker/composer copy for `dev-test`, plus a fabricated `RunState` served by route interception to assert Developer/Tester nodes, `DEVELOPER`/`TESTER` persona badges, the Tester's `PASS` verdict, and each box's own `handoff.md`. The fixture sets `result` to the Tester's text so the TASK-047 bug fails the test — verified by reintroducing it.
+- **Live smoke** — `e2e/live-dev-test.spec.ts`, skipped unless `ADHD_E2E_LIVE=1`. Proves only what the cheap tiers cannot: the boxes chain, and the Tester sees the Developer's file in the shared workspace. Not executed (needs an unsandboxed server + real spend).
+- **Test affordances** — `data-testid` on the run status word (stage nodes render the same words), stage nodes, stage profession/persona, and the artifact preview.
+- **Config** — `workers: 1` + `fullyParallel: false` (one shared server and run store); root `pnpm e2e`; `tsconfig.e2e.json` so the Node-side files typecheck without leaking `process` into `src/`.
+- **Docs** — `docs/e2e-test-plan.md` rewritten around the three tiers (`handoff.md`, third pipeline); run-app skill's `/pipelines` line and e2e commands corrected in both `.claude/` and `.agents/` copies; CI note updated in `docs/code-quality.md`.
+
+---
+
 ## TASK-060: Restart vs Resume — full-pipeline restart from History
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-21 18:00

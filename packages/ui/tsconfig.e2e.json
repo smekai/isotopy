@@ -1,0 +1,17 @@
+// The Node-side files of this package: the Playwright suite, its config, and
+// the Vite config. Kept apart from tsconfig.json so `process` and friends stay
+// out of reach of the browser code in src/.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "paths": {
+      "@adhd/core": ["../core/src/index.ts"]
+    }
+  },
+  "include": ["e2e", "playwright.config.ts", "vite.config.ts"]
+}

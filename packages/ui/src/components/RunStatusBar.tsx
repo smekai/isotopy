@@ -33,7 +33,7 @@ export function RunStatusBar({ run, d }: { run: RunState; d: Dir }) {
         boxShadow: running ? `0 0 7px ${d.accent}` : undefined,
         animation: running ? "adhd-pulse 1.2s ease-in-out infinite" : undefined,
       }} />
-      <span style={{ color: d.textMid, fontFamily: MONO, fontSize: 10, fontWeight: 600 }}>{run.status.toUpperCase()}</span>
+      <span data-testid="run-status" style={{ color: d.textMid, fontFamily: MONO, fontSize: 10, fontWeight: 600 }}>{run.status.toUpperCase()}</span>
     </div>
   );
 }

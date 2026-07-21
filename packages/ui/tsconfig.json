@@ -10,5 +10,8 @@
       "@adhd/core": ["../core/src/index.ts"]
     }
   },
-  "include": ["src"]
+  // test/ holds unit specs for the pure helpers in src/. Safe to include here:
+  // this config is noEmit (Vite does the bundling from index.html), so nothing
+  // from test/ can reach dist/.
+  "include": ["src", "test"]
 }

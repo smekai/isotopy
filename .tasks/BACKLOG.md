@@ -77,29 +77,6 @@ Produce a **staff-level "Architect" skill** that captures how code in this repo 
 
 ---
 
-## TASK-050: Test phase — extend Playwright e2e to the Developer+Tester flow
-**Priority:** P1 | **Tags:** testing, ui
-**Updated:** 2026-07-20 22:30
-
-**Playwright is already set up** — do not re-add it. `packages/ui/playwright.config.ts` (auto-starts `pnpm dev`, waits on `/health`, `reuseExistingServer: true`), 8 free-tier tests in `packages/ui/e2e/ui-smoke.spec.ts`, script `pnpm --filter @adhd/ui e2e`. `docs/e2e-test-plan.md` already defines the two tiers. This task **extends** that to cover the two-box flow and automates what is currently manual.
-
-**Guiding principle — cheapest tier that can prove it.** Three tiers, in cost order; a check belongs in the lowest tier that can catch its failure:
-1. **Free / zero-token** — UI + API assertions with no engine spend. The `sequential` pipeline is *simulated*, so it exercises the whole run lifecycle (status bar, stage focus, live log, history, restart, abort) for **zero tokens**. Most run-UI coverage belongs here.
-2. **Seeded** — drive the API directly, or pre-write a `.adhd/runs/<id>/state.json` fixture with `stageOutputs`, to assert per-stage handoff rendering and the persona badge without running an engine at all.
-3. **Live** — one thin real `dev-test` run (haiku, ≈cents). Reserve for proving the boxes genuinely chain; everything else should already be covered above.
-
-**Work:**
-- **First: check for a regression I introduced.** TASK-043 added a third pipeline (`dev-test`) to `DEMO_PIPELINES`, changing the picker's contents. Run `pnpm --filter @adhd/ui e2e` and repair any existing test that asserted on a two-entry picker.
-- **Fix stale docs** — `docs/e2e-test-plan.md` still says the Artifacts tab lists `result.md`; TASK-047 renamed it to `handoff.md`. It also predates the third pipeline. The run-app skill likewise still says `/pipelines` returns only `sequential` + `one-box`.
-- **New free-tier specs** — `dev-test` selectable in the picker; both boxes render as **Developer** and **Tester**; the persona badge (`DEVELOPER` / `TESTER`) shows in the stage focus header; per-stage Artifacts show that stage's own `handoff.md` (regression guard for the TASK-047 bug where every stage showed the last stage's output).
-- **Promote live-tier items to free/seeded** wherever the simulated pipeline or a seeded run can prove the same thing (run lifecycle, history re-attach, abort → CANCELLED).
-- **Keep one live smoke** for the real two-box chain; mark it skipped by default behind an env flag (e.g. `ADHD_E2E_LIVE=1`) so the default suite stays free and fast.
-- Add a root `pnpm e2e` script; note CI wiring stays on the `docs/code-quality.md` "adopt next" list.
-
-**Verify:** `pnpm --filter @adhd/ui e2e` green with no engine spend; the live smoke passes when explicitly enabled.
-
----
-
 ## TASK-051: Manual-Tester box — Playwright-driven verification stage in the workflow
 **Priority:** P2 | **Tags:** core, server, engine
 **Updated:** 2026-07-20 22:30

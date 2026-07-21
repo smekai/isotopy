@@ -5,9 +5,7 @@
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { EnginePermissionMode, RunEvent, RunState } from "@adhd/core";
-import { REPO_ROOT } from "../paths.js";
-
-const RUNS_DIR = path.join(REPO_ROOT, ".adhd", "runs");
+import { runsDir } from "../paths.js";
 
 /** Simulation timings needed to restart a mock run after a reload. */
 export interface PersistedSimOptions {
@@ -29,7 +27,7 @@ export interface PersistedRun {
 }
 
 function runDir(runId: string): string {
-  return path.join(RUNS_DIR, runId);
+  return path.join(runsDir(), runId);
 }
 
 async function writeStateFile(runId: string, persisted: PersistedRun): Promise<void> {
@@ -93,18 +91,43 @@ export function appendEvent(runId: string, event: RunEvent): Promise<void> {
  * and event trail. Best-effort: losing the artifact must not fail the run,
  * since the same text is already persisted in state.json's stageOutputs.
  */
-export async function writeHandoff(
+export function writeHandoff(
   runId: string,
   stageId: string,
   content: string,
 ): Promise<void> {
-  try {
-    const dir = path.join(runDir(runId), stageId);
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, "handoff.md"), content);
-  } catch (error) {
-    console.warn(`Failed to write handoff for run ${runId}/${stageId}:`, error);
-  }
+  return track(
+    (async () => {
+      try {
+        const dir = path.join(runDir(runId), stageId);
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, "handoff.md"), content);
+      } catch (error) {
+        console.warn(`Failed to write handoff for run ${runId}/${stageId}:`, error);
+      }
+    })(),
+  );
+}
+
+// Callers fire most writes without awaiting them (`void writeHandoff(...)`), so
+// nothing otherwise knows when the disk has caught up. `settleWrites` is that
+// join point: a graceful shutdown uses it, and tests need it before deleting a
+// temp data root — on Windows a rename still in flight makes `rm` throw EBUSY.
+const inFlight = new Set<Promise<unknown>>();
+
+function track<T>(operation: Promise<T>): Promise<T> {
+  inFlight.add(operation);
+  void operation.catch(() => undefined).finally(() => inFlight.delete(operation));
+  return operation;
+}
+
+/** Resolve once every queued state, event, and handoff write has landed. */
+export async function settleWrites(): Promise<void> {
+  const pending = [...stateQueues.values(), ...appendQueues.values(), ...inFlight];
+  await Promise.allSettled(pending);
+  // A settled write can enqueue the next one behind it; loop until quiet.
+  const stillPending = [...stateQueues.values(), ...appendQueues.values(), ...inFlight];
+  await Promise.allSettled(stillPending);
 }
 
 function isPersistedRun(value: unknown): value is PersistedRun {
@@ -123,16 +146,17 @@ function isPersistedRun(value: unknown): value is PersistedRun {
  * single bad run can't stop the server from booting.
  */
 export async function loadAllRuns(): Promise<PersistedRun[]> {
+  const dir = runsDir();
   let entries: string[];
   try {
-    entries = await readdir(RUNS_DIR);
+    entries = await readdir(dir);
   } catch {
     return []; // no runs dir yet — nothing to restore
   }
 
   const loaded: PersistedRun[] = [];
   for (const name of entries) {
-    const statePath = path.join(RUNS_DIR, name, "state.json");
+    const statePath = path.join(dir, name, "state.json");
     let raw: string;
     try {
       raw = await readFile(statePath, "utf8");

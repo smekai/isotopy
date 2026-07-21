@@ -37,15 +37,17 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
 ## Smoke checks
 
 - API: `curl http://localhost:9477/health` → `{"ok":true,...}`;
-  `curl http://localhost:9477/pipelines` → `sequential` + `one-box`.
+  `curl http://localhost:9477/pipelines` → `sequential`, `one-box`,
+  `dev-test` (the two-box Developer→Tester flow).
 - CLI detection: `curl http://localhost:9477/engines/Codex/status`
   → `{"installed":true,"path":...,"version":...}`.
 - Connection settings: `GET /settings`, `PUT /settings/engines/Codex`
   (`{"connectionMode":"subscription"|"api-key","apiKey":"..."|null}`);
   stored in gitignored `.adhd/settings.json`, key never echoed back.
-- UI free-tier E2E (no engine spend, auto-starts the dev server):
-  `pnpm --filter @adhd/ui e2e`
-- Full checklist incl. the manual live tier: `docs/e2e-test-plan.md`.
+- E2E, free + seeded tiers (no engine spend, auto-starts the dev
+  server): `pnpm e2e`. The live tier is opt-in:
+  `ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test`.
+- Full plan and what each tier proves: `docs/e2e-test-plan.md`.
 
 ## Driving the UI headlessly
 
@@ -53,12 +55,19 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
 in the user-level ms-playwright cache (`npx playwright install
 chromium --only-shell` inside `packages/ui` if missing). Useful
 selectors: the pipeline picker is a dropdown — trigger button shows
-the selected label ("Full team" / "Single agent"), menu entries are
+the selected label ("Full team" / "Single agent" / "Developer +
+Tester"), menu entries are
 `role=option`; header buttons "Setup" / "History"; task input
 placeholder "Describe the task..."; status-bar engine pill matches
 `/^⬡ Codex · /`. History run cards are clickable divs (no View
 button). Text like "Codex · <model>" appears in both the pill
 and the team-controller line — anchor or `.first()` your locators.
+
+Test ids for the moving parts: `run-status` (run status word — stage
+nodes render the same words for themselves, so always anchor on
+this), `stage-node-<stageId>`, `stage-profession`, `stage-persona`,
+`stage-verdict`, `artifact-preview`, `artifact-view-workflow` /
+`artifact-view-files`, `history-card`.
 
 ## Starting a run without the UI
 

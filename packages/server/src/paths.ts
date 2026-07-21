@@ -9,8 +9,28 @@ export const REPO_ROOT = path.resolve(
   "../../..",
 );
 
+/**
+ * Everything ADHD writes: run state, settings, personas. Defaults to `.adhd/`
+ * beside the repo, and `ADHD_HOME` moves it elsewhere — which is what lets a
+ * test point at a temp directory instead of the developer's real run history.
+ *
+ * Deliberately a function, not a constant: a constant would be frozen at import
+ * time, so a test could only change it by controlling module load order.
+ */
+export function adhdDir(): string {
+  const override = process.env.ADHD_HOME;
+  return override && override.trim() !== ""
+    ? path.resolve(override.trim())
+    : path.join(REPO_ROOT, ".adhd");
+}
+
+/** One directory per run: state.json, events.jsonl, handoffs, workspace/. */
+export function runsDir(): string {
+  return path.join(adhdDir(), "runs");
+}
+
 export function runWorkspaceDir(runId: string): string {
-  return path.join(REPO_ROOT, ".adhd", "runs", runId, "workspace");
+  return path.join(runsDir(), runId, "workspace");
 }
 
 async function ensureRunWorkspace(runId: string): Promise<string> {

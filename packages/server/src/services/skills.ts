@@ -5,10 +5,12 @@
 // first use, giving the user a copy to edit rather than an invisible feature.
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { REPO_ROOT } from "../paths.js";
+import { adhdDir } from "../paths.js";
 import { DEFAULT_SKILLS } from "./skill-defaults.js";
 
-const SKILLS_DIR = path.join(REPO_ROOT, ".adhd", "skills");
+function skillsDir(): string {
+  return path.join(adhdDir(), "skills");
+}
 
 interface CacheEntry {
   /** mtime the content was read at — a newer file invalidates the entry. */
@@ -16,16 +18,18 @@ interface CacheEntry {
   content: string;
 }
 
+// Keyed by resolved file path, not skill id — ADHD_HOME can point the skills
+// directory somewhere else, and a cache keyed by id would survive that move.
 const cache = new Map<string, CacheEntry>();
 
 export function skillFilePath(skillId: string): string {
-  return path.join(SKILLS_DIR, `${skillId}.md`);
+  return path.join(skillsDir(), `${skillId}.md`);
 }
 
 /** Best-effort write of a default persona so the user has something to edit. */
 async function seedSkillFile(skillId: string, content: string): Promise<void> {
   try {
-    await mkdir(SKILLS_DIR, { recursive: true });
+    await mkdir(skillsDir(), { recursive: true });
     // "wx" — never clobber a file the user already wrote.
     await writeFile(skillFilePath(skillId), content, { flag: "wx" });
   } catch {
@@ -45,12 +49,12 @@ export async function loadSkill(skillId: string): Promise<string | undefined> {
   const filePath = skillFilePath(skillId);
   try {
     const { mtimeMs } = await stat(filePath);
-    const cached = cache.get(skillId);
+    const cached = cache.get(filePath);
     if (cached && cached.mtimeMs === mtimeMs) {
       return cached.content;
     }
     const content = await readFile(filePath, "utf8");
-    cache.set(skillId, { mtimeMs, content });
+    cache.set(filePath, { mtimeMs, content });
     return content;
   } catch {
     // No readable file — fall back to the bundled default.

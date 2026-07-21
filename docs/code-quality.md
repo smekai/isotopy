@@ -38,8 +38,9 @@ Core stays dependency-free and side-effect-free: types, constants, and pure func
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/settings.ts`, `src/paths.ts` | Persistence/filesystem helpers |
 | `src/utils.ts` | Pure, context-free helpers (no I/O, no internal imports) |
+| `test/` | Component tests, unit specs, and their support harness ([`testing.md`](./testing.md)) — never colocated with `src/`, which would emit them into `dist/` |
 
-Dependency direction: `index.ts → app.ts → routes → services → engines/core`. Routes never contain business rules; services never touch `Request`/`Response`.
+Dependency direction: `index.ts → app.ts → routes → services → engines/core`. Routes never contain business rules; services never touch `Request`/`Response`. Routes are factories (`createRunRoutes(orchestrator)`) that receive their service rather than importing a singleton — which is what lets a component test mount them over a throwaway orchestrator.
 
 ### `packages/ui` — React app
 
@@ -47,6 +48,7 @@ Dependency direction: `index.ts → app.ts → routes → services → engines/c
 - `components/` presentational + container components, `hooks/` reusable stateful logic.
 - `api.ts` is the only module that talks HTTP; components import functions from it, never `fetch` directly.
 - Pure helpers (`run-utils.ts`, `theme.ts`) stay separate from stateful modules.
+- `test/` holds unit specs; `e2e/` holds the Playwright suite. Neither lives in `src/`.
 
 ## Configuration & constants
 
@@ -76,15 +78,17 @@ Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure help
 
 Already in place:
 
-- **Strict TypeScript** (`strict: true`, `isolatedModules`) with `pnpm typecheck` across the workspace.
+- **Strict TypeScript** (`strict: true`, `isolatedModules`) with `pnpm typecheck` across the workspace. `packages/ui` typechecks twice — `tsconfig.json` for the browser app, `tsconfig.e2e.json` for the Node-side Playwright/Vite configs, so `process` and friends stay out of reach of `src/`.
 - **`import type`** for type-only imports (enforced by lint).
 - **UI-safe views**: the server never serializes secrets to the client (`SettingsView`).
+- **Layered tests** — component tests (Vitest, `pnpm test`) are the primary level; specs cover complicated pure functions; Playwright covers only the browser; one opt-in live canary. See [`testing.md`](./testing.md) for the policy and the AAAAA convention (TASK-062).
+- **Testable seams** — `ADHD_HOME` moves the data root, `setEngineAdapter()` substitutes a harness, and `createApp({ orchestrator })` injects the service instead of routes reaching for a module singleton.
 
 Recommended next steps, in rough priority order:
 
-1. **CI gate** — a GitHub Actions workflow running `pnpm lint && pnpm typecheck && pnpm build` on every PR; later add the Playwright smoke suite.
+1. **CI gate** — a GitHub Actions workflow running `pnpm lint && pnpm typecheck && pnpm test && pnpm build` on every PR, then `pnpm e2e`. The Vitest suite is CI-ready today (no credentials, no engine, no browser, ~1.5s); the Playwright job additionally needs `npx playwright install chromium`. The workflow itself is not written yet.
 2. **Formatter** — add Prettier (or Biome) with a pre-commit hook (`husky` + `lint-staged`) so style never reaches review.
-3. **Unit tests** — Vitest for pure logic first (core helpers, `run-orchestrator` state transitions, engine output parsing); the e2e suite already covers the happy path.
+3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
 4. **Structured logger** — replace `console.*` (tracked as TASK-022; `LOG_LEVEL` should join `config.ts`).
 5. **Request validation** — zod (or Hono's validator) at route boundaries instead of hand-rolled `body.x !== undefined` checks; the parsed types then flow into services for free.
 6. **Stricter compiler flags** — `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` in `tsconfig.base.json` once the codebase is ready.

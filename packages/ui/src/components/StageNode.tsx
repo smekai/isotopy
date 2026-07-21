@@ -22,6 +22,7 @@ export function StageNode({
   return (
     <button
       onClick={onClick}
+      data-testid={`stage-node-${stageId}`}
       style={{
         background: "#FFFFFF",
         borderRadius: 14,

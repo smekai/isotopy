@@ -178,7 +178,7 @@ export function StageFocusPanel({
           {agent.glyph}
         </div>
         <div>
-          <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700 }}>{agent.profession}</div>
+          <div data-testid="stage-profession" style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700 }}>{agent.profession}</div>
           <div style={{ color: d.textMuted, fontSize: 11, fontFamily: SANS }}>{stage.label} stage</div>
         </div>
         {/* The box's own reported outcome, which drives its pass/fail status. */}
@@ -200,6 +200,7 @@ export function StageFocusPanel({
         {/* Which persona this box ran as — .adhd/skills/<skill>.md */}
         {stage.skill && (
           <div
+            data-testid="stage-persona"
             title={`Persona: .adhd/skills/${stage.skill}.md`}
             style={{
               background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 20,
@@ -316,7 +317,7 @@ export function StageFocusPanel({
                 </div>
                 <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
                   {artifacts[artIdx] && (
-                    <pre style={{ color: d.text, fontFamily: MONO, fontSize: 11, lineHeight: 1.75, whiteSpace: "pre-wrap", margin: 0 }}>
+                    <pre data-testid="artifact-preview" style={{ color: d.text, fontFamily: MONO, fontSize: 11, lineHeight: 1.75, whiteSpace: "pre-wrap", margin: 0 }}>
                       {artifacts[artIdx].preview}
                     </pre>
                   )}

@@ -1,0 +1,10 @@
+// Component tests. Kept apart from tsconfig.json so `test/` never lands in the
+// build output (rootDir: src) while still being typechecked.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["test", "src"]
+}

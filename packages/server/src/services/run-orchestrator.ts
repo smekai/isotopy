@@ -23,7 +23,13 @@ import { assertEngineId, getEngineAdapter } from "../engines/registry.js";
 import type { EngineRunResult } from "../engines/types.js";
 import { resolveWorkspace } from "../paths.js";
 import { getEngineConnection } from "../settings.js";
-import { appendEvent, loadAllRuns, writeHandoff, writeState } from "./run-store.js";
+import {
+  appendEvent,
+  loadAllRuns,
+  settleWrites,
+  writeHandoff,
+  writeState,
+} from "./run-store.js";
 import type { PersistedRun } from "./run-store.js";
 import { loadSkill } from "./skills.js";
 import { buildStagePrompt, formatHandoff, parseStageVerdict } from "./stage-context.js";
@@ -100,6 +106,22 @@ export class RunOrchestrator {
       }
     }
     this.nextRunNumber = maxNumber + 1;
+  }
+
+  /**
+   * Stop cleanly: cancel anything in flight, flush the debounced state writes,
+   * and wait for the disk to catch up. Without this a caller has no way to know
+   * when it is safe to touch the data directory — which is what a test needs
+   * before removing its temp `ADHD_HOME`.
+   */
+  async shutdown(): Promise<void> {
+    for (const run of this.runs.values()) {
+      if (!isTerminalRunStatus(run.status)) {
+        this.abortRun(run.id);
+      }
+    }
+    await Promise.all([...this.runs.keys()].map((runId) => this.flushPersist(runId)));
+    await settleWrites();
   }
 
   /** A run reloaded in a non-terminal state can't resume — mark it failed. */
@@ -475,7 +497,11 @@ export class RunOrchestrator {
     ];
 
     const duration = randomBetween(options.minDurationMs, options.maxDurationMs);
-    const stepDelay = Math.max(300, Math.floor(duration / logLines.length));
+    // Spread the log lines across the requested duration. No floor here: the
+    // default 2-8s range already gives 500ms+ per line, so a floor would only
+    // ever bite when a caller deliberately asked for something faster — which
+    // is exactly when overriding it is wrong (component tests do that).
+    const stepDelay = Math.max(1, Math.floor(duration / logLines.length));
 
     for (const [level, message] of logLines) {
       await sleep(stepDelay);
@@ -640,10 +666,21 @@ export class RunOrchestrator {
       `${profession} online · ${this.engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
     );
 
-    const { persona, prompt } = await this.resolveStageInputs(run, stageDef);
-
+    // Register the abort handle *before* the first await. Resolving the persona
+    // touches the filesystem, and an abort arriving in that window used to find
+    // no controller to cancel — so the CLI was spawned anyway and ran to
+    // completion for a run the user had already stopped.
     const controller = new AbortController();
     this.engineAborts.set(runId, controller);
+
+    const { persona, prompt } = await this.resolveStageInputs(run, stageDef);
+
+    if (this.cancelled.has(runId)) {
+      // Aborted while the inputs were being resolved — never start the engine.
+      this.engineAborts.delete(runId);
+      return "cancelled";
+    }
+
     let outcome: EngineRunResult;
     try {
       const adapter = getEngineAdapter(run.engine);
@@ -821,5 +858,3 @@ export class RunOrchestrator {
     await this.runStages(runId, pipeline, options);
   }
 }
-
-export const orchestrator = new RunOrchestrator();

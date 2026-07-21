@@ -1,63 +1,107 @@
-# E2E Test Plan — one-box Claude run UI
+# E2E Test Plan — the browser layer
 
-Regression checklist for the milestone-c surface, distilled from the TASK-020
-verification pass. Two tiers:
+Regression coverage for what the **React app** does with a run. This is the
+narrowest layer in [`testing.md`](./testing.md) — read that first for the layer
+policy. Run *semantics* (abort → cancelled, gates, restart, per-stage statuses,
+handoff chaining, error contracts) live in the component suite under
+`packages/server/test/` and are deliberately **not** duplicated here.
 
-- **Free tier** — no engine spend, no `claude` CLI needed. Automated in
-  [`packages/ui/e2e/ui-smoke.spec.ts`](../packages/ui/e2e/ui-smoke.spec.ts)
-  (`pnpm --filter @adhd/ui e2e`).
-- **Live tier** — starts a real one-box run (≈ $0.01 with haiku). Manual for
-  now; automate later if it earns its keep. Requires an authenticated
-  `claude` CLI and a server that was **not** started from a sandboxed agent
-  shell (see the run-app skill: sandboxed spawns die with 0xC0000142).
+**Guiding principle — cheapest tier that can prove it.** A check belongs in the
+lowest tier that can catch its failure. The `sequential` pipeline is *simulated*
+(no stage carries a persona, so no engine is ever spawned), so what remains here
+still costs **zero tokens**.
+
+| Tier | Cost | What it proves | Where |
+| --- | --- | --- | --- |
+| Free | none | Composer, Setup, persistence, and that run state reaches the status bar / stage focus / live log | `e2e/ui-smoke.spec.ts`, `e2e/run-lifecycle.spec.ts`, first test of `e2e/dev-test-flow.spec.ts` |
+| Seeded | none | Per-stage rendering of a two-box run, from a fabricated `RunState` served by route interception | `e2e/dev-test-flow.spec.ts` |
+| Live | ≈ $0.01 | Canary that the real CLI still integrates | `e2e/live-dev-test.spec.ts` (opt-in) |
+
+## Running
+
+```bash
+pnpm e2e                        # free + seeded; live is skipped
+pnpm --filter @adhd/ui e2e      # the same thing, from the package
+```
+
+Playwright auto-starts `pnpm dev` and waits on `/health` (which is proxied to
+the API server, so it covers both processes); an already-running dev server is
+reused. The suite runs single-worker on purpose: every spec drives the same
+server and the same in-memory run store.
+
+The free and seeded tiers create real runs under `.adhd/runs/` (gitignored) but
+never spawn an engine. Every test leaves its run in a terminal state, so the
+empty-state specs still see a quiet server.
+
+CI wiring is still on the "adopt next" list in
+[`code-quality.md`](./code-quality.md) — the suite is run locally for now.
 
 ## Free tier
 
-1. **Empty state & pipeline picker**
-   - Page renders the ghost pipeline, task input, and the segmented picker
-     with "Full team · mock" and "Single agent".
-   - "Start run" is disabled while the task input is empty.
-2. **Single-agent mode**
-   - Clicking "Single agent" switches the heading to "What should the
-     Developer build?", shows the working-directory input, and the footer
-     caption `Engine: <label> · <model> — change in Setup`.
-3. **Setup → AI Harness**
-   - Claude Code listed and selectable; Cursor and Codex rendered disabled
-     with a `SOON` pill.
-   - Model select works (opus / sonnet / haiku options).
-   - Permission modes: "Never block (recommended)" and "Accept edits only".
-4. **Persistence across reload** (localStorage)
-   - Pipeline selection, engine model, and permission mode survive a page
-     reload — footer caption and Setup controls both reflect the saved
-     values.
-5. **History drawer**
-   - Opens from the header; shows "No runs yet." on a fresh server, or run
-     cards (status pill, task text, duration) otherwise.
+1. **Empty state & pipeline picker** — ghost pipeline, task input, and the
+   dropdown with all three pipelines ("Full team", "Single agent",
+   "Developer + Tester"). "Start run" is disabled while the input is empty.
+2. **Single-agent mode** — heading switches to "What should the Developer
+   build?", the working-directory input appears, footer reads
+   `Engine: <label> · <model> — change in Setup`.
+3. **Setup → AI Harness** — all three harnesses listed and selectable (none is
+   behind a `SOON` pill any more); the model roster is resolved server-side and
+   can come from the CLI, so specs assert the entries that matter rather than a
+   count; permission modes "Never block (recommended)" / "Accept edits only".
+4. **Persistence across reload** (localStorage) — pipeline, engine model, and
+   permission mode survive a reload.
+5. **History drawer** — "No runs yet." on a fresh server, otherwise run cards.
+6. **Run view wiring** (simulated `sequential`, driven through the API with
+   `minDurationMs`/`maxDurationMs`/`failProbability: 0` so it finishes in
+   seconds) — three tests, each about *rendering*, not run rules:
+   - starting from the composer swaps the empty state for the run view —
+     `RUN #n`, the task, a RUNNING status, the first stage auto-focused, its
+     live log streaming, and Abort reflected as CANCELLED with "Resume from …"
+     and "New run" offered;
+   - finishing a run moves the focus panel off the stopped log onto Artifacts;
+   - history lists the finished run and clicking the card re-attaches to it.
 
-## Live tier (manual)
+   *That the abort actually cancels the run, that gates hold it, and that a
+   restart resumes correctly are asserted in `runs.comp.ts`.*
+7. **`dev-test` picker** — selectable, composer copy names both boxes, ghost
+   pipeline previews exactly Developer and Tester, choice survives a reload.
 
-1. Switch to "Single agent", set model `claude-haiku-4-5` in Setup, point
-   the working directory at a scratch folder, task: *"Create a file named
-   hello-ui.txt containing exactly the text: hello from the UI pass. Do
-   nothing else."*
-2. During the run:
-   - status bar shows `RUN #n`, the task, the engine pill
-     `⬡ Claude Code · claude-haiku-4-5`, and a pulsing RUNNING dot;
-   - the Developer stage node is RUNNING and auto-focused;
-   - the Live Log tab streams entries as they arrive ("Developer online…",
-     "Claude Code online · N tools", tool-use lines).
-3. On completion:
-   - status flips to COMPLETED, stage to PASSED;
-   - Artifacts tab lists `result.md` with a non-empty preview;
-   - the requested file exists in the working directory with the exact
-     content;
-   - the final log line shows cost/turns/duration.
-4. History drawer lists the run; clicking the card re-attaches to it.
-5. Abort path (occasionally): start a run, hit Abort — run goes CANCELLED,
-   no orphaned `claude` processes remain (`tasklist | findstr claude`).
+## Seeded tier
+
+A completed two-box `RunState` is served to the app via Playwright route
+interception (`/runs`, `/runs/:id`, `/runs/:id/files`, `/runs/:id/events`), so
+per-stage rendering is asserted with no engine and no server state. The fixture
+is typed as `RunState` from `@adhd/core`, so a change to the run model breaks
+`pnpm typecheck` rather than rotting silently.
+
+1. Both stage nodes render as **Developer** and **Tester**.
+2. The stage focus header shows the persona badge — `DEVELOPER` / `TESTER` —
+   and the Tester's `PASS` verdict pill (the Developer declares none).
+3. **Each box's Artifacts tab shows that box's own `handoff.md`.** This is the
+   regression guard for TASK-047, where every stage showed `run.result` — which
+   holds only the *last* box's output. The fixture sets `result` to the Tester's
+   text on purpose, so the bug reappearing fails the test.
+
+## Live tier (opt-in)
+
+One thin real `dev-test` run on haiku, ≈ a cent. Skipped unless enabled:
+
+```bash
+ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test
+```
+
+Requires an authenticated `claude` CLI, and a dev server started **outside** a
+sandboxed agent shell — a sandboxed spawn dies with 0xC0000142 (see the
+run-app skill).
+
+This is a **canary, not a proof**. That the boxes chain is proven for free in
+`packages/server/test/dev-test-pipeline.comp.ts` against a mocked adapter. What
+this test adds is the only thing a mock cannot: that the real CLI is found,
+authenticates, honours `--model`, streams parseable output, and writes files
+where we expect.
 
 ## Known non-bugs
 
-- Right after switching tabs in the stage focus panel, a screenshot can
-  catch the old tab still underlined — that's the 0.18s CSS transition,
-  not a state bug (verified settled in TASK-020).
+- Right after switching tabs in the stage focus panel, a screenshot can catch
+  the old tab still underlined — that's the 0.18s CSS transition, not a state
+  bug (verified in TASK-020).

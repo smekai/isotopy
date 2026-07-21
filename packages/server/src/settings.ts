@@ -3,10 +3,12 @@ import path from "node:path";
 import { ENGINES, defaultConnectionMode } from "@adhd/core";
 import type { EngineId, SettingsView } from "@adhd/core";
 import type { EngineConnection } from "./engines/types.js";
-import { REPO_ROOT } from "./paths.js";
+import { adhdDir } from "./paths.js";
 
 // Lives under .adhd/ (gitignored) because it can hold an API key.
-const SETTINGS_PATH = path.join(REPO_ROOT, ".adhd", "settings.json");
+function settingsPath(): string {
+  return path.join(adhdDir(), "settings.json");
+}
 
 interface EngineConnectionSettings {
   connectionMode: string;
@@ -30,7 +32,7 @@ function emptySettings(): SettingsFile {
 
 function readSettings(): SettingsFile {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(settingsPath(), "utf8"));
     if (
       typeof parsed === "object" &&
       parsed !== null &&
@@ -45,10 +47,11 @@ function readSettings(): SettingsFile {
 }
 
 function writeSettings(settings: SettingsFile): void {
-  mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true });
-  const tmp = `${SETTINGS_PATH}.tmp`;
+  const target = settingsPath();
+  mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
-  renameSync(tmp, SETTINGS_PATH);
+  renameSync(tmp, target);
 }
 
 export function getEngineConnection(engineId: EngineId): EngineConnection {

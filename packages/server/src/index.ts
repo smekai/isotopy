@@ -3,7 +3,9 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { config } from "./config.js";
-import { orchestrator } from "./services/run-orchestrator.js";
+import { RunOrchestrator } from "./services/run-orchestrator.js";
+
+const orchestrator = new RunOrchestrator();
 
 // Restore persisted runs before accepting requests so /api/runs is correct on
 // the first request and interrupted runs are reconciled up front.
@@ -11,7 +13,7 @@ await orchestrator.init();
 
 serve(
   {
-    fetch: createApp().fetch,
+    fetch: createApp({ orchestrator }).fetch,
     hostname: config.host,
     port: config.port,
   },
