@@ -1,7 +1,7 @@
 import { Play, RotateCcw, Sparkles, Square, UserCheck } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
-import { restartStageId } from "../run-utils";
+import { resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";
 import { GOLD, MONO, SANS, runDot } from "../theme";
 import { VoiceBtn, VoiceStatus } from "./VoiceControls";
@@ -20,11 +20,11 @@ export function TeamController({
   onNewRun: () => void;
 }) {
   const elapsed = useElapsed(run?.createdAt, run?.completedAt);
-  const restartId = run && (run.status === "failed" || run.status === "cancelled")
-    ? restartStageId(run)
+  const resumeId = run && (run.status === "failed" || run.status === "cancelled")
+    ? resumeStageId(run)
     : null;
-  const restartLabel = restartId
-    ? run?.stages.find((stage) => stage.id === restartId)?.label
+  const resumeLabel = resumeId
+    ? run?.stages.find((stage) => stage.id === resumeId)?.label
     : null;
   const terminal = run !== null &&
     (run.status === "completed" || run.status === "failed" || run.status === "cancelled");
@@ -87,16 +87,16 @@ export function TeamController({
             <UserCheck size={13} /> Approve Gate
           </button>
         )}
-        {restartId && restartLabel && (
+        {resumeId && resumeLabel && (
           <button
-            onClick={() => onRestart(restartId)}
+            onClick={() => onRestart(resumeId)}
             style={{
               background: "rgba(220,38,38,0.08)", color: "#DC2626",
               border: "1px solid rgba(220,38,38,0.20)", borderRadius: 10, padding: "7px 14px",
               fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 6,
             }}>
-            <RotateCcw size={12} /> Restart from {restartLabel}
+            <RotateCcw size={12} /> Resume from {resumeLabel}
           </button>
         )}
         {(run?.status === "running" || run?.status === "awaiting") && (

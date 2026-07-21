@@ -1,5 +1,31 @@
 # Done
 
+## TASK-060: Restart vs Resume — full-pipeline restart from History
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-21 18:00
+
+History has a single **Restart** button that resumes from the *failed* stage (`restartStageId`), so a two-box run that failed in the Tester restarts at the Tester and never re-runs the Developer. The label promises "start over"; the behaviour is "resume". Reported after restarting run #32 and seeing it begin at Test.
+
+Split the two meanings into separate actions (owner decision):
+- **Resume** — continue from the failed stage. Current behaviour, keeps expensive engine work from being redone.
+- **Restart** — re-run every enabled stage from the first one.
+
+**Work:**
+- `run-utils.ts` — rename `restartStageId` to `resumeStageId` (it never meant "restart"), and add `firstEnabledStageId(run)` returning the first stage not in `disabledStages`.
+- `HistoryDrawer.tsx` — render both buttons for failed/cancelled runs, alongside the existing `Rerun`.
+- `TeamController.tsx` — the footer action targets the resume stage, so its label becomes **Resume from X**; leaving it as "Restart from X" would contradict the new vocabulary.
+- Both actions stay limited to failed/cancelled runs: `RunOrchestrator.restartRun` rejects anything else, and re-running a *completed* run in place would destroy its artifacts. **Rerun** remains the path for completed runs.
+
+**Not a bug, worth recording:** run #32 also had `disabledStages: ["implementation"]`, set through the API during TASK-057 verification, which is why its Developer was skipped. That is unreachable from the UI — `App.tsx` only sends `disabledStages` for simulated pipelines. Even after this change run #32 restarts at the Tester, because the Developer is disabled *in that run*; **Rerun** is the way to get a fresh run with both boxes.
+
+**Done.** `resumeStageId` (renamed from `restartStageId` — it never meant restart) + new `firstEnabledStageId`. History renders **Resume** and **Restart** for failed/cancelled runs; Resume is hidden when both targets are the same stage, so the pair never shows two buttons that do the same thing. `TeamController`'s footer became **Resume from X** so the vocabulary is consistent.
+
+**Verified** with simulated runs (zero engine spend): a run aborted mid-stage-2 offers both buttons; **Restart re-ran stage 1 even though it had already passed** (previously it began at stage 2); **Resume** left stage 1 `passed` and continued at stage 2. A run that failed on its first stage shows Restart only; completed runs show Rerun only.
+
+Typecheck + lint + build green; e2e unchanged at 6 passed / 2 failed (pre-existing stale Cursor specs, TASK-050).
+
+---
+
 ## TASK-057: Honour the Tester's VERDICT — a FAIL verdict must fail the stage
 **Priority:** P1 | **Tags:** server, engine, ui
 **Updated:** 2026-07-21 17:10

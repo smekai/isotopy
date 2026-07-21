@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Repeat, RotateCcw, X } from "lucide-react";
+import { PlayCircle, Repeat, RotateCcw, X } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import { fetchRuns } from "../api";
 import { formatDuration } from "../hooks/useElapsed";
-import { restartStageId } from "../run-utils";
+import { firstEnabledStageId, resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";
 import { MONO, RUN_PILL, SANS } from "../theme";
 
@@ -47,9 +47,13 @@ export function HistoryDrawer({
         {runs?.map((run) => {
           const pill = RUN_PILL[run.status];
           const failedStage = run.stages.find((stage) => stage.status === "failed");
-          const restartId = run.status === "failed" || run.status === "cancelled"
-            ? restartStageId(run)
-            : null;
+          // Only a failed/cancelled run can be restarted in place; a completed
+          // one would lose its artifacts, so Rerun is the path for those.
+          const restartable = run.status === "failed" || run.status === "cancelled";
+          const resumeId = restartable ? resumeStageId(run) : null;
+          const restartId = restartable ? firstEnabledStageId(run) : null;
+          // Hide Resume when it would do exactly what Restart does.
+          const showResume = resumeId !== null && resumeId !== restartId;
           const duration = run.completedAt
             ? formatDuration(new Date(run.completedAt).getTime() - new Date(run.createdAt).getTime())
             : "—";
@@ -78,13 +82,26 @@ export function HistoryDrawer({
                 {failedStage && <span style={{ color: "#DC2626", fontFamily: SANS, fontSize: 10 }}>✗ {failedStage.label}</span>}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                {showResume && resumeId && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRestart(run.id, resumeId);
+                    }}
+                    data-testid="history-resume"
+                    title="Continue from the stage that stopped — earlier stages keep their work"
+                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
+                    <PlayCircle size={10} /> Resume
+                  </button>
+                )}
                 {restartId && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onRestart(run.id, restartId);
                     }}
-                    title="Resume this run from where it stopped"
+                    data-testid="history-restart"
+                    title="Re-run the whole pipeline from the first stage"
                     style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
                     <RotateCcw size={10} /> Restart
                   </button>
