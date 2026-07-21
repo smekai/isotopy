@@ -36,11 +36,19 @@ export interface StageLogEntry {
   message: string;
 }
 
+/** Outcome a verification box reports for itself, independent of exit code. */
+export type StageVerdict = "PASS" | "FAIL";
+
 export interface StageState {
   id: string;
   label: string;
   /** Persona this stage ran as, copied from the stage definition. */
   skill?: string;
+  /**
+   * Verdict the stage declared in its own report, when its persona has a
+   * verdict contract. Absent for stages that do not declare one.
+   */
+  verdict?: StageVerdict;
   status: StageStatus;
   logs: StageLogEntry[];
   startedAt?: string;

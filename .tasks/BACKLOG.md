@@ -2,7 +2,7 @@
 
 ## TASK-052: Architect skill — codify the code standards, then clean the codebase to them
 **Priority:** P1 | **Tags:** core, ui, server, infra
-**Updated:** 2026-07-21 12:00
+**Updated:** 2026-07-21 11:27
 
 Produce a **staff-level "Architect" skill** that captures how code in this repo must be written, then use it to clean the existing code. The skill is the deliverable; the cleanup is the proof it works. `docs/code-quality.md` stays the *descriptive* layout reference — the skill is the *prescriptive* one, and must link to it rather than duplicate it.
 
@@ -15,6 +15,8 @@ Produce a **staff-level "Architect" skill** that captures how code in this repo 
 5. **Classes over loose function bags** where there is state or a lifecycle.
 6. **No big anonymous objects.** Reference case: [StageFocusPanel.tsx:19-31](packages/ui/src/components/StageFocusPanel.tsx#L19-L31) — an inline props type literal; and the inline `style={{...}}` blocks throughout that file. Named types / named style constants instead.
 7. **Lean on TypeScript.** Discriminated unions over stringly-typed state, `satisfies`, `const` type params, branded ids, exhaustive `switch` with `never`. Bump TS to the latest release as part of this task and adopt what it buys us (also revisit the `noUncheckedIndexedAccess` / `exactOptionalPropertyTypes` items already parked in `docs/code-quality.md`).
+8. If we need evidences for made decigions - we are not using comments in a code - we are using MD files, we can use Arhitecture or any other MD files. May be we can add docs folder.
+9. Architecture can be different for BE, FE and Mobile. This have to be addressed.
 
 **Deliverables (both forms — one canonical text, two consumers):**
 - `.claude/skills/architect/SKILL.md` — loaded when writing or refactoring code in this repo.
@@ -110,4 +112,3 @@ Evaluate [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle) as th
 **Deliverable:** short recommendation (adopt / borrow patterns / pass) + impact on TASK-006/TASK-021. Not a competitor — a build-on candidate; see docs/competitor-matrix.md §6.
 
 ---
-

@@ -1,7 +1,7 @@
 {
   "name": "adhd",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "ADHD — Artificial Development, Human Directed",
   "repository": {
     "type": "git",

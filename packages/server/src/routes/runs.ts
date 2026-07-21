@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { isTerminalRunStatus } from "@adhd/core";
 import type { RunEvent } from "@adhd/core";
 import { orchestrator } from "../services/run-orchestrator.js";
+import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-files.js";
 
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;
@@ -103,6 +104,44 @@ export const runRoutes = new Hono()
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to restart run";
       return c.json({ error: message }, 409);
+    }
+  })
+
+  .get("/:id/files", async (c) => {
+    const run = orchestrator.getRun(c.req.param("id"));
+    if (!run) {
+      return c.json({ error: "Run not found" }, 404);
+    }
+    if (!run.workspacePath) {
+      return c.json({ files: [] });
+    }
+    try {
+      return c.json({ files: await listWorkspaceFiles(run.workspacePath) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to list workspace";
+      return c.json({ error: message }, 500);
+    }
+  })
+
+  .get("/:id/files/content", async (c) => {
+    const run = orchestrator.getRun(c.req.param("id"));
+    if (!run) {
+      return c.json({ error: "Run not found" }, 404);
+    }
+    const filePath = c.req.query("path");
+    if (!filePath) {
+      return c.json({ error: "path is required" }, 400);
+    }
+    if (!run.workspacePath) {
+      return c.json({ error: "Run has no workspace" }, 404);
+    }
+    try {
+      return c.json(await readWorkspaceFile(run.workspacePath, filePath));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to read file";
+      // Traversal attempts are rejected, not reported as missing files.
+      const status = /escapes the workspace|must be relative/.test(message) ? 400 : 404;
+      return c.json({ error: message }, status);
     }
   })
 

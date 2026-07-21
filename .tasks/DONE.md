@@ -1,5 +1,125 @@
 # Done
 
+## TASK-057: Honour the Tester's VERDICT — a FAIL verdict must fail the stage
+**Priority:** P1 | **Tags:** server, engine, ui
+**Updated:** 2026-07-21 17:10
+
+Done. A verification box's own verdict now decides its stage status; a failed verification can no longer present as a green run.
+
+- `services/stage-context.ts` — `parseStageVerdict()`, pure. Scans **backwards** for a line that is *only* a verdict. Both halves matter: the persona text itself contains the literal strings `VERDICT: PASS` and `VERDICT: FAIL`, and a report may discuss one mid-prose, so a first-match-anywhere search reads the wrong outcome. Accepts the markdown wrapping real runs produce (bare, `` `backticked` ``, `**bold**`), is case-insensitive, and strips `\r` so CRLF output from a Windows CLI still matches.
+- `core/runs.ts` — `StageVerdict` type and `StageState.verdict?`, so the verdict is persisted and reachable by the UI. Core stays pure (type only; the parser lives in the server).
+- `run-orchestrator.ts` — after a successful engine outcome the verdict is read, recorded on the stage, and logged (`pass`/`fail` level). `FAIL` marks the stage failed and returns `"failed"`, so the existing loop fails the run and `restartRun` offers "Restart from Tester". The handoff artifact is still written first, so a failing run keeps its evidence.
+- **No verdict → unchanged behaviour**, keeping this self-describing with no new `StageDefinition` field. `restartRun` also clears a stale `verdict` alongside the stage's recorded output.
+- `StageFocusPanel.tsx` — PASS/FAIL badge beside the persona badge.
+
+**Verified.** Parser: 13 synthetic cases including the two decisive ones (a mid-prose "I would return VERDICT: FAIL…" must not beat the real trailing `PASS`; an echoed persona block must not beat a real trailing `FAIL`). Then against **real data** — all 14 tester handoffs on disk parsed, and **0 of 12 developer handoffs** returned a verdict, confirming the Developer is untouched. (The one tester returning `undefined` is the TASK-048 marker-probe run, which deliberately had no verdict contract.)
+
+End-to-end, reproducing the evidence case: `dev-test` with `disabledStages: ["implementation"]` on an empty workspace → run **failed**, `Tester=failed [FAIL]`, log line `✗ Tester reported VERDICT: FAIL`, FAIL badge in the header, "Restart from Tester" offered. Previously identical conditions produced a green `completed` run. A normal `dev-test` run still completes with `Developer=passed verdict=undefined` and `Tester=passed verdict=PASS`.
+
+Typecheck + lint + build green. `pnpm --filter @adhd/ui e2e` unchanged at 6 passed / 2 failed (pre-existing stale Cursor-model specs, TASK-050).
+
+---
+
+## TASK-058: Rerun from History — prefill the composer from a past run
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-21 16:25
+
+Done. History could only *Restart* a failed run from its failed stage; a completed run offered no way to run the same task again.
+
+- `HistoryDrawer.tsx` — **Rerun** button on every card that has a task, beside `Restart`. Tooltips now distinguish them: Restart *resumes this run from where it stopped*, Rerun *loads the task and settings into the composer to edit before starting*.
+- `App.tsx` — `handleRerun()` restores the run configuration to settings (`savePipelineId`, `saveWorkspaceDir`, `saveEngine`, `saveEngineModel`), closes the drawer, clears the active run, and hands over the task text. Pipeline/workspace/engine come back through the settings EmptyState already reads, so only the task needed a new prop (`initialTask`).
+- **Remount via `key`** — `EmptyState` seeds state with `useState(loadX)`, which only runs on mount, so a prefill arriving while it was mounted would have been silently ignored.
+- `run-utils.ts` — `isScratchWorkspace()`, separator-agnostic (normalises Windows backslashes to `/`). **A scratch path must not be reused:** `.adhd/runs/<oldId>/workspace` belongs to the run that created it, so reusing it would write the new run into the previous run's folder. Those rerun with a blank directory and get their own scratch.
+- **Removed the stale `Artifacts` button** — hardcoded `disabled` with the tooltip *"Artifacts are not stored yet"*, untrue since TASK-055. Clicking the card opens the run, where Artifacts live.
+- Added `data-testid` hooks (`history-card` + `data-run-id`, `history-rerun`) — the cards were not addressable from a test; TASK-050 will want them.
+
+**Verified** with two simulated runs (zero engine spend): a run with an explicit working directory restored task, pipeline, directory and `Engine: Codex · gpt-5-mini`; a scratch-workspace run restored task, pipeline and `Engine: Claude Code · haiku` with the **directory left blank**. Both closed the drawer and stopped at the composer without starting.
+
+Typecheck + lint + build green. `pnpm --filter @adhd/ui e2e` unchanged at 6 passed / 2 failed (the pre-existing stale Cursor-model specs, TASK-050).
+
+---
+
+## TASK-056: Folder browser — choose where the project lives
+**Priority:** P2 | **Tags:** server, ui
+**Updated:** 2026-07-21 15:20
+
+Done. The project location is now picked, not typed from memory.
+
+- `services/directory-browser.ts` (new) — `listDirectories()` returns **directory names only**, never file names or contents, so the endpoint cannot be used to read anything off the machine. No path → roots (home dir, plus drive letters on Windows, `/` elsewhere). Hidden dirs filtered; `ENOENT`/`EACCES`/`ENOTDIR` mapped to readable messages (with `cause` preserved).
+- `routes/fs.ts` (new, mounted in `app.ts`) — `GET /fs/dirs?path=&entry=`. **`entry` descends into a child and the join happens server-side** via `joinDirectory`, so the client never constructs a `\` vs `/` path. My first attempt concatenated client-side; this replaced it.
+- `vite.config.ts` — added `/fs` to `API_PROXY_PATHS` (the file's own comment says to keep it in sync with `app.ts`).
+- `components/FolderPicker.tsx` (new) — modal with Up navigation, breadcrumb, folder list, Select/Cancel, Esc to close; follows the `SetupModal` overlay idiom.
+- `EmptyState.tsx` — **Browse…** button beside the workspace input. On first run (nothing saved) the control is accent-highlighted with the line *"Pick a project folder — otherwise the run works in a temporary scratch workspace"*, so the scratch fallback is a visible choice rather than a silent default.
+
+**Verified.** API: roots list, `C:/Development` listing, server-side `entry` join into `C:\Development\smekai`, missing dir → 400 with a readable message. UI: first-run hint shown, picker opens, roots listed, navigation works, selection fills the input, hint disappears, value persists across reload.
+
+**Pre-existing e2e failures — not caused by this work.** `pnpm --filter @adhd/ui e2e` reports 6 passed / 2 failed (Setup → AI Harness Cursor model options). Confirmed by stashing all changes and re-running on clean `HEAD`: the same 2 fail. The specs are stale against `CURSOR_MODEL_OPTIONS` (5 entries, test expects 4) and `DEFAULT_CURSOR_MODEL` (`""`, test expects `"auto"`). Belongs to **TASK-050**, which already lists repairing stale specs.
+
+Typecheck + lint + build green.
+
+---
+
+## TASK-055: Show what the run produced — workspace files in Artifacts + auto-switch
+**Priority:** P1 | **Tags:** server, ui
+**Updated:** 2026-07-21 14:45
+
+Done. A run's produced files are now visible in the app instead of only in a log line.
+
+- `services/workspace-files.ts` (new) — `listWorkspaceFiles` walks the run workspace skipping `node_modules`/`.git`/`dist`/etc, capped at depth 8 and 500 entries; `readWorkspaceFile` previews up to 256 KB and reports `truncated` beyond that. Paths are returned POSIX-style so the UI has one shape on both platforms.
+- **`resolveInsideWorkspace` is the single security gate.** It rejects absolute paths, checks the *lexical* path before touching disk (so a traversal to a non-existent file is rejected as traversal, not reported as "not found"), then re-checks after `realpath` so a symlink inside the workspace cannot point out.
+- `routes/runs.ts` — `GET /runs/:id/files` and `GET /runs/:id/files/content?path=`; traversal returns 400, missing file 404. Thin HTTP mapping only.
+- `api.ts` — `fetchRunFiles` / `fetchRunFileContent` (the sole HTTP module).
+- `StageFocusPanel.tsx` — `Workflow | Files` switcher in Artifacts. *Workflow* keeps the per-stage `handoff.md`; *Files* lists the workspace with a preview pane, reusing the existing two-pane layout. Re-lists on run completion so newly written files appear.
+- `App.tsx` — on terminal run status the panel switches to Artifacts, **unless the user picked a tab during that run** (`tabChosenByUser` ref, reset by `attachRun` so one manual click doesn't disable it forever).
+
+**Verified.** Traversal: `../../../../Windows/win.ini`, an absolute path, and `sub/../../../../etc/passwd` all rejected 400; legitimate reads work. End-to-end with a real `dev-test` run of "write a backup script": auto-switched to Artifacts, switcher present, Workflow showed `handoff.md`, Files listed `backup.js` (2.2 KB) and previewed its full contents.
+
+Typecheck + lint + build green.
+
+---
+
+## TASK-054: Live log auto-scroll (stick-to-bottom)
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-21 14:10
+
+Done. The Live Log now follows new entries without hijacking the user.
+
+- `StageFocusPanel.tsx` — `scrollRef` on the tab-content scroll container plus an effect on `stage.logs.length` that pins to the bottom. `followRef` tracks whether the user is within `FOLLOW_THRESHOLD_PX` (40px) of the bottom; scrolling up parks the view and stops the follow, returning to the bottom resumes it. Opening a different stage or tab starts following again.
+- Added `data-testid="stage-scroll"` to the container — the pane was otherwise unaddressable from a test, and TASK-050 will want it too.
+
+**Verified against a real streaming run** (the simulated pipeline emits only 4 lines per stage, which never overflows a real pane):
+- *following* — `scrollHeight` grew 91→249 while distance-from-bottom stayed 0.
+- *parked* — scrolled to top, log grew 385→448, scroll position stayed at 0.
+- *resume* — returning to the bottom re-pinned.
+
+Note for future tests: an artificially tiny pane makes this untestable — with a 70px pane the whole scroll range (21px) is inside the 40px threshold, so "scrolled to top" *is* "at the bottom". Use a realistic pane height (260px+). An earlier FAIL was this test artefact, not a code defect.
+
+Typecheck + lint green.
+
+---
+
+## TASK-053: Fix DEP0190 — unescaped args passed with shell:true
+**Priority:** P1 | **Tags:** server, engine
+**Updated:** 2026-07-21 13:40
+
+Done. Warning gone — and it was hiding two real defects.
+
+- `engines/subprocess.ts` — `shell:true` + args array replaced by `resolveSpawnTarget()`: normal executables get the argv array untouched; Windows `.cmd`/`.bat` shims run as one explicitly quoted command line through `cmd.exe /d /s /c` with `windowsVerbatimArguments`. `quoteWindowsArg()` applies the C-runtime backslash/quote rules; the outer quote pair is what `/s` strips, which is the documented way to keep our quoting intact.
+- `engines/claude-code.ts` — bespoke `claudeVersion()` `execFile` replaced by the existing `probeCommand(binary, ["--version"])`, deleting duplicated shim/timeout/tree-kill logic.
+- Exported `commandNeedsWindowsShell()` so adapters can ask which channel is safe.
+
+**Defect #1 (the reason for the warning) — command injection.** Quoting now neutralises cmd metacharacters: `a & echo PWNED & b | c > d` arrives as a single intact argument instead of executing.
+
+**Defect #2, found only by testing — silent truncation.** `cmd.exe` ends a command at a line break, so a multi-line persona passed as `--append-system-prompt` was **silently cut at the first newline** (`"# Role: Tester\n\nUse…"` → `"# Role: Tester"`). No amount of quoting fixes this. Two changes:
+- `runSubprocess` now **rejects** a multi-line argument on the shim path with a clear message rather than truncating it.
+- The Claude adapter picks the safe channel per binary: native `--append-system-prompt` for a real `.exe`, and the existing `withPersonaPrompt()` stdin folding (already used by Cursor/Codex) when resolved to a `.cmd` shim.
+
+Known, documented limitation: `%VAR%` still expands inside quotes on the shim path — it can substitute an env value but cannot introduce a command. Not faked with `^`, which does not escape inside quotes.
+
+**Verified:** purpose-built `.cmd` shim echoing its argv — spaces, embedded quotes, metacharacters, trailing backslashes all round-trip exactly; multi-line rejected loudly; persona intact via the stdin fallback. Zero `DEP0190` in a full server session. Real `dev-test` run (`75fff084`) passed both boxes with `VERDICT: PASS`. Typecheck + lint green.
+
+---
+
 ## TASK-049: Code-quality assessment + refactor of the Dev+Test subsystem
 **Priority:** P3 | **Tags:** core, server
 **Updated:** 2026-07-20 14:20

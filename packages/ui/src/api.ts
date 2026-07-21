@@ -87,6 +87,60 @@ export function startRun(options: StartRunOptions = {}): Promise<RunState> {
   return postJson<RunState>("/runs", { pipelineId: "sequential", ...options });
 }
 
+export interface DirectoryListing {
+  /** Absolute path listed; empty when showing the roots. */
+  path: string;
+  parent: string | null;
+  /** Subdirectory names, not full paths. */
+  entries: string[];
+  isRootList: boolean;
+}
+
+/**
+ * Browse directories for the project-location picker. Omit `path` for the
+ * roots; pass `entry` to descend into a child — the server joins it, so the
+ * client never builds a platform-specific path.
+ */
+export function fetchDirectories(path?: string, entry?: string): Promise<DirectoryListing> {
+  const params = new URLSearchParams();
+  if (path) {
+    params.set("path", path);
+  }
+  if (entry) {
+    params.set("entry", entry);
+  }
+  const query = params.toString();
+  return requestJson<DirectoryListing>(`/fs/dirs${query ? `?${query}` : ""}`);
+}
+
+export interface WorkspaceFile {
+  /** POSIX-style path relative to the run's workspace. */
+  path: string;
+  size: number;
+}
+
+export interface WorkspaceFileContent {
+  path: string;
+  size: number;
+  content: string;
+  /** The file was too large to preview; `content` is empty. */
+  truncated: boolean;
+}
+
+/** Files the run actually produced, from its shared workspace. */
+export function fetchRunFiles(runId: string): Promise<{ files: WorkspaceFile[] }> {
+  return requestJson<{ files: WorkspaceFile[] }>(`/runs/${runId}/files`);
+}
+
+export function fetchRunFileContent(
+  runId: string,
+  filePath: string,
+): Promise<WorkspaceFileContent> {
+  return requestJson<WorkspaceFileContent>(
+    `/runs/${runId}/files/content?path=${encodeURIComponent(filePath)}`,
+  );
+}
+
 export function approveGate(runId: string, stageId: string): Promise<RunState> {
   return postJson<RunState>(`/runs/${runId}/gates/${stageId}/approve`);
 }

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, History, Settings, Sparkles } from "lucide-react";
-import type { RunStatus } from "@adhd/core";
+import type { RunState, RunStatus } from "@adhd/core";
 import { pipelineUsesEngineById } from "@adhd/core";
 import { abortRun, approveGate, fetchRuns, restartRun, startRun } from "./api";
 import { EmptyState } from "./components/EmptyState";
@@ -14,11 +14,16 @@ import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useRunEvents } from "./hooks/useRunEvents";
+import { isScratchWorkspace } from "./run-utils";
 import {
   loadDisabledStages,
   loadEngine,
   loadEngineModel,
   loadPermissionMode,
+  saveEngine,
+  saveEngineModel,
+  savePipelineId,
+  saveWorkspaceDir,
 } from "./settings";
 import { SANS } from "./theme";
 import { useTheme } from "./ThemeContext";
@@ -33,12 +38,15 @@ export function App() {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
   const [focusTab, setFocusTab] = useState<FocusTab>("log");
+  const tabChosenByUser = useRef(false);
   const [pipeVs, setPipeVs] = useState<VoiceState>("idle");
   const [stageVs, setStageVs] = useState<VoiceState>("idle");
   const [showSetup, setShowSetup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Composer contents carried over from a past run; `key` forces a remount. */
+  const [prefill, setPrefill] = useState<{ key: string; task: string } | null>(null);
 
   const { run, error: runError } = useRunEvents(activeRunId, resubKey);
 
@@ -56,6 +64,21 @@ export function App() {
       })
       .finally(() => setBooted(true));
   }, []);
+
+  // When a run finishes, show what it produced rather than leaving the user on
+  // a log that has stopped moving — unless they chose a tab themselves, in
+  // which case switching would yank them out of what they were reading.
+  const runStatus = run?.status;
+  useEffect(() => {
+    if (runStatus && TERMINAL_RUN_STATUSES.includes(runStatus) && !tabChosenByUser.current) {
+      setFocusTab("artifacts");
+    }
+  }, [runStatus]);
+
+  function handleTabChange(next: FocusTab) {
+    tabChosenByUser.current = true;
+    setFocusTab(next);
+  }
 
   // Follow the stage that needs attention unless the user pinned one.
   useEffect(() => {
@@ -76,6 +99,9 @@ export function App() {
     setResubKey((key) => key + 1);
     setPinned(false);
     setFocusTab("log");
+    // A new run gets the automatic behaviour again; a tab choice made during
+    // the previous run must not disable it forever.
+    tabChosenByUser.current = false;
   }
 
   async function handleStart(task: string, pipelineId: string, workspaceDir?: string) {
@@ -144,6 +170,27 @@ export function App() {
     setPinned(false);
   }
 
+  /**
+   * Put a past run's configuration back in front of the user without starting
+   * it. Pipeline/workspace/engine live in settings, which EmptyState already
+   * reads on mount, so only the task text is handed over directly.
+   */
+  function handleRerun(source: RunState) {
+    savePipelineId(source.pipelineId);
+    // A scratch workspace belongs to the run that created it — reusing the path
+    // would write the new run into the old run's folder.
+    saveWorkspaceDir(isScratchWorkspace(source.workspacePath) ? "" : (source.workspacePath ?? ""));
+    if (source.engine) {
+      saveEngine(source.engine);
+      saveEngineModel(source.engine, source.model ?? "");
+    }
+    setShowHistory(false);
+    setActiveRunId(null);
+    setFocusedId(null);
+    setPinned(false);
+    setPrefill({ key: `rerun-${source.id}-${Date.now()}`, task: source.task ?? "" });
+  }
+
   function handleNodeClick(stageId: string) {
     if (focusedId === stageId) {
       setFocusedId(null);
@@ -205,7 +252,11 @@ export function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundImage: dotGrid, backgroundSize: "26px 26px" }}>
         {showEmpty ? (
           <EmptyState
+            // EmptyState seeds its state on mount, so a prefill arriving later
+            // would be ignored — remount it when one comes in.
+            key={prefill?.key ?? "composer"}
             d={d}
+            initialTask={prefill?.task}
             onStart={(task, pipelineId, workspaceDir) =>
               void handleStart(task, pipelineId, workspaceDir)
             }
@@ -228,7 +279,7 @@ export function App() {
                 run={run}
                 d={d}
                 tab={focusTab}
-                onTabChange={setFocusTab}
+                onTabChange={handleTabChange}
                 vs={stageVs}
                 onCycleVoice={() => setStageVs((v) => cycleVS(v))}
                 onClose={() => {
@@ -268,6 +319,7 @@ export function App() {
             void handleRestart(runId, stageId);
             setShowHistory(false);
           }}
+          onRerun={handleRerun}
         />
       )}
     </div>

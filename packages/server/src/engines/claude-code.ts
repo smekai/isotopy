@@ -1,10 +1,11 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineStatus } from "@adhd/core";
 import { firstLine, truncate } from "./log-text.js";
-import { runSubprocess } from "./subprocess.js";
+import { withPersonaPrompt } from "./persona.js";
+import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.js";
 import type {
   EngineAdapter,
   EngineConnection,
@@ -80,23 +81,13 @@ function resolveClaudeBinary(): ResolvedBinary {
   throw new Error(INSTALL_HINT);
 }
 
-function claudeVersion(binary: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // Same Node >= 20 rule as the run spawn: .cmd/.bat shims need a shell.
-    const useShell = /\.(cmd|bat)$/i.test(binary);
-    execFile(
-      useShell ? `"${binary}"` : binary,
-      ["--version"],
-      { encoding: "utf8", timeout: 10_000, shell: useShell },
-      (error, stdout) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(firstLine(stdout) ?? "");
-      },
-    );
-  });
+async function claudeVersion(binary: string): Promise<string> {
+  // probeCommand owns the Windows shim handling, timeout, and process-tree kill.
+  const result = await probeCommand(binary, ["--version"]);
+  if (!result.success) {
+    throw new Error(result.errorMessage ?? "claude --version failed");
+  }
+  return firstLine(result.stdout) ?? "";
 }
 
 /** Known CLI failure signatures mapped to actionable guidance. */
@@ -257,6 +248,13 @@ export const claudeCodeAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
+    // A .cmd shim runs through cmd.exe, which ends a command at a line break —
+    // a multi-line persona cannot survive as a flag there. Fall back to the
+    // same prompt-folding the flagless harnesses use, so it travels via stdin.
+    const personaViaFlag =
+      ctx.appendSystemPrompt !== undefined && !commandNeedsWindowsShell(binary);
+    const runCtx = personaViaFlag ? ctx : withPersonaPrompt(ctx);
+
     const args = [
       "-p",
       "--output-format",
@@ -268,7 +266,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       ...(ctx.model ? ["--model", ctx.model] : []),
       // Native system-prompt channel — the stage persona stays in the system
       // role rather than being folded into the user turn.
-      ...(ctx.appendSystemPrompt
+      ...(personaViaFlag && ctx.appendSystemPrompt
         ? ["--append-system-prompt", ctx.appendSystemPrompt]
         : []),
       ...(ctx.permissionMode === "acceptEdits"
@@ -284,7 +282,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       args,
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection),
-      input: ctx.prompt,
+      input: runCtx.prompt,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,
       onLine: (stream, line) => {

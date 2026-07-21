@@ -26,7 +26,7 @@ import { getEngineConnection } from "../settings.js";
 import { appendEvent, loadAllRuns, writeHandoff, writeState } from "./run-store.js";
 import type { PersistedRun } from "./run-store.js";
 import { loadSkill } from "./skills.js";
-import { buildStagePrompt, formatHandoff } from "./stage-context.js";
+import { buildStagePrompt, formatHandoff, parseStageVerdict } from "./stage-context.js";
 import type { UpstreamOutput } from "./stage-context.js";
 import { nowIso, randomBetween, sleep } from "../utils.js";
 
@@ -376,6 +376,7 @@ export class RunOrchestrator {
       stage.logs = [];
       stage.startedAt = undefined;
       stage.completedAt = undefined;
+      stage.verdict = undefined;
       // Drop the old report too — a stage being re-run has not produced
       // anything yet, and a downstream box must not read a stale handoff.
       delete outputs[stage.id];
@@ -681,7 +682,32 @@ export class RunOrchestrator {
       // stageOutputs instead, or a multi-box run shows one box's text everywhere.
       run.result = outcome.result;
       this.captureStageOutput(run, stageDef, outcome.result);
+
+      // A verification box declares its own outcome. The harness exiting 0 only
+      // means it ran — a FAIL verdict has to fail the stage, or a failed
+      // verification is reported as a green run. Stages whose persona declares
+      // no verdict are unaffected and stay governed by the exit code.
+      const verdict = parseStageVerdict(outcome.result);
+      stage.verdict = verdict;
+      if (verdict === "FAIL") {
+        stage.status = "failed";
+        const message = `${profession} reported VERDICT: FAIL`;
+        this.log(runId, stageDef.id, "fail", `✗ ${message}`);
+        this.emit({
+          ts: nowIso(),
+          type: "stage.failed",
+          runId,
+          stageId: stageDef.id,
+          status: "failed",
+          message,
+        });
+        return "failed";
+      }
+
       stage.status = "passed";
+      if (verdict === "PASS") {
+        this.log(runId, stageDef.id, "pass", `${profession} reported VERDICT: PASS`);
+      }
       this.log(runId, stageDef.id, "pass", `✓ ${profession} finished — result ready`);
       this.emit({
         ts: nowIso(),

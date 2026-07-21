@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RotateCcw, X } from "lucide-react";
+import { Repeat, RotateCcw, X } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import { fetchRuns } from "../api";
 import { formatDuration } from "../hooks/useElapsed";
@@ -14,12 +14,14 @@ function formatDate(iso: string): string {
 }
 
 export function HistoryDrawer({
-  d, onClose, onView, onRestart,
+  d, onClose, onView, onRestart, onRerun,
 }: {
   d: Dir;
   onClose: () => void;
   onView: (runId: string) => void;
   onRestart: (runId: string, stageId: string) => void;
+  /** Load this run's task + settings back into the composer, without starting. */
+  onRerun: (run: RunState) => void;
 }) {
   const [runs, setRuns] = useState<RunState[] | null>(null);
 
@@ -56,6 +58,8 @@ export function HistoryDrawer({
             <div
               key={run.id}
               onClick={() => onView(run.id)}
+              data-testid="history-card"
+              data-run-id={run.id}
               style={{ padding: "14px 16px", borderBottom: `1px solid ${d.border}`, cursor: "pointer" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -80,17 +84,23 @@ export function HistoryDrawer({
                       e.stopPropagation();
                       onRestart(run.id, restartId);
                     }}
+                    title="Resume this run from where it stopped"
                     style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
                     <RotateCcw size={10} /> Restart
                   </button>
                 )}
-                <button
-                  disabled
-                  title="Artifacts are not stored yet"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "default", opacity: 0.5 }}>
-                  Artifacts
-                </button>
+                {run.task && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRerun(run);
+                    }}
+                    data-testid="history-rerun"
+                    title="Load this run's task and settings into the composer — you can edit before starting"
+                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
+                    <Repeat size={10} /> Rerun
+                  </button>
+                )}
               </div>
             </div>
           );

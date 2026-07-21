@@ -29,8 +29,10 @@ export interface SubprocessSpec {
   /** Aborting terminates the process tree. */
   signal?: AbortSignal;
   /**
-   * Force (or forbid) a shell. Defaults to auto: Node >= 20 refuses to spawn
-   * Windows .cmd/.bat shims without one, so they get a shell automatically.
+   * Force (or forbid) running through the Windows command interpreter. Defaults
+   * to auto: Node >= 20 refuses to spawn `.cmd`/`.bat` shims directly, so those
+   * are routed through `cmd.exe` with an explicitly quoted command line. Has no
+   * effect off Windows, which has no such shims.
    */
   shell?: boolean;
   /** Called for each complete line of output as it streams in. */
@@ -109,21 +111,97 @@ export function probeCommand(binary: string, args: string[]): Promise<Subprocess
 }
 
 /**
+ * Windows batch shims (`.cmd`/`.bat`) can only be launched through the command
+ * interpreter — Node >= 20 refuses to spawn them directly.
+ */
+export function commandNeedsWindowsShell(command: string): boolean {
+  return process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
+}
+
+function needsWindowsShell(spec: SubprocessSpec): boolean {
+  if (spec.shell !== undefined) {
+    return spec.shell && process.platform === "win32";
+  }
+  return commandNeedsWindowsShell(spec.command);
+}
+
+/**
+ * Wrap one argument in double quotes using the C runtime's backslash rules, so
+ * the child parses argv back exactly as given. Quoting also neutralises the
+ * cmd metacharacters that matter for injection (`&`, `|`, `<`, `>`), which the
+ * interpreter does not act on inside a quoted string — this is what makes it
+ * safe to pass a stage persona (multi-line markdown) as an argument.
+ *
+ * Caveat, deliberately not faked: `%VAR%` is still expanded inside quotes, and
+ * `^` cannot prevent it there. That can substitute an env value into an
+ * argument, but cannot introduce a new command.
+ */
+function quoteWindowsArg(arg: string): string {
+  const escaped = arg
+    // Backslashes before a quote must be doubled, then the quote escaped.
+    .replace(/(\\*)"/g, '$1$1\\"')
+    // Trailing backslashes would otherwise escape our own closing quote.
+    .replace(/(\\+)$/, "$1$1");
+  return `"${escaped}"`;
+}
+
+/**
+ * Decide what to actually hand to `spawn`. Normal executables take the argv
+ * array untouched; Windows shims are run as a single quoted command line
+ * through the interpreter, which keeps `shell: true` (and DEP0190) out of this
+ * module entirely.
+ */
+function resolveSpawnTarget(spec: SubprocessSpec): { command: string; args: string[] } {
+  const args = spec.args ?? [];
+  if (!needsWindowsShell(spec)) {
+    return { command: spec.command, args };
+  }
+  const commandLine = [spec.command, ...args].map(quoteWindowsArg).join(" ");
+  return {
+    command: process.env.ComSpec ?? "cmd.exe",
+    // /d skips AutoRun scripts; /c runs and exits. /s plus the outer quote pair
+    // is the documented way to keep our own quoting intact: cmd strips exactly
+    // that outer pair and treats the remainder verbatim.
+    args: ["/d", "/s", "/c", `"${commandLine}"`],
+  };
+}
+
+/**
  * Run a command to completion. Never rejects: failures (spawn errors, non-zero
  * exit, timeout, abort) are reported in the resolved SubprocessResult.
  */
 export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
   const startedAt = Date.now();
-  // A shell parses the command string itself, so quote a path with spaces.
-  const useShell = spec.shell ?? /\.(cmd|bat)$/i.test(spec.command);
-  const command = useShell ? `"${spec.command}"` : spec.command;
+
+  // cmd.exe ends a command at a line break, so a multi-line argument would be
+  // silently truncated. Fail loudly instead — callers with long text (a stage
+  // persona) must send it via stdin on this path.
+  if (needsWindowsShell(spec) && (spec.args ?? []).some((arg) => /[\r\n]/.test(arg))) {
+    return Promise.resolve({
+      success: false,
+      exitCode: null,
+      termSignal: null,
+      timedOut: false,
+      aborted: false,
+      stdout: "",
+      stderrTail: [],
+      durationMs: 0,
+      errorMessage:
+        "Multi-line argument cannot be passed through a Windows .cmd/.bat shim — send it via stdin instead.",
+    });
+  }
+
+  const { command, args } = resolveSpawnTarget(spec);
 
   return new Promise<SubprocessResult>((resolve) => {
     let child: ChildProcess;
     try {
-      child = spawn(command, spec.args ?? [], {
+      child = spawn(command, args, {
         cwd: spec.cwd,
-        shell: useShell,
+        // Never `shell: true` with an args array — Node would concatenate them
+        // unescaped (DEP0190). resolveSpawnTarget already built a quoted
+        // command line for the shim case.
+        windowsVerbatimArguments: needsWindowsShell(spec),
         env: spec.env,
         stdio: ["pipe", "pipe", "pipe"],
       });

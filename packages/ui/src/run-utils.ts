@@ -1,5 +1,21 @@
 import type { RunState } from "@adhd/core";
 
+/**
+ * Whether a run's workspace was the per-run scratch directory the server
+ * creates (`.adhd/runs/<id>/workspace`) rather than a directory the user chose.
+ *
+ * Reusing a scratch path for a *new* run would write into the previous run's
+ * folder, so callers offering "run this again" must leave the directory blank
+ * instead. Separator-agnostic: the path is absolute and platform-shaped.
+ */
+export function isScratchWorkspace(workspacePath: string | undefined): boolean {
+  if (!workspacePath) {
+    return false;
+  }
+  const normalized = workspacePath.replace(/\\/g, "/");
+  return normalized.includes("/.adhd/runs/");
+}
+
 // The stage a failed/cancelled run should restart from: the failed stage,
 // or (after an abort) the first stage that was skipped by the abort rather
 // than by pipeline configuration.

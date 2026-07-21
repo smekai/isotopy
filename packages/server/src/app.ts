@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { config } from "./config.js";
 import { engineRoutes } from "./routes/engines.js";
+import { fsRoutes } from "./routes/fs.js";
 import { healthRoutes } from "./routes/health.js";
 import { pipelineRoutes } from "./routes/pipelines.js";
 import { runRoutes } from "./routes/runs.js";
@@ -23,6 +24,7 @@ export function createApp(): Hono {
   app.route("/engines", engineRoutes);
   app.route("/settings", settingsRoutes);
   app.route("/runs", runRoutes);
+  app.route("/fs", fsRoutes);
 
   return app;
 }

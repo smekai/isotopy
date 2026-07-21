@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play } from "lucide-react";
+import { FolderOpen, Play } from "lucide-react";
 import {
   ENGINES,
   LIFECYCLE_STAGES,
@@ -18,6 +18,7 @@ import {
 } from "../settings";
 import type { Dir } from "../theme";
 import { SANS, specColor } from "../theme";
+import { FolderPicker } from "./FolderPicker";
 import { PipelineDropdown } from "./PipelineDropdown";
 import type { PipelineOption } from "./PipelineDropdown";
 
@@ -38,15 +39,20 @@ const PIPELINE_COPY: Record<string, { headline: string; subtitle: string }> = {
 };
 
 export function EmptyState({
-  d, onStart, starting = false,
+  d, onStart, starting = false, initialTask = "",
 }: {
   d: Dir;
   onStart: (task: string, pipelineId: string, workspaceDir?: string) => void;
   starting?: boolean;
+  /** Task text carried over from a past run, ready to edit before starting. */
+  initialTask?: string;
 }) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialTask);
   const [pipelineId, setPipelineId] = useState(loadPipelineId);
   const [workspaceDir, setWorkspaceDir] = useState(loadWorkspaceDir);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Nothing chosen yet — highlight the picker rather than defaulting silently. */
+  const firstRun = workspaceDir.trim() === "";
   const canStart = input.trim().length > 0 && !starting;
   // Engine-backed pipelines need a workspace + engine settings; derived from the
   // stage model so a new pipeline doesn't need a matching check added here.
@@ -147,18 +153,40 @@ export function EmptyState({
         </div>
 
         {usesEngine && (
-          <input
-            value={workspaceDir}
-            onChange={(e) => {
-              setWorkspaceDir(e.target.value);
-              saveWorkspaceDir(e.target.value);
-            }}
-            placeholder="Working directory — empty = scratch workspace per run"
-            style={{
-              border: `1px solid ${d.border}`, borderRadius: 12, padding: "9px 14px",
-              background: "#FFF", color: d.text, fontFamily: SANS, fontSize: 12, outline: "none",
-            }}
-          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={workspaceDir}
+              onChange={(e) => {
+                setWorkspaceDir(e.target.value);
+                saveWorkspaceDir(e.target.value);
+              }}
+              placeholder="Working directory — empty = scratch workspace per run"
+              style={{
+                flex: 1,
+                border: `1px solid ${firstRun ? d.accent : d.border}`, borderRadius: 12, padding: "9px 14px",
+                background: "#FFF", color: d.text, fontFamily: SANS, fontSize: 12, outline: "none",
+              }}
+            />
+            <button
+              onClick={() => setPickerOpen(true)}
+              data-testid="browse-folder"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                border: `1px solid ${firstRun ? d.accent : d.border}`, borderRadius: 12,
+                padding: "9px 14px", background: firstRun ? d.accentSoft : "#FFF",
+                color: firstRun ? d.accent : d.textMid, cursor: "pointer",
+                fontFamily: SANS, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+              }}
+            >
+              <FolderOpen size={13} /> Browse…
+            </button>
+          </div>
+        )}
+        {/* First run: say where the work will land instead of silently using scratch. */}
+        {usesEngine && firstRun && (
+          <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, textAlign: "center" }}>
+            Pick a project folder — otherwise the run works in a temporary scratch workspace.
+          </div>
         )}
       </div>
 
@@ -167,6 +195,19 @@ export function EmptyState({
           ? <>Engine: {engine.label} · {loadEngineModel(engine.id)} — change in Setup</>
           : <>↵ to start · ⌘⇧V for voice</>}
       </div>
+
+      {pickerOpen && (
+        <FolderPicker
+          d={d}
+          initialPath={workspaceDir.trim() === "" ? undefined : workspaceDir.trim()}
+          onSelect={(picked) => {
+            setWorkspaceDir(picked);
+            saveWorkspaceDir(picked);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }
