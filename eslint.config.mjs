@@ -13,7 +13,7 @@ export default tseslint.config(
       "**/playwright-report/**",
       "**/test-results/**",
       ".adhd/**",
-      // Figma-exported design reference, not product code.
+      // Exported design reference, not product code.
       "design/**",
     ],
   },

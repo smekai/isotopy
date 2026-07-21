@@ -42,14 +42,12 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 | Document | Description |
 |----------|-------------|
-| [design-desktop-shell.md](docs/design-desktop-shell.md) | Conversational pipeline workspace brief (Figma-agentic): pipeline canvas as hero + per-stage/whole-pipeline voice steering |
-| [figma-agent-prompt.md](docs/figma-agent-prompt.md) | Paste-ready Figma Agent prompt that generates the workspace + a fresh design system |
 | [model-and-harness-strategy.md](docs/model-and-harness-strategy.md) | When to use Claude Code vs Cursor, stage-to-tool mapping, BYOK models |
 
 
 ## Status
 
-Planning complete. Conversational pipeline workspace UI (from the Figma design in `design/`) implemented on the mock orchestrator: a team of profession-named agents (Project Manager → SRE), human gates with approval, abort/restart, run history, and theme selection under Setup → Appearance. Runs and history are in-memory (reset with the server).
+Planning complete. Conversational pipeline workspace UI (from the design reference in `design/`) implemented on the mock orchestrator: a team of profession-named agents (Project Manager → SRE), human gates with approval, abort/restart, run history, and theme selection under Setup → Appearance. Runs and history are in-memory (reset with the server).
 
 ## Prerequisites
 

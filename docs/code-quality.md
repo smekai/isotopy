@@ -6,7 +6,7 @@ How code in this repo is organized, linted, and configured. Introduced by TASK-0
 
 - ESLint 10 flat config lives at [`eslint.config.mjs`](../eslint.config.mjs): JS + typescript-eslint recommended rules everywhere, React hooks rules for `packages/ui`.
 - Run `pnpm lint` (or `pnpm lint:fix`) from the repo root. Keep it green — treat lint errors like compile errors.
-- The `design/` folder (Figma export) and build output are excluded.
+- The `design/` folder (design reference) and build output are excluded.
 
 ## Layout conventions
 

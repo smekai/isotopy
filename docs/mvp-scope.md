@@ -16,7 +16,7 @@
 | **Markdown file** | `.adhd/inputs/feature.md` | Loads title, body, optional acceptance criteria |
 | **GitHub issue URL** | `adhd run --issue https://github.com/org/repo/issues/42` | Fetches title + body via `gh` CLI (optional dep) |
 
-**Not in v0.1:** Linear, Jira, Figma import (adapter hooks only).
+**Not in v0.1:** Linear, Jira, design-tool import (adapter hooks only).
 
 ---
 
@@ -355,4 +355,4 @@ deploy:
 - Additional deploy adapters (Netlify, Fly.io, Railway)
 - Linear / GitHub issue native sync (task import/export)
 - Team workflow templates (shareable YAML)
-- Mockup stage with wireframe tool integration (Excalidraw, Figma MCP)
+- Mockup stage with wireframe tool integration (Excalidraw, design-tool MCP)
