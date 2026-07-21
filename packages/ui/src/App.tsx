@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, History, Settings, Sparkles } from "lucide-react";
 import type { RunStatus } from "@adhd/core";
+import { pipelineUsesEngineById } from "@adhd/core";
 import { abortRun, approveGate, fetchRuns, restartRun, startRun } from "./api";
 import { EmptyState } from "./components/EmptyState";
 import { HistoryDrawer } from "./components/HistoryDrawer";
@@ -81,11 +82,13 @@ export function App() {
     setError(null);
     setStarting(true);
     try {
-      const oneBox = pipelineId === "one-box";
+      // Every engine-backed pipeline (one-box, dev-test, …) needs the harness
+      // settings; only simulated ones take disabledStages.
+      const usesEngine = pipelineUsesEngineById(pipelineId);
       const created = await startRun({
         task,
         pipelineId,
-        ...(oneBox
+        ...(usesEngine
           ? {
               engine: loadEngine(),
               model: loadEngineModel(loadEngine()),

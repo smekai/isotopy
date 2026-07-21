@@ -18,6 +18,12 @@ export interface EngineRunContext {
   /** Working directory the engine operates in (scratch workspace or user dir). */
   cwd: string;
   model?: string;
+  /**
+   * Persona for this stage (the resolved skill text). Harnesses with a native
+   * system-prompt channel pass it there; the rest fold it into the prompt via
+   * `withPersonaPrompt`. Undefined for stages that run without a persona.
+   */
+  appendSystemPrompt?: string;
   permissionMode: EnginePermissionMode;
   connection?: EngineConnection;
   timeoutMs: number;

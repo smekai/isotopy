@@ -55,6 +55,23 @@ Dependency direction: `index.ts → app.ts → routes → services → engines/c
 - Named constants over magic numbers: timeouts, poll intervals, and status lists are declared at the top of the module that owns them (or in `@adhd/core` when shared, e.g. `TERMINAL_RUN_STATUSES`).
 - Secrets (API keys) never go in code or `.env.example`; runtime secrets live in `.adhd/settings.json` (gitignored) or real env vars.
 
+## Subsystem review: Developer→Tester flow (TASK-049)
+
+Assessment of the two-box flow against the conventions above, with the refactors applied.
+
+| Finding | Resolution |
+| --- | --- |
+| `executeEngineStage` inlined persona resolution + prompt building, mixing lifecycle with input assembly | Extracted `resolveStageInputs()`; the method is now stage lifecycle only |
+| `stage-prompt.ts` had grown to hold both prompt building *and* handoff formatting | Renamed to `stage-context.ts` — it owns cross-box context in both directions |
+| `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
+| `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
+
+Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults (pure data) sit in `skill-defaults.ts` apart from the I/O in `skills.ts`; `run-store.ts` remains the only module that knows the run disk layout; no `console.*` in the new modules; no hardcoded paths or secrets.
+
+**Deliberate seam:** `RunOrchestrator.executeStage()` is the single decision point for how a stage runs. A durable-workflow executor (Aiki) replaces that method alone — engine adapters and the surrounding lifecycle are untouched.
+
+**Known gap (not code):** persona adherence is model-dependent. On `haiku` the Tester verified with inline `node -e` checks rather than writing a test file, and ignored an instruction placed *after* the closing "Do not restate this prompt" line. Put must-follow output rules before that line.
+
 ## Practices to keep (and adopt next)
 
 Already in place:

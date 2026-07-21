@@ -5,6 +5,7 @@ import path from "node:path";
 import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
 import type { EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
 import { firstLine, truncate } from "./log-text.js";
+import { withPersonaPrompt } from "./persona.js";
 import { probeCommand, runSubprocess } from "./subprocess.js";
 import type {
   EngineActionResult,
@@ -418,21 +419,24 @@ export const cursorAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
+    // No system-prompt flag on the Cursor CLI — the persona rides in the prompt.
+    const runCtx = withPersonaPrompt(ctx);
+
     const promptViaArg = process.env.ADHD_CURSOR_PROMPT_VIA !== "stdin";
     if (ctx.permissionMode === "acceptEdits") {
       ctx.onLog("info", "Cursor has no accept-edits-only headless mode — running with --force");
     }
-    if (promptViaArg && ctx.prompt.length > PROMPT_ARG_WARN_LENGTH) {
+    if (promptViaArg && runCtx.prompt.length > PROMPT_ARG_WARN_LENGTH) {
       ctx.onLog("warn", "Prompt near the command-line length limit — set ADHD_CURSOR_PROMPT_VIA=stdin");
     }
 
     let finalEvent: CursorStreamEvent | undefined;
     const result = await runSubprocess({
       command: binary,
-      args: buildArgs(ctx, promptViaArg),
+      args: buildArgs(runCtx, promptViaArg),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection),
-      input: promptViaArg ? undefined : ctx.prompt,
+      input: promptViaArg ? undefined : runCtx.prompt,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,
       onLine: (stream, line) => {

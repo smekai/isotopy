@@ -266,6 +266,11 @@ export const claudeCodeAdapter: EngineAdapter = {
       // logged-in CLI silently ignores the injected key and bills the plan.
       ...(ctx.connection?.mode === "api-key" ? ["--bare"] : []),
       ...(ctx.model ? ["--model", ctx.model] : []),
+      // Native system-prompt channel — the stage persona stays in the system
+      // role rather than being folded into the user turn.
+      ...(ctx.appendSystemPrompt
+        ? ["--append-system-prompt", ctx.appendSystemPrompt]
+        : []),
       ...(ctx.permissionMode === "acceptEdits"
         ? ["--permission-mode", "acceptEdits"]
         : ["--dangerously-skip-permissions"]),

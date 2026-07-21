@@ -12,23 +12,29 @@ import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
   ENGINES,
-  ONE_BOX_PIPELINE,
   agentForStage,
   createInitialRunState,
   flattenPipelineStages,
   isTerminalRunStatus,
+  pipelineUsesEngine,
 } from "@adhd/core";
 import { config } from "../config.js";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.js";
 import type { EngineRunResult } from "../engines/types.js";
 import { resolveWorkspace } from "../paths.js";
 import { getEngineConnection } from "../settings.js";
-import { appendEvent, loadAllRuns, writeState } from "./run-store.js";
+import { appendEvent, loadAllRuns, writeHandoff, writeState } from "./run-store.js";
 import type { PersistedRun } from "./run-store.js";
+import { loadSkill } from "./skills.js";
+import { buildStagePrompt, formatHandoff } from "./stage-context.js";
+import type { UpstreamOutput } from "./stage-context.js";
 import { nowIso, randomBetween, sleep } from "../utils.js";
 
 /** Coalesce log-driven state writes; transitions flush immediately regardless. */
 const PERSIST_DEBOUNCE_MS = 150;
+
+/** Shown when a run has no engine recorded (should not happen for engine stages). */
+const UNKNOWN_ENGINE_LABEL = "unknown";
 
 type RunListener = (event: RunEvent) => void;
 
@@ -211,8 +217,9 @@ export class RunOrchestrator {
     const { task, disabledStages, engine, model, workspaceDir, permissionMode, ...simOptions } =
       options;
 
-    const isOneBox = pipeline.id === ONE_BOX_PIPELINE.id;
-    if (isOneBox) {
+    // Any pipeline with a persona-bearing stage runs a real harness.
+    const usesEngine = pipelineUsesEngine(pipeline);
+    if (usesEngine) {
       // Validate the engine before the run exists so bad requests fail fast.
       const engineId = engine ?? "claude-code";
       getEngineAdapter(engineId);
@@ -235,11 +242,13 @@ export class RunOrchestrator {
       disabledStages,
     );
 
-    if (isOneBox) {
+    if (usesEngine) {
       const engineId = engine ?? "claude-code";
       assertEngineId(engineId);
       run.engine = engineId;
       run.model = model;
+      // One workspace for the whole run: every box works in the same directory,
+      // so the Tester sees exactly what the Developer wrote.
       run.workspacePath = await resolveWorkspace(runId, workspaceDir);
       this.enginePermissionModes.set(
         runId,
@@ -358,6 +367,7 @@ export class RunOrchestrator {
     }
 
     this.cancelled.delete(runId);
+    const outputs = { ...run.stageOutputs };
     for (const stage of run.stages.slice(startIndex)) {
       if (disabled.has(stage.id)) {
         continue;
@@ -366,7 +376,11 @@ export class RunOrchestrator {
       stage.logs = [];
       stage.startedAt = undefined;
       stage.completedAt = undefined;
+      // Drop the old report too — a stage being re-run has not produced
+      // anything yet, and a downstream box must not read a stale handoff.
+      delete outputs[stage.id];
     }
+    run.stageOutputs = outputs;
     run.status = "running";
     run.completedAt = undefined;
 
@@ -523,6 +537,81 @@ export class RunOrchestrator {
     return "passed";
   }
 
+  /**
+   * Reports from the boxes that already ran, in stage order. This is the memory
+   * the next box is handed — the workspace carries the actual work.
+   */
+  private upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
+    const index = run.stages.findIndex((stage) => stage.id === stageId);
+    if (index <= 0) {
+      return [];
+    }
+    const outputs = run.stageOutputs ?? {};
+    return run.stages
+      .slice(0, index)
+      .map((stage) => ({ label: stage.label, output: outputs[stage.id] ?? "" }))
+      .filter((entry) => entry.output !== "");
+  }
+
+  /** Display name of the harness a run is using. */
+  private engineLabel(run: RunState): string {
+    return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
+  }
+
+  /**
+   * Resolve what a box is given: its persona and its prompt. Keeping this out
+   * of executeEngineStage leaves that method to the stage lifecycle alone.
+   * A stage whose skill file cannot be resolved runs without a persona rather
+   * than failing the run.
+   */
+  private async resolveStageInputs(
+    run: RunState,
+    stageDef: StageDefinition,
+  ): Promise<{ persona: string | undefined; prompt: string }> {
+    const persona = stageDef.skill ? await loadSkill(stageDef.skill) : undefined;
+    if (stageDef.skill && !persona) {
+      this.log(
+        run.id,
+        stageDef.id,
+        "warn",
+        `No skill "${stageDef.skill}" found — running without a persona`,
+      );
+    }
+    return {
+      persona,
+      prompt: buildStagePrompt(run.task ?? "", this.upstreamFor(run, stageDef.id)),
+    };
+  }
+
+  /**
+   * Record a box's result as run state (durable in state.json) and as a
+   * readable handoff artifact beside the run's logs.
+   */
+  private captureStageOutput(
+    run: RunState,
+    stageDef: StageDefinition,
+    result: string | undefined,
+  ): void {
+    if (!result || result.trim() === "") {
+      return;
+    }
+    run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: result };
+    void writeHandoff(
+      run.id,
+      stageDef.id,
+      formatHandoff(
+        {
+          stageLabel: stageDef.label,
+          profession: agentForStage(stageDef.id).profession,
+          engine: this.engineLabel(run),
+          model: run.model,
+          completedAt: nowIso(),
+        },
+        result,
+      ),
+    );
+  }
+
   private async executeEngineStage(
     runId: string,
     stageDef: StageDefinition,
@@ -547,8 +636,10 @@ export class RunOrchestrator {
       runId,
       stageDef.id,
       "info",
-      `${profession} online · ${ENGINES[run.engine].label}${run.model ? ` · ${run.model}` : ""}`,
+      `${profession} online · ${this.engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
     );
+
+    const { persona, prompt } = await this.resolveStageInputs(run, stageDef);
 
     const controller = new AbortController();
     this.engineAborts.set(runId, controller);
@@ -557,9 +648,10 @@ export class RunOrchestrator {
       const adapter = getEngineAdapter(run.engine);
       outcome = await adapter.run({
         runId,
-        prompt: run.task ?? "",
+        prompt,
         cwd: run.workspacePath ?? process.cwd(),
         model: run.model,
+        appendSystemPrompt: persona,
         permissionMode: this.enginePermissionModes.get(runId) ?? DEFAULT_PERMISSION_MODE,
         // Read fresh per stage so settings changes apply to restarted runs.
         connection: getEngineConnection(run.engine),
@@ -584,7 +676,11 @@ export class RunOrchestrator {
 
     stage.completedAt = nowIso();
     if (outcome.success) {
+      // Last-stage output only — kept for the run-level result view and for
+      // runs recorded before stageOutputs existed. Per-box consumers must read
+      // stageOutputs instead, or a multi-box run shows one box's text everywhere.
       run.result = outcome.result;
+      this.captureStageOutput(run, stageDef, outcome.result);
       stage.status = "passed";
       this.log(runId, stageDef.id, "pass", `✓ ${profession} finished — result ready`);
       this.emit({
@@ -611,6 +707,27 @@ export class RunOrchestrator {
     return "failed";
   }
 
+  /**
+   * Run one stage, choosing how it executes: a real harness when the stage
+   * carries a persona and the run has an engine, otherwise the simulation.
+   *
+   * This is the seam the durable-workflow runtime would replace (see
+   * docs/technical-architecture.md) — swapping in an Aiki-backed executor means
+   * reimplementing this method, not touching the engine adapters or the stage
+   * lifecycle around it.
+   */
+  private executeStage(
+    runId: string,
+    stageDef: StageDefinition,
+    options: Required<SimulationOptions>,
+  ): Promise<StageOutcome> {
+    const run = this.runs.get(runId);
+    const engineBacked = stageDef.skill !== undefined && run?.engine !== undefined;
+    return engineBacked
+      ? this.executeEngineStage(runId, stageDef)
+      : this.simulateStage(runId, stageDef, options);
+  }
+
   private async runStages(
     runId: string,
     pipeline: PipelineDefinition,
@@ -629,9 +746,7 @@ export class RunOrchestrator {
           continue;
         }
       }
-      const outcome = this.runs.get(runId)?.engine
-        ? await this.executeEngineStage(runId, stageDef)
-        : await this.simulateStage(runId, stageDef, options);
+      const outcome = await this.executeStage(runId, stageDef, options);
       if (outcome === "cancelled") {
         return;
       }

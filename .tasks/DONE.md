@@ -1,5 +1,116 @@
 # Done
 
+## TASK-049: Code-quality assessment + refactor of the Dev+Test subsystem
+**Priority:** P3 | **Tags:** core, server
+**Updated:** 2026-07-20 14:20
+
+Done. Behavior-preserving quality pass over the Developer→Tester subsystem; assessment recorded in `docs/code-quality.md` (new "Subsystem review" section).
+
+Refactors applied:
+- **`resolveStageInputs()` extracted** — `executeEngineStage` inlined persona resolution + prompt building; it is now stage lifecycle only, as the plan required.
+- **`stage-prompt.ts` → `stage-context.ts`** — the module had grown to own cross-box context in *both* directions (prompt in, handoff out); the name now matches.
+- **`engineLabel()` + `UNKNOWN_ENGINE_LABEL`** — removed duplicated agent/engine-label computation and a bare string literal.
+- **Documented `run.result`** — it holds only the last stage's output (the reason the UI needed a fallback); per-box consumers must read `stageOutputs`.
+
+Hygiene: no `console.*` in the new modules (the one added to `run-store.ts` matches three pre-existing ones there; structured logging stays TASK-022), no hardcoded paths or secrets, core stays pure.
+
+Verified: typecheck + lint + build green, and a **fresh real run post-refactor** (`51d6ebd4`) reproduced TASK-048 exactly — both boxes passed, personas resolved, both handoffs written, `stageOutputs` populated, `VERDICT: PASS`.
+
+---
+
+## TASK-048: Verify the two-box Developer→Tester flow end-to-end
+**Priority:** P2 | **Tags:** testing
+**Updated:** 2026-07-20 14:05
+
+Done — verified with **real Claude Code runs** (haiku, unsandboxed server per the run-app gotcha).
+
+- `GET /pipelines` exposes `dev-test`; three runs completed with both boxes `passed`.
+- Artifacts on disk: `.adhd/runs/<id>/implementation/handoff.md` + `test/handoff.md`; `state.json` has `stageOutputs` for both stages and the persisted `skill` per stage.
+- Shared workspace confirmed — Developer wrote `sum.js`/`mul.js`/`div.js`, Tester verified the same directory.
+- Persona contracts held: Developer emitted its "how to verify" handoff; Tester emitted `What I tested / Results / Findings` and `VERDICT: PASS`.
+- **Decisive probe** (temporarily swapped `tester.md` for a minimal marker persona, then restored): the Tester replied `PERSONA_LOADED: yes` and `UPSTREAM_SEEN: Created div.js with a CommonJS` — proving (a) an edited skill is picked up by the **already-running** server with no rebuild/restart, and (b) the Developer's handoff text reaches the Tester's prompt verbatim.
+
+Typecheck + lint + build green.
+
+**Finding (persona tuning, not a defect):** with haiku the Tester verified via inline `node -e` checks instead of writing a test file, and ignored an instruction appended *after* "Do not restate this prompt". Put must-follow output rules **before** that closing line, or use a stronger model. Tracked for a future persona-tuning pass.
+
+---
+
+## TASK-047: UI — surface per-box persona + render handoff in run view
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-20 13:52
+
+Done. Persona + per-box handoff are visible in the run view.
+
+- **Bug fix (found while implementing):** the Artifacts tab showed `run.result` — the *last* stage's output — for **every** stage on an engine run. With two boxes, opening the Developer showed the Tester's result. It now renders that stage's own `stageOutputs[stage.id]` as `handoff.md`; runs recorded before `stageOutputs` existed fall back to `run.result` (they only ever had one box).
+- `core/runs.ts`: `StageState.skill?: string`, copied from the stage definition in `createInitialRunState` — persists which persona actually ran (provenance, and the UI needs it).
+- `StageFocusPanel`: persona badge in the header, tooltipped with the source path `.adhd/skills/<skill>.md`.
+
+The `dev-test` pipeline needed no picker work — it comes through `DEMO_PIPELINES`. Typecheck + lint green.
+
+---
+
+## TASK-046: Orchestrator — engine-per-skill-stage + shared workspace + StageExecutor seam
+**Priority:** P1 | **Tags:** server, engine
+**Updated:** 2026-07-20 13:45
+
+Done. Both boxes now run a real harness on the plain-TS FSM.
+
+- `core/pipelines.ts`: `pipelineUsesEngine()` — engine-backed is derived from the stage model (any stage with a `skill`) instead of a hardcoded pipeline id, so new engine pipelines work without touching the orchestrator. Replaces the `ONE_BOX_PIPELINE.id` check in `startRun` for both engine validation and workspace setup.
+- **`executeStage()` — the StageExecutor seam.** One place decides how a stage runs (real harness when the stage has a persona and the run has an engine, else simulation). Swapping in an Aiki executor means reimplementing this method only — adapters and the surrounding stage lifecycle are untouched.
+- `executeEngineStage`: resolves the stage persona → `appendSystemPrompt`; builds the prompt via `buildStagePrompt` with upstream reports; a missing skill file degrades to no persona + a warning rather than failing the run.
+- `upstreamFor()` / `captureStageOutput()`: per-stage output → `run.stageOutputs` (durable in state.json) + `handoff.md` artifact.
+- Shared workspace: one `run.workspacePath` for the whole run, so the Tester sees the Developer's code.
+- **Fix:** `restartRun` now also drops the recorded output of every stage it resets — a re-run stage has produced nothing yet, and a downstream box must not read a stale handoff.
+
+Probed: `sequential` simulated, `one-box`/`dev-test` engine-backed, dev-test stages resolve Developer:developer → Tester:tester. Typecheck + lint green. Real engine run is TASK-048.
+
+---
+
+## TASK-045: Prompt composition + context handoff + appendSystemPrompt
+**Priority:** P1 | **Tags:** server, adapters
+**Updated:** 2026-07-20 13:30
+
+Done. The persona + upstream-context plumbing (wired into the run loop by TASK-046).
+
+- `engines/types.ts`: `EngineRunContext.appendSystemPrompt?: string`.
+- `engines/persona.ts`: `withPersonaPrompt(ctx)` — engine-agnostic fallback that folds the persona into the head of the prompt; no-op without a persona (returns the same object).
+- Adapters: **Claude** passes `--append-system-prompt` natively (persona stays in the system role); **Cursor** and **Codex** have no such flag, so they use `withPersonaPrompt` for both the positional-arg and stdin prompt paths.
+- `services/stage-prompt.ts` (renamed to `stage-context.ts` by TASK-049): `buildStagePrompt(task, upstream)` — pure; returns the task verbatim when there is no upstream output (single-box runs unchanged), otherwise adds a handoff block. Wording tells the model the reports are *intent* and the workspace is the source of truth.
+- `services/run-store.ts`: `writeHandoff(runId, stageId, content)` → `.adhd/runs/<id>/<stageId>/handoff.md`, best-effort (the same text is already durable in `state.json`).
+
+Probed: no/blank upstream → task unchanged, handoff block renders, persona folds, no-persona is a no-op. Typecheck + lint green.
+
+---
+
+## TASK-044: Skills layer — markdown persona loader + author developer/tester skills
+**Priority:** P1 | **Tags:** server
+**Updated:** 2026-07-20 13:20
+
+Done. Editable markdown personas, read at run time.
+
+- `services/skill-defaults.ts` — bundled persona text as pure constants (no I/O). Since `.adhd/` is **gitignored**, these constants are the shipped source of truth, not the on-disk files.
+- `services/skills.ts` — `loadSkill(id)` prefers `.adhd/skills/<id>.md` with an **mtime-checked cache** (edits apply on the next run), falls back to the bundled default, and **seeds the file on first use** (`wx` flag, never clobbers) so the override is discoverable rather than invisible. Unknown skill → `undefined` (stage runs without a persona rather than failing the run).
+- Personas authored: **developer** (multitool: inspect → smallest correct change → verify own work → structured handoff report) and **tester** (trust nothing → run it → write missing tests → `VERDICT: PASS/FAIL`).
+
+Verified by probe: fallback+seed, disk read, unknown→undefined, **edit picked up on next load**, re-seed after delete, tester loads. Typecheck + lint green.
+
+---
+
+## TASK-043: Dev+Test flow — per-stage skill + context model + DEV_TEST_PIPELINE
+**Priority:** P1 | **Tags:** core
+**Updated:** 2026-07-20 13:10
+
+Done. Foundational `@adhd/core` model for the two-box Developer→Tester flow.
+
+- `pipelines.ts`: `StageDefinition.skill?: string` added (a stage with a skill is engine-backed). New `DEV_TEST_PIPELINE` (`dev-test`) with Developer→Tester stages, registered in `DEMO_PIPELINES` so the UI picker surfaces it. `ONE_BOX_PIPELINE` stage now carries `skill: "developer"`.
+- `runs.ts`: `RunState.stageOutputs?: Record<string, string>` (per-box memory; `result` only held the last), initialized `{}` in `createInitialRunState`.
+- `agents.ts`: `test` profession renamed "QA Engineer" → "Tester".
+
+Typecheck + lint green.
+
+---
+
 ## TASK-035: Spike — beads (bd) vs. TS-native task-graph backlog
 **Priority:** P2 | **Tags:** core, server
 **Updated:** 2026-07-20 12:20

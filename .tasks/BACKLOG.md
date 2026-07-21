@@ -1,87 +1,79 @@
 # Backlog
 
-## TASK-043: Dev+Test flow — per-stage skill + context model + DEV_TEST_PIPELINE
-**Priority:** P1 | **Tags:** core
-**Updated:** 2026-07-20 12:40
+## TASK-052: Architect skill — codify the code standards, then clean the codebase to them
+**Priority:** P1 | **Tags:** core, ui, server, infra
+**Updated:** 2026-07-21 12:00
 
-First real two-box workflow (Developer → Tester). Foundational data-model changes in `@adhd/core`. See plan: `for-a-next-step-pure-floyd.md`.
+Produce a **staff-level "Architect" skill** that captures how code in this repo must be written, then use it to clean the existing code. The skill is the deliverable; the cleanup is the proof it works. `docs/code-quality.md` stays the *descriptive* layout reference — the skill is the *prescriptive* one, and must link to it rather than duplicate it.
 
-- `pipelines.ts`: extend `StageDefinition` with optional `skill?: string`. Add `DEV_TEST_PIPELINE` (`id: "dev-test"`, name "Developer + Tester") with one sequential group: `implementation`/label "Developer"/skill "developer", then `test`/label "Tester"/skill "tester". Register in `DEMO_PIPELINES`. Give `ONE_BOX_PIPELINE`'s stage `skill: "developer"`.
-- `runs.ts`: add `stageOutputs?: Record<string, string>` to `RunState` (cross-box memory); initialize `{}` in `createInitialRunState`.
-- `agents.ts`: rename the `test` profession to "Tester".
+**The standards to encode** (owner's preferences — these are the rules, not suggestions):
 
-Blocks TASK-044/045/046.
+1. **Comments are a smell.** A function that needs a comment to be understood is a badly named / badly factored function — refactor it instead. Exceptions, and only these: genuinely intricate logic (state machines, protocol quirks, platform workarounds), the *why* behind a non-obvious decision, and tests.
+2. **SOLID.** Single responsibility per module/class; depend on interfaces (`EngineAdapter` is the model to follow), not concretions.
+3. **DDD layering.** Pure functions and domain rules live in a **Domain** layer; the **Service** layer stays thin — a top-level narration of *what happens*, delegating the *how*. `packages/core` is already the pure layer; decide whether server-side domain logic moves there or into `packages/server/src/domain/`.
+4. **Long-running work is async/await.** Anything genuinely long-lived belongs in a **workflow**, not an inline `await` chain — `RunOrchestrator.executeStage()` is already the documented seam for a durable executor.
+5. **Classes over loose function bags** where there is state or a lifecycle.
+6. **No big anonymous objects.** Reference case: [StageFocusPanel.tsx:19-31](packages/ui/src/components/StageFocusPanel.tsx#L19-L31) — an inline props type literal; and the inline `style={{...}}` blocks throughout that file. Named types / named style constants instead.
+7. **Lean on TypeScript.** Discriminated unions over stringly-typed state, `satisfies`, `const` type params, branded ids, exhaustive `switch` with `never`. Bump TS to the latest release as part of this task and adopt what it buys us (also revisit the `noUncheckedIndexedAccess` / `exactOptionalPropertyTypes` items already parked in `docs/code-quality.md`).
 
----
+**Deliverables (both forms — one canonical text, two consumers):**
+- `.claude/skills/architect/SKILL.md` — loaded when writing or refactoring code in this repo.
+- ADHD persona `architect`: bundled default in `packages/server/src/services/skill-defaults.ts` (`.adhd/` is gitignored, so the constant is the shipped source of truth) seeding `.adhd/skills/architect.md`. Follow the `DEVELOPER_SKILL` / `TESTER_SKILL` shape, including a compact handoff/verdict section.
+- **Keep the two in sync deliberately** — decide the mechanism (single source generating both, or a documented "edit both" rule) and write the decision down.
 
-## TASK-044: Skills layer — markdown persona loader + author developer/tester skills
-**Priority:** P1 | **Tags:** server
-**Updated:** 2026-07-20 12:40
+**Cleanup pass** (scope-limited; do not rewrite the world): the props-type and inline-style cleanup in `StageFocusPanel.tsx` and its siblings, the thin-service/pure-domain split in `packages/server/src/services/`, and any comment that is compensating for a bad name. Every change must be traceable to a numbered rule above.
 
-Editable markdown personas under `.adhd/skills/`, read at run time so they can be tweaked without a rebuild.
+**Verify:** `pnpm lint && pnpm typecheck && pnpm build` green; `pnpm --filter @adhd/ui e2e` still passes; the new persona appears in `DEFAULT_SKILLS` and seeds correctly on a fresh `.adhd/`.
 
-- New `packages/server/src/services/skills.ts`: `loadSkill(id)` reads `.adhd/skills/<id>.md` (via `path.join(REPO_ROOT, ...)`), falls back to a bundled default string when the file is missing; small mtime-checked cache so edits apply on next run.
-- Author `.adhd/skills/developer.md` (multitool: read context → implement → self-check) and `.adhd/skills/tester.md` (inspect diff → write/run tests → report PASS/FAIL + findings) — strong, real persona prompts.
-- Bundled defaults must match the seeded files so the flow works out of the box.
-
-Depends on TASK-043.
-
----
-
-## TASK-045: Prompt composition + context handoff + appendSystemPrompt
-**Priority:** P1 | **Tags:** server, adapters
-**Updated:** 2026-07-20 12:40
-
-Give each box its persona and the previous box's work.
-
-- `EngineRunContext` (`engines/types.ts`): add optional `appendSystemPrompt?: string`. Claude adapter passes `--append-system-prompt <persona>`; Cursor/Codex adapters prepend the persona to the prompt (engine-agnostic fallback).
-- Helper `buildStagePrompt({ task, upstream })`: user prompt = task + a "Previous step handoff" block built from prior `stageOutputs`.
-- After each engine stage: capture `result` into `run.stageOutputs[stageId]`, persist, and write `.adhd/runs/<id>/<stageId>/handoff.md`. Shared workspace stays the source of truth; the handoff summary is the injected memory.
-
-Depends on TASK-043, TASK-044.
+**Cross-platform:** the persona seeding path touches the filesystem — `.adhd/skills/architect.md` must be built with `path.join` via the existing loader in `services/skills.ts` (no new path logic). Any verification command quoted inside either skill text must be given in a shell-neutral form (`pnpm ...`), never as a PowerShell- or bash-only one-liner. Otherwise pure logic/UI. Will be authored on Windows; macOS path untested but unchanged.
 
 ---
 
-## TASK-046: Orchestrator — engine-per-skill-stage + shared workspace + StageExecutor seam
-**Priority:** P1 | **Tags:** server, engine
-**Updated:** 2026-07-20 12:40
+## TASK-050: Test phase — extend Playwright e2e to the Developer+Tester flow
+**Priority:** P1 | **Tags:** testing, ui
+**Updated:** 2026-07-20 22:30
 
-Make the two boxes actually run on the plain-TS FSM.
+**Playwright is already set up** — do not re-add it. `packages/ui/playwright.config.ts` (auto-starts `pnpm dev`, waits on `/health`, `reuseExistingServer: true`), 8 free-tier tests in `packages/ui/e2e/ui-smoke.spec.ts`, script `pnpm --filter @adhd/ui e2e`. `docs/e2e-test-plan.md` already defines the two tiers. This task **extends** that to cover the two-box flow and automates what is currently manual.
 
-- `run-orchestrator.ts`: run the real engine for any stage that has a `skill` (not only whole-run engine mode), so both boxes execute. Both share one `run.workspacePath` (Tester sees Developer's code). v1 uses one `run.engine`/`run.model` for both boxes; per-box engine selection deferred.
-- `executeEngineStage`: load the stage's skill → `appendSystemPrompt`; build prompt via `buildStagePrompt` with upstream context; capture output → `stageOutputs` + `handoff.md`.
-- Factor the engine-vs-sim decision behind a small `StageExecutor`-shaped boundary so an Aiki executor can replace it later without touching adapters (v0.2 door).
-- `startRun`: accept `"dev-test"` like `one-box` for engine validation + single shared workspace resolution. Keep gate/restart/persistence unchanged.
+**Guiding principle — cheapest tier that can prove it.** Three tiers, in cost order; a check belongs in the lowest tier that can catch its failure:
+1. **Free / zero-token** — UI + API assertions with no engine spend. The `sequential` pipeline is *simulated*, so it exercises the whole run lifecycle (status bar, stage focus, live log, history, restart, abort) for **zero tokens**. Most run-UI coverage belongs here.
+2. **Seeded** — drive the API directly, or pre-write a `.adhd/runs/<id>/state.json` fixture with `stageOutputs`, to assert per-stage handoff rendering and the persona badge without running an engine at all.
+3. **Live** — one thin real `dev-test` run (haiku, ≈cents). Reserve for proving the boxes genuinely chain; everything else should already be covered above.
 
-Depends on TASK-043, TASK-044, TASK-045.
+**Work:**
+- **First: check for a regression I introduced.** TASK-043 added a third pipeline (`dev-test`) to `DEMO_PIPELINES`, changing the picker's contents. Run `pnpm --filter @adhd/ui e2e` and repair any existing test that asserted on a two-entry picker.
+- **Fix stale docs** — `docs/e2e-test-plan.md` still says the Artifacts tab lists `result.md`; TASK-047 renamed it to `handoff.md`. It also predates the third pipeline. The run-app skill likewise still says `/pipelines` returns only `sequential` + `one-box`.
+- **New free-tier specs** — `dev-test` selectable in the picker; both boxes render as **Developer** and **Tester**; the persona badge (`DEVELOPER` / `TESTER`) shows in the stage focus header; per-stage Artifacts show that stage's own `handoff.md` (regression guard for the TASK-047 bug where every stage showed the last stage's output).
+- **Promote live-tier items to free/seeded** wherever the simulated pipeline or a seeded run can prove the same thing (run lifecycle, history re-attach, abort → CANCELLED).
+- **Keep one live smoke** for the real two-box chain; mark it skipped by default behind an env flag (e.g. `ADHD_E2E_LIVE=1`) so the default suite stays free and fast.
+- Add a root `pnpm e2e` script; note CI wiring stays on the `docs/code-quality.md` "adopt next" list.
 
----
-
-## TASK-047: UI — surface per-box persona + render handoff in run view
-**Priority:** P2 | **Tags:** ui
-**Updated:** 2026-07-20 12:40
-
-Polish once the flow runs. The `dev-test` pipeline appears in the picker automatically; add persona/handoff visibility.
-
-- Show each box's persona name (Developer / Tester) in the run view.
-- Render `handoff.md` (or `stageOutputs[stageId]`) in the box's log/detail so the hand-off between boxes is visible.
-
-Depends on TASK-046.
+**Verify:** `pnpm --filter @adhd/ui e2e` green with no engine spend; the live smoke passes when explicitly enabled.
 
 ---
 
-## TASK-048: Verify the two-box Developer→Tester flow end-to-end
-**Priority:** P2 | **Tags:** testing
-**Updated:** 2026-07-20 12:40
+## TASK-051: Manual-Tester box — Playwright-driven verification stage in the workflow
+**Priority:** P2 | **Tags:** core, server, engine
+**Updated:** 2026-07-20 22:30
 
-Manual/e2e verification via the run-app skill.
+Add a **third box** to the workflow, after the Tester: a *Manual Tester* persona that verifies the app the pipeline just built **through a real browser** with Playwright — the check a unit test cannot make ("does it actually work when a human clicks it?"). Builds on the persona/handoff machinery from TASK-043…046.
 
-- `pnpm typecheck && pnpm lint`; `pnpm dev`.
-- Start a "Developer + Tester" run on a small task (e.g. "add a `sum(a,b)` util with a test") against a scratch workspace.
-- Confirm Developer writes code → Tester (separate persona) inspects the shared workspace, writes/runs a test, reports PASS/FAIL. Inspect `.adhd/runs/<id>/implementation/handoff.md`, `.adhd/runs/<id>/test/handoff.md`, and `state.json.stageOutputs`.
-- Edit `.adhd/skills/tester.md`, re-run, confirm the change applies without a rebuild.
+**Guiding principle — automate first, drive manually only where it cannot.** The box must not narrate clicks turn-by-turn; that burns tokens and is slow and non-reproducible. Instead:
+1. **Write a Playwright spec, then run it.** One LLM turn authors the spec; the *run* costs zero tokens per assertion and is repeatable. This is the default path.
+2. **Only fall back to interactive driving** for genuinely exploratory checks (unexpected layout, a flow the spec cannot express).
+3. **Report failures + a short summary, not a transcript.** The persona's output is the handoff, so it must stay compact.
 
-Depends on TASK-046.
+**Work:**
+- `.adhd/skills/manual-tester.md` persona (+ a bundled default in `services/skill-defaults.ts`, since `.adhd/` is gitignored) encoding the automate-first rule and a `VERDICT: PASS/FAIL` contract matching the Tester's.
+- New pipeline in `core/pipelines.ts` — either a third stage on `dev-test` or a separate `dev-test-manual`; reuse `agentForStage` for the label/glyph. **Decide which**; a separate pipeline keeps the cheap two-box flow intact.
+- **Resolve the environment questions** (the real design work here):
+  - How does the box get a *running* app? It must start the built app in the shared workspace (port selection, teardown, no orphaned processes — see the stray-process gotcha in the run-app skill).
+  - Browser availability — Playwright needs a browser binary; decide install/caching strategy so a run does not download Chromium every time.
+  - Headless by default.
+- **Artifacts** — save the generated spec, screenshots, and any trace into `.adhd/runs/<id>/<stageId>/` alongside `handoff.md` so a failure is inspectable after the fact.
+- Keep the `executeStage()` seam untouched — this is a new stage with a persona, so it should need **no orchestrator changes** (a good test that the TASK-046 design generalizes).
+
+**Verify:** a real run on a small web app — Manual Tester writes a spec, runs it headless, reports PASS/FAIL, and leaves screenshots + the spec as artifacts. Confirm no orphaned browser/server processes remain.
 
 ---
 

@@ -39,6 +39,8 @@ export interface StageLogEntry {
 export interface StageState {
   id: string;
   label: string;
+  /** Persona this stage ran as, copied from the stage definition. */
+  skill?: string;
   status: StageStatus;
   logs: StageLogEntry[];
   startedAt?: string;
@@ -56,6 +58,12 @@ export interface RunState {
   engine?: EngineId;
   model?: string;
   result?: string;
+  /**
+   * Final output of each engine-backed stage, keyed by stage id. `result` only
+   * holds the last one; this keeps every box's output so a later box can be
+   * handed what the earlier ones produced.
+   */
+  stageOutputs?: Record<string, string>;
   workspacePath?: string;
   stages: StageState[];
   createdAt: string;
@@ -112,10 +120,12 @@ export function createInitialRunState(
     status: "pending",
     task,
     disabledStages,
+    stageOutputs: {},
     createdAt: new Date().toISOString(),
     stages: flattenPipelineStages(pipeline).map((stage) => ({
       id: stage.id,
       label: stage.label,
+      ...(stage.skill !== undefined ? { skill: stage.skill } : {}),
       status: disabled.has(stage.id) ? "skipped" : "pending",
       logs: [],
     })),

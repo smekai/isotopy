@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
-import { ENGINES, LIFECYCLE_STAGES, agentForStage } from "@adhd/core";
+import {
+  ENGINES,
+  LIFECYCLE_STAGES,
+  agentForStage,
+  findPipeline,
+  flattenPipelineStages,
+  pipelineUsesEngineById,
+} from "@adhd/core";
 import {
   loadEngine,
   loadEngineModel,
@@ -14,6 +21,22 @@ import { SANS, specColor } from "../theme";
 import { PipelineDropdown } from "./PipelineDropdown";
 import type { PipelineOption } from "./PipelineDropdown";
 
+/** Headline + subtitle per pipeline; `sequential` doubles as the fallback. */
+const PIPELINE_COPY: Record<string, { headline: string; subtitle: string }> = {
+  sequential: {
+    headline: "What should the team build?",
+    subtitle: "Describe a feature, bug fix, or task. Your AI team will handle the rest.",
+  },
+  "one-box": {
+    headline: "What should the Developer build?",
+    subtitle: "One prompt, one agent, one result — powered by a real engine.",
+  },
+  "dev-test": {
+    headline: "What should the Developer build?",
+    subtitle: "A Developer implements it, then a Tester verifies the result — real engine.",
+  },
+};
+
 export function EmptyState({
   d, onStart, starting = false,
 }: {
@@ -25,9 +48,12 @@ export function EmptyState({
   const [pipelineId, setPipelineId] = useState(loadPipelineId);
   const [workspaceDir, setWorkspaceDir] = useState(loadWorkspaceDir);
   const canStart = input.trim().length > 0 && !starting;
-  const oneBox = pipelineId === "one-box";
-  const stages = oneBox
-    ? LIFECYCLE_STAGES.filter((stage) => stage.id === "implementation")
+  // Engine-backed pipelines need a workspace + engine settings; derived from the
+  // stage model so a new pipeline doesn't need a matching check added here.
+  const usesEngine = pipelineUsesEngineById(pipelineId);
+  const selectedPipeline = findPipeline(pipelineId);
+  const stages = selectedPipeline
+    ? flattenPipelineStages(selectedPipeline)
     : LIFECYCLE_STAGES;
   const engine = ENGINES[loadEngine()];
 
@@ -42,7 +68,14 @@ export function EmptyState({
       label: "Single agent",
       description: `Real engine — ${engine.label}`,
     },
+    {
+      id: "dev-test",
+      label: "Developer + Tester",
+      description: `Developer implements, Tester verifies — ${engine.label}`,
+    },
   ];
+
+  const copy = PIPELINE_COPY[pipelineId] ?? PIPELINE_COPY.sequential;
 
   function selectPipeline(id: string) {
     setPipelineId(id);
@@ -51,7 +84,7 @@ export function EmptyState({
 
   function start() {
     if (canStart) {
-      onStart(input.trim(), pipelineId, oneBox ? workspaceDir.trim() : undefined);
+      onStart(input.trim(), pipelineId, usesEngine ? workspaceDir.trim() : undefined);
     }
   }
 
@@ -75,12 +108,10 @@ export function EmptyState({
 
       <div style={{ textAlign: "center" }}>
         <div style={{ color: d.text, fontFamily: SANS, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 8 }}>
-          {oneBox ? "What should the Developer build?" : "What should the team build?"}
+          {copy.headline}
         </div>
         <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 14 }}>
-          {oneBox
-            ? "One prompt, one agent, one result — powered by a real engine."
-            : "Describe a feature, bug fix, or task. Your AI team will handle the rest."}
+          {copy.subtitle}
         </div>
       </div>
 
@@ -115,7 +146,7 @@ export function EmptyState({
           </button>
         </div>
 
-        {oneBox && (
+        {usesEngine && (
           <input
             value={workspaceDir}
             onChange={(e) => {
@@ -132,7 +163,7 @@ export function EmptyState({
       </div>
 
       <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
-        {oneBox
+        {usesEngine
           ? <>Engine: {engine.label} · {loadEngineModel(engine.id)} — change in Setup</>
           : <>↵ to start · ⌘⇧V for voice</>}
       </div>

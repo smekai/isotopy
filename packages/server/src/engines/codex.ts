@@ -5,6 +5,7 @@ import path from "node:path";
 import { CODEX_MODEL_OPTIONS } from "@adhd/core";
 import type { EngineModelList, EngineStatus } from "@adhd/core";
 import { firstLine, truncate } from "./log-text.js";
+import { withPersonaPrompt } from "./persona.js";
 import { probeCommand, runSubprocess } from "./subprocess.js";
 import type {
   EngineActionResult,
@@ -412,13 +413,16 @@ export const codexAdapter: EngineAdapter = {
       ctx.onLog("info", "Codex has no accept-edits-only headless mode — running with --sandbox workspace-write");
     }
 
+    // No system-prompt flag on the Codex CLI — the persona rides in the prompt.
+    const runCtx = withPersonaPrompt(ctx);
+
     const capture: CodexCapture = { turnCompleted: false };
     const result = await runSubprocess({
       command: binary,
-      args: buildArgs(ctx),
+      args: buildArgs(runCtx),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection),
-      input: ctx.prompt,
+      input: runCtx.prompt,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,
       onLine: (stream, line) => {

@@ -87,6 +87,26 @@ export function appendEvent(runId: string, event: RunEvent): Promise<void> {
   return next;
 }
 
+/**
+ * Write a stage's handoff artifact to .adhd/runs/<runId>/<stageId>/handoff.md —
+ * the human-readable record of what that box reported, next to the run's state
+ * and event trail. Best-effort: losing the artifact must not fail the run,
+ * since the same text is already persisted in state.json's stageOutputs.
+ */
+export async function writeHandoff(
+  runId: string,
+  stageId: string,
+  content: string,
+): Promise<void> {
+  try {
+    const dir = path.join(runDir(runId), stageId);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "handoff.md"), content);
+  } catch (error) {
+    console.warn(`Failed to write handoff for run ${runId}/${stageId}:`, error);
+  }
+}
+
 function isPersistedRun(value: unknown): value is PersistedRun {
   return (
     typeof value === "object" &&

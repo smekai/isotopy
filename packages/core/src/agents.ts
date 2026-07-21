@@ -10,7 +10,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
   design: { stageId: "design", profession: "Software Architect", glyph: "◇" },
   implementation: { stageId: "implementation", profession: "Developer", glyph: "⬡" },
   review: { stageId: "review", profession: "Code Reviewer", glyph: "◎" },
-  test: { stageId: "test", profession: "QA Engineer", glyph: "⊕" },
+  test: { stageId: "test", profession: "Tester", glyph: "⊕" },
   release: { stageId: "release", profession: "Release Manager", glyph: "◆" },
   deploy: { stageId: "deploy", profession: "SRE", glyph: "▲" },
 };

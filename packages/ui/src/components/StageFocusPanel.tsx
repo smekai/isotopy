@@ -34,9 +34,14 @@ export function StageFocusPanel({
   const st = statusClr(stage.status);
   // Engine runs show the real result; mock runs still show static design samples.
   const isEngineRun = run.engine != null;
+  // Each box's own handoff — run.result only holds the last stage's output, so
+  // with multiple boxes it must not be shown against every stage. Runs recorded
+  // before stageOutputs existed fall back to it (they had a single box).
+  const legacyRun = Object.keys(run.stageOutputs ?? {}).length === 0;
+  const stageOutput = run.stageOutputs?.[stage.id] ?? (legacyRun ? run.result : undefined);
   const artifacts = isEngineRun
-    ? run.result
-      ? [{ name: "result.md", size: `${new Blob([run.result]).size} B`, preview: run.result }]
+    ? stageOutput
+      ? [{ name: "handoff.md", size: `${new Blob([stageOutput]).size} B`, preview: stageOutput }]
       : []
     : (ARTIFACTS[stage.id] ?? []);
   const reasoning = isEngineRun ? [] : (REASONING[stage.id] ?? []);
@@ -77,6 +82,19 @@ export function StageFocusPanel({
           <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700 }}>{agent.profession}</div>
           <div style={{ color: d.textMuted, fontSize: 11, fontFamily: SANS }}>{stage.label} stage</div>
         </div>
+        {/* Which persona this box ran as — .adhd/skills/<skill>.md */}
+        {stage.skill && (
+          <div
+            title={`Persona: .adhd/skills/${stage.skill}.md`}
+            style={{
+              background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 20,
+              padding: "3px 10px", color: d.textMid, fontFamily: MONO, fontSize: 9,
+              fontWeight: 700, letterSpacing: "0.06em",
+            }}
+          >
+            {stage.skill.toUpperCase()}
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: st.bg, borderRadius: 20, padding: "3px 10px" }}>
           <StatusIcon s={stage.status} size={11} />
           <span style={{ color: st.text, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em" }}>{sLabel(stage.status)}</span>
