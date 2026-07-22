@@ -5,7 +5,6 @@ import type { EngineId, SettingsView } from "@adhd/core";
 import type { EngineConnection } from "./engines/types.js";
 import { adhdDir } from "./paths.js";
 
-// Lives under .adhd/ (gitignored) because it can hold an API key.
 function settingsPath(): string {
   return path.join(adhdDir(), "settings.json");
 }
@@ -22,7 +21,6 @@ interface SettingsFile {
 
 export interface EngineConnectionUpdate {
   connectionMode?: string;
-  /** A string sets the key, `null` clears it, `undefined` keeps it. */
   apiKey?: string | null;
 }
 
@@ -40,9 +38,7 @@ function readSettings(): SettingsFile {
     ) {
       return { version: 1, engines: (parsed as SettingsFile).engines ?? {} };
     }
-  } catch {
-    // missing or corrupt file — fall through to defaults
-  }
+  } catch {}
   return emptySettings();
 }
 
@@ -62,13 +58,12 @@ export function getEngineConnection(engineId: EngineId): EngineConnection {
   };
 }
 
-/** UI-safe view: reports whether a key exists, never the key itself. */
 export function getSettingsView(): SettingsView {
   const stored = readSettings().engines;
   const view: SettingsView = { engines: {} };
   for (const engineId of Object.keys(ENGINES) as EngineId[]) {
     if (ENGINES[engineId].connections.length === 0) {
-      continue; // engine has no connection methods yet
+      continue;
     }
     const entry = stored[engineId];
     view.engines[engineId] = {

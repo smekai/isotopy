@@ -9,14 +9,14 @@ export interface PipelineOption {
   description: string;
 }
 
-export function PipelineDropdown({
-  d, options, value, onSelect,
-}: {
+export interface PipelineDropdownProps {
   d: Dir;
   options: PipelineOption[];
   value: string;
   onSelect: (id: string) => void;
-}) {
+}
+
+export function PipelineDropdown({ d, options, value, onSelect }: PipelineDropdownProps) {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);

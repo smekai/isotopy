@@ -1,5 +1,3 @@
-// Base lint rules for the whole workspace: JS + typescript-eslint recommended,
-// React hooks rules for the UI. Style/formatting is left to the formatter.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -13,7 +11,6 @@ export default tseslint.config(
       "**/playwright-report/**",
       "**/test-results/**",
       ".adhd/**",
-      // Exported design reference, not product code.
       "design/**",
     ],
   },
@@ -32,6 +29,7 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "no-empty": ["error", { allowEmptyCatch: true }],
       eqeqeq: ["error", "smart"],
     },
   },

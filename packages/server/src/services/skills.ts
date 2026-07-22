@@ -1,50 +1,30 @@
-// Loads the persona ("skill") a pipeline stage runs as. Skills are markdown
-// files under .adhd/skills/<id>.md so they can be tweaked and re-run without a
-// rebuild. That directory is gitignored, so the bundled text in skill-defaults
-// is the shipped source of truth: a missing file is seeded from the default on
-// first use, giving the user a copy to edit rather than an invisible feature.
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { adhdDir } from "../paths.js";
-import { DEFAULT_SKILLS } from "./skill-defaults.js";
+import { DEFAULT_SKILLS } from "../domain/skills/defaults.js";
 
 function skillsDir(): string {
   return path.join(adhdDir(), "skills");
 }
 
 interface CacheEntry {
-  /** mtime the content was read at — a newer file invalidates the entry. */
   mtimeMs: number;
   content: string;
 }
 
-// Keyed by resolved file path, not skill id — ADHD_HOME can point the skills
-// directory somewhere else, and a cache keyed by id would survive that move.
 const cache = new Map<string, CacheEntry>();
 
 export function skillFilePath(skillId: string): string {
   return path.join(skillsDir(), `${skillId}.md`);
 }
 
-/** Best-effort write of a default persona so the user has something to edit. */
 async function seedSkillFile(skillId: string, content: string): Promise<void> {
   try {
     await mkdir(skillsDir(), { recursive: true });
-    // "wx" — never clobber a file the user already wrote.
     await writeFile(skillFilePath(skillId), content, { flag: "wx" });
-  } catch {
-    // Seeding is a convenience; a read-only or racing FS must not fail the run.
-  }
+  } catch {}
 }
 
-/**
- * Resolve a stage's persona text. Prefers the on-disk `.adhd/skills/<id>.md`
- * (re-read whenever its mtime changes, so edits apply to the next run) and
- * falls back to the bundled default, seeding the file when it is absent.
- *
- * Returns undefined for an unknown skill with no file — the caller then runs
- * the stage without a persona rather than failing the run.
- */
 export async function loadSkill(skillId: string): Promise<string | undefined> {
   const filePath = skillFilePath(skillId);
   try {
@@ -56,9 +36,7 @@ export async function loadSkill(skillId: string): Promise<string | undefined> {
     const content = await readFile(filePath, "utf8");
     cache.set(filePath, { mtimeMs, content });
     return content;
-  } catch {
-    // No readable file — fall back to the bundled default.
-  }
+  } catch {}
 
   const fallback = DEFAULT_SKILLS[skillId];
   if (fallback === undefined) {

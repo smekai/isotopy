@@ -24,7 +24,6 @@ function loadDirId(): DirId {
       return saved as DirId;
     }
   } catch {
-    // localStorage unavailable — fall through to default
   }
   return "indigo";
 }
@@ -37,7 +36,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, id);
     } catch {
-      // ignore storage failures
     }
   }, []);
 

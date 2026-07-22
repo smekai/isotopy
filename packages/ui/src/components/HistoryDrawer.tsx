@@ -13,16 +13,15 @@ function formatDate(iso: string): string {
   });
 }
 
-export function HistoryDrawer({
-  d, onClose, onView, onRestart, onRerun,
-}: {
+export interface HistoryDrawerProps {
   d: Dir;
   onClose: () => void;
   onView: (runId: string) => void;
   onRestart: (runId: string, stageId: string) => void;
-  /** Load this run's task + settings back into the composer, without starting. */
   onRerun: (run: RunState) => void;
-}) {
+}
+
+export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: HistoryDrawerProps) {
   const [runs, setRuns] = useState<RunState[] | null>(null);
 
   useEffect(() => {
@@ -47,12 +46,9 @@ export function HistoryDrawer({
         {runs?.map((run) => {
           const pill = RUN_PILL[run.status];
           const failedStage = run.stages.find((stage) => stage.status === "failed");
-          // Only a failed/cancelled run can be restarted in place; a completed
-          // one would lose its artifacts, so Rerun is the path for those.
           const restartable = run.status === "failed" || run.status === "cancelled";
           const resumeId = restartable ? resumeStageId(run) : null;
           const restartId = restartable ? firstEnabledStageId(run) : null;
-          // Hide Resume when it would do exactly what Restart does.
           const showResume = resumeId !== null && resumeId !== restartId;
           const duration = run.completedAt
             ? formatDuration(new Date(run.completedAt).getTime() - new Date(run.createdAt).getTime())

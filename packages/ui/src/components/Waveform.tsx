@@ -1,4 +1,9 @@
-export function Waveform({ color, height = 14 }: { color: string; height?: number }) {
+export interface WaveformProps {
+  color: string;
+  height?: number;
+}
+
+export function Waveform({ color, height = 14 }: WaveformProps) {
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height }}>
       {[0.4, 0.8, 0.55, 1, 0.65, 0.85, 0.4].map((h, i) => (

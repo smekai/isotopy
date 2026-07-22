@@ -9,7 +9,12 @@ const STAGE_DEFS = new Map(
   flattenPipelineStages(SEQUENTIAL_PIPELINE).map((def) => [def.id, def]),
 );
 
-function Connector({ d, dim }: { d: Dir; dim?: boolean }) {
+interface ConnectorProps {
+  d: Dir;
+  dim?: boolean;
+}
+
+function Connector({ d, dim }: ConnectorProps) {
   return (
     <div style={{ display: "flex", alignItems: "center", width: 20, flexShrink: 0 }}>
       <div style={{ flex: 1, height: 2, borderRadius: 1, background: dim ? "rgba(0,0,0,0.07)" : d.accentMid }} />
@@ -17,15 +22,15 @@ function Connector({ d, dim }: { d: Dir; dim?: boolean }) {
   );
 }
 
-export function PipelineRow({
-  run, d, focusedId, onNodeClick, onApprove,
-}: {
+export interface PipelineRowProps {
   run: RunState;
   d: Dir;
   focusedId: string | null;
   onNodeClick: (stageId: string) => void;
   onApprove: (stageId: string) => void;
-}) {
+}
+
+export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: PipelineRowProps) {
   let gateCounter = 0;
 
   return (

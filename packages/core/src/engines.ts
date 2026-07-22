@@ -1,6 +1,5 @@
 export type EngineId = "claude-code" | "cursor" | "codex";
 
-/** "skip" never blocks on permission prompts (default); "acceptEdits" auto-approves edits only. */
 export type EnginePermissionMode = "skip" | "acceptEdits";
 
 export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";
@@ -17,7 +16,6 @@ export interface EngineDefinition {
   label: string;
   description: string;
   available: boolean;
-  /** How this harness authenticates/bills. Empty when it has no run implementation yet. */
   connections: EngineConnectionDefinition[];
 }
 
@@ -89,25 +87,17 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
   },
 };
 
-/** Fallback connection mode when a harness has no stored preference yet. */
 export function defaultConnectionMode(engineId: EngineId): string {
   return ENGINES[engineId].connections[0]?.id ?? "subscription";
 }
 
 export interface EngineModelOption {
-  /** Value passed verbatim to the engine CLI (e.g. `claude --model <id>`). */
   id: string;
   label: string;
   hint: string;
-  /** 1M-context variants are gated behind usage credits on subscription plans. */
   requiresUsageCredits?: boolean;
 }
 
-/**
- * "let the CLI decide" — no `--model` flag is passed, so the engine's own
- * configured default wins (e.g. `model = "…"` in `~/.codex/config.toml`).
- * Always safer than a snapshot ID our roster may have outlived.
- */
 export const AUTO_MODEL_ID = "";
 
 export const AUTO_MODEL_OPTION: EngineModelOption = {
@@ -116,13 +106,11 @@ export const AUTO_MODEL_OPTION: EngineModelOption = {
   hint: "use the CLI's own configured default",
 };
 
-/** Where a model roster came from — surfaced in Setup so a stale list is visible. */
 export type EngineModelSource = "cli" | "config" | "static";
 
 export interface EngineModelList {
   options: EngineModelOption[];
   source: EngineModelSource;
-  /** Why the source is what it is (probe failure, config path, …). */
   note?: string;
 }
 
@@ -141,10 +129,6 @@ export const CLAUDE_MODEL_OPTIONS: EngineModelOption[] = [
 
 export const DEFAULT_CLAUDE_MODEL = "sonnet";
 
-/**
- * Cursor's model roster churns fast — the named entries are a snapshot; `auto`
- * always works. True up against `agent models` when they drift.
- */
 export const CURSOR_MODEL_OPTIONS: EngineModelOption[] = [
   AUTO_MODEL_OPTION,
   { id: "auto", label: "Cursor Auto", hint: "Cursor's own model router" },
@@ -155,12 +139,6 @@ export const CURSOR_MODEL_OPTIONS: EngineModelOption[] = [
 
 export const DEFAULT_CURSOR_MODEL = AUTO_MODEL_ID;
 
-/**
- * The Codex CLI has no `models` subcommand to query, and model availability
- * differs between ChatGPT-subscription and API-key auth — so any named entry
- * here is a guess that can 400 at run time. Auto (no `--model`) is the default;
- * the adapter's listModels() adds whatever `~/.codex/config.toml` actually sets.
- */
 export const CODEX_MODEL_OPTIONS: EngineModelOption[] = [
   AUTO_MODEL_OPTION,
   { id: "gpt-5", label: "GPT-5", hint: "OpenAI flagship" },
@@ -175,7 +153,6 @@ const MODEL_OPTIONS: Record<EngineId, EngineModelOption[]> = {
   codex: CODEX_MODEL_OPTIONS,
 };
 
-/** Model choices for the Setup picker. Empty for engines without a run implementation. */
 export function modelOptionsFor(engineId: EngineId): EngineModelOption[] {
   return MODEL_OPTIONS[engineId];
 }
@@ -190,15 +167,6 @@ export function defaultModelFor(engineId: EngineId): string {
   return DEFAULT_MODELS[engineId];
 }
 
-/**
- * Model IDs previously offered in Setup that are now known-bad, mapped to a
- * working replacement. Stored preferences are migrated through this on read so
- * a user who picked a since-retired model isn't stuck with failing runs.
- *
- * - Claude: full IDs resolve to 1M-context variants, which subscription plans reject.
- * - Codex: `gpt-5-codex` is rejected outright on ChatGPT-account auth — fall back
- *   to Auto so the CLI's own configured default wins.
- */
 export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
   "claude-code": {
     "claude-opus-4-8": "opus",
@@ -216,13 +184,10 @@ export interface EngineStatus {
   engine: EngineId;
   installed: boolean;
   path?: string;
-  version?: string;
+  version?: string | undefined;
   source?: "env" | "path" | "ide-extension" | "install-dir";
   message?: string;
-  /** Whether the CLI has valid auth. `undefined` when auth state can't be determined. */
-  loggedIn?: boolean;
-  /** Shell command that installs the CLI — powers the Setup "copy install command" button. */
+  loggedIn?: boolean | undefined;
   installCommand?: string;
-  /** Docs link for manual install/setup. */
   docsUrl?: string;
 }

@@ -1,7 +1,7 @@
 {
   "name": "adhd",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "ADHD — Artificial Development, Human Directed",
   "repository": {
     "type": "git",
@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "e2e": "pnpm --filter @adhd/ui e2e",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "gen:skills": "node scripts/generate-architect-skill.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -27,7 +28,7 @@
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
-    "typescript": "^5.8.2",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0",
     "vitest": "^3.2.4"
   },

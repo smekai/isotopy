@@ -7,12 +7,15 @@ import { VoiceBtn } from "./VoiceControls";
 import type { VoiceState } from "./VoiceControls";
 import { Waveform } from "./Waveform";
 
-// Steering chat is a visual mock — messages get a canned local reply.
-export function SteerChat({
-  stageId, stageLabel, d, vs, onCycle,
-}: {
-  stageId: string; stageLabel: string; d: Dir; vs: VoiceState; onCycle: () => void;
-}) {
+export interface SteerChatProps {
+  stageId: string;
+  stageLabel: string;
+  d: Dir;
+  vs: VoiceState;
+  onCycle: () => void;
+}
+
+export function SteerChat({ stageId, stageLabel, d, vs, onCycle }: SteerChatProps) {
   const profession = agentForStage(stageId).profession;
   const [input, setInput] = useState("");
   const [chat, setChat] = useState<Array<{ role: "user" | "agent"; text: string }>>([]);
@@ -50,7 +53,6 @@ export function SteerChat({
         ))}
       </div>
 
-      {/* Voice state */}
       {vs !== "idle" && (
         <div style={{ borderTop: `1px solid ${d.border}`, padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, background: d.surface2 }}>
           {vs === "listening" && <><Waveform color="#EF4444" /><span style={{ color: "#EF4444", fontSize: 12, fontFamily: SANS }} className="animate-pulse">Listening...</span></>}
@@ -59,7 +61,6 @@ export function SteerChat({
         </div>
       )}
 
-      {/* Input row */}
       <div style={{ borderTop: `1px solid ${d.border}`, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
         <VoiceBtn vs={vs} d={d} onCycle={onCycle} />
         <input

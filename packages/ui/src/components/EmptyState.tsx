@@ -22,12 +22,18 @@ import { FolderPicker } from "./FolderPicker";
 import { PipelineDropdown } from "./PipelineDropdown";
 import type { PipelineOption } from "./PipelineDropdown";
 
-/** Headline + subtitle per pipeline; `sequential` doubles as the fallback. */
-const PIPELINE_COPY: Record<string, { headline: string; subtitle: string }> = {
-  sequential: {
-    headline: "What should the team build?",
-    subtitle: "Describe a feature, bug fix, or task. Your AI team will handle the rest.",
-  },
+interface PipelineCopy {
+  headline: string;
+  subtitle: string;
+}
+
+const DEFAULT_PIPELINE_COPY: PipelineCopy = {
+  headline: "What should the team build?",
+  subtitle: "Describe a feature, bug fix, or task. Your AI team will handle the rest.",
+};
+
+const PIPELINE_COPY: Record<string, PipelineCopy> = {
+  sequential: DEFAULT_PIPELINE_COPY,
   "one-box": {
     headline: "What should the Developer build?",
     subtitle: "One prompt, one agent, one result — powered by a real engine.",
@@ -38,24 +44,20 @@ const PIPELINE_COPY: Record<string, { headline: string; subtitle: string }> = {
   },
 };
 
-export function EmptyState({
-  d, onStart, starting = false, initialTask = "",
-}: {
+export interface EmptyStateProps {
   d: Dir;
   onStart: (task: string, pipelineId: string, workspaceDir?: string) => void;
   starting?: boolean;
-  /** Task text carried over from a past run, ready to edit before starting. */
-  initialTask?: string;
-}) {
+  initialTask?: string | undefined;
+}
+
+export function EmptyState({ d, onStart, starting = false, initialTask = "" }: EmptyStateProps) {
   const [input, setInput] = useState(initialTask);
   const [pipelineId, setPipelineId] = useState(loadPipelineId);
   const [workspaceDir, setWorkspaceDir] = useState(loadWorkspaceDir);
   const [pickerOpen, setPickerOpen] = useState(false);
-  /** Nothing chosen yet — highlight the picker rather than defaulting silently. */
   const firstRun = workspaceDir.trim() === "";
   const canStart = input.trim().length > 0 && !starting;
-  // Engine-backed pipelines need a workspace + engine settings; derived from the
-  // stage model so a new pipeline doesn't need a matching check added here.
   const usesEngine = pipelineUsesEngineById(pipelineId);
   const selectedPipeline = findPipeline(pipelineId);
   const stages = selectedPipeline
@@ -81,7 +83,7 @@ export function EmptyState({
     },
   ];
 
-  const copy = PIPELINE_COPY[pipelineId] ?? PIPELINE_COPY.sequential;
+  const copy = PIPELINE_COPY[pipelineId] ?? DEFAULT_PIPELINE_COPY;
 
   function selectPipeline(id: string) {
     setPipelineId(id);
@@ -96,7 +98,6 @@ export function EmptyState({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "0 40px" }}>
-      {/* Ghost pipeline */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.18 }}>
         {stages.map((stage, i) => {
           const agent = agentForStage(stage.id);
@@ -121,7 +122,6 @@ export function EmptyState({
         </div>
       </div>
 
-      {/* Pipeline picker */}
       <PipelineDropdown d={d} options={pipelineOptions} value={pipelineId} onSelect={selectPipeline} />
 
       <div style={{ maxWidth: 540, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -182,7 +182,6 @@ export function EmptyState({
             </button>
           </div>
         )}
-        {/* First run: say where the work will land instead of silently using scratch. */}
         {usesEngine && firstRun && (
           <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, textAlign: "center" }}>
             Pick a project folder — otherwise the run works in a temporary scratch workspace.

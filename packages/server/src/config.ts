@@ -2,17 +2,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { REPO_ROOT } from "./paths.js";
 
-/**
- * Minimal .env loader (KEY=VALUE lines, # comments, optional quotes).
- * Values already present in the process environment win — the file only
- * fills gaps, so `PORT=1234 pnpm dev` still overrides .env.
- */
 function loadEnvFile(file: string): void {
   let text: string;
   try {
     text = readFileSync(file, "utf8");
   } catch {
-    return; // no .env file — process env and defaults apply
+    return;
   }
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -54,17 +49,13 @@ loadEnvFile(path.join(REPO_ROOT, ".env"));
 const port = envNumber("ADHD_PORT", envNumber("PORT", 9477));
 const uiPort = envNumber("ADHD_UI_PORT", 5173);
 
-/** Server configuration — every value can be set via the environment or a root .env file. */
 export const config = {
-  /** Interface the HTTP server binds to; set ADHD_HOST=0.0.0.0 to expose beyond this machine. */
   host: process.env.ADHD_HOST ?? "localhost",
   port,
-  /** Origins allowed by CORS; defaults cover the Vite dev UI and the server itself. */
   corsOrigins: process.env.ADHD_CORS_ORIGINS
     ? process.env.ADHD_CORS_ORIGINS.split(",")
         .map((origin) => origin.trim())
         .filter(Boolean)
     : [`http://localhost:${uiPort}`, `http://localhost:${port}`],
-  /** Hard cap for a single engine (CLI) run. */
   engineTimeoutMs: envNumber("ADHD_ENGINE_TIMEOUT_MS", 600_000),
 } as const;

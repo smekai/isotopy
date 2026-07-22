@@ -60,7 +60,6 @@ export const DIRS: Record<DirId, Dir> = {
   },
 };
 
-// Per-agent signature colors, keyed by stage id.
 export const SPEC_COLOR: Record<string, { main: string; soft: string; gradient: string }> = {
   intake:         { main: "#60A5FA", soft: "rgba(96,165,250,0.12)",  gradient: "linear-gradient(135deg,#60A5FA,#818CF8)" },
   requirements:   { main: "#818CF8", soft: "rgba(129,140,248,0.12)", gradient: "linear-gradient(135deg,#818CF8,#A78BFA)" },

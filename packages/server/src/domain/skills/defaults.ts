@@ -1,14 +1,5 @@
-// Bundled persona text for the built-in skills. `.adhd/` is gitignored, so
-// these constants — not the on-disk files — are the shipped source of truth:
-// the loader seeds `.adhd/skills/<id>.md` from them on first use, and the user
-// edits that copy. Pure data, no I/O (see docs/code-quality.md).
+import { ARCHITECT_SKILL } from "./architect.generated.js";
 
-/**
- * The "multitool" implementer. Deliberately generalist: it may need to scaffold
- * a project, add a feature, or fix a bug in whatever stack the workspace holds.
- * The closing report matters as much as the code — it becomes the handoff the
- * Tester box reads.
- */
 const DEVELOPER_SKILL = `# Role: Developer
 
 You are a pragmatic senior developer working directly in a repository. You are a
@@ -59,11 +50,6 @@ final message is a handoff. End with a short report:
 Be concise and concrete. Do not restate this prompt.
 `;
 
-/**
- * The verifier. Its job is adversarial-but-fair independent confirmation, so it
- * is told explicitly not to trust the Developer's claims and to end with a
- * machine-greppable verdict line the run log can surface.
- */
 const TESTER_SKILL = `# Role: Tester
 
 You are a meticulous QA engineer. A Developer has just worked in this directory.
@@ -113,8 +99,8 @@ requirement is not met, the build breaks, or a test fails. Be concise and
 concrete. Do not restate this prompt.
 `;
 
-/** Built-in personas, keyed by skill id (`.adhd/skills/<id>.md`). */
 export const DEFAULT_SKILLS: Record<string, string> = {
   developer: DEVELOPER_SKILL,
   tester: TESTER_SKILL,
+  architect: ARCHITECT_SKILL,
 };

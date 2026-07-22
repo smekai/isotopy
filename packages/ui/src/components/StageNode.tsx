@@ -3,16 +3,16 @@ import { agentForStage } from "@adhd/core";
 import type { Dir } from "../theme";
 import { MONO, SANS, sLabel, specColor, statusClr } from "../theme";
 
-export function StageNode({
-  stageId, label, status, d, focused, onClick,
-}: {
+export interface StageNodeProps {
   stageId: string;
   label: string;
   status: StageStatus;
   d: Dir;
   focused: boolean;
   onClick: () => void;
-}) {
+}
+
+export function StageNode({ stageId, label, status, d, focused, onClick }: StageNodeProps) {
   const agent = agentForStage(stageId);
   const sc = specColor(stageId);
   const st = statusClr(status);
@@ -42,7 +42,6 @@ export function StageNode({
         position: "relative",
       }}
     >
-      {/* Top gradient band */}
       <div style={{
         background: sc.gradient,
         height: running ? 5 : 4,
@@ -60,9 +59,7 @@ export function StageNode({
         )}
       </div>
 
-      {/* Card body */}
       <div style={{ padding: "10px 8px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: "100%" }}>
-        {/* Glyph in the agent's signature color */}
         <div style={{
           width: 36, height: 36, borderRadius: 10,
           background: sc.soft,
@@ -73,7 +70,6 @@ export function StageNode({
           {agent.glyph}
         </div>
 
-        {/* Profession — the agent's primary identity */}
         <div style={{
           color: "#1E1B4B", fontSize: 11.5, fontWeight: 700, lineHeight: 1.2,
           textAlign: "center", minHeight: 28,
@@ -82,12 +78,10 @@ export function StageNode({
           {agent.profession}
         </div>
 
-        {/* Pipeline stage */}
         <div style={{ color: "#9B9BC8", fontSize: 10, fontWeight: 500, lineHeight: 1.2 }}>
           {label}
         </div>
 
-        {/* Status gem pill */}
         <div style={{
           marginTop: 6,
           background: st.bg,

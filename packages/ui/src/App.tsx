@@ -45,12 +45,10 @@ export function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Composer contents carried over from a past run; `key` forces a remount. */
   const [prefill, setPrefill] = useState<{ key: string; task: string } | null>(null);
 
   const { run, error: runError } = useRunEvents(activeRunId, resubKey);
 
-  // Re-attach to an in-flight run on page load.
   useEffect(() => {
     void fetchRuns()
       .then((runs) => {
@@ -59,15 +57,10 @@ export function App() {
           setActiveRunId(active.id);
         }
       })
-      .catch(() => {
-        // Server unreachable — the empty state still renders.
-      })
+      .catch(() => {})
       .finally(() => setBooted(true));
   }, []);
 
-  // When a run finishes, show what it produced rather than leaving the user on
-  // a log that has stopped moving — unless they chose a tab themselves, in
-  // which case switching would yank them out of what they were reading.
   const runStatus = run?.status;
   useEffect(() => {
     if (runStatus && TERMINAL_RUN_STATUSES.includes(runStatus) && !tabChosenByUser.current) {
@@ -80,7 +73,6 @@ export function App() {
     setFocusTab(next);
   }
 
-  // Follow the stage that needs attention unless the user pinned one.
   useEffect(() => {
     if (!run || pinned) {
       return;
@@ -99,8 +91,6 @@ export function App() {
     setResubKey((key) => key + 1);
     setPinned(false);
     setFocusTab("log");
-    // A new run gets the automatic behaviour again; a tab choice made during
-    // the previous run must not disable it forever.
     tabChosenByUser.current = false;
   }
 
@@ -108,8 +98,6 @@ export function App() {
     setError(null);
     setStarting(true);
     try {
-      // Every engine-backed pipeline (one-box, dev-test, …) needs the harness
-      // settings; only simulated ones take disabledStages.
       const usesEngine = pipelineUsesEngineById(pipelineId);
       const created = await startRun({
         task,
@@ -138,9 +126,7 @@ export function App() {
     }
     try {
       await approveGate(activeRunId, stageId);
-    } catch {
-      // Double-click race — the gate was already approved.
-    }
+    } catch {}
   }
 
   async function handleAbort() {
@@ -149,9 +135,7 @@ export function App() {
     }
     try {
       await abortRun(activeRunId);
-    } catch {
-      // Run already finished.
-    }
+    } catch {}
   }
 
   async function handleRestart(runId: string, stageId: string) {
@@ -170,15 +154,8 @@ export function App() {
     setPinned(false);
   }
 
-  /**
-   * Put a past run's configuration back in front of the user without starting
-   * it. Pipeline/workspace/engine live in settings, which EmptyState already
-   * reads on mount, so only the task text is handed over directly.
-   */
   function handleRerun(source: RunState) {
     savePipelineId(source.pipelineId);
-    // A scratch workspace belongs to the run that created it — reusing the path
-    // would write the new run into the old run's folder.
     saveWorkspaceDir(isScratchWorkspace(source.workspacePath) ? "" : (source.workspacePath ?? ""));
     if (source.engine) {
       saveEngine(source.engine);
@@ -210,9 +187,7 @@ export function App() {
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
-      {/* ── Header ── */}
       <div style={{ background: d.surface, borderBottom: `1px solid ${d.border}`, height: 50, display: "flex", alignItems: "center", padding: "0 20px", gap: 14, flexShrink: 0, boxShadow: d.shadowSm }}>
-        {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: `linear-gradient(135deg, ${d.accent}, ${d.accentDark})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Sparkles size={15} style={{ color: "#FFF" }} />
@@ -222,7 +197,6 @@ export function App() {
 
         <div style={{ width: 1, height: 22, background: d.border }} />
 
-        {/* Project */}
         <button style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 13, fontWeight: 500 }}>
           my-saas-app <ChevronDown size={13} style={{ color: d.textMuted }} />
         </button>
@@ -241,19 +215,15 @@ export function App() {
         </div>
       </div>
 
-      {/* ── Error banner ── */}
       {banner && (
         <div style={{ background: "rgba(220,38,38,0.08)", borderBottom: "1px solid rgba(220,38,38,0.20)", color: "#DC2626", fontFamily: SANS, fontSize: 12, padding: "6px 20px", flexShrink: 0 }}>
           {banner}
         </div>
       )}
 
-      {/* ── Main canvas ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundImage: dotGrid, backgroundSize: "26px 26px" }}>
         {showEmpty ? (
           <EmptyState
-            // EmptyState seeds its state on mount, so a prefill arriving later
-            // would be ignored — remount it when one comes in.
             key={prefill?.key ?? "composer"}
             d={d}
             initialTask={prefill?.task}
@@ -293,7 +263,6 @@ export function App() {
         ) : null}
       </div>
 
-      {/* ── Team controller ── */}
       <TeamController
         d={d}
         run={run}
@@ -305,7 +274,6 @@ export function App() {
         onNewRun={handleNewRun}
       />
 
-      {/* ── Overlays ── */}
       {showSetup && <SetupModal d={d} onClose={() => setShowSetup(false)} />}
       {showHistory && (
         <HistoryDrawer

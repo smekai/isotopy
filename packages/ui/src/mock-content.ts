@@ -1,6 +1,3 @@
-// Static sample content for the Reasoning and Artifacts tabs, ported from the
-// design reference. The mock orchestrator doesn't produce reasoning traces or
-// artifacts yet — these keep the panels visually complete until it does.
 
 export const REASONING: Record<string, string[]> = {
   design: [

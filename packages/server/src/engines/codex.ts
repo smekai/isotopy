@@ -15,7 +15,6 @@ import type {
   EngineRunResult,
 } from "./types.js";
 
-/** npm install works on both Windows and macOS/Linux, so one hint fits all. */
 const INSTALL_COMMAND = "npm install -g @openai/codex";
 const DOCS_URL = "https://developers.openai.com/codex/cli";
 
@@ -30,11 +29,6 @@ interface ResolvedBinary {
 
 let cachedBinary: ResolvedBinary | undefined;
 
-/**
- * Pick the executable line from a `where`/`which` result. On Windows an npm
- * global install drops both an extensionless shell shim and a `.cmd` shim on
- * PATH; only the latter can be spawned directly, so prefer it.
- */
 function pickBinaryLine(output: string): string | undefined {
   const lines = output
     .split(/\r?\n/)
@@ -70,13 +64,10 @@ function resolveCodexBinary(): ResolvedBinary {
       cachedBinary = { path: first, source: "path" };
       return cachedBinary;
     }
-  } catch {
-    // not on PATH — fall through to the install hint
-  }
+  } catch {}
   throw new Error(INSTALL_HINT);
 }
 
-/** Known CLI failure signatures mapped to actionable guidance. */
 const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /not logged in|logged out|please (?:run|use).*login|run `?codex login`?|unauthorized|\b401\b/i,
@@ -104,12 +95,6 @@ function mapKnownError(raw: string): string | undefined {
   return ERROR_HINTS.find((hint) => hint.pattern.test(raw))?.message;
 }
 
-/**
- * Environment for the spawned CLI. The OpenAI key is stripped so a stray
- * OPENAI_API_KEY in the server env can't silently switch billing away from the
- * user's CLI login (subscription mode); api-key mode injects the stored key,
- * which `codex exec` uses in preference to a cached login.
- */
 function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.OPENAI_API_KEY;
@@ -122,18 +107,12 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
 function buildArgs(ctx: EngineRunContext): string[] {
   return [
     "exec",
-    // Newline-delimited JSON events on stdout — parsed off each line below.
     "--json",
-    // Scratch worktrees may not be a git repo; don't refuse to run.
     "--skip-git-repo-check",
-    // Codex has no accept-edits-only headless mode. "skip" runs fully
-    // autonomously (no sandbox, no approvals); "acceptEdits" confines writes to
-    // the workspace sandbox — a command needing escalation is denied, not queued.
     ...(ctx.permissionMode === "acceptEdits"
       ? ["--sandbox", "workspace-write"]
       : ["--dangerously-bypass-approvals-and-sandbox"]),
     ...(ctx.model ? ["--model", ctx.model] : []),
-    // `-` reads the prompt from stdin, sidestepping the Windows arg-length limit.
     "-",
   ];
 }
@@ -164,10 +143,9 @@ interface CodexEvent {
   message?: string;
 }
 
-/** Accumulates the cross-event state the run needs after the stream ends. */
 interface CodexCapture {
   lastMessage?: string;
-  usage?: CodexUsage;
+  usage?: CodexUsage | undefined;
   turnCompleted: boolean;
   errorMessage?: string;
 }
@@ -183,7 +161,6 @@ function commandText(command: CodexItem["command"]): string {
   return Array.isArray(command) ? command.join(" ") : String(command ?? "");
 }
 
-/** Log the start of a work item (tool call), skipping duplicate completions. */
 function logItemStart(item: CodexItem, onLog: EngineRunContext["onLog"]): void {
   switch (item.type) {
     case "command_execution":
@@ -203,11 +180,6 @@ function logItemStart(item: CodexItem, onLog: EngineRunContext["onLog"]): void {
   }
 }
 
-/**
- * Fold one Codex thread-item event into the run log and the capture. Codex's
- * `--json` stream is one JSON object per line: thread/turn lifecycle events plus
- * item.started/updated/completed for each message, reasoning block, or tool call.
- */
 function handleCodexEvent(
   event: CodexEvent,
   onLog: EngineRunContext["onLog"],
@@ -224,8 +196,6 @@ function handleCodexEvent(
       }
       break;
     case "item.completed":
-      // The agent's prose arrives complete on item.completed; reasoning blocks
-      // are dropped as too verbose for the run log.
       if (item?.type === "agent_message" && item.text) {
         capture.lastMessage = item.text;
         onLog("info", truncate(item.text));
@@ -256,7 +226,6 @@ function handleCodexEvent(
       break;
     }
     default:
-      // turn.started, item.updated, and unknown types — ignore
       break;
   }
 }
@@ -265,26 +234,18 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * The model the Codex CLI itself would use: the top-level `model = "…"` key in
- * `~/.codex/config.toml`. Matched before the first `[section]` header so a
- * `model` key nested under e.g. `[profiles.foo]` isn't mistaken for the global
- * default. Returns undefined when the file is absent or has no such key.
- */
 function readCodexConfigModel(): string | undefined {
-  // os.homedir() + path.join keeps this correct on Windows (%USERPROFILE%) and
-  // POSIX ($HOME) alike — the Codex CLI uses ~/.codex on both.
   const configPath = path.join(os.homedir(), ".codex", "config.toml");
   let text: string;
   try {
     text = readFileSync(configPath, "utf8");
   } catch {
-    return undefined; // no config yet, or unreadable — caller falls back to static
+    return undefined;
   }
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (trimmed.startsWith("[")) {
-      break; // past the top-level table
+      break;
     }
     const match = /^model\s*=\s*["']([^"']+)["']/.exec(trimmed);
     if (match) {
@@ -297,12 +258,6 @@ function readCodexConfigModel(): string | undefined {
 export const codexAdapter: EngineAdapter = {
   id: "codex",
 
-  /**
-   * The Codex CLI has no `models` subcommand, and which models an account may
-   * use differs between ChatGPT-subscription and API-key auth — so the only
-   * trustworthy signal available locally is the CLI's own configured default.
-   * Surface that alongside the static snapshot.
-   */
   async listModels(): Promise<EngineModelList> {
     const configured = readCodexConfigModel();
     if (!configured) {
@@ -326,7 +281,7 @@ export const codexAdapter: EngineAdapter = {
   },
 
   async detect(): Promise<EngineStatus> {
-    cachedBinary = undefined; // re-check must pick up a newly installed CLI
+    cachedBinary = undefined;
     let resolved: ResolvedBinary;
     try {
       resolved = resolveCodexBinary();
@@ -352,8 +307,6 @@ export const codexAdapter: EngineAdapter = {
         docsUrl: DOCS_URL,
       };
     }
-    // Best-effort auth probe. `codex login status` exits 0 when authenticated
-    // and 1 when not, so the exit code is the signal; text fills the status line.
     const auth = await probeCommand(resolved.path, ["login", "status"]);
     const authText = firstLine(auth.stdout) ?? firstLine(auth.stderrTail.join("\n"));
     const loggedIn = auth.success
@@ -373,11 +326,6 @@ export const codexAdapter: EngineAdapter = {
   },
 
   async install(): Promise<EngineActionResult> {
-    // The Codex CLI ships as an npm package, so one install path covers every
-    // OS. On Windows the launcher is `npm.cmd` (runSubprocess adds the shell the
-    // .cmd shim needs); POSIX runs `npm` directly. The global bin dir is
-    // normally already on the server's PATH, so a Re-check finds the new binary
-    // without a restart.
     const npm = process.platform === "win32" ? "npm.cmd" : "npm";
     const result = await runSubprocess({
       command: npm,
@@ -386,7 +334,7 @@ export const codexAdapter: EngineAdapter = {
       timeoutMs: 300_000,
     });
     if (result.success) {
-      cachedBinary = undefined; // force the next detect()/run to re-resolve
+      cachedBinary = undefined;
       return {
         ok: true,
         output: firstLine(result.stdout),
@@ -413,7 +361,6 @@ export const codexAdapter: EngineAdapter = {
       ctx.onLog("info", "Codex has no accept-edits-only headless mode — running with --sandbox workspace-write");
     }
 
-    // No system-prompt flag on the Codex CLI — the persona rides in the prompt.
     const runCtx = withPersonaPrompt(ctx);
 
     const capture: CodexCapture = { turnCompleted: false };
@@ -436,7 +383,7 @@ export const codexAdapter: EngineAdapter = {
         try {
           handleCodexEvent(JSON.parse(trimmed) as CodexEvent, ctx.onLog, capture);
         } catch {
-          // non-JSON output line — ignore
+          return;
         }
       },
     });
@@ -449,7 +396,6 @@ export const codexAdapter: EngineAdapter = {
       } else if (result.aborted) {
         errorMessage = "Aborted";
       } else if (result.exitCode === null && !capture.turnCompleted && !capture.errorMessage) {
-        // The CLI never started (bad binary, etc.) — surface the spawn reason.
         errorMessage = result.errorMessage ?? "Failed to start Codex CLI";
         ctx.onLog("fail", errorMessage);
       } else {
@@ -459,7 +405,6 @@ export const codexAdapter: EngineAdapter = {
           `Codex exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
-          // Keep the raw error visible in the log; surface the guidance.
           ctx.onLog("warn", truncate(raw));
           errorMessage = mapped;
         } else {
@@ -473,7 +418,6 @@ export const codexAdapter: EngineAdapter = {
       result: capture.lastMessage,
       exitCode: result.exitCode,
       errorMessage,
-      // Codex's --json stream reports token usage, not USD cost — leave costUsd unset.
       durationMs: result.durationMs,
     };
   },

@@ -1,5 +1,3 @@
-// Pure, context-free helpers — no I/O, no imports from the rest of the server.
-
 export function nowIso(): string {
   return new Date().toISOString();
 }

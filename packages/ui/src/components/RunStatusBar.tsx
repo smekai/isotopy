@@ -4,7 +4,12 @@ import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
 import { MONO, SANS, runDot } from "../theme";
 
-export function RunStatusBar({ run, d }: { run: RunState; d: Dir }) {
+export interface RunStatusBarProps {
+  run: RunState;
+  d: Dir;
+}
+
+export function RunStatusBar({ run, d }: RunStatusBarProps) {
   const elapsed = useElapsed(run.createdAt, run.completedAt);
   const running = run.status === "running";
   const dot = runDot(run.status, d);

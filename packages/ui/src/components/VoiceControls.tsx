@@ -3,19 +3,23 @@ import type { Dir } from "../theme";
 import { SANS } from "../theme";
 import { Waveform } from "./Waveform";
 
-// Voice UI is a visual mock: clicking the button cycles through the states.
 export type VoiceState = "idle" | "listening" | "transcribing" | "speaking";
 
+const VOICE_STATE_CYCLE: VoiceState[] = ["idle", "listening", "transcribing", "speaking"];
+
 export function cycleVS(v: VoiceState): VoiceState {
-  const cycle: VoiceState[] = ["idle", "listening", "transcribing", "speaking"];
-  return cycle[(cycle.indexOf(v) + 1) % cycle.length];
+  const next = VOICE_STATE_CYCLE[(VOICE_STATE_CYCLE.indexOf(v) + 1) % VOICE_STATE_CYCLE.length];
+  return next ?? "idle";
 }
 
-export function VoiceBtn({
-  vs, d, onCycle, large = false,
-}: {
-  vs: VoiceState; d: Dir; onCycle: () => void; large?: boolean;
-}) {
+export interface VoiceBtnProps {
+  vs: VoiceState;
+  d: Dir;
+  onCycle: () => void;
+  large?: boolean;
+}
+
+export function VoiceBtn({ vs, d, onCycle, large = false }: VoiceBtnProps) {
   const listening = vs === "listening";
   const speaking = vs === "speaking";
   const active = vs !== "idle";
@@ -29,7 +33,6 @@ export function VoiceBtn({
 
   return (
     <div style={{ position: "relative", display: "inline-flex" }}>
-      {/* Pulse ring */}
       {active && (
         <div style={{
           position: "absolute", inset: -4,
@@ -59,7 +62,13 @@ export function VoiceBtn({
   );
 }
 
-export function VoiceStatus({ vs, d, agentName }: { vs: VoiceState; d: Dir; agentName?: string }) {
+export interface VoiceStatusProps {
+  vs: VoiceState;
+  d: Dir;
+  agentName?: string;
+}
+
+export function VoiceStatus({ vs, d, agentName }: VoiceStatusProps) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 160 }}>
       {vs === "idle" && (

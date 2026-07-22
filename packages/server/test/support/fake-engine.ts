@@ -121,6 +121,15 @@ export class FakeEngine implements EngineAdapter {
     return ctx;
   }
 
+  /** The context of the nth engine call (0-based), or throw if it never arrived. */
+  callAt(index: number): EngineRunContext {
+    const ctx = this.calls[index];
+    if (!ctx) {
+      throw new Error(`FakeEngine: no call at index ${index}; saw ${this.calls.length}`);
+    }
+    return ctx;
+  }
+
   /** EngineAdapter surface — the orchestrator calls this per engine-backed stage. */
   run(ctx: EngineRunContext): Promise<EngineRunResult> {
     this.calls.push(ctx);
@@ -155,6 +164,9 @@ export class FakeEngine implements EngineAdapter {
   private verifyCall({ anticipation }: Scripted, index: number): void {
     const ctx = this.calls[index];
     const who = anticipation.as ?? `call #${index + 1}`;
+    if (ctx === undefined) {
+      throw new Error(`${who}: no engine call was recorded at index ${index}`);
+    }
     const check = (
       field: string,
       actual: string | undefined,

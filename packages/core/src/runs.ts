@@ -17,7 +17,6 @@ export type RunStatus =
   | "failed"
   | "cancelled";
 
-/** Run statuses that mean the run will never progress again. */
 export const TERMINAL_RUN_STATUSES: RunStatus[] = [
   "completed",
   "failed",
@@ -36,18 +35,12 @@ export interface StageLogEntry {
   message: string;
 }
 
-/** Outcome a verification box reports for itself, independent of exit code. */
 export type StageVerdict = "PASS" | "FAIL";
 
 export interface StageState {
   id: string;
   label: string;
-  /** Persona this stage ran as, copied from the stage definition. */
   skill?: string;
-  /**
-   * Verdict the stage declared in its own report, when its persona has a
-   * verdict contract. Absent for stages that do not declare one.
-   */
   verdict?: StageVerdict;
   status: StageStatus;
   logs: StageLogEntry[];
@@ -66,11 +59,6 @@ export interface RunState {
   engine?: EngineId;
   model?: string;
   result?: string;
-  /**
-   * Final output of each engine-backed stage, keyed by stage id. `result` only
-   * holds the last one; this keeps every box's output so a later box can be
-   * handed what the earlier ones produced.
-   */
   stageOutputs?: Record<string, string>;
   workspacePath?: string;
   stages: StageState[];
@@ -126,8 +114,8 @@ export function createInitialRunState(
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",
-    task,
-    disabledStages,
+    ...(task !== undefined ? { task } : {}),
+    ...(disabledStages !== undefined ? { disabledStages } : {}),
     stageOutputs: {},
     createdAt: new Date().toISOString(),
     stages: flattenPipelineStages(pipeline).map((stage) => ({

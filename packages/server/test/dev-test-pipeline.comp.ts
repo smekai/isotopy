@@ -78,8 +78,8 @@ test("both boxes run in order, in one shared workspace, each with its own person
   expect(stageOf(finished, "test").status).toBe("passed");
   engine.verify();
   // One workspace for the run, so the Tester sees what the Developer wrote.
-  expect(engine.calls[1].cwd).toBe(engine.calls[0].cwd);
-  expect(finished.workspacePath).toBe(engine.calls[0].cwd);
+  expect(engine.callAt(1).cwd).toBe(engine.callAt(0).cwd);
+  expect(finished.workspacePath).toBe(engine.callAt(0).cwd);
 });
 
 test("the Tester's prompt quotes the Developer's report under a handoff heading", async () => {
@@ -99,13 +99,13 @@ test("the Tester's prompt quotes the Developer's report under a handoff heading"
 
   // Assert
   await waitForRunStatus(app, run.id, "completed");
-  const testerPrompt = engine.calls[1].prompt;
+  const testerPrompt = engine.callAt(1).prompt;
   expect(testerPrompt).toContain("## Task");
   expect(testerPrompt).toContain("## Handoff from previous steps");
   expect(testerPrompt).toContain("### Developer");
   expect(testerPrompt).toContain(DEV_REPORT);
   // The Developer runs first and has nothing upstream, so it gets the bare task.
-  expect(engine.calls[0].prompt).toBe(TASK);
+  expect(engine.callAt(0).prompt).toBe(TASK);
 });
 
 test("each box's output is stored per stage and written as its own handoff.md", async () => {
@@ -227,7 +227,7 @@ test("aborting a run signals the engine it is running", async () => {
   expect(status).toBe(200);
   const cancelled = await waitForRunStatus(app, run.id, "cancelled");
   expect(stageOf(cancelled, "test").status).toBe("skipped");
-  expect(engine.calls[0].signal.aborted).toBe(true);
+  expect(engine.callAt(0).signal.aborted).toBe(true);
   engine.verify();
 });
 

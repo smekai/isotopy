@@ -5,27 +5,23 @@ import type { DirectoryListing } from "../api";
 import type { Dir } from "../theme";
 import { MONO, SANS } from "../theme";
 
-/**
- * Modal for choosing the directory a run works in, so the path never has to be
- * typed from memory. Lists directories only — it is a picker, not a file browser.
- */
-export function FolderPicker({
-  d,
-  initialPath,
-  onSelect,
-  onClose,
-}: {
+export interface FolderPickerProps {
   d: Dir;
-  /** Directory to open at; falls back to the roots. */
-  initialPath?: string;
+  initialPath?: string | undefined;
   onSelect: (path: string) => void;
   onClose: () => void;
-}) {
+}
+
+interface ListTarget {
+  path?: string | undefined;
+  entry?: string | undefined;
+}
+
+export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPickerProps) {
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  /** Where to list next: a base path plus an optional child to descend into. */
-  const [target, setTarget] = useState<{ path?: string; entry?: string }>({ path: initialPath });
+  const [target, setTarget] = useState<ListTarget>({ path: initialPath });
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +63,6 @@ export function FolderPicker({
   const currentPath = listing?.path ?? "";
 
   function open(entry: string) {
-    // Root entries are already absolute paths; children are joined server-side.
     setTarget(atRoots ? { path: entry } : { path: currentPath, entry });
   }
 

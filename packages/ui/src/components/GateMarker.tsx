@@ -1,14 +1,16 @@
 import type { Dir } from "../theme";
 import { GOLD, GOLD_SOFT, MONO, SANS } from "../theme";
 
-export function GateMarker({
-  index, awaiting, onApprove,
-}: {
-  index: number; d: Dir; awaiting: boolean; onApprove?: () => void;
-}) {
+export interface GateMarkerProps {
+  index: number;
+  d: Dir;
+  awaiting: boolean;
+  onApprove?: (() => void) | undefined;
+}
+
+export function GateMarker({ index, awaiting, onApprove }: GateMarkerProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 52, flexShrink: 0 }}>
-      {/* Diamond crystal */}
       <div style={{
         width: 22, height: 22,
         background: awaiting ? GOLD_SOFT : "rgba(0,0,0,0.03)",
@@ -21,12 +23,10 @@ export function GateMarker({
         flexShrink: 0,
       }} />
 
-      {/* Label */}
       <div style={{ color: awaiting ? GOLD : "#C0C0D8", fontFamily: MONO, fontSize: 9, letterSpacing: "0.1em", fontWeight: 600 }}>
         G{index}
       </div>
 
-      {/* Approve button */}
       {awaiting && onApprove && (
         <button
           onClick={onApprove}

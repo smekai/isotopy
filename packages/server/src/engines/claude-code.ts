@@ -24,7 +24,6 @@ interface ResolvedBinary {
 
 let cachedBinary: ResolvedBinary | undefined;
 
-/** Last resort: the native binary bundled with the Claude Code IDE extension. */
 function findIdeExtensionBinary(): string | undefined {
   const binaryName = process.platform === "win32" ? "claude.exe" : "claude";
   for (const ide of [".vscode", ".cursor"]) {
@@ -70,9 +69,7 @@ function resolveClaudeBinary(): ResolvedBinary {
       cachedBinary = { path: first, source: "path" };
       return cachedBinary;
     }
-  } catch {
-    // not on PATH — try the IDE extension bundle below
-  }
+  } catch {}
   const fromIde = findIdeExtensionBinary();
   if (fromIde) {
     cachedBinary = { path: fromIde, source: "ide-extension" };
@@ -82,7 +79,6 @@ function resolveClaudeBinary(): ResolvedBinary {
 }
 
 async function claudeVersion(binary: string): Promise<string> {
-  // probeCommand owns the Windows shim handling, timeout, and process-tree kill.
   const result = await probeCommand(binary, ["--version"]);
   if (!result.success) {
     throw new Error(result.errorMessage ?? "claude --version failed");
@@ -90,7 +86,6 @@ async function claudeVersion(binary: string): Promise<string> {
   return firstLine(result.stdout) ?? "";
 }
 
-/** Known CLI failure signatures mapped to actionable guidance. */
 const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /usage credits required|switch to standard context/i,
@@ -122,15 +117,10 @@ function mapKnownError(raw: string): string | undefined {
   return ERROR_HINTS.find((hint) => hint.pattern.test(raw))?.message;
 }
 
-/**
- * Environment for the spawned CLI. Anthropic credentials are stripped so a
- * stray key in the server env can't silently switch billing away from the
- * user's CLI login (subscription mode); api-key mode injects the stored key.
- */
 function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
-  delete env.ANTHROPIC_AUTH_TOKEN; // setting both makes the CLI reject requests
+  delete env.ANTHROPIC_AUTH_TOKEN;
   if (connection?.mode === "api-key" && connection.apiKey) {
     env.ANTHROPIC_API_KEY = connection.apiKey;
   }
@@ -164,10 +154,6 @@ interface ClaudeStreamEvent {
   };
 }
 
-/**
- * Render one Claude stream-json event to the run log. Returns the event when
- * it's the final `result` event so the caller can capture cost/turns/result.
- */
 function handleClaudeEvent(
   event: ClaudeStreamEvent,
   onLog: EngineRunContext["onLog"],
@@ -209,7 +195,7 @@ export const claudeCodeAdapter: EngineAdapter = {
   id: "claude-code",
 
   async detect(): Promise<EngineStatus> {
-    cachedBinary = undefined; // re-check must pick up a newly installed CLI
+    cachedBinary = undefined;
     let resolved: ResolvedBinary;
     try {
       resolved = resolveClaudeBinary();
@@ -248,9 +234,6 @@ export const claudeCodeAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
-    // A .cmd shim runs through cmd.exe, which ends a command at a line break —
-    // a multi-line persona cannot survive as a flag there. Fall back to the
-    // same prompt-folding the flagless harnesses use, so it travels via stdin.
     const personaViaFlag =
       ctx.appendSystemPrompt !== undefined && !commandNeedsWindowsShell(binary);
     const runCtx = personaViaFlag ? ctx : withPersonaPrompt(ctx);
@@ -260,12 +243,8 @@ export const claudeCodeAdapter: EngineAdapter = {
       "--output-format",
       "stream-json",
       "--verbose",
-      // Bare mode reads auth strictly from ANTHROPIC_API_KEY — without it a
-      // logged-in CLI silently ignores the injected key and bills the plan.
       ...(ctx.connection?.mode === "api-key" ? ["--bare"] : []),
       ...(ctx.model ? ["--model", ctx.model] : []),
-      // Native system-prompt channel — the stage persona stays in the system
-      // role rather than being folded into the user turn.
       ...(personaViaFlag && ctx.appendSystemPrompt
         ? ["--append-system-prompt", ctx.appendSystemPrompt]
         : []),
@@ -274,8 +253,6 @@ export const claudeCodeAdapter: EngineAdapter = {
         : ["--dangerously-skip-permissions"]),
     ];
 
-    // The generic harness owns the process lifecycle (spawn, timeout, abort,
-    // process-tree kill); we parse Claude's stream-json output off each line.
     let finalEvent: ClaudeStreamEvent | undefined;
     const result = await runSubprocess({
       command: binary,
@@ -298,9 +275,7 @@ export const claudeCodeAdapter: EngineAdapter = {
           if (captured) {
             finalEvent = captured;
           }
-        } catch {
-          // non-JSON output line — ignore
-        }
+        } catch {}
       },
     });
 
@@ -312,20 +287,16 @@ export const claudeCodeAdapter: EngineAdapter = {
       } else if (result.aborted) {
         errorMessage = "Aborted";
       } else if (result.exitCode === null && !finalEvent) {
-        // The CLI never started (bad binary, etc.) — surface the spawn reason.
         errorMessage = result.errorMessage ?? "Failed to start Claude Code";
         ctx.onLog("fail", errorMessage);
       } else {
         const stderr = result.stderrTail.join(" ").trim();
-        // An error result can arrive as a non-success subtype or as is_error on
-        // a "success" result event — take the text either way.
         const raw =
           finalEvent && (finalEvent.subtype !== "success" || finalEvent.is_error)
             ? (finalEvent.result ?? `Claude Code ended with ${finalEvent.subtype}`)
             : `Claude Code exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
-          // Keep the raw error visible in the log; surface the guidance.
           ctx.onLog("warn", truncate(raw));
           errorMessage = mapped;
         } else {

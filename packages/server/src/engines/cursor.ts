@@ -15,11 +15,8 @@ import type {
   EngineRunResult,
 } from "./types.js";
 
-/** Newer installs name the binary `agent`; older ones `cursor-agent`. The
- * unambiguous name goes first — a bare `agent` on PATH could be anything. */
 const PATH_CANDIDATES = ["cursor-agent", "agent"];
 
-/** Official one-liner; also what the Setup "copy install command" button copies. */
 const INSTALL_COMMAND = "irm 'https://cursor.com/install?win32=true' | iex";
 const DOCS_URL = "https://cursor.com/docs/cli/installation";
 
@@ -27,11 +24,6 @@ const INSTALL_HINT =
   `Install it (PowerShell: ${INSTALL_COMMAND}), ` +
   "then run `agent login` once. Or set ADHD_CURSOR_PATH to the executable.";
 
-/**
- * The Cursor *IDE* is a different tool from the headless Agent CLI — users who
- * have the editor installed are surprised by "not found". Detect the IDE so the
- * message can say so explicitly.
- */
 function isCursorIdeInstalled(): boolean {
   if (existsSync(path.join("C:", "Program Files", "cursor"))) {
     return true;
@@ -43,7 +35,6 @@ function isCursorIdeInstalled(): boolean {
   return false;
 }
 
-/** Windows arg limit is ~32K; positional prompts near it need the stdin knob. */
 const PROMPT_ARG_WARN_LENGTH = 30_000;
 
 interface ResolvedBinary {
@@ -53,19 +44,16 @@ interface ResolvedBinary {
 
 let cachedBinary: ResolvedBinary | undefined;
 
-/** Directories the installer drops the binary into — checked directly so a
- * fresh install is found even when the running server's PATH predates it. */
 function installDirs(): string[] {
   const dirs = [path.join(os.homedir(), ".local", "bin")];
   const localApp = process.env.LOCALAPPDATA;
   if (localApp) {
-    dirs.push(path.join(localApp, "cursor-agent")); // Windows installer target
+    dirs.push(path.join(localApp, "cursor-agent"));
   }
   return dirs;
 }
 
 function findInstallDirBinary(): string | undefined {
-  // The Windows install ships .cmd shims (no bare .exe); prefer them.
   const extensions = process.platform === "win32" ? [".cmd", ".exe", ""] : [""];
   for (const dir of installDirs()) {
     for (const name of PATH_CANDIDATES) {
@@ -103,7 +91,7 @@ function resolveCursorBinary(): ResolvedBinary {
         return cachedBinary;
       }
     } catch {
-      // not on PATH — try the next candidate
+      continue;
     }
   }
   const fromInstallDir = findInstallDirBinary();
@@ -118,7 +106,6 @@ function resolveCursorBinary(): ResolvedBinary {
   );
 }
 
-/** Known CLI failure signatures mapped to actionable guidance. */
 const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /not (?:logged|signed) in|login required|please (?:run|use).*login|authentication required|unauthorized/i,
@@ -152,11 +139,6 @@ function mapKnownError(raw: string): string | undefined {
   return ERROR_HINTS.find((hint) => hint.pattern.test(raw))?.message;
 }
 
-/**
- * Environment for the spawned CLI. The Cursor key is stripped so a stray
- * CURSOR_API_KEY in the server env can't silently switch billing away from
- * the user's CLI login (subscription mode); api-key mode injects the stored key.
- */
 function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.CURSOR_API_KEY;
@@ -166,22 +148,12 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
   return env;
 }
 
-/**
- * Experimentation knobs (the Cursor CLI's headless behavior on Windows is
- * still being mapped out — these let the user try variants without code edits):
- * - ADHD_CURSOR_TRUST=0   drop --trust (on by default: fresh scratch
- *   workspaces would otherwise hit the workspace-trust prompt and hang).
- * - ADHD_CURSOR_ARGS      extra args appended verbatim (whitespace-split).
- * - ADHD_CURSOR_PROMPT_VIA=stdin   pipe the prompt instead of a positional arg.
- */
 function buildArgs(ctx: EngineRunContext, promptViaArg: boolean): string[] {
   const extra = (process.env.ADHD_CURSOR_ARGS ?? "").split(/\s+/).filter(Boolean);
   return [
     "-p",
     "--output-format",
     "stream-json",
-    // Headless runs must not stop for confirmation; Cursor has no
-    // accept-edits-only equivalent, so both permission modes use --force.
     "--force",
     ...(process.env.ADHD_CURSOR_TRUST === "0" ? [] : ["--trust"]),
     ...(ctx.model ? ["--model", ctx.model] : []),
@@ -206,7 +178,6 @@ interface CursorStreamEvent {
   tool_call?: Record<string, unknown>;
 }
 
-/** The tool_call payload is tool-specific and loosely documented — probe common arg names. */
 function toolCallSummary(toolCall: Record<string, unknown>): string {
   const name = Object.keys(toolCall)[0] ?? "tool";
   const inner = toolCall[name];
@@ -219,10 +190,6 @@ function toolCallSummary(toolCall: Record<string, unknown>): string {
   return truncate(`▶ ${name} ${String(detail)}`);
 }
 
-/**
- * Render one Cursor stream-json event to the run log. Returns the event when
- * it's the final `result` event so the caller can capture result/duration.
- */
 function handleCursorEvent(
   event: CursorStreamEvent,
   onLog: EngineRunContext["onLog"],
@@ -248,7 +215,6 @@ function handleCursorEvent(
     onLog("info", `done in ${secs}`);
     return event;
   }
-  // "user" echo, tool_call completions, unknown types — ignore
   return undefined;
 }
 
@@ -256,12 +222,6 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * Parse `agent models` output. It prints an "Available models" banner followed
- * by one `<id> - <Label>` line per model, the active one tagged
- * "(current, default)". Unrecognised lines are skipped so a banner or footer
- * change doesn't poison the roster.
- */
 function parseCursorModels(stdout: string): EngineModelOption[] {
   const options: EngineModelOption[] = [];
   for (const line of stdout.split(/\r?\n/)) {
@@ -270,12 +230,13 @@ function parseCursorModels(stdout: string): EngineModelOption[] {
       continue;
     }
     const [, id, label] = match;
+    if (id === undefined || label === undefined) {
+      continue;
+    }
     const current = /\(current[^)]*\)/i.test(label);
     const clean = label.replace(/\s*\(current[^)]*\)\s*/i, "").trim() || id;
     options.push({
       id,
-      // Cursor's own `auto` router model is a different thing from our Auto
-      // (which sends no --model at all) — don't let both read "Auto".
       label: id === "auto" ? `Cursor ${clean}` : clean,
       hint: current ? "the CLI's current default" : "",
     });
@@ -286,7 +247,6 @@ function parseCursorModels(stdout: string): EngineModelOption[] {
 export const cursorAdapter: EngineAdapter = {
   id: "cursor",
 
-  /** Cursor's CLI can enumerate its own roster, so ask it rather than guessing. */
   async listModels(): Promise<EngineModelList> {
     let binary: string;
     try {
@@ -307,13 +267,11 @@ export const cursorAdapter: EngineAdapter = {
         note: "`agent models` returned nothing usable — showing the built-in list.",
       };
     }
-    // Our Auto (no --model at all) is distinct from Cursor's own `auto` router
-    // model, so it is prepended rather than assumed to be in the CLI output.
     return { options: [AUTO_MODEL_OPTION, ...parsed], source: "cli" };
   },
 
   async detect(): Promise<EngineStatus> {
-    cachedBinary = undefined; // re-check must pick up a newly installed CLI
+    cachedBinary = undefined;
     let resolved: ResolvedBinary;
     try {
       resolved = resolveCursorBinary();
@@ -342,8 +300,6 @@ export const cursorAdapter: EngineAdapter = {
         docsUrl: DOCS_URL,
       };
     }
-    // Best-effort auth probe — surfaces login state in the status card.
-    // `status` exits 0 either way, so the answer is in the text.
     const auth = await probeCommand(resolved.path, ["status"]);
     const authText = firstLine(auth.stdout) ?? firstLine(auth.stderrTail.join("\n"));
     const loggedIn = authText ? !/not logged in|logged out|no.*auth/i.test(authText) : undefined;
@@ -365,9 +321,6 @@ export const cursorAdapter: EngineAdapter = {
         message: `Auto-install is Windows-only — install manually: ${INSTALL_COMMAND} (see ${DOCS_URL}).`,
       };
     }
-    // Runs the official installer, which on Windows drops the binary into
-    // %LOCALAPPDATA%\cursor-agent — a location resolveCursorBinary() scans, so
-    // a Re-check finds it without a server restart.
     const result = await runSubprocess({
       command: "powershell.exe",
       args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", INSTALL_COMMAND],
@@ -375,7 +328,7 @@ export const cursorAdapter: EngineAdapter = {
       timeoutMs: 180_000,
     });
     if (result.success) {
-      cachedBinary = undefined; // force the next detect()/run to re-resolve
+      cachedBinary = undefined;
       return { ok: true, output: firstLine(result.stdout), message: "Cursor CLI installed. Run `agent login` next." };
     }
     const reason = result.timedOut
@@ -391,9 +344,6 @@ export const cursorAdapter: EngineAdapter = {
     } catch (error) {
       return { ok: false, message: errorText(error) };
     }
-    // `agent login` opens the browser on this machine and blocks until the
-    // OAuth flow completes, then persists the token. The generous timeout is
-    // the window for the user to finish in the browser.
     const result = await runSubprocess({
       command: binary,
       args: ["login"],
@@ -419,7 +369,6 @@ export const cursorAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
-    // No system-prompt flag on the Cursor CLI — the persona rides in the prompt.
     const runCtx = withPersonaPrompt(ctx);
 
     const promptViaArg = process.env.ADHD_CURSOR_PROMPT_VIA !== "stdin";
@@ -453,7 +402,7 @@ export const cursorAdapter: EngineAdapter = {
             finalEvent = captured;
           }
         } catch {
-          // non-JSON output line — ignore
+          return;
         }
       },
     });
@@ -466,7 +415,6 @@ export const cursorAdapter: EngineAdapter = {
       } else if (result.aborted) {
         errorMessage = "Aborted";
       } else if (result.exitCode === null && !finalEvent) {
-        // The CLI never started (bad binary, etc.) — surface the spawn reason.
         errorMessage = result.errorMessage ?? "Failed to start Cursor CLI";
         ctx.onLog("fail", errorMessage);
       } else {
@@ -477,7 +425,6 @@ export const cursorAdapter: EngineAdapter = {
             : `Cursor exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
-          // Keep the raw error visible in the log; surface the guidance.
           ctx.onLog("warn", truncate(raw));
           errorMessage = mapped;
         } else {
@@ -491,7 +438,6 @@ export const cursorAdapter: EngineAdapter = {
       result: finalEvent?.result,
       exitCode: result.exitCode,
       errorMessage,
-      // Cursor's result event carries no cost/turn fields — leave those undefined.
       durationMs: finalEvent?.duration_ms ?? result.durationMs,
     };
   },

@@ -2,6 +2,14 @@
 
 How code in this repo is organized, linted, and configured. Introduced by TASK-032.
 
+> **Descriptive, not prescriptive.** This file records the layout that *exists*.
+> For the rules any new or refactored code *must* follow, see
+> [`architect-standards.md`](./architect-standards.md) (the Architect standard);
+> [`decisions.md`](./decisions.md) for the rationale behind non-obvious choices;
+> and [`implementation-notes.md`](./implementation-notes.md) for the "why" behind
+> non-obvious code, which — per the comments-are-a-smell rule — lives in docs, not
+> in source comments.
+
 ## Linting
 
 - ESLint 10 flat config lives at [`eslint.config.mjs`](../eslint.config.mjs): JS + typescript-eslint recommended rules everywhere, React hooks rules for `packages/ui`.
@@ -34,7 +42,8 @@ Core stays dependency-free and side-effect-free: types, constants, and pure func
 | `src/app.ts` | Composition: wires middleware + route controllers |
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
-| `src/services/` | Domain logic (run orchestrator); no HTTP awareness |
+| `src/services/` | I/O and lifecycle (run orchestrator, persistence, skill loading); no HTTP awareness |
+| `src/domain/` | Server-only **pure** logic: `stage-context.ts` (prompt/handoff/verdict), `skills/defaults.ts` (bundled persona text). No I/O — the thin-service/fat-domain split (A3) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/settings.ts`, `src/paths.ts` | Persistence/filesystem helpers |
 | `src/utils.ts` | Pure, context-free helpers (no I/O, no internal imports) |
@@ -91,5 +100,5 @@ Recommended next steps, in rough priority order:
 3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
 4. **Structured logger** — replace `console.*` (tracked as TASK-022; `LOG_LEVEL` should join `config.ts`).
 5. **Request validation** — zod (or Hono's validator) at route boundaries instead of hand-rolled `body.x !== undefined` checks; the parsed types then flow into services for free.
-6. **Stricter compiler flags** — `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` in `tsconfig.base.json` once the codebase is ready.
+6. ~~**Stricter compiler flags**~~ — done in TASK-052: `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are on in `tsconfig.base.json`, and TypeScript is on 6.0.3. See [`decisions.md`](./decisions.md) for the version pin and the two migration idioms.
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).

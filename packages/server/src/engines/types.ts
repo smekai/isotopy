@@ -6,7 +6,6 @@ import type {
   LogLevel,
 } from "@adhd/core";
 
-/** How the engine authenticates/bills — resolved from server settings per run. */
 export interface EngineConnection {
   mode: string;
   apiKey?: string;
@@ -15,58 +14,37 @@ export interface EngineConnection {
 export interface EngineRunContext {
   runId: string;
   prompt: string;
-  /** Working directory the engine operates in (scratch workspace or user dir). */
   cwd: string;
-  model?: string;
-  /**
-   * Persona for this stage (the resolved skill text). Harnesses with a native
-   * system-prompt channel pass it there; the rest fold it into the prompt via
-   * `withPersonaPrompt`. Undefined for stages that run without a persona.
-   */
-  appendSystemPrompt?: string;
+  model?: string | undefined;
+  appendSystemPrompt?: string | undefined;
   permissionMode: EnginePermissionMode;
-  connection?: EngineConnection;
+  connection?: EngineConnection | undefined;
   timeoutMs: number;
-  /** Aborting the signal must terminate the engine process tree. */
   signal: AbortSignal;
-  /** Streams progress into the run's stage log. */
   onLog: (level: LogLevel, message: string) => void;
 }
 
 export interface EngineRunResult {
   success: boolean;
-  /** Final assistant result text, when the engine produced one. */
-  result?: string;
+  result?: string | undefined;
   exitCode: number | null;
-  errorMessage?: string;
-  costUsd?: number;
-  durationMs?: number;
-  numTurns?: number;
+  errorMessage?: string | undefined;
+  costUsd?: number | undefined;
+  durationMs?: number | undefined;
+  numTurns?: number | undefined;
 }
 
-/** Outcome of a one-click CLI action (install, login) triggered from Setup. */
 export interface EngineActionResult {
   ok: boolean;
-  /** Tail of command output, for the run/status log. */
-  output?: string;
-  /** Human-readable summary or failure reason. */
-  message?: string;
+  output?: string | undefined;
+  message?: string | undefined;
 }
 
 export interface EngineAdapter {
   id: EngineId;
   run(ctx: EngineRunContext): Promise<EngineRunResult>;
-  /** Reports whether the engine's CLI is installed and usable. */
   detect?(): Promise<EngineStatus>;
-  /**
-   * Model roster for the Setup picker, resolved from the CLI or its config
-   * rather than our static snapshot. Optional: engines whose CLI can't report
-   * one fall back to `modelOptionsFor()`. Must not throw — degrade to the
-   * static list with a `note` instead.
-   */
   listModels?(): Promise<EngineModelList>;
-  /** Installs the engine's CLI (best-effort, platform-specific). */
   install?(): Promise<EngineActionResult>;
-  /** Authenticates the CLI — opens the provider's login flow, blocks until done. */
   login?(): Promise<EngineActionResult>;
 }

@@ -9,12 +9,10 @@ import { createRunRoutes } from "./routes/runs.js";
 import { settingsRoutes } from "./routes/settings.js";
 import type { RunOrchestrator } from "./services/run-orchestrator.js";
 
-/** Services the HTTP layer is built on. Passed in so tests can substitute them. */
 export interface AppDependencies {
   orchestrator: RunOrchestrator;
 }
 
-/** Wires middleware and route controllers into the HTTP app. */
 export function createApp({ orchestrator }: AppDependencies): Hono {
   const app = new Hono();
 

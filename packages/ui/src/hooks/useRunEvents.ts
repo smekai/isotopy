@@ -9,7 +9,7 @@ function applyEvent(run: RunState, event: RunEvent): RunState {
 
   if (event.type === "run.started") {
     next.status = "running";
-    next.completedAt = undefined;
+    delete next.completedAt;
   }
 
   if (event.type === "run.completed") {
@@ -35,7 +35,7 @@ function applyEvent(run: RunState, event: RunEvent): RunState {
   if (event.type === "stage.started") {
     stage.status = "running";
     stage.startedAt = event.ts;
-    stage.completedAt = undefined;
+    delete stage.completedAt;
   }
 
   if (event.type === "stage.log" && event.message) {
@@ -100,8 +100,6 @@ export function useRunEvents(runId: string | null, resubscribeKey = 0) {
       unsubscribe = undefined;
     };
 
-    // Subscribe before the initial fetch so no events are lost; buffer until
-    // the initial state arrives (the log dedupe in applyEvent absorbs overlap).
     unsubscribe = subscribeRunEvents(runId, (event) => {
       if (cancelled) {
         return;
@@ -112,7 +110,6 @@ export function useRunEvents(runId: string | null, resubscribeKey = 0) {
       }
       setRun((current) => (current ? applyEvent(current, event) : current));
       if (event.type === "run.completed") {
-        // Stop before the server closes the stream, or EventSource reconnects forever.
         stop();
       }
     });

@@ -16,7 +16,7 @@ function postJson<T>(path: string, body?: unknown): Promise<T> {
   return requestJson<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -26,7 +26,6 @@ export function fetchSettings(): Promise<SettingsView> {
 
 export interface EngineConnectionUpdate {
   connectionMode?: string;
-  /** A string sets the key, `null` clears it. */
   apiKey?: string | null;
 }
 
@@ -45,7 +44,6 @@ export function fetchEngineStatus(engineId: string): Promise<EngineStatus> {
   return requestJson<EngineStatus>(`/engines/${engineId}/status`);
 }
 
-/** Model roster resolved server-side (from the CLI where possible, else static). */
 export function fetchEngineModels(engineId: string): Promise<EngineModelList> {
   return requestJson<EngineModelList>(`/engines/${engineId}/models`);
 }
@@ -88,19 +86,12 @@ export function startRun(options: StartRunOptions = {}): Promise<RunState> {
 }
 
 export interface DirectoryListing {
-  /** Absolute path listed; empty when showing the roots. */
   path: string;
   parent: string | null;
-  /** Subdirectory names, not full paths. */
   entries: string[];
   isRootList: boolean;
 }
 
-/**
- * Browse directories for the project-location picker. Omit `path` for the
- * roots; pass `entry` to descend into a child — the server joins it, so the
- * client never builds a platform-specific path.
- */
 export function fetchDirectories(path?: string, entry?: string): Promise<DirectoryListing> {
   const params = new URLSearchParams();
   if (path) {
@@ -114,7 +105,6 @@ export function fetchDirectories(path?: string, entry?: string): Promise<Directo
 }
 
 export interface WorkspaceFile {
-  /** POSIX-style path relative to the run's workspace. */
   path: string;
   size: number;
 }
@@ -123,11 +113,9 @@ export interface WorkspaceFileContent {
   path: string;
   size: number;
   content: string;
-  /** The file was too large to preview; `content` is empty. */
   truncated: boolean;
 }
 
-/** Files the run actually produced, from its shared workspace. */
 export function fetchRunFiles(runId: string): Promise<{ files: WorkspaceFile[] }> {
   return requestJson<{ files: WorkspaceFile[] }>(`/runs/${runId}/files`);
 }
@@ -166,9 +154,7 @@ export function subscribeRunEvents(
       }
       try {
         onEvent(JSON.parse(message.data) as RunEvent);
-      } catch {
-        // ignore malformed events
-      }
+      } catch {}
     });
   }
 

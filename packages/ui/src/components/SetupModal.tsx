@@ -44,29 +44,30 @@ const PERMISSION_MODES: { id: EnginePermissionMode; label: string; desc: string 
   { id: "acceptEdits", label: "Accept edits only", desc: "File edits auto-approved; shell commands may stall the run." },
 ];
 
-/** Where the shown roster came from — the picker says so, since a stale list is what breaks runs. */
 const MODEL_SOURCE_LABEL: Record<EngineModelList["source"], string> = {
   cli: "from the CLI",
   config: "from the CLI's config",
   static: "built-in list",
 };
 
-/** Model list before the server answers — keeps the picker from flashing empty. */
 function seedModelList(engineId: EngineId): EngineModelList {
   return { options: modelOptionsFor(engineId), source: "static" };
 }
 
-/** Engines with a one-click `install()` — drives the Setup install button + hint. */
 const INSTALLERS: Partial<Record<EngineId, { label: string; loginCmd: string; envVar: string }>> = {
   cursor: { label: "Install Cursor CLI", loginCmd: "agent login", envVar: "ADHD_CURSOR_PATH" },
   codex: { label: "Install Codex CLI", loginCmd: "codex login", envVar: "ADHD_CODEX_PATH" },
 };
 
-export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
+export interface SetupModalProps {
+  d: Dir;
+  onClose: () => void;
+}
+
+export function SetupModal({ d, onClose }: SetupModalProps) {
   const { dirId, setDirId } = useTheme();
   const [sec, setSec] = useState("harness");
   const [disabledStages, setDisabledStages] = useState<string[]>(loadDisabledStages);
-  // Deploy target is a display-only mock for now.
   const [harness, setHarness] = useState<EngineId>(loadEngine);
   const [model, setModel] = useState(() => loadEngineModel(loadEngine()));
   const [modelList, setModelList] = useState<EngineModelList>(() => seedModelList(loadEngine()));
@@ -120,8 +121,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
     };
   }, [sec, harness, statusNonce]);
 
-  // Roster is resolved server-side (the CLI can't be asked from the browser) and
-  // re-fetched after an install/login, since that's when it can start answering.
   useEffect(() => {
     if (sec !== "harness") {
       return;
@@ -133,7 +132,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
         if (!stale && list.options.length > 0) setModelList(list);
       })
       .catch(() => {
-        // keep the seeded static list — the picker must never be empty
       });
     return () => {
       stale = true;
@@ -184,7 +182,7 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
     try {
       const result = await installEngine(harness);
       if (result.ok) {
-        setStatusNonce((n) => n + 1); // re-check picks up the freshly installed CLI
+        setStatusNonce((n) => n + 1);
       } else {
         setInstallError(result.message ?? "Install failed");
       }
@@ -204,7 +202,7 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
     try {
       const result = await loginEngine(harness);
       if (result.ok) {
-        setStatusNonce((n) => n + 1); // re-check reflects the new auth state
+        setStatusNonce((n) => n + 1);
       } else {
         setLoginError(result.message ?? "Login failed");
       }
@@ -224,7 +222,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard blocked — the command is still visible in the message
     }
   }
 
@@ -246,7 +243,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         style={{ background: "#FFF", borderRadius: 20, width: 700, maxHeight: "82vh", display: "flex", overflow: "hidden", boxShadow: d.shadowLg }}
       >
-        {/* Sidebar */}
         <div style={{ width: 160, background: d.surface2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${d.border}` }}>
             <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 800 }}>Setup</div>
@@ -273,7 +269,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
           {sec === "appearance" && (
             <div>
@@ -375,7 +370,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                         if (opt.available) {
                           setHarness(opt.id);
                           saveEngine(opt.id);
-                          // Each engine keeps its own model choice — swap to it.
                           setModel(loadEngineModel(opt.id));
                         }
                       }}
@@ -555,8 +549,6 @@ export function SetupModal({ d, onClose }: { d: Dir; onClose: () => void }) {
                 </button>
               </div>
               {customModel && (
-                // Rosters go stale between releases — this is the escape hatch so a
-                // model we don't list yet never blocks a run.
                 <input value={model}
                   onChange={(e) => {
                     setModel(e.target.value);

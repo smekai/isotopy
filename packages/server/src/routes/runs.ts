@@ -8,10 +8,6 @@ import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-fil
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;
 
-/**
- * Run controller. Takes its orchestrator rather than importing a singleton, so
- * a test can mount these routes against a throwaway instance.
- */
 export function createRunRoutes(orchestrator: RunOrchestrator): Hono {
   return new Hono()
     .get("/", (c) => c.json(orchestrator.listRuns()))
@@ -144,7 +140,6 @@ export function createRunRoutes(orchestrator: RunOrchestrator): Hono {
         return c.json(await readWorkspaceFile(run.workspacePath, filePath));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to read file";
-        // Traversal attempts are rejected, not reported as missing files.
         const status = /escapes the workspace|must be relative/.test(message) ? 400 : 404;
         return c.json({ error: message }, status);
       }

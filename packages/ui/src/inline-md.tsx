@@ -1,10 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { MONO } from "./theme";
 
-// One alternative per inline style, tried left-to-right at each position, so
-// `**` outranks `*` and a `code` span consumes any markers inside it. The
-// underscore form requires non-word neighbours so snake_case_names in paths
-// and tool summaries don't turn italic (real markdown skips those too).
 const INLINE_TOKEN =
   /\*\*(.+?)\*\*|~~(.+?)~~|`([^`\n]+?)`|\*([^*\n]+?)\*|(?<!\w)_([^_\n]+?)_(?!\w)/g;
 
@@ -16,14 +12,6 @@ const codeStyle: CSSProperties = {
   padding: "1px 4px",
 };
 
-/**
- * Render the basic inline markdown styles — `**bold**`, `*italic*`/`_italic_`,
- * `~~strikethrough~~`, `` `code` `` — as React nodes. Text goes through
- * React's normal escaping (no HTML injection is possible), and unmatched
- * markers pass through as literal characters. Bold/strikethrough content is
- * rendered recursively so `**bold with `code`**` still styles the inner span;
- * nesting can't loop because a lazy match never contains its own delimiter.
- */
 export function renderInlineMarkdown(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let last = 0;

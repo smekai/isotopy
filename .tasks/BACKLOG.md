@@ -1,5 +1,19 @@
 # Backlog
 
+## TASK-063: Extract SetupModal inline styles to named constants (Architect rule A6)
+**Priority:** P3 | **Tags:** ui
+**Updated:** 2026-07-22 12:40
+
+Follow-up from TASK-052. The Architect standard (rule **A6**, `docs/architect-standards.md`) bans large inline `style={{…}}` blocks; `StageFocusPanel.tsx` was cleaned as the reference case, but [`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) still carries ~108 inline style objects. Lift them into named module-level constants (static) and small named builder functions (theme-/state-dependent), matching the `StageFocusPanel.tsx` pattern.
+
+Deliberately deferred from TASK-052 (see `docs/decisions.md`, 2026-07-22): the extraction is a large, visually risky diff with no unit coverage, and folding it into the standards task would have buried the standard under churn.
+
+**Verify:** `pnpm lint && pnpm typecheck && pnpm build` green; `pnpm --filter @adhd/ui e2e` still passes (the Setup → AI Harness smoke tests exercise this modal); no visual regression when opening Setup.
+
+**Cross-platform:** n/a — pure UI.
+
+---
+
 ## TASK-061: Limit is over
 **Priority:** P2 | **Tags:** limits, model | **Assignee:** Fedor
 **Updated:** 2026-07-21 11:55
@@ -43,37 +57,6 @@ A full-replacement file stays supported for power users, but the addendum is the
 **Verify:** two projects pointing at different directories; each shows only its own history and artifacts; switching projects switches pipeline/model/permission; a run writes into *its own* project's `.adhd/`, never the ADHD repo; a project addendum visibly changes a persona while the bundled default still supplies the base; API keys are not written anywhere inside a project folder; existing runs still appear after migration.
 
 **Cross-platform:** project roots are user-supplied absolute paths — build and compare them with `path.join`/`path.resolve` and normalise separators before comparing (the `isScratchWorkspace` helper in `run-utils.ts` is the existing pattern). The user-level registry location differs per OS (`%APPDATA%`/`~/.adhd`) — resolve via `os.homedir()`, never a hardcoded path. Project ids must not be derived from raw paths without normalising case on Windows.
-
----
-
-## TASK-052: Architect skill — codify the code standards, then clean the codebase to them
-**Priority:** P1 | **Tags:** core, ui, server, infra
-**Updated:** 2026-07-21 11:27
-
-Produce a **staff-level "Architect" skill** that captures how code in this repo must be written, then use it to clean the existing code. The skill is the deliverable; the cleanup is the proof it works. `docs/code-quality.md` stays the *descriptive* layout reference — the skill is the *prescriptive* one, and must link to it rather than duplicate it.
-
-**The standards to encode** (owner's preferences — these are the rules, not suggestions):
-
-1. **Comments are a smell.** A function that needs a comment to be understood is a badly named / badly factored function — refactor it instead. Exceptions, and only these: genuinely intricate logic (state machines, protocol quirks, platform workarounds), the *why* behind a non-obvious decision, and tests.
-2. **SOLID.** Single responsibility per module/class; depend on interfaces (`EngineAdapter` is the model to follow), not concretions.
-3. **DDD layering.** Pure functions and domain rules live in a **Domain** layer; the **Service** layer stays thin — a top-level narration of *what happens*, delegating the *how*. `packages/core` is already the pure layer; decide whether server-side domain logic moves there or into `packages/server/src/domain/`.
-4. **Long-running work is async/await.** Anything genuinely long-lived belongs in a **workflow**, not an inline `await` chain — `RunOrchestrator.executeStage()` is already the documented seam for a durable executor.
-5. **Classes over loose function bags** where there is state or a lifecycle.
-6. **No big anonymous objects.** Reference case: [StageFocusPanel.tsx:19-31](packages/ui/src/components/StageFocusPanel.tsx#L19-L31) — an inline props type literal; and the inline `style={{...}}` blocks throughout that file. Named types / named style constants instead.
-7. **Lean on TypeScript.** Discriminated unions over stringly-typed state, `satisfies`, `const` type params, branded ids, exhaustive `switch` with `never`. Bump TS to the latest release as part of this task and adopt what it buys us (also revisit the `noUncheckedIndexedAccess` / `exactOptionalPropertyTypes` items already parked in `docs/code-quality.md`).
-8. If we need evidences for made decigions - we are not using comments in a code - we are using MD files, we can use Arhitecture or any other MD files. May be we can add docs folder.
-9. Architecture can be different for BE, FE and Mobile. This have to be addressed.
-
-**Deliverables (both forms — one canonical text, two consumers):**
-- `.claude/skills/architect/SKILL.md` — loaded when writing or refactoring code in this repo.
-- ADHD persona `architect`: bundled default in `packages/server/src/services/skill-defaults.ts` (`.adhd/` is gitignored, so the constant is the shipped source of truth) seeding `.adhd/skills/architect.md`. Follow the `DEVELOPER_SKILL` / `TESTER_SKILL` shape, including a compact handoff/verdict section.
-- **Keep the two in sync deliberately** — decide the mechanism (single source generating both, or a documented "edit both" rule) and write the decision down.
-
-**Cleanup pass** (scope-limited; do not rewrite the world): the props-type and inline-style cleanup in `StageFocusPanel.tsx` and its siblings, the thin-service/pure-domain split in `packages/server/src/services/`, and any comment that is compensating for a bad name. Every change must be traceable to a numbered rule above.
-
-**Verify:** `pnpm lint && pnpm typecheck && pnpm build` green; `pnpm --filter @adhd/ui e2e` still passes; the new persona appears in `DEFAULT_SKILLS` and seeds correctly on a fresh `.adhd/`.
-
-**Cross-platform:** the persona seeding path touches the filesystem — `.adhd/skills/architect.md` must be built with `path.join` via the existing loader in `services/skills.ts` (no new path logic). Any verification command quoted inside either skill text must be given in a shell-neutral form (`pnpm ...`), never as a PowerShell- or bash-only one-liner. Otherwise pure logic/UI. Will be authored on Windows; macOS path untested but unchanged.
 
 ---
 

@@ -21,9 +21,6 @@ export const engineRoutes = new Hono()
     }
     return c.json(await adapter.detect());
   })
-  // Model roster for the Setup picker. Never fails hard: an engine without a
-  // listModels() capability, or one whose probe blows up, falls back to the
-  // static snapshot in core so the picker always has something to render.
   .get("/:engineId/models", async (c) => {
     const engineId = c.req.param("engineId");
     if (!(engineId in ENGINES)) {

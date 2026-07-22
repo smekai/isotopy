@@ -1,5 +1,19 @@
 # Done
 
+## TASK-052: Architect skill — codify the code standards, then clean the codebase to them
+**Priority:** P1 | **Tags:** core, ui, server, infra
+**Updated:** 2026-07-22 12:40
+
+Produced a staff-level **Architect standard** — nine rules (A1–A9), stated transferably with per-tier (BE/FE/Mobile) shapes — and cleaned the codebase to it.
+
+**One source, two consumers.** [`docs/architect-standards.md`](../docs/architect-standards.md) is the canonical text; [`scripts/generate-architect-skill.mjs`](../scripts/generate-architect-skill.mjs) (`pnpm gen:skills`) emits both `.claude/skills/architect/SKILL.md` and `packages/server/src/domain/skills/architect.generated.ts` (`ARCHITECT_SKILL`, added to `DEFAULT_SKILLS`, seeds `.adhd/skills/architect.md` via the existing loader). Drift, rule-id coverage, and seeding are guarded by `architect-skill.spec.ts`. `code-quality.md` stays descriptive and links to the two new prescriptive docs; rationale lives in [`docs/decisions.md`](../docs/decisions.md) (rule A8).
+
+**Cleanup traceable to the rules:** server pure logic moved to `packages/server/src/domain/` (A3); all 12 UI components got named `XProps` types and `StageFocusPanel.tsx` got named style constants/builders (A6); comments compensating for bad names removed (A1). **TypeScript 6.0.3** (7.x crashes the lint gate — see decisions log) with `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` on (A7). SetupModal's ~108 inline styles deferred to TASK-063.
+
+**Verified:** `pnpm lint`, `typecheck`, `build`, `test` (64), and `pnpm --filter @adhd/ui e2e` (14) all green; `pnpm gen:skills` leaves a clean tree.
+
+---
+
 ## TASK-062: Component tests (AAAAA) for the server + testing-layer policy
 **Priority:** P1 | **Tags:** testing, server, infra
 **Updated:** 2026-07-21 19:30

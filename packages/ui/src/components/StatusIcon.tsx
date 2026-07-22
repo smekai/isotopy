@@ -2,7 +2,12 @@ import { CheckCircle2, Circle, Loader2, SkipForward, UserCheck, XCircle } from "
 import type { StageStatus } from "@adhd/core";
 import { statusClr } from "../theme";
 
-export function StatusIcon({ s, size = 13 }: { s: StageStatus; size?: number }) {
+export interface StatusIconProps {
+  s: StageStatus;
+  size?: number;
+}
+
+export function StatusIcon({ s, size = 13 }: StatusIconProps) {
   const c = statusClr(s);
   const style = { color: c.text, width: size, height: size };
   if (s === "passed") return <CheckCircle2 style={style} />;

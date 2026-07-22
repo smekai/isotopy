@@ -19,9 +19,7 @@ function loadString(key: string): string | null {
 function saveString(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
-  } catch {
-    // ignore storage failures
-  }
+  } catch {}
 }
 
 export function loadDisabledStages(): string[] {
@@ -42,9 +40,7 @@ export function loadDisabledStages(): string[] {
 export function saveDisabledStages(stageIds: string[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stageIds));
-  } catch {
-    // ignore storage failures
-  }
+  } catch {}
 }
 
 export function loadEngine(): EngineId {
@@ -59,15 +55,10 @@ export function saveEngine(engine: EngineId): void {
 export function loadEngineModel(engineId: EngineId): string {
   const raw =
     loadString(`adhd.engineModel.${engineId}`) ??
-    // Pre-TASK-037 the model was stored in a single un-namespaced key.
     (engineId === "claude-code" ? loadString("adhd.engineModel") : null);
-  // `""` is a real stored value (AUTO_MODEL_ID — let the CLI decide), so only a
-  // missing key falls back to the default.
   if (raw === null) {
     return defaultModelFor(engineId);
   }
-  // Retired model IDs are rewritten on read so a stale preference can't keep
-  // failing runs — see LEGACY_MODEL_ALIASES for why each one is retired.
   const migrated = LEGACY_MODEL_ALIASES[engineId][raw];
   if (migrated !== undefined) {
     saveString(`adhd.engineModel.${engineId}`, migrated);

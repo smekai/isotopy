@@ -7,9 +7,7 @@ import { GOLD, MONO, SANS, runDot } from "../theme";
 import { VoiceBtn, VoiceStatus } from "./VoiceControls";
 import type { VoiceState } from "./VoiceControls";
 
-export function TeamController({
-  d, run, pipeVs, onCycleVoice, onApprove, onAbort, onRestart, onNewRun,
-}: {
+export interface TeamControllerProps {
   d: Dir;
   run: RunState | null;
   pipeVs: VoiceState;
@@ -18,7 +16,11 @@ export function TeamController({
   onAbort: () => void;
   onRestart: (stageId: string) => void;
   onNewRun: () => void;
-}) {
+}
+
+export function TeamController({
+  d, run, pipeVs, onCycleVoice, onApprove, onAbort, onRestart, onNewRun,
+}: TeamControllerProps) {
   const elapsed = useElapsed(run?.createdAt, run?.completedAt);
   const resumeId = run && (run.status === "failed" || run.status === "cancelled")
     ? resumeStageId(run)
@@ -36,7 +38,6 @@ export function TeamController({
       padding: "0 20px", gap: 16, flexShrink: 0,
       boxShadow: "0 -2px 12px rgba(0,0,0,0.05)",
     }}>
-      {/* Brand */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{
           width: 28, height: 28, borderRadius: 8,
@@ -50,7 +51,6 @@ export function TeamController({
 
       <div style={{ width: 1, height: 20, background: d.border }} />
 
-      {/* Run info */}
       {run ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10 }}>#{run.number}</span>
@@ -71,7 +71,6 @@ export function TeamController({
 
       <div style={{ flex: 1 }} />
 
-      {/* Actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {run?.status === "awaiting" && (
           <button
@@ -128,7 +127,6 @@ export function TeamController({
 
       <div style={{ width: 1, height: 20, background: d.border }} />
 
-      {/* Team voice */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <VoiceStatus vs={pipeVs} d={d} />
         <VoiceBtn vs={pipeVs} d={d} onCycle={onCycleVoice} large />

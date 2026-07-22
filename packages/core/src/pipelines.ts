@@ -2,12 +2,6 @@ export interface StageDefinition {
   id: string;
   label: string;
   gateAfter?: boolean;
-  /**
-   * Persona this stage runs as — the id of a markdown skill under
-   * `.adhd/skills/<skill>.md`. A stage with a skill is engine-backed: the
-   * orchestrator runs a real harness for it and injects the persona.
-   * Stages without one are simulated.
-   */
   skill?: string;
 }
 
@@ -58,12 +52,6 @@ export const ONE_BOX_PIPELINE: PipelineDefinition = {
   ],
 };
 
-/**
- * The first real multi-box workflow: a Developer implements, then a Tester
- * verifies. Both boxes run a real engine in the same workspace, so the Tester
- * sees the code the Developer just wrote; the Developer's summary is handed
- * forward as context. No gates — the run flows straight through.
- */
 export const DEV_TEST_PIPELINE: PipelineDefinition = {
   id: "dev-test",
   name: "Developer + Tester",
@@ -92,25 +80,14 @@ export function flattenPipelineStages(
   return pipeline.groups.flatMap((group) => group.stages);
 }
 
-/**
- * Whether any stage runs a real harness (i.e. carries a persona). Drives engine
- * validation and workspace setup at run start — keyed off the stage model
- * rather than a hardcoded pipeline id, so new engine-backed pipelines just work.
- */
 export function pipelineUsesEngine(pipeline: PipelineDefinition): boolean {
   return flattenPipelineStages(pipeline).some((stage) => stage.skill !== undefined);
 }
 
-/** Look up a built-in pipeline by id. */
 export function findPipeline(pipelineId: string): PipelineDefinition | undefined {
   return DEMO_PIPELINES.find((pipeline) => pipeline.id === pipelineId);
 }
 
-/**
- * Whether the pipeline with this id runs a real harness. Lets callers that only
- * hold an id (the UI) decide whether to send engine/model/workspace settings,
- * without hardcoding which pipelines those are. Unknown ids are not engine-backed.
- */
 export function pipelineUsesEngineById(pipelineId: string): boolean {
   const pipeline = findPipeline(pipelineId);
   return pipeline !== undefined && pipelineUsesEngine(pipeline);

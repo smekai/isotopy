@@ -93,9 +93,10 @@ test("runs are restored from disk when the server comes back", async () => {
   // Assert
   const { body } = await get<RunState[]>(restarted.app, "/runs");
   expect(body).toHaveLength(1);
-  expect(body[0].id).toBe(run.id);
-  expect(body[0].task).toBe("comp survives restart");
-  expect(body[0].status).toBe("completed");
+  const [restoredRun] = body;
+  expect(restoredRun?.id).toBe(run.id);
+  expect(restoredRun?.task).toBe("comp survives restart");
+  expect(restoredRun?.status).toBe("completed");
   await restarted.orchestrator.shutdown();
 });
 

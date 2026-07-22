@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Brain, FileText, FolderOpen, MessageSquare, RotateCcw, Terminal, X } from "lucide-react";
-import type { LogLevel, RunState, StageState } from "@adhd/core";
+import type { LogLevel, RunState, StageState, StageVerdict } from "@adhd/core";
 import { agentForStage } from "@adhd/core";
 import { fetchRunFileContent, fetchRunFiles } from "../api";
 import type { WorkspaceFile, WorkspaceFileContent } from "../api";
@@ -14,27 +15,211 @@ import type { VoiceState } from "./VoiceControls";
 
 export type FocusTab = "artifacts" | "log" | "reasoning" | "steer";
 
-/** Within Artifacts: what the boxes reported vs what the run wrote to disk. */
 type ArtifactView = "workflow" | "files";
+
+type SpecColor = ReturnType<typeof specColor>;
+type StatusColor = ReturnType<typeof statusClr>;
+
+const PASS_GREEN = "#059669";
+const FAIL_RED = "#DC2626";
+
+const FOLLOW_THRESHOLD_PX = 40;
 
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-/**
- * How close to the bottom still counts as "following" the log. Anything further
- * up means the user scrolled back to read, and new entries must not yank them
- * away from it.
- */
-const FOLLOW_THRESHOLD_PX = 40;
-
 function formatTs(ts: string): string {
   return new Date(ts).toLocaleTimeString("en-GB", { hour12: false });
 }
 
-export function StageFocusPanel({
-  stage, run, d, tab, onTabChange, vs, onCycleVoice, onClose, onRestartHere,
-}: {
+const listPreview: CSSProperties = {
+  color: "inherit",
+  fontFamily: MONO,
+  fontSize: 11,
+  lineHeight: 1.75,
+  whiteSpace: "pre-wrap",
+  margin: 0,
+};
+
+const pillBase: CSSProperties = {
+  borderRadius: 20,
+  padding: "3px 10px",
+  fontFamily: MONO,
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+};
+
+function panelContainer(d: Dir, sc: SpecColor): CSSProperties {
+  return {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    background: d.surface,
+    borderTop: `3px solid ${sc.main}`,
+    boxShadow: "0 -4px 24px rgba(0,0,0,0.06)",
+  };
+}
+
+function headerRow(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 16px",
+    borderBottom: `1px solid ${d.border}`,
+    flexShrink: 0,
+  };
+}
+
+function agentGlyph(sc: SpecColor): CSSProperties {
+  return {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    background: sc.gradient,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 16,
+  };
+}
+
+function verdictPill(verdict: StageVerdict): CSSProperties {
+  const pass = verdict === "PASS";
+  return {
+    ...pillBase,
+    background: pass ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
+    border: `1px solid ${pass ? "rgba(5,150,105,0.35)" : "rgba(220,38,38,0.35)"}`,
+    color: pass ? PASS_GREEN : FAIL_RED,
+  };
+}
+
+function personaPill(d: Dir): CSSProperties {
+  return {
+    ...pillBase,
+    background: d.surface2,
+    border: `1px solid ${d.border}`,
+    color: d.textMid,
+  };
+}
+
+function statusPill(st: StatusColor): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: st.bg,
+    borderRadius: 20,
+    padding: "3px 10px",
+  };
+}
+
+function restartButton(d: Dir, restartable: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: d.surface2,
+    border: `1px solid ${d.border}`,
+    borderRadius: 8,
+    padding: "5px 10px",
+    cursor: restartable ? "pointer" : "default",
+    opacity: restartable ? 1 : 0.45,
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: 11,
+    fontWeight: 600,
+  };
+}
+
+function tabsRow(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    borderBottom: `1px solid ${d.border}`,
+    padding: "0 16px",
+    flexShrink: 0,
+  };
+}
+
+function tabButton(active: boolean, sc: SpecColor, d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "10px 14px",
+    marginBottom: -1,
+    border: "none",
+    borderBottom: `2px solid ${active ? sc.main : "transparent"}`,
+    background: "none",
+    cursor: "pointer",
+    color: active ? sc.main : d.textMuted,
+    fontFamily: SANS,
+    fontSize: 12,
+    fontWeight: active ? 700 : 500,
+    transition: "all 0.18s",
+  };
+}
+
+function viewToggle(active: boolean, d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    border: `1px solid ${active ? d.accent : d.border}`,
+    borderRadius: 8,
+    padding: "4px 12px",
+    background: active ? d.accentSoft : "transparent",
+    color: active ? d.accent : d.textMid,
+    cursor: "pointer",
+    fontFamily: SANS,
+    fontSize: 11,
+    fontWeight: active ? 700 : 500,
+  };
+}
+
+function listButton(active: boolean, d: Dir): CSSProperties {
+  return {
+    width: "100%",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: "10px 12px",
+    border: "none",
+    borderBottom: `1px solid ${d.border}`,
+    background: active ? d.accentSoft : "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+  };
+}
+
+function sidebar(width: number, d: Dir): CSSProperties {
+  return {
+    width,
+    borderRight: `1px solid ${d.border}`,
+    overflowY: "auto",
+    flexShrink: 0,
+  };
+}
+
+function emptyNote(d: Dir): CSSProperties {
+  return { color: d.textMuted, padding: 16, fontSize: 12, fontFamily: SANS };
+}
+
+const HEADER_TITLE_STACK: CSSProperties = { display: "flex" };
+const FLEX_SPACER: CSSProperties = { flex: 1 };
+const CLOSE_BUTTON: CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  padding: 4,
+};
+const SPLIT_PANE: CSSProperties = { display: "flex", flex: 1, minHeight: 0 };
+const READING_PANE: CSSProperties = { flex: 1, padding: 16, overflowY: "auto" };
+
+export interface StageFocusPanelProps {
   stage: StageState;
   run: RunState;
   d: Dir;
@@ -44,15 +229,16 @@ export function StageFocusPanel({
   onCycleVoice: () => void;
   onClose: () => void;
   onRestartHere: (stageId: string) => void;
-}) {
+}
+
+export function StageFocusPanel({
+  stage, run, d, tab, onTabChange, vs, onCycleVoice, onClose, onRestartHere,
+}: StageFocusPanelProps) {
   const agent = agentForStage(stage.id);
   const sc = specColor(stage.id);
   const st = statusClr(stage.status);
-  // Engine runs show the real result; mock runs still show static design samples.
   const isEngineRun = run.engine != null;
-  // Each box's own handoff — run.result only holds the last stage's output, so
-  // with multiple boxes it must not be shown against every stage. Runs recorded
-  // before stageOutputs existed fall back to it (they had a single box).
+
   const legacyRun = Object.keys(run.stageOutputs ?? {}).length === 0;
   const stageOutput = run.stageOutputs?.[stage.id] ?? (legacyRun ? run.result : undefined);
   const artifacts = isEngineRun
@@ -63,8 +249,6 @@ export function StageFocusPanel({
   const reasoning = isEngineRun ? [] : (REASONING[stage.id] ?? []);
   const [artIdx, setArtIdx] = useState(0);
 
-  // "Workflow" is what each box reported; "Files" is what the run actually
-  // wrote to the shared workspace — the produced code, not the description.
   const [artifactView, setArtifactView] = useState<ArtifactView>("workflow");
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [filesError, setFilesError] = useState<string | null>(null);
@@ -93,7 +277,6 @@ export function StageFocusPanel({
     return () => {
       cancelled = true;
     };
-    // Re-list when the run finishes so newly written files appear.
   }, [tab, artifactView, canBrowseFiles, run.id, run.status]);
 
   useEffect(() => {
@@ -118,8 +301,6 @@ export function StageFocusPanel({
     };
   }, [run.id, selectedFile]);
 
-  // Follow the live log as it streams, but only while the user is already at
-  // the bottom — scrolling up to read must not be interrupted by new entries.
   const scrollRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
 
@@ -141,7 +322,6 @@ export function StageFocusPanel({
     }
   }, [tab, stage.id, stage.logs.length]);
 
-  // A newly opened stage starts following again.
   useEffect(() => {
     followRef.current = true;
   }, [stage.id, tab]);
@@ -158,105 +338,68 @@ export function StageFocusPanel({
   ];
 
   const logColor = (level: LogLevel) => {
-    if (level === "error" || level === "fail") return "#DC2626";
-    if (level === "pass") return "#059669";
+    if (level === "error" || level === "fail") return FAIL_RED;
+    if (level === "pass") return PASS_GREEN;
     if (level === "run") return d.accent;
     if (level === "warn") return "#D97706";
     return d.textMid;
   };
 
   return (
-    <div style={{
-      flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-      background: d.surface,
-      borderTop: `3px solid ${sc.main}`,
-      boxShadow: "0 -4px 24px rgba(0,0,0,0.06)",
-    }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 9, background: sc.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
-          {agent.glyph}
-        </div>
-        <div>
+    <div style={panelContainer(d, sc)}>
+      <div style={headerRow(d)}>
+        <div style={agentGlyph(sc)}>{agent.glyph}</div>
+        <div style={HEADER_TITLE_STACK}>
           <div data-testid="stage-profession" style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700 }}>{agent.profession}</div>
           <div style={{ color: d.textMuted, fontSize: 11, fontFamily: SANS }}>{stage.label} stage</div>
         </div>
-        {/* The box's own reported outcome, which drives its pass/fail status. */}
         {stage.verdict && (
           <div
             data-testid="stage-verdict"
             title={`This box reported VERDICT: ${stage.verdict}`}
-            style={{
-              background: stage.verdict === "PASS" ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
-              border: `1px solid ${stage.verdict === "PASS" ? "rgba(5,150,105,0.35)" : "rgba(220,38,38,0.35)"}`,
-              borderRadius: 20, padding: "3px 10px",
-              color: stage.verdict === "PASS" ? "#059669" : "#DC2626",
-              fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-            }}
+            style={verdictPill(stage.verdict)}
           >
             {stage.verdict}
           </div>
         )}
-        {/* Which persona this box ran as — .adhd/skills/<skill>.md */}
         {stage.skill && (
           <div
             data-testid="stage-persona"
             title={`Persona: .adhd/skills/${stage.skill}.md`}
-            style={{
-              background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 20,
-              padding: "3px 10px", color: d.textMid, fontFamily: MONO, fontSize: 9,
-              fontWeight: 700, letterSpacing: "0.06em",
-            }}
+            style={personaPill(d)}
           >
             {stage.skill.toUpperCase()}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: st.bg, borderRadius: 20, padding: "3px 10px" }}>
+        <div style={statusPill(st)}>
           <StatusIcon s={stage.status} size={11} />
           <span style={{ color: st.text, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em" }}>{sLabel(stage.status)}</span>
         </div>
-        <div style={{ flex: 1 }} />
+        <div style={FLEX_SPACER} />
         <button
           onClick={() => restartable && onRestartHere(stage.id)}
           disabled={!restartable}
           title={restartable ? undefined : "Available after a failed or aborted run"}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: d.surface2, border: `1px solid ${d.border}`,
-            borderRadius: 8, padding: "5px 10px",
-            cursor: restartable ? "pointer" : "default",
-            opacity: restartable ? 1 : 0.45,
-            color: d.textMid, fontFamily: SANS, fontSize: 11, fontWeight: 600,
-          }}>
+          style={restartButton(d, restartable)}>
           <RotateCcw size={11} /> Restart here
         </button>
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: d.textMuted, padding: 4 }}>
+        <button onClick={onClose} style={{ ...CLOSE_BUTTON, color: d.textMuted }}>
           <X size={16} />
         </button>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", borderBottom: `1px solid ${d.border}`, padding: "0 16px", flexShrink: 0 }}>
+      <div style={tabsRow(d)}>
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => onTabChange(t.id)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "10px 14px", marginBottom: -1,
-              border: "none", borderBottom: `2px solid ${tab === t.id ? sc.main : "transparent"}`,
-              background: "none", cursor: "pointer",
-              color: tab === t.id ? sc.main : d.textMuted,
-              fontFamily: SANS, fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
-              transition: "all 0.18s",
-            }}
+            style={tabButton(tab === t.id, sc, d)}
           >
             {t.ico}{t.label}
           </button>
         ))}
       </div>
 
-      {/* Content */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -265,7 +408,6 @@ export function StageFocusPanel({
       >
         {tab === "artifacts" && (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            {/* Workflow = what the boxes reported; Files = what they wrote. */}
             {canBrowseFiles && (
               <div style={{ display: "flex", gap: 4, padding: "8px 16px", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
                 {(["workflow", "files"] as ArtifactView[]).map((view) => (
@@ -273,15 +415,7 @@ export function StageFocusPanel({
                     key={view}
                     onClick={() => setArtifactView(view)}
                     data-testid={`artifact-view-${view}`}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      border: `1px solid ${artifactView === view ? d.accent : d.border}`,
-                      borderRadius: 8, padding: "4px 12px",
-                      background: artifactView === view ? d.accentSoft : "transparent",
-                      color: artifactView === view ? d.accent : d.textMid,
-                      cursor: "pointer", fontFamily: SANS, fontSize: 11,
-                      fontWeight: artifactView === view ? 700 : 500,
-                    }}
+                    style={viewToggle(artifactView === view, d)}
                   >
                     {view === "workflow" ? <FileText size={11} /> : <FolderOpen size={11} />}
                     {view === "workflow" ? "Workflow" : "Files"}
@@ -291,20 +425,15 @@ export function StageFocusPanel({
             )}
 
             {artifactView === "workflow" || !canBrowseFiles ? (
-              <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-                <div style={{ width: 180, borderRight: `1px solid ${d.border}`, overflowY: "auto", flexShrink: 0 }}>
+              <div style={SPLIT_PANE}>
+                <div style={sidebar(180, d)}>
                   {artifacts.length === 0
-                    ? <div style={{ color: d.textMuted, padding: 16, fontSize: 12, fontFamily: SANS }}>No artifacts yet.</div>
+                    ? <div style={emptyNote(d)}>No artifacts yet.</div>
                     : artifacts.map((a, i) => (
                       <button
                         key={a.name}
                         onClick={() => setArtIdx(i)}
-                        style={{
-                          width: "100%", display: "flex", alignItems: "flex-start", gap: 8,
-                          padding: "10px 12px", border: "none", borderBottom: `1px solid ${d.border}`,
-                          background: i === artIdx ? d.accentSoft : "transparent",
-                          cursor: "pointer", textAlign: "left",
-                        }}
+                        style={listButton(i === artIdx, d)}
                       >
                         <FileText size={11} style={{ color: i === artIdx ? d.accent : d.textMuted, marginTop: 2, flexShrink: 0 }} />
                         <div>
@@ -315,32 +444,27 @@ export function StageFocusPanel({
                     ))
                   }
                 </div>
-                <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
+                <div style={READING_PANE}>
                   {artifacts[artIdx] && (
-                    <pre data-testid="artifact-preview" style={{ color: d.text, fontFamily: MONO, fontSize: 11, lineHeight: 1.75, whiteSpace: "pre-wrap", margin: 0 }}>
+                    <pre data-testid="artifact-preview" style={{ ...listPreview, color: d.text }}>
                       {artifacts[artIdx].preview}
                     </pre>
                   )}
                 </div>
               </div>
             ) : (
-              <div style={{ display: "flex", flex: 1, minHeight: 0 }} data-testid="artifact-files">
-                <div style={{ width: 220, borderRight: `1px solid ${d.border}`, overflowY: "auto", flexShrink: 0 }}>
+              <div style={SPLIT_PANE} data-testid="artifact-files">
+                <div style={sidebar(220, d)}>
                   {filesError
-                    ? <div style={{ color: "#DC2626", padding: 16, fontSize: 12, fontFamily: SANS }}>{filesError}</div>
+                    ? <div style={{ ...emptyNote(d), color: FAIL_RED }}>{filesError}</div>
                     : files.length === 0
-                      ? <div style={{ color: d.textMuted, padding: 16, fontSize: 12, fontFamily: SANS }}>No files in the workspace yet.</div>
+                      ? <div style={emptyNote(d)}>No files in the workspace yet.</div>
                       : files.map((file) => (
                         <button
                           key={file.path}
                           onClick={() => setSelectedFile(file.path)}
                           title={file.path}
-                          style={{
-                            width: "100%", display: "flex", alignItems: "flex-start", gap: 8,
-                            padding: "10px 12px", border: "none", borderBottom: `1px solid ${d.border}`,
-                            background: file.path === selectedFile ? d.accentSoft : "transparent",
-                            cursor: "pointer", textAlign: "left",
-                          }}
+                          style={listButton(file.path === selectedFile, d)}
                         >
                           <FileText size={11} style={{ color: file.path === selectedFile ? d.accent : d.textMuted, marginTop: 2, flexShrink: 0 }} />
                           <div style={{ minWidth: 0 }}>
@@ -351,11 +475,11 @@ export function StageFocusPanel({
                       ))
                   }
                 </div>
-                <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
+                <div style={READING_PANE}>
                   {fileContent?.truncated
                     ? <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>File is too large to preview ({formatBytes(fileContent.size)}).</div>
                     : fileContent && (
-                      <pre style={{ color: d.text, fontFamily: MONO, fontSize: 11, lineHeight: 1.75, whiteSpace: "pre-wrap", margin: 0 }}>
+                      <pre style={{ ...listPreview, color: d.text }}>
                         {fileContent.content}
                       </pre>
                     )

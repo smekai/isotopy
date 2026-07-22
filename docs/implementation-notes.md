@@ -1,0 +1,282 @@
+# Implementation Notes
+
+The "why" behind non-obvious code — the platform workarounds, protocol quirks,
+and subtle decisions that used to live in code comments. Per Architect rules
+**A1** (comments are a smell) and **A8** (evidence lives in Markdown), the source
+carries almost none of this; it lives here, grouped by subsystem, so the code
+stays clean and the reasoning stays discoverable.
+
+Entries are keyed to a file (and where useful a function). If you are about to
+"simplify" something that looks odd, check here first — most of it is load-bearing.
+
+---
+
+## Engines — subprocess harness (`engines/subprocess.ts`)
+
+The generic harness runs any CLI in a workspace, streams output line-by-line,
+enforces a hard timeout, supports abort, and kills the whole process tree. The
+concrete adapters build binary resolution, argument construction, and output
+parsing on top.
+
+**Windows `.cmd`/`.bat` shims.** Node ≥ 20 refuses to spawn batch shims directly.
+`resolveSpawnTarget` routes them through the command interpreter as a single
+quoted command line: `cmd.exe /d /s /c "<line>"`. `/d` skips AutoRun scripts;
+`/c` runs and exits; `/s` plus the outer quote pair is the documented way to keep
+our own quoting intact — cmd strips exactly that outer pair and treats the rest
+verbatim. `windowsVerbatimArguments: true` is what keeps `shell: true` (and the
+DEP0190 deprecation, which concatenates an args array unescaped) out of this
+module entirely. Everything off Windows takes the argv array untouched.
+
+**Argument quoting (`quoteWindowsArg`).** Wraps one argument in double quotes
+using the C runtime's backslash rules so the child parses argv back exactly as
+given: backslashes before a quote are doubled then the quote escaped, and
+trailing backslashes are doubled so they can't escape our closing quote. Quoting
+also neutralises the cmd injection metacharacters (`&`, `|`, `<`, `>`) — the
+interpreter does not act on them inside a quoted string, which is what makes it
+safe to pass a stage persona (multi-line markdown) as an argument.
+**Deliberate caveat:** `%VAR%` is still expanded inside quotes and `^` can't stop
+it there — it can substitute an env value into an argument but cannot introduce a
+new command.
+
+**Multi-line args truncate under cmd.** cmd ends a command at a line break, so a
+multi-line argument through a shim is silently cut. `runSubprocess` fails loudly
+instead; callers with long text (a persona) must send it via stdin on that path.
+
+**Process-tree kill (`killProcessTree`).** `child.kill()` alone orphans
+grandchildren spawned under a Windows `.cmd` shim, so Windows uses
+`taskkill /pid <pid> /T /F`. POSIX sends `SIGTERM`, then escalates to `SIGKILL`
+after a grace period.
+
+## Engines — binary resolution (all adapters)
+
+Each adapter resolves its CLI in a fixed order and caches the result, clearing
+the cache on `detect()`/`install()` so a freshly installed CLI is picked up
+without a server restart:
+
+1. `ADHD_<ENGINE>_PATH` env override (validated to exist).
+2. `where`/`which` on PATH. **On Windows, prefer the `.cmd`/`.exe`/`.bat` shim
+   over an extensionless shell shim** — only the former can be spawned directly
+   (npm global installs drop both).
+3. Fallbacks: Cursor scans its installer dirs (`~/.local/bin`,
+   `%LOCALAPPDATA%\cursor-agent`); Claude Code scans the native binary bundled in
+   the VS Code / Cursor IDE extension (`anthropic.claude-code-*`).
+
+Cursor detection also flags when the **Cursor IDE** is installed but its headless
+**Agent CLI** (a separate tool) is not — otherwise "not found" surprises users.
+
+## Engines — billing safety (`buildChildEnv` in each adapter)
+
+The provider's API-key env var is **stripped from the child environment** so a
+stray key in the server's env can't silently switch billing away from the user's
+CLI subscription login. The stored key is injected **only** in `api-key`
+connection mode. Claude Code additionally deletes `ANTHROPIC_AUTH_TOKEN` (setting
+both makes the CLI reject requests) and passes `--bare` in api-key mode, because
+bare mode reads auth strictly from `ANTHROPIC_API_KEY` — without it a logged-in
+CLI ignores the injected key and bills the plan.
+
+## Engines — persona delivery (`engines/persona.ts`)
+
+Claude Code takes the stage persona natively via `--append-system-prompt`, so it
+stays in the system role. Cursor and Codex expose no equivalent flag, so
+`withPersonaPrompt` folds the persona into the head of the user prompt (separated
+by `\n\n---\n\n`) — same content reaches the model, keeping personas
+engine-agnostic. It is a no-op when a stage has no persona. **Exception:** a
+Claude `.cmd` shim runs through cmd.exe (multi-line flag can't survive), so on
+that path Claude also falls back to prompt-folding via stdin.
+
+## Engines — CLI-specific quirks
+
+**Cursor (`engines/cursor.ts`).** Headless runs must not stop for confirmation;
+Cursor has no accept-edits-only mode, so both permission modes use `--force`.
+`--trust` is on by default (fresh scratch workspaces would otherwise hit the
+workspace-trust prompt and hang). Experimentation knobs, since the CLI's headless
+behavior on Windows is still being mapped: `ADHD_CURSOR_TRUST=0` drops `--trust`,
+`ADHD_CURSOR_ARGS` appends args verbatim, `ADHD_CURSOR_PROMPT_VIA=stdin` pipes
+the prompt instead of passing it positionally (Windows arg limit ≈ 32K).
+Cursor's own `auto` router model is distinct from our **Auto** (which sends no
+`--model` at all), so the roster prepends ours and relabels theirs.
+
+**Codex (`engines/codex.ts`).** `codex exec --json` emits newline-delimited JSON
+events. `--skip-git-repo-check` lets it run in a non-git scratch workspace.
+Permission modes: `acceptEdits` → `--sandbox workspace-write` (writes confined to
+the workspace; escalation is denied, not queued); otherwise
+`--dangerously-bypass-approvals-and-sandbox`. The prompt is read from stdin via
+`-` to sidestep the Windows arg-length limit. The CLI has no `models` subcommand,
+so `listModels` reads the top-level `model = "…"` key from `~/.codex/config.toml`
+(matched before the first `[section]` so a nested profile key isn't mistaken for
+the global default).
+
+**Auth probes (detect).** Cursor `status` and Codex `login status` are best-effort:
+Cursor's exits 0 either way so the answer is in the text; Codex's exit code is the
+signal (0 authenticated, 1 not) with text filling the status line.
+
+## Engines — output parsing
+
+All three adapters parse a JSON-per-line stream off `onLine`, ignoring non-JSON
+lines, and capture the final `result`/`turn.completed` event for the run's
+result text, cost, duration, and turn count. Error text can arrive as a
+non-success subtype **or** as `is_error` on a success event — both are handled.
+Known CLI failure signatures are matched by regex (`ERROR_HINTS`) and mapped to
+actionable guidance while the raw error stays visible in the log.
+
+---
+
+## Run orchestration (`services/run-orchestrator.ts`)
+
+`RunOrchestrator` owns run lifecycle — it starts pipelines, streams stage events
+to subscribers, and executes each stage either as a simulation or through a real
+engine adapter. State is in-memory for the prototype, persisted per transition.
+
+**`executeStage()` is the durable-workflow seam.** It is the single decision
+point for how a stage runs (simulate vs. engine). A durable-workflow runtime
+(Aiki, see `technical-architecture.md`) replaces this one method — the engine
+adapters and the surrounding stage lifecycle are untouched. Do not spread
+stage-execution logic out of it.
+
+**Register the abort handle before the first `await` (`executeEngineStage`).**
+Resolving the persona touches the filesystem. An abort arriving in that window
+used to find no `AbortController` to cancel, so the CLI was spawned anyway and
+ran to completion for a run the user had already stopped. The controller is set
+before any await, and cancellation is re-checked after the inputs resolve and
+after the adapter returns.
+
+**`run.result` holds only the last stage's output.** It is kept for the
+run-level result view and for runs recorded before `stageOutputs` existed
+(single-box runs). Per-box consumers must read `stageOutputs` instead, or a
+multi-box run shows one box's text against every stage.
+
+**A verification box's verdict can fail a passing exit.** The harness exiting 0
+only means it ran; a `VERDICT: FAIL` in the output fails the stage anyway, or a
+failed verification would be reported as a green run. Stages whose persona
+declares no verdict stay governed by the exit code.
+
+**`parseStageVerdict` scans backwards (`domain/stage-context.ts`).** It looks for
+the *last* line that is *only* a verdict, tolerating markdown wrapping (bare,
+backticked, bold) and CRLF line endings. Both matter: the persona text itself
+contains the literal strings `VERDICT: PASS`/`FAIL`, and a report may discuss one
+mid-prose ("I would fail this if…"), so a first-match-anywhere search would read
+the wrong outcome. Absent a verdict line it returns `undefined`, which is how a
+box with no verdict contract (the Developer) stays governed by exit code alone.
+`buildStagePrompt` prepends the run task and one handoff block per upstream box;
+the workspace is the source of truth, the reports only add what a box *said*.
+
+## Core — model rosters & pipelines (`core/engines.ts`, `core/pipelines.ts`)
+
+- **Auto (no `--model`)** is always offered and always safe: it lets the CLI's own
+  configured default win, so it can't outlive a snapshot id our roster hard-codes.
+  The Cursor and Codex rosters are snapshots that churn; `listModels()` trues them
+  up against the live CLI.
+- **`LEGACY_MODEL_ALIASES`** migrates stored preferences on read so a user who
+  picked a since-retired model isn't stuck with failing runs. Claude full ids
+  (`claude-opus-4-8`, …) resolve to 1M-context variants that subscription plans
+  reject, so they map to the short id; Codex's `gpt-5-codex` is rejected on
+  ChatGPT-account auth, so it maps to Auto.
+- **A stage is engine-backed iff it carries a `skill`.** `pipelineUsesEngine`
+  keys off the stage model, not a hardcoded pipeline id, so a new engine-backed
+  pipeline needs no orchestrator change to get engine validation and a workspace.
+
+## Configuration & paths (`server/config.ts`, `server/paths.ts`)
+
+- **`REPO_ROOT` is anchored to this module's location, not `process.cwd()`.** The
+  dev server runs with `cwd = packages/server` (via `pnpm --filter`), so a
+  cwd-relative data path would land in the wrong place.
+- **`adhdDir()` is a function, not a constant.** A constant would freeze
+  `ADHD_HOME` at import time; as a function, a test can point the data root at a
+  temp directory regardless of module load order. This is the seam the component
+  tests use to isolate their `.adhd/`.
+- **The `.env` loader fills gaps only.** Values already in `process.env` win, so
+  `PORT=1234 pnpm dev` still overrides the file. Every config value has an env
+  override and a sensible default; nothing is hardcoded.
+
+## UI
+
+**Inline markdown renderer (`ui/src/inline-md.tsx`).** `INLINE_TOKEN` is one
+alternation with one branch per inline style, tried left-to-right at each
+position, so `**` outranks `*` and a `` `code` `` span consumes any markers
+inside it. The underscore italic form requires non-word neighbours, so
+`snake_case_names` in paths and tool summaries don't turn italic (real markdown
+skips those too). Text goes through React's normal escaping — no HTML injection
+is possible — and unmatched markers pass through literally. Bold/strikethrough
+content renders recursively so a bold span containing an inline-code span still
+styles the inner span; nesting can't loop because a lazy match never contains its
+own delimiter.
+
+**Live-run subscription ordering (`ui/src/hooks/useRunEvents.ts`).** The SSE
+subscription is opened *before* the initial `fetchRun`, and events are buffered
+until that initial state arrives, so no event is lost in the gap (the log dedupe
+in `applyEvent` absorbs any overlap). On `run.completed` it stops the stream
+explicitly, otherwise `EventSource` would reconnect forever once the server
+closes it.
+
+**Model preference migration (`ui/src/settings.ts`).** `""` is a real stored
+value (`AUTO_MODEL_ID` — let the CLI decide), so only a *missing* key falls back
+to the default. Retired model ids are rewritten on read via `LEGACY_MODEL_ALIASES`
+(see the core note above) so a stale preference can't keep failing runs.
+
+**Focus panel log-follow (`ui/src/components/StageFocusPanel.tsx`).** The live
+log auto-scrolls only while the user is already within `FOLLOW_THRESHOLD_PX` of
+the bottom; scrolling up to read must not be yanked away by new entries. A newly
+opened stage starts following again. Its `run.result` handling mirrors the
+orchestration note: only the last stage's output lives there, so per-box views
+read `stageOutputs`.
+
+**Interrupted runs reconcile to failed on boot (`init`/`reconcileInterrupted`).**
+A run reloaded in a non-terminal state can't resume — its subprocess and timers
+died with the old process — so any running/awaiting stage is marked failed.
+
+**Persistence is debounced (`emit`/`schedulePersist`).** Every event appends to
+the durable trail immediately; state transitions flush `state.json` at once, but
+high-frequency stage logs are coalesced behind a short debounce so log spam
+doesn't thrash the disk.
+
+**One workspace per run.** Every box works in the same directory, so the Tester
+sees exactly what the Developer wrote.
+
+## Persistence (`services/run-store.ts`)
+
+One directory per run under `.adhd/runs/<id>/`: `state.json` is the
+atomically-rewritten snapshot (write to `.tmp`, then `rename`), `events.jsonl`
+is the append-only trail. The orchestrator is the only writer.
+
+- **Writes are serialized per run.** Two rapid transitions could otherwise clash
+  on the shared `.tmp` file — Windows `rename` in particular is unforgiving about
+  concurrency. Event appends are serialized too so concurrent lines can't
+  interleave, and never reject back to the fire-and-forget caller.
+- **`settleWrites()` is the join point.** Most writes are fired without `await`
+  (`void writeHandoff(...)`), so nothing otherwise knows when the disk has caught
+  up. A graceful shutdown awaits it, and tests need it before deleting a temp
+  data root — on Windows a `rename` still in flight makes `rm` throw `EBUSY`. It
+  loops once because a settled write can enqueue the next behind it.
+- **A corrupt or absent `state.json` is skipped with a warning**, so one bad run
+  can't stop the server from booting.
+
+## Filesystem access (`services/workspace-files.ts`, `services/directory-browser.ts`)
+
+These back read-only UI views and every path from the client is untrusted.
+
+- **`resolveInsideWorkspace` is the single traversal gate.** It rejects absolute
+  paths, checks the *lexical* resolved path first (so a non-existent traversal
+  target is rejected as traversal, not "not found"), then resolves symlinks and
+  re-checks — a link inside the workspace may still point out.
+- **The workspace walk is bounded** (`MAX_DEPTH`, `MAX_ENTRIES`, ignored noisy
+  dirs like `node_modules`) so a large repo can't stall the request; oversized
+  files are listed but not previewed (`MAX_PREVIEW_BYTES`).
+- **The directory browser is deliberately narrow.** It returns directory *names*
+  only — never file contents, never file names — so it can't read anything off
+  the machine; the server binds to localhost. Windows roots are found by probing
+  drive letters `A:`–`Z:` (no cross-platform drive-enumeration API); POSIX uses
+  the single `/` root.
+
+## Skills / personas (`services/skills.ts`, `domain/skills/`)
+
+Personas ("skills") are markdown at `.adhd/skills/<id>.md` so they can be edited
+and re-run without a rebuild. That directory is gitignored, so the bundled text
+in `domain/skills/defaults.ts` is the shipped source of truth: `loadSkill`
+prefers the on-disk file (re-read whenever its mtime changes, so edits apply to
+the next run) and falls back to the default, **seeding** the file with `wx` (never
+clobbering a user's copy) so the persona becomes an editable file rather than an
+invisible feature. Seeding is best-effort — a read-only or racing FS must not
+fail the run. The cache is keyed by resolved path, not skill id, because
+`ADHD_HOME` can move the skills directory and an id-keyed cache would survive the
+move. See [`architect-standards.md`](./architect-standards.md) for how the
+`architect` persona is generated from a single source.
