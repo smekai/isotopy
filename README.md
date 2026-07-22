@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="packages/ui/public/adhd-icon.png" alt="ADHD" width="128" height="128" />
+</div>
+
 # ADHD — Artificial Development, Human Directed
 
 Research and planning artifacts for **ADHD** (formerly **Artificial Developer**) — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
