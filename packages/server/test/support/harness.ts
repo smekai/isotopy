@@ -11,7 +11,9 @@ import type { Hono } from "hono";
 import type { EngineId, RunState } from "@adhd/core";
 import { createApp } from "../../src/app.js";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.js";
+import { ProjectRegistry } from "../../src/services/project-registry.js";
 import { RunOrchestrator } from "../../src/services/run-orchestrator.js";
+import { SettingsStore } from "../../src/services/settings-store.js";
 import { FakeEngine } from "./fake-engine.js";
 
 /** How long a `waitFor*` helper keeps polling before failing the test. */
@@ -21,10 +23,14 @@ const POLL_INTERVAL_MS = 10;
 export interface TestApp {
   app: Hono;
   orchestrator: RunOrchestrator;
+  registry: ProjectRegistry;
+  settings: SettingsStore;
   /** The substituted adapter. Script it in the Anticipate block. */
   engine: FakeEngine;
-  /** Temp `ADHD_HOME` for this test — runs, settings and personas all land here. */
+  /** Temp `ADHD_HOME` for this test — the home project's data root. */
   home: string;
+  /** Temp `ADHD_USER_HOME` — the project registry and credentials land here. */
+  userHome: string;
   dispose(): Promise<void>;
 }
 
@@ -35,25 +41,33 @@ export interface TestAppOptions {
 
 /**
  * Build an isolated app. Every test gets a fresh orchestrator (so run numbers
- * and in-memory state never leak) and a fresh data root (so nothing touches the
- * developer's real `.adhd/runs`).
+ * and in-memory state never leak) and fresh data roots — both the home
+ * project's `.adhd` and the user-level registry — so nothing touches the
+ * developer's real files.
  */
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
   const engineId = options.engineId ?? "claude-code";
   const home = await mkdtemp(path.join(os.tmpdir(), "adhd-comp-"));
+  const userHome = await mkdtemp(path.join(os.tmpdir(), "adhd-user-"));
   process.env.ADHD_HOME = home;
+  process.env.ADHD_USER_HOME = userHome;
 
   const engine = new FakeEngine(engineId);
   setEngineAdapter(engineId, engine);
 
-  const orchestrator = new RunOrchestrator();
-  const app = createApp({ orchestrator });
+  const registry = new ProjectRegistry();
+  const settings = new SettingsStore();
+  const orchestrator = new RunOrchestrator({ registry, settings });
+  const app = createApp({ orchestrator, registry, settings });
 
   return {
     app,
     orchestrator,
+    registry,
+    settings,
     engine,
     home,
+    userHome,
     dispose: async () => {
       // Order matters: stop the orchestrator (which cancels in-flight runs and
       // waits for queued writes) before removing the directory those writes
@@ -61,23 +75,54 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       await orchestrator.shutdown();
       resetEngineAdapters();
       delete process.env.ADHD_HOME;
+      delete process.env.ADHD_USER_HOME;
       // maxRetries covers the Windows case where a handle is still closing.
       // A temp directory that survives is untidy, never a test failure.
-      await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
-        .catch(() => undefined);
+      await Promise.all(
+        [home, userHome].map((dir) =>
+          rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(
+            () => undefined,
+          ),
+        ),
+      );
     },
   };
 }
+
+/** A second orchestrator over the same data roots — a server restart. */
+export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrchestrator }> {
+  const registry = new ProjectRegistry();
+  const settings = new SettingsStore();
+  const orchestrator = new RunOrchestrator({ registry, settings });
+  await orchestrator.init();
+  return { app: createApp({ orchestrator, registry, settings }), orchestrator };
+}
+
+/** Register a temp directory as a project and return it with its API header. */
+export async function addTestProject(
+  registry: ProjectRegistry,
+  label: string,
+): Promise<{ id: string; root: string; headers: Record<string, string> }> {
+  const root = await mkdtemp(path.join(os.tmpdir(), `adhd-${label}-`));
+  const project = await registry.add(root);
+  return { id: project.id, root, headers: { "X-ADHD-Project": project.id } };
+}
+
+/** Extra request headers — in practice `X-ADHD-Project` to target a project. */
+export type TestHeaders = Record<string, string>;
+
+const JSON_HEADERS: TestHeaders = { "Content-Type": "application/json" };
 
 /** POST JSON and return the parsed body plus status. */
 export async function post<T>(
   app: Hono,
   route: string,
   body?: unknown,
+  headers: TestHeaders = {},
 ): Promise<{ status: number; body: T }> {
   const response = await app.request(route, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...JSON_HEADERS, ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, body: (await response.json()) as T };
@@ -88,10 +133,11 @@ export async function put<T>(
   app: Hono,
   route: string,
   body: unknown,
+  headers: TestHeaders = {},
 ): Promise<{ status: number; body: T }> {
   const response = await app.request(route, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...JSON_HEADERS, ...headers },
     body: JSON.stringify(body),
   });
   return { status: response.status, body: (await response.json()) as T };
@@ -101,8 +147,19 @@ export async function put<T>(
 export async function get<T>(
   app: Hono,
   route: string,
+  headers: TestHeaders = {},
 ): Promise<{ status: number; body: T }> {
-  const response = await app.request(route);
+  const response = await app.request(route, { headers });
+  return { status: response.status, body: (await response.json()) as T };
+}
+
+/** DELETE and return the parsed body plus status. */
+export async function del<T>(
+  app: Hono,
+  route: string,
+  headers: TestHeaders = {},
+): Promise<{ status: number; body: T }> {
+  const response = await app.request(route, { method: "DELETE", headers });
   return { status: response.status, body: (await response.json()) as T };
 }
 
@@ -110,8 +167,9 @@ export async function get<T>(
 export async function startRun(
   app: Hono,
   body: Record<string, unknown>,
+  headers: TestHeaders = {},
 ): Promise<RunState> {
-  const { status, body: run } = await post<RunState>(app, "/runs", body);
+  const { status, body: run } = await post<RunState>(app, "/runs", body, headers);
   if (status !== 201) {
     throw new Error(`Expected 201 from POST /runs, got ${status}: ${JSON.stringify(run)}`);
   }

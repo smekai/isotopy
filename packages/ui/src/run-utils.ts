@@ -1,11 +1,17 @@
 import type { RunState } from "@adhd/core";
 
+const SCRATCH_WORKSPACE = /\/runs\/[^/]+\/workspace$/;
+
 export function isScratchWorkspace(workspacePath: string | undefined): boolean {
-  if (!workspacePath) {
-    return false;
-  }
-  const normalized = workspacePath.replace(/\\/g, "/");
-  return normalized.includes("/.adhd/runs/");
+  return (
+    workspacePath !== undefined && SCRATCH_WORKSPACE.test(workspacePath.replace(/\\/g, "/"))
+  );
+}
+
+export function childPath(base: string, child: string): string {
+  return base.includes("\\")
+    ? `${base}\\${child.replace(/\//g, "\\")}`
+    : `${base}/${child}`;
 }
 
 export function resumeStageId(run: RunState): string | null {

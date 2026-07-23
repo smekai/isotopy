@@ -1,5 +1,49 @@
 # Done
 
+## TASK-064: The project owns the folder — retire the per-run working directory
+**Priority:** P1 | **Tags:** core, server, ui
+**Updated:** 2026-07-23 11:10
+
+After TASK-059 two folders competed: the project's root, and the composer's "Working directory" box (kept per project in localStorage, sent as `workspaceDir` on `POST /runs`). A run listed under `my-app` could execute the agent anywhere, and the browser could name any absolute path as an autonomous agent's cwd.
+
+**One folder per project, derived not requested.** `resolveWorkspace(paths, runId)` now takes no directory: a registered project runs in its own root; the **home** project — which owns no code — gets `~/.adhd/home/runs/<id>/workspace` per run, keeping the zero-setup path and giving the live e2e canary a folder it cannot damage. `workspaceDir` is gone from `StartRunOptions`, the `POST /runs` body, `api.ts` and `settings.ts`; a client that still sends one is ignored (covered by a comp test). A project's root is fixed at registration — no route and no control changes it.
+
+**Artifacts stay per-run and git-ignored.** `ensureProjectDataDir` also runs at run start, so `<root>/.adhd/.gitignore` (`*`) exists even for projects registered before it, or whose `.adhd/` was deleted.
+
+**New `ProjectDrawer`** (left, mirroring `HistoryDrawer`; header **Project** button, X or Escape to close) is where the setup went: folder + lock note + the git-ignored data folder; the open run's pipeline·engine·model, working folder and artifacts folder; engine/permissions/connection and pipeline summaries for new runs, each deep-linking into Setup via a new `SetupSection` union on `SetupModal`. The composer replaced its input and Browse button with a read-only folder chip that opens the drawer.
+
+**Small consolidations on the way:** `Project` gained `dataDir`, derived on read (`withDataDir`) so `projects.json` keeps only what the user chose; `projectPaths` takes a `ProjectLocation` instead of a whole `Project`; permission-mode labels moved into `@adhd/core` (`PERMISSION_MODES`, `permissionModeLabel`) so the drawer and Setup share one source; `isScratchWorkspace` was corrected — it matched `/.adhd/runs/`, which never matches the home project's real scratch path.
+
+**Verified:** `lint`, `typecheck`, `test` (115, +7), `build`, `e2e` (23 + live skipped), `gen:skills --check` all green. Against the running app: a `POST /runs` carrying `"workspaceDir":"C:/Windows"` still ran in the project root, a real Claude Code run used the project folder as cwd and left `git status` clean, and a home run landed in `~/.adhd/home/runs/<id>/workspace`. Rationale in `docs/decisions.md`; layout in `docs/technical-architecture.md`. Version 0.6.1 → 0.6.2.
+
+**Follow-up:** engine/model/permission/pipeline preferences are project-scoped but still live in `localStorage`; moving them server-side (so they survive a browser change) is a separate task.
+
+---
+
+## TASK-059: Projects — scope runs, settings and skills to a project
+**Priority:** P1 | **Tags:** core, server, ui, infra
+**Updated:** 2026-07-22 22:45
+
+All five phases shipped. **A project is a directory that owns its own `.adhd/`**, like `.git`, so history sits beside the code it belongs to instead of inside the ADHD checkout.
+
+**Storage relocated (the load-bearing change).** `paths.ts` now exports a `ProjectPaths` value (`id`, `root`, `dataDir`) that callers receive; `REPO_ROOT` survives only for loading the tool's own `.env`. `run-store.ts` became a `RunStore` interface + `JsonRunStore` class bound to a project (the TASK-039 seam, done once — TASK-039 now only adds an adapter). `RunState.projectId` is required; the orchestrator takes `{ registry, createRunStore, settings }`, keeps a store and a run-number counter per project, and filters `listRuns` by project.
+
+**Registry + API.** `Project`/`ProjectsView` in `@adhd/core`; `ProjectRegistry` over `~/.adhd/projects.json`; `GET/POST /projects`, `POST /projects/:id/activate`, `DELETE /projects/:id` (unregisters only — never deletes files). Each request resolves its project from an `X-ADHD-Project` header, falling back to the registry's active one. Project ids are `<slug>-<sha1(normalized root)>`, case-folded on Windows only.
+
+**No migration (owner decision).** Instead of adopting orphaned runs, the fallback is a **home project** at `~/.adhd/home` — deliberately *not* `REPO_ROOT`, which would reproduce the bug being fixed. The ~75 legacy runs in the repo are no longer listed; files left on disk.
+
+**Credentials never enter a project folder.** `~/.adhd/settings.json` (mode `0600`) holds `defaults` + per-project overrides, so a new project inherits an existing key instead of demanding a new one. Created `<project>/.adhd/` ships a self-ignoring `.gitignore` (`*`).
+
+**Skills layered, not replaced.** bundled default → user-level override → project addendum (`<id>.project.md`) appended; full replacement still supported. Seeding to disk was **removed** — it was the exact mechanism that shadowed improved defaults during the TASK-053 follow-up.
+
+**UI.** Real header dropdown (`ProjectSwitcher` + `useProjects`), reusing `FolderPicker` to add a project; every localStorage preference is now keyed `adhd.<projectId>.<name>`.
+
+**Follow-up in the same pass (owner request):** stripped every explanatory comment from the new source per rule **A1** — renaming where the comment described *what* (`registry.remove` → `unregister`, `detachedCopyOfResolvedEntry`, `foldCaseWhereFilesystemIsInsensitive`, `clearRunViewForProjectSwitch`) and relocating the *why* into `docs/implementation-notes.md` and `docs/decisions.md` per **A8**. Added the [`validate-code`](../.claude/skills/validate-code/SKILL.md) skill — the review counterpart to `architect`: the A1–A9 checklist plus the gate order. Unified the personas: text now lives in `domain/skills/personas/*.md` (Architect still composed from `architect-standards.md`), and `scripts/generate-skills.mjs` emits one `defaults.generated.ts`, replacing the split between a hand-written `defaults.ts` and a separate `architect.generated.ts`; `skill-generation.spec.ts` guards the drift.
+
+**Verified:** `lint`/`typecheck`/`test` (109, +45)/`build`/`e2e` (19) all green, plus `pnpm gen:skills --check`. Against the running app: two projects each showed only their own history, runs wrote into their own `.adhd/runs/`, nothing new landed in the ADHD repo, an API key set on one project stayed out of both project folders and off the other project, and a `developer.project.md` addendum appeared in the persona while the bundled base still supplied the text. Rationale in `docs/decisions.md`; layout in `docs/technical-architecture.md`. Version 0.5.0 → 0.6.0.
+
+---
+
 ## TASK-052: Architect skill — codify the code standards, then clean the codebase to them
 **Priority:** P1 | **Tags:** core, ui, server, infra
 **Updated:** 2026-07-22 12:40

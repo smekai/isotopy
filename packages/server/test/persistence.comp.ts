@@ -4,13 +4,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
+import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunState } from "@adhd/core";
-import { createApp } from "../src/app.js";
-import { RunOrchestrator } from "../src/services/run-orchestrator.js";
 import {
   FAST_SIM,
   createTestApp,
   get,
+  restartApp,
   stageOf,
   startRun,
   waitForRunStatus,
@@ -35,11 +35,7 @@ function statePath(home: string, runId: string): string {
  * Stand up a second orchestrator over the same data root — the component-test
  * equivalent of restarting the server.
  */
-async function restart() {
-  const orchestrator = new RunOrchestrator();
-  await orchestrator.init();
-  return { app: createApp({ orchestrator }), orchestrator };
-}
+const restart = restartApp;
 
 test("a finished run is written to state.json and its events to events.jsonl", async () => {
   // Arrange
@@ -107,6 +103,7 @@ test("a run left mid-flight by a crash is reconciled to failed, not left running
   const interrupted: RunState = {
     id: runId,
     number: 7,
+    projectId: HOME_PROJECT_ID,
     pipelineId: "sequential",
     pipelineName: "Sequential lifecycle",
     status: "running",

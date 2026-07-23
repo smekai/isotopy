@@ -2,23 +2,17 @@ import { useState } from "react";
 import { FolderOpen, Play } from "lucide-react";
 import {
   ENGINES,
+  HOME_PROJECT_ID,
   LIFECYCLE_STAGES,
   agentForStage,
   findPipeline,
   flattenPipelineStages,
   pipelineUsesEngineById,
 } from "@adhd/core";
-import {
-  loadEngine,
-  loadEngineModel,
-  loadPipelineId,
-  loadWorkspaceDir,
-  savePipelineId,
-  saveWorkspaceDir,
-} from "../settings";
+import type { Project } from "@adhd/core";
+import { loadEngine, loadEngineModel, loadPipelineId, savePipelineId } from "../settings";
 import type { Dir } from "../theme";
-import { SANS, specColor } from "../theme";
-import { FolderPicker } from "./FolderPicker";
+import { MONO, SANS, specColor } from "../theme";
 import { PipelineDropdown } from "./PipelineDropdown";
 import type { PipelineOption } from "./PipelineDropdown";
 
@@ -44,26 +38,43 @@ const PIPELINE_COPY: Record<string, PipelineCopy> = {
   },
 };
 
+function workspaceChipStyle(d: Dir): React.CSSProperties {
+  return {
+    display: "flex", alignItems: "center", gap: 8, alignSelf: "center",
+    border: `1px solid ${d.border}`, borderRadius: 12, padding: "7px 12px",
+    background: d.surface2, cursor: "pointer", maxWidth: "100%",
+  };
+}
+
 export interface EmptyStateProps {
   d: Dir;
-  onStart: (task: string, pipelineId: string, workspaceDir?: string) => void;
+  projectId: string;
+  project: Project | undefined;
+  onOpenProject: () => void;
+  onStart: (task: string, pipelineId: string) => void;
   starting?: boolean;
   initialTask?: string | undefined;
 }
 
-export function EmptyState({ d, onStart, starting = false, initialTask = "" }: EmptyStateProps) {
+export function EmptyState({
+  d,
+  projectId,
+  project,
+  onOpenProject,
+  onStart,
+  starting = false,
+  initialTask = "",
+}: EmptyStateProps) {
   const [input, setInput] = useState(initialTask);
-  const [pipelineId, setPipelineId] = useState(loadPipelineId);
-  const [workspaceDir, setWorkspaceDir] = useState(loadWorkspaceDir);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const firstRun = workspaceDir.trim() === "";
+  const [pipelineId, setPipelineId] = useState(() => loadPipelineId(projectId));
+  const scratch = projectId === HOME_PROJECT_ID;
   const canStart = input.trim().length > 0 && !starting;
   const usesEngine = pipelineUsesEngineById(pipelineId);
   const selectedPipeline = findPipeline(pipelineId);
   const stages = selectedPipeline
     ? flattenPipelineStages(selectedPipeline)
     : LIFECYCLE_STAGES;
-  const engine = ENGINES[loadEngine()];
+  const engine = ENGINES[loadEngine(projectId)];
 
   const pipelineOptions: PipelineOption[] = [
     {
@@ -87,27 +98,28 @@ export function EmptyState({ d, onStart, starting = false, initialTask = "" }: E
 
   function selectPipeline(id: string) {
     setPipelineId(id);
-    savePipelineId(id);
+    savePipelineId(projectId, id);
   }
 
   function start() {
     if (canStart) {
-      onStart(input.trim(), pipelineId, usesEngine ? workspaceDir.trim() : undefined);
+      onStart(input.trim(), pipelineId);
     }
   }
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "0 40px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {stages.map((stage, i) => {
           const agent = agentForStage(stage.id);
+          const spec = specColor(stage.id);
           return (
             <div key={stage.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 9, border: `1.5px solid ${specColor(stage.id).main}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: d.text }}>{agent.glyph}</div>
-                <div style={{ fontFamily: SANS, fontSize: 9, color: d.textMuted, whiteSpace: "nowrap" }}>{agent.profession}</div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, border: `1.5px solid ${spec.main}`, background: spec.soft, boxShadow: d.shadowSm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: spec.main }}>{agent.glyph}</div>
+                <div style={{ fontFamily: SANS, fontSize: 10, fontWeight: 600, color: d.textMid, whiteSpace: "nowrap" }}>{agent.profession}</div>
               </div>
-              {i < stages.length - 1 && <div style={{ width: 16, height: 2, borderRadius: 1, background: d.border }} />}
+              {i < stages.length - 1 && <div style={{ width: 16, height: 2, borderRadius: 1, background: d.runBorder, alignSelf: "flex-start", marginTop: 16 }} />}
             </div>
           );
         })}
@@ -153,60 +165,23 @@ export function EmptyState({ d, onStart, starting = false, initialTask = "" }: E
         </div>
 
         {usesEngine && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={workspaceDir}
-              onChange={(e) => {
-                setWorkspaceDir(e.target.value);
-                saveWorkspaceDir(e.target.value);
-              }}
-              placeholder="Working directory — empty = scratch workspace per run"
-              style={{
-                flex: 1,
-                border: `1px solid ${firstRun ? d.accent : d.border}`, borderRadius: 12, padding: "9px 14px",
-                background: "#FFF", color: d.text, fontFamily: SANS, fontSize: 12, outline: "none",
-              }}
-            />
-            <button
-              onClick={() => setPickerOpen(true)}
-              data-testid="browse-folder"
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                border: `1px solid ${firstRun ? d.accent : d.border}`, borderRadius: 12,
-                padding: "9px 14px", background: firstRun ? d.accentSoft : "#FFF",
-                color: firstRun ? d.accent : d.textMid, cursor: "pointer",
-                fontFamily: SANS, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
-              }}
-            >
-              <FolderOpen size={13} /> Browse…
-            </button>
-          </div>
-        )}
-        {usesEngine && firstRun && (
-          <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, textAlign: "center" }}>
-            Pick a project folder — otherwise the run works in a temporary scratch workspace.
-          </div>
+          <button onClick={onOpenProject} data-testid="workspace-chip" style={workspaceChipStyle(d)}>
+            <FolderOpen size={13} style={{ color: d.textMuted, flexShrink: 0 }} />
+            <span style={{ color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+              {scratch ? "Scratch workspace" : (project?.name ?? "Project")}
+            </span>
+            <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {scratch ? "this run gets its own folder" : (project?.root ?? "")}
+            </span>
+          </button>
         )}
       </div>
 
       <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
         {usesEngine
-          ? <>Engine: {engine.label} · {loadEngineModel(engine.id)} — change in Setup</>
+          ? <>Engine: {engine.label} · {loadEngineModel(projectId, engine.id)} — change in Setup</>
           : <>↵ to start · ⌘⇧V for voice</>}
       </div>
-
-      {pickerOpen && (
-        <FolderPicker
-          d={d}
-          initialPath={workspaceDir.trim() === "" ? undefined : workspaceDir.trim()}
-          onSelect={(picked) => {
-            setWorkspaceDir(picked);
-            saveWorkspaceDir(picked);
-            setPickerOpen(false);
-          }}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
     </div>
   );
 }

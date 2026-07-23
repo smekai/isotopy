@@ -1,10 +1,32 @@
-import type { EngineModelList, EngineStatus, RunEvent, RunState, SettingsView } from "@adhd/core";
-import { RUN_EVENT_TYPES } from "@adhd/core";
+import type {
+  EngineModelList,
+  EngineStatus,
+  Project,
+  ProjectsView,
+  RunEvent,
+  RunState,
+  SettingsView,
+} from "@adhd/core";
+import { HOME_PROJECT_ID, RUN_EVENT_TYPES } from "@adhd/core";
 
 const API_BASE = "";
+const PROJECT_HEADER = "X-ADHD-Project";
+
+let activeProjectId = HOME_PROJECT_ID;
+
+export function setActiveProjectId(projectId: string): void {
+  activeProjectId = projectId;
+}
+
+function projectHeaders(extra?: HeadersInit): HeadersInit {
+  return { ...(extra as Record<string, string>), [PROJECT_HEADER]: activeProjectId };
+}
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: projectHeaders(init?.headers),
+  });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Request failed: ${path}`);
@@ -18,6 +40,26 @@ function postJson<T>(path: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+}
+
+export function fetchProjects(): Promise<ProjectsView> {
+  return requestJson<ProjectsView>("/projects");
+}
+
+export interface AddProjectResult extends ProjectsView {
+  project: Project;
+}
+
+export function addProject(root: string): Promise<AddProjectResult> {
+  return postJson<AddProjectResult>("/projects", { root });
+}
+
+export function activateProject(projectId: string): Promise<ProjectsView> {
+  return postJson<ProjectsView>(`/projects/${projectId}/activate`);
+}
+
+export function removeProject(projectId: string): Promise<ProjectsView> {
+  return requestJson<ProjectsView>(`/projects/${projectId}`, { method: "DELETE" });
 }
 
 export function fetchSettings(): Promise<SettingsView> {
@@ -76,7 +118,6 @@ export interface StartRunOptions {
   disabledStages?: string[];
   engine?: string;
   model?: string;
-  workspaceDir?: string;
   permissionMode?: string;
   failProbability?: number;
 }

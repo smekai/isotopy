@@ -6,7 +6,15 @@ const REPO_ROOT = path.resolve(__dirname, "../..");
 
 // API prefixes proxied to the server during development.
 // Keep in sync with the route mounts in packages/server/src/app.ts.
-const API_PROXY_PATHS = ["/pipelines", "/runs", "/health", "/settings", "/engines", "/fs"];
+const API_PROXY_PATHS = [
+  "/pipelines",
+  "/projects",
+  "/runs",
+  "/health",
+  "/settings",
+  "/engines",
+  "/fs",
+];
 
 export default defineConfig(({ mode }) => {
   // Read the shared .env at the repo root so UI and server agree on ports.

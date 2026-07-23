@@ -179,16 +179,35 @@ the workspace is the source of truth, the reports only add what a box *said*.
 
 - **`REPO_ROOT` is anchored to this module's location, not `process.cwd()`.** The
   dev server runs with `cwd = packages/server` (via `pnpm --filter`), so a
-  cwd-relative data path would land in the wrong place.
-- **`adhdDir()` is a function, not a constant.** A constant would freeze
-  `ADHD_HOME` at import time; as a function, a test can point the data root at a
-  temp directory regardless of module load order. This is the seam the component
-  tests use to isolate their `.adhd/`.
+  cwd-relative path would land in the wrong place. Since TASK-059 it is used
+  *only* to find the tool's own `.env` — no user data hangs off it.
+- **Data paths are a value, not a constant.** Every storage call takes a
+  `ProjectPaths` (`id`, `root`, `dataDir`): a project's data lives in
+  `<root>/.adhd/`, so history sits beside the code it belongs to instead of
+  inside the ADHD checkout. See [`decisions.md`](./decisions.md) (2026-07-22).
+- **`homeProjectPaths()` and `userAdhdDir()` are functions, not constants.** A
+  constant would freeze `ADHD_HOME` / `ADHD_USER_HOME` at import time; as
+  functions, a test can point both roots at temp directories regardless of module
+  load order. That is the seam the component tests use — `ADHD_HOME` isolates the
+  home project's data, `ADHD_USER_HOME` the registry and credentials.
+- **The `.env` loader fills gaps only.** Values already in `process.env` win, so
+  `PORT=1234 pnpm dev` still overrides the file. Every config value has an env
+  override and a sensible default; nothing is hardcoded.
 - **The `.env` loader fills gaps only.** Values already in `process.env` win, so
   `PORT=1234 pnpm dev` still overrides the file. Every config value has an env
   override and a sensible default; nothing is hardcoded.
 
 ## UI
+
+**Project scoping (`ui/src/api.ts`, `hooks/useProjects.ts`, `settings.ts`).**
+`api.ts` stamps `X-ADHD-Project` onto every request from module state that
+`useProjects` keeps in step; the server still falls back to its own active
+project, so the browser copy is never the sole source of truth. `useProjects`
+exposes `ready`, and `App` loads nothing project-scoped until it flips — the
+switcher shows a placeholder name for that first tick, which is why an
+assertion on it has to wait for the list rather than reading the trigger
+immediately. Preferences are keyed `adhd.<projectId>.<name>` so two projects
+can hold different pipelines, models and permission modes at once.
 
 **Inline markdown renderer (`ui/src/inline-md.tsx`).** `INLINE_TOKEN` is one
 alternation with one branch per inline style, tried left-to-right at each
@@ -232,11 +251,58 @@ doesn't thrash the disk.
 **One workspace per run.** Every box works in the same directory, so the Tester
 sees exactly what the Developer wrote.
 
+## Projects (`domain/projects.ts`, `services/project-registry.ts`, `routes/project-scope.ts`)
+
+A project is a directory owning its `.adhd/`; the user-level registry at
+`~/.adhd/projects.json` holds paths and metadata only. See
+[`technical-architecture.md`](./technical-architecture.md) for the storage table
+and [`decisions.md`](./decisions.md) for why the home project is not `REPO_ROOT`.
+
+- **Project ids are `<slug>-<sha1(normalized root)>`** — readable enough to
+  recognise in a `localStorage` key, and never a raw path (a path is neither a
+  safe key segment nor stable across separator spellings). The hash is taken over
+  the *normalized* root, so `C:\Dev\App` and `c:/dev/app/` yield one id.
+- **Case is folded only on `win32`.** Windows filesystems are case-insensitive,
+  so those two spellings must be one project; on Linux they are genuinely two
+  directories and must stay distinct. This is why `normalizeProjectRoot` branches
+  on platform rather than lowercasing unconditionally.
+- **The home project is synthesised, never persisted.** It always exists, so the
+  registry is never empty and `resolve()` always has an answer; persisting it
+  would let a stale entry point somewhere that no longer matches `ADHD_HOME`.
+- **`unregister` is deliberately not called `remove`.** It drops the registry
+  entry and never touches the folder — a user's code and run history outlive
+  their interest in seeing the project in a dropdown.
+- **Requests resolve their project per call** via the `X-ADHD-Project` header,
+  falling back to the registry's active project. Run-scoped routes
+  (`/runs/:id/...`) need no project because run ids are globally unique — which
+  is also why SSE works, since `EventSource` cannot send headers.
+- **`dataDir` is derived on read, not stored.** `projects.json` holds only what a
+  user chose (id, name, root, timestamps); `all()` maps each entry through
+  `withDataDir` so the UI can name the folder runs land in without duplicating
+  the layout rule, and a stored file can never disagree with `paths.ts`.
+- **`ensureProjectDataDir` runs at run start as well as at registration.** A
+  project registered before the self-ignoring `.gitignore` existed — or one whose
+  `.adhd/` was deleted — would otherwise accumulate run artifacts that show up in
+  the user's `git status`.
+
+## Credentials (`services/settings-store.ts`)
+
+Engine connection settings live in the user-level `~/.adhd/settings.json`
+(mode `0600`) as `defaults` plus a per-project override map, never in a
+project's `.adhd/`.
+
+- **An inherited default is copied before it is edited**
+  (`detachedCopyOfResolvedEntry`). Aliasing the object and mutating it wrote the
+  edited entry back into `defaults`, leaking one project's API key to every other
+  project — a real defect, now covered by `projects.comp.ts`.
+
 ## Persistence (`services/run-store.ts`)
 
-One directory per run under `.adhd/runs/<id>/`: `state.json` is the
+One directory per run under `<project>/.adhd/runs/<id>/`: `state.json` is the
 atomically-rewritten snapshot (write to `.tmp`, then `rename`), `events.jsonl`
-is the append-only trail. The orchestrator is the only writer.
+is the append-only trail. The orchestrator is the only writer, and it holds one
+`RunStore` per project — the interface the orchestrator depends on, so a durable
+backend replaces `JsonRunStore` without touching the run lifecycle.
 
 - **Writes are serialized per run.** Two rapid transitions could otherwise clash
   on the shared `.tmp` file — Windows `rename` in particular is unforgiving about
@@ -269,14 +335,26 @@ These back read-only UI views and every path from the client is untrusted.
 
 ## Skills / personas (`services/skills.ts`, `domain/skills/`)
 
-Personas ("skills") are markdown at `.adhd/skills/<id>.md` so they can be edited
-and re-run without a rebuild. That directory is gitignored, so the bundled text
-in `domain/skills/defaults.ts` is the shipped source of truth: `loadSkill`
-prefers the on-disk file (re-read whenever its mtime changes, so edits apply to
-the next run) and falls back to the default, **seeding** the file with `wx` (never
-clobbering a user's copy) so the persona becomes an editable file rather than an
-invisible feature. Seeding is best-effort — a read-only or racing FS must not
-fail the run. The cache is keyed by resolved path, not skill id, because
-`ADHD_HOME` can move the skills directory and an id-keyed cache would survive the
-move. See [`architect-standards.md`](./architect-standards.md) for how the
-`architect` persona is generated from a single source.
+Personas ("skills") are markdown on disk so they can be edited and re-run without
+a rebuild, and the bundled text in `domain/skills/defaults.generated.ts` is the shipped
+source of truth. Files are re-read whenever their mtime changes, so an edit
+applies to the next run.
+
+**Nothing is seeded to disk.** `loadSkill` used to write the bundled default to
+`.adhd/skills/<id>.md` on first read; that copy then silently shadowed later
+improvements to the constant and had to be regenerated by hand during the
+TASK-053 follow-up. Personas are **layered** instead, composed by the pure
+`domain/skills/compose.ts`:
+
+1. bundled default in `domain/skills/defaults.generated.ts`;
+2. replaced by a user-level `~/.adhd/skills/<id>.md`, if present;
+3. replaced by `<project>/.adhd/skills/<id>.md`, if present — the power-user
+   escape hatch;
+4. plus `<project>/.adhd/skills/<id>.project.md` **appended** — the default way
+   to customise, carrying only the project's tweaks so improvements to the base
+   keep reaching it.
+
+The cache is keyed by resolved path, not skill id, because the data roots differ
+per project and an id-keyed cache would leak one project's persona into another.
+See [`architect-standards.md`](./architect-standards.md) for how the `architect`
+persona is generated from a single source.

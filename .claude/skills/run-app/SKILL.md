@@ -7,8 +7,8 @@ description: Launch and drive the ADHD app (Hono server :9477 + Vite UI :5173) �
 
 Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@adhd/server` (Hono, port **9477**) and `@adhd/ui`
-(Vite + React, port **5173**). The UI proxies `/pipelines`, `/runs`,
-`/health`, `/settings`, `/engines` to the server, so
+(Vite + React, port **5173**). The UI proxies `/pipelines`, `/projects`,
+`/runs`, `/health`, `/settings`, `/engines`, `/fs` to the server, so
 `http://localhost:5173/health` proves both are up.
 
 ## Launch
@@ -43,7 +43,12 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
   → `{"installed":true,"path":...,"version":...}`.
 - Connection settings: `GET /settings`, `PUT /settings/engines/claude-code`
   (`{"connectionMode":"subscription"|"api-key","apiKey":"..."|null}`);
-  stored in gitignored `.adhd/settings.json`, key never echoed back.
+  stored user-level in `~/.adhd/settings.json` keyed by project, key never
+  echoed back. Scope any call to a project with `-H "X-ADHD-Project: <id>"`.
+- Projects: `GET /projects` → the registry (`home` always present);
+  `POST /projects` (`{"root":"C:/some/dir"}`) registers one and creates its
+  self-ignoring `.adhd/`; `POST /projects/<id>/activate`; `DELETE /projects/<id>`
+  unregisters without touching files.
 - Backend behaviour without a browser or a server: `pnpm test`
   (Vitest component tests, ~1.5s, mocks the engine adapter). Reach
   for this before driving the UI.
@@ -70,18 +75,22 @@ Test ids for the moving parts: `run-status` (run status word — stage
 nodes render the same words for themselves, so always anchor on
 this), `stage-node-<stageId>`, `stage-profession`, `stage-persona`,
 `stage-verdict`, `artifact-preview`, `artifact-view-workflow` /
-`artifact-view-files`, `history-card`.
+`artifact-view-files`, `history-card`, `project-switcher`,
+`open-project` / `project-drawer` / `project-root`, `workspace-chip`.
 
 ## Starting a run without the UI
 
 ```bash
 curl -s -X POST http://localhost:9477/runs -H "content-type: application/json" \
-  -d '{"pipelineId":"one-box","task":"...","engine":"claude-code","model":"haiku","workspaceDir":"C:/some/existing/dir"}'
+  -H "X-ADHD-Project: <projectId>" \
+  -d '{"pipelineId":"one-box","task":"...","engine":"claude-code","model":"haiku"}'
 # then stream: curl -N http://localhost:9477/runs/<id>/events
 ```
 
-`workspaceDir` must exist (else 400); omit it for a scratch workspace
-per run. `model` takes standard-context CLI aliases (`opus`/`sonnet`/
+The working directory is **not** a request field: a run works in its
+project's folder, and a `home` run gets `~/.adhd/home/runs/<id>/workspace`.
+Target a folder by targeting its project (`X-ADHD-Project`, or activate
+it first). `model` takes standard-context CLI aliases (`opus`/`sonnet`/
 `haiku`); full model IDs resolve to 1M-context variants that
 subscription plans reject ("Usage credits required for 1M context").
 

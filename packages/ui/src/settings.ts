@@ -6,28 +6,30 @@ import {
   LEGACY_MODEL_ALIASES,
 } from "@adhd/core";
 
-const STORAGE_KEY = "adhd.disabledStages";
+export function prefKey(projectId: string, name: string): string {
+  return `adhd.${projectId}.${name}`;
+}
 
-function loadString(key: string): string | null {
+function loadString(projectId: string, name: string): string | null {
   try {
-    return localStorage.getItem(key);
+    return localStorage.getItem(prefKey(projectId, name));
   } catch {
     return null;
   }
 }
 
-function saveString(key: string, value: string): void {
+function saveString(projectId: string, name: string, value: string): void {
   try {
-    localStorage.setItem(key, value);
+    localStorage.setItem(prefKey(projectId, name), value);
   } catch {}
 }
 
-export function loadDisabledStages(): string[] {
+export function loadDisabledStages(projectId: string): string[] {
+  const raw = loadString(projectId, "disabledStages");
+  if (!raw) {
+    return [];
+  }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed)
       ? parsed.filter((item): item is string => typeof item === "string")
@@ -37,62 +39,57 @@ export function loadDisabledStages(): string[] {
   }
 }
 
-export function saveDisabledStages(stageIds: string[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stageIds));
-  } catch {}
+export function saveDisabledStages(projectId: string, stageIds: string[]): void {
+  saveString(projectId, "disabledStages", JSON.stringify(stageIds));
 }
 
-export function loadEngine(): EngineId {
-  const raw = loadString("adhd.engine");
+export function loadEngine(projectId: string): EngineId {
+  const raw = loadString(projectId, "engine");
   return raw && raw in ENGINES ? (raw as EngineId) : "claude-code";
 }
 
-export function saveEngine(engine: EngineId): void {
-  saveString("adhd.engine", engine);
+export function saveEngine(projectId: string, engine: EngineId): void {
+  saveString(projectId, "engine", engine);
 }
 
-export function loadEngineModel(engineId: EngineId): string {
-  const raw =
-    loadString(`adhd.engineModel.${engineId}`) ??
-    (engineId === "claude-code" ? loadString("adhd.engineModel") : null);
+export function loadEngineModel(projectId: string, engineId: EngineId): string {
+  const raw = loadString(projectId, `engineModel.${engineId}`);
   if (raw === null) {
     return defaultModelFor(engineId);
   }
   const migrated = LEGACY_MODEL_ALIASES[engineId][raw];
   if (migrated !== undefined) {
-    saveString(`adhd.engineModel.${engineId}`, migrated);
+    saveString(projectId, `engineModel.${engineId}`, migrated);
     return migrated;
   }
   return raw;
 }
 
-export function saveEngineModel(engineId: EngineId, model: string): void {
-  saveString(`adhd.engineModel.${engineId}`, model);
+export function saveEngineModel(
+  projectId: string,
+  engineId: EngineId,
+  model: string,
+): void {
+  saveString(projectId, `engineModel.${engineId}`, model);
 }
 
-export function loadPermissionMode(): EnginePermissionMode {
-  return loadString("adhd.permissionMode") === "acceptEdits"
+export function loadPermissionMode(projectId: string): EnginePermissionMode {
+  return loadString(projectId, "permissionMode") === "acceptEdits"
     ? "acceptEdits"
     : DEFAULT_PERMISSION_MODE;
 }
 
-export function savePermissionMode(mode: EnginePermissionMode): void {
-  saveString("adhd.permissionMode", mode);
+export function savePermissionMode(
+  projectId: string,
+  mode: EnginePermissionMode,
+): void {
+  saveString(projectId, "permissionMode", mode);
 }
 
-export function loadPipelineId(): string {
-  return loadString("adhd.pipelineId") ?? "sequential";
+export function loadPipelineId(projectId: string): string {
+  return loadString(projectId, "pipelineId") ?? "sequential";
 }
 
-export function savePipelineId(pipelineId: string): void {
-  saveString("adhd.pipelineId", pipelineId);
-}
-
-export function loadWorkspaceDir(): string {
-  return loadString("adhd.workspaceDir") ?? "";
-}
-
-export function saveWorkspaceDir(dir: string): void {
-  saveString("adhd.workspaceDir", dir);
+export function savePipelineId(projectId: string, pipelineId: string): void {
+  saveString(projectId, "pipelineId", pipelineId);
 }

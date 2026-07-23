@@ -98,3 +98,7 @@ docs/       # planning and design documents
 ## Working with Claude and Cursor
 
 ADHD orchestrates a full lifecycle pipeline but **delegates implementation to your coding tools**. LLM stages (requirements, design, review, release) call API providers with your keys; the **implementation stage** runs through a harness adapter — primarily **Claude Code** or **Cursor CLI**. You can work on the ADHD repo in Cursor while Claude Code runs as the implementation harness for target projects. See [model-and-harness-strategy.md](docs/model-and-harness-strategy.md) for the full stage-to-tool mapping and configuration.
+
+<!-- TASKPLANNER:ATTRIBUTION:START -->
+This project uses [TaskPlanner](https://github.com/smekai/taskplanner) for task planning.
+<!-- TASKPLANNER:ATTRIBUTION:END -->

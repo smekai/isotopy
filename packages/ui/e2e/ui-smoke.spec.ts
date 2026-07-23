@@ -1,9 +1,20 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 // Free tier of docs/e2e-test-plan.md: picker, Setup modal, persistence,
 // history drawer. Starts no runs — safe to execute on every change.
 // Assumes a quiet server (no in-flight run, otherwise the empty state
 // is replaced by the run view).
+
+/**
+ * Preferences are scoped by project id, so a storage assertion has to ask the
+ * server which project is active rather than hardcoding a key.
+ */
+async function prefKey(page: Page, name: string): Promise<string> {
+  const response = await page.request.get("/projects");
+  const { activeProjectId } = (await response.json()) as { activeProjectId: string };
+  return `adhd.${activeProjectId}.${name}`;
+}
 
 test("empty state shows the pipeline dropdown and a disabled start button", async ({ page }) => {
   await page.goto("/");
@@ -24,14 +35,18 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
   await expect(page.getByRole("button", { name: /Start run/ })).toBeEnabled();
 });
 
-test("single-agent mode reveals the workspace input and engine caption", async ({ page }) => {
+test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Full team" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
 
   await expect(page.getByText("What should the Developer build?")).toBeVisible();
-  await expect(page.getByPlaceholder(/Working directory/)).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
+
+  // The folder is the project's, so the composer states it and offers no way
+  // to type another one.
+  await expect(page.getByTestId("workspace-chip")).toBeVisible();
+  await expect(page.getByPlaceholder(/Working directory/)).toHaveCount(0);
 });
 
 test("Setup → AI Harness lists engines, status, models, and permission modes", async ({ page }) => {
@@ -115,21 +130,25 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   await expect(page.locator("select")).toHaveValue("haiku");
 
   // permission mode is stored (UI selection is style-only, so assert storage)
-  const stored = await page.evaluate(() => localStorage.getItem("adhd.permissionMode"));
+  const stored = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    await prefKey(page, "permissionMode"),
+  );
   expect(stored).toBe("acceptEdits");
 });
 
 test("legacy full model IDs migrate to standard-context CLI aliases", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => localStorage.setItem("adhd.engineModel", "claude-sonnet-4-6"));
+  const modelKey = await prefKey(page, "engineModel.claude-code");
+  await page.evaluate((key) => localStorage.setItem(key, "claude-sonnet-4-6"), modelKey);
   await page.reload();
 
   await page.getByRole("button", { name: "Full team" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
-  // the migrated value lands in the per-engine key introduced in TASK-037
-  const stored = await page.evaluate(() => localStorage.getItem("adhd.engineModel.claude-code"));
+  // the alias is rewritten in place, in the active project's own key
+  const stored = await page.evaluate((key) => localStorage.getItem(key), modelKey);
   expect(stored).toBe("sonnet");
 });
 

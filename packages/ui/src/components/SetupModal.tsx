@@ -10,6 +10,7 @@ import type {
 import {
   ENGINES,
   LIFECYCLE_STAGES,
+  PERMISSION_MODES,
   agentForStage,
   defaultConnectionMode,
   modelOptionsFor,
@@ -39,11 +40,6 @@ import type { Dir } from "../theme";
 
 const GATED_STAGES = LIFECYCLE_STAGES.filter((stage) => stage.gateAfter);
 
-const PERMISSION_MODES: { id: EnginePermissionMode; label: string; desc: string }[] = [
-  { id: "skip", label: "Never block (recommended)", desc: "The engine runs fully autonomously — no permission prompts." },
-  { id: "acceptEdits", label: "Accept edits only", desc: "File edits auto-approved; shell commands may stall the run." },
-];
-
 const MODEL_SOURCE_LABEL: Record<EngineModelList["source"], string> = {
   cli: "from the CLI",
   config: "from the CLI's config",
@@ -59,20 +55,45 @@ const INSTALLERS: Partial<Record<EngineId, { label: string; loginCmd: string; en
   codex: { label: "Install Codex CLI", loginCmd: "codex login", envVar: "ADHD_CODEX_PATH" },
 };
 
+export type SetupSection = "harness" | "pipeline" | "gates" | "appearance" | "deploy";
+
+const SECTIONS: { id: SetupSection; label: string }[] = [
+  { id: "harness", label: "AI Harness" },
+  { id: "pipeline", label: "Pipeline" },
+  { id: "gates", label: "Gates" },
+  { id: "appearance", label: "Appearance" },
+  { id: "deploy", label: "Deploy Target" },
+];
+
 export interface SetupModalProps {
   d: Dir;
+  projectId: string;
+  projectName: string;
+  section?: SetupSection;
   onClose: () => void;
 }
 
-export function SetupModal({ d, onClose }: SetupModalProps) {
+export function SetupModal({
+  d,
+  projectId,
+  projectName,
+  section = "harness",
+  onClose,
+}: SetupModalProps) {
   const { dirId, setDirId } = useTheme();
-  const [sec, setSec] = useState("harness");
-  const [disabledStages, setDisabledStages] = useState<string[]>(loadDisabledStages);
-  const [harness, setHarness] = useState<EngineId>(loadEngine);
-  const [model, setModel] = useState(() => loadEngineModel(loadEngine()));
-  const [modelList, setModelList] = useState<EngineModelList>(() => seedModelList(loadEngine()));
+  const [sec, setSec] = useState<SetupSection>(section);
+  const [disabledStages, setDisabledStages] = useState<string[]>(() =>
+    loadDisabledStages(projectId),
+  );
+  const [harness, setHarness] = useState<EngineId>(() => loadEngine(projectId));
+  const [model, setModel] = useState(() => loadEngineModel(projectId, loadEngine(projectId)));
+  const [modelList, setModelList] = useState<EngineModelList>(() =>
+    seedModelList(loadEngine(projectId)),
+  );
   const [customModel, setCustomModel] = useState(false);
-  const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(loadPermissionMode);
+  const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(() =>
+    loadPermissionMode(projectId),
+  );
   const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusNonce, setStatusNonce] = useState(0);
@@ -85,14 +106,6 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
   const [copied, setCopied] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  const sections = [
-    { id: "harness", label: "AI Harness" },
-    { id: "pipeline", label: "Pipeline" },
-    { id: "gates", label: "Gates" },
-    { id: "appearance", label: "Appearance" },
-    { id: "deploy", label: "Deploy Target" },
-  ];
 
   useEffect(() => {
     fetchSettings()
@@ -143,7 +156,7 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
       const next = current.includes(stageId)
         ? current.filter((id) => id !== stageId)
         : [...current, stageId];
-      saveDisabledStages(next);
+      saveDisabledStages(projectId, next);
       return next;
     });
   }
@@ -246,9 +259,9 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
         <div style={{ width: 160, background: d.surface2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${d.border}` }}>
             <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 800 }}>Setup</div>
-            <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>my-saas-app</div>
+            <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{projectName}</div>
           </div>
-          {sections.map((s) => (
+          {SECTIONS.map((s) => (
             <button
               key={s.id}
               onClick={() => setSec(s.id)}
@@ -369,8 +382,8 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
                       onClick={() => {
                         if (opt.available) {
                           setHarness(opt.id);
-                          saveEngine(opt.id);
-                          setModel(loadEngineModel(opt.id));
+                          saveEngine(projectId, opt.id);
+                          setModel(loadEngineModel(projectId, opt.id));
                         }
                       }}
                       disabled={!opt.available}
@@ -500,7 +513,7 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{apiKeyMode?.label ?? "API key"}</div>
                   <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 }}>
-                    Stored server-side in .adhd/settings.json (plaintext, gitignored) — never sent back to the browser.
+                    Stored server-side in your user-level ~/.adhd/settings.json for {projectName} — never inside the project folder, never sent back to the browser.
                   </div>
                   {apiKeyConfigured && (
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -531,7 +544,7 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
               <select value={model}
                 onChange={(e) => {
                   setModel(e.target.value);
-                  saveEngineModel(harness, e.target.value);
+                  saveEngineModel(projectId, harness, e.target.value);
                 }}
                 style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: 6 }}>
                 {modelOptions.map((opt) => (
@@ -552,7 +565,7 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
                 <input value={model}
                   onChange={(e) => {
                     setModel(e.target.value);
-                    saveEngineModel(harness, e.target.value);
+                    saveEngineModel(projectId, harness, e.target.value);
                   }}
                   placeholder="Exact model ID passed to the CLI (blank = Auto)"
                   style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: d.surface2, outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }} />
@@ -570,13 +583,15 @@ export function SetupModal({ d, onClose }: SetupModalProps) {
                     <button key={opt.id}
                       onClick={() => {
                         setPermissionMode(opt.id);
-                        savePermissionMode(opt.id);
+                        savePermissionMode(projectId, opt.id);
                       }}
                       style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
                       <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
                       <div>
-                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
-                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.desc}</div>
+                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>
+                          {opt.recommended ? `${opt.label} (recommended)` : opt.label}
+                        </div>
+                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
                       </div>
                     </button>
                   );

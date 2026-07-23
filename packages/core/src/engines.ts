@@ -4,6 +4,31 @@ export type EnginePermissionMode = "skip" | "acceptEdits";
 
 export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";
 
+export interface EnginePermissionModeDefinition {
+  id: EnginePermissionMode;
+  label: string;
+  description: string;
+  recommended?: boolean;
+}
+
+export const PERMISSION_MODES: EnginePermissionModeDefinition[] = [
+  {
+    id: "skip",
+    label: "Never block",
+    description: "The engine runs fully autonomously — no permission prompts.",
+    recommended: true,
+  },
+  {
+    id: "acceptEdits",
+    label: "Accept edits only",
+    description: "File edits auto-approved; shell commands may stall the run.",
+  },
+];
+
+export function permissionModeLabel(mode: EnginePermissionMode): string {
+  return PERMISSION_MODES.find((option) => option.id === mode)?.label ?? mode;
+}
+
 export interface EngineConnectionDefinition {
   id: string;
   label: string;

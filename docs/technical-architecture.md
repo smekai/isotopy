@@ -406,10 +406,57 @@ harness:
 
 ## Artifact storage strategy
 
+### Where a project's data lives
+
+A **project** is a directory that owns its own `.adhd/`, the way a repository
+owns its `.git/`. History travels with the code and is isolated by construction.
+Nothing is anchored to the ADHD checkout: `paths.ts` exports a `ProjectPaths`
+value (`id`, `root`, `dataDir`) that callers receive, and `REPO_ROOT` survives
+only for loading the tool's own `.env`.
+
+| Location | Holds | Scope |
+|----------|-------|-------|
+| `<project>/.adhd/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md` | One project |
+| `<project>/.adhd/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
+| `<project>/.adhd/skills/<id>.md` | Full persona replacement (power users) | One project |
+| `<project>/.adhd/.gitignore` | `*` — the folder ignores itself by default | One project |
+| `~/.adhd/projects.json` | Known projects (paths + metadata) and the active one | User |
+| `~/.adhd/settings.json` | Engine connection modes and **API keys**, `defaults` + per-project overrides, mode `0600` | User |
+| `~/.adhd/skills/<id>.md` | User-level persona override of the bundled default | User |
+| `~/.adhd/home/runs/<run-id>/workspace/` | Scratch working folder — **home runs only** | User |
+| `~/.adhd/home/` | Data root of the **home** project — the fallback when no project is selected | User |
+
+**A run works in its project's folder.** The working directory is derived, never
+requested: `resolveWorkspace(paths, runId)` returns the project root, or — for
+the home project, which has no code of its own — a scratch
+`runs/<run-id>/workspace/` used by that run alone. A client cannot name the
+directory an agent runs in; it selects a *project*, and the project's root is
+fixed when it is registered. Run artifacts always stay in the per-run folder
+under `.adhd/`, which ignores itself from git.
+
+**Secrets never enter a project folder.** `<project>/.adhd/` sits in the user's
+git working tree, so credentials live only in the user-level store, keyed by
+project id, with user-level defaults a new project inherits until it overrides
+them.
+
+**Skills layer rather than replace:** bundled default (`domain/skills/defaults.generated.ts`)
+→ user-level override → project addendum appended. Nothing is written to disk on
+read, so improvements to a bundled persona keep reaching every project.
+
+**Resolving the active project:** the registry names one, and any request may
+override it with an `X-ADHD-Project` header. Run-scoped routes (`/runs/:id/...`)
+need no project — run ids are globally unique, which is also why SSE works
+without a header.
+
+`ADHD_HOME` overrides the home project's data directory and `ADHD_USER_HOME` the
+user-level root; both exist so tests get isolated roots.
+
+### Promotion
+
 | Artifact type | Location | Git tracked? |
 |---------------|----------|--------------|
 | Tasks | `.adhd/tasks/` | Optional (gitignore by default) |
-| Run state, events | `.adhd/runs/` | Optional (gitignore by default) |
+| Run state, events | `<project>/.adhd/runs/` | No (self-ignoring by default) |
 | Approved specs | `specs/<slug>/` | Yes (on user opt-in) |
 | Code changes | `adhd/*` branch | Yes (normal git) |
 | Agent prompts | `.adhd/agents/` | Yes (team customization) |

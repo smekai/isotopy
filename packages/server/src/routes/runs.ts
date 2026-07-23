@@ -2,15 +2,20 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { isTerminalRunStatus } from "@adhd/core";
 import type { RunEvent } from "@adhd/core";
+import type { ProjectRegistry } from "../services/project-registry.js";
 import type { RunOrchestrator } from "../services/run-orchestrator.js";
 import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-files.js";
+import { projectScope } from "./project-scope.js";
 
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;
 
-export function createRunRoutes(orchestrator: RunOrchestrator): Hono {
+export function createRunRoutes(
+  orchestrator: RunOrchestrator,
+  registry: ProjectRegistry,
+): Hono {
   return new Hono()
-    .get("/", (c) => c.json(orchestrator.listRuns()))
+    .get("/", (c) => c.json(orchestrator.listRuns(projectScope(registry, c).id)))
 
     .get("/:id", (c) => {
       const run = orchestrator.getRun(c.req.param("id"));
@@ -28,7 +33,6 @@ export function createRunRoutes(orchestrator: RunOrchestrator): Hono {
           disabledStages?: string[];
           engine?: string;
           model?: string;
-          workspaceDir?: string;
           permissionMode?: string;
           failProbability?: number;
           minDurationMs?: number;
@@ -38,12 +42,11 @@ export function createRunRoutes(orchestrator: RunOrchestrator): Hono {
       const pipelineId = body.pipelineId ?? "sequential";
 
       try {
-        const run = await orchestrator.startRun(pipelineId, {
+        const run = await orchestrator.startRun(projectScope(registry, c), pipelineId, {
           task: body.task,
           disabledStages: body.disabledStages,
           engine: body.engine,
           model: body.model,
-          workspaceDir: body.workspaceDir,
           permissionMode: body.permissionMode,
           ...(body.failProbability !== undefined
             ? { failProbability: body.failProbability }

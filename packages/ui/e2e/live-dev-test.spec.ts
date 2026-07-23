@@ -35,8 +35,12 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
 
   await page.goto("/");
 
-  // Cheapest model, and a scratch workspace (blank working directory) so the
-  // run cannot write into a real project.
+  // The run works in the active project's folder, so switch to Home first: its
+  // runs get a scratch workspace each and cannot touch real code.
+  await page.getByTestId("project-switcher").click();
+  await page.getByRole("option", { name: /Home/ }).click();
+
+  // Cheapest model.
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
   await page.locator("select").selectOption("haiku");
@@ -44,7 +48,6 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
 
   await page.getByRole("button", { name: "Full team" }).click();
   await page.getByRole("option", { name: /Developer \+ Tester/ }).click();
-  await page.getByPlaceholder(/Working directory/).fill("");
   await page.getByPlaceholder("Describe the task...").fill(TASK);
   await page.getByRole("button", { name: /Start run/ }).click();
 

@@ -43,9 +43,9 @@ Core stays dependency-free and side-effect-free: types, constants, and pure func
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/services/` | I/O and lifecycle (run orchestrator, persistence, skill loading); no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: `stage-context.ts` (prompt/handoff/verdict), `skills/defaults.ts` (bundled persona text). No I/O — the thin-service/fat-domain split (A3) |
+| `src/domain/` | Server-only **pure** logic: `stage-context.ts` (prompt/handoff/verdict), `skills/defaults.generated.ts` + `skills/personas/*.md` (bundled persona text), `skills/compose.ts` (persona layering). No I/O — the thin-service/fat-domain split (A3) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
-| `src/settings.ts`, `src/paths.ts` | Persistence/filesystem helpers |
+| `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |
 | `src/utils.ts` | Pure, context-free helpers (no I/O, no internal imports) |
 | `test/` | Component tests, unit specs, and their support harness ([`testing.md`](./testing.md)) — never colocated with `src/`, which would emit them into `dist/` |
 
@@ -64,7 +64,7 @@ Dependency direction: `index.ts → app.ts → routes → services → engines/c
 - **No hardcoded hosts/ports.** Everything comes from env vars with sensible defaults — see [`.env.example`](../.env.example). Copy it to `.env` (gitignored) for local overrides.
 - The server loads the root `.env` itself (`src/config.ts`), Vite reads the same file via `loadEnv`, so one file drives both processes.
 - Named constants over magic numbers: timeouts, poll intervals, and status lists are declared at the top of the module that owns them (or in `@adhd/core` when shared, e.g. `TERMINAL_RUN_STATUSES`).
-- Secrets (API keys) never go in code or `.env.example`; runtime secrets live in `.adhd/settings.json` (gitignored) or real env vars.
+- Secrets (API keys) never go in code or `.env.example`; runtime secrets live in the user-level `~/.adhd/settings.json` (mode `0600`) or real env vars — **never** in a project's `.adhd/`, which sits in the user's git working tree.
 
 ## Subsystem review: Developer→Tester flow (TASK-049)
 
@@ -77,7 +77,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 | `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
 | `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
 
-Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults (pure data) sit in `skill-defaults.ts` apart from the I/O in `skills.ts`; `run-store.ts` remains the only module that knows the run disk layout; no `console.*` in the new modules; no hardcoded paths or secrets.
+Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults (pure data) sit in `domain/skills/` apart from the I/O in `skills.ts`; `run-store.ts` remains the only module that knows the run disk layout; no `console.*` in the new modules; no hardcoded paths or secrets.
 
 **Deliberate seam:** `RunOrchestrator.executeStage()` is the single decision point for how a stage runs. A durable-workflow executor (Aiki) replaces that method alone — engine adapters and the surrounding lifecycle are untouched.
 
@@ -91,7 +91,7 @@ Already in place:
 - **`import type`** for type-only imports (enforced by lint).
 - **UI-safe views**: the server never serializes secrets to the client (`SettingsView`).
 - **Layered tests** — component tests (Vitest, `pnpm test`) are the primary level; specs cover complicated pure functions; Playwright covers only the browser; one opt-in live canary. See [`testing.md`](./testing.md) for the policy and the AAAAA convention (TASK-062).
-- **Testable seams** — `ADHD_HOME` moves the data root, `setEngineAdapter()` substitutes a harness, and `createApp({ orchestrator })` injects the service instead of routes reaching for a module singleton.
+- **Testable seams** — `ADHD_HOME` and `ADHD_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, `RunOrchestrator` takes its `RunStore` factory, and `createApp({ orchestrator, registry, settings })` injects services instead of routes reaching for a module singleton.
 
 Recommended next steps, in rough priority order:
 

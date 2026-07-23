@@ -5,12 +5,17 @@ The **prescriptive** standard for how code in this repo is written. Where
 *prescribes* what any new or refactored code must look like — and it is the
 single source the two Architect consumers are generated from.
 
-> **This file is the source of truth.** Do not hand-edit
-> [`.claude/skills/architect/SKILL.md`](../.claude/skills/architect/SKILL.md) or
-> `packages/server/src/domain/skills/architect.generated.ts` — both are emitted
-> by [`scripts/generate-architect-skill.mjs`](../scripts/generate-architect-skill.mjs).
-> Edit the `gen:` blocks below and run `pnpm gen:skills`. A drift test
-> (`architect-skill.spec.ts`) fails the build if the committed outputs diverge.
+> **This file is the source of truth for the Architect persona.** Do not
+> hand-edit [`.claude/skills/architect/SKILL.md`](../.claude/skills/architect/SKILL.md)
+> or `packages/server/src/domain/skills/defaults.generated.ts` — both are emitted
+> by [`scripts/generate-skills.mjs`](../scripts/generate-skills.mjs). Edit the
+> `gen:` blocks below and run `pnpm gen:skills`. A drift test
+> (`skill-generation.spec.ts`) fails the build if the committed outputs diverge.
+>
+> The other personas are plain markdown in
+> `packages/server/src/domain/skills/personas/` and feed the same generated
+> module; only the Architect is composed from this document, because it must stay
+> identical to the standard it enforces.
 
 The generator reads four named blocks — `shared`, `skill`, `persona-head`,
 `persona-tail` — delimited by `<!-- gen:NAME:start -->` / `<!-- gen:NAME:end -->`.

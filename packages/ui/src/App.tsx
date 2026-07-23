@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, History, Settings, Sparkles } from "lucide-react";
+import { FolderOpen, History, Settings, Sparkles } from "lucide-react";
 import type { RunState, RunStatus } from "@adhd/core";
 import { pipelineUsesEngineById } from "@adhd/core";
 import { abortRun, approveGate, fetchRuns, restartRun, startRun } from "./api";
 import { EmptyState } from "./components/EmptyState";
 import { HistoryDrawer } from "./components/HistoryDrawer";
 import { PipelineRow } from "./components/PipelineRow";
+import { ProjectDrawer } from "./components/ProjectDrawer";
+import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunStatusBar } from "./components/RunStatusBar";
 import { SetupModal } from "./components/SetupModal";
+import type { SetupSection } from "./components/SetupModal";
 import { StageFocusPanel } from "./components/StageFocusPanel";
 import type { FocusTab } from "./components/StageFocusPanel";
 import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
+import { useProjects } from "./hooks/useProjects";
 import { useRunEvents } from "./hooks/useRunEvents";
-import { isScratchWorkspace } from "./run-utils";
 import {
   loadDisabledStages,
   loadEngine,
@@ -23,7 +26,6 @@ import {
   saveEngine,
   saveEngineModel,
   savePipelineId,
-  saveWorkspaceDir,
 } from "./settings";
 import { SANS } from "./theme";
 import { useTheme } from "./ThemeContext";
@@ -32,6 +34,8 @@ const TERMINAL_RUN_STATUSES: RunStatus[] = ["completed", "failed", "cancelled"];
 
 export function App() {
   const { d } = useTheme();
+  const projects = useProjects();
+  const projectId = projects.activeId;
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [resubKey, setResubKey] = useState(0);
   const [booted, setBooted] = useState(false);
@@ -41,7 +45,8 @@ export function App() {
   const tabChosenByUser = useRef(false);
   const [pipeVs, setPipeVs] = useState<VoiceState>("idle");
   const [stageVs, setStageVs] = useState<VoiceState>("idle");
-  const [showSetup, setShowSetup] = useState(false);
+  const [setupSection, setSetupSection] = useState<SetupSection | null>(null);
+  const [showProject, setShowProject] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,17 +54,36 @@ export function App() {
 
   const { run, error: runError } = useRunEvents(activeRunId, resubKey);
 
+  function clearRunViewForProjectSwitch() {
+    setBooted(false);
+    setActiveRunId(null);
+    setFocusedId(null);
+    setPinned(false);
+  }
+
   useEffect(() => {
+    if (!projects.ready) {
+      return;
+    }
+    let stale = false;
+    clearRunViewForProjectSwitch();
     void fetchRuns()
       .then((runs) => {
         const active = runs.find((r) => !TERMINAL_RUN_STATUSES.includes(r.status));
-        if (active) {
+        if (active && !stale) {
           setActiveRunId(active.id);
         }
       })
       .catch(() => {})
-      .finally(() => setBooted(true));
-  }, []);
+      .finally(() => {
+        if (!stale) {
+          setBooted(true);
+        }
+      });
+    return () => {
+      stale = true;
+    };
+  }, [projects.ready, projectId]);
 
   const runStatus = run?.status;
   useEffect(() => {
@@ -94,22 +118,22 @@ export function App() {
     tabChosenByUser.current = false;
   }
 
-  async function handleStart(task: string, pipelineId: string, workspaceDir?: string) {
+  async function handleStart(task: string, pipelineId: string) {
     setError(null);
     setStarting(true);
     try {
       const usesEngine = pipelineUsesEngineById(pipelineId);
+      const engine = loadEngine(projectId);
       const created = await startRun({
         task,
         pipelineId,
         ...(usesEngine
           ? {
-              engine: loadEngine(),
-              model: loadEngineModel(loadEngine()),
-              permissionMode: loadPermissionMode(),
-              ...(workspaceDir ? { workspaceDir } : {}),
+              engine,
+              model: loadEngineModel(projectId, engine),
+              permissionMode: loadPermissionMode(projectId),
             }
-          : { disabledStages: loadDisabledStages() }),
+          : { disabledStages: loadDisabledStages(projectId) }),
       });
       setFocusedId(null);
       attachRun(created.id);
@@ -155,11 +179,10 @@ export function App() {
   }
 
   function handleRerun(source: RunState) {
-    savePipelineId(source.pipelineId);
-    saveWorkspaceDir(isScratchWorkspace(source.workspacePath) ? "" : (source.workspacePath ?? ""));
+    savePipelineId(projectId, source.pipelineId);
     if (source.engine) {
-      saveEngine(source.engine);
-      saveEngineModel(source.engine, source.model ?? "");
+      saveEngine(projectId, source.engine);
+      saveEngineModel(projectId, source.engine, source.model ?? "");
     }
     setShowHistory(false);
     setActiveRunId(null);
@@ -181,7 +204,7 @@ export function App() {
   const awaitingStage = run?.stages.find((stage) => stage.status === "awaiting");
   const focusedStage = run?.stages.find((stage) => stage.id === focusedId);
   const showEmpty = booted && !activeRunId;
-  const banner = error ?? runError;
+  const banner = error ?? runError ?? projects.error;
 
   const dotGrid = `radial-gradient(circle, ${d.border.replace("0.12", "0.20")} 1px, transparent 1px)`;
 
@@ -197,18 +220,27 @@ export function App() {
 
         <div style={{ width: 1, height: 22, background: d.border }} />
 
-        <button style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 13, fontWeight: 500 }}>
-          my-saas-app <ChevronDown size={13} style={{ color: d.textMuted }} />
-        </button>
+        <ProjectSwitcher
+          d={d}
+          projects={projects.projects}
+          activeId={projectId}
+          onSelect={(id) => void projects.select(id)}
+          onAdd={(root) => void projects.add(root)}
+          onRemove={(id) => void projects.remove(id)}
+        />
 
         <div style={{ flex: 1 }} />
 
         <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setShowProject(true)} data-testid="open-project"
+            style={{ display: "flex", alignItems: "center", gap: 6, background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 500 }}>
+            <FolderOpen size={13} /> Project
+          </button>
           <button onClick={() => setShowHistory(true)}
             style={{ display: "flex", alignItems: "center", gap: 6, background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 500 }}>
             <History size={13} /> History
           </button>
-          <button onClick={() => setShowSetup(true)}
+          <button onClick={() => setSetupSection("harness")}
             style={{ display: "flex", alignItems: "center", gap: 6, background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 500 }}>
             <Settings size={13} /> Setup
           </button>
@@ -224,12 +256,13 @@ export function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundImage: dotGrid, backgroundSize: "26px 26px" }}>
         {showEmpty ? (
           <EmptyState
-            key={prefill?.key ?? "composer"}
+            key={`${projectId}:${prefill?.key ?? "composer"}`}
             d={d}
+            projectId={projectId}
+            project={projects.active}
+            onOpenProject={() => setShowProject(true)}
             initialTask={prefill?.task}
-            onStart={(task, pipelineId, workspaceDir) =>
-              void handleStart(task, pipelineId, workspaceDir)
-            }
+            onStart={(task, pipelineId) => void handleStart(task, pipelineId)}
             starting={starting}
           />
         ) : run ? (
@@ -274,7 +307,28 @@ export function App() {
         onNewRun={handleNewRun}
       />
 
-      {showSetup && <SetupModal d={d} onClose={() => setShowSetup(false)} />}
+      {showProject && (
+        <ProjectDrawer
+          d={d}
+          projectId={projectId}
+          project={projects.active}
+          run={run}
+          onOpenSetup={(section) => {
+            setShowProject(false);
+            setSetupSection(section);
+          }}
+          onClose={() => setShowProject(false)}
+        />
+      )}
+      {setupSection && (
+        <SetupModal
+          d={d}
+          projectId={projectId}
+          projectName={projects.active?.name ?? "Home"}
+          section={setupSection}
+          onClose={() => setSetupSection(null)}
+        />
+      )}
       {showHistory && (
         <HistoryDrawer
           d={d}

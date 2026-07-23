@@ -2,8 +2,9 @@
 // (TASK-060 shipped a Restart button that actually resumed), and the scratch
 // check has to hold on both path separators.
 import { describe, expect, test } from "vitest";
+import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunState, StageState, StageStatus } from "@adhd/core";
-import { firstEnabledStageId, isScratchWorkspace, resumeStageId } from "../src/run-utils";
+import { childPath, firstEnabledStageId, isScratchWorkspace, resumeStageId } from "../src/run-utils";
 
 function stage(id: string, status: StageStatus): StageState {
   return { id, label: id, status, logs: [] };
@@ -13,6 +14,7 @@ function run(stages: StageState[], disabledStages?: string[]): RunState {
   return {
     id: "r1",
     number: 1,
+    projectId: HOME_PROJECT_ID,
     pipelineId: "sequential",
     pipelineName: "Sequential lifecycle",
     status: "failed",
@@ -91,12 +93,30 @@ describe("isScratchWorkspace", () => {
     expect(isScratchWorkspace("/home/me/adhd/.adhd/runs/ab12/workspace")).toBe(true);
   });
 
-  test("a directory the user chose is not scratch", () => {
+  test("recognises the home project's scratch path, which has no .adhd/runs segment", () => {
+    expect(isScratchWorkspace("C:\\Users\\me\\.adhd\\home\\runs\\ab12\\workspace")).toBe(true);
+  });
+
+  test("a project root is not scratch", () => {
     expect(isScratchWorkspace("C:\\projects\\my-app")).toBe(false);
     expect(isScratchWorkspace("/home/me/projects/my-app")).toBe(false);
   });
 
   test("an absent workspace is not scratch", () => {
     expect(isScratchWorkspace(undefined)).toBe(false);
+  });
+});
+
+describe("childPath", () => {
+  test("keeps Windows separators when the base has them", () => {
+    expect(childPath("C:\\projects\\my-app\\.adhd", "runs/ab12")).toBe(
+      "C:\\projects\\my-app\\.adhd\\runs\\ab12",
+    );
+  });
+
+  test("keeps POSIX separators when the base has them", () => {
+    expect(childPath("/home/me/my-app/.adhd", "runs/ab12")).toBe(
+      "/home/me/my-app/.adhd/runs/ab12",
+    );
   });
 });

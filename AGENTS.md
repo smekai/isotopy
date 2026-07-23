@@ -13,6 +13,9 @@ Each state has its own file:
 - **Done** → `DONE.md`
 - **Rejected** → `REJECTED.md`
 
+Auxiliary file (optional rolling log, not a task state):
+- **Work Log** → `WORK_LOG.md`
+
 ## Task Format
 
 Each task is a `## ` heading section separated by `---`:
@@ -36,8 +39,22 @@ When asked to implement a task:
 1. **Pick the task** from BACKLOG.md or NEXT.md (highest priority first, or as specified by the user).
 2. **Move the task** to IN_PROGRESS.md by cutting it from the source file and pasting it into IN_PROGRESS.md.
 3. **Implement** the task.
-4. **Move the task** to DONE.md when complete.
+4. **Move the task** to DONE.md when complete — trim `### Plan` to a done-summary, append a short entry to `.tasks/WORK_LOG.md` if that file exists, and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
 
+### Work Log
+
+When moving a task to DONE.md, if `.tasks/WORK_LOG.md` exists, append **one short entry at the top** (after the header, before older entries):
+
+```markdown
+## TASK-001 — YYYY-MM-DD
+**What:** One-line summary of what was delivered.
+**Decisions:** Key choices made and why (skip if none).
+**Outcome:** Result or follow-ups (skip if obvious from What).
+
+---
+```
+
+Keep it to 3–5 lines total. Skip empty fields rather than writing "N/A". Detailed steps belong in the task's `### Plan`, not here.
 
 ## Mandatory checklist (do not skip)
 
@@ -46,6 +63,7 @@ These steps are **part of the work**, not optional housekeeping:
 - **In Progress:** You must **physically move** the task markdown (the whole `##` section and its `---`) from BACKLOG/NEXT into **IN_PROGRESS.md** before substantive implementation — not only describe that you will.
 - **Done:** When the implementation is finished, **move** the same task section from IN_PROGRESS.md into **DONE.md** and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
 - **Plan:** If this project requires a plan (check the **aiPlanRequired** field in .tasks/config.json), the `### Plan` block must exist in IN_PROGRESS **before** coding, and should be **trimmed to a short done-summary** when you move the task to DONE.
+- **Work log:** If `.tasks/WORK_LOG.md` exists, append one short entry at the top when moving a task to Done (see **Work Log** above).
 
 ## Creating a New Task
 
@@ -92,4 +110,4 @@ All workspace packages (root + `packages/*`) share one version, bumped together.
 - **Patch** (0.0.x): fixes and small tweaks between features.
 - **Major** (1.0.0): when everything planned for the milestone set is done and the product is ready.
 
-Current: 0.5.0.
+Current: 0.6.1.

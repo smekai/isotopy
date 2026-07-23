@@ -1,11 +1,9 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { adhdDir } from "../paths.js";
-import { DEFAULT_SKILLS } from "../domain/skills/defaults.js";
-
-function skillsDir(): string {
-  return path.join(adhdDir(), "skills");
-}
+import { skillsDir, userSkillsDir } from "../paths.js";
+import type { ProjectPaths } from "../paths.js";
+import { composeSkill } from "../domain/skills/compose.js";
+import { DEFAULT_SKILLS } from "../domain/skills/defaults.generated.js";
 
 interface CacheEntry {
   mtimeMs: number;
@@ -14,19 +12,19 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-export function skillFilePath(skillId: string): string {
-  return path.join(skillsDir(), `${skillId}.md`);
+export function userSkillFilePath(skillId: string): string {
+  return path.join(userSkillsDir(), `${skillId}.md`);
 }
 
-async function seedSkillFile(skillId: string, content: string): Promise<void> {
-  try {
-    await mkdir(skillsDir(), { recursive: true });
-    await writeFile(skillFilePath(skillId), content, { flag: "wx" });
-  } catch {}
+export function projectSkillFilePath(paths: ProjectPaths, skillId: string): string {
+  return path.join(skillsDir(paths), `${skillId}.md`);
 }
 
-export async function loadSkill(skillId: string): Promise<string | undefined> {
-  const filePath = skillFilePath(skillId);
+export function projectSkillAddendumPath(paths: ProjectPaths, skillId: string): string {
+  return path.join(skillsDir(paths), `${skillId}.project.md`);
+}
+
+async function readCached(filePath: string): Promise<string | undefined> {
   try {
     const { mtimeMs } = await stat(filePath);
     const cached = cache.get(filePath);
@@ -36,12 +34,24 @@ export async function loadSkill(skillId: string): Promise<string | undefined> {
     const content = await readFile(filePath, "utf8");
     cache.set(filePath, { mtimeMs, content });
     return content;
-  } catch {}
-
-  const fallback = DEFAULT_SKILLS[skillId];
-  if (fallback === undefined) {
+  } catch {
+    cache.delete(filePath);
     return undefined;
   }
-  await seedSkillFile(skillId, fallback);
-  return fallback;
+}
+
+export async function loadSkill(
+  paths: ProjectPaths,
+  skillId: string,
+): Promise<string | undefined> {
+  const [userOverride, projectOverride, projectAddendum] = await Promise.all([
+    readCached(userSkillFilePath(skillId)),
+    readCached(projectSkillFilePath(paths, skillId)),
+    readCached(projectSkillAddendumPath(paths, skillId)),
+  ]);
+  return composeSkill({
+    base: userOverride ?? DEFAULT_SKILLS[skillId],
+    projectOverride,
+    projectAddendum,
+  });
 }

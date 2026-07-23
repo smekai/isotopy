@@ -44,6 +44,7 @@ const FINISHED_AT = "2026-07-20T10:02:30.000Z";
 const SEEDED_RUN: RunState = {
   id: RUN_ID,
   number: 9001,
+  projectId: "home",
   pipelineId: "dev-test",
   pipelineName: "Developer + Tester",
   status: "completed",
@@ -128,8 +129,8 @@ test("dev-test is selectable in the picker and describes both boxes", async ({ p
   await expect(page.getByText("What should the Developer build?")).toBeVisible();
   await expect(page.getByText(/A Developer implements it, then a Tester verifies the result/)).toBeVisible();
 
-  // Engine-backed, so the workspace input and engine caption appear.
-  await expect(page.getByPlaceholder(/Working directory/)).toBeVisible();
+  // Engine-backed, so the folder chip and engine caption appear.
+  await expect(page.getByTestId("workspace-chip")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
   // The ghost pipeline previews exactly two boxes, by profession. (The

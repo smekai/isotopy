@@ -51,6 +51,7 @@ export interface StageState {
 export interface RunState {
   id: string;
   number: number;
+  projectId: string;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
@@ -100,17 +101,28 @@ export interface RunEvent {
   result?: string;
 }
 
-export function createInitialRunState(
-  runId: string,
-  number: number,
-  pipeline: PipelineDefinition,
-  task?: string,
-  disabledStages?: string[],
-): RunState {
+export interface NewRunInput {
+  runId: string;
+  number: number;
+  projectId: string;
+  pipeline: PipelineDefinition;
+  task?: string | undefined;
+  disabledStages?: string[] | undefined;
+}
+
+export function createInitialRunState({
+  runId,
+  number,
+  projectId,
+  pipeline,
+  task,
+  disabledStages,
+}: NewRunInput): RunState {
   const disabled = new Set(disabledStages ?? []);
   return {
     id: runId,
     number,
+    projectId,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",

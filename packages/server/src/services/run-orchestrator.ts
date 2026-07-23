@@ -21,16 +21,12 @@ import {
 import { config } from "../config.js";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.js";
 import type { EngineRunResult } from "../engines/types.js";
-import { resolveWorkspace } from "../paths.js";
-import { getEngineConnection } from "../settings.js";
-import {
-  appendEvent,
-  loadAllRuns,
-  settleWrites,
-  writeHandoff,
-  writeState,
-} from "./run-store.js";
-import type { PersistedRun } from "./run-store.js";
+import { ensureProjectDataDir, resolveWorkspace } from "../paths.js";
+import type { ProjectPaths } from "../paths.js";
+import type { ProjectRegistry } from "./project-registry.js";
+import { createJsonRunStore } from "./run-store.js";
+import type { PersistedRun, RunStore, RunStoreFactory } from "./run-store.js";
+import { SettingsStore } from "./settings-store.js";
 import { loadSkill } from "./skills.js";
 import { buildStagePrompt, formatHandoff, parseStageVerdict } from "../domain/stage-context.js";
 import type { UpstreamOutput } from "../domain/stage-context.js";
@@ -53,7 +49,6 @@ export interface StartRunOptions extends SimulationOptions {
   disabledStages?: string[] | undefined;
   engine?: string | undefined;
   model?: string | undefined;
-  workspaceDir?: string | undefined;
   permissionMode?: string | undefined;
 }
 
@@ -65,6 +60,12 @@ const DEFAULT_OPTIONS: Required<SimulationOptions> = {
 
 type StageOutcome = "passed" | "failed" | "cancelled";
 
+export interface RunOrchestratorDependencies {
+  registry: ProjectRegistry;
+  createRunStore?: RunStoreFactory;
+  settings?: SettingsStore;
+}
+
 export class RunOrchestrator {
   private readonly runs = new Map<string, RunState>();
   private readonly listeners = new Map<string, Set<RunListener>>();
@@ -74,13 +75,45 @@ export class RunOrchestrator {
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
   private readonly persistTimers = new Map<string, NodeJS.Timeout>();
-  private nextRunNumber = 1;
+  private readonly stores = new Map<string, RunStore>();
+  private readonly nextRunNumbers = new Map<string, number>();
+  private readonly registry: ProjectRegistry;
+  private readonly createRunStore: RunStoreFactory;
+  private readonly settings: SettingsStore;
+
+  constructor({ registry, createRunStore, settings }: RunOrchestratorDependencies) {
+    this.registry = registry;
+    this.createRunStore = createRunStore ?? createJsonRunStore;
+    this.settings = settings ?? new SettingsStore();
+  }
+
+  private storeFor(paths: ProjectPaths): RunStore {
+    const existing = this.stores.get(paths.id);
+    if (existing) {
+      return existing;
+    }
+    const store = this.createRunStore(paths);
+    this.stores.set(paths.id, store);
+    return store;
+  }
+
+  private storeForRun(runId: string): RunStore {
+    const projectId = this.runs.get(runId)?.projectId;
+    return this.storeFor(this.registry.resolve(projectId));
+  }
 
   async init(): Promise<void> {
-    const loaded = await loadAllRuns();
-    let maxNumber = 0;
+    for (const project of this.registry.all()) {
+      await this.loadProject(this.registry.resolve(project.id));
+    }
+  }
+
+  private async loadProject(paths: ProjectPaths): Promise<void> {
+    const loaded = await this.storeFor(paths).loadAll();
+    let maxNumber = this.nextRunNumbers.get(paths.id) ?? 1;
     for (const persisted of loaded) {
       const { run } = persisted;
+      run.projectId = paths.id;
       this.runs.set(run.id, run);
       if (persisted.permissionMode) {
         this.enginePermissionModes.set(run.id, persisted.permissionMode);
@@ -88,12 +121,18 @@ export class RunOrchestrator {
       if (persisted.simOptions) {
         this.runOptions.set(run.id, { ...DEFAULT_OPTIONS, ...persisted.simOptions });
       }
-      maxNumber = Math.max(maxNumber, run.number);
+      maxNumber = Math.max(maxNumber, run.number + 1);
       if (!isTerminalRunStatus(run.status)) {
         this.reconcileInterrupted(run);
       }
     }
-    this.nextRunNumber = maxNumber + 1;
+    this.nextRunNumbers.set(paths.id, maxNumber);
+  }
+
+  private takeRunNumber(projectId: string): number {
+    const next = this.nextRunNumbers.get(projectId) ?? 1;
+    this.nextRunNumbers.set(projectId, next + 1);
+    return next;
   }
 
   async shutdown(): Promise<void> {
@@ -103,7 +142,7 @@ export class RunOrchestrator {
       }
     }
     await Promise.all([...this.runs.keys()].map((runId) => this.flushPersist(runId)));
-    await settleWrites();
+    await Promise.all([...this.stores.values()].map((store) => store.settle()));
   }
 
   private reconcileInterrupted(run: RunState): void {
@@ -117,7 +156,7 @@ export class RunOrchestrator {
     }
     run.status = "failed";
     run.completedAt = ts;
-    void appendEvent(run.id, {
+    void this.storeForRun(run.id).appendEvent(run.id, {
       ts,
       type: "run.completed",
       runId: run.id,
@@ -155,7 +194,7 @@ export class RunOrchestrator {
       return;
     }
     try {
-      await writeState(runId, persisted);
+      await this.storeForRun(runId).writeState(runId, persisted);
     } catch (error) {
       console.warn(`Failed to persist run ${runId}:`, error);
     }
@@ -185,10 +224,10 @@ export class RunOrchestrator {
     return DEMO_PIPELINES.find((pipeline) => pipeline.id === pipelineId);
   }
 
-  listRuns(): RunState[] {
-    return [...this.runs.values()].sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
-    );
+  listRuns(projectId: string): RunState[] {
+    return [...this.runs.values()]
+      .filter((run) => run.projectId === projectId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   getRun(runId: string): RunState | undefined {
@@ -208,6 +247,7 @@ export class RunOrchestrator {
   }
 
   async startRun(
+    paths: ProjectPaths,
     pipelineId: string,
     options: StartRunOptions = {},
   ): Promise<RunState> {
@@ -216,15 +256,14 @@ export class RunOrchestrator {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
 
-    const { task, disabledStages, engine, model, workspaceDir, permissionMode, ...simOptions } =
-      options;
+    const { task, disabledStages, engine, model, permissionMode, ...simOptions } = options;
 
     const usesEngine = pipelineUsesEngine(pipeline);
     if (usesEngine) {
       const engineId = engine ?? "claude-code";
       getEngineAdapter(engineId);
       assertEngineId(engineId);
-      const connection = getEngineConnection(engineId);
+      const connection = this.settings.getEngineConnection(paths.id, engineId);
       const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
       if (mode?.requiresApiKey && !connection.apiKey) {
         throw new Error(
@@ -233,14 +272,17 @@ export class RunOrchestrator {
       }
     }
 
+    await ensureProjectDataDir(paths);
+
     const runId = randomUUID().slice(0, 8);
-    const run = createInitialRunState(
+    const run = createInitialRunState({
       runId,
-      this.nextRunNumber++,
+      number: this.takeRunNumber(paths.id),
+      projectId: paths.id,
       pipeline,
       task,
       disabledStages,
-    );
+    });
 
     if (usesEngine) {
       const engineId = engine ?? "claude-code";
@@ -249,7 +291,7 @@ export class RunOrchestrator {
       if (model !== undefined) {
         run.model = model;
       }
-      run.workspacePath = await resolveWorkspace(runId, workspaceDir);
+      run.workspacePath = await resolveWorkspace(paths, runId);
       this.enginePermissionModes.set(
         runId,
         permissionMode === "acceptEdits" ? "acceptEdits" : DEFAULT_PERMISSION_MODE,
@@ -396,7 +438,7 @@ export class RunOrchestrator {
   }
 
   private emit(event: RunEvent): void {
-    void appendEvent(event.runId, event);
+    void this.storeForRun(event.runId).appendEvent(event.runId, event);
     this.schedulePersist(event.runId, event.type !== "stage.log");
     const listeners = this.listeners.get(event.runId);
     if (!listeners) {
@@ -551,7 +593,8 @@ export class RunOrchestrator {
     run: RunState,
     stageDef: StageDefinition,
   ): Promise<{ persona: string | undefined; prompt: string }> {
-    const persona = stageDef.skill ? await loadSkill(stageDef.skill) : undefined;
+    const paths = this.registry.resolve(run.projectId);
+    const persona = stageDef.skill ? await loadSkill(paths, stageDef.skill) : undefined;
     if (stageDef.skill && !persona) {
       this.log(
         run.id,
@@ -575,7 +618,7 @@ export class RunOrchestrator {
       return;
     }
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: result };
-    void writeHandoff(
+    void this.storeForRun(run.id).writeHandoff(
       run.id,
       stageDef.id,
       formatHandoff(
@@ -638,7 +681,7 @@ export class RunOrchestrator {
         model: run.model,
         appendSystemPrompt: persona,
         permissionMode: this.enginePermissionModes.get(runId) ?? DEFAULT_PERMISSION_MODE,
-        connection: getEngineConnection(run.engine),
+        connection: this.settings.getEngineConnection(run.projectId, run.engine),
         timeoutMs: config.engineTimeoutMs,
         signal: controller.signal,
         onLog: (level, message) => this.log(runId, stageDef.id, level, message),

@@ -1,7 +1,8 @@
 {
   "version": 2,
+  "taskplannerVersion": "2.1.1",
   "idPrefix": "TASK",
-  "nextId": 64,
+  "nextId": 66,
   "states": [
     {
       "name": "Backlog",
@@ -49,5 +50,6 @@
   ],
   "insertPosition": "top",
   "aiPlanRequired": false,
+  "readmeAttribution": true,
   "sortBy": "priority"
 }
