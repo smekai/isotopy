@@ -1,5 +1,81 @@
 # Done
 
+## TASK-066: Inestigation of Workflow options
+**Priority:** P0 | **Tags:** worklow | **Assignee:** Fedor
+**Updated:** 2026-07-23 09:38
+
+Workflow Runtime Options Decision Document Summary Create branch codex/workflow-runtime-options from committed HEAD da46ce9 in an isolated worktree, excluding the uncommitted TASK-065 changes. Add exactly one file: docs/workflow-runtime-options.md. Do not modify TaskPlanner, changelog, versions, code, or existing docs. Research is dated 2026-07-23 and uses official sources. Document Content Define the agreed semantics:The manually started runner continues after the UI closes; OS login autostart is deferred. Restart/checkpoint granularity is a named workflow stage, not an instruction inside an agent process. “Copy workflow” duplicates a reusable definition only. Components are selected and the definition is frozen when a run starts. One active workflow is allowed per project; different projects may run concurrently. Declared parallel branches may share the project folder, with conflict avoidance owned by the workflow author.  Map every requested capability to current implementation and plans: start, recovery, retries, definition copying, artifacts, durable user/external waits, optional stages, project concurrency, cancellation, and parallel execution. Reference the relevant completed tasks (TASK-003/005/014/043–046/055/058–060), open work (TASK-039/051/061/065), and roadmap commitments. Correct the existing architectural claim that only executeStage() must change: durable execution must own starting/queuing, the orchestration loop, gates/waits, retries, fan-out/fan-in, recovery, cancellation, and execution history. Compare three primary options:Evolve the current TypeScript/file-backed state machine. Adopt Aiki. Adopt DBOS TypeScript.  Provide two matrices:Capability coverage: native, ADHD-owned, custom work, or unsupported/undocumented. Operational fit: maturity, license, PostgreSQL/runtime requirements, Windows/macOS packaging, integration cost, source-of-truth implications, versioning, and lock-in.  Add a compact competitor section covering Cline, OpenHands, Devin, Cursor Cloud Agents, and GitHub Copilot agents. Highlight that session persistence, checkpoints, approvals, and isolated parallel agents are becoming baseline, while semantic failed-stage restart and durable external waits remain differentiators. Recommendation Recorded in the Document Recommend DBOS as the leading implementation-spike and default candidate because bundled PostgreSQL is acceptable and DBOS has the strongest match for recovery, retries, signals, durable sleep, cancellation, step forking, parallel work, and project-keyed queue concurrency. Keep workflow definitions, definition copying, enabled-component snapshots, artifact manifests, code, and generated files ADHD-owned. If DBOS is adopted, make its database authoritative for execution state; retain project-local state.json/events only as an idempotent history projection/export, avoiding two independently advancing state machines. Require a feasibility spike before adoption to prove:Invisible PostgreSQL installation, startup, upgrade, backup, and removal on Windows and macOS. Recovery after killing the server during a stage and during a durable wait. User signals and limit polling with persisted timers. One active run per project with concurrent runs across projects. Immediate subprocess-tree termination despite DBOS cancellation occurring at step boundaries. Declared parallel branches and project-local history projection.  If the packaging or project-portability gates fail, recommend the custom engine as the fallback. Keep Aiki on the watch list because it is alpha, has the same PostgreSQL burden, and lacks documented semantic stage-reset advantages. Note Restate as screened out due to missing official Windows binaries. Validation and Assumptions Verify every changing framework/competitor fact against an official source and include inline links plus the research date. Review the Markdown rendering, tables, relative repository links, and terminology. Run a whitespace/error check on the new file and confirm the branch worktree contains exactly that one changed file. No public APIs, schemas, or runtime behavior change in this branch; all interface names in the document are conceptual recommendations only.
+
+### Scope extension — 2026-07-23 (reopened)
+
+The first pass shipped `docs/workflow-runtime-options.md` recommending **DBOS**, gated on bundling
+PostgreSQL invisibly (gate **G1**). Two owner inputs reopened it:
+
+1. **Postgres is disproportionate to the data.** Run state is a handful of rows per run; requiring a
+   Postgres server on every Windows/macOS machine to hold it is rejected. Want a file-backed store —
+   SQLite or equivalent — that a workflow engine actually supports.
+2. **The owner is an Aiki contributor**, so Aiki's capability gaps — the entire basis for keeping it
+   on the watch list — are changeable upstream.
+
+**Added scope:**
+- Split the storage comparison into its own file, `docs/workflow-storage-options.md` (embedded DB
+  candidates + an engine × storage support matrix + the tie-in to TASK-039).
+- Widen the engine survey beyond the original three — the field includes TanStack Workflow, Reflow
+  and Resonate, none of which were considered.
+- Revise `docs/workflow-runtime-options.md`: DBOS TypeScript is **Postgres-only** (`pg` is its sole
+  DB driver; SQLite exists only in the Python port), so the DBOS recommendation and gate G1 are
+  superseded. Re-rank the options against an embedded-database constraint.
+
+### Done
+
+Two documents on branch **`codex/workflow-runtime-options`** (commits `f773dee`, `b0e2c29`);
+`git diff main HEAD --stat` shows exactly those two files, 793 insertions, no code or schema.
+
+**`docs/workflow-storage-options.md` (new).** SQLite via Node's built-in **`node:sqlite`**, behind
+the `RunStore` seam TASK-059 already built. Measured on Windows 11 / Node v24.12.0 rather than
+cited: **`better-sqlite3` fails to install here** — no prebuild, `node-gyp` demands Visual Studio
+C++ — while `node:sqlite` works (1000 inserts, transactions, WAL). PGlite rejected (*"single
+user/connection"*, single-process, alpha); `embedded-postgres` rejected (zonky binaries their own
+project calls *"intended for testing purposes"*). Includes the engine × storage matrix, which is the
+document's point: **the storage choice decides the engine choice.** TASK-039's named candidate
+should change from `better-sqlite3` to `node:sqlite`; its interface half is already done.
+
+**`docs/workflow-runtime-options.md` (revised).** §1–§4 and §8 stand unchanged; §5, §7 and §9 are
+revised with a dated revision note so the superseded DBOS reasoning stays legible.
+
+- **DBOS TypeScript is Postgres-only** — `pg` is the sole DB driver in its `package.json`. The SQLite
+  support widely attributed to DBOS is in the **Python** port, where it is the default. Gate G1
+  (bundle Postgres invisibly) is obsolete, and DBOS is blocked pending TS parity.
+- **Survey widened** past the three the task named: OpenWorkflow, Reflow, TanStack Workflow, Vercel
+  Workflow SDK, Resonate. **Resonate screened out — no Windows binaries** (darwin/linux only), the
+  same failure that eliminated Restate; that criterion is now called out as a first-class filter.
+- **Recommendation: OpenWorkflow** (Apache-2.0, 1279★). Installs as **1 package, ~2 s, zero
+  dependencies, no native module, no server**; its SQLite adapter calls `require("node:sqlite")`.
+  Measured running ADHD's exact shape — Developer → durable gate → Tester — **surviving a hard
+  process kill at the gate, resuming in a fresh process, and not re-running the completed stage.**
+  Gives durable gates (`waitForSignal`/`sendSignal`), durable sleep (TASK-061), retries,
+  cancellation, parallel steps and lease-based recovery.
+- **Honest trade recorded:** OpenWorkflow has no fork-from-step (**S2**) and no per-key concurrency
+  (**S5**) — the two things DBOS did natively. Both become ADHD-owned; note `restartRun()` already
+  implements S2 semantics against our own state model.
+- **Recovered by this change:** execution history stays a per-project file inside `.adhd/`, so it
+  travels with the folder like `.git`. Postgres would have moved it to a machine-level database and
+  broken the local-first differentiator §8 identifies as hardest for cloud competitors to copy.
+- **Aiki is the standing second choice**, on contributor leverage rather than features — its gaps
+  (SQLite provider, fork-from-step) are ours to close, but closing them only reaches where
+  OpenWorkflow already is. Revisit immediately if its SQLite backend lands.
+
+**Validated:** 19 relative links resolve across both docs, 10 tables well-formed, no trailing
+whitespace or tabs, LF endings, trailing newlines, cross-links resolve both ways. Every changing
+framework fact carries an inline official-source link dated 2026-07-23; gaps are labelled
+unverified rather than asserted.
+
+**Not done (deliberate):** `architect-standards.md`, `implementation-notes.md` and `code-quality.md`
+still carry the `executeStage()`-is-the-whole-seam claim that §4 corrects. They should be amended
+when a runtime decision is executed, not in a research branch.
+
+---
+
 ## TASK-065: Move project preferences server-side, out of localStorage
 **Priority:** P2 | **Tags:** ui, server, setup
 **Updated:** 2026-07-23 12:40

@@ -1,10 +1,70 @@
 # Backlog
 
-## TASK-066: Inestigation of Workflow options
-**Priority:** P0 | **Tags:** worklow | **Assignee:** Fedor
-**Updated:** 2026-07-23 09:38
+## TASK-067: SQLite run store — a `node:sqlite` RunStore adapter, per project
+**Priority:** P1
+**Tags:** server, infra, core
+**Updated:** 2026-07-23 13:00
 
-Workflow Runtime Options Decision Document Summary Create branch codex/workflow-runtime-options from committed HEAD da46ce9 in an isolated worktree, excluding the uncommitted TASK-065 changes. Add exactly one file: docs/workflow-runtime-options.md. Do not modify TaskPlanner, changelog, versions, code, or existing docs. Research is dated 2026-07-23 and uses official sources. Document Content Define the agreed semantics:The manually started runner continues after the UI closes; OS login autostart is deferred. Restart/checkpoint granularity is a named workflow stage, not an instruction inside an agent process. “Copy workflow” duplicates a reusable definition only. Components are selected and the definition is frozen when a run starts. One active workflow is allowed per project; different projects may run concurrently. Declared parallel branches may share the project folder, with conflict avoidance owned by the workflow author.  Map every requested capability to current implementation and plans: start, recovery, retries, definition copying, artifacts, durable user/external waits, optional stages, project concurrency, cancellation, and parallel execution. Reference the relevant completed tasks (TASK-003/005/014/043–046/055/058–060), open work (TASK-039/051/061/065), and roadmap commitments. Correct the existing architectural claim that only executeStage() must change: durable execution must own starting/queuing, the orchestration loop, gates/waits, retries, fan-out/fan-in, recovery, cancellation, and execution history. Compare three primary options:Evolve the current TypeScript/file-backed state machine. Adopt Aiki. Adopt DBOS TypeScript.  Provide two matrices:Capability coverage: native, ADHD-owned, custom work, or unsupported/undocumented. Operational fit: maturity, license, PostgreSQL/runtime requirements, Windows/macOS packaging, integration cost, source-of-truth implications, versioning, and lock-in.  Add a compact competitor section covering Cline, OpenHands, Devin, Cursor Cloud Agents, and GitHub Copilot agents. Highlight that session persistence, checkpoints, approvals, and isolated parallel agents are becoming baseline, while semantic failed-stage restart and durable external waits remain differentiators. Recommendation Recorded in the Document Recommend DBOS as the leading implementation-spike and default candidate because bundled PostgreSQL is acceptable and DBOS has the strongest match for recovery, retries, signals, durable sleep, cancellation, step forking, parallel work, and project-keyed queue concurrency. Keep workflow definitions, definition copying, enabled-component snapshots, artifact manifests, code, and generated files ADHD-owned. If DBOS is adopted, make its database authoritative for execution state; retain project-local state.json/events only as an idempotent history projection/export, avoiding two independently advancing state machines. Require a feasibility spike before adoption to prove:Invisible PostgreSQL installation, startup, upgrade, backup, and removal on Windows and macOS. Recovery after killing the server during a stage and during a durable wait. User signals and limit polling with persisted timers. One active run per project with concurrent runs across projects. Immediate subprocess-tree termination despite DBOS cancellation occurring at step boundaries. Declared parallel branches and project-local history projection.  If the packaging or project-portability gates fail, recommend the custom engine as the fallback. Keep Aiki on the watch list because it is alpha, has the same PostgreSQL burden, and lacks documented semantic stage-reset advantages. Note Restate as screened out due to missing official Windows binaries. Validation and Assumptions Verify every changing framework/competitor fact against an official source and include inline links plus the research date. Review the Markdown rendering, tables, relative repository links, and terminology. Run a whitespace/error check on the new file and confirm the branch worktree contains exactly that one changed file. No public APIs, schemas, or runtime behavior change in this branch; all interface names in the document are conceptual recommendations only.
+The storage half of the workflow-runtime decision ([`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md), TASK-066) and a concrete slice of TASK-039. Run state today is flat JSON — `state.json` + `events.jsonl` under `<project>/.adhd/runs/` via [`JsonRunStore`](../packages/server/src/services/run-store.ts). Both candidate runtimes (OpenWorkflow, Aiki) want a SQL substrate, and the decision is **SQLite**: a handful of rows per run, no server, and — placed inside `.adhd/` — history that travels with the folder like `.git`. **Only run information moves to SQLite; project settings stay in `~/.adhd/settings.json`** (TASK-065) — this task does not touch settings.
+
+The `RunStore` interface already exists (`writeState`, `appendEvent`, `writeHandoff`, `loadAll`, `settle`) and is bound per-project through `RunStoreFactory` (TASK-059). This task adds a second implementation behind it; the orchestrator does not change.
+
+**Scope:**
+- New `SqliteRunStore implements RunStore` using **`node:sqlite`** — Node's built-in, no native module. `better-sqlite3` is explicitly rejected: it failed to install on the target platform (see the storage doc). Pin `engines.node` to `>=22.5` and decide how the `ExperimentalWarning` is suppressed/accepted in a shipped product (gate **G6**).
+- One database file per project at `<project>/.adhd/runs.db` (home project: `~/.adhd/home/runs.db`), created lazily like the JSON dirs are today. Schema: a `runs` table holding the `PersistedRun` snapshot, an `events` append log, handoffs either a table or left on disk — decide in the plan. WAL mode; prove behaviour under the writer plus concurrent readers (G6).
+- Config selector `ADHD_RUN_STORE=json|sqlite` through [`config.ts`](../packages/server/src/config.ts), documented in `.env.example`; `json` stays the default so nothing changes out of the box.
+- One-shot importer: existing `.adhd/runs/*/state.json` + `events.jsonl` load into the DB on first use (idempotent — re-running does not duplicate). Keep `loadAll()` semantics identical so persistence/restart component tests pass against either backend.
+- Tests: the existing `run-store`/persistence coverage runs against **both** adapters (parametrised), plus a spec for the importer and for a corrupt/locked DB degrading like the JSON store's corrupt-file path.
+
+**Cross-platform:** `node:sqlite` is a built-in Node API, identical on Windows and macOS; the DB path is built with `path.join` + the existing `ProjectPaths`, never a hardcoded separator. WAL creates `-wal`/`-shm` sidecar files — ensure the self-ignoring `.adhd/.gitignore` (`*`) still covers them, and that Windows file-locking (the EBUSY-on-delete hazard the test harness already works around) is handled on `settle()`/close. Tested on Windows; macOS path reasoned through, mark "untested on macOS".
+
+---
+
+## TASK-068: Durable workflow runtime on OpenWorkflow (SQLite)
+**Priority:** P1
+**Tags:** server, engine, infra, milestone-c
+**Updated:** 2026-07-23 13:00
+
+Execute the recommendation of [`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md) (TASK-066): adopt **OpenWorkflow** (Apache-2.0, `node:sqlite`, no server) as the durable execution layer. Depends on **TASK-067** for the storage substrate. Today [`RunOrchestrator`](../packages/server/src/services/run-orchestrator.ts) is an in-memory `Map` with a floating `void simulateRun(...)`; gates are heap promises (`gateWaiters`), recovery is `reconcileInterrupted()` marking everything `failed`, retries and durable timers do not exist. §3 of the doc lists six of eleven capabilities as absent or non-durable.
+
+**The seam is the class, not one method** (doc §4): `RunOrchestrator` *is* the durable workflow, `executeStage()` is the durable step. Durability must own start/queuing, the `runStages()` loop, gates/waits, retries, recovery, cancellation state and execution history. Kept ADHD-owned without exception: workflow definitions and their schema, "copy workflow" (S3), the enabled-component snapshot frozen at start (S4), artifact manifests, engine adapters, personas, and prompt/handoff composition in `domain/stage-context.ts`.
+
+**Non-negotiable integration rule:** OpenWorkflow's SQLite DB becomes the single source of truth for execution state, living inside the project's `.adhd/`. `state.json`/`events.jsonl` (and the SSE projection) become a rebuildable, idempotent **read model** — never a second writer. Two independently advancing state machines is the failure mode to design out.
+
+**Feasibility gates from doc §9 (each is a checkpoint in the plan):**
+- **G1 — semantic restart from a chosen stage (S2):** OpenWorkflow has no `fork`/`restartFrom`; rebuild ADHD's existing `restartRun(runId, stageId)` on durable steps (likely a fresh run seeded with retained prior-stage outputs). Decide whether to contribute a fork primitive upstream.
+- **G2 — one active run per project, concurrent across projects (S5):** worker concurrency is a pool size, not a per-key cap; build a restart-surviving, project-keyed admission check that the API cannot bypass (it currently can).
+- **G3 — per-project DB placement & portability** (shared with TASK-067): copying the folder carries history; the projection rebuilds idempotently.
+- **G4 — immediate subprocess-tree kill on cancel:** stays ADHD-owned via `runSubprocess`; `cancelWorkflowRun()` only marks durable state.
+- **G5 — declared parallel branches over one shared workspace (S6):** `Promise.all` over durable steps; prove fan-in and per-branch failure policy. `runStages()` is a sequential `for` loop today — a `parallel` group runs sequentially and silently.
+- **G6 — `node:sqlite` under sustained use:** covered by TASK-067.
+
+**Determinism refactor:** OpenWorkflow (like any durable runtime) requires non-deterministic work — filesystem I/O (`loadSkill`), `nowIso()`, `randomUUID()` — to live inside steps, not the workflow body. This is the mechanical cost §4 says the old "one method" seam claim hid.
+
+**Deliverable:** the `sequential`/`one-box`/`dev-test` pipelines run on OpenWorkflow; a gate survives a hard process kill and resumes in a fresh process without re-running the completed stage (the doc's measured M6/M7); `reconcileInterrupted()`'s mark-everything-failed is replaced by real resumption. **Fallback** if G1 or G2 proves too costly: Option A, the custom engine on the same `node:sqlite` substrate behind the `RunStore` seam — so TASK-067's storage work is not wasted either way. Amend the stale "durable runtime replaces `executeStage()` alone" claim in `architect-standards.md`, `implementation-notes.md` and `code-quality.md` (doc §4).
+
+**Cross-platform:** durable execution and `node:sqlite` are OS-independent; the platform-sensitive surface is subprocess-tree termination on cancel (G4), already owned by `runSubprocess` (`taskkill /T` on win32, SIGTERM→SIGKILL on POSIX). No new spawn/path/env code. Tested on Windows; macOS reasoned through, mark "untested on macOS".
+
+---
+
+## TASK-069: Spike — Aiki durable runtime on a comparison branch
+**Priority:** P2
+**Tags:** server, engine, infra
+**Updated:** 2026-07-23 13:00
+
+The standing second choice from [`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md) §9 is **Aiki** — TypeScript, Apache-2.0, and the only candidate ADHD has a contributor on, so its gaps are ours to close. It is not the recommendation only because it requires **PostgreSQL 14+ today** (SQLite is "coming soon", i.e. we'd write it) and documents no fork-from-step (S2). This task builds the same durable runtime as TASK-068 but on Aiki, **on a separate branch**, to compare the two against ADHD's real shape before committing.
+
+**Do it on a branch off TASK-068's work** so the two runtimes sit behind the same seam and can be measured head to head; the winner merges to `main`, the loser stays as a documented spike. (Note: the pre-1.0 "commit directly to main" norm is deliberately set aside here — a throwaway comparison branch is the point.)
+
+**Scope:**
+- Stand Aiki up against the same feature checklist (doc §3): durable start, crash recovery/resume, retries, durable approval gates, durable sleep (TASK-061 shape), cancellation, parallel branches, project concurrency (S5), semantic restart (S2).
+- Confront its two hard gaps directly: **(a)** does its `database({ provider })` seam let us stand up SQLite via `node:sqlite` without a Postgres server (the storage constraint that ruled it out), and **(b)** can `restartRun(runId, stageId)` semantics be built without a native fork primitive? These are the two things that, if closed, make Aiki "directly competitive with OpenWorkflow, with the added advantage of influence over its direction" (§9).
+- Run the doc's measured probe (a Developer → gate → Tester workflow, hard-killed at the gate, resumed in a fresh process, completed stage not re-run) on Aiki and record the result beside OpenWorkflow's.
+- Write the comparison up as a dated decision-log entry (A8): integration cost, maturity/bus-factor (Aiki is alpha, 34★), and whether steering-the-dependency outweighs shipping-sooner.
+
+**Deliverable:** a runnable Aiki branch behind the same runtime seam as TASK-068, a head-to-head write-up, and a go/no-go recommendation. If Aiki wins, its branch merges to `main`; otherwise TASK-068's OpenWorkflow branch is what merges.
+
+**Cross-platform:** the deciding question **is** cross-platform — Aiki's Postgres-14+ requirement would mean bundling a database server invisibly on Windows *and* macOS, the packaging burden that eliminated it in the doc. The spike must confirm whether an embedded `node:sqlite` backend avoids that on both OSes, or Aiki fails the same platform bar as DBOS/Restate/Resonate. Tested on Windows; macOS packaging reasoned through.
 
 ---
 
