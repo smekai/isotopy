@@ -1,5 +1,7 @@
 export type EngineId = "claude-code" | "cursor" | "codex";
 
+export const DEFAULT_ENGINE_ID: EngineId = "claude-code";
+
 export type EnginePermissionMode = "skip" | "acceptEdits";
 
 export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";

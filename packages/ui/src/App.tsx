@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FolderOpen, History, Settings, Sparkles } from "lucide-react";
 import type { RunState, RunStatus } from "@adhd/core";
-import { pipelineUsesEngineById } from "@adhd/core";
+import { modelForEngine, pipelineUsesEngineById } from "@adhd/core";
 import { abortRun, approveGate, fetchRuns, restartRun, startRun } from "./api";
 import { EmptyState } from "./components/EmptyState";
 import { HistoryDrawer } from "./components/HistoryDrawer";
@@ -18,15 +18,7 @@ import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useProjects } from "./hooks/useProjects";
 import { useRunEvents } from "./hooks/useRunEvents";
-import {
-  loadDisabledStages,
-  loadEngine,
-  loadEngineModel,
-  loadPermissionMode,
-  saveEngine,
-  saveEngineModel,
-  savePipelineId,
-} from "./settings";
+import { useSettings } from "./hooks/useSettings";
 import { SANS } from "./theme";
 import { useTheme } from "./ThemeContext";
 
@@ -36,6 +28,7 @@ export function App() {
   const { d } = useTheme();
   const projects = useProjects();
   const projectId = projects.activeId;
+  const settings = useSettings(projectId);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [resubKey, setResubKey] = useState(0);
   const [booted, setBooted] = useState(false);
@@ -123,17 +116,17 @@ export function App() {
     setStarting(true);
     try {
       const usesEngine = pipelineUsesEngineById(pipelineId);
-      const engine = loadEngine(projectId);
+      const { engine, permissionMode, disabledStages } = settings.preferences;
       const created = await startRun({
         task,
         pipelineId,
         ...(usesEngine
           ? {
               engine,
-              model: loadEngineModel(projectId, engine),
-              permissionMode: loadPermissionMode(projectId),
+              model: modelForEngine(settings.preferences, engine),
+              permissionMode,
             }
-          : { disabledStages: loadDisabledStages(projectId) }),
+          : { disabledStages }),
       });
       setFocusedId(null);
       attachRun(created.id);
@@ -179,11 +172,12 @@ export function App() {
   }
 
   function handleRerun(source: RunState) {
-    savePipelineId(projectId, source.pipelineId);
-    if (source.engine) {
-      saveEngine(projectId, source.engine);
-      saveEngineModel(projectId, source.engine, source.model ?? "");
-    }
+    settings.update({
+      pipelineId: source.pipelineId,
+      ...(source.engine
+        ? { engine: source.engine, engineModels: { [source.engine]: source.model ?? "" } }
+        : {}),
+    });
     setShowHistory(false);
     setActiveRunId(null);
     setFocusedId(null);
@@ -204,7 +198,7 @@ export function App() {
   const awaitingStage = run?.stages.find((stage) => stage.status === "awaiting");
   const focusedStage = run?.stages.find((stage) => stage.id === focusedId);
   const showEmpty = booted && !activeRunId;
-  const banner = error ?? runError ?? projects.error;
+  const banner = error ?? runError ?? projects.error ?? settings.error;
 
   const dotGrid = `radial-gradient(circle, ${d.border.replace("0.12", "0.20")} 1px, transparent 1px)`;
 
@@ -260,6 +254,7 @@ export function App() {
             d={d}
             projectId={projectId}
             project={projects.active}
+            settings={settings}
             onOpenProject={() => setShowProject(true)}
             initialTask={prefill?.task}
             onStart={(task, pipelineId) => void handleStart(task, pipelineId)}
@@ -312,6 +307,7 @@ export function App() {
           d={d}
           projectId={projectId}
           project={projects.active}
+          settings={settings}
           run={run}
           onOpenSetup={(section) => {
             setShowProject(false);
@@ -323,8 +319,8 @@ export function App() {
       {setupSection && (
         <SetupModal
           d={d}
-          projectId={projectId}
           projectName={projects.active?.name ?? "Home"}
+          settings={settings}
           section={setupSection}
           onClose={() => setSetupSection(null)}
         />

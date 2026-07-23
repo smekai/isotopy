@@ -421,7 +421,7 @@ only for loading the tool's own `.env`.
 | `<project>/.adhd/skills/<id>.md` | Full persona replacement (power users) | One project |
 | `<project>/.adhd/.gitignore` | `*` — the folder ignores itself by default | One project |
 | `~/.adhd/projects.json` | Known projects (paths + metadata) and the active one | User |
-| `~/.adhd/settings.json` | Engine connection modes and **API keys**, `defaults` + per-project overrides, mode `0600` | User |
+| `~/.adhd/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
 | `~/.adhd/skills/<id>.md` | User-level persona override of the bundled default | User |
 | `~/.adhd/home/runs/<run-id>/workspace/` | Scratch working folder — **home runs only** | User |
 | `~/.adhd/home/` | Data root of the **home** project — the fallback when no project is selected | User |

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { ENGINES } from "@adhd/core";
 import type { EngineId } from "@adhd/core";
+import { parsePreferencesUpdate } from "../domain/preferences.js";
 import type { ProjectRegistry } from "../services/project-registry.js";
 import type { SettingsStore } from "../services/settings-store.js";
 import { projectScope } from "./project-scope.js";
@@ -16,6 +17,16 @@ export function createSettingsRoutes(
 ): Hono {
   return new Hono()
     .get("/", (c) => c.json(settings.getSettingsView(projectScope(registry, c).id)))
+
+    .put("/preferences", async (c) => {
+      const parsed = parsePreferencesUpdate(await c.req.json<unknown>().catch(() => ({})));
+      if (!parsed.ok) {
+        return c.json({ error: parsed.error }, 400);
+      }
+      return c.json(
+        settings.updatePreferences(projectScope(registry, c).id, parsed.update),
+      );
+    })
 
     .put("/engines/:engineId", async (c) => {
       const engineId = c.req.param("engineId");

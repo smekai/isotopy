@@ -1,39 +1,23 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw, Server, ToggleLeft, ToggleRight, X } from "lucide-react";
-import type {
-  EngineId,
-  EngineModelList,
-  EnginePermissionMode,
-  EngineStatus,
-  SettingsView,
-} from "@adhd/core";
+import type { EngineId, EngineModelList, EngineStatus } from "@adhd/core";
 import {
   ENGINES,
   LIFECYCLE_STAGES,
   PERMISSION_MODES,
   agentForStage,
   defaultConnectionMode,
+  modelForEngine,
   modelOptionsFor,
 } from "@adhd/core";
 import {
   fetchEngineModels,
   fetchEngineStatus,
-  fetchSettings,
   installEngine,
   loginEngine,
-  updateEngineConnection,
 } from "../api";
 import type { EngineConnectionUpdate } from "../api";
-import {
-  loadDisabledStages,
-  loadEngine,
-  loadEngineModel,
-  loadPermissionMode,
-  saveDisabledStages,
-  saveEngine,
-  saveEngineModel,
-  savePermissionMode,
-} from "../settings";
+import type { SettingsController } from "../hooks/useSettings";
 import { useTheme } from "../ThemeContext";
 import { DIRS, GOLD, MONO, SANS, specColor } from "../theme";
 import type { Dir } from "../theme";
@@ -67,37 +51,32 @@ const SECTIONS: { id: SetupSection; label: string }[] = [
 
 export interface SetupModalProps {
   d: Dir;
-  projectId: string;
   projectName: string;
+  settings: SettingsController;
   section?: SetupSection;
   onClose: () => void;
 }
 
 export function SetupModal({
   d,
-  projectId,
   projectName,
+  settings,
   section = "harness",
   onClose,
 }: SetupModalProps) {
   const { dirId, setDirId } = useTheme();
+  const { preferences } = settings;
+  const harness = preferences.engine;
+  const model = modelForEngine(preferences, harness);
+  const disabledStages = preferences.disabledStages;
+  const permissionMode = preferences.permissionMode;
   const [sec, setSec] = useState<SetupSection>(section);
-  const [disabledStages, setDisabledStages] = useState<string[]>(() =>
-    loadDisabledStages(projectId),
-  );
-  const [harness, setHarness] = useState<EngineId>(() => loadEngine(projectId));
-  const [model, setModel] = useState(() => loadEngineModel(projectId, loadEngine(projectId)));
-  const [modelList, setModelList] = useState<EngineModelList>(() =>
-    seedModelList(loadEngine(projectId)),
-  );
+  const [modelList, setModelList] = useState<EngineModelList>(() => seedModelList(harness));
   const [customModel, setCustomModel] = useState(false);
-  const [permissionMode, setPermissionMode] = useState<EnginePermissionMode>(() =>
-    loadPermissionMode(projectId),
-  );
+  const [customModelDraft, setCustomModelDraft] = useState(model);
   const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusNonce, setStatusNonce] = useState(0);
-  const [settingsView, setSettingsView] = useState<SettingsView | null>(null);
   const [keyInput, setKeyInput] = useState("");
   const [keySaving, setKeySaving] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -106,12 +85,6 @@ export function SetupModal({
   const [copied, setCopied] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchSettings()
-      .then(setSettingsView)
-      .catch(() => setSettingsView(null));
-  }, []);
 
   useEffect(() => {
     if (sec !== "harness") {
@@ -152,19 +125,27 @@ export function SetupModal({
   }, [sec, harness, statusNonce]);
 
   function toggleStage(stageId: string) {
-    setDisabledStages((current) => {
-      const next = current.includes(stageId)
-        ? current.filter((id) => id !== stageId)
-        : [...current, stageId];
-      saveDisabledStages(projectId, next);
-      return next;
+    settings.update({
+      disabledStages: disabledStages.includes(stageId)
+        ? disabledStages.filter((id) => id !== stageId)
+        : [...disabledStages, stageId],
     });
+  }
+
+  function selectEngine(engineId: EngineId) {
+    settings.update({ engine: engineId });
+    setCustomModelDraft(modelForEngine(preferences, engineId));
+  }
+
+  function selectModel(modelId: string) {
+    settings.update({ engineModels: { [harness]: modelId } });
+    setCustomModelDraft(modelId);
   }
 
   async function applyConnectionUpdate(update: EngineConnectionUpdate): Promise<boolean> {
     setConnectionError(null);
     try {
-      setSettingsView(await updateEngineConnection(harness, update));
+      await settings.updateConnection(harness, update);
       return true;
     } catch (error) {
       setConnectionError(
@@ -239,7 +220,7 @@ export function SetupModal({
   }
 
   const connectionModes = ENGINES[harness].connections;
-  const connectionView = settingsView?.engines[harness];
+  const connectionView = settings.view?.engines[harness];
   const connectionMode = connectionView?.connectionMode ?? defaultConnectionMode(harness);
   const apiKeyConfigured = connectionView?.apiKeyConfigured ?? false;
   const apiKeyMode = connectionModes.find((opt) => opt.requiresApiKey);
@@ -379,13 +360,7 @@ export function SetupModal({
                   const sel = harness === opt.id;
                   return (
                     <button key={opt.id}
-                      onClick={() => {
-                        if (opt.available) {
-                          setHarness(opt.id);
-                          saveEngine(projectId, opt.id);
-                          setModel(loadEngineModel(projectId, opt.id));
-                        }
-                      }}
+                      onClick={() => opt.available && selectEngine(opt.id)}
                       disabled={!opt.available}
                       style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: opt.available ? "pointer" : "default", textAlign: "left", opacity: opt.available ? 1 : 0.45 }}>
                       <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
@@ -542,10 +517,7 @@ export function SetupModal({
               )}
               <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Model</div>
               <select value={model}
-                onChange={(e) => {
-                  setModel(e.target.value);
-                  saveEngineModel(projectId, harness, e.target.value);
-                }}
+                onChange={(e) => selectModel(e.target.value)}
                 style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: 6 }}>
                 {modelOptions.map((opt) => (
                   <option key={opt.id} value={opt.id}>{opt.hint ? `${opt.label} — ${opt.hint}` : opt.label}</option>
@@ -562,11 +534,10 @@ export function SetupModal({
                 </button>
               </div>
               {customModel && (
-                <input value={model}
-                  onChange={(e) => {
-                    setModel(e.target.value);
-                    saveEngineModel(projectId, harness, e.target.value);
-                  }}
+                <input value={customModelDraft}
+                  onChange={(e) => setCustomModelDraft(e.target.value)}
+                  onBlur={() => selectModel(customModelDraft)}
+                  onKeyDown={(e) => e.key === "Enter" && selectModel(customModelDraft)}
                   placeholder="Exact model ID passed to the CLI (blank = Auto)"
                   style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: d.surface2, outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }} />
               )}
@@ -581,10 +552,7 @@ export function SetupModal({
                   const sel = permissionMode === opt.id;
                   return (
                     <button key={opt.id}
-                      onClick={() => {
-                        setPermissionMode(opt.id);
-                        savePermissionMode(projectId, opt.id);
-                      }}
+                      onClick={() => settings.update({ permissionMode: opt.id })}
                       style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
                       <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
                       <div>

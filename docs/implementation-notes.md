@@ -227,10 +227,12 @@ in `applyEvent` absorbs any overlap). On `run.completed` it stops the stream
 explicitly, otherwise `EventSource` would reconnect forever once the server
 closes it.
 
-**Model preference migration (`ui/src/settings.ts`).** `""` is a real stored
-value (`AUTO_MODEL_ID` — let the CLI decide), so only a *missing* key falls back
-to the default. Retired model ids are rewritten on read via `LEGACY_MODEL_ALIASES`
-(see the core note above) so a stale preference can't keep failing runs.
+**Model preference migration (`server/src/domain/preferences.ts`).** `""` is a
+real stored value (`AUTO_MODEL_ID` — let the CLI decide), so only a *missing*
+entry falls back to the default. Retired model ids are rewritten on read via
+`LEGACY_MODEL_ALIASES` (see the core note above) so a stale preference can't keep
+failing runs. This ran in the browser until preferences moved server-side; it now
+runs once for every client, which is also why a legacy id is accepted on write.
 
 **Focus panel log-follow (`ui/src/components/StageFocusPanel.tsx`).** The live
 log auto-scrolls only while the user is already within `FOLLOW_THRESHOLD_PX` of
@@ -259,8 +261,8 @@ A project is a directory owning its `.adhd/`; the user-level registry at
 and [`decisions.md`](./decisions.md) for why the home project is not `REPO_ROOT`.
 
 - **Project ids are `<slug>-<sha1(normalized root)>`** — readable enough to
-  recognise in a `localStorage` key, and never a raw path (a path is neither a
-  safe key segment nor stable across separator spellings). The hash is taken over
+  recognise as a key in `settings.json`, and never a raw path (a path is neither
+  a safe key segment nor stable across separator spellings). The hash is taken over
   the *normalized* root, so `C:\Dev\App` and `c:/dev/app/` yield one id.
 - **Case is folded only on `win32`.** Windows filesystems are case-insensitive,
   so those two spellings must be one project; on Linux they are genuinely two

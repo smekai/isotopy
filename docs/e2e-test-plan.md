@@ -25,9 +25,21 @@ pnpm --filter @adhd/ui e2e      # the same thing, from the package
 ```
 
 Playwright auto-starts `pnpm dev` and waits on `/health` (which is proxied to
-the API server, so it covers both processes); an already-running dev server is
-reused. The suite runs single-worker on purpose: every spec drives the same
-server and the same in-memory run store.
+the API server, so it covers both processes). The suite runs single-worker on
+purpose: every spec drives the same server and the same in-memory run store.
+
+**The suite gets its own machine state.** Since preferences became server-side
+(TASK-065), a spec that picks a pipeline writes to `~/.adhd/settings.json` — so
+Playwright starts the server with `ADHD_USER_HOME` and `ADHD_HOME` pointed at
+`<tmp>/adhd-e2e` and its own ports (`9499`/`5199`), and does **not** reuse an
+already-running dev server: the isolation is only real on a server this config
+started. Your own settings, projects and run history are never touched, and
+`pnpm dev` can stay running on 5173 while the suite works.
+
+Preferences also outlive a browser context, which a fresh `localStorage` used to
+discard for free. Every spec therefore calls `resetPreferences` in a
+`beforeEach` (`e2e/support/preferences.ts`) — without it, the pipeline chosen in
+`dev-test-flow.spec.ts` changes the run `run-lifecycle.spec.ts` starts.
 
 The free and seeded tiers create real runs under `.adhd/runs/` (gitignored) but
 never spawn an engine. Every test leaves its run in a terminal state, so the
@@ -48,8 +60,11 @@ CI wiring is still on the "adopt next" list in
    behind a `SOON` pill any more); the model roster is resolved server-side and
    can come from the CLI, so specs assert the entries that matter rather than a
    count; permission modes "Never block (recommended)" / "Accept edits only".
-4. **Persistence across reload** (localStorage) — pipeline, engine model, and
-   permission mode survive a reload.
+4. **Persistence across reload** (server-side, asserted through `/settings`) —
+   pipeline, engine model and permission mode survive a reload; they also
+   survive a browser whose storage was wiped, a legacy model id is migrated on
+   read, and a preference an older build left in `localStorage` is adopted once
+   and its key removed.
 5. **History drawer** — "No runs yet." on a fresh server, otherwise run cards.
 6. **Run view wiring** (simulated `sequential`, driven through the API with
    `minDurationMs`/`maxDurationMs`/`failProbability: 0` so it finishes in

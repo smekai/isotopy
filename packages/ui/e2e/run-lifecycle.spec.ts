@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { resetPreferences } from "./support/preferences";
 
 // The run view, in a browser. Deliberately thin.
 //
@@ -13,6 +14,10 @@ import type { Page } from "@playwright/test";
 // Runs started here are simulated (`sequential` carries no personas), so no
 // engine is ever spawned. Each test leaves its run terminal, keeping the
 // empty-state specs' quiet-server assumption intact.
+
+test.beforeEach(async ({ page }) => {
+  await resetPreferences(page);
+});
 
 const ALL_STAGES = [
   "intake",

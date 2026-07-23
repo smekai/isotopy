@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, FolderOpen, Lock, X } from "lucide-react";
-import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, permissionModeLabel } from "@adhd/core";
-import type { Project, RunState, SettingsView } from "@adhd/core";
-import { fetchSettings } from "../api";
+import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, modelForEngine, permissionModeLabel } from "@adhd/core";
+import type { Project, RunState } from "@adhd/core";
+import type { SettingsController } from "../hooks/useSettings";
 import { childPath, isScratchWorkspace } from "../run-utils";
-import {
-  loadDisabledStages,
-  loadEngine,
-  loadEngineModel,
-  loadPermissionMode,
-  loadPipelineId,
-} from "../settings";
 import type { Dir } from "../theme";
 import { MONO, RUN_PILL, SANS } from "../theme";
 import type { SetupSection } from "./SetupModal";
@@ -74,6 +67,7 @@ export interface ProjectDrawerProps {
   d: Dir;
   projectId: string;
   project: Project | undefined;
+  settings: SettingsController;
   run: RunState | null;
   onOpenSetup: (section: SetupSection) => void;
   onClose: () => void;
@@ -83,11 +77,11 @@ export function ProjectDrawer({
   d,
   projectId,
   project,
+  settings,
   run,
   onOpenSetup,
   onClose,
 }: ProjectDrawerProps) {
-  const [settingsView, setSettingsView] = useState<SettingsView | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -100,12 +94,6 @@ export function ProjectDrawer({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  useEffect(() => {
-    fetchSettings()
-      .then(setSettingsView)
-      .catch(() => setSettingsView(null));
-  }, [projectId]);
-
   async function copyRoot() {
     if (!project) {
       return;
@@ -117,14 +105,15 @@ export function ProjectDrawer({
     } catch {}
   }
 
+  const { preferences } = settings;
   const scratch = projectId === HOME_PROJECT_ID;
-  const engineId = loadEngine(projectId);
+  const engineId = preferences.engine;
   const engine = ENGINES[engineId];
-  const connection = settingsView?.engines[engineId];
-  const pipeline = findPipeline(loadPipelineId(projectId));
+  const connection = settings.view?.engines[engineId];
+  const pipeline = findPipeline(preferences.pipelineId);
   const stages = pipeline ? flattenPipelineStages(pipeline) : [];
   const gates = stages.filter((stage) => stage.gateAfter).length;
-  const disabled = loadDisabledStages(projectId).length;
+  const disabled = preferences.disabledStages.length;
 
   return (
     <div style={panelStyle(d)} data-testid="project-drawer">
@@ -193,8 +182,8 @@ export function ProjectDrawer({
             ENGINE
             <button onClick={() => onOpenSetup("harness")} style={editLinkStyle(d)}>Edit in Setup →</button>
           </div>
-          <Field d={d} label="For new runs" value={`${engine.label} · ${loadEngineModel(projectId, engineId) || "Auto"}`} />
-          <Field d={d} label="Permissions" value={permissionModeLabel(loadPermissionMode(projectId))} />
+          <Field d={d} label="For new runs" value={`${engine.label} · ${modelForEngine(preferences, engineId) || "Auto"}`} />
+          <Field d={d} label="Permissions" value={permissionModeLabel(preferences.permissionMode)} />
           <Field
             d={d}
             label="Connection"

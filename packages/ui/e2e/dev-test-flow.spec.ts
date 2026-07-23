@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { RunState } from "@adhd/core";
+import { resetPreferences } from "./support/preferences";
 
 // The Developer+Tester (`dev-test`) two-box flow, without running an engine.
 //
@@ -12,6 +13,10 @@ import type { RunState } from "@adhd/core";
 //
 // The fixture is typed as `RunState`, so a change to the run model breaks
 // `pnpm --filter @adhd/ui typecheck` rather than rotting silently here.
+
+test.beforeEach(async ({ page }) => {
+  await resetPreferences(page);
+});
 
 const RUN_ID = "e2eseed1";
 
@@ -138,7 +143,7 @@ test("dev-test is selectable in the picker and describes both boxes", async ({ p
   await expect(page.getByText("Developer", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Tester", { exact: true })).toHaveCount(1);
 
-  // The choice survives a reload (localStorage), like the other pipelines.
+  // The choice survives a reload (stored server-side), like the other pipelines.
   await page.reload();
   await expect(page.getByRole("button", { name: "Developer + Tester" })).toBeVisible();
 });

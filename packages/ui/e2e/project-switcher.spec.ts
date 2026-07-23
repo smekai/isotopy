@@ -1,10 +1,15 @@
 import { expect, test } from "@playwright/test";
+import { resetPreferences } from "./support/preferences";
 
 // Free tier: the switcher is driven against whatever the registry already
 // holds. Only the home project is guaranteed to exist on a clean machine, so
 // every assertion here is about the switcher itself — not about which projects
 // happen to be registered. Cross-project isolation is proven server-side in
 // packages/server/test/projects.comp.ts, where two projects can be created.
+
+test.beforeEach(async ({ page }) => {
+  await resetPreferences(page);
+});
 
 test("the header carries a real project switcher, not the old mock", async ({ page }) => {
   await page.goto("/");

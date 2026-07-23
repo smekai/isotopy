@@ -1,5 +1,31 @@
 # Done
 
+## TASK-065: Move project preferences server-side, out of localStorage
+**Priority:** P2 | **Tags:** ui, server, setup
+**Updated:** 2026-07-23 12:40
+
+Engine, model, permission mode, pipeline and disabled stages read as project settings but lived in one browser (`adhd.<projectId>.<name>` in `localStorage`), so a second browser — or cleared site data — silently reverted a project to defaults while its folder, skills and credentials stayed durable server-side.
+
+**They now live in `~/.adhd/settings.json`,** in the same per-project section as the engine connection, behind `GET /settings` and a new `PUT /settings/preferences`. Secrets did not move: an API key is still write-only and never echoed back.
+
+**Stored as a partial, resolved in three layers** — built-in defaults ← `defaults.preferences` ← `projects.<id>.preferences` — so a project that sets one field is not frozen against later changes to the defaults. Validation splits by direction: `normalizeProjectPreferences` is tolerant on read (hand-editable file, falls back field by field, migrates `LEGACY_MODEL_ALIASES` — that migration used to run in the browser), `parsePreferencesUpdate` 400s on an unknown engine, permission mode or pipeline on write.
+
+**The UI reads and writes through one hook.** `useSettings` (a `SettingsController`, modelled on `useProjects`) is owned by `App` and passed to `EmptyState`, `SetupModal` and `ProjectDrawer` — replacing `src/settings.ts` and the two components' own `fetchSettings` calls. Updates are optimistic, then reconciled with the server's response. `legacy-prefs.ts` adopts whatever the old keys still hold, once per project, then deletes them.
+
+**E2E had to be isolated:** preferences are now durable state that a fresh browser context no longer discards, so Playwright runs against its own `ADHD_USER_HOME`/`ADHD_HOME` and ports (`reuseExistingServer: false`), and every spec resets preferences in `beforeEach` — without that, the pipeline `dev-test-flow.spec.ts` picks changed the run `run-lifecycle.spec.ts` started. Verified with two real browsers against a running app: what one sets, the other sees.
+
+Also fixed on the way: a UTF-8 BOM in the `package.json` files broke `vite build`'s PostCSS config search, so `pnpm build` had been failing before this change.
+
+### Plan (done)
+
+1. core — `ProjectPreferences`, `defaultProjectPreferences`, `mergeProjectPreferences`, `modelForEngine`, `DEFAULT_ENGINE_ID`, `DEFAULT_PIPELINE_ID`; `SettingsView.preferences`.
+2. server — `domain/preferences.ts`, `SettingsStore.getPreferences`/`updatePreferences`, `PUT /settings/preferences`.
+3. ui — `hooks/useSettings.ts`, `legacy-prefs.ts`, `api.updatePreferences`; `src/settings.ts` deleted.
+4. tests — `settings.comp.ts` (10), `preferences.spec.ts` (14), `legacy-prefs.spec.ts` (9); e2e rewritten against `/settings` with `e2e/support/preferences.ts`.
+5. docs — decision-log entry, e2e plan, implementation notes, architecture storage table.
+
+---
+
 ## TASK-064: The project owns the folder — retire the per-run working directory
 **Priority:** P1 | **Tags:** core, server, ui
 **Updated:** 2026-07-23 11:10

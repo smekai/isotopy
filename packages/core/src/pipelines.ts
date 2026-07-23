@@ -80,6 +80,8 @@ export function flattenPipelineStages(
   return pipeline.groups.flatMap((group) => group.stages);
 }
 
+export const DEFAULT_PIPELINE_ID: string = SEQUENTIAL_PIPELINE.id;
+
 export function pipelineUsesEngine(pipeline: PipelineDefinition): boolean {
   return flattenPipelineStages(pipeline).some((stage) => stage.skill !== undefined);
 }

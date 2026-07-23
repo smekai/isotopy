@@ -7,10 +7,11 @@ import {
   agentForStage,
   findPipeline,
   flattenPipelineStages,
+  modelForEngine,
   pipelineUsesEngineById,
 } from "@adhd/core";
 import type { Project } from "@adhd/core";
-import { loadEngine, loadEngineModel, loadPipelineId, savePipelineId } from "../settings";
+import type { SettingsController } from "../hooks/useSettings";
 import type { Dir } from "../theme";
 import { MONO, SANS, specColor } from "../theme";
 import { PipelineDropdown } from "./PipelineDropdown";
@@ -50,6 +51,7 @@ export interface EmptyStateProps {
   d: Dir;
   projectId: string;
   project: Project | undefined;
+  settings: SettingsController;
   onOpenProject: () => void;
   onStart: (task: string, pipelineId: string) => void;
   starting?: boolean;
@@ -60,13 +62,14 @@ export function EmptyState({
   d,
   projectId,
   project,
+  settings,
   onOpenProject,
   onStart,
   starting = false,
   initialTask = "",
 }: EmptyStateProps) {
   const [input, setInput] = useState(initialTask);
-  const [pipelineId, setPipelineId] = useState(() => loadPipelineId(projectId));
+  const { pipelineId } = settings.preferences;
   const scratch = projectId === HOME_PROJECT_ID;
   const canStart = input.trim().length > 0 && !starting;
   const usesEngine = pipelineUsesEngineById(pipelineId);
@@ -74,7 +77,7 @@ export function EmptyState({
   const stages = selectedPipeline
     ? flattenPipelineStages(selectedPipeline)
     : LIFECYCLE_STAGES;
-  const engine = ENGINES[loadEngine(projectId)];
+  const engine = ENGINES[settings.preferences.engine];
 
   const pipelineOptions: PipelineOption[] = [
     {
@@ -97,8 +100,7 @@ export function EmptyState({
   const copy = PIPELINE_COPY[pipelineId] ?? DEFAULT_PIPELINE_COPY;
 
   function selectPipeline(id: string) {
-    setPipelineId(id);
-    savePipelineId(projectId, id);
+    settings.update({ pipelineId: id });
   }
 
   function start() {
@@ -179,7 +181,7 @@ export function EmptyState({
 
       <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
         {usesEngine
-          ? <>Engine: {engine.label} · {loadEngineModel(projectId, engine.id)} — change in Setup</>
+          ? <>Engine: {engine.label} · {modelForEngine(settings.preferences, engine.id)} — change in Setup</>
           : <>↵ to start · ⌘⇧V for voice</>}
       </div>
     </div>

@@ -6,6 +6,49 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-23 — Project preferences are project state, not browser state
+
+**Context:** engine, model, permission mode, pipeline and disabled stages were
+keyed `adhd.<projectId>.<name>` in `localStorage`. They read as project settings
+in the UI — the Setup modal is titled with the project's name — but they lived in
+one browser. Opening the app in a second browser, or clearing site data, silently
+reverted a project to defaults while its folder, skills and credentials, all
+server-side, stayed put.
+
+**Decision:** the non-secret preferences move into the per-project section of
+`~/.adhd/settings.json`, beside the engine connection, and are read and written
+through `/settings` and `PUT /settings/preferences`. Secrets do not move: an API
+key is still write-only and never leaves the server.
+
+**Stored as a partial, resolved in three layers.** A project's block holds only
+the fields that project actually set; a read resolves built-in defaults ←
+`defaults.preferences` ← `projects.<id>.preferences`, exactly as `engines`
+already did. Storing the fully resolved set was rejected because it would freeze
+a project against any future change to `defaults` the moment it touched one
+field.
+
+**Validation splits by direction.** A read is tolerant — `settings.json` is
+hand-editable and predates the preference block, so
+`normalizeProjectPreferences` falls back field by field and migrates legacy model
+ids (that migration used to run in the browser; it now runs once, server-side,
+for every client). A write is the API contract — `parsePreferencesUpdate` returns
+400 for an unknown engine, permission mode or pipeline rather than storing it.
+
+**Legacy `localStorage` values are adopted once, then deleted.** `legacy-prefs.ts`
+reads the old keys on a project's first load, PUTs them, and clears them.
+Ignoring them was the simpler option and was rejected: it would have silently
+reset every existing installation's engine and model. The module is self-contained
+so it can be deleted once no installation predates this change.
+
+**Consequence:** the e2e suite now mutates durable server state, which a fresh
+browser context used to discard for free. Playwright therefore runs against its
+own `ADHD_USER_HOME`/`ADHD_HOME` on its own ports (`reuseExistingServer: false`,
+since isolation is only real on a server the config started), and every spec
+resets preferences in `beforeEach` — without that, a pipeline chosen in
+`dev-test-flow.spec.ts` leaked into the run `run-lifecycle.spec.ts` started.
+
+---
+
 ## 2026-07-23 — The project owns the folder; a run cannot choose its own
 
 **Context:** after projects landed, two folders competed. The composer still

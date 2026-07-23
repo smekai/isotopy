@@ -1,9 +1,14 @@
 import { expect, test } from "@playwright/test";
+import { resetPreferences } from "./support/preferences";
 
 // The Project drawer is where a run's setup is visible now that the folder is
 // no longer a per-run field. Only the home project is guaranteed to exist on a
 // clean machine, so these assertions are about the drawer, not about which
 // project happens to be active.
+
+test.beforeEach(async ({ page }) => {
+  await resetPreferences(page);
+});
 
 test("the Project button opens a drawer naming the active project's folder", async ({ page }) => {
   await page.goto("/");

@@ -30,7 +30,7 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 | `engines.ts` | Engine/harness definitions, connection modes, model options |
 | `pipelines.ts` | Pipeline/stage definitions and pure helpers |
 | `runs.ts` | Run/stage state models, run events, status constants |
-| `settings.ts` | UI-safe settings view models |
+| `settings.ts` | UI-safe settings view models, project preferences and their defaults |
 
 Core stays dependency-free and side-effect-free: types, constants, and pure functions only.
 

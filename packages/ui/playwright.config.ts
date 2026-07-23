@@ -1,9 +1,15 @@
+import os from "node:os";
 import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const HERE = import.meta.dirname;
 
-const UI_PORT = process.env.ADHD_UI_PORT ?? "5173";
+// Preferences are durable server state (TASK-065), so the suite gets its own
+// `~/.adhd` and its own ports: it must never edit the developer's real settings,
+// and it must not collide with a `pnpm dev` already on 5173.
+const E2E_HOME = path.join(os.tmpdir(), "adhd-e2e");
+const SERVER_PORT = process.env.ADHD_PORT ?? "9499";
+const UI_PORT = process.env.ADHD_UI_PORT ?? "5199";
 const BASE_URL = process.env.ADHD_UI_URL ?? `http://localhost:${UI_PORT}`;
 
 // Free + seeded tiers run by default — no engine spend, no claude CLI required.
@@ -24,7 +30,14 @@ export default defineConfig({
     cwd: path.resolve(HERE, "../.."),
     // /health is proxied to the API server, so this waits for both processes.
     url: `${BASE_URL}/health`,
-    reuseExistingServer: true,
+    env: {
+      ADHD_USER_HOME: path.join(E2E_HOME, "user"),
+      ADHD_HOME: path.join(E2E_HOME, "home"),
+      ADHD_PORT: SERVER_PORT,
+      ADHD_UI_PORT: UI_PORT,
+    },
+    // The isolation above is only real on a server this config started.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

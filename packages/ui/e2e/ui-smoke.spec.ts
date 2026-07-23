@@ -1,20 +1,14 @@
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import { readPreferences, resetPreferences, writePreferences } from "./support/preferences";
 
 // Free tier of docs/e2e-test-plan.md: picker, Setup modal, persistence,
 // history drawer. Starts no runs — safe to execute on every change.
 // Assumes a quiet server (no in-flight run, otherwise the empty state
 // is replaced by the run view).
 
-/**
- * Preferences are scoped by project id, so a storage assertion has to ask the
- * server which project is active rather than hardcoding a key.
- */
-async function prefKey(page: Page, name: string): Promise<string> {
-  const response = await page.request.get("/projects");
-  const { activeProjectId } = (await response.json()) as { activeProjectId: string };
-  return `adhd.${activeProjectId}.${name}`;
-}
+test.beforeEach(async ({ page }) => {
+  await resetPreferences(page);
+});
 
 test("empty state shows the pipeline dropdown and a disabled start button", async ({ page }) => {
   await page.goto("/");
@@ -102,7 +96,7 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
   await expect(page.getByRole("button", { name: /Cursor subscription/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Cursor API key/ })).toBeVisible();
 
-  // engine choice is localStorage-only; restore the default for later tests
+  // the engine is stored per project now; restore the default for later tests
   await page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ }).click();
   await expect(page.locator("select")).toHaveValue("sonnet");
 });
@@ -129,27 +123,55 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   await page.getByRole("button", { name: "AI Harness" }).click();
   await expect(page.locator("select")).toHaveValue("haiku");
 
-  // permission mode is stored (UI selection is style-only, so assert storage)
-  const stored = await page.evaluate(
-    (key) => localStorage.getItem(key),
-    await prefKey(page, "permissionMode"),
-  );
-  expect(stored).toBe("acceptEdits");
+  // permission mode is stored server-side (UI selection is style-only)
+  expect((await readPreferences(page)).permissionMode).toBe("acceptEdits");
+});
+
+test("preferences survive a browser with no storage of its own", async ({ page }) => {
+  await page.goto("/");
+  await writePreferences(page, { pipelineId: "one-box" });
+
+  // Wiping storage is what "open it in another browser" means: nothing is
+  // carried over but the server's own state.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await expect(page.getByText("What should the Developer build?")).toBeVisible();
 });
 
 test("legacy full model IDs migrate to standard-context CLI aliases", async ({ page }) => {
   await page.goto("/");
-  const modelKey = await prefKey(page, "engineModel.claude-code");
-  await page.evaluate((key) => localStorage.setItem(key, "claude-sonnet-4-6"), modelKey);
+  await writePreferences(page, { engineModels: { "claude-code": "claude-sonnet-4-6" } });
   await page.reload();
 
   await page.getByRole("button", { name: "Full team" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
-  // the alias is rewritten in place, in the active project's own key
-  const stored = await page.evaluate((key) => localStorage.getItem(key), modelKey);
-  expect(stored).toBe("sonnet");
+  // the alias is rewritten in the active project's own stored preferences
+  expect((await readPreferences(page)).engineModels["claude-code"]).toBe("sonnet");
+});
+
+test("a preference left in localStorage by an older build is adopted once", async ({ page }) => {
+  await page.goto("/");
+  await writePreferences(page, { pipelineId: "sequential" });
+  const { activeProjectId } = (await (await page.request.get("/projects")).json()) as {
+    activeProjectId: string;
+  };
+  await page.evaluate(
+    (id) => localStorage.setItem(`adhd.${id}.pipelineId`, "dev-test"),
+    activeProjectId,
+  );
+  await page.reload();
+
+  await expect(page.getByText("What should the Developer build?")).toBeVisible();
+  await expect
+    .poll(async () => (await readPreferences(page)).pipelineId)
+    .toBe("dev-test");
+  // adopted once: the key is gone, so a later server-side change is not undone
+  expect(
+    await page.evaluate((id) => localStorage.getItem(`adhd.${id}.pipelineId`), activeProjectId),
+  ).toBeNull();
 });
 
 test("history drawer opens and renders", async ({ page }) => {

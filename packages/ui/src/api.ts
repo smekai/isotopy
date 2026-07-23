@@ -2,12 +2,13 @@ import type {
   EngineModelList,
   EngineStatus,
   Project,
+  ProjectPreferencesUpdate,
   ProjectsView,
   RunEvent,
   RunState,
   SettingsView,
 } from "@adhd/core";
-import { HOME_PROJECT_ID, RUN_EVENT_TYPES } from "@adhd/core";
+import { DEFAULT_PIPELINE_ID, HOME_PROJECT_ID, RUN_EVENT_TYPES } from "@adhd/core";
 
 const API_BASE = "";
 const PROJECT_HEADER = "X-ADHD-Project";
@@ -64,6 +65,16 @@ export function removeProject(projectId: string): Promise<ProjectsView> {
 
 export function fetchSettings(): Promise<SettingsView> {
   return requestJson<SettingsView>("/settings");
+}
+
+export function updatePreferences(
+  update: ProjectPreferencesUpdate,
+): Promise<SettingsView> {
+  return requestJson<SettingsView>("/settings/preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
 }
 
 export interface EngineConnectionUpdate {
@@ -123,7 +134,7 @@ export interface StartRunOptions {
 }
 
 export function startRun(options: StartRunOptions = {}): Promise<RunState> {
-  return postJson<RunState>("/runs", { pipelineId: "sequential", ...options });
+  return postJson<RunState>("/runs", { pipelineId: DEFAULT_PIPELINE_ID, ...options });
 }
 
 export interface DirectoryListing {

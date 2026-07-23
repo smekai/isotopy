@@ -1,7 +1,13 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ENGINES, defaultConnectionMode } from "@adhd/core";
-import type { EngineId, SettingsView } from "@adhd/core";
+import type {
+  EngineId,
+  ProjectPreferences,
+  ProjectPreferencesUpdate,
+  SettingsView,
+} from "@adhd/core";
+import { normalizeProjectPreferences } from "../domain/preferences.js";
 import type { EngineConnection } from "../engines/types.js";
 import { userSettingsPath } from "../paths.js";
 
@@ -14,6 +20,7 @@ type EngineSettings = Partial<Record<EngineId, EngineConnectionSettings>>;
 
 interface ProjectSettings {
   engines: EngineSettings;
+  preferences?: ProjectPreferencesUpdate;
 }
 
 interface SettingsFile {
@@ -59,6 +66,26 @@ function detachedCopyOfResolvedEntry(
   };
 }
 
+function mergedPreferenceOverride(
+  current: ProjectPreferencesUpdate | undefined,
+  update: ProjectPreferencesUpdate,
+): ProjectPreferencesUpdate {
+  const merged: ProjectPreferencesUpdate = { ...current, ...update };
+  if (update.engineModels) {
+    merged.engineModels = { ...current?.engineModels, ...update.engineModels };
+  }
+  return merged;
+}
+
+function resolvedPreferences(settings: SettingsFile, projectId: string): ProjectPreferences {
+  return normalizeProjectPreferences(
+    mergedPreferenceOverride(
+      settings.defaults.preferences,
+      settings.projects[projectId]?.preferences ?? {},
+    ),
+  );
+}
+
 export class SettingsStore {
   private read(): SettingsFile {
     let raw: string;
@@ -71,7 +98,10 @@ export class SettingsStore {
       const parsed = JSON.parse(raw) as Partial<SettingsFile>;
       return {
         version: 1,
-        defaults: { engines: readEngineBag(parsed.defaults?.engines) },
+        defaults: {
+          engines: readEngineBag(parsed.defaults?.engines),
+          ...(parsed.defaults?.preferences ? { preferences: parsed.defaults.preferences } : {}),
+        },
         projects:
           typeof parsed.projects === "object" && parsed.projects !== null ? parsed.projects : {},
       };
@@ -96,9 +126,16 @@ export class SettingsStore {
     };
   }
 
+  getPreferences(projectId: string): ProjectPreferences {
+    return resolvedPreferences(this.read(), projectId);
+  }
+
   getSettingsView(projectId: string): SettingsView {
     const settings = this.read();
-    const view: SettingsView = { engines: {} };
+    const view: SettingsView = {
+      engines: {},
+      preferences: resolvedPreferences(settings, projectId),
+    };
     for (const engineId of Object.keys(ENGINES) as EngineId[]) {
       if (ENGINES[engineId].connections.length === 0) {
         continue;
@@ -110,6 +147,15 @@ export class SettingsStore {
       };
     }
     return view;
+  }
+
+  updatePreferences(projectId: string, update: ProjectPreferencesUpdate): SettingsView {
+    const settings = this.read();
+    const project = settings.projects[projectId] ?? emptyProjectSettings();
+    project.preferences = mergedPreferenceOverride(project.preferences, update);
+    settings.projects[projectId] = project;
+    this.write(settings);
+    return this.getSettingsView(projectId);
   }
 
   updateEngineConnection(
