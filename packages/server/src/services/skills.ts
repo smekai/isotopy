@@ -1,9 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { skillsDir, userSkillsDir } from "../paths.js";
-import type { ProjectPaths } from "../paths.js";
-import { composeSkill } from "../domain/skills/compose.js";
-import { DEFAULT_SKILLS } from "../domain/skills/defaults.generated.js";
+import { skillsDir, userSkillsDir } from "../paths.ts";
+import type { ProjectPaths } from "../paths.ts";
+import { composeSkill } from "../domain/skills/compose.ts";
+import { DEFAULT_SKILLS } from "../domain/skills/defaults.generated.ts";
 
 interface CacheEntry {
   mtimeMs: number;

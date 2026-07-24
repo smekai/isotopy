@@ -9,12 +9,12 @@ import os from "node:os";
 import path from "node:path";
 import type { Hono } from "hono";
 import type { EngineId, RunState } from "@adhd/core";
-import { createApp } from "../../src/app.js";
-import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.js";
-import { ProjectRegistry } from "../../src/services/project-registry.js";
-import { RunOrchestrator } from "../../src/services/run-orchestrator.js";
-import { SettingsStore } from "../../src/services/settings-store.js";
-import { FakeEngine } from "./fake-engine.js";
+import { createApp } from "../../src/app.ts";
+import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
+import { ProjectRegistry } from "../../src/services/project-registry.ts";
+import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
+import { SettingsStore } from "../../src/services/settings-store.ts";
+import { FakeEngine } from "./fake-engine.ts";
 
 /** How long a `waitFor*` helper keeps polling before failing the test. */
 const WAIT_TIMEOUT_MS = 10_000;

@@ -14,8 +14,8 @@ import {
   startRun,
   waitForRunStatus,
   waitForStageStatus,
-} from "./support/harness.js";
-import type { TestApp } from "./support/harness.js";
+} from "./support/harness.ts";
+import type { TestApp } from "./support/harness.ts";
 
 /** Every `sequential` stage; gates sit after requirements, design and release. */
 const ALL_STAGES = [

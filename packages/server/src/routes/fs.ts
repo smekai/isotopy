@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { joinDirectory, listDirectories } from "../services/directory-browser.js";
+import { joinDirectory, listDirectories } from "../services/directory-browser.ts";
 
 export const fsRoutes = new Hono().get("/dirs", async (c) => {
   const base = c.req.query("path");

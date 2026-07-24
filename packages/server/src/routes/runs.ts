@@ -2,10 +2,10 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { isTerminalRunStatus } from "@adhd/core";
 import type { RunEvent } from "@adhd/core";
-import type { ProjectRegistry } from "../services/project-registry.js";
-import type { RunOrchestrator } from "../services/run-orchestrator.js";
-import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-files.js";
-import { projectScope } from "./project-scope.js";
+import type { ProjectRegistry } from "../services/project-registry.ts";
+import type { RunOrchestrator } from "../services/run-orchestrator.ts";
+import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-files.ts";
+import { projectScope } from "./project-scope.ts";
 
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;

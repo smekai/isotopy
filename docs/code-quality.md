@@ -77,7 +77,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 | `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
 | `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
 
-Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults (pure data) sit in `domain/skills/` apart from the I/O in `skills.ts`; `run-store.ts` remains the only module that knows the run disk layout; no `console.*` in the new modules; no hardcoded paths or secrets.
+Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults (pure data) sit in `domain/skills/` apart from the I/O in `skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
 
 **Deliberate seam:** `RunOrchestrator.executeStage()` is the single decision point for how a stage runs. A durable-workflow executor (Aiki) replaces that method alone — engine adapters and the surrounding lifecycle are untouched.
 

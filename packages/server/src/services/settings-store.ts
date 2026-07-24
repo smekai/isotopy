@@ -7,9 +7,9 @@ import type {
   ProjectPreferencesUpdate,
   SettingsView,
 } from "@adhd/core";
-import { normalizeProjectPreferences } from "../domain/preferences.js";
-import type { EngineConnection } from "../engines/types.js";
-import { userSettingsPath } from "../paths.js";
+import { normalizeProjectPreferences } from "../domain/preferences.ts";
+import type { EngineConnection } from "../engines/types.ts";
+import { userSettingsPath } from "../paths.ts";
 
 interface EngineConnectionSettings {
   connectionMode: string;

@@ -7,7 +7,7 @@ import {
   buildStagePrompt,
   formatHandoff,
   parseStageVerdict,
-} from "../src/domain/stage-context.js";
+} from "../src/domain/stage-context.ts";
 
 describe("parseStageVerdict", () => {
   test("reads a bare verdict line", () => {

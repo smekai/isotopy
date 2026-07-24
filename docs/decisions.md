@@ -6,6 +6,39 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-23 — SQLite is the sole run store, in a `repository/` module
+
+**Context:** TASK-067 first landed `SqliteRunStore` behind the existing seam with
+the flat-file JSON store kept as the default and an `ADHD_RUN_STORE=json|sqlite`
+selector. On review the owner asked to go further: run state is a handful of rows
+per run, `node:sqlite` installs cleanly (unlike `better-sqlite3`), and carrying two
+storage formats plus a selector is complexity with no live consumer.
+
+**Decision:** SQLite is the **only** run store. `JsonRunStore` and the flat-file
+`state.json` / `events.jsonl` format are retired. **No migration path is kept** — the
+project has no active users, so the flat-file format is simply dropped rather than
+importing old data. The persistence code is layered **services → repository → db**:
+a single concrete `RunRepository` class (`src/repository/`) coordinates a `Database`
+connection + `RunsTable` / `EventsTable` (`src/db/`) and an on-disk handoff writer.
+No interface, no factory, no `index.ts` barrel — one concrete class over a
+data-access layer, folders named for the layer (`repository`, `db`) not the backend.
+Relative imports use `.ts` extensions (matching `@adhd/core`;
+`rewriteRelativeImportExtensions` rewrites them to `.js` on build).
+
+**Consequence — the ExperimentalWarning.** With SQLite the only store, `node:sqlite`
+loads on every startup, so its `ExperimentalWarning` is no longer contained to an
+opt-in path. A warning listener does not suppress the default printer, so the
+shipped `start` script uses `node --disable-warning=ExperimentalWarning`. Rejected:
+`--no-warnings` (blanket-silences everything) and leaving it to print on every boot
+(reads as unpolished for a shipped product).
+
+**Rejected alternative:** keeping JSON as the default with the two-backend selector
+(the original TASK-067 shape). It hedged against a `node:sqlite` problem that
+measurement (M1/M2 in `workflow-storage-options.md`) had already ruled out, at the
+cost of two code paths and a config surface no one selected.
+
+---
+
 ## 2026-07-23 — Project preferences are project state, not browser state
 
 **Context:** engine, model, permission mode, pipeline and disabled stages were

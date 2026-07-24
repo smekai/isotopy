@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { REPO_ROOT } from "./paths.js";
+import { REPO_ROOT } from "./paths.ts";
 
 function loadEnvFile(file: string): void {
   let text: string;

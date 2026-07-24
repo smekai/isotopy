@@ -7,8 +7,8 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { DEFAULT_SKILLS } from "../src/domain/skills/defaults.generated.js";
-import { REPO_ROOT } from "../src/paths.js";
+import { DEFAULT_SKILLS } from "../src/domain/skills/defaults.generated.ts";
+import { REPO_ROOT } from "../src/paths.ts";
 
 const RULE_IDS = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9"];
 const SKILL_MD = path.join(REPO_ROOT, ".claude", "skills", "architect", "SKILL.md");

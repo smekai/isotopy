@@ -41,6 +41,13 @@ interface, not a concretion: define the seam as a type, and let callers receive
 an implementation rather than importing one. When you find a module doing two
 jobs, split it along the axis that changes independently.
 
+Keep the seam in its **own file**, separate from the mechanics behind it — a file
+named for one backend is not where a shared abstraction belongs. Layer a coarse
+concern over its detail: a repository (domain-facing persistence) sits over a
+data-access layer, each in a folder named for the *layer* — \`repository/\`, \`db/\` —
+never for a backend (\`sqlite/\`), one responsibility per file. Prefer direct imports;
+a barrel \`index.ts\` that only re-exports is indirection to avoid.
+
 ### A3 — DDD layering: fat domain, thin service
 
 Pure functions and domain rules live in a **domain** layer with no I/O. The
@@ -80,6 +87,12 @@ ids where identity matters; exhaustive \`switch\` closed with a \`never\` assert
 so a new case is a compile error. Turn the strict compiler flags on and keep them
 on. Model illegal states as unrepresentable rather than guarding against them at
 runtime.
+
+Avoid \`unknown\` and \`as unknown as\` in business logic — a double-cast defeats the
+type system rather than using it. Reach for a library's own typed return values
+and narrow them (\`typeof\`, a type guard) instead of re-casting. Confine \`unknown\`
+to a single named boundary — a type guard or a \`parseX\` helper that validates
+untyped input — and hand typed values to everything downstream.
 
 ### A8 — Evidence lives in Markdown, not code comments
 

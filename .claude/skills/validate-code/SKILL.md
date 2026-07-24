@@ -77,11 +77,12 @@ a comment without relocating what it knew is data loss — do the move.
 ### A2 — Depend on interfaces
 
 - Does a module reach for a concretion by import where it could receive one?
-  `EngineAdapter` (`engines/types.ts`) and `RunStore` (`services/run-store.ts`)
-  are the shapes to copy: define the seam as a type, construct at the edge, pass
-  it in.
+  `EngineAdapter` (`engines/types.ts`) is the shape to copy: define the seam as a
+  type in its own file, construct at the edge, pass it in.
 - Does any module now have two reasons to change? Split it along the axis that
-  changes independently.
+  changes independently. Persistence is the layering reference: a `RunRepository`
+  coordinator (`src/repository/`) over a data-access layer (`src/db/`), folders
+  named for the layer not the backend, and no barrel `index.ts`.
 
 ### A3 / A9 — Layering
 

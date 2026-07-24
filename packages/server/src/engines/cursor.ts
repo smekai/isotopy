@@ -4,16 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
 import type { EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
-import { firstLine, truncate } from "./log-text.js";
-import { withPersonaPrompt } from "./persona.js";
-import { probeCommand, runSubprocess } from "./subprocess.js";
+import { firstLine, truncate } from "./log-text.ts";
+import { withPersonaPrompt } from "./persona.ts";
+import { probeCommand, runSubprocess } from "./subprocess.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
-} from "./types.js";
+} from "./types.ts";
 
 const PATH_CANDIDATES = ["cursor-agent", "agent"];
 

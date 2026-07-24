@@ -1,9 +1,9 @@
 import { ENGINES } from "@adhd/core";
 import type { EngineId } from "@adhd/core";
-import { claudeCodeAdapter } from "./claude-code.js";
-import { codexAdapter } from "./codex.js";
-import { cursorAdapter } from "./cursor.js";
-import type { EngineAdapter } from "./types.js";
+import { claudeCodeAdapter } from "./claude-code.ts";
+import { codexAdapter } from "./codex.ts";
+import { cursorAdapter } from "./cursor.ts";
+import type { EngineAdapter } from "./types.ts";
 
 const BUILT_IN: [EngineId, EngineAdapter][] = [
   [claudeCodeAdapter.id, claudeCodeAdapter],

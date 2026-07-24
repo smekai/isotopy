@@ -3,9 +3,9 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { Project, ProjectsView } from "@adhd/core";
-import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/projects.js";
-import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.js";
-import type { ProjectPaths } from "../paths.js";
+import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/projects.ts";
+import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
+import type { ProjectPaths } from "../paths.ts";
 
 type StoredProject = Omit<Project, "dataDir">;
 

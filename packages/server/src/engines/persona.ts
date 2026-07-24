@@ -1,4 +1,4 @@
-import type { EngineRunContext } from "./types.js";
+import type { EngineRunContext } from "./types.ts";
 
 const PERSONA_SEPARATOR = "\n\n---\n\n";
 

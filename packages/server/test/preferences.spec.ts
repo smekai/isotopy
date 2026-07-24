@@ -5,7 +5,7 @@ import { defaultProjectPreferences } from "@adhd/core";
 import {
   normalizeProjectPreferences,
   parsePreferencesUpdate,
-} from "../src/domain/preferences.js";
+} from "../src/domain/preferences.ts";
 
 describe("normalizeProjectPreferences", () => {
   test("an absent block reads as the built-in defaults", () => {

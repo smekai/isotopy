@@ -7,7 +7,7 @@ import {
   projectIdFor,
   projectNameFor,
   sameProjectRoot,
-} from "../src/domain/projects.js";
+} from "../src/domain/projects.ts";
 
 const isWindows = process.platform === "win32";
 

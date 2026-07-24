@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { ENGINES } from "@adhd/core";
 import type { EngineId } from "@adhd/core";
-import { parsePreferencesUpdate } from "../domain/preferences.js";
-import type { ProjectRegistry } from "../services/project-registry.js";
-import type { SettingsStore } from "../services/settings-store.js";
-import { projectScope } from "./project-scope.js";
+import { parsePreferencesUpdate } from "../domain/preferences.ts";
+import type { ProjectRegistry } from "../services/project-registry.ts";
+import type { SettingsStore } from "../services/settings-store.ts";
+import { projectScope } from "./project-scope.ts";
 
 interface ConnectionUpdateBody {
   connectionMode?: string;

@@ -1,9 +1,9 @@
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
-import { config } from "./config.js";
-import { ProjectRegistry } from "./services/project-registry.js";
-import { RunOrchestrator } from "./services/run-orchestrator.js";
-import { SettingsStore } from "./services/settings-store.js";
+import { createApp } from "./app.ts";
+import { config } from "./config.ts";
+import { ProjectRegistry } from "./services/project-registry.ts";
+import { RunOrchestrator } from "./services/run-orchestrator.ts";
+import { SettingsStore } from "./services/settings-store.ts";
 
 const registry = new ProjectRegistry();
 const settings = new SettingsStore();

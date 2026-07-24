@@ -12,7 +12,7 @@ import type {
   EngineAdapter,
   EngineRunContext,
   EngineRunResult,
-} from "../../src/engines/types.js";
+} from "../../src/engines/types.ts";
 
 /** A string equals it exactly; a RegExp must match it. */
 export type Matcher = string | RegExp;

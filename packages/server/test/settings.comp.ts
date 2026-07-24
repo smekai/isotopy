@@ -13,8 +13,8 @@ import {
   get,
   put,
   restartApp,
-} from "./support/harness.js";
-import type { TestApp } from "./support/harness.js";
+} from "./support/harness.ts";
+import type { TestApp } from "./support/harness.ts";
 
 let ctx: TestApp;
 

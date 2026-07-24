@@ -1,5 +1,23 @@
 # Done
 
+## TASK-067: SQLite run repository — the sole run store, layered `repository/` over `db/`
+**Priority:** P1 | **Tags:** server, infra, core
+**Updated:** 2026-07-24 09:50
+
+Storage slice of the TASK-066 decision / TASK-039. SQLite is the only run store, one `runs.db` per project. Landed in three review rounds; final shape is a layered persistence stack.
+
+### Done summary
+- **Layered `services → repository → db`.** New top-level `src/db/` — `Database` (connection: lazy open, WAL, `busy_timeout`, schema, checkpoint+close on settle; the only place `node:sqlite` is imported) + `RunsTable` (upsert / all) + `EventsTable` (append), string-in/string-out. New top-level `src/repository/` — a single concrete `RunRepository` class coordinating the db tables + the on-disk handoff writer (`handoff.ts`), owning the `PersistedRun` types and `parsePersistedRun`. No interface, no factory, no `index.ts` barrel; folders named for the layer, not the backend.
+- **JSON store + importer retired.** No active users, so the flat-file format is dropped outright (no migration). `ADHD_RUN_STORE` selector gone; the orchestrator news up `new RunRepository(paths)` per project.
+- **`.ts` imports across the whole server package** (~120 specifiers, src + test) matching `@adhd/core`; `rewriteRelativeImportExtensions` rewrites them to `.js` in `dist/` (verified — `node dist/index.js` resolves). No barrel files.
+- **No `unknown` in business logic** — confined to the `parsePersistedRun`/`isPersistedRun` guard; `node:sqlite`'s typed rows are narrowed, not cast.
+- `ExperimentalWarning` suppressed on the `start` script via `--disable-warning=ExperimentalWarning`. Root `engines.node` `>=22.5`; versions 0.6.7.
+- Tests: `run-repository.spec.ts` (contract), `run-database.spec.ts` (corrupt-DB degrade + WAL concurrency / G6), `persistence.comp.ts` (restart round-trip; crash reconcile seeded via the DB). 144 tests + lint + typecheck + build + `gen:skills --check` green.
+- Standard revised (A2 = layer a seam over its data-access layer, folders named for the layer, prefer direct imports over barrels; A7 no-`unknown` + `.ts` imports) and the architect skill regenerated; `docs/decisions.md` + `docs/implementation-notes.md` record the "why".
+- **Cross-platform:** `node:sqlite` and the DB path (`path.join` + `ProjectPaths`) OS-independent; WAL sidecars covered by `.adhd/.gitignore`; `--disable-warning` + the `.ts`→`.js` rewrite identical on both OSes. Tested on Windows; macOS reasoned through — **untested on macOS**.
+
+---
+
 ## TASK-066: Inestigation of Workflow options
 **Priority:** P0 | **Tags:** worklow | **Assignee:** Fedor
 **Updated:** 2026-07-23 09:38

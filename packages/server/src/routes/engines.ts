@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { ENGINES, modelOptionsFor } from "@adhd/core";
 import type { EngineId, EngineModelList, EngineStatus } from "@adhd/core";
-import { findEngineAdapter } from "../engines/registry.js";
+import { findEngineAdapter } from "../engines/registry.ts";
 
 export const engineRoutes = new Hono()
   .get("/:engineId/status", async (c) => {

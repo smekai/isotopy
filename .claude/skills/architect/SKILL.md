@@ -33,6 +33,13 @@ interface, not a concretion: define the seam as a type, and let callers receive
 an implementation rather than importing one. When you find a module doing two
 jobs, split it along the axis that changes independently.
 
+Keep the seam in its **own file**, separate from the mechanics behind it — a file
+named for one backend is not where a shared abstraction belongs. Layer a coarse
+concern over its detail: a repository (domain-facing persistence) sits over a
+data-access layer, each in a folder named for the *layer* — `repository/`, `db/` —
+never for a backend (`sqlite/`), one responsibility per file. Prefer direct imports;
+a barrel `index.ts` that only re-exports is indirection to avoid.
+
 ### A3 — DDD layering: fat domain, thin service
 
 Pure functions and domain rules live in a **domain** layer with no I/O. The
@@ -72,6 +79,12 @@ ids where identity matters; exhaustive `switch` closed with a `never` assertion
 so a new case is a compile error. Turn the strict compiler flags on and keep them
 on. Model illegal states as unrepresentable rather than guarding against them at
 runtime.
+
+Avoid `unknown` and `as unknown as` in business logic — a double-cast defeats the
+type system rather than using it. Reach for a library's own typed return values
+and narrow them (`typeof`, a type guard) instead of re-casting. Confine `unknown`
+to a single named boundary — a type guard or a `parseX` helper that validates
+untyped input — and hand typed values to everything downstream.
 
 ### A8 — Evidence lives in Markdown, not code comments
 
@@ -116,7 +129,10 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **The interface to model (A2):** `EngineAdapter` in
   `packages/server/src/engines/types.ts`. Adapters are constructed and handed to
   the orchestrator; nothing reaches for a concrete engine by import. New pluggable
-  seams follow its shape.
+  seams follow its shape. Persistence is the layering reference: `RunRepository`
+  (`src/repository/`) is a coordinator over a data-access layer (`src/db/` —
+  `Database`, `RunsTable`, `EventsTable`). Folders are named for the layer, never a
+  backend, and there is no barrel `index.ts` — callers import the file they need.
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
   by the UI too, so nothing platform- or server-specific goes there).
@@ -138,7 +154,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict`,
   `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Reset an optional
   field with `delete obj.field`, not `= undefined`; omit an absent key with a
-  conditional spread rather than writing `undefined` into it.
+  conditional spread rather than writing `undefined` into it. No `unknown` /
+  `as unknown as` in business logic — `repository/run-repository.ts` confines it to
+  one `parsePersistedRun` guard, and `db/runs-table.ts` narrows `node:sqlite`'s own
+  `Record<string, SQLOutputValue>` rows instead of casting. Relative imports use
+  `.ts` extensions (like `@adhd/core`); `rewriteRelativeImportExtensions` rewrites
+  them to `.js` on build.
 
 **Verify a change** (from the repo root, shell-neutral):
 

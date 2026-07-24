@@ -4,16 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { CODEX_MODEL_OPTIONS } from "@adhd/core";
 import type { EngineModelList, EngineStatus } from "@adhd/core";
-import { firstLine, truncate } from "./log-text.js";
-import { withPersonaPrompt } from "./persona.js";
-import { probeCommand, runSubprocess } from "./subprocess.js";
+import { firstLine, truncate } from "./log-text.ts";
+import { withPersonaPrompt } from "./persona.ts";
+import { probeCommand, runSubprocess } from "./subprocess.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
-} from "./types.js";
+} from "./types.ts";
 
 const INSTALL_COMMAND = "npm install -g @openai/codex";
 const DOCS_URL = "https://developers.openai.com/codex/cli";

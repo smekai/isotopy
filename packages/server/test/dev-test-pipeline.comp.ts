@@ -16,8 +16,8 @@ import {
   stageOf,
   startRun,
   waitForRunStatus,
-} from "./support/harness.js";
-import type { TestApp } from "./support/harness.js";
+} from "./support/harness.ts";
+import type { TestApp } from "./support/harness.ts";
 
 /** Distinct markers so an assertion can tell the two boxes' output apart. */
 const DEV_REPORT = "Added greet.js and a smoke check. MARKER-DEVELOPER";

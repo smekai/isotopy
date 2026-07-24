@@ -1,25 +1,5 @@
 # Backlog
 
-## TASK-067: SQLite run store — a `node:sqlite` RunStore adapter, per project
-**Priority:** P1
-**Tags:** server, infra, core
-**Updated:** 2026-07-23 13:00
-
-The storage half of the workflow-runtime decision ([`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md), TASK-066) and a concrete slice of TASK-039. Run state today is flat JSON — `state.json` + `events.jsonl` under `<project>/.adhd/runs/` via [`JsonRunStore`](../packages/server/src/services/run-store.ts). Both candidate runtimes (OpenWorkflow, Aiki) want a SQL substrate, and the decision is **SQLite**: a handful of rows per run, no server, and — placed inside `.adhd/` — history that travels with the folder like `.git`. **Only run information moves to SQLite; project settings stay in `~/.adhd/settings.json`** (TASK-065) — this task does not touch settings.
-
-The `RunStore` interface already exists (`writeState`, `appendEvent`, `writeHandoff`, `loadAll`, `settle`) and is bound per-project through `RunStoreFactory` (TASK-059). This task adds a second implementation behind it; the orchestrator does not change.
-
-**Scope:**
-- New `SqliteRunStore implements RunStore` using **`node:sqlite`** — Node's built-in, no native module. `better-sqlite3` is explicitly rejected: it failed to install on the target platform (see the storage doc). Pin `engines.node` to `>=22.5` and decide how the `ExperimentalWarning` is suppressed/accepted in a shipped product (gate **G6**).
-- One database file per project at `<project>/.adhd/runs.db` (home project: `~/.adhd/home/runs.db`), created lazily like the JSON dirs are today. Schema: a `runs` table holding the `PersistedRun` snapshot, an `events` append log, handoffs either a table or left on disk — decide in the plan. WAL mode; prove behaviour under the writer plus concurrent readers (G6).
-- Config selector `ADHD_RUN_STORE=json|sqlite` through [`config.ts`](../packages/server/src/config.ts), documented in `.env.example`; `json` stays the default so nothing changes out of the box.
-- One-shot importer: existing `.adhd/runs/*/state.json` + `events.jsonl` load into the DB on first use (idempotent — re-running does not duplicate). Keep `loadAll()` semantics identical so persistence/restart component tests pass against either backend.
-- Tests: the existing `run-store`/persistence coverage runs against **both** adapters (parametrised), plus a spec for the importer and for a corrupt/locked DB degrading like the JSON store's corrupt-file path.
-
-**Cross-platform:** `node:sqlite` is a built-in Node API, identical on Windows and macOS; the DB path is built with `path.join` + the existing `ProjectPaths`, never a hardcoded separator. WAL creates `-wal`/`-shm` sidecar files — ensure the self-ignoring `.adhd/.gitignore` (`*`) still covers them, and that Windows file-locking (the EBUSY-on-delete hazard the test harness already works around) is handled on `settle()`/close. Tested on Windows; macOS path reasoned through, mark "untested on macOS".
-
----
-
 ## TASK-068: Durable workflow runtime on OpenWorkflow (SQLite)
 **Priority:** P1
 **Tags:** server, engine, infra, milestone-c

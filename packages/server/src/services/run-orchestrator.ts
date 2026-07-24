@@ -18,19 +18,19 @@ import {
   isTerminalRunStatus,
   pipelineUsesEngine,
 } from "@adhd/core";
-import { config } from "../config.js";
-import { assertEngineId, getEngineAdapter } from "../engines/registry.js";
-import type { EngineRunResult } from "../engines/types.js";
-import { ensureProjectDataDir, resolveWorkspace } from "../paths.js";
-import type { ProjectPaths } from "../paths.js";
-import type { ProjectRegistry } from "./project-registry.js";
-import { createJsonRunStore } from "./run-store.js";
-import type { PersistedRun, RunStore, RunStoreFactory } from "./run-store.js";
-import { SettingsStore } from "./settings-store.js";
-import { loadSkill } from "./skills.js";
-import { buildStagePrompt, formatHandoff, parseStageVerdict } from "../domain/stage-context.js";
-import type { UpstreamOutput } from "../domain/stage-context.js";
-import { nowIso, randomBetween, sleep } from "../utils.js";
+import { config } from "../config.ts";
+import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
+import type { EngineRunResult } from "../engines/types.ts";
+import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
+import type { ProjectPaths } from "../paths.ts";
+import type { ProjectRegistry } from "./project-registry.ts";
+import { RunRepository } from "../repository/run-repository.ts";
+import type { PersistedRun } from "../repository/run-repository.ts";
+import { SettingsStore } from "./settings-store.ts";
+import { loadSkill } from "./skills.ts";
+import { buildStagePrompt, formatHandoff, parseStageVerdict } from "../domain/stage-context.ts";
+import type { UpstreamOutput } from "../domain/stage-context.ts";
+import { nowIso, randomBetween, sleep } from "../utils.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
 
@@ -62,7 +62,6 @@ type StageOutcome = "passed" | "failed" | "cancelled";
 
 export interface RunOrchestratorDependencies {
   registry: ProjectRegistry;
-  createRunStore?: RunStoreFactory;
   settings?: SettingsStore;
 }
 
@@ -75,31 +74,29 @@ export class RunOrchestrator {
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
   private readonly persistTimers = new Map<string, NodeJS.Timeout>();
-  private readonly stores = new Map<string, RunStore>();
+  private readonly repositories = new Map<string, RunRepository>();
   private readonly nextRunNumbers = new Map<string, number>();
   private readonly registry: ProjectRegistry;
-  private readonly createRunStore: RunStoreFactory;
   private readonly settings: SettingsStore;
 
-  constructor({ registry, createRunStore, settings }: RunOrchestratorDependencies) {
+  constructor({ registry, settings }: RunOrchestratorDependencies) {
     this.registry = registry;
-    this.createRunStore = createRunStore ?? createJsonRunStore;
     this.settings = settings ?? new SettingsStore();
   }
 
-  private storeFor(paths: ProjectPaths): RunStore {
-    const existing = this.stores.get(paths.id);
+  private repositoryFor(paths: ProjectPaths): RunRepository {
+    const existing = this.repositories.get(paths.id);
     if (existing) {
       return existing;
     }
-    const store = this.createRunStore(paths);
-    this.stores.set(paths.id, store);
-    return store;
+    const repository = new RunRepository(paths);
+    this.repositories.set(paths.id, repository);
+    return repository;
   }
 
-  private storeForRun(runId: string): RunStore {
+  private repositoryForRun(runId: string): RunRepository {
     const projectId = this.runs.get(runId)?.projectId;
-    return this.storeFor(this.registry.resolve(projectId));
+    return this.repositoryFor(this.registry.resolve(projectId));
   }
 
   async init(): Promise<void> {
@@ -109,7 +106,7 @@ export class RunOrchestrator {
   }
 
   private async loadProject(paths: ProjectPaths): Promise<void> {
-    const loaded = await this.storeFor(paths).loadAll();
+    const loaded = await this.repositoryFor(paths).loadAll();
     let maxNumber = this.nextRunNumbers.get(paths.id) ?? 1;
     for (const persisted of loaded) {
       const { run } = persisted;
@@ -142,7 +139,9 @@ export class RunOrchestrator {
       }
     }
     await Promise.all([...this.runs.keys()].map((runId) => this.flushPersist(runId)));
-    await Promise.all([...this.stores.values()].map((store) => store.settle()));
+    await Promise.all(
+      [...this.repositories.values()].map((repository) => repository.settle()),
+    );
   }
 
   private reconcileInterrupted(run: RunState): void {
@@ -156,7 +155,7 @@ export class RunOrchestrator {
     }
     run.status = "failed";
     run.completedAt = ts;
-    void this.storeForRun(run.id).appendEvent(run.id, {
+    void this.repositoryForRun(run.id).appendEvent(run.id, {
       ts,
       type: "run.completed",
       runId: run.id,
@@ -194,7 +193,7 @@ export class RunOrchestrator {
       return;
     }
     try {
-      await this.storeForRun(runId).writeState(runId, persisted);
+      await this.repositoryForRun(runId).writeState(runId, persisted);
     } catch (error) {
       console.warn(`Failed to persist run ${runId}:`, error);
     }
@@ -438,7 +437,7 @@ export class RunOrchestrator {
   }
 
   private emit(event: RunEvent): void {
-    void this.storeForRun(event.runId).appendEvent(event.runId, event);
+    void this.repositoryForRun(event.runId).appendEvent(event.runId, event);
     this.schedulePersist(event.runId, event.type !== "stage.log");
     const listeners = this.listeners.get(event.runId);
     if (!listeners) {
@@ -618,7 +617,7 @@ export class RunOrchestrator {
       return;
     }
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: result };
-    void this.storeForRun(run.id).writeHandoff(
+    void this.repositoryForRun(run.id).writeHandoff(
       run.id,
       stageDef.id,
       formatHandoff(

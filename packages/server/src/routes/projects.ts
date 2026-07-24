@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { ProjectRegistry } from "../services/project-registry.js";
+import type { ProjectRegistry } from "../services/project-registry.ts";
 
 interface AddProjectBody {
   root?: string;

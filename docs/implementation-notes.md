@@ -298,25 +298,46 @@ project's `.adhd/`.
   edited entry back into `defaults`, leaking one project's API key to every other
   project — a real defect, now covered by `projects.comp.ts`.
 
-## Persistence (`services/run-store.ts`)
+## Persistence (`repository/` over `db/`)
 
-One directory per run under `<project>/.adhd/runs/<id>/`: `state.json` is the
-atomically-rewritten snapshot (write to `.tmp`, then `rename`), `events.jsonl`
-is the append-only trail. The orchestrator is the only writer, and it holds one
-`RunStore` per project — the interface the orchestrator depends on, so a durable
-backend replaces `JsonRunStore` without touching the run lifecycle.
+Run history lives in one `node:sqlite` database per project at
+`<project>/.adhd/runs.db`: a `runs` table holding the `PersistedRun` snapshot
+(upserted on `run_id`) and an append-only `events` table. The layering is
+**services → repository → db**: `RunOrchestrator` depends on `RunRepository`
+(`repository/run-repository.ts`), a single concrete class that owns the
+`PersistedRun` shape and coordinates the low-level pieces — a `Database` connection
+plus `RunsTable` / `EventsTable` in `db/`, and the handoff file writer in
+`repository/handoff.ts`. SQLite was chosen over `better-sqlite3`, which fails to
+install on the target platform; see
+[workflow-storage-options.md](./workflow-storage-options.md).
 
-- **Writes are serialized per run.** Two rapid transitions could otherwise clash
-  on the shared `.tmp` file — Windows `rename` in particular is unforgiving about
-  concurrency. Event appends are serialized too so concurrent lines can't
-  interleave, and never reject back to the fire-and-forget caller.
-- **`settleWrites()` is the join point.** Most writes are fired without `await`
-  (`void writeHandoff(...)`), so nothing otherwise knows when the disk has caught
-  up. A graceful shutdown awaits it, and tests need it before deleting a temp
-  data root — on Windows a `rename` still in flight makes `rm` throw `EBUSY`. It
-  loops once because a settled write can enqueue the next behind it.
-- **A corrupt or absent `state.json` is skipped with a warning**, so one bad run
-  can't stop the server from booting.
+- **The `db/` layer knows nothing about `PersistedRun`.** `Database` owns the
+  connection (lazy open, WAL, `busy_timeout`, schema, settle/close); `RunsTable` and
+  `EventsTable` take strings in and hand strings out. `RunRepository` does the JSON
+  encode/decode and the resilience policy on top.
+- **Handoffs stay on disk** as `runs/<id>/<stageId>/handoff.md` — nothing reads them
+  back and a markdown file is inspectable without a SQLite client. Only run state and
+  the event trail live in the DB.
+- **`node:sqlite` is imported lazily** in `db/database.ts`, not at module load. Its
+  narrow surface (`DatabaseSync`, `prepare`, `run/all`, `exec`) is contained to that
+  one file. Requires Node ≥ 22.5, which is why root `engines.node` is `>=22.5`.
+- **The `ExperimentalWarning` is suppressed at launch, not in code.** node:sqlite
+  fires it on the first require, on every startup. A `process.on('warning')` listener
+  does *not* suppress the default printer (verified), so the shipped `start` script
+  passes `node --disable-warning=ExperimentalWarning` — a plain node arg, identical on
+  Windows and macOS. Dev/tests may still show it.
+- **`Database.settle()` closes the connection, not just flushes it.** `DatabaseSync`
+  writes are synchronous, so there is no write queue to drain — but the open file
+  handle is what makes a Windows temp-dir `rm` throw `EBUSY`. So `settle()` runs
+  `PRAGMA wal_checkpoint(TRUNCATE)` (removing the `-wal`/`-shm` sidecars), closes, and
+  clears the memoised handle; the next operation transparently re-opens.
+- **WAL mode plus `PRAGMA busy_timeout` (5 s)** let a concurrent reader coexist with
+  the single writer rather than erroring on a lock.
+- **A corrupt or unopenable DB degrades to an empty load with a warning**, so a bad
+  DB can't stop the server from booting. A failed open clears the memoised handle so
+  a later call can retry. JSON parsing of a stored snapshot is confined to
+  `parsePersistedRun` — the one trust boundary where `unknown` is narrowed by the
+  `isPersistedRun` guard.
 
 ## Filesystem access (`services/workspace-files.ts`, `services/directory-browser.ts`)
 

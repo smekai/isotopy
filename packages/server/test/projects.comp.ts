@@ -16,8 +16,8 @@ import {
   put,
   startRun,
   waitForRunStatus,
-} from "./support/harness.js";
-import type { TestApp } from "./support/harness.js";
+} from "./support/harness.ts";
+import type { TestApp } from "./support/harness.ts";
 
 /** The only `sequential` stage these tests need — the rest just cost time. */
 const INTAKE_ONLY = [
@@ -97,9 +97,8 @@ test("a run is written into its own project's .adhd, not the home project's", as
 
   // Assert
   expect(run.projectId).toBe(project.id);
-  const state = path.join(project.root, ".adhd", "runs", run.id, "state.json");
-  expect(await exists(state)).toBe(true);
-  expect(await exists(path.join(ctx.home, "runs", run.id))).toBe(false);
+  expect(await exists(path.join(project.root, ".adhd", "runs.db"))).toBe(true);
+  expect(await exists(path.join(ctx.home, "runs.db"))).toBe(false);
 });
 
 test("starting a run restores the .adhd git-ignore if the folder was wiped", async () => {
@@ -249,9 +248,7 @@ test("removing a project unregisters it but leaves its folder and history on dis
   // Assert
   expect(status).toBe(200);
   expect(body.projects.map((entry) => entry.id)).not.toContain(project.id);
-  expect(await exists(path.join(project.root, ".adhd", "runs", run.id, "state.json"))).toBe(
-    true,
-  );
+  expect(await exists(path.join(project.root, ".adhd", "runs.db"))).toBe(true);
 });
 
 test("the home project cannot be removed", async () => {
