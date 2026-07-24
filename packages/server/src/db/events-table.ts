@@ -15,4 +15,12 @@ CREATE INDEX IF NOT EXISTS events_run_idx ON events(run_id);`;
     const connection = await this.db.connection();
     connection.prepare("INSERT INTO events(run_id, data) VALUES(?, ?)").run(runId, data);
   }
+
+  async allForRun(runId: string): Promise<string[]> {
+    const connection = await this.db.connection();
+    const rows = connection
+      .prepare("SELECT data FROM events WHERE run_id = ? ORDER BY seq ASC")
+      .all(runId);
+    return rows.flatMap((row) => (typeof row.data === "string" ? [row.data] : []));
+  }
 }

@@ -338,7 +338,7 @@ deploy:
 - [ ] CLI: `task create`, `task list`, `task show`, `task move`, `task update`; `run --task <id>`
 - [ ] Built-in task management: CRUD, status, link runs to tasks
 - [ ] Default 8-stage pipeline with state machine (incl. deploy)
-- [ ] Aiki-backed durable workflow runtime (or thin fallback state machine)
+- [x] OpenWorkflow-backed durable workflow runtime (SQLite via `node:sqlite`; TASK-068)
 - [ ] Worktree isolation per run
 - [ ] 2 harness adapters (Claude Code + generic)
 - [ ] Playwright E2E in test stage with fix loop

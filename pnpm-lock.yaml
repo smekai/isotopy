@@ -46,6 +46,9 @@ importers:
       hono:
         specifier: ^4.7.6
         version: 4.12.28
+      openworkflow:
+        specifier: ^0.9.2
+        version: 0.9.2
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -1185,6 +1188,15 @@ packages:
   node-releases@2.0.50:
     resolution: {integrity: sha512-J6l92tKHX6w8Jy5nO1Vuc01NoIiRGi/d6qBKVxh+IQ8Cr3b6HbVNfKiF8ZpFKufTwpwxMmce2W3iQZ861ZRyTg==}
     engines: {node: '>=18'}
+
+  openworkflow@0.9.2:
+    resolution: {integrity: sha512-NluYomuVLf+rAMJ9ASKqw8nbPAAD+C/HSTZoJacZdelLfTpndzHvPcP8SCANg9me9zek6mao0uUOGGbrWUWhGw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      postgres: ^3.4.9
+    peerDependenciesMeta:
+      postgres:
+        optional: true
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -2489,6 +2501,8 @@ snapshots:
   natural-compare@1.4.0: {}
 
   node-releases@2.0.50: {}
+
+  openworkflow@0.9.2: {}
 
   optionator@0.9.4:
     dependencies:

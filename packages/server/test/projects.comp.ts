@@ -183,8 +183,10 @@ test("run numbering restarts per project", async () => {
   const alpha = await addTestProject(ctx.registry, "num-a");
   const beta = await addTestProject(ctx.registry, "num-b");
 
-  // Act
+  // Act — one active run per project (S5), so alpha's second run waits for its
+  // first; beta runs concurrently in its own project.
   const firstAlpha = await startRun(ctx.app, SIM_RUN, alpha.headers);
+  await waitForRunStatus(ctx.app, firstAlpha.id, "completed");
   const secondAlpha = await startRun(ctx.app, SIM_RUN, alpha.headers);
   const firstBeta = await startRun(ctx.app, SIM_RUN, beta.headers);
 

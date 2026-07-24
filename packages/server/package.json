@@ -1,6 +1,6 @@
 {
   "name": "@adhd/server",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
   "dependencies": {
     "@adhd/core": "workspace:*",
     "@hono/node-server": "^1.14.1",
-    "hono": "^4.7.6"
+    "hono": "^4.7.6",
+    "openworkflow": "^0.9.2"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

@@ -204,37 +204,59 @@ Enables dashboard live tail and post-run forensics.
 
 ---
 
-## Workflow runtime (Aiki)
+## Workflow runtime (OpenWorkflow)
 
-**Recommendation:** Use [Aiki](https://github.com/aikirun/aiki) as the durable workflow execution layer. Do **not** build custom crash recovery, retry, and long-running suspend/resume from scratch unless Aiki cannot be embedded in the local single-process MVP.
+**Decision (TASK-066/068):** the durable workflow runtime is
+[OpenWorkflow](https://github.com/openworkflowdev/openworkflow) — Apache-2.0,
+TypeScript, durable execution on an embedded SQLite file via Node's built-in
+`node:sqlite`, no server. It runs in-process inside the single manually-started
+runner (its worker embeds; there is no daemon). Chosen over Aiki (Postgres-only
+today) and DBOS (Postgres-only) because it is the only candidate that pairs an
+embedded file DB with Windows support while shipping durable gates, durable
+sleep, retries and crash recovery. See
+[`workflow-runtime-options.md`](workflow-runtime-options.md) for the full
+comparison; Aiki remains the recorded second choice.
 
-**Why Aiki:**
+**Why OpenWorkflow:**
 
-| Need | Aiki capability |
-|------|-----------------|
-| Long-running agent runs | Durable execution with checkpoint/resume |
-| Human approval gates | Typed event suspension until approve/reject |
-| Stage retries | Configurable retry policies per task |
-| Crash recovery | Worker failover; run resumes from last checkpoint |
-| Workflow versioning | Ship new pipeline YAML without breaking in-flight runs |
-| Local-first | Runs in-process or split topology; no cloud required |
+| Need | OpenWorkflow capability |
+|------|-------------------------|
+| Long-running agent runs | Durable steps with memoised checkpoint/resume |
+| Human approval gates | `step.waitForSignal` + `client.sendSignal` |
+| Stage retries | `RetryPolicy` (`maximumAttempts` + backoff) per workflow/step |
+| Crash recovery | Worker resumes from the last completed step (SQLite lease/heartbeat) |
+| Durable timers | `step.sleep` survives restart (TASK-061 shape) |
+| Local-first | In-process worker; the SQLite file lives inside `.adhd/` and travels with the project |
 
-**Layering:**
+**Layering** (the durable runtime owns the *whole* lifecycle, not one method —
+see `workflow-runtime-options.md` §4):
 
 ```
 ┌─────────────────────────────────────────┐
-│  ADHD domain layer      │
-│  stages, agents, artifacts, gates,      │
-│  worktrees, harness + deploy adapters   │
+│  ADHD-owned                             │
+│  definitions, agents, artifacts,        │
+│  engine adapters, subprocess kill (G4)  │
 ├─────────────────────────────────────────┤
-│  Aiki workflow runtime                  │
-│  durable steps, events, retries, sleep  │
+│  workflow/ (durable runtime)            │
+│  RunOrchestrator hosts OpenWorkflow;    │
+│  pipeline-workflow = the run loop,      │
+│  stage-execution = the durable step     │
+├─────────────────────────────────────────┤
+│  db/ — one shared .adhd/runs.db         │
+│  OpenWorkflow's tables (SoT) +          │
+│  runs/events read-model projection      │
 └─────────────────────────────────────────┘
 ```
 
-Each pipeline stage maps to an Aiki workflow (or child workflow). Human gates map to `waitForEvent("gate.approved")`. Harness and deploy invocations map to Aiki tasks with timeouts and retries.
+Each pipeline **stage** is a durable step; a `gateAfter` stage parks on
+`waitForSignal` and `approveGate` sends the matching signal. Semantic restart
+(S2) and one-active-run-per-project (S5) are ADHD-owned on top (a seeded fresh
+run, and a project-keyed admission guard). Subprocess-tree kill on cancel (G4)
+stays ADHD-owned; `cancelWorkflowRun` only marks durable state.
 
-**Fallback:** If Aiki embedding proves too heavy for v0.1 packaging, ship a minimal custom state machine (`state.json` + `events.jsonl`) but design the `StageExecutor` interface to swap to Aiki in v0.2 without changing adapter contracts.
+**Fallback (not taken):** if the runtime had failed to embed in-process, the
+same six capabilities were to be built on the same `node:sqlite` substrate behind
+the repository seam — so the storage work is preserved either way.
 
 
 ---
@@ -576,7 +598,7 @@ adhd/
 3. **CLI:** `init`, `run`, `task` subcommands (requirements + design only, no harness)
 4. **Worktree manager:** git isolation
 5. **One harness adapter:** Claude Code
-6. **Aiki integration:** wrap stages as durable workflows; human gate events
+6. **OpenWorkflow integration:** wrap stages as durable steps; gates via signals
 7. **Review + test stages** with unit + Playwright E2E fix loop
 8. **Deploy adapter:** Docker Compose or generic subprocess
 9. **Dashboard:** task backlog + run list + stage timeline + approve
@@ -600,7 +622,7 @@ adhd/
 | LLM abstraction | LiteLLM or Vercel AI SDK | Multi-provider, local Ollama |
 | Worktree at run start vs impl stage | At implementation | Spec stages don't need branch |
 | Commit specs automatically | Opt-in on gate approve | Keeps git clean |
-| Workflow runtime | Aiki (preferred) | Durable execution, HITL events, retries; TypeScript-native |
+| Workflow runtime | OpenWorkflow (`node:sqlite`, in-process) | Durable execution, gates, retries, crash recovery; embedded file DB, no server |
 | E2E runner | Playwright | Industry standard; test agents; trace on failure |
 | Deploy model | Adapter-based subprocess/CLI | Platform-agnostic; preview default |
-| Fallback if Aiki too heavy | Custom state.json FSM | Ship MVP faster; migrate interface in v0.2 |
+| Fallback (not taken) | Custom engine on the same `node:sqlite` substrate | Same capabilities behind the repository seam if the runtime hadn't embedded |

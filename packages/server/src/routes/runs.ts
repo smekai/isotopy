@@ -163,6 +163,12 @@ export function createRunRoutes(
           });
         };
 
+        // Replay persisted history first so a subscriber that connects after a
+        // resume (or reload) sees the whole run, not only events from now on.
+        for (const event of await orchestrator.replayEvents(runId)) {
+          await send(event);
+        }
+
         const unsubscribe = orchestrator.subscribe(runId, (event) => {
           void send(event);
         });

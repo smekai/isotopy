@@ -1,5 +1,23 @@
 # Done
 
+## TASK-068: Durable workflow runtime on OpenWorkflow (SQLite)
+**Priority:** P1 | **Tags:** server, engine, infra, milestone-c
+**Updated:** 2026-07-24 15:00
+
+Executed the TASK-066 recommendation: `RunOrchestrator` is now a durable workflow on **OpenWorkflow** (Apache-2.0, v0.9.2, `node:sqlite`, zero deps), embedded **in-process** in the single runner. The seam is the class, not one method (doc §4): the orchestrator hosts the runtime and is the single writer of the read model; the old in-memory `Map` + `void simulateRun` + heap `gateWaiters` + mark-everything-failed recovery are gone.
+
+### Done summary
+- **New `workflow/` layer.** `WorkflowRuntime` (per-project OpenWorkflow client + in-process `Worker` + `BackendSqlite`) + `WorkflowRuntimeRegistry`; `pipeline-workflow.ts` (the ported `runStages` loop as `defineWorkflow`, walking `pipeline.groups`); `stage-execution.ts` (the durable step = old `executeStage()` — skill load, engine run, verdict parse, handoff, projection); `types.ts` (`PipelineWorkflowInput`, `RunProjection`, `WorkflowDeps`). `RunOrchestrator implements RunProjection` and keeps its public API (`startRun`/`approveGate`/`abortRun`/`restartRun`/`getRun`/`listRuns`/`subscribe`/`init`/`shutdown`) — so the whole component suite kept passing unchanged.
+- **Phase 0 proved it embeds** (M5–M8 reproduced in-repo, then deleted): the worker starts programmatically (no CLI/daemon), a gate parked at a hard kill resumes in a fresh process, the completed stage is not re-run, and OpenWorkflow's `BackendSqlite` coexists with our `Database` on **one** `.adhd/runs.db` (two `node:sqlite` connections). Its tables are the source of truth; `RunState` + `events` are a rebuildable read model — never a second writer.
+- **Capabilities.** Gates → `step.waitForSignal` / `client.sendSignal` (`approveGate` optimistically projects the approval, then signals). Retries → `RetryPolicy` (default `maximumAttempts: 1` to preserve fail-fast). Recovery → the worker auto-resumes non-terminal runs on `init` (only a run with no durable run behind it, or an OpenWorkflow-failed one, settles to failed). Cancellation (**G4**) → `cancelWorkflowRun` + immediate `killProcessTree`, unchanged engine seam. Restart (**G1**) → a fresh run seeded with retained prior-stage outputs, stable logical `runId`. Admission (**G2**) → `active_runs(project_id PK)` guard below the API. Parallel (**G5**) → `Promise.allSettled` over durable steps. SSE now replays persisted history on connect.
+- **Determinism refactor:** `loadSkill`, `nowIso`, `randomUUID`, `Math.random` and the engine call moved inside durable steps.
+- **Behaviour change (S5):** one active run per project — a second `POST /runs` in a project now returns 400; `projects.comp.ts` numbering test serialised to match.
+- **Tests:** added `durable-runtime.comp.ts` (M6/M7 gate-survives-restart + no re-run; G2/S5) and `workflow-parallel.spec.ts` (G5 fan-in + per-branch failure). **148 tests + lint + typecheck + build + e2e (25 passed, 1 live-engine skipped) + `gen:skills --check` all green.**
+- **Docs:** corrected the "durable runtime replaces `executeStage()` alone" claim in `architect-standards.md` (skill regenerated), `implementation-notes.md`, `code-quality.md`; re-pointed Aiki→OpenWorkflow in `technical-architecture.md`, `mvp-scope.md`, `product-brief.md`; dated `decisions.md` entry. Aiki stays the recorded second choice (TASK-069). Versions 0.6.8.
+- **Cross-platform:** durable execution and `node:sqlite` are OS-independent; the only platform-sensitive surface (subprocess-tree kill — `taskkill /T` vs `SIGTERM`→`SIGKILL`) is unchanged. Tested on Windows; macOS reasoned through — **untested on macOS**.
+
+---
+
 ## TASK-067: SQLite run repository — the sole run store, layered `repository/` over `db/`
 **Priority:** P1 | **Tags:** server, infra, core
 **Updated:** 2026-07-24 09:50

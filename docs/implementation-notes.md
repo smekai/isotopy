@@ -127,18 +127,25 @@ actionable guidance while the raw error stays visible in the log.
 to subscribers, and executes each stage either as a simulation or through a real
 engine adapter. State is in-memory for the prototype, persisted per transition.
 
-**`executeStage()` is the durable-workflow seam.** It is the single decision
-point for how a stage runs (simulate vs. engine). A durable-workflow runtime
-(Aiki, see `technical-architecture.md`) replaces this one method — the engine
-adapters and the surrounding stage lifecycle are untouched. Do not spread
-stage-execution logic out of it.
+**The durable-workflow seam is the whole `RunOrchestrator`, not one method.**
+The durable runtime is **OpenWorkflow** (`workflow/`, see
+`workflow-runtime-options.md`). `workflow/pipeline-workflow.ts` is the durable
+workflow body (the ported run loop) and `workflow/stage-execution.ts` is the
+durable *step* — the single decision point for how a stage runs (simulate vs.
+engine). Durability owns starting/queueing, the loop, gates (durable signals),
+durable timers, retries, recovery and cancellation state; `RunOrchestrator` is
+the single writer of the `RunState`/events read model. The earlier claim that a
+durable runtime "replaces `executeStage()` alone" was wrong (§4 of the runtime
+doc). Keep stage-execution logic inside `workflow/stage-execution.ts`.
 
-**Register the abort handle before the first `await` (`executeEngineStage`).**
+**Register the abort handle before the first `await` (`workflow/stage-execution.ts` `runEngineStage`, via `deps.beginEngineStage`).**
 Resolving the persona touches the filesystem. An abort arriving in that window
 used to find no `AbortController` to cancel, so the CLI was spawned anyway and
 ran to completion for a run the user had already stopped. The controller is set
 before any await, and cancellation is re-checked after the inputs resolve and
-after the adapter returns.
+after the adapter returns. Cancel stays immediate and ADHD-owned (`abortRun` →
+`controller.abort()` → `killProcessTree`); OpenWorkflow's `cancelWorkflowRun`
+only marks durable state (G4).
 
 **`run.result` holds only the last stage's output.** It is kept for the
 run-level result view and for runs recorded before `stageOutputs` existed
@@ -241,14 +248,20 @@ opened stage starts following again. Its `run.result` handling mirrors the
 orchestration note: only the last stage's output lives there, so per-box views
 read `stageOutputs`.
 
-**Interrupted runs reconcile to failed on boot (`init`/`reconcileInterrupted`).**
-A run reloaded in a non-terminal state can't resume — its subprocess and timers
-died with the old process — so any running/awaiting stage is marked failed.
+**Interrupted runs now resume on boot (`init` + the per-project worker).**
+OpenWorkflow's SQLite state is the source of truth, so on `init` each project's
+worker resumes any non-terminal durable run from its last completed step — a gate
+parked before a crash resumes and waits again (the old
+`reconcileInterrupted`-marks-everything-failed is gone). Only a run with no
+durable run behind it, or whose durable run already failed, is settled to failed
+(`reconcileOnLoad`/`markInterrupted`).
 
-**Persistence is debounced (`emit`/`schedulePersist`).** Every event appends to
-the durable trail immediately; state transitions flush `state.json` at once, but
-high-frequency stage logs are coalesced behind a short debounce so log spam
-doesn't thrash the disk.
+**The read model is a projection; OpenWorkflow's SQLite is the SoT (`emit`/`schedulePersist`).**
+Every event appends to the per-project `events` table immediately; `RunState`
+snapshot transitions flush at once, while high-frequency stage logs are coalesced
+behind a short debounce. The snapshot and events (formerly `state.json` /
+`events.jsonl`, now SQLite tables) are a rebuildable read model with exactly one
+writer — the durable workflow — never a second, independently advancing store.
 
 **One workspace per run.** Every box works in the same directory, so the Tester
 sees exactly what the Developer wrote.

@@ -7,6 +7,7 @@ import type {
   RunState,
   StageDefinition,
   StageState,
+  StageVerdict,
 } from "@adhd/core";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -14,23 +15,24 @@ import {
   ENGINES,
   agentForStage,
   createInitialRunState,
-  flattenPipelineStages,
   isTerminalRunStatus,
   pipelineUsesEngine,
 } from "@adhd/core";
-import { config } from "../config.ts";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
-import type { EngineRunResult } from "../engines/types.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
 import type { ProjectPaths } from "../paths.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
-import { loadSkill } from "./skills.ts";
-import { buildStagePrompt, formatHandoff, parseStageVerdict } from "../domain/stage-context.ts";
-import type { UpstreamOutput } from "../domain/stage-context.ts";
-import { nowIso, randomBetween, sleep } from "../utils.ts";
+import { formatHandoff } from "../domain/stage-context.ts";
+import { nowIso } from "../utils.ts";
+import { WorkflowRuntimeRegistry } from "../workflow/workflow-runtime.ts";
+import type {
+  PipelineWorkflowInput,
+  RunProjection,
+  WorkflowDeps,
+} from "../workflow/types.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
 
@@ -58,30 +60,659 @@ const DEFAULT_OPTIONS: Required<SimulationOptions> = {
   failProbability: 0.05,
 };
 
-type StageOutcome = "passed" | "failed" | "cancelled";
-
 export interface RunOrchestratorDependencies {
   registry: ProjectRegistry;
   settings?: SettingsStore;
 }
 
-export class RunOrchestrator {
+/** Extra fields layered onto a run's frozen workflow input (fresh vs. restart). */
+interface InputExtras {
+  startedMessage: string;
+  seededOutputs?: Record<string, string>;
+  startStageId?: string;
+}
+
+/**
+ * Owns the run read model (`RunState` + events + SSE listeners) and translates
+ * each API call into a durable OpenWorkflow operation. `RunOrchestrator` *is*
+ * the durable workflow (in `workflow/`); this class is its read-model writer
+ * (the single writer — the API only reads, cancellation aside) and its host.
+ */
+export class RunOrchestrator implements RunProjection {
   private readonly runs = new Map<string, RunState>();
   private readonly listeners = new Map<string, Set<RunListener>>();
   private readonly runOptions = new Map<string, Required<SimulationOptions>>();
   private readonly cancelled = new Set<string>();
-  private readonly gateWaiters = new Map<string, () => void>();
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
   private readonly persistTimers = new Map<string, NodeJS.Timeout>();
   private readonly repositories = new Map<string, RunRepository>();
   private readonly nextRunNumbers = new Map<string, number>();
+  private readonly owRunIds = new Map<string, string>();
   private readonly registry: ProjectRegistry;
   private readonly settings: SettingsStore;
+  private readonly runtimes: WorkflowRuntimeRegistry;
 
   constructor({ registry, settings }: RunOrchestratorDependencies) {
     this.registry = registry;
     this.settings = settings ?? new SettingsStore();
+    const deps: WorkflowDeps = {
+      projection: this,
+      registry: this.registry,
+      settings: this.settings,
+      beginEngineStage: (runId) => this.beginEngineStage(runId),
+      endEngineStage: (runId) => this.endEngineStage(runId),
+      isCancelled: (runId) => this.cancelled.has(runId),
+    };
+    this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry);
+  }
+
+  // ─── lifecycle ────────────────────────────────────────────────────────────
+
+  async init(): Promise<void> {
+    for (const project of this.registry.all()) {
+      const paths = this.registry.resolve(project.id);
+      await this.loadProject(paths);
+      await this.runtimes.for(paths).start();
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    // Kill in-flight engine subprocesses so a graceful worker stop cannot block
+    // on a ten-minute engine call; parked (gated) runs stay durably resumable.
+    for (const controller of this.engineAborts.values()) {
+      controller.abort();
+    }
+    await this.runtimes.stopAll();
+    await Promise.all([...this.runs.keys()].map((runId) => this.flushPersist(runId)));
+    await Promise.all(
+      [...this.repositories.values()].map((repository) => repository.settle()),
+    );
+  }
+
+  private async loadProject(paths: ProjectPaths): Promise<void> {
+    const loaded = await this.repositoryFor(paths).loadAll();
+    let maxNumber = this.nextRunNumbers.get(paths.id) ?? 1;
+    for (const persisted of loaded) {
+      const { run } = persisted;
+      run.projectId = paths.id;
+      this.runs.set(run.id, run);
+      if (persisted.permissionMode) {
+        this.enginePermissionModes.set(run.id, persisted.permissionMode);
+      }
+      if (persisted.simOptions) {
+        this.runOptions.set(run.id, { ...DEFAULT_OPTIONS, ...persisted.simOptions });
+      }
+      if (persisted.owRunId) {
+        this.owRunIds.set(run.id, persisted.owRunId);
+      }
+      maxNumber = Math.max(maxNumber, run.number + 1);
+      if (!isTerminalRunStatus(run.status)) {
+        await this.reconcileOnLoad(paths, run);
+      }
+    }
+    this.nextRunNumbers.set(paths.id, maxNumber);
+  }
+
+  /**
+   * Reconcile a non-terminal projected run against the durable source of truth
+   * on boot. A run whose OpenWorkflow run is still live is left for the worker
+   * to resume (replacing `reconcileInterrupted`'s mark-everything-failed); one
+   * whose durable run has already ended, or has none, is settled here.
+   */
+  private async reconcileOnLoad(paths: ProjectPaths, run: RunState): Promise<void> {
+    const owRunId = this.owRunIds.get(run.id);
+    if (!owRunId) {
+      this.markInterrupted(run.id);
+      return;
+    }
+    const status = await this.runtimes.for(paths).runStatus(owRunId);
+    if (status === undefined || !isTerminalOwStatus(status)) {
+      return; // the worker will resume it
+    }
+    if (status === "canceled") {
+      this.markCancelled(run.id);
+    } else if (status === "failed") {
+      this.markInterrupted(run.id);
+    } else {
+      this.runCompleted(run.id, "completed");
+    }
+    await this.repositoryForRun(run.id).releaseRun(run.id);
+  }
+
+  // ─── queries ──────────────────────────────────────────────────────────────
+
+  listPipelines(): PipelineDefinition[] {
+    return DEMO_PIPELINES;
+  }
+
+  getPipeline(pipelineId: string): PipelineDefinition | undefined {
+    return DEMO_PIPELINES.find((pipeline) => pipeline.id === pipelineId);
+  }
+
+  listRuns(projectId: string): RunState[] {
+    return [...this.runs.values()]
+      .filter((run) => run.projectId === projectId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getRun(runId: string): RunState | undefined {
+    return this.runs.get(runId);
+  }
+
+  subscribe(runId: string, listener: RunListener): () => void {
+    const bucket = this.listeners.get(runId) ?? new Set<RunListener>();
+    bucket.add(listener);
+    this.listeners.set(runId, bucket);
+    return () => {
+      bucket.delete(listener);
+      if (bucket.size === 0) {
+        this.listeners.delete(runId);
+      }
+    };
+  }
+
+  /** Replay a run's persisted event history (for a late SSE subscriber). */
+  async replayEvents(runId: string): Promise<RunEvent[]> {
+    return this.repositoryForRun(runId).loadEvents(runId);
+  }
+
+  // ─── commands ─────────────────────────────────────────────────────────────
+
+  async startRun(
+    paths: ProjectPaths,
+    pipelineId: string,
+    options: StartRunOptions = {},
+  ): Promise<RunState> {
+    const pipeline = this.getPipeline(pipelineId);
+    if (!pipeline) {
+      throw new Error(`Unknown pipeline: ${pipelineId}`);
+    }
+
+    const { task, disabledStages, engine, model, permissionMode, ...simOptions } = options;
+
+    const usesEngine = pipelineUsesEngine(pipeline);
+    if (usesEngine) {
+      const engineId = engine ?? "claude-code";
+      getEngineAdapter(engineId);
+      assertEngineId(engineId);
+      const connection = this.settings.getEngineConnection(paths.id, engineId);
+      const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
+      if (mode?.requiresApiKey && !connection.apiKey) {
+        throw new Error(
+          `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
+        );
+      }
+    }
+
+    await ensureProjectDataDir(paths);
+
+    const runId = randomUUID().slice(0, 8);
+    const admitted = await this.repositoryFor(paths).admitRun(runId);
+    if (!admitted) {
+      throw new Error(
+        "A run is already active in this project — wait for it to finish or abort it before starting another.",
+      );
+    }
+
+    const run = createInitialRunState({
+      runId,
+      number: this.takeRunNumber(paths.id),
+      projectId: paths.id,
+      pipeline,
+      task,
+      disabledStages,
+    });
+
+    if (usesEngine) {
+      const engineId = engine ?? "claude-code";
+      assertEngineId(engineId);
+      run.engine = engineId;
+      if (model !== undefined) {
+        run.model = model;
+      }
+      run.workspacePath = await resolveWorkspace(paths, runId);
+      this.enginePermissionModes.set(
+        runId,
+        permissionMode === "acceptEdits" ? "acceptEdits" : DEFAULT_PERMISSION_MODE,
+      );
+    }
+
+    this.runs.set(runId, run);
+    this.runOptions.set(runId, { ...DEFAULT_OPTIONS, ...simOptions });
+    await this.flushPersist(runId);
+
+    await this.launch(paths, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
+    return structuredClone(run);
+  }
+
+  approveGate(runId: string, stageId: string): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stage = this.requireStage(runId, stageId);
+    if (stage.status !== "awaiting") {
+      throw new Error(`Stage ${stageId} is not awaiting approval`);
+    }
+    const owRunId = this.owRunIds.get(runId);
+    if (!owRunId) {
+      throw new Error(`Run ${runId} has no durable run to approve`);
+    }
+
+    // Optimistically project the approval (the same single transition the
+    // workflow's gate step makes — it no-ops once the stage is passed), then
+    // wake the durable wait.
+    this.gateApproved(runId, stageId);
+    void this.runtimes.forProject(run.projectId).approveGate(runId, stageId);
+    return structuredClone(run);
+  }
+
+  abortRun(runId: string): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (isTerminalRunStatus(run.status)) {
+      throw new Error(`Run ${runId} is already finished`);
+    }
+
+    this.cancelled.add(runId);
+    this.engineAborts.get(runId)?.abort();
+    const owRunId = this.owRunIds.get(runId);
+    if (owRunId) {
+      void this.runtimes.forProject(run.projectId).cancel(owRunId);
+    }
+    this.markCancelled(runId);
+    void this.repositoryForRun(runId).releaseRun(runId);
+    return structuredClone(run);
+  }
+
+  restartRun(runId: string, stageId: string): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (run.status !== "failed" && run.status !== "cancelled") {
+      throw new Error(`Run ${runId} can only be restarted after failing or being aborted`);
+    }
+    const startIndex = run.stages.findIndex((stage) => stage.id === stageId);
+    if (startIndex === -1) {
+      throw new Error(`Stage not found: ${stageId}`);
+    }
+    const disabled = new Set(run.disabledStages ?? []);
+    if (disabled.has(stageId)) {
+      throw new Error(`Stage ${stageId} is disabled for this run`);
+    }
+
+    // Retain outputs of the stages before the restart point (G1 seed).
+    const outputs = { ...run.stageOutputs };
+    const seededOutputs: Record<string, string> = {};
+    for (const stage of run.stages.slice(0, startIndex)) {
+      const output = outputs[stage.id];
+      if (output !== undefined) {
+        seededOutputs[stage.id] = output;
+      }
+    }
+
+    // Reset the restart point onward, exactly as the old in-place restart did.
+    this.cancelled.delete(runId);
+    for (const stage of run.stages.slice(startIndex)) {
+      if (disabled.has(stage.id)) {
+        continue;
+      }
+      stage.status = "pending";
+      stage.logs = [];
+      delete stage.startedAt;
+      delete stage.completedAt;
+      delete stage.verdict;
+      delete outputs[stage.id];
+    }
+    run.stageOutputs = outputs;
+    run.status = "running";
+    delete run.completedAt;
+    void this.flushPersist(runId);
+
+    const profession = agentForStage(stageId).profession;
+    void this.launch(this.registry.resolve(run.projectId), run, {
+      startedMessage: `Restarted from ${profession}`,
+      seededOutputs,
+      startStageId: stageId,
+    });
+    return structuredClone(run);
+  }
+
+  /** Admit (re-admit on restart), start the worker, enqueue the durable run. */
+  private async launch(
+    paths: ProjectPaths,
+    run: RunState,
+    extras: InputExtras,
+  ): Promise<void> {
+    if (extras.startStageId !== undefined) {
+      const admitted = await this.repositoryFor(paths).admitRun(run.id);
+      if (!admitted) {
+        this.markInterrupted(run.id);
+        return;
+      }
+    }
+    const runtime = this.runtimes.for(paths);
+    await runtime.start();
+    const input = this.buildInput(run, extras);
+    const owRunId = await runtime.startRun(input);
+    this.bindOwRun(run.id, owRunId);
+  }
+
+  private buildInput(run: RunState, extras: InputExtras): PipelineWorkflowInput {
+    const pipeline = this.getPipeline(run.pipelineId);
+    if (!pipeline) {
+      throw new Error(`Unknown pipeline: ${run.pipelineId}`);
+    }
+    const sim = this.runOptions.get(run.id) ?? DEFAULT_OPTIONS;
+    return {
+      runId: run.id,
+      projectId: run.projectId,
+      pipeline,
+      ...(run.task !== undefined ? { task: run.task } : {}),
+      ...(run.disabledStages !== undefined ? { disabledStages: run.disabledStages } : {}),
+      ...(run.engine !== undefined ? { engine: run.engine } : {}),
+      ...(run.model !== undefined ? { model: run.model } : {}),
+      permissionMode: this.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
+      ...(run.workspacePath !== undefined ? { workspacePath: run.workspacePath } : {}),
+      simOptions: sim as Required<SimulationOptions> & PipelineWorkflowInput["simOptions"],
+      startedMessage: extras.startedMessage,
+      ...(extras.seededOutputs !== undefined ? { seededOutputs: extras.seededOutputs } : {}),
+      ...(extras.startStageId !== undefined ? { startStageId: extras.startStageId } : {}),
+    };
+  }
+
+  // ─── RunProjection (the single writer, driven by the durable workflow) ──────
+
+  bindOwRun(runId: string, owRunId: string): void {
+    this.owRunIds.set(runId, owRunId);
+    this.schedulePersist(runId, true);
+  }
+
+  runStarted(runId: string, message: string): void {
+    const run = this.live(runId);
+    if (!run) {
+      return;
+    }
+    run.status = "running";
+    this.emit({ ts: nowIso(), type: "run.started", runId, status: "running", message });
+  }
+
+  stageStarted(runId: string, stageId: string): void {
+    if (!this.live(runId)) {
+      return;
+    }
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    stage.status = "running";
+    stage.startedAt = nowIso();
+    this.emit({ ts: nowIso(), type: "stage.started", runId, stageId, status: "running" });
+  }
+
+  log(runId: string, stageId: string, level: LogLevel, message: string): void {
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    const ts = nowIso();
+    stage.logs.push({ ts, level, message });
+    this.emit({ ts, type: "stage.log", runId, stageId, message, level });
+  }
+
+  stageAwaiting(runId: string, stageId: string): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage) {
+      return;
+    }
+    stage.status = "awaiting";
+    run.status = "awaiting";
+    this.emit({
+      ts: nowIso(),
+      type: "stage.awaiting",
+      runId,
+      stageId,
+      status: "awaiting",
+      message: `${agentForStage(stageId).profession} is waiting for your approval`,
+    });
+  }
+
+  gateApproved(runId: string, stageId: string): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage || stage.status !== "awaiting") {
+      return;
+    }
+    const profession = agentForStage(stageId).profession;
+    stage.status = "passed";
+    stage.completedAt = nowIso();
+    run.status = "running";
+    this.log(runId, stageId, "pass", `✓ Gate approved — ${profession} cleared to proceed`);
+    this.emit({
+      ts: nowIso(),
+      type: "stage.approved",
+      runId,
+      stageId,
+      status: "passed",
+      message: `Gate approved for ${profession}`,
+    });
+  }
+
+  stagePassed(runId: string, stageId: string): void {
+    if (!this.live(runId)) {
+      return;
+    }
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    stage.completedAt = nowIso();
+    stage.status = "passed";
+    this.emit({
+      ts: nowIso(),
+      type: "stage.completed",
+      runId,
+      stageId,
+      status: "passed",
+      message: `${agentForStage(stageId).profession} completed`,
+    });
+  }
+
+  stageFailed(runId: string, stageId: string, message: string): void {
+    if (!this.live(runId)) {
+      return;
+    }
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    stage.completedAt = nowIso();
+    stage.status = "failed";
+    this.log(runId, stageId, "fail", `✗ ${message}`);
+    this.emit({ ts: nowIso(), type: "stage.failed", runId, stageId, status: "failed", message });
+  }
+
+  stageSkipped(runId: string, stageId: string): void {
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    stage.status = "skipped";
+    this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId, status: "skipped" });
+  }
+
+  setVerdict(runId: string, stageId: string, verdict: StageVerdict): void {
+    const stage = this.findStage(runId, stageId);
+    if (stage) {
+      stage.verdict = verdict;
+    }
+  }
+
+  captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void {
+    const run = this.live(runId);
+    if (!run || output.trim() === "") {
+      return;
+    }
+    run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
+    run.result = output;
+    void this.repositoryForRun(runId).writeHandoff(
+      runId,
+      stageDef.id,
+      formatHandoff(
+        {
+          stageLabel: stageDef.label,
+          profession: agentForStage(stageDef.id).profession,
+          engine: this.engineLabel(run),
+          model: run.model,
+          completedAt: nowIso(),
+        },
+        output,
+      ),
+    );
+    this.schedulePersist(runId, true);
+  }
+
+  applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageDef.id);
+    if (!run || !stage) {
+      return;
+    }
+    stage.status = "passed";
+    stage.completedAt = nowIso();
+    run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
+    run.result = output;
+    this.emit({
+      ts: nowIso(),
+      type: "stage.completed",
+      runId,
+      stageId: stageDef.id,
+      status: "passed",
+      message: `Reused ${agentForStage(stageDef.id).profession} output from the previous run`,
+    });
+  }
+
+  runCompleted(runId: string, status: "completed" | "failed"): void {
+    const run = this.live(runId);
+    if (!run) {
+      return;
+    }
+    run.status = status;
+    run.completedAt = nowIso();
+    this.emit({
+      ts: nowIso(),
+      type: "run.completed",
+      runId,
+      status,
+      message: status === "completed" ? "Run completed successfully" : "Run failed",
+      ...(run.result !== undefined ? { result: run.result } : {}),
+    });
+    void this.repositoryForRun(runId).releaseRun(runId);
+  }
+
+  // ─── terminal projections owned by the API / recovery ───────────────────────
+
+  private markCancelled(runId: string): void {
+    const run = this.runs.get(runId);
+    if (!run || isTerminalRunStatus(run.status)) {
+      return;
+    }
+    for (const stage of run.stages) {
+      if (
+        stage.status === "pending" ||
+        stage.status === "running" ||
+        stage.status === "awaiting"
+      ) {
+        stage.status = "skipped";
+        this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId: stage.id, status: "skipped" });
+      }
+    }
+    run.status = "cancelled";
+    run.completedAt = nowIso();
+    this.emit({
+      ts: nowIso(),
+      type: "run.completed",
+      runId,
+      status: "cancelled",
+      message: "Run aborted",
+    });
+  }
+
+  private markInterrupted(runId: string): void {
+    const run = this.runs.get(runId);
+    if (!run || isTerminalRunStatus(run.status)) {
+      return;
+    }
+    const ts = nowIso();
+    for (const stage of run.stages) {
+      if (stage.status === "running" || stage.status === "awaiting") {
+        stage.status = "failed";
+        stage.completedAt = ts;
+        stage.logs.push({ ts, level: "fail", message: "✗ Interrupted by server restart" });
+      }
+    }
+    run.status = "failed";
+    run.completedAt = ts;
+    this.emit({
+      ts,
+      type: "run.completed",
+      runId,
+      status: "failed",
+      message: "Interrupted by server restart",
+    });
+    void this.repositoryForRun(runId).releaseRun(runId);
+  }
+
+  // ─── engine-stage abort handles (G4) ────────────────────────────────────────
+
+  private beginEngineStage(runId: string): AbortController {
+    const controller = new AbortController();
+    this.engineAborts.set(runId, controller);
+    return controller;
+  }
+
+  private endEngineStage(runId: string): void {
+    this.engineAborts.delete(runId);
+  }
+
+  // ─── read-model plumbing ────────────────────────────────────────────────────
+
+  private live(runId: string): RunState | undefined {
+    const run = this.runs.get(runId);
+    return run && !isTerminalRunStatus(run.status) ? run : undefined;
+  }
+
+  private findStage(runId: string, stageId: string): StageState | undefined {
+    return this.runs.get(runId)?.stages.find((stage) => stage.id === stageId);
+  }
+
+  private requireStage(runId: string, stageId: string): StageState {
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      throw new Error(`Stage not found: ${stageId}`);
+    }
+    return stage;
+  }
+
+  private engineLabel(run: RunState): string {
+    return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
+  }
+
+  private emit(event: RunEvent): void {
+    void this.repositoryForRun(event.runId).appendEvent(event.runId, event);
+    this.schedulePersist(event.runId, event.type !== "stage.log");
+    const listeners = this.listeners.get(event.runId);
+    if (!listeners) {
+      return;
+    }
+    for (const listener of listeners) {
+      listener(event);
+    }
   }
 
   private repositoryFor(paths: ProjectPaths): RunRepository {
@@ -99,70 +730,10 @@ export class RunOrchestrator {
     return this.repositoryFor(this.registry.resolve(projectId));
   }
 
-  async init(): Promise<void> {
-    for (const project of this.registry.all()) {
-      await this.loadProject(this.registry.resolve(project.id));
-    }
-  }
-
-  private async loadProject(paths: ProjectPaths): Promise<void> {
-    const loaded = await this.repositoryFor(paths).loadAll();
-    let maxNumber = this.nextRunNumbers.get(paths.id) ?? 1;
-    for (const persisted of loaded) {
-      const { run } = persisted;
-      run.projectId = paths.id;
-      this.runs.set(run.id, run);
-      if (persisted.permissionMode) {
-        this.enginePermissionModes.set(run.id, persisted.permissionMode);
-      }
-      if (persisted.simOptions) {
-        this.runOptions.set(run.id, { ...DEFAULT_OPTIONS, ...persisted.simOptions });
-      }
-      maxNumber = Math.max(maxNumber, run.number + 1);
-      if (!isTerminalRunStatus(run.status)) {
-        this.reconcileInterrupted(run);
-      }
-    }
-    this.nextRunNumbers.set(paths.id, maxNumber);
-  }
-
   private takeRunNumber(projectId: string): number {
     const next = this.nextRunNumbers.get(projectId) ?? 1;
     this.nextRunNumbers.set(projectId, next + 1);
     return next;
-  }
-
-  async shutdown(): Promise<void> {
-    for (const run of this.runs.values()) {
-      if (!isTerminalRunStatus(run.status)) {
-        this.abortRun(run.id);
-      }
-    }
-    await Promise.all([...this.runs.keys()].map((runId) => this.flushPersist(runId)));
-    await Promise.all(
-      [...this.repositories.values()].map((repository) => repository.settle()),
-    );
-  }
-
-  private reconcileInterrupted(run: RunState): void {
-    const ts = nowIso();
-    for (const stage of run.stages) {
-      if (stage.status === "running" || stage.status === "awaiting") {
-        stage.status = "failed";
-        stage.completedAt = ts;
-        stage.logs.push({ ts, level: "fail", message: "✗ Interrupted by server restart" });
-      }
-    }
-    run.status = "failed";
-    run.completedAt = ts;
-    void this.repositoryForRun(run.id).appendEvent(run.id, {
-      ts,
-      type: "run.completed",
-      runId: run.id,
-      status: "failed",
-      message: "Interrupted by server restart",
-    });
-    void this.flushPersist(run.id);
   }
 
   private buildPersisted(runId: string): PersistedRun | undefined {
@@ -178,6 +749,10 @@ export class RunOrchestrator {
     const simOptions = this.runOptions.get(runId);
     if (simOptions) {
       persisted.simOptions = simOptions;
+    }
+    const owRunId = this.owRunIds.get(runId);
+    if (owRunId) {
+      persisted.owRunId = owRunId;
     }
     return persisted;
   }
@@ -214,622 +789,10 @@ export class RunOrchestrator {
     timer.unref();
     this.persistTimers.set(runId, timer);
   }
+}
 
-  listPipelines(): PipelineDefinition[] {
-    return DEMO_PIPELINES;
-  }
+const TERMINAL_OW_STATUSES = new Set(["succeeded", "completed", "failed", "canceled"]);
 
-  getPipeline(pipelineId: string): PipelineDefinition | undefined {
-    return DEMO_PIPELINES.find((pipeline) => pipeline.id === pipelineId);
-  }
-
-  listRuns(projectId: string): RunState[] {
-    return [...this.runs.values()]
-      .filter((run) => run.projectId === projectId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
-
-  getRun(runId: string): RunState | undefined {
-    return this.runs.get(runId);
-  }
-
-  subscribe(runId: string, listener: RunListener): () => void {
-    const bucket = this.listeners.get(runId) ?? new Set<RunListener>();
-    bucket.add(listener);
-    this.listeners.set(runId, bucket);
-    return () => {
-      bucket.delete(listener);
-      if (bucket.size === 0) {
-        this.listeners.delete(runId);
-      }
-    };
-  }
-
-  async startRun(
-    paths: ProjectPaths,
-    pipelineId: string,
-    options: StartRunOptions = {},
-  ): Promise<RunState> {
-    const pipeline = this.getPipeline(pipelineId);
-    if (!pipeline) {
-      throw new Error(`Unknown pipeline: ${pipelineId}`);
-    }
-
-    const { task, disabledStages, engine, model, permissionMode, ...simOptions } = options;
-
-    const usesEngine = pipelineUsesEngine(pipeline);
-    if (usesEngine) {
-      const engineId = engine ?? "claude-code";
-      getEngineAdapter(engineId);
-      assertEngineId(engineId);
-      const connection = this.settings.getEngineConnection(paths.id, engineId);
-      const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
-      if (mode?.requiresApiKey && !connection.apiKey) {
-        throw new Error(
-          `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
-        );
-      }
-    }
-
-    await ensureProjectDataDir(paths);
-
-    const runId = randomUUID().slice(0, 8);
-    const run = createInitialRunState({
-      runId,
-      number: this.takeRunNumber(paths.id),
-      projectId: paths.id,
-      pipeline,
-      task,
-      disabledStages,
-    });
-
-    if (usesEngine) {
-      const engineId = engine ?? "claude-code";
-      assertEngineId(engineId);
-      run.engine = engineId;
-      if (model !== undefined) {
-        run.model = model;
-      }
-      run.workspacePath = await resolveWorkspace(paths, runId);
-      this.enginePermissionModes.set(
-        runId,
-        permissionMode === "acceptEdits" ? "acceptEdits" : DEFAULT_PERMISSION_MODE,
-      );
-    }
-
-    this.runs.set(runId, run);
-
-    const merged = { ...DEFAULT_OPTIONS, ...simOptions };
-    this.runOptions.set(runId, merged);
-    await this.flushPersist(runId);
-    void this.simulateRun(runId, pipeline, merged);
-    return structuredClone(run);
-  }
-
-  approveGate(runId: string, stageId: string): RunState {
-    const run = this.runs.get(runId);
-    if (!run) {
-      throw new Error(`Run not found: ${runId}`);
-    }
-    const stage = this.getStage(runId, stageId);
-    if (stage.status !== "awaiting") {
-      throw new Error(`Stage ${stageId} is not awaiting approval`);
-    }
-
-    const profession = agentForStage(stageId).profession;
-    stage.status = "passed";
-    stage.completedAt = nowIso();
-    run.status = "running";
-    this.log(runId, stageId, "pass", `✓ Gate approved — ${profession} cleared to proceed`);
-    this.emit({
-      ts: nowIso(),
-      type: "stage.approved",
-      runId,
-      stageId,
-      status: "passed",
-      message: `Gate approved for ${profession}`,
-    });
-
-    const waiterKey = `${runId}:${stageId}`;
-    const resume = this.gateWaiters.get(waiterKey);
-    this.gateWaiters.delete(waiterKey);
-    resume?.();
-    return structuredClone(run);
-  }
-
-  abortRun(runId: string): RunState {
-    const run = this.runs.get(runId);
-    if (!run) {
-      throw new Error(`Run not found: ${runId}`);
-    }
-    if (isTerminalRunStatus(run.status)) {
-      throw new Error(`Run ${runId} is already finished`);
-    }
-
-    this.cancelled.add(runId);
-    this.engineAborts.get(runId)?.abort();
-    for (const [key, resume] of [...this.gateWaiters]) {
-      if (key.startsWith(`${runId}:`)) {
-        this.gateWaiters.delete(key);
-        resume();
-      }
-    }
-
-    for (const stage of run.stages) {
-      if (
-        stage.status === "pending" ||
-        stage.status === "running" ||
-        stage.status === "awaiting"
-      ) {
-        stage.status = "skipped";
-        this.emit({
-          ts: nowIso(),
-          type: "stage.skipped",
-          runId,
-          stageId: stage.id,
-          status: "skipped",
-        });
-      }
-    }
-
-    run.status = "cancelled";
-    run.completedAt = nowIso();
-    this.emit({
-      ts: nowIso(),
-      type: "run.completed",
-      runId,
-      status: "cancelled",
-      message: "Run aborted",
-    });
-    return structuredClone(run);
-  }
-
-  restartRun(runId: string, stageId: string): RunState {
-    const run = this.runs.get(runId);
-    if (!run) {
-      throw new Error(`Run not found: ${runId}`);
-    }
-    if (run.status !== "failed" && run.status !== "cancelled") {
-      throw new Error(`Run ${runId} can only be restarted after failing or being aborted`);
-    }
-    const pipeline = this.getPipeline(run.pipelineId);
-    if (!pipeline) {
-      throw new Error(`Unknown pipeline: ${run.pipelineId}`);
-    }
-    const startIndex = run.stages.findIndex((stage) => stage.id === stageId);
-    if (startIndex === -1) {
-      throw new Error(`Stage not found: ${stageId}`);
-    }
-    const disabled = new Set(run.disabledStages ?? []);
-    if (disabled.has(stageId)) {
-      throw new Error(`Stage ${stageId} is disabled for this run`);
-    }
-
-    this.cancelled.delete(runId);
-    const outputs = { ...run.stageOutputs };
-    for (const stage of run.stages.slice(startIndex)) {
-      if (disabled.has(stage.id)) {
-        continue;
-      }
-      stage.status = "pending";
-      stage.logs = [];
-      delete stage.startedAt;
-      delete stage.completedAt;
-      delete stage.verdict;
-      delete outputs[stage.id];
-    }
-    run.stageOutputs = outputs;
-    run.status = "running";
-    delete run.completedAt;
-
-    const profession = agentForStage(stageId).profession;
-    this.emit({
-      ts: nowIso(),
-      type: "run.started",
-      runId,
-      status: "running",
-      message: `Restarted from ${profession}`,
-    });
-
-    const options = this.runOptions.get(runId) ?? DEFAULT_OPTIONS;
-    void this.runStages(runId, pipeline, options, stageId);
-    return structuredClone(run);
-  }
-
-  private emit(event: RunEvent): void {
-    void this.repositoryForRun(event.runId).appendEvent(event.runId, event);
-    this.schedulePersist(event.runId, event.type !== "stage.log");
-    const listeners = this.listeners.get(event.runId);
-    if (!listeners) {
-      return;
-    }
-    for (const listener of listeners) {
-      listener(event);
-    }
-  }
-
-  private log(
-    runId: string,
-    stageId: string,
-    level: LogLevel,
-    message: string,
-  ): void {
-    const stage = this.getStage(runId, stageId);
-    const ts = nowIso();
-    stage.logs.push({ ts, level, message });
-    this.emit({ ts, type: "stage.log", runId, stageId, message, level });
-  }
-
-  private updateRun(runId: string, updater: (run: RunState) => void): RunState {
-    const run = this.runs.get(runId);
-    if (!run) {
-      throw new Error(`Run not found: ${runId}`);
-    }
-    updater(run);
-    return run;
-  }
-
-  private getStage(runId: string, stageId: string): StageState {
-    const run = this.runs.get(runId);
-    const stage = run?.stages.find((item) => item.id === stageId);
-    if (!run || !stage) {
-      throw new Error(`Stage not found: ${stageId}`);
-    }
-    return stage;
-  }
-
-  private async simulateStage(
-    runId: string,
-    stageDef: StageDefinition,
-    options: Required<SimulationOptions>,
-  ): Promise<StageOutcome> {
-    const run = this.runs.get(runId);
-    const stage = this.getStage(runId, stageDef.id);
-    if (!run || stage.status === "skipped") {
-      return "passed";
-    }
-
-    const profession = agentForStage(stageDef.id).profession;
-    stage.status = "running";
-    stage.startedAt = nowIso();
-
-    this.emit({
-      ts: nowIso(),
-      type: "stage.started",
-      runId,
-      stageId: stageDef.id,
-      status: "running",
-    });
-
-    const logLines: Array<[LogLevel, string]> = [
-      ["info", `${profession} online · run #${run.number}`],
-      ["info", `Reading context for ${stage.label.toLowerCase()}`],
-      ["run", `▶ Executing ${stage.label.toLowerCase()} workflow`],
-      ["info", `${profession} finishing up`],
-    ];
-
-    const duration = randomBetween(options.minDurationMs, options.maxDurationMs);
-    const stepDelay = Math.max(1, Math.floor(duration / logLines.length));
-
-    for (const [level, message] of logLines) {
-      await sleep(stepDelay);
-      if (this.cancelled.has(runId)) {
-        return "cancelled";
-      }
-      this.log(runId, stageDef.id, level, message);
-    }
-
-    const failed = Math.random() < options.failProbability;
-    if (failed) {
-      stage.completedAt = nowIso();
-      stage.status = "failed";
-      this.log(runId, stageDef.id, "fail", `✗ ${profession} failed (simulated)`);
-      this.emit({
-        ts: nowIso(),
-        type: "stage.failed",
-        runId,
-        stageId: stageDef.id,
-        status: "failed",
-        message: `${profession} failed (simulated)`,
-      });
-      return "failed";
-    }
-
-    if (stageDef.gateAfter) {
-      stage.status = "awaiting";
-      this.updateRun(runId, (current) => {
-        current.status = "awaiting";
-      });
-      this.log(runId, stageDef.id, "warn", `${profession} is waiting for your approval`);
-      this.emit({
-        ts: nowIso(),
-        type: "stage.awaiting",
-        runId,
-        stageId: stageDef.id,
-        status: "awaiting",
-        message: `${profession} is waiting for your approval`,
-      });
-      await new Promise<void>((resolve) => {
-        this.gateWaiters.set(`${runId}:${stageDef.id}`, resolve);
-      });
-      if (this.cancelled.has(runId)) {
-        return "cancelled";
-      }
-      return "passed";
-    }
-
-    stage.completedAt = nowIso();
-    stage.status = "passed";
-    this.log(runId, stageDef.id, "pass", `✓ ${profession} finished — ${stage.label.toLowerCase()} complete`);
-    this.emit({
-      ts: nowIso(),
-      type: "stage.completed",
-      runId,
-      stageId: stageDef.id,
-      status: "passed",
-      message: `${profession} completed`,
-    });
-    return "passed";
-  }
-
-  private upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
-    const index = run.stages.findIndex((stage) => stage.id === stageId);
-    if (index <= 0) {
-      return [];
-    }
-    const outputs = run.stageOutputs ?? {};
-    return run.stages
-      .slice(0, index)
-      .map((stage) => ({ label: stage.label, output: outputs[stage.id] ?? "" }))
-      .filter((entry) => entry.output !== "");
-  }
-
-  private engineLabel(run: RunState): string {
-    return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
-  }
-
-  private async resolveStageInputs(
-    run: RunState,
-    stageDef: StageDefinition,
-  ): Promise<{ persona: string | undefined; prompt: string }> {
-    const paths = this.registry.resolve(run.projectId);
-    const persona = stageDef.skill ? await loadSkill(paths, stageDef.skill) : undefined;
-    if (stageDef.skill && !persona) {
-      this.log(
-        run.id,
-        stageDef.id,
-        "warn",
-        `No skill "${stageDef.skill}" found — running without a persona`,
-      );
-    }
-    return {
-      persona,
-      prompt: buildStagePrompt(run.task ?? "", this.upstreamFor(run, stageDef.id)),
-    };
-  }
-
-  private captureStageOutput(
-    run: RunState,
-    stageDef: StageDefinition,
-    result: string | undefined,
-  ): void {
-    if (!result || result.trim() === "") {
-      return;
-    }
-    run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: result };
-    void this.repositoryForRun(run.id).writeHandoff(
-      run.id,
-      stageDef.id,
-      formatHandoff(
-        {
-          stageLabel: stageDef.label,
-          profession: agentForStage(stageDef.id).profession,
-          engine: this.engineLabel(run),
-          model: run.model,
-          completedAt: nowIso(),
-        },
-        result,
-      ),
-    );
-  }
-
-  private async executeEngineStage(
-    runId: string,
-    stageDef: StageDefinition,
-  ): Promise<StageOutcome> {
-    const run = this.runs.get(runId);
-    const stage = this.getStage(runId, stageDef.id);
-    if (!run || !run.engine || stage.status === "skipped") {
-      return "passed";
-    }
-
-    const profession = agentForStage(stageDef.id).profession;
-    stage.status = "running";
-    stage.startedAt = nowIso();
-    this.emit({
-      ts: nowIso(),
-      type: "stage.started",
-      runId,
-      stageId: stageDef.id,
-      status: "running",
-    });
-    this.log(
-      runId,
-      stageDef.id,
-      "info",
-      `${profession} online · ${this.engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
-    );
-
-    const controller = new AbortController();
-    this.engineAborts.set(runId, controller);
-
-    const { persona, prompt } = await this.resolveStageInputs(run, stageDef);
-
-    if (this.cancelled.has(runId)) {
-      this.engineAborts.delete(runId);
-      return "cancelled";
-    }
-
-    let outcome: EngineRunResult;
-    try {
-      const adapter = getEngineAdapter(run.engine);
-      outcome = await adapter.run({
-        runId,
-        prompt,
-        cwd: run.workspacePath ?? process.cwd(),
-        model: run.model,
-        appendSystemPrompt: persona,
-        permissionMode: this.enginePermissionModes.get(runId) ?? DEFAULT_PERMISSION_MODE,
-        connection: this.settings.getEngineConnection(run.projectId, run.engine),
-        timeoutMs: config.engineTimeoutMs,
-        signal: controller.signal,
-        onLog: (level, message) => this.log(runId, stageDef.id, level, message),
-      });
-    } catch (error) {
-      outcome = {
-        success: false,
-        exitCode: null,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      };
-    } finally {
-      this.engineAborts.delete(runId);
-    }
-
-    if (this.cancelled.has(runId)) {
-      return "cancelled";
-    }
-
-    stage.completedAt = nowIso();
-    if (outcome.success) {
-      if (outcome.result !== undefined) {
-        run.result = outcome.result;
-      }
-      this.captureStageOutput(run, stageDef, outcome.result);
-
-      const verdict = parseStageVerdict(outcome.result);
-      if (verdict !== undefined) {
-        stage.verdict = verdict;
-      }
-      if (verdict === "FAIL") {
-        stage.status = "failed";
-        const message = `${profession} reported VERDICT: FAIL`;
-        this.log(runId, stageDef.id, "fail", `✗ ${message}`);
-        this.emit({
-          ts: nowIso(),
-          type: "stage.failed",
-          runId,
-          stageId: stageDef.id,
-          status: "failed",
-          message,
-        });
-        return "failed";
-      }
-
-      stage.status = "passed";
-      if (verdict === "PASS") {
-        this.log(runId, stageDef.id, "pass", `${profession} reported VERDICT: PASS`);
-      }
-      this.log(runId, stageDef.id, "pass", `✓ ${profession} finished — result ready`);
-      this.emit({
-        ts: nowIso(),
-        type: "stage.completed",
-        runId,
-        stageId: stageDef.id,
-        status: "passed",
-        message: `${profession} completed`,
-      });
-      return "passed";
-    }
-
-    stage.status = "failed";
-    this.log(runId, stageDef.id, "fail", `✗ ${outcome.errorMessage ?? `${profession} failed`}`);
-    this.emit({
-      ts: nowIso(),
-      type: "stage.failed",
-      runId,
-      stageId: stageDef.id,
-      status: "failed",
-      message: outcome.errorMessage ?? `${profession} failed`,
-    });
-    return "failed";
-  }
-
-  private executeStage(
-    runId: string,
-    stageDef: StageDefinition,
-    options: Required<SimulationOptions>,
-  ): Promise<StageOutcome> {
-    const run = this.runs.get(runId);
-    const engineBacked = stageDef.skill !== undefined && run?.engine !== undefined;
-    return engineBacked
-      ? this.executeEngineStage(runId, stageDef)
-      : this.simulateStage(runId, stageDef, options);
-  }
-
-  private async runStages(
-    runId: string,
-    pipeline: PipelineDefinition,
-    options: Required<SimulationOptions>,
-    startStageId?: string,
-  ): Promise<void> {
-    const stageDefs = flattenPipelineStages(pipeline);
-    let started = startStageId == null;
-    let success = true;
-
-    for (const stageDef of stageDefs) {
-      if (!started) {
-        if (stageDef.id === startStageId) {
-          started = true;
-        } else {
-          continue;
-        }
-      }
-      const outcome = await this.executeStage(runId, stageDef, options);
-      if (outcome === "cancelled") {
-        return;
-      }
-      if (outcome === "failed") {
-        success = false;
-        break;
-      }
-    }
-
-    if (this.cancelled.has(runId)) {
-      return;
-    }
-
-    const finished = this.updateRun(runId, (run) => {
-      run.status = success ? "completed" : "failed";
-      run.completedAt = nowIso();
-    });
-
-    this.emit({
-      ts: nowIso(),
-      type: "run.completed",
-      runId,
-      status: success ? "completed" : "failed",
-      message: success ? "Run completed successfully" : "Run failed",
-      ...(finished.result !== undefined ? { result: finished.result } : {}),
-    });
-  }
-
-  private async simulateRun(
-    runId: string,
-    pipeline: PipelineDefinition,
-    options: Required<SimulationOptions>,
-  ): Promise<void> {
-    this.updateRun(runId, (run) => {
-      run.status = "running";
-    });
-
-    this.emit({
-      ts: nowIso(),
-      type: "run.started",
-      runId,
-      status: "running",
-      message: `Started pipeline: ${pipeline.name}`,
-    });
-
-    await this.runStages(runId, pipeline, options);
-  }
+function isTerminalOwStatus(status: string): boolean {
+  return TERMINAL_OW_STATUSES.has(status);
 }

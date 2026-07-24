@@ -152,7 +152,7 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 |------|------------|
 | Harness APIs unstable | Adapter interface plus CLI fallback |
 | Scope creep vs hosted builders on v1 speed | Prepared agents + templates; don't host runtime |
-| Orchestration complexity | Aiki for durable execution; fixed default pipeline |
+| Orchestration complexity | OpenWorkflow for durable execution (embedded SQLite, no server); fixed default pipeline |
 | Quality of agent output | Gates, blind review agent, Playwright E2E fix loops |
 | Context burden on user | Smart defaults, intake agent, progressive disclosure |
 | Task management scope creep | Tasks feed runs only; no sprint planning, team sync, or external PM in MVP |
@@ -170,6 +170,6 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 ## Next Steps
 
 1. Ship MVP scope (see mvp-scope.md)
-2. Implement architecture with Aiki workflow runtime (see technical-architecture.md)
+2. Implement architecture with the OpenWorkflow workflow runtime (see technical-architecture.md)
 3. Validate with 3-5 developers running one real feature end-to-end including deploy
 4. Publish docs and open-source repo under ADHD
