@@ -3,11 +3,6 @@ import type { Database } from "./database.ts";
 const CLAIM = `INSERT INTO active_runs(project_id, run_id, started_at) VALUES(?, ?, ?)
   ON CONFLICT(project_id) DO NOTHING`;
 
-/**
- * The project-keyed admission guard (G2). At most one row per project, so its
- * PRIMARY KEY is the atomic backstop that enforces "one active run per project"
- * even against a concurrent double-start the API cannot otherwise prevent.
- */
 export class ActiveRunsTable {
   static readonly SCHEMA = `
 CREATE TABLE IF NOT EXISTS active_runs (
@@ -18,7 +13,6 @@ CREATE TABLE IF NOT EXISTS active_runs (
 
   constructor(private readonly db: Database) {}
 
-  /** Claim the project for a run. Returns false when one is already active. */
   async claim(projectId: string, runId: string, startedAt: string): Promise<boolean> {
     const connection = await this.db.connection();
     const result = connection.prepare(CLAIM).run(projectId, runId, startedAt);

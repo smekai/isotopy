@@ -1,8 +1,3 @@
-// G5 — declared parallel branches over durable steps. There is no parallel demo
-// pipeline (all three ship sequential), so this drives the real durable workflow
-// body directly with a test-only parallel fixture: prove fan-out (both branches
-// execute), fan-in (the join waits for both), and the per-branch failure policy
-// (a failing branch fails the group without stranding its sibling).
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -31,7 +26,6 @@ const PARALLEL_PIPELINE: PipelineDefinition = {
   ],
 };
 
-/** A tiny in-memory read model that records which branches actually executed. */
 class RecordingProjection implements RunProjection {
   readonly started: string[] = [];
   private readonly run: RunState;
@@ -157,7 +151,6 @@ describe("G5 declared parallel branches", () => {
       projection,
     );
 
-    // Fan-out: both branches ran. Fan-in: the run completed only once both did.
     expect(projection.started.sort()).toEqual(["branch-a", "branch-b"]);
     expect(projection.getRun().stages.map((s) => s.status).sort()).toEqual([
       "passed",
@@ -174,7 +167,6 @@ describe("G5 declared parallel branches", () => {
       projection,
     );
 
-    // Both branches still executed (allSettled join), and the group failed.
     expect(projection.started.sort()).toEqual(["branch-a", "branch-b"]);
     expect((result.output as { status: string }).status).toBe("failed");
   });

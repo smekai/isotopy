@@ -38,6 +38,8 @@ const PERSIST_DEBOUNCE_MS = 150;
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
+const TERMINAL_OW_STATUSES = new Set(["succeeded", "completed", "failed", "canceled"]);
+
 type RunListener = (event: RunEvent) => void;
 
 interface SimulationOptions {
@@ -65,19 +67,12 @@ export interface RunOrchestratorDependencies {
   settings?: SettingsStore;
 }
 
-/** Extra fields layered onto a run's frozen workflow input (fresh vs. restart). */
 interface InputExtras {
   startedMessage: string;
   seededOutputs?: Record<string, string>;
   startStageId?: string;
 }
 
-/**
- * Owns the run read model (`RunState` + events + SSE listeners) and translates
- * each API call into a durable OpenWorkflow operation. `RunOrchestrator` *is*
- * the durable workflow (in `workflow/`); this class is its read-model writer
- * (the single writer — the API only reads, cancellation aside) and its host.
- */
 export class RunOrchestrator implements RunProjection {
   private readonly runs = new Map<string, RunState>();
   private readonly listeners = new Map<string, Set<RunListener>>();
@@ -107,8 +102,6 @@ export class RunOrchestrator implements RunProjection {
     this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry);
   }
 
-  // ─── lifecycle ────────────────────────────────────────────────────────────
-
   async init(): Promise<void> {
     for (const project of this.registry.all()) {
       const paths = this.registry.resolve(project.id);
@@ -118,8 +111,6 @@ export class RunOrchestrator implements RunProjection {
   }
 
   async shutdown(): Promise<void> {
-    // Kill in-flight engine subprocesses so a graceful worker stop cannot block
-    // on a ten-minute engine call; parked (gated) runs stay durably resumable.
     for (const controller of this.engineAborts.values()) {
       controller.abort();
     }
@@ -154,12 +145,6 @@ export class RunOrchestrator implements RunProjection {
     this.nextRunNumbers.set(paths.id, maxNumber);
   }
 
-  /**
-   * Reconcile a non-terminal projected run against the durable source of truth
-   * on boot. A run whose OpenWorkflow run is still live is left for the worker
-   * to resume (replacing `reconcileInterrupted`'s mark-everything-failed); one
-   * whose durable run has already ended, or has none, is settled here.
-   */
   private async reconcileOnLoad(paths: ProjectPaths, run: RunState): Promise<void> {
     const owRunId = this.owRunIds.get(run.id);
     if (!owRunId) {
@@ -167,8 +152,8 @@ export class RunOrchestrator implements RunProjection {
       return;
     }
     const status = await this.runtimes.for(paths).runStatus(owRunId);
-    if (status === undefined || !isTerminalOwStatus(status)) {
-      return; // the worker will resume it
+    if (status === undefined || !TERMINAL_OW_STATUSES.has(status)) {
+      return;
     }
     if (status === "canceled") {
       this.markCancelled(run.id);
@@ -179,8 +164,6 @@ export class RunOrchestrator implements RunProjection {
     }
     await this.repositoryForRun(run.id).releaseRun(run.id);
   }
-
-  // ─── queries ──────────────────────────────────────────────────────────────
 
   listPipelines(): PipelineDefinition[] {
     return DEMO_PIPELINES;
@@ -212,12 +195,9 @@ export class RunOrchestrator implements RunProjection {
     };
   }
 
-  /** Replay a run's persisted event history (for a late SSE subscriber). */
   async replayEvents(runId: string): Promise<RunEvent[]> {
     return this.repositoryForRun(runId).loadEvents(runId);
   }
-
-  // ─── commands ─────────────────────────────────────────────────────────────
 
   async startRun(
     paths: ProjectPaths,
@@ -300,9 +280,6 @@ export class RunOrchestrator implements RunProjection {
       throw new Error(`Run ${runId} has no durable run to approve`);
     }
 
-    // Optimistically project the approval (the same single transition the
-    // workflow's gate step makes — it no-ops once the stage is passed), then
-    // wake the durable wait.
     this.gateApproved(runId, stageId);
     void this.runtimes.forProject(run.projectId).approveGate(runId, stageId);
     return structuredClone(run);
@@ -345,7 +322,6 @@ export class RunOrchestrator implements RunProjection {
       throw new Error(`Stage ${stageId} is disabled for this run`);
     }
 
-    // Retain outputs of the stages before the restart point (G1 seed).
     const outputs = { ...run.stageOutputs };
     const seededOutputs: Record<string, string> = {};
     for (const stage of run.stages.slice(0, startIndex)) {
@@ -355,7 +331,6 @@ export class RunOrchestrator implements RunProjection {
       }
     }
 
-    // Reset the restart point onward, exactly as the old in-place restart did.
     this.cancelled.delete(runId);
     for (const stage of run.stages.slice(startIndex)) {
       if (disabled.has(stage.id)) {
@@ -382,7 +357,6 @@ export class RunOrchestrator implements RunProjection {
     return structuredClone(run);
   }
 
-  /** Admit (re-admit on restart), start the worker, enqueue the durable run. */
   private async launch(
     paths: ProjectPaths,
     run: RunState,
@@ -418,14 +392,16 @@ export class RunOrchestrator implements RunProjection {
       ...(run.model !== undefined ? { model: run.model } : {}),
       permissionMode: this.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
       ...(run.workspacePath !== undefined ? { workspacePath: run.workspacePath } : {}),
-      simOptions: sim as Required<SimulationOptions> & PipelineWorkflowInput["simOptions"],
+      simOptions: {
+        minDurationMs: sim.minDurationMs,
+        maxDurationMs: sim.maxDurationMs,
+        failProbability: sim.failProbability,
+      },
       startedMessage: extras.startedMessage,
       ...(extras.seededOutputs !== undefined ? { seededOutputs: extras.seededOutputs } : {}),
       ...(extras.startStageId !== undefined ? { startStageId: extras.startStageId } : {}),
     };
   }
-
-  // ─── RunProjection (the single writer, driven by the durable workflow) ──────
 
   bindOwRun(runId: string, owRunId: string): void {
     this.owRunIds.set(runId, owRunId);
@@ -537,15 +513,6 @@ export class RunOrchestrator implements RunProjection {
     this.emit({ ts: nowIso(), type: "stage.failed", runId, stageId, status: "failed", message });
   }
 
-  stageSkipped(runId: string, stageId: string): void {
-    const stage = this.findStage(runId, stageId);
-    if (!stage) {
-      return;
-    }
-    stage.status = "skipped";
-    this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId, status: "skipped" });
-  }
-
   setVerdict(runId: string, stageId: string, verdict: StageVerdict): void {
     const stage = this.findStage(runId, stageId);
     if (stage) {
@@ -615,8 +582,6 @@ export class RunOrchestrator implements RunProjection {
     void this.repositoryForRun(runId).releaseRun(runId);
   }
 
-  // ─── terminal projections owned by the API / recovery ───────────────────────
-
   private markCancelled(runId: string): void {
     const run = this.runs.get(runId);
     if (!run || isTerminalRunStatus(run.status)) {
@@ -668,8 +633,6 @@ export class RunOrchestrator implements RunProjection {
     void this.repositoryForRun(runId).releaseRun(runId);
   }
 
-  // ─── engine-stage abort handles (G4) ────────────────────────────────────────
-
   private beginEngineStage(runId: string): AbortController {
     const controller = new AbortController();
     this.engineAborts.set(runId, controller);
@@ -679,8 +642,6 @@ export class RunOrchestrator implements RunProjection {
   private endEngineStage(runId: string): void {
     this.engineAborts.delete(runId);
   }
-
-  // ─── read-model plumbing ────────────────────────────────────────────────────
 
   private live(runId: string): RunState | undefined {
     const run = this.runs.get(runId);
@@ -789,10 +750,4 @@ export class RunOrchestrator implements RunProjection {
     timer.unref();
     this.persistTimers.set(runId, timer);
   }
-}
-
-const TERMINAL_OW_STATUSES = new Set(["succeeded", "completed", "failed", "canceled"]);
-
-function isTerminalOwStatus(status: string): boolean {
-  return TERMINAL_OW_STATUSES.has(status);
 }

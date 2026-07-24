@@ -10,21 +10,12 @@ import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
 const RUNS_DB_FILE = "runs.db";
 
-/** OpenWorkflow run statuses that will never transition again. */
-const TERMINAL_OW_STATUSES = new Set(["succeeded", "completed", "failed", "canceled"]);
-
 type PipelineWorkflow = Workflow<
   PipelineWorkflowInput,
   PipelineWorkflowResult,
   PipelineWorkflowInput
 >;
 
-/**
- * One project's durable-execution runtime: an OpenWorkflow client and an
- * in-process worker over a `BackendSqlite` connection to the project's shared
- * `.adhd/runs.db` (the second connection; our `Database` owns the first). The
- * worker resuming this backend on start is what replaces `reconcileInterrupted`.
- */
 export class WorkflowRuntime {
   private backend: BackendSqlite | undefined;
   private client: OpenWorkflow | undefined;
@@ -45,7 +36,6 @@ export class WorkflowRuntime {
     return { client: this.client, backend: this.backend };
   }
 
-  /** Start the worker so it executes new runs and resumes interrupted ones. */
   async start(): Promise<void> {
     if (this.started) {
       return;
@@ -56,7 +46,6 @@ export class WorkflowRuntime {
     this.started = true;
   }
 
-  /** Enqueue a durable run; returns the OpenWorkflow run id backing it. */
   async startRun(input: PipelineWorkflowInput): Promise<string> {
     const { client } = this.ensure();
     const handle = await client.runWorkflow(this.workflow.spec, input);
@@ -73,12 +62,10 @@ export class WorkflowRuntime {
     try {
       await client.cancelWorkflowRun(owRunId);
     } catch {
-      // Already terminal or unknown — cancellation is best-effort here; the
-      // in-process subprocess kill (G4) is what makes a cancel immediate.
+      return;
     }
   }
 
-  /** The backing OpenWorkflow run's status, or undefined if it cannot be read. */
   async runStatus(owRunId: string): Promise<string | undefined> {
     const { backend } = this.ensure();
     try {
@@ -87,12 +74,6 @@ export class WorkflowRuntime {
     } catch {
       return undefined;
     }
-  }
-
-  /** True when the backing OpenWorkflow run has reached a terminal state. */
-  async isRunTerminal(owRunId: string): Promise<boolean> {
-    const status = await this.runStatus(owRunId);
-    return status !== undefined && TERMINAL_OW_STATUSES.has(status);
   }
 
   async stop(): Promise<void> {
@@ -109,10 +90,6 @@ export class WorkflowRuntime {
   }
 }
 
-/**
- * Builds the durable workflow once (its body closes over the global read-model
- * writer and services) and hands each project its own {@link WorkflowRuntime}.
- */
 export class WorkflowRuntimeRegistry {
   private readonly runtimes = new Map<string, WorkflowRuntime>();
   private readonly workflow: PipelineWorkflow;

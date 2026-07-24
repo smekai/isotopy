@@ -1,11 +1,10 @@
-import { ENGINES, agentForStage } from "@adhd/core";
+import { DEFAULT_PERMISSION_MODE, ENGINES, agentForStage } from "@adhd/core";
 import type { LogLevel, RunState, StageDefinition } from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildStagePrompt, parseStageVerdict } from "../domain/stage-context.ts";
 import type { UpstreamOutput } from "../domain/stage-context.ts";
-import { DEFAULT_PERMISSION_MODE } from "@adhd/core";
 import { loadSkill } from "../services/skills.ts";
 import { nowIso, randomBetween, sleep } from "../utils.ts";
 import type { PipelineWorkflowInput, StageResult, WorkflowDeps } from "./types.ts";
@@ -28,10 +27,6 @@ function engineLabel(run: RunState): string {
   return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
 }
 
-/**
- * Whether a stage runs a real engine (has a skill and the run has an engine) or
- * the simulator. Same rule the old `executeStage()` seam used.
- */
 function isEngineBacked(input: PipelineWorkflowInput, stageDef: StageDefinition): boolean {
   return stageDef.skill !== undefined && input.engine !== undefined;
 }
@@ -73,8 +68,6 @@ async function runSimulatedStage(
     return { outcome: "failed", startedAt, completedAt: nowIso() };
   }
 
-  // A gated stage stops at "passed-pending-approval" — the workflow body drives
-  // it to awaiting; only a non-gated stage records the pass here.
   if (!stageDef.gateAfter) {
     projection.log(
       runId,
@@ -109,9 +102,6 @@ async function runEngineStage(
     `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
   );
 
-  // Register the abort handle before the first `await` (persona resolution
-  // touches the filesystem): an abort arriving in that window must find a
-  // controller to cancel, or the CLI would spawn anyway for a stopped run.
   const controller = deps.beginEngineStage(runId);
   const paths = registry.resolve(run.projectId);
   const persona = stageDef.skill ? await loadSkill(paths, stageDef.skill) : undefined;
@@ -197,11 +187,6 @@ async function runEngineStage(
   return { outcome: "failed", startedAt, completedAt: nowIso() };
 }
 
-/**
- * The durable step body — today's `executeStage()`. Filesystem I/O
- * (`loadSkill`), clocks (`nowIso`), randomness and the engine subprocess all
- * live here, inside the step, so a memoised replay does not repeat them.
- */
 export function runStageWork(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,

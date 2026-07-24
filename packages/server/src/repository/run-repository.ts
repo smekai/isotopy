@@ -18,7 +18,6 @@ export interface PersistedRun {
   run: RunState;
   permissionMode?: EnginePermissionMode;
   simOptions?: PersistedSimOptions;
-  /** The OpenWorkflow run id backing this logical run (for signals/cancel). */
   owRunId?: string;
 }
 
@@ -91,7 +90,6 @@ export class RunRepository {
     });
   }
 
-  /** Admission (G2): claim the project for a run; false if one is active. */
   async admitRun(runId: string): Promise<boolean> {
     try {
       return await this.active.claim(this.paths.id, runId, nowIso());

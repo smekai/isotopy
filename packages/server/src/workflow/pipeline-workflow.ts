@@ -11,17 +11,14 @@ import type {
 
 export const PIPELINE_WORKFLOW_NAME = "adhd-pipeline";
 
-/** One durable step per stage keeps today's no-retry behaviour by default. */
 const STAGE_RETRY = { maximumAttempts: 1 } as const;
 
-/** A human gate waits effectively forever; a decade is our "never times out". */
 const GATE_TIMEOUT = "3650d";
 
 export interface PipelineWorkflowResult {
   status: "completed" | "failed" | "cancelled";
 }
 
-/** The signal string a gate parks on; `approveGate` sends the same one. */
 export function gateSignal(runId: string, stageId: string): string {
   return `gate:${runId}:${stageId}`;
 }
@@ -34,10 +31,6 @@ interface StepApiLike {
   }): Promise<{ data: Output } | null>;
 }
 
-/**
- * A stage step, then — if the stage gates — a durable wait for the approval
- * signal. Returns the stage's aggregate outcome for the loop to act on.
- */
 async function runOneStage(
   step: StepApiLike,
   deps: WorkflowDeps,
@@ -45,9 +38,6 @@ async function runOneStage(
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
   const { runId } = input;
-  // The stage step owns the "passed" transition for non-gated stages (and the
-  // work + failure emit for every stage); a gated stage stops short of passed
-  // and this function drives it to awaiting → approved instead.
   const result = await step.run({ name: stageDef.id }, () =>
     runStageWork(deps, input, stageDef),
   );
@@ -96,11 +86,6 @@ interface WalkState {
   reached: boolean;
 }
 
-/**
- * Run one pipeline group. Sequential groups run in order; a `parallel` group
- * (G5) fans out over durable steps and joins with `allSettled` so one failing
- * branch does not strand its siblings — the run fails only after they settle.
- */
 async function runGroup(
   step: StepApiLike,
   deps: WorkflowDeps,
@@ -155,11 +140,6 @@ async function runGroup(
   return "passed";
 }
 
-/**
- * Build the durable pipeline workflow. `RunOrchestrator` *is* this workflow;
- * each stage step *is* the old `executeStage()`. The body stays pure
- * orchestration — every non-deterministic effect lives inside a step.
- */
 export function createPipelineWorkflow(
   deps: WorkflowDeps,
 ): Workflow<PipelineWorkflowInput, PipelineWorkflowResult, PipelineWorkflowInput> {
