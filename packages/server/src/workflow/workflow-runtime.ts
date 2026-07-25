@@ -57,23 +57,15 @@ export class WorkflowRuntime {
     await client.sendSignal({ signal: gateSignal(runId, stageId) });
   }
 
-  async cancel(owRunId: string): Promise<void> {
+  async cancel(openWorkflowRunId: string): Promise<void> {
     const { client } = this.ensure();
-    try {
-      await client.cancelWorkflowRun(owRunId);
-    } catch {
-      return;
-    }
+    await client.cancelWorkflowRun(openWorkflowRunId);
   }
 
-  async runStatus(owRunId: string): Promise<string | undefined> {
+  async runStatus(openWorkflowRunId: string): Promise<string | undefined> {
     const { backend } = this.ensure();
-    try {
-      const run = await backend.getWorkflowRun({ workflowRunId: owRunId });
-      return run?.status;
-    } catch {
-      return undefined;
-    }
+    const run = await backend.getWorkflowRun({ workflowRunId: openWorkflowRunId });
+    return run?.status;
   }
 
   async stop(): Promise<void> {

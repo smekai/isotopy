@@ -1,6 +1,6 @@
 // GENERATED FILE — do not edit by hand.
 // Sources: packages/server/src/domain/skills/personas/*.md and the gen: blocks
-// in docs/architect-standards.md · regenerate with `pnpm gen:skills`.
+// in docs/architecture.md · regenerate with `pnpm gen:skills`.
 // Drift from the sources is caught by skill-generation.spec.ts.
 
 export const DEFAULT_SKILLS: Record<string, string> = {

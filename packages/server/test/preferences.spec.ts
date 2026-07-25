@@ -19,7 +19,6 @@ describe("normalizeProjectPreferences", () => {
         engineModels: "nope",
         permissionMode: "yolo",
         pipelineId: "no-such-pipeline",
-        disabledStages: "review",
       }),
     ).toEqual(defaultProjectPreferences());
   });
@@ -31,14 +30,12 @@ describe("normalizeProjectPreferences", () => {
         engineModels: { codex: "gpt-5.1-codex-max" },
         permissionMode: "acceptEdits",
         pipelineId: "one-box",
-        disabledStages: ["review", "deploy"],
       }),
     ).toEqual({
       engine: "codex",
       engineModels: { codex: "gpt-5.1-codex-max" },
       permissionMode: "acceptEdits",
       pipelineId: "one-box",
-      disabledStages: ["review", "deploy"],
     });
   });
 
@@ -56,12 +53,6 @@ describe("normalizeProjectPreferences", () => {
     });
 
     expect(preferences.engineModels).toEqual({ "claude-code": "opus" });
-  });
-
-  test("non-string entries in disabledStages are dropped", () => {
-    expect(normalizeProjectPreferences({ disabledStages: ["review", 7, null] })).toMatchObject({
-      disabledStages: ["review"],
-    });
   });
 });
 
@@ -94,10 +85,6 @@ describe("parsePreferencesUpdate", () => {
 
   test("an unknown engine in the model bag is rejected", () => {
     expect(parsePreferencesUpdate({ engineModels: { gemini: "pro" } }).ok).toBe(false);
-  });
-
-  test("disabledStages must be an array", () => {
-    expect(parsePreferencesUpdate({ disabledStages: "review" }).ok).toBe(false);
   });
 
   test("a legacy model id is accepted and migrated on the way in", () => {

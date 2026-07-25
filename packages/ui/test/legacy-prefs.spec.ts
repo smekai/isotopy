@@ -50,14 +50,12 @@ describe("readLegacyPreferences", () => {
     store(ALPHA, "engineModel.codex", "gpt-5.1-codex-max");
     store(ALPHA, "permissionMode", "acceptEdits");
     store(ALPHA, "pipelineId", "one-box");
-    store(ALPHA, "disabledStages", JSON.stringify(["review", "deploy"]));
 
     expect(readLegacyPreferences(ALPHA)).toEqual({
       engine: "codex",
       engineModels: { codex: "gpt-5.1-codex-max" },
       permissionMode: "acceptEdits",
       pipelineId: "one-box",
-      disabledStages: ["review", "deploy"],
     });
   });
 
@@ -83,7 +81,6 @@ describe("readLegacyPreferences", () => {
     store(ALPHA, "engine", "not-an-engine");
     store(ALPHA, "permissionMode", "yolo");
     store(ALPHA, "pipelineId", "no-such-pipeline");
-    store(ALPHA, "disabledStages", "{not json");
 
     expect(readLegacyPreferences(ALPHA)).toBeNull();
   });

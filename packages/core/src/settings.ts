@@ -12,7 +12,6 @@ export interface ProjectPreferences {
   engineModels: Partial<Record<EngineId, string>>;
   permissionMode: EnginePermissionMode;
   pipelineId: string;
-  disabledStages: string[];
 }
 
 export type ProjectPreferencesUpdate = Partial<ProjectPreferences>;
@@ -28,7 +27,6 @@ export function defaultProjectPreferences(): ProjectPreferences {
     engineModels: {},
     permissionMode: DEFAULT_PERMISSION_MODE,
     pipelineId: DEFAULT_PIPELINE_ID,
-    disabledStages: [],
   };
 }
 

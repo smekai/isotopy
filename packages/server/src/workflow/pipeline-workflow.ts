@@ -93,9 +93,7 @@ async function runGroup(
   group: PipelineGroup,
   walk: WalkState,
 ): Promise<StageOutcome> {
-  const disabled = new Set(input.disabledStages ?? []);
   const seeded = input.seededOutputs ?? {};
-  const runnable: StageDefinition[] = [];
 
   for (const stageDef of group.stages) {
     if (!walk.reached) {
@@ -103,7 +101,7 @@ async function runGroup(
         walk.reached = true;
       } else {
         const seededOutput = seeded[stageDef.id];
-        if (seededOutput !== undefined && !disabled.has(stageDef.id)) {
+        if (seededOutput !== undefined) {
           await step.run({ name: `${stageDef.id}:seeded` }, () => {
             deps.projection.applySeededOutput(input.runId, stageDef, seededOutput);
             return null;
@@ -112,26 +110,6 @@ async function runGroup(
         continue;
       }
     }
-    if (disabled.has(stageDef.id)) {
-      continue;
-    }
-    runnable.push(stageDef);
-  }
-
-  if (group.mode === "parallel") {
-    const settled = await Promise.allSettled(
-      runnable.map((stageDef) => runOneStage(step, deps, input, stageDef)),
-    );
-    if (settled.some((r) => r.status === "fulfilled" && r.value === "cancelled")) {
-      return "cancelled";
-    }
-    if (settled.some((r) => r.status === "rejected" || r.value !== "passed")) {
-      return "failed";
-    }
-    return "passed";
-  }
-
-  for (const stageDef of runnable) {
     const outcome = await runOneStage(step, deps, input, stageDef);
     if (outcome !== "passed") {
       return outcome;

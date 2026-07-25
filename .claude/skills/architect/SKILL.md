@@ -5,7 +5,7 @@ description: The prescriptive code standard for this repo — comments-as-smell,
 
 # Architect — how code in this repo must be written
 
-> Generated from `docs/architect-standards.md`. Do not edit here — edit the
+> Generated from `docs/architecture.md`. Do not edit here — edit the
 > source and run `pnpm gen:skills`.
 
 ## The rules
@@ -121,7 +121,7 @@ expression, and a change is judged against its tier.
 ## Applying this in the ADHD repo
 
 Concrete anchors for the rules above, specific to this codebase. Read
-[`code-quality.md`](../docs/code-quality.md) for the full layout reference,
+[`architecture.md`](../docs/architecture.md) for the full layout reference,
 [`decisions.md`](../docs/decisions.md) for the rationale log (A8), and
 [`implementation-notes.md`](../docs/implementation-notes.md) for the "why" behind
 non-obvious code — the platform workarounds and protocol quirks that A1 keeps out
@@ -176,5 +176,5 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 For UI structural changes, also `pnpm --filter @adhd/ui e2e`. If you touched the
-`gen:` blocks in `architect-standards.md`, run `pnpm gen:skills` and commit the
+`gen:` blocks in `architecture.md`, run `pnpm gen:skills` and commit the
 regenerated files.

@@ -28,7 +28,7 @@ Then, conditionally:
 | Run this | When |
 |---|---|
 | `pnpm --filter @adhd/ui e2e` | any UI structural change |
-| `pnpm gen:skills` (commit the output) | you edited a `gen:` block in `docs/architect-standards.md` or a persona under `domain/skills/personas/` |
+| `pnpm gen:skills` (commit the output) | you edited a `gen:` block in `docs/architecture.md` or a persona under `domain/skills/personas/` |
 | the `run-app` skill | the change is only provable in the running app — a new endpoint, a screen, a storage path |
 
 Rules about the gates:

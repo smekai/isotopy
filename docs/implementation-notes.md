@@ -270,7 +270,7 @@ sees exactly what the Developer wrote.
 
 A project is a directory owning its `.adhd/`; the user-level registry at
 `~/.adhd/projects.json` holds paths and metadata only. See
-[`technical-architecture.md`](./technical-architecture.md) for the storage table
+[`architecture.md`](./architecture.md) for the storage table
 and [`decisions.md`](./decisions.md) for why the home project is not `REPO_ROOT`.
 
 - **Project ids are `<slug>-<sha1(normalized root)>`** — readable enough to
@@ -392,5 +392,5 @@ TASK-053 follow-up. Personas are **layered** instead, composed by the pure
 
 The cache is keyed by resolved path, not skill id, because the data roots differ
 per project and an id-keyed cache would leak one project's persona into another.
-See [`architect-standards.md`](./architect-standards.md) for how the `architect`
+See [`architecture.md`](./architecture.md) for how the `architect`
 persona is generated from a single source.

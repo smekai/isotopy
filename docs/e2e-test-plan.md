@@ -46,7 +46,7 @@ never spawn an engine. Every test leaves its run in a terminal state, so the
 empty-state specs still see a quiet server.
 
 CI wiring is still on the "adopt next" list in
-[`code-quality.md`](./code-quality.md) — the suite is run locally for now.
+[`architecture.md`](./architecture.md) — the suite is run locally for now.
 
 ## Free tier
 

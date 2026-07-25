@@ -113,7 +113,6 @@ export function ProjectDrawer({
   const pipeline = findPipeline(preferences.pipelineId);
   const stages = pipeline ? flattenPipelineStages(pipeline) : [];
   const gates = stages.filter((stage) => stage.gateAfter).length;
-  const disabled = preferences.disabledStages.length;
 
   return (
     <div style={panelStyle(d)} data-testid="project-drawer">
@@ -198,13 +197,13 @@ export function ProjectDrawer({
         <div style={sectionStyle(d)}>
           <div style={sectionTitleStyle(d)}>
             PIPELINE
-            <button onClick={() => onOpenSetup("pipeline")} style={editLinkStyle(d)}>Edit in Setup →</button>
+            <button onClick={() => onOpenSetup("gates")} style={editLinkStyle(d)}>Edit in Setup →</button>
           </div>
           <Field d={d} label="For new runs" value={pipeline?.name ?? "—"} />
           <Field
             d={d}
             label="Stages"
-            value={`${stages.length} stages · ${gates} gates${disabled > 0 ? ` · ${disabled} disabled` : ""}`}
+            value={`${stages.length} stages · ${gates} gates`}
           />
         </div>
       </div>

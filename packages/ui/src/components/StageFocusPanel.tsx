@@ -326,9 +326,7 @@ export function StageFocusPanel({
     followRef.current = true;
   }, [stage.id, tab]);
 
-  const restartable =
-    (run.status === "failed" || run.status === "cancelled") &&
-    !(run.disabledStages ?? []).includes(stage.id);
+  const restartable = run.status === "failed" || run.status === "cancelled";
 
   const tabs: { id: FocusTab; label: string; ico: React.ReactNode }[] = [
     { id: "artifacts", label: "Artifacts", ico: <FileText size={12} /> },

@@ -25,7 +25,7 @@ The standing second choice from [`docs/workflow-runtime-options.md`](../docs/wor
 **Priority:** P3 | **Tags:** ui
 **Updated:** 2026-07-22 12:40
 
-Follow-up from TASK-052. The Architect standard (rule **A6**, `docs/architect-standards.md`) bans large inline `style={{…}}` blocks; `StageFocusPanel.tsx` was cleaned as the reference case, but [`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) still carries ~108 inline style objects. Lift them into named module-level constants (static) and small named builder functions (theme-/state-dependent), matching the `StageFocusPanel.tsx` pattern.
+Follow-up from TASK-052. The Architect standard (rule **A6**, `docs/architecture.md`) bans large inline `style={{…}}` blocks; `StageFocusPanel.tsx` was cleaned as the reference case, but [`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) still carries ~108 inline style objects. Lift them into named module-level constants (static) and small named builder functions (theme-/state-dependent), matching the `StageFocusPanel.tsx` pattern.
 
 Deliberately deferred from TASK-052 (see `docs/decisions.md`, 2026-07-22): the extraction is a large, visually risky diff with no unit coverage, and folding it into the standards task would have buried the standard under churn.
 

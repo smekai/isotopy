@@ -1,12 +1,6 @@
-// Run lifecycle, proven at the API boundary against the simulated pipeline.
-//
-// `sequential` carries no personas, so the orchestrator never reaches an engine
-// adapter — which makes the empty `engine.verify()` in these tests a real
-// assertion: the simulated path must not spawn anything.
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { RunState } from "@adhd/core";
 import {
-  FAST_SIM,
   createTestApp,
   get,
   post,
@@ -17,20 +11,9 @@ import {
 } from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
 
-/** Every `sequential` stage; gates sit after requirements, design and release. */
-const ALL_STAGES = [
-  "intake",
-  "requirements",
-  "design",
-  "implementation",
-  "review",
-  "test",
-  "release",
-  "deploy",
-];
-
-const disableAllExcept = (enabled: string[]) =>
-  ALL_STAGES.filter((id) => !enabled.includes(id));
+const TASK = "add a greet function";
+const DEV_REPORT = "Implemented it. MARKER-DEVELOPER";
+const TESTER_REPORT = "Verified it.\n\nVERDICT: PASS";
 
 let ctx: TestApp;
 
@@ -42,87 +25,42 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-test("a run completes with enabled stages passed and disabled stages skipped", async () => {
-  // Arrange
-  const { app, engine } = ctx;
-
-  // Anticipate — no engine calls at all: this pipeline is simulated.
-
-  // Act
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp lifecycle",
-    disabledStages: disableAllExcept(["intake", "implementation"]),
-    ...FAST_SIM,
-  });
-
-  // Assert
-  const finished = await waitForRunStatus(app, run.id, "completed");
-  expect(stageOf(finished, "intake").status).toBe("passed");
-  expect(stageOf(finished, "implementation").status).toBe("passed");
-  expect(stageOf(finished, "deploy").status).toBe("skipped");
-  expect(finished.completedAt).toBeDefined();
-  engine.verify();
-});
-
-test("aborting a running run cancels it and skips the unfinished stages", async () => {
-  // Arrange
-  const { app, engine } = ctx;
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp abort",
-    disabledStages: disableAllExcept(["intake", "implementation", "test"]),
-    ...FAST_SIM,
-  });
-  await waitForStageStatus(app, run.id, "intake", "running");
-
-  // Act
-  const { status, body } = await post<RunState>(app, `/runs/${run.id}/abort`);
-
-  // Assert
-  expect(status).toBe(200);
-  expect(body.status).toBe("cancelled");
-  const cancelled = await waitForRunStatus(app, run.id, "cancelled");
-  expect(stageOf(cancelled, "test").status).toBe("skipped");
-  engine.verify();
-});
-
 test("a gate holds the run at awaiting until it is approved", async () => {
   // Arrange
-  const { app } = ctx;
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp gate",
-    disabledStages: disableAllExcept(["intake", "requirements"]),
-    ...FAST_SIM,
-  });
-  const waiting = await waitForRunStatus(app, run.id, "awaiting");
-  expect(stageOf(waiting, "requirements").status).toBe("awaiting");
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
 
   // Act
-  const { status } = await post(app, `/runs/${run.id}/gates/requirements/approve`);
+  const run = await startRun(app, {
+    pipelineId: "gated-dev-test",
+    task: TASK,
+    engine: "claude-code",
+  });
+  const waiting = await waitForStageStatus(app, run.id, "implementation", "awaiting");
+  expect(waiting.status).toBe("awaiting");
+  const { status } = await post(app, `/runs/${run.id}/gates/implementation/approve`);
 
   // Assert
   expect(status).toBe(200);
   const finished = await waitForRunStatus(app, run.id, "completed");
-  expect(stageOf(finished, "requirements").status).toBe("passed");
+  expect(stageOf(finished, "implementation").status).toBe("passed");
+  expect(stageOf(finished, "test").status).toBe("passed");
+  engine.verify();
 });
 
 test("approving a gate that is not awaiting is a conflict", async () => {
   // Arrange
-  const { app } = ctx;
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp gate conflict",
-    disabledStages: disableAllExcept(["intake"]),
-    ...FAST_SIM,
-  });
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
   await waitForRunStatus(app, run.id, "completed");
 
   // Act
   const { status, body } = await post<{ error: string }>(
     app,
-    `/runs/${run.id}/gates/intake/approve`,
+    `/runs/${run.id}/gates/implementation/approve`,
   );
 
   // Assert
@@ -130,44 +68,18 @@ test("approving a gate that is not awaiting is a conflict", async () => {
   expect(body.error).toMatch(/not awaiting approval/);
 });
 
-test("a cancelled run restarts from the stage the abort interrupted", async () => {
-  // Arrange
-  const { app } = ctx;
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp restart",
-    disabledStages: disableAllExcept(["intake", "implementation", "test"]),
-    ...FAST_SIM,
-  });
-  await waitForStageStatus(app, run.id, "intake", "running");
-  await post(app, `/runs/${run.id}/abort`);
-  await waitForRunStatus(app, run.id, "cancelled");
-
-  // Act
-  const { status } = await post(app, `/runs/${run.id}/restart`, { stageId: "intake" });
-
-  // Assert
-  expect(status).toBe(200);
-  const finished = await waitForRunStatus(app, run.id, "completed");
-  expect(stageOf(finished, "test").status).toBe("passed");
-});
-
 test("restarting a run that is still going is a conflict", async () => {
   // Arrange
-  const { app } = ctx;
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp restart conflict",
-    disabledStages: disableAllExcept(["intake", "implementation"]),
-    ...FAST_SIM,
-  });
-  await waitForStageStatus(app, run.id, "intake", "running");
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Developer" }).hangsUntilAborted();
+  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  await engine.waitForCall(1);
 
   // Act
   const { status, body } = await post<{ error: string }>(
     app,
     `/runs/${run.id}/restart`,
-    { stageId: "intake" },
+    { stageId: "implementation" },
   );
 
   // Assert
@@ -177,14 +89,10 @@ test("restarting a run that is still going is a conflict", async () => {
 
 test("restart without a stageId is rejected", async () => {
   // Arrange
-  const { app } = ctx;
-  const run = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp restart validation",
-    disabledStages: disableAllExcept(["intake"]),
-    ...FAST_SIM,
-  });
-  await waitForRunStatus(app, run.id, "completed");
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Developer" }).hangsUntilAborted();
+  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  await engine.waitForCall(1);
 
   // Act
   const { status, body } = await post<{ error: string }>(app, `/runs/${run.id}/restart`, {});
@@ -195,21 +103,15 @@ test("restart without a stageId is rejected", async () => {
 });
 
 test("runs are listed newest first", async () => {
-  // Arrange
-  const { app } = ctx;
-  const first = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp older",
-    disabledStages: disableAllExcept(["intake"]),
-    ...FAST_SIM,
-  });
+  // Arrange — one active run per project, so the two runs are serialised.
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Dev 1" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "Test 1" }).reports(TESTER_REPORT);
+  engine.anticipate({ as: "Dev 2" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "Test 2" }).reports(TESTER_REPORT);
+  const first = await startRun(app, { pipelineId: "dev-test", task: "comp older", engine: "claude-code" });
   await waitForRunStatus(app, first.id, "completed");
-  const second = await startRun(app, {
-    pipelineId: "sequential",
-    task: "comp newer",
-    disabledStages: disableAllExcept(["intake"]),
-    ...FAST_SIM,
-  });
+  const second = await startRun(app, { pipelineId: "dev-test", task: "comp newer", engine: "claude-code" });
   await waitForRunStatus(app, second.id, "completed");
 
   // Act

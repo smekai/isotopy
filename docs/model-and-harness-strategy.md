@@ -1,8 +1,8 @@
 # Model and Harness Strategy
 
-**Purpose:** Single reference for how ADHD uses **Claude Code**, **Cursor CLI**, and LLM API providers across pipeline stages. Consolidates decisions spread across [product-brief.md](product-brief.md), [technical-architecture.md](technical-architecture.md), and [mvp-scope.md](mvp-scope.md).
+**Purpose:** Single reference for how ADHD uses **Claude Code**, **Cursor CLI**, and LLM API providers across pipeline stages. Consolidates decisions spread across [product-brief.md](product-brief.md), [architecture.md](architecture.md), and [mvp-scope.md](mvp-scope.md).
 
-For adapter implementation details, see the Harness adapter layer in [technical-architecture.md](technical-architecture.md).
+For adapter implementation details, see the Harness adapter layer in [architecture.md](architecture.md).
 
 ---
 
@@ -127,7 +127,7 @@ llm:
       model: llama3
 ```
 
-Full schema: [technical-architecture.md — Harness adapter layer](technical-architecture.md#harness-adapter-layer).
+Full schema: [architecture.md — Harness adapter layer](architecture.md#harness-adapter-layer).
 
 ---
 

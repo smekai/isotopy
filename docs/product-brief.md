@@ -170,6 +170,6 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 ## Next Steps
 
 1. Ship MVP scope (see mvp-scope.md)
-2. Implement architecture with the OpenWorkflow workflow runtime (see technical-architecture.md)
+2. Implement architecture with the OpenWorkflow workflow runtime (see architecture.md)
 3. Validate with 3-5 developers running one real feature end-to-end including deploy
 4. Publish docs and open-source repo under ADHD

@@ -46,7 +46,7 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
   await page.locator("select").selectOption("haiku");
   await page.getByRole("button", { name: "Close" }).click();
 
-  await page.getByRole("button", { name: "Full team" }).click();
+  await page.getByRole("button", { name: "Developer + Tester" }).click();
   await page.getByRole("option", { name: /Developer \+ Tester/ }).click();
   await page.getByPlaceholder("Describe the task...").fill(TASK);
   await page.getByRole("button", { name: /Start run/ }).click();

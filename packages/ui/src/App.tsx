@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FolderOpen, History, Settings, Sparkles } from "lucide-react";
 import type { RunState, RunStatus } from "@adhd/core";
-import { modelForEngine, pipelineUsesEngineById } from "@adhd/core";
+import { modelForEngine } from "@adhd/core";
 import { abortRun, approveGate, fetchRuns, restartRun, startRun } from "./api";
 import { EmptyState } from "./components/EmptyState";
 import { HistoryDrawer } from "./components/HistoryDrawer";
@@ -115,18 +115,13 @@ export function App() {
     setError(null);
     setStarting(true);
     try {
-      const usesEngine = pipelineUsesEngineById(pipelineId);
-      const { engine, permissionMode, disabledStages } = settings.preferences;
+      const { engine, permissionMode } = settings.preferences;
       const created = await startRun({
         task,
         pipelineId,
-        ...(usesEngine
-          ? {
-              engine,
-              model: modelForEngine(settings.preferences, engine),
-              permissionMode,
-            }
-          : { disabledStages }),
+        engine,
+        model: modelForEngine(settings.preferences, engine),
+        permissionMode,
       });
       setFocusedId(null);
       attachRun(created.id);

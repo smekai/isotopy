@@ -7,18 +7,11 @@ import type { ProjectPaths } from "../paths.ts";
 import { nowIso } from "../utils.ts";
 import { persistHandoff } from "./handoff.ts";
 
-export interface PersistedSimOptions {
-  minDurationMs: number;
-  maxDurationMs: number;
-  failProbability: number;
-}
-
 export interface PersistedRun {
   version: 1;
   run: RunState;
   permissionMode?: EnginePermissionMode;
-  simOptions?: PersistedSimOptions;
-  owRunId?: string;
+  openWorkflowRunId?: string;
 }
 
 export function isPersistedRun(value: unknown): value is PersistedRun {
@@ -74,13 +67,7 @@ export class RunRepository {
   }
 
   async loadEvents(runId: string): Promise<RunEvent[]> {
-    let rows: string[];
-    try {
-      rows = await this.events.allForRun(runId);
-    } catch (error) {
-      console.warn(`Failed to read events for run ${runId}:`, error);
-      return [];
-    }
+    const rows = await this.events.allForRun(runId);
     return rows.flatMap((data) => {
       try {
         return [JSON.parse(data) as RunEvent];
@@ -91,28 +78,11 @@ export class RunRepository {
   }
 
   async admitRun(runId: string): Promise<boolean> {
-    try {
-      return await this.active.claim(this.paths.id, runId, nowIso());
-    } catch (error) {
-      console.warn(`Failed to claim admission for run ${runId}:`, error);
-      return true;
-    }
+    return this.active.claim(this.paths.id, runId, nowIso());
   }
 
   async releaseRun(runId: string): Promise<void> {
-    try {
-      await this.active.release(this.paths.id, runId);
-    } catch (error) {
-      console.warn(`Failed to release admission for run ${runId}:`, error);
-    }
-  }
-
-  async activeRunId(): Promise<string | undefined> {
-    try {
-      return await this.active.current(this.paths.id);
-    } catch {
-      return undefined;
-    }
+    await this.active.release(this.paths.id, runId);
   }
 
   writeHandoff(runId: string, stageId: string, content: string): Promise<void> {

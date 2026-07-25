@@ -1,12 +1,12 @@
 import { DEFAULT_PERMISSION_MODE, ENGINES, agentForStage } from "@adhd/core";
-import type { LogLevel, RunState, StageDefinition } from "@adhd/core";
+import type { RunState, StageDefinition } from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildStagePrompt, parseStageVerdict } from "../domain/stage-context.ts";
 import type { UpstreamOutput } from "../domain/stage-context.ts";
 import { loadSkill } from "../services/skills.ts";
-import { nowIso, randomBetween, sleep } from "../utils.ts";
+import { nowIso } from "../utils.ts";
 import type { PipelineWorkflowInput, StageResult, WorkflowDeps } from "./types.ts";
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
@@ -27,60 +27,7 @@ function engineLabel(run: RunState): string {
   return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
 }
 
-function isEngineBacked(input: PipelineWorkflowInput, stageDef: StageDefinition): boolean {
-  return stageDef.skill !== undefined && input.engine !== undefined;
-}
-
-async function runSimulatedStage(
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
-): Promise<StageResult> {
-  const { projection } = deps;
-  const { runId, simOptions } = input;
-  const startedAt = nowIso();
-  const run = projection.getRun(runId);
-  const profession = agentForStage(stageDef.id).profession;
-  const label = stageDef.label.toLowerCase();
-
-  projection.stageStarted(runId, stageDef.id);
-
-  const logLines: Array<[LogLevel, string]> = [
-    ["info", `${profession} online · run #${run?.number ?? 0}`],
-    ["info", `Reading context for ${label}`],
-    ["run", `▶ Executing ${label} workflow`],
-    ["info", `${profession} finishing up`],
-  ];
-
-  const duration = randomBetween(simOptions.minDurationMs, simOptions.maxDurationMs);
-  const stepDelay = Math.max(1, Math.floor(duration / logLines.length));
-
-  for (const [level, message] of logLines) {
-    await sleep(stepDelay);
-    if (deps.isCancelled(runId)) {
-      return { outcome: "cancelled", startedAt, completedAt: nowIso() };
-    }
-    projection.log(runId, stageDef.id, level, message);
-  }
-
-  if (Math.random() < simOptions.failProbability) {
-    projection.stageFailed(runId, stageDef.id, `${profession} failed (simulated)`);
-    return { outcome: "failed", startedAt, completedAt: nowIso() };
-  }
-
-  if (!stageDef.gateAfter) {
-    projection.log(
-      runId,
-      stageDef.id,
-      "pass",
-      `✓ ${profession} finished — ${label} complete`,
-    );
-    projection.stagePassed(runId, stageDef.id);
-  }
-  return { outcome: "passed", startedAt, completedAt: nowIso() };
-}
-
-async function runEngineStage(
+export async function runStageWork(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,
   stageDef: StageDefinition,
@@ -185,14 +132,4 @@ async function runEngineStage(
 
   projection.stageFailed(runId, stageDef.id, outcome.errorMessage ?? `${profession} failed`);
   return { outcome: "failed", startedAt, completedAt: nowIso() };
-}
-
-export function runStageWork(
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
-): Promise<StageResult> {
-  return isEngineBacked(input, stageDef)
-    ? runEngineStage(deps, input, stageDef)
-    : runSimulatedStage(deps, input, stageDef);
 }

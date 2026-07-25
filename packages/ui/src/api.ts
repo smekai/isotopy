@@ -126,11 +126,9 @@ export function fetchRun(runId: string): Promise<RunState> {
 export interface StartRunOptions {
   pipelineId?: string;
   task?: string;
-  disabledStages?: string[];
   engine?: string;
   model?: string;
   permissionMode?: string;
-  failProbability?: number;
 }
 
 export function startRun(options: StartRunOptions = {}): Promise<RunState> {

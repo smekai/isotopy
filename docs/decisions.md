@@ -21,9 +21,8 @@ single runner (its `Worker` starts programmatically; there is no daemon and no C
 run loop, `workflow/stage-execution.ts` is the durable step (simulate vs. engine),
 and durability owns start/queueing, the loop, gates (`waitForSignal`/`sendSignal`),
 durable timers, retries (`RetryPolicy`), recovery and cancellation. This corrects the
-standing claim in `architect-standards.md` / `implementation-notes.md` /
-`code-quality.md` that a durable runtime replaces `executeStage()` alone — the seam
-is the class, not one method (doc §4).
+standing claim (now in `architecture.md` and `implementation-notes.md`) that a durable
+runtime replaces `executeStage()` alone — the seam is the class, not one method (doc §4).
 
 **Storage & single-writer rule.** OpenWorkflow's tables share the **one**
 `.adhd/runs.db` (two `node:sqlite` connections — its `BackendSqlite` plus our
@@ -236,13 +235,13 @@ path, and **nothing is written to disk on read**. Composition is a pure function
 **Context:** persona text lived in two shapes. `developer` and `tester` were
 hand-written template literals inside `domain/skills/defaults.ts`; `architect`
 was a separate generated module, `architect.generated.ts`, because it is composed
-from `architect-standards.md`. Nothing but history explained why one persona sat
+from `architecture.md`. Nothing but history explained why one persona sat
 apart from the others, and prose escaped inside a TS template literal diffs
 badly and invites a stray backtick to break the build.
 
 **Decision:** persona *sources* are markdown —
 `domain/skills/personas/<id>.md` for hand-written ones, the `gen:` blocks of
-`architect-standards.md` for the Architect — and
+`architecture.md` for the Architect — and
 [`scripts/generate-skills.mjs`](../scripts/generate-skills.mjs) emits a single
 `defaults.generated.ts` exporting `DEFAULT_SKILLS`, plus the Claude Code
 `SKILL.md`. Adding a persona is now dropping in a markdown file and running
@@ -266,7 +265,7 @@ the generator exists to avoid.
 (`.claude/skills/architect/SKILL.md`) and an ADHD persona constant. Keeping two
 hand-written copies in sync fails the first time someone edits one.
 
-**Decision:** a single canonical source, [`architect-standards.md`](./architect-standards.md),
+**Decision:** a single canonical source, [`architecture.md`](./architecture.md),
 with named `gen:` blocks; the generator emits both consumers, and a drift test
 fails the build (`pnpm gen:skills --check`).
 
@@ -305,7 +304,7 @@ the UI). `@types/node` was bumped to v26 to match.
 
 ## 2026-07-22 — Adopted `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
 
-**Context:** both flags were parked in `code-quality.md` as "once the codebase is
+**Context:** both flags were parked in `architecture.md` as "once the codebase is
 ready." Rule A7 pushes for them.
 
 **Decision:** both are on in `tsconfig.base.json`. The two idioms adopted for the

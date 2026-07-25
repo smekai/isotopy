@@ -7,8 +7,8 @@ import type { PipelineDefinition } from "../src/pipelines.ts";
 import {
   DEMO_PIPELINES,
   DEV_TEST_PIPELINE,
+  GATED_DEV_TEST_PIPELINE,
   ONE_BOX_PIPELINE,
-  SEQUENTIAL_PIPELINE,
   findPipeline,
   flattenPipelineStages,
   pipelineUsesEngine,
@@ -22,8 +22,8 @@ describe("flattenPipelineStages", () => {
       name: "Multi",
       description: "",
       groups: [
-        { mode: "sequential", stages: [{ id: "a", label: "A" }] },
-        { mode: "parallel", stages: [{ id: "b", label: "B" }, { id: "c", label: "C" }] },
+        { stages: [{ id: "a", label: "A" }] },
+        { stages: [{ id: "b", label: "B" }, { id: "c", label: "C" }] },
       ],
     };
 
@@ -39,23 +39,29 @@ describe("flattenPipelineStages", () => {
 });
 
 describe("pipelineUsesEngine", () => {
-  test("a pipeline with no personas is simulated", () => {
-    expect(pipelineUsesEngine(SEQUENTIAL_PIPELINE)).toBe(false);
+  test("a pipeline with no personas does not run a harness", () => {
+    const personaless: PipelineDefinition = {
+      id: "none",
+      name: "None",
+      description: "",
+      groups: [{ stages: [{ id: "a", label: "A" }] }],
+    };
+    expect(pipelineUsesEngine(personaless)).toBe(false);
   });
 
   test("a pipeline with any persona-bearing stage runs a real harness", () => {
     expect(pipelineUsesEngine(ONE_BOX_PIPELINE)).toBe(true);
     expect(pipelineUsesEngine(DEV_TEST_PIPELINE)).toBe(true);
+    expect(pipelineUsesEngine(GATED_DEV_TEST_PIPELINE)).toBe(true);
   });
 
-  test("one persona among simulated stages is enough", () => {
+  test("one persona among plain stages is enough", () => {
     const mixed: PipelineDefinition = {
       id: "mixed",
       name: "Mixed",
       description: "",
       groups: [
         {
-          mode: "sequential",
           stages: [{ id: "a", label: "A" }, { id: "b", label: "B", skill: "developer" }],
         },
       ],
@@ -67,9 +73,9 @@ describe("pipelineUsesEngine", () => {
 
 describe("pipelineUsesEngineById", () => {
   test("classifies the built-in pipelines", () => {
-    expect(pipelineUsesEngineById("sequential")).toBe(false);
     expect(pipelineUsesEngineById("one-box")).toBe(true);
     expect(pipelineUsesEngineById("dev-test")).toBe(true);
+    expect(pipelineUsesEngineById("gated-dev-test")).toBe(true);
   });
 
   test("an unknown id is not engine-backed", () => {

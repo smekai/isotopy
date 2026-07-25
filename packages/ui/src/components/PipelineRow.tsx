@@ -1,13 +1,9 @@
 import type { RunState } from "@adhd/core";
-import { SEQUENTIAL_PIPELINE, flattenPipelineStages } from "@adhd/core";
+import { findPipeline, flattenPipelineStages } from "@adhd/core";
 import type { Dir } from "../theme";
 import { GOLD } from "../theme";
 import { GateMarker } from "./GateMarker";
 import { StageNode } from "./StageNode";
-
-const STAGE_DEFS = new Map(
-  flattenPipelineStages(SEQUENTIAL_PIPELINE).map((def) => [def.id, def]),
-);
 
 interface ConnectorProps {
   d: Dir;
@@ -32,12 +28,16 @@ export interface PipelineRowProps {
 
 export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: PipelineRowProps) {
   let gateCounter = 0;
+  const pipeline = findPipeline(run.pipelineId);
+  const stageDefs = new Map(
+    (pipeline ? flattenPipelineStages(pipeline) : []).map((def) => [def.id, def]),
+  );
 
   return (
     <div style={{ flexShrink: 0, overflowX: "auto", padding: "20px 24px" }}>
       <div style={{ display: "flex", alignItems: "center", minWidth: "max-content" }}>
         {run.stages.map((stage, i) => {
-          const def = STAGE_DEFS.get(stage.id);
+          const def = stageDefs.get(stage.id);
           const isLast = i === run.stages.length - 1;
 
           const node = (

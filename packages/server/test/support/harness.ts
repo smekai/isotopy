@@ -243,13 +243,3 @@ export function stageOf(run: RunState, stageId: string) {
   return stage;
 }
 
-/**
- * Simulated stage timing for tests: fast enough to be free, non-zero so the
- * stage still passes through every state a real one does. `failProbability: 0`
- * removes the orchestrator's 5% random failure, which would flake the suite.
- */
-export const FAST_SIM = {
-  minDurationMs: 40,
-  maxDurationMs: 40,
-  failProbability: 0,
-} as const;

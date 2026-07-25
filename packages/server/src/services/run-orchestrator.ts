@@ -38,29 +38,21 @@ const PERSIST_DEBOUNCE_MS = 150;
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
-const TERMINAL_OW_STATUSES = new Set(["succeeded", "completed", "failed", "canceled"]);
+const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
+  "succeeded",
+  "completed",
+  "failed",
+  "canceled",
+]);
 
 type RunListener = (event: RunEvent) => void;
 
-interface SimulationOptions {
-  minDurationMs?: number;
-  maxDurationMs?: number;
-  failProbability?: number;
-}
-
-export interface StartRunOptions extends SimulationOptions {
+export interface StartRunOptions {
   task?: string | undefined;
-  disabledStages?: string[] | undefined;
   engine?: string | undefined;
   model?: string | undefined;
   permissionMode?: string | undefined;
 }
-
-const DEFAULT_OPTIONS: Required<SimulationOptions> = {
-  minDurationMs: 2000,
-  maxDurationMs: 8000,
-  failProbability: 0.05,
-};
 
 export interface RunOrchestratorDependencies {
   registry: ProjectRegistry;
@@ -76,14 +68,13 @@ interface InputExtras {
 export class RunOrchestrator implements RunProjection {
   private readonly runs = new Map<string, RunState>();
   private readonly listeners = new Map<string, Set<RunListener>>();
-  private readonly runOptions = new Map<string, Required<SimulationOptions>>();
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
   private readonly persistTimers = new Map<string, NodeJS.Timeout>();
   private readonly repositories = new Map<string, RunRepository>();
   private readonly nextRunNumbers = new Map<string, number>();
-  private readonly owRunIds = new Map<string, string>();
+  private readonly openWorkflowRunIds = new Map<string, string>();
   private readonly registry: ProjectRegistry;
   private readonly settings: SettingsStore;
   private readonly runtimes: WorkflowRuntimeRegistry;
@@ -131,11 +122,8 @@ export class RunOrchestrator implements RunProjection {
       if (persisted.permissionMode) {
         this.enginePermissionModes.set(run.id, persisted.permissionMode);
       }
-      if (persisted.simOptions) {
-        this.runOptions.set(run.id, { ...DEFAULT_OPTIONS, ...persisted.simOptions });
-      }
-      if (persisted.owRunId) {
-        this.owRunIds.set(run.id, persisted.owRunId);
+      if (persisted.openWorkflowRunId) {
+        this.openWorkflowRunIds.set(run.id, persisted.openWorkflowRunId);
       }
       maxNumber = Math.max(maxNumber, run.number + 1);
       if (!isTerminalRunStatus(run.status)) {
@@ -146,13 +134,18 @@ export class RunOrchestrator implements RunProjection {
   }
 
   private async reconcileOnLoad(paths: ProjectPaths, run: RunState): Promise<void> {
-    const owRunId = this.owRunIds.get(run.id);
-    if (!owRunId) {
+    const openWorkflowRunId = this.openWorkflowRunIds.get(run.id);
+    if (!openWorkflowRunId) {
       this.markInterrupted(run.id);
       return;
     }
-    const status = await this.runtimes.for(paths).runStatus(owRunId);
-    if (status === undefined || !TERMINAL_OW_STATUSES.has(status)) {
+    let status: string | undefined;
+    try {
+      status = await this.runtimes.for(paths).runStatus(openWorkflowRunId);
+    } catch {
+      return;
+    }
+    if (status === undefined || !TERMINAL_OPENWORKFLOW_STATUSES.has(status)) {
       return;
     }
     if (status === "canceled") {
@@ -209,7 +202,7 @@ export class RunOrchestrator implements RunProjection {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
 
-    const { task, disabledStages, engine, model, permissionMode, ...simOptions } = options;
+    const { task, engine, model, permissionMode } = options;
 
     const usesEngine = pipelineUsesEngine(pipeline);
     if (usesEngine) {
@@ -241,7 +234,6 @@ export class RunOrchestrator implements RunProjection {
       projectId: paths.id,
       pipeline,
       task,
-      disabledStages,
     });
 
     if (usesEngine) {
@@ -259,7 +251,6 @@ export class RunOrchestrator implements RunProjection {
     }
 
     this.runs.set(runId, run);
-    this.runOptions.set(runId, { ...DEFAULT_OPTIONS, ...simOptions });
     await this.flushPersist(runId);
 
     await this.launch(paths, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
@@ -275,8 +266,8 @@ export class RunOrchestrator implements RunProjection {
     if (stage.status !== "awaiting") {
       throw new Error(`Stage ${stageId} is not awaiting approval`);
     }
-    const owRunId = this.owRunIds.get(runId);
-    if (!owRunId) {
+    const openWorkflowRunId = this.openWorkflowRunIds.get(runId);
+    if (!openWorkflowRunId) {
       throw new Error(`Run ${runId} has no durable run to approve`);
     }
 
@@ -296,9 +287,9 @@ export class RunOrchestrator implements RunProjection {
 
     this.cancelled.add(runId);
     this.engineAborts.get(runId)?.abort();
-    const owRunId = this.owRunIds.get(runId);
-    if (owRunId) {
-      void this.runtimes.forProject(run.projectId).cancel(owRunId);
+    const openWorkflowRunId = this.openWorkflowRunIds.get(runId);
+    if (openWorkflowRunId) {
+      void this.runtimes.forProject(run.projectId).cancel(openWorkflowRunId).catch(() => {});
     }
     this.markCancelled(runId);
     void this.repositoryForRun(runId).releaseRun(runId);
@@ -317,10 +308,6 @@ export class RunOrchestrator implements RunProjection {
     if (startIndex === -1) {
       throw new Error(`Stage not found: ${stageId}`);
     }
-    const disabled = new Set(run.disabledStages ?? []);
-    if (disabled.has(stageId)) {
-      throw new Error(`Stage ${stageId} is disabled for this run`);
-    }
 
     const outputs = { ...run.stageOutputs };
     const seededOutputs: Record<string, string> = {};
@@ -333,9 +320,6 @@ export class RunOrchestrator implements RunProjection {
 
     this.cancelled.delete(runId);
     for (const stage of run.stages.slice(startIndex)) {
-      if (disabled.has(stage.id)) {
-        continue;
-      }
       stage.status = "pending";
       stage.logs = [];
       delete stage.startedAt;
@@ -372,8 +356,8 @@ export class RunOrchestrator implements RunProjection {
     const runtime = this.runtimes.for(paths);
     await runtime.start();
     const input = this.buildInput(run, extras);
-    const owRunId = await runtime.startRun(input);
-    this.bindOwRun(run.id, owRunId);
+    const openWorkflowRunId = await runtime.startRun(input);
+    this.bindOpenWorkflowRun(run.id, openWorkflowRunId);
   }
 
   private buildInput(run: RunState, extras: InputExtras): PipelineWorkflowInput {
@@ -381,30 +365,23 @@ export class RunOrchestrator implements RunProjection {
     if (!pipeline) {
       throw new Error(`Unknown pipeline: ${run.pipelineId}`);
     }
-    const sim = this.runOptions.get(run.id) ?? DEFAULT_OPTIONS;
     return {
       runId: run.id,
       projectId: run.projectId,
       pipeline,
       ...(run.task !== undefined ? { task: run.task } : {}),
-      ...(run.disabledStages !== undefined ? { disabledStages: run.disabledStages } : {}),
       ...(run.engine !== undefined ? { engine: run.engine } : {}),
       ...(run.model !== undefined ? { model: run.model } : {}),
       permissionMode: this.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
       ...(run.workspacePath !== undefined ? { workspacePath: run.workspacePath } : {}),
-      simOptions: {
-        minDurationMs: sim.minDurationMs,
-        maxDurationMs: sim.maxDurationMs,
-        failProbability: sim.failProbability,
-      },
       startedMessage: extras.startedMessage,
       ...(extras.seededOutputs !== undefined ? { seededOutputs: extras.seededOutputs } : {}),
       ...(extras.startStageId !== undefined ? { startStageId: extras.startStageId } : {}),
     };
   }
 
-  bindOwRun(runId: string, owRunId: string): void {
-    this.owRunIds.set(runId, owRunId);
+  bindOpenWorkflowRun(runId: string, openWorkflowRunId: string): void {
+    this.openWorkflowRunIds.set(runId, openWorkflowRunId);
     this.schedulePersist(runId, true);
   }
 
@@ -707,13 +684,9 @@ export class RunOrchestrator implements RunProjection {
     if (permissionMode) {
       persisted.permissionMode = permissionMode;
     }
-    const simOptions = this.runOptions.get(runId);
-    if (simOptions) {
-      persisted.simOptions = simOptions;
-    }
-    const owRunId = this.owRunIds.get(runId);
-    if (owRunId) {
-      persisted.owRunId = owRunId;
+    const openWorkflowRunId = this.openWorkflowRunIds.get(runId);
+    if (openWorkflowRunId) {
+      persisted.openWorkflowRunId = openWorkflowRunId;
     }
     return persisted;
   }
