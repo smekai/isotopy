@@ -5,7 +5,7 @@ description: The prescriptive code standard for this repo — comments-as-smell,
 
 # Architect — how code in this repo must be written
 
-> Generated from `docs/architect-standards.md`. Do not edit here — edit the
+> Generated from `docs/architecture.md`. Do not edit here — edit the
 > source and run `pnpm gen:skills`.
 
 ## The rules
@@ -51,10 +51,11 @@ domain state, that logic belongs in a pure domain function it calls.
 ### A4 — Long-running work is a workflow, not an inline await chain
 
 A genuinely long-lived operation (minutes, external processes, human waits)
-belongs behind a single seam that a durable executor can later own — not an
-ad-hoc chain of `await`s sprinkled through a service. Keep the decision of *how a
-unit of long work runs* in exactly one place so it can be swapped for a durable
-runtime without touching the lifecycle around it.
+belongs behind a durable runtime that owns its *whole lifecycle* — starting and
+queueing the work, the orchestration loop, human gates, durable timers, retries
+and crash recovery — not an ad-hoc chain of `await`s sprinkled through a service.
+The seam is the **workflow itself**, with each unit of work a durable *step*; it
+is not a single method you swap while the lifecycle around it stays put.
 
 ### A5 — Classes over loose function bags where there is state or a lifecycle
 
@@ -120,7 +121,7 @@ expression, and a change is judged against its tier.
 ## Applying this in the ADHD repo
 
 Concrete anchors for the rules above, specific to this codebase. Read
-[`code-quality.md`](../docs/code-quality.md) for the full layout reference,
+[`architecture.md`](../docs/architecture.md) for the full layout reference,
 [`decisions.md`](../docs/decisions.md) for the rationale log (A8), and
 [`implementation-notes.md`](../docs/implementation-notes.md) for the "why" behind
 non-obvious code — the platform workarounds and protocol quirks that A1 keeps out
@@ -140,12 +141,19 @@ of the source. When you strip or avoid a comment, that is where its content goes
   `domain/stage-context.ts` (prompt building, handoff formatting, verdict
   parsing). `packages/server/src/services/` keeps only I/O and lifecycle.
 
-- **The workflow seam (A4):** `RunOrchestrator.executeStage()` in
-  `services/run-orchestrator.ts` is the single decision point for how a stage
-  runs. A durable executor replaces that method alone — leave it intact.
+- **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
+  `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
+  `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop) and
+  `workflow/stage-execution.ts` is the durable *step* (how one stage runs —
+  simulate vs. engine). Durability owns start/queueing, the loop, gates, durable
+  timers, retries, recovery and cancellation state — *not* one method. The old
+  claim that a durable executor "replaces `executeStage()` alone" was wrong and
+  is corrected here.
 
-- **The stateful class (A5):** `RunOrchestrator` owns run lifecycle and state;
-  that is why it is a class, not a module of functions.
+- **The stateful class (A5):** `RunOrchestrator` owns the run read model
+  (`RunState` + events + SSE) and hosts the per-project durable runtime; that is
+  why it is a class, not a module of functions. It is the *single writer* of the
+  read model — the durable workflow drives it; the API only reads it.
 
 - **Named types & styles (A6):** every component exports a named `XProps`
   interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
@@ -168,5 +176,5 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 For UI structural changes, also `pnpm --filter @adhd/ui e2e`. If you touched the
-`gen:` blocks in `architect-standards.md`, run `pnpm gen:skills` and commit the
+`gen:` blocks in `architecture.md`, run `pnpm gen:skills` and commit the
 regenerated files.

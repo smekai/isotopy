@@ -126,7 +126,7 @@ async function attachSeededRun(page: Page): Promise<void> {
 
 test("dev-test is selectable in the picker and describes both boxes", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Full team" }).click();
+  await page.getByRole("button", { name: "Developer + Tester" }).click();
   await page.getByRole("option", { name: /Developer \+ Tester/ }).click();
 
   // The trigger now shows the chosen pipeline, and the composer copy follows.

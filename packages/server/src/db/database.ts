@@ -7,11 +7,13 @@ const BUSY_TIMEOUT_MS = 5000;
 
 export class Database {
   private ready?: Promise<SqliteConnection>;
+  private readonly schemas: string[] = [];
 
-  constructor(
-    private readonly paths: ProjectPaths,
-    private readonly schema: string,
-  ) {}
+  constructor(private readonly paths: ProjectPaths) {}
+
+  register(schema: string): void {
+    this.schemas.push(schema);
+  }
 
   describe(): string {
     return path.join(this.paths.dataDir, "runs.db");
@@ -36,7 +38,9 @@ export class Database {
     const db = new DatabaseSync(this.describe());
     db.exec("PRAGMA journal_mode=WAL");
     db.exec(`PRAGMA busy_timeout=${BUSY_TIMEOUT_MS}`);
-    db.exec(this.schema);
+    for (const schema of this.schemas) {
+      db.exec(schema);
+    }
     return db;
   }
 

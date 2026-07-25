@@ -6,6 +6,51 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-24 — OpenWorkflow is the durable workflow runtime (TASK-068)
+
+**Context:** `RunOrchestrator` was an in-memory `Map` firing `void simulateRun(...)`;
+gates were heap promises, recovery marked interrupted runs failed, and retries and
+durable timers did not exist (six of eleven capabilities absent or non-durable). The
+runtime survey ([`workflow-runtime-options.md`](workflow-runtime-options.md)) chose
+**OpenWorkflow** — Apache-2.0, `node:sqlite`, no server — and TASK-067 had already
+landed the SQLite substrate.
+
+**Decision:** the durable runtime is OpenWorkflow, embedded **in-process** in the
+single runner (its `Worker` starts programmatically; there is no daemon and no CLI).
+`RunOrchestrator` *is* the durable workflow: `workflow/pipeline-workflow.ts` is the
+run loop, `workflow/stage-execution.ts` is the durable step (simulate vs. engine),
+and durability owns start/queueing, the loop, gates (`waitForSignal`/`sendSignal`),
+durable timers, retries (`RetryPolicy`), recovery and cancellation. This corrects the
+standing claim (now in `architecture.md` and `implementation-notes.md`) that a durable
+runtime replaces `executeStage()` alone — the seam is the class, not one method (doc §4).
+
+**Storage & single-writer rule.** OpenWorkflow's tables share the **one**
+`.adhd/runs.db` (two `node:sqlite` connections — its `BackendSqlite` plus our
+`Database`) and are the source of truth for execution state. The `RunState` snapshot
+and `events` table are a rebuildable read model with exactly one writer — the
+workflow drives it; the API only reads it (cancellation aside). History travels with
+the project folder like `.git`.
+
+**ADHD-owned on top.** Semantic restart from a chosen stage (S2/G1) is a fresh run
+seeded with retained prior-stage outputs; one-active-run-per-project (S5/G2) is a
+project-keyed `active_runs` admission guard enforced below the API; immediate
+subprocess-tree kill on cancel (G4) stays in `runSubprocess` (`cancelWorkflowRun`
+only marks durable state); declared parallel branches (G5) fan out via
+`Promise.allSettled` over durable steps. Determinism cost: `loadSkill`, `nowIso`,
+`randomUUID` and the engine call moved inside steps.
+
+**Alternative rejected:** Aiki (Postgres-only today; would need us to write its
+SQLite backend *and* fork-from-step) stays the recorded second choice. Retries are
+wired but default to `maximumAttempts: 1` to preserve today's fail-fast behaviour.
+**Behaviour change:** the API can no longer start a second concurrent run in one
+project (previously reachable) — it now returns 400.
+
+**Cross-platform:** durable execution and `node:sqlite` are OS-independent; the only
+platform-sensitive surface (subprocess-tree kill) is unchanged. Tested on Windows;
+macOS reasoned through, **untested on macOS**.
+
+---
+
 ## 2026-07-23 — SQLite is the sole run store, in a `repository/` module
 
 **Context:** TASK-067 first landed `SqliteRunStore` behind the existing seam with
@@ -190,13 +235,13 @@ path, and **nothing is written to disk on read**. Composition is a pure function
 **Context:** persona text lived in two shapes. `developer` and `tester` were
 hand-written template literals inside `domain/skills/defaults.ts`; `architect`
 was a separate generated module, `architect.generated.ts`, because it is composed
-from `architect-standards.md`. Nothing but history explained why one persona sat
+from `architecture.md`. Nothing but history explained why one persona sat
 apart from the others, and prose escaped inside a TS template literal diffs
 badly and invites a stray backtick to break the build.
 
 **Decision:** persona *sources* are markdown —
 `domain/skills/personas/<id>.md` for hand-written ones, the `gen:` blocks of
-`architect-standards.md` for the Architect — and
+`architecture.md` for the Architect — and
 [`scripts/generate-skills.mjs`](../scripts/generate-skills.mjs) emits a single
 `defaults.generated.ts` exporting `DEFAULT_SKILLS`, plus the Claude Code
 `SKILL.md`. Adding a persona is now dropping in a markdown file and running
@@ -220,7 +265,7 @@ the generator exists to avoid.
 (`.claude/skills/architect/SKILL.md`) and an ADHD persona constant. Keeping two
 hand-written copies in sync fails the first time someone edits one.
 
-**Decision:** a single canonical source, [`architect-standards.md`](./architect-standards.md),
+**Decision:** a single canonical source, [`architecture.md`](./architecture.md),
 with named `gen:` blocks; the generator emits both consumers, and a drift test
 fails the build (`pnpm gen:skills --check`).
 
@@ -259,7 +304,7 @@ the UI). `@types/node` was bumped to v26 to match.
 
 ## 2026-07-22 — Adopted `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
 
-**Context:** both flags were parked in `code-quality.md` as "once the codebase is
+**Context:** both flags were parked in `architecture.md` as "once the codebase is
 ready." Rule A7 pushes for them.
 
 **Decision:** both are on in `tsconfig.base.json`. The two idioms adopted for the

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw, Server, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw, Server, X } from "lucide-react";
 import type { EngineId, EngineModelList, EngineStatus } from "@adhd/core";
 import {
+  DEMO_PIPELINES,
   ENGINES,
-  LIFECYCLE_STAGES,
   PERMISSION_MODES,
   agentForStage,
   defaultConnectionMode,
+  flattenPipelineStages,
   modelForEngine,
   modelOptionsFor,
 } from "@adhd/core";
@@ -19,10 +20,16 @@ import {
 import type { EngineConnectionUpdate } from "../api";
 import type { SettingsController } from "../hooks/useSettings";
 import { useTheme } from "../ThemeContext";
-import { DIRS, GOLD, MONO, SANS, specColor } from "../theme";
+import { DIRS, GOLD, MONO, SANS } from "../theme";
 import type { Dir } from "../theme";
 
-const GATED_STAGES = LIFECYCLE_STAGES.filter((stage) => stage.gateAfter);
+const GATED_STAGES = Array.from(
+  new Map(
+    DEMO_PIPELINES.flatMap((pipeline) => flattenPipelineStages(pipeline))
+      .filter((stage) => stage.gateAfter)
+      .map((stage) => [stage.id, stage]),
+  ).values(),
+);
 
 const MODEL_SOURCE_LABEL: Record<EngineModelList["source"], string> = {
   cli: "from the CLI",
@@ -39,11 +46,10 @@ const INSTALLERS: Partial<Record<EngineId, { label: string; loginCmd: string; en
   codex: { label: "Install Codex CLI", loginCmd: "codex login", envVar: "ADHD_CODEX_PATH" },
 };
 
-export type SetupSection = "harness" | "pipeline" | "gates" | "appearance" | "deploy";
+export type SetupSection = "harness" | "gates" | "appearance" | "deploy";
 
 const SECTIONS: { id: SetupSection; label: string }[] = [
   { id: "harness", label: "AI Harness" },
-  { id: "pipeline", label: "Pipeline" },
   { id: "gates", label: "Gates" },
   { id: "appearance", label: "Appearance" },
   { id: "deploy", label: "Deploy Target" },
@@ -68,7 +74,6 @@ export function SetupModal({
   const { preferences } = settings;
   const harness = preferences.engine;
   const model = modelForEngine(preferences, harness);
-  const disabledStages = preferences.disabledStages;
   const permissionMode = preferences.permissionMode;
   const [sec, setSec] = useState<SetupSection>(section);
   const [modelList, setModelList] = useState<EngineModelList>(() => seedModelList(harness));
@@ -123,14 +128,6 @@ export function SetupModal({
       stale = true;
     };
   }, [sec, harness, statusNonce]);
-
-  function toggleStage(stageId: string) {
-    settings.update({
-      disabledStages: disabledStages.includes(stageId)
-        ? disabledStages.filter((id) => id !== stageId)
-        : [...disabledStages, stageId],
-    });
-  }
 
   function selectEngine(engineId: EngineId) {
     settings.update({ engine: engineId });
@@ -294,37 +291,6 @@ export function SetupModal({
                         <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{dir.desc}</div>
                       </div>
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {sec === "pipeline" && (
-            <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Pipeline Stages</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>
-                Toggle which team members are active. Disabled agents are skipped on the next run.
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {LIFECYCLE_STAGES.map((stage) => {
-                  const agent = agentForStage(stage.id);
-                  const sc = specColor(stage.id);
-                  const enabled = !disabledStages.includes(stage.id);
-                  return (
-                    <div key={stage.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: `1px solid ${d.border}`, borderRadius: 12, padding: "10px 14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 8, background: sc.soft, color: sc.main, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>{agent.glyph}</div>
-                        <div>
-                          <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600 }}>{agent.profession}</div>
-                          <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10 }}>{stage.label} stage</div>
-                        </div>
-                      </div>
-                      <button onClick={() => toggleStage(stage.id)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: enabled ? d.accent : d.textMuted }}>
-                        {enabled ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
-                      </button>
-                    </div>
                   );
                 })}
               </div>

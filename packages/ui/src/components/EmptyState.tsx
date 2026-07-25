@@ -3,7 +3,6 @@ import { FolderOpen, Play } from "lucide-react";
 import {
   ENGINES,
   HOME_PROJECT_ID,
-  LIFECYCLE_STAGES,
   agentForStage,
   findPipeline,
   flattenPipelineStages,
@@ -28,7 +27,6 @@ const DEFAULT_PIPELINE_COPY: PipelineCopy = {
 };
 
 const PIPELINE_COPY: Record<string, PipelineCopy> = {
-  sequential: DEFAULT_PIPELINE_COPY,
   "one-box": {
     headline: "What should the Developer build?",
     subtitle: "One prompt, one agent, one result — powered by a real engine.",
@@ -36,6 +34,10 @@ const PIPELINE_COPY: Record<string, PipelineCopy> = {
   "dev-test": {
     headline: "What should the Developer build?",
     subtitle: "A Developer implements it, then a Tester verifies the result — real engine.",
+  },
+  "gated-dev-test": {
+    headline: "What should the Developer build?",
+    subtitle: "A Developer implements it, you approve at a gate, then a Tester verifies it.",
   },
 };
 
@@ -74,17 +76,10 @@ export function EmptyState({
   const canStart = input.trim().length > 0 && !starting;
   const usesEngine = pipelineUsesEngineById(pipelineId);
   const selectedPipeline = findPipeline(pipelineId);
-  const stages = selectedPipeline
-    ? flattenPipelineStages(selectedPipeline)
-    : LIFECYCLE_STAGES;
+  const stages = selectedPipeline ? flattenPipelineStages(selectedPipeline) : [];
   const engine = ENGINES[settings.preferences.engine];
 
   const pipelineOptions: PipelineOption[] = [
-    {
-      id: "sequential",
-      label: "Full team",
-      description: "8 simulated stages with approval gates (mock)",
-    },
     {
       id: "one-box",
       label: "Single agent",
@@ -94,6 +89,11 @@ export function EmptyState({
       id: "dev-test",
       label: "Developer + Tester",
       description: `Developer implements, Tester verifies — ${engine.label}`,
+    },
+    {
+      id: "gated-dev-test",
+      label: "Developer + approval + Tester",
+      description: `Approve the work at a gate, then test — ${engine.label}`,
     },
   ];
 

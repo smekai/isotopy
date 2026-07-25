@@ -7,7 +7,6 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { ProjectsView, RunState, SettingsView } from "@adhd/core";
 import {
-  FAST_SIM,
   addTestProject,
   createTestApp,
   del,
@@ -18,19 +17,6 @@ import {
   waitForRunStatus,
 } from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
-
-/** The only `sequential` stage these tests need — the rest just cost time. */
-const INTAKE_ONLY = [
-  "requirements",
-  "design",
-  "implementation",
-  "review",
-  "test",
-  "release",
-  "deploy",
-];
-
-const SIM_RUN = { pipelineId: "sequential", disabledStages: INTAKE_ONLY, ...FAST_SIM };
 
 /** One real (mocked) engine box — the shortest run that has a workspace. */
 const ENGINE_RUN = { pipelineId: "one-box", task: "work here", engine: "claude-code" };
@@ -91,7 +77,8 @@ test("a run is written into its own project's .adhd, not the home project's", as
   const project = await addTestProject(ctx.registry, "writes");
 
   // Act
-  const run = await startRun(ctx.app, { ...SIM_RUN, task: "in project" }, project.headers);
+  ctx.engine.anticipate().reports("done");
+  const run = await startRun(ctx.app, { ...ENGINE_RUN, task: "in project" }, project.headers);
   await waitForRunStatus(ctx.app, run.id, "completed");
   await ctx.orchestrator.shutdown();
 
@@ -107,7 +94,8 @@ test("starting a run restores the .adhd git-ignore if the folder was wiped", asy
   await rm(path.join(project.root, ".adhd"), { recursive: true, force: true });
 
   // Act
-  const run = await startRun(ctx.app, SIM_RUN, project.headers);
+  ctx.engine.anticipate().reports("done");
+  const run = await startRun(ctx.app, ENGINE_RUN, project.headers);
 
   // Assert
   await waitForRunStatus(ctx.app, run.id, "completed");
@@ -164,8 +152,10 @@ test("each project lists only its own runs", async () => {
   const beta = await addTestProject(ctx.registry, "beta");
 
   // Act
-  const inAlpha = await startRun(ctx.app, { ...SIM_RUN, task: "alpha work" }, alpha.headers);
-  const inBeta = await startRun(ctx.app, { ...SIM_RUN, task: "beta work" }, beta.headers);
+  ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipate().reports("done");
+  const inAlpha = await startRun(ctx.app, { ...ENGINE_RUN, task: "alpha work" }, alpha.headers);
+  const inBeta = await startRun(ctx.app, { ...ENGINE_RUN, task: "beta work" }, beta.headers);
   await waitForRunStatus(ctx.app, inAlpha.id, "completed");
   await waitForRunStatus(ctx.app, inBeta.id, "completed");
 
@@ -184,9 +174,13 @@ test("run numbering restarts per project", async () => {
   const beta = await addTestProject(ctx.registry, "num-b");
 
   // Act
-  const firstAlpha = await startRun(ctx.app, SIM_RUN, alpha.headers);
-  const secondAlpha = await startRun(ctx.app, SIM_RUN, alpha.headers);
-  const firstBeta = await startRun(ctx.app, SIM_RUN, beta.headers);
+  ctx.engine.anticipate().reports("done");
+  const firstAlpha = await startRun(ctx.app, ENGINE_RUN, alpha.headers);
+  await waitForRunStatus(ctx.app, firstAlpha.id, "completed");
+  ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipate().reports("done");
+  const secondAlpha = await startRun(ctx.app, ENGINE_RUN, alpha.headers);
+  const firstBeta = await startRun(ctx.app, ENGINE_RUN, beta.headers);
 
   // Assert
   expect([firstAlpha.number, secondAlpha.number]).toEqual([1, 2]);
@@ -238,7 +232,8 @@ test("a key set on one project does not leak into another", async () => {
 test("removing a project unregisters it but leaves its folder and history on disk", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "keepfiles");
-  const run = await startRun(ctx.app, SIM_RUN, project.headers);
+  ctx.engine.anticipate().reports("done");
+  const run = await startRun(ctx.app, ENGINE_RUN, project.headers);
   await waitForRunStatus(ctx.app, run.id, "completed");
   await ctx.orchestrator.shutdown();
 
@@ -273,7 +268,8 @@ test("adding a folder that does not exist is rejected", async () => {
 test("activating a project switches which runs an unheadered request sees", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "switch");
-  const run = await startRun(ctx.app, SIM_RUN, project.headers);
+  ctx.engine.anticipate().reports("done");
+  const run = await startRun(ctx.app, ENGINE_RUN, project.headers);
   await waitForRunStatus(ctx.app, run.id, "completed");
 
   // Act

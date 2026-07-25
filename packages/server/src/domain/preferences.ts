@@ -42,10 +42,6 @@ function readEngineModels(value: unknown): Partial<Record<EngineId, string>> {
   return models;
 }
 
-function readStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
 export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
   const stored = bagOf(raw);
   const defaults = defaultProjectPreferences();
@@ -59,7 +55,6 @@ export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
       typeof stored.pipelineId === "string" && findPipeline(stored.pipelineId)
         ? stored.pipelineId
         : defaults.pipelineId,
-    disabledStages: readStringList(stored.disabledStages),
   };
 }
 
@@ -98,13 +93,6 @@ export function parsePreferencesUpdate(body: unknown): PreferencesUpdateParse {
       return { ok: false, error: `Unknown engine: ${unknown}` };
     }
     update.engineModels = readEngineModels(models);
-  }
-
-  if (requested.disabledStages !== undefined) {
-    if (!Array.isArray(requested.disabledStages)) {
-      return { ok: false, error: "disabledStages must be an array of stage ids" };
-    }
-    update.disabledStages = readStringList(requested.disabledStages);
   }
 
   return { ok: true, update };

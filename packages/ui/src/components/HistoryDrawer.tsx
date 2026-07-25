@@ -3,7 +3,7 @@ import { PlayCircle, Repeat, RotateCcw, X } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import { fetchRuns } from "../api";
 import { formatDuration } from "../hooks/useElapsed";
-import { firstEnabledStageId, resumeStageId } from "../run-utils";
+import { firstStageId, resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";
 import { MONO, RUN_PILL, SANS } from "../theme";
 
@@ -48,7 +48,7 @@ export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: Histor
           const failedStage = run.stages.find((stage) => stage.status === "failed");
           const restartable = run.status === "failed" || run.status === "cancelled";
           const resumeId = restartable ? resumeStageId(run) : null;
-          const restartId = restartable ? firstEnabledStageId(run) : null;
+          const restartId = restartable ? firstStageId(run) : null;
           const showResume = resumeId !== null && resumeId !== restartId;
           const duration = run.completedAt
             ? formatDuration(new Date(run.completedAt).getTime() - new Date(run.createdAt).getTime())

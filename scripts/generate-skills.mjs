@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const STANDARDS = path.join(ROOT, "docs", "architect-standards.md");
+const STANDARDS = path.join(ROOT, "docs", "architecture.md");
 const PERSONA_DIR = path.join(ROOT, "packages", "server", "src", "domain", "skills", "personas");
 const SKILL_OUT = path.join(ROOT, ".claude", "skills", "architect", "SKILL.md");
 const DEFAULTS_OUT = path.join(
@@ -53,7 +53,7 @@ function buildSkillMarkdown(blocks) {
     "",
     "# Architect — how code in this repo must be written",
     "",
-    "> Generated from `docs/architect-standards.md`. Do not edit here — edit the",
+    "> Generated from `docs/architecture.md`. Do not edit here — edit the",
     "> source and run `pnpm gen:skills`.",
     "",
     blocks.shared,
@@ -77,7 +77,7 @@ function buildDefaultsModule(personas) {
   return [
     "// GENERATED FILE — do not edit by hand.",
     "// Sources: packages/server/src/domain/skills/personas/*.md and the gen: blocks",
-    "// in docs/architect-standards.md · regenerate with `pnpm gen:skills`.",
+    "// in docs/architecture.md · regenerate with `pnpm gen:skills`.",
     "// Drift from the sources is caught by skill-generation.spec.ts.",
     "",
     "export const DEFAULT_SKILLS: Record<string, string> = {",

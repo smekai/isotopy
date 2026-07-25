@@ -46,7 +46,6 @@ test("a preference set through the API is visible to a second server over the sa
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
     pipelineId: "one-box",
-    disabledStages: ["review"],
   });
   const { app } = await restartApp();
 
@@ -59,7 +58,6 @@ test("a preference set through the API is visible to a second server over the sa
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
     pipelineId: "one-box",
-    disabledStages: ["review"],
   });
 });
 

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { isTerminalRunStatus } from "@adhd/core";
+import { DEFAULT_PIPELINE_ID, isTerminalRunStatus } from "@adhd/core";
 import type { RunEvent } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
@@ -30,33 +30,19 @@ export function createRunRoutes(
         .json<{
           pipelineId?: string;
           task?: string;
-          disabledStages?: string[];
           engine?: string;
           model?: string;
           permissionMode?: string;
-          failProbability?: number;
-          minDurationMs?: number;
-          maxDurationMs?: number;
         }>()
         .catch(() => ({}) as Record<string, never>);
-      const pipelineId = body.pipelineId ?? "sequential";
+      const pipelineId = body.pipelineId ?? DEFAULT_PIPELINE_ID;
 
       try {
         const run = await orchestrator.startRun(projectScope(registry, c), pipelineId, {
           task: body.task,
-          disabledStages: body.disabledStages,
           engine: body.engine,
           model: body.model,
           permissionMode: body.permissionMode,
-          ...(body.failProbability !== undefined
-            ? { failProbability: body.failProbability }
-            : {}),
-          ...(body.minDurationMs !== undefined
-            ? { minDurationMs: body.minDurationMs }
-            : {}),
-          ...(body.maxDurationMs !== undefined
-            ? { maxDurationMs: body.maxDurationMs }
-            : {}),
         });
         return c.json(run, 201);
       } catch (error) {
@@ -162,6 +148,10 @@ export function createRunRoutes(
             data: JSON.stringify(event),
           });
         };
+
+        for (const event of await orchestrator.replayEvents(runId)) {
+          await send(event);
+        }
 
         const unsubscribe = orchestrator.subscribe(runId, (event) => {
           void send(event);

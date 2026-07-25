@@ -37,7 +37,7 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 |----------|-------------|
 | [product-brief.md](docs/product-brief.md) | Positioning, app-builder gap, target user, workflow, differentiation |
 | [mvp-scope.md](docs/mvp-scope.md) | Smallest useful MVP: stages, built-in tasks, Playwright E2E, deploy adapters, dashboard |
-| [technical-architecture.md](docs/technical-architecture.md) | Local architecture: TypeScript/Hono/React, Aiki runtime, tasks, worktrees, adapters |
+| [architecture.md](docs/architecture.md) | Local architecture: TypeScript/Hono/React, Aiki runtime, tasks, worktrees, adapters |
 | [competitor-matrix.md](docs/competitor-matrix.md) | What existing tools miss and why none fully owns ongoing local development |
 | [technology-comparison.md](docs/technology-comparison.md) | TypeScript vs Python vs Rust vs Go: UI, workflow, speed, AI integration, RPC |
 | [prototype-plan.md](docs/prototype-plan.md) | Temporary prototype roadmap (UI-first demo) |

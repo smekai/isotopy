@@ -1,21 +1,17 @@
 import type { EnginePermissionMode, RunEvent, RunState } from "@adhd/core";
+import { ActiveRunsTable } from "../db/active-runs-table.ts";
 import { Database } from "../db/database.ts";
 import { EventsTable } from "../db/events-table.ts";
 import { RunsTable } from "../db/runs-table.ts";
 import type { ProjectPaths } from "../paths.ts";
+import { nowIso } from "../utils.ts";
 import { persistHandoff } from "./handoff.ts";
-
-export interface PersistedSimOptions {
-  minDurationMs: number;
-  maxDurationMs: number;
-  failProbability: number;
-}
 
 export interface PersistedRun {
   version: 1;
   run: RunState;
   permissionMode?: EnginePermissionMode;
-  simOptions?: PersistedSimOptions;
+  openWorkflowRunId?: string;
 }
 
 export function isPersistedRun(value: unknown): value is PersistedRun {
@@ -41,28 +37,41 @@ export class RunRepository {
   private readonly db: Database;
   private readonly runs: RunsTable;
   private readonly events: EventsTable;
+  private readonly active: ActiveRunsTable;
   private readonly handoffs = new Set<Promise<void>>();
 
   constructor(private readonly paths: ProjectPaths) {
-    this.db = new Database(paths, `${RunsTable.SCHEMA}\n${EventsTable.SCHEMA}`);
+    this.db = new Database(paths);
     this.runs = new RunsTable(this.db);
     this.events = new EventsTable(this.db);
+    this.active = new ActiveRunsTable(this.db);
   }
 
   async writeState(runId: string, persisted: PersistedRun): Promise<void> {
-    try {
-      await this.runs.upsert(runId, JSON.stringify(persisted));
-    } catch (error) {
-      console.warn(`Failed to persist run ${runId}:`, error);
-    }
+    await this.runs.upsert(runId, JSON.stringify(persisted));
   }
 
   async appendEvent(runId: string, event: RunEvent): Promise<void> {
-    try {
-      await this.events.append(runId, JSON.stringify(event));
-    } catch (error) {
-      console.warn(`Failed to persist event for run ${runId}:`, error);
-    }
+    await this.events.append(runId, JSON.stringify(event));
+  }
+
+  async loadEvents(runId: string): Promise<RunEvent[]> {
+    const rows = await this.events.allForRun(runId);
+    return rows.flatMap((data) => {
+      try {
+        return [JSON.parse(data) as RunEvent];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  async admitRun(runId: string): Promise<boolean> {
+    return this.active.claim(this.paths.id, runId, nowIso());
+  }
+
+  async releaseRun(runId: string): Promise<void> {
+    await this.active.release(this.paths.id, runId);
   }
 
   writeHandoff(runId: string, stageId: string, content: string): Promise<void> {

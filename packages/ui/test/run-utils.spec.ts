@@ -4,83 +4,58 @@
 import { describe, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunState, StageState, StageStatus } from "@adhd/core";
-import { childPath, firstEnabledStageId, isScratchWorkspace, resumeStageId } from "../src/run-utils";
+import { childPath, firstStageId, isScratchWorkspace, resumeStageId } from "../src/run-utils";
 
 function stage(id: string, status: StageStatus): StageState {
   return { id, label: id, status, logs: [] };
 }
 
-function run(stages: StageState[], disabledStages?: string[]): RunState {
+function run(stages: StageState[]): RunState {
   return {
     id: "r1",
     number: 1,
     projectId: HOME_PROJECT_ID,
-    pipelineId: "sequential",
-    pipelineName: "Sequential lifecycle",
+    pipelineId: "dev-test",
+    pipelineName: "Developer + Tester",
     status: "failed",
     stages,
     createdAt: "2026-07-21T10:00:00.000Z",
-    ...(disabledStages ? { disabledStages } : {}),
   };
 }
 
 describe("resumeStageId", () => {
   test("resumes at the stage that failed", () => {
     expect(
-      resumeStageId(run([stage("intake", "passed"), stage("design", "failed")])),
-    ).toBe("design");
+      resumeStageId(run([stage("implementation", "passed"), stage("test", "failed")])),
+    ).toBe("test");
   });
 
   test("after an abort, resumes at the first stage the abort skipped", () => {
     expect(
-      resumeStageId(
-        run([stage("intake", "passed"), stage("design", "skipped"), stage("test", "skipped")]),
-      ),
-    ).toBe("design");
-  });
-
-  test("ignores stages that were switched off for the run", () => {
-    // A disabled stage was configuration, not a casualty of the abort.
-    expect(
-      resumeStageId(
-        run(
-          [stage("intake", "passed"), stage("design", "skipped"), stage("test", "skipped")],
-          ["design"],
-        ),
-      ),
+      resumeStageId(run([stage("implementation", "passed"), stage("test", "skipped")])),
     ).toBe("test");
   });
 
   test("prefers the failed stage over an earlier skipped one", () => {
     expect(
-      resumeStageId(
-        run([stage("intake", "skipped"), stage("design", "failed")], ["intake"]),
-      ),
-    ).toBe("design");
+      resumeStageId(run([stage("implementation", "skipped"), stage("test", "failed")])),
+    ).toBe("test");
   });
 
   test("returns null when there is nothing to resume", () => {
-    expect(resumeStageId(run([stage("intake", "passed")]))).toBeNull();
+    expect(resumeStageId(run([stage("implementation", "passed")]))).toBeNull();
   });
 });
 
-describe("firstEnabledStageId", () => {
-  test("is the first stage the run actually executes", () => {
+describe("firstStageId", () => {
+  test("is the first stage of the run", () => {
     expect(
-      firstEnabledStageId(run([stage("intake", "passed"), stage("design", "passed")])),
-    ).toBe("intake");
+      firstStageId(run([stage("implementation", "passed"), stage("test", "passed")])),
+    ).toBe("implementation");
   });
 
-  test("skips past stages disabled for the run", () => {
-    expect(
-      firstEnabledStageId(
-        run([stage("intake", "skipped"), stage("design", "passed")], ["intake"]),
-      ),
-    ).toBe("design");
-  });
-
-  test("returns null when every stage is disabled", () => {
-    expect(firstEnabledStageId(run([stage("intake", "skipped")], ["intake"]))).toBeNull();
+  test("returns null when there are no stages", () => {
+    expect(firstStageId(run([]))).toBeNull();
   });
 });
 

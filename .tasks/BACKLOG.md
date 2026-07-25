@@ -1,32 +1,5 @@
 # Backlog
 
-## TASK-068: Durable workflow runtime on OpenWorkflow (SQLite)
-**Priority:** P1
-**Tags:** server, engine, infra, milestone-c
-**Updated:** 2026-07-23 13:00
-
-Execute the recommendation of [`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md) (TASK-066): adopt **OpenWorkflow** (Apache-2.0, `node:sqlite`, no server) as the durable execution layer. Depends on **TASK-067** for the storage substrate. Today [`RunOrchestrator`](../packages/server/src/services/run-orchestrator.ts) is an in-memory `Map` with a floating `void simulateRun(...)`; gates are heap promises (`gateWaiters`), recovery is `reconcileInterrupted()` marking everything `failed`, retries and durable timers do not exist. §3 of the doc lists six of eleven capabilities as absent or non-durable.
-
-**The seam is the class, not one method** (doc §4): `RunOrchestrator` *is* the durable workflow, `executeStage()` is the durable step. Durability must own start/queuing, the `runStages()` loop, gates/waits, retries, recovery, cancellation state and execution history. Kept ADHD-owned without exception: workflow definitions and their schema, "copy workflow" (S3), the enabled-component snapshot frozen at start (S4), artifact manifests, engine adapters, personas, and prompt/handoff composition in `domain/stage-context.ts`.
-
-**Non-negotiable integration rule:** OpenWorkflow's SQLite DB becomes the single source of truth for execution state, living inside the project's `.adhd/`. `state.json`/`events.jsonl` (and the SSE projection) become a rebuildable, idempotent **read model** — never a second writer. Two independently advancing state machines is the failure mode to design out.
-
-**Feasibility gates from doc §9 (each is a checkpoint in the plan):**
-- **G1 — semantic restart from a chosen stage (S2):** OpenWorkflow has no `fork`/`restartFrom`; rebuild ADHD's existing `restartRun(runId, stageId)` on durable steps (likely a fresh run seeded with retained prior-stage outputs). Decide whether to contribute a fork primitive upstream.
-- **G2 — one active run per project, concurrent across projects (S5):** worker concurrency is a pool size, not a per-key cap; build a restart-surviving, project-keyed admission check that the API cannot bypass (it currently can).
-- **G3 — per-project DB placement & portability** (shared with TASK-067): copying the folder carries history; the projection rebuilds idempotently.
-- **G4 — immediate subprocess-tree kill on cancel:** stays ADHD-owned via `runSubprocess`; `cancelWorkflowRun()` only marks durable state.
-- **G5 — declared parallel branches over one shared workspace (S6):** `Promise.all` over durable steps; prove fan-in and per-branch failure policy. `runStages()` is a sequential `for` loop today — a `parallel` group runs sequentially and silently.
-- **G6 — `node:sqlite` under sustained use:** covered by TASK-067.
-
-**Determinism refactor:** OpenWorkflow (like any durable runtime) requires non-deterministic work — filesystem I/O (`loadSkill`), `nowIso()`, `randomUUID()` — to live inside steps, not the workflow body. This is the mechanical cost §4 says the old "one method" seam claim hid.
-
-**Deliverable:** the `sequential`/`one-box`/`dev-test` pipelines run on OpenWorkflow; a gate survives a hard process kill and resumes in a fresh process without re-running the completed stage (the doc's measured M6/M7); `reconcileInterrupted()`'s mark-everything-failed is replaced by real resumption. **Fallback** if G1 or G2 proves too costly: Option A, the custom engine on the same `node:sqlite` substrate behind the `RunStore` seam — so TASK-067's storage work is not wasted either way. Amend the stale "durable runtime replaces `executeStage()` alone" claim in `architect-standards.md`, `implementation-notes.md` and `code-quality.md` (doc §4).
-
-**Cross-platform:** durable execution and `node:sqlite` are OS-independent; the platform-sensitive surface is subprocess-tree termination on cancel (G4), already owned by `runSubprocess` (`taskkill /T` on win32, SIGTERM→SIGKILL on POSIX). No new spawn/path/env code. Tested on Windows; macOS reasoned through, mark "untested on macOS".
-
----
-
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P2
 **Tags:** server, engine, infra
@@ -52,7 +25,7 @@ The standing second choice from [`docs/workflow-runtime-options.md`](../docs/wor
 **Priority:** P3 | **Tags:** ui
 **Updated:** 2026-07-22 12:40
 
-Follow-up from TASK-052. The Architect standard (rule **A6**, `docs/architect-standards.md`) bans large inline `style={{…}}` blocks; `StageFocusPanel.tsx` was cleaned as the reference case, but [`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) still carries ~108 inline style objects. Lift them into named module-level constants (static) and small named builder functions (theme-/state-dependent), matching the `StageFocusPanel.tsx` pattern.
+Follow-up from TASK-052. The Architect standard (rule **A6**, `docs/architecture.md`) bans large inline `style={{…}}` blocks; `StageFocusPanel.tsx` was cleaned as the reference case, but [`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) still carries ~108 inline style objects. Lift them into named module-level constants (static) and small named builder functions (theme-/state-dependent), matching the `StageFocusPanel.tsx` pattern.
 
 Deliberately deferred from TASK-052 (see `docs/decisions.md`, 2026-07-22): the extraction is a large, visually risky diff with no unit coverage, and folding it into the standards task would have buried the standard under churn.
 

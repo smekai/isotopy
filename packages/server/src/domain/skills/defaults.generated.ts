@@ -1,6 +1,6 @@
 // GENERATED FILE — do not edit by hand.
 // Sources: packages/server/src/domain/skills/personas/*.md and the gen: blocks
-// in docs/architect-standards.md · regenerate with `pnpm gen:skills`.
+// in docs/architecture.md · regenerate with `pnpm gen:skills`.
 // Drift from the sources is caught by skill-generation.spec.ts.
 
 export const DEFAULT_SKILLS: Record<string, string> = {
@@ -59,10 +59,11 @@ domain state, that logic belongs in a pure domain function it calls.
 ### A4 — Long-running work is a workflow, not an inline await chain
 
 A genuinely long-lived operation (minutes, external processes, human waits)
-belongs behind a single seam that a durable executor can later own — not an
-ad-hoc chain of \`await\`s sprinkled through a service. Keep the decision of *how a
-unit of long work runs* in exactly one place so it can be swapped for a durable
-runtime without touching the lifecycle around it.
+belongs behind a durable runtime that owns its *whole lifecycle* — starting and
+queueing the work, the orchestration loop, human gates, durable timers, retries
+and crash recovery — not an ad-hoc chain of \`await\`s sprinkled through a service.
+The seam is the **workflow itself**, with each unit of work a durable *step*; it
+is not a single method you swap while the lifecycle around it stays put.
 
 ### A5 — Classes over loose function bags where there is state or a lifecycle
 

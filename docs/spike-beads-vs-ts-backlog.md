@@ -3,7 +3,7 @@
 **Task:** [TASK-035](../.tasks/DONE.md)
 **Date:** 2026-07-20
 **Status:** Complete
-**Related:** [competitor-matrix.md §2](./competitor-matrix.md), [mvp-scope.md](./mvp-scope.md), [technical-architecture.md](./technical-architecture.md)
+**Related:** [competitor-matrix.md §2](./competitor-matrix.md), [mvp-scope.md](./mvp-scope.md), [architecture.md](./architecture.md)
 
 ---
 
@@ -103,7 +103,7 @@ index. See below.
 ## Backlog data-model implications
 
 Keep human-readable markdown per task **and** a machine index (already the plan in
-[technical-architecture.md](./technical-architecture.md) — `index.json` + `TASK-xxx.md`). Extend the model with the two
+[architecture.md](./architecture.md) — `index.json` + `TASK-xxx.md`). Extend the model with the two
 fields needed for a graph and a ready queue:
 
 ```jsonc

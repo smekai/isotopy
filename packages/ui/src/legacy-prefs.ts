@@ -33,19 +33,6 @@ function readStoredEngineModels(projectId: string): Partial<Record<EngineId, str
   return models;
 }
 
-function readStoredDisabledStages(projectId: string): string[] | null {
-  const raw = readKey(legacyKey(projectId, "disabledStages"));
-  if (raw === null) {
-    return null;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Whatever this browser still holds for the project, or null when nothing does. */
 export function readLegacyPreferences(projectId: string): ProjectPreferencesUpdate | null {
   const update: ProjectPreferencesUpdate = {};
@@ -70,11 +57,6 @@ export function readLegacyPreferences(projectId: string): ProjectPreferencesUpda
     update.engineModels = engineModels;
   }
 
-  const disabledStages = readStoredDisabledStages(projectId);
-  if (disabledStages !== null) {
-    update.disabledStages = disabledStages;
-  }
-
   return Object.keys(update).length > 0 ? update : null;
 }
 
@@ -83,7 +65,6 @@ export function clearLegacyPreferences(projectId: string): void {
     "engine",
     "permissionMode",
     "pipelineId",
-    "disabledStages",
     ...ENGINE_IDS.map((engineId) => `engineModel.${engineId}`),
   ];
   try {

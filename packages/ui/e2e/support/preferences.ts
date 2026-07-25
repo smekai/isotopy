@@ -8,8 +8,7 @@ export const DEFAULT_PREFERENCES: ProjectPreferencesUpdate = {
   engine: "claude-code",
   engineModels: { "claude-code": "sonnet", cursor: "", codex: "" },
   permissionMode: "skip",
-  pipelineId: "sequential",
-  disabledStages: [],
+  pipelineId: "dev-test",
 };
 
 export async function readPreferences(page: Page): Promise<ProjectPreferences> {

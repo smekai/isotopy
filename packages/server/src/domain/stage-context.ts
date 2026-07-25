@@ -1,4 +1,5 @@
 import type { StageVerdict } from "@adhd/core";
+import type { EngineRunResult } from "../engines/types.ts";
 
 export interface UpstreamOutput {
   label: string;
@@ -42,6 +43,38 @@ export function parseStageVerdict(output: string | undefined): StageVerdict | un
     }
   }
   return undefined;
+}
+
+export interface EngineStageOutcome {
+  outcome: "passed" | "failed";
+  output?: string;
+  verdict?: StageVerdict;
+  failureMessage?: string;
+}
+
+export function interpretEngineResult(
+  result: EngineRunResult,
+  profession: string,
+): EngineStageOutcome {
+  if (!result.success) {
+    return { outcome: "failed", failureMessage: result.errorMessage ?? `${profession} failed` };
+  }
+  const output =
+    result.result !== undefined && result.result.trim() !== "" ? result.result : undefined;
+  const verdict = parseStageVerdict(result.result);
+  if (verdict === "FAIL") {
+    return {
+      outcome: "failed",
+      ...(output !== undefined ? { output } : {}),
+      verdict,
+      failureMessage: `${profession} reported VERDICT: FAIL`,
+    };
+  }
+  return {
+    outcome: "passed",
+    ...(output !== undefined ? { output } : {}),
+    ...(verdict !== undefined ? { verdict } : {}),
+  };
 }
 
 export interface HandoffMeta {

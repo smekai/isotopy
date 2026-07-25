@@ -56,7 +56,6 @@ export interface RunState {
   pipelineName: string;
   status: RunStatus;
   task?: string;
-  disabledStages?: string[];
   engine?: EngineId;
   model?: string;
   result?: string;
@@ -107,7 +106,6 @@ export interface NewRunInput {
   projectId: string;
   pipeline: PipelineDefinition;
   task?: string | undefined;
-  disabledStages?: string[] | undefined;
 }
 
 export function createInitialRunState({
@@ -116,9 +114,7 @@ export function createInitialRunState({
   projectId,
   pipeline,
   task,
-  disabledStages,
 }: NewRunInput): RunState {
-  const disabled = new Set(disabledStages ?? []);
   return {
     id: runId,
     number,
@@ -127,14 +123,13 @@ export function createInitialRunState({
     pipelineName: pipeline.name,
     status: "pending",
     ...(task !== undefined ? { task } : {}),
-    ...(disabledStages !== undefined ? { disabledStages } : {}),
     stageOutputs: {},
     createdAt: new Date().toISOString(),
     stages: flattenPipelineStages(pipeline).map((stage) => ({
       id: stage.id,
       label: stage.label,
       ...(stage.skill !== undefined ? { skill: stage.skill } : {}),
-      status: disabled.has(stage.id) ? "skipped" : "pending",
+      status: "pending",
       logs: [],
     })),
   };

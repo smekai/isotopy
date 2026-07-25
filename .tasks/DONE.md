@@ -1,5 +1,42 @@
 # Done
 
+## TASK-070: Simplify the durable runtime (post-TASK-068 review)
+**Priority:** P2 | **Tags:** server, core, ui, engine
+**Updated:** 2026-07-24 22:00
+
+Follow-up simplification of TASK-068 (PR #2), cutting flexibility not needed yet.
+
+### Done summary
+- **Renamed** `owRunId` → `openWorkflowRunId` (the map, `bindOpenWorkflowRun`, `TERMINAL_OPENWORKFLOW_STATUSES`, `PersistedRun.openWorkflowRunId`).
+- **Removed parallel execution** — `PipelineGroup.mode` dropped; `runGroup` runs stages sequentially; `workflow-parallel.spec.ts` deleted.
+- **Removed the simulation engine entirely** — deleted `runSimulatedStage`, `SEQUENTIAL_PIPELINE`, `LIFECYCLE_STAGES`, `SimulationOptions`/`simOptions`/`PersistedSimOptions`, `randomBetween`/`sleep`; `runStageWork` is engine-only. Added `GATED_DEV_TEST_PIPELINE` (Developer → gate → Tester) so durable gates stay shipped and tested via the FakeEngine. Default pipeline is now `dev-test`.
+- **Removed disabled-stages ("skip steps") end-to-end** — gone from core (`RunState`/`NewRunInput`/`createInitialRunState`, `ProjectPreferences`), `preferences.ts`, orchestrator, workflow, routes, and the UI (SetupModal "Pipeline" toggle section, App/EmptyState/ProjectDrawer/StageFocusPanel/run-utils/legacy-prefs).
+- **Trimmed try/catch** — removed the defensive catches added in TASK-068 (`workflow-runtime` cancel/runStatus, admission `admitRun`/`releaseRun`, `loadEvents`); handling now lives in the orchestrator (`reconcileOnLoad` wraps `runStatus`, `abortRun` `.catch`es the fire-and-forget cancel). Kept the tested corrupt-DB degrade + best-effort persistence.
+- **Merged the three architecture docs** — `architect-standards.md` + `code-quality.md` + `technical-architecture.md` → one `docs/architecture.md`; `gen:skills` repointed to it (`STANDARDS` path + reference strings), `--check` green; links swept in the active docs (the two dated decision records keep their historical names).
+- **Tests** — rewrote the simulation-dependent component tests onto engine-backed pipelines + the scripted `FakeEngine` (`runs.comp.ts`; `durable-runtime.comp.ts` M6/M7 now park on `gated-dev-test`; `persistence.comp.ts`; `projects.comp.ts`), plus `preferences.spec.ts` / `settings.comp.ts` / `legacy-prefs.spec.ts` / core `pipelines.spec.ts` / ui `run-utils.spec.ts`. Deleted `run-lifecycle.spec.ts` — it needed a run that completes without a CLI (only simulation could do that); its run-view coverage is in `dev-test-flow.spec.ts` (seeded route-interception) and its semantics in the component tests. Fixed the e2e picker selectors ("Full team" → "Developer + Tester").
+- **Gates:** 139 tests + lint + typecheck + build + `gen:skills --check` green. Versions 0.6.9.
+- **Cross-platform:** no new spawn/path/env code; the subprocess-tree-kill surface is unchanged. Tested on Windows; macOS reasoned through — **untested on macOS**.
+
+---
+
+## TASK-068: Durable workflow runtime on OpenWorkflow (SQLite)
+**Priority:** P1 | **Tags:** server, engine, infra, milestone-c
+**Updated:** 2026-07-24 15:00
+
+Executed the TASK-066 recommendation: `RunOrchestrator` is now a durable workflow on **OpenWorkflow** (Apache-2.0, v0.9.2, `node:sqlite`, zero deps), embedded **in-process** in the single runner. The seam is the class, not one method (doc §4): the orchestrator hosts the runtime and is the single writer of the read model; the old in-memory `Map` + `void simulateRun` + heap `gateWaiters` + mark-everything-failed recovery are gone.
+
+### Done summary
+- **New `workflow/` layer.** `WorkflowRuntime` (per-project OpenWorkflow client + in-process `Worker` + `BackendSqlite`) + `WorkflowRuntimeRegistry`; `pipeline-workflow.ts` (the ported `runStages` loop as `defineWorkflow`, walking `pipeline.groups`); `stage-execution.ts` (the durable step = old `executeStage()` — skill load, engine run, verdict parse, handoff, projection); `types.ts` (`PipelineWorkflowInput`, `RunProjection`, `WorkflowDeps`). `RunOrchestrator implements RunProjection` and keeps its public API (`startRun`/`approveGate`/`abortRun`/`restartRun`/`getRun`/`listRuns`/`subscribe`/`init`/`shutdown`) — so the whole component suite kept passing unchanged.
+- **Phase 0 proved it embeds** (M5–M8 reproduced in-repo, then deleted): the worker starts programmatically (no CLI/daemon), a gate parked at a hard kill resumes in a fresh process, the completed stage is not re-run, and OpenWorkflow's `BackendSqlite` coexists with our `Database` on **one** `.adhd/runs.db` (two `node:sqlite` connections). Its tables are the source of truth; `RunState` + `events` are a rebuildable read model — never a second writer.
+- **Capabilities.** Gates → `step.waitForSignal` / `client.sendSignal` (`approveGate` optimistically projects the approval, then signals). Retries → `RetryPolicy` (default `maximumAttempts: 1` to preserve fail-fast). Recovery → the worker auto-resumes non-terminal runs on `init` (only a run with no durable run behind it, or an OpenWorkflow-failed one, settles to failed). Cancellation (**G4**) → `cancelWorkflowRun` + immediate `killProcessTree`, unchanged engine seam. Restart (**G1**) → a fresh run seeded with retained prior-stage outputs, stable logical `runId`. Admission (**G2**) → `active_runs(project_id PK)` guard below the API. Parallel (**G5**) → `Promise.allSettled` over durable steps. SSE now replays persisted history on connect.
+- **Determinism refactor:** `loadSkill`, `nowIso`, `randomUUID`, `Math.random` and the engine call moved inside durable steps.
+- **Behaviour change (S5):** one active run per project — a second `POST /runs` in a project now returns 400; `projects.comp.ts` numbering test serialised to match.
+- **Tests:** added `durable-runtime.comp.ts` (M6/M7 gate-survives-restart + no re-run; G2/S5) and `workflow-parallel.spec.ts` (G5 fan-in + per-branch failure). **148 tests + lint + typecheck + build + e2e (25 passed, 1 live-engine skipped) + `gen:skills --check` all green.**
+- **Docs:** corrected the "durable runtime replaces `executeStage()` alone" claim in `architecture.md` (skill regenerated), `implementation-notes.md`, `architecture.md`; re-pointed Aiki→OpenWorkflow in `architecture.md`, `mvp-scope.md`, `product-brief.md`; dated `decisions.md` entry. Aiki stays the recorded second choice (TASK-069). Versions 0.6.8.
+- **Cross-platform:** durable execution and `node:sqlite` are OS-independent; the only platform-sensitive surface (subprocess-tree kill — `taskkill /T` vs `SIGTERM`→`SIGKILL`) is unchanged. Tested on Windows; macOS reasoned through — **untested on macOS**.
+
+---
+
 ## TASK-067: SQLite run repository — the sole run store, layered `repository/` over `db/`
 **Priority:** P1 | **Tags:** server, infra, core
 **Updated:** 2026-07-24 09:50
@@ -88,7 +125,7 @@ whitespace or tabs, LF endings, trailing newlines, cross-links resolve both ways
 framework fact carries an inline official-source link dated 2026-07-23; gaps are labelled
 unverified rather than asserted.
 
-**Not done (deliberate):** `architect-standards.md`, `implementation-notes.md` and `code-quality.md`
+**Not done (deliberate):** `architecture.md`, `implementation-notes.md` and `architecture.md`
 still carry the `executeStage()`-is-the-whole-seam claim that §4 corrects. They should be amended
 when a runtime decision is executed, not in a research branch.
 
@@ -134,7 +171,7 @@ After TASK-059 two folders competed: the project's root, and the composer's "Wor
 
 **Small consolidations on the way:** `Project` gained `dataDir`, derived on read (`withDataDir`) so `projects.json` keeps only what the user chose; `projectPaths` takes a `ProjectLocation` instead of a whole `Project`; permission-mode labels moved into `@adhd/core` (`PERMISSION_MODES`, `permissionModeLabel`) so the drawer and Setup share one source; `isScratchWorkspace` was corrected — it matched `/.adhd/runs/`, which never matches the home project's real scratch path.
 
-**Verified:** `lint`, `typecheck`, `test` (115, +7), `build`, `e2e` (23 + live skipped), `gen:skills --check` all green. Against the running app: a `POST /runs` carrying `"workspaceDir":"C:/Windows"` still ran in the project root, a real Claude Code run used the project folder as cwd and left `git status` clean, and a home run landed in `~/.adhd/home/runs/<id>/workspace`. Rationale in `docs/decisions.md`; layout in `docs/technical-architecture.md`. Version 0.6.1 → 0.6.2.
+**Verified:** `lint`, `typecheck`, `test` (115, +7), `build`, `e2e` (23 + live skipped), `gen:skills --check` all green. Against the running app: a `POST /runs` carrying `"workspaceDir":"C:/Windows"` still ran in the project root, a real Claude Code run used the project folder as cwd and left `git status` clean, and a home run landed in `~/.adhd/home/runs/<id>/workspace`. Rationale in `docs/decisions.md`; layout in `docs/architecture.md`. Version 0.6.1 → 0.6.2.
 
 **Follow-up:** engine/model/permission/pipeline preferences are project-scoped but still live in `localStorage`; moving them server-side (so they survive a browser change) is a separate task.
 
@@ -158,9 +195,9 @@ All five phases shipped. **A project is a directory that owns its own `.adhd/`**
 
 **UI.** Real header dropdown (`ProjectSwitcher` + `useProjects`), reusing `FolderPicker` to add a project; every localStorage preference is now keyed `adhd.<projectId>.<name>`.
 
-**Follow-up in the same pass (owner request):** stripped every explanatory comment from the new source per rule **A1** — renaming where the comment described *what* (`registry.remove` → `unregister`, `detachedCopyOfResolvedEntry`, `foldCaseWhereFilesystemIsInsensitive`, `clearRunViewForProjectSwitch`) and relocating the *why* into `docs/implementation-notes.md` and `docs/decisions.md` per **A8**. Added the [`validate-code`](../.claude/skills/validate-code/SKILL.md) skill — the review counterpart to `architect`: the A1–A9 checklist plus the gate order. Unified the personas: text now lives in `domain/skills/personas/*.md` (Architect still composed from `architect-standards.md`), and `scripts/generate-skills.mjs` emits one `defaults.generated.ts`, replacing the split between a hand-written `defaults.ts` and a separate `architect.generated.ts`; `skill-generation.spec.ts` guards the drift.
+**Follow-up in the same pass (owner request):** stripped every explanatory comment from the new source per rule **A1** — renaming where the comment described *what* (`registry.remove` → `unregister`, `detachedCopyOfResolvedEntry`, `foldCaseWhereFilesystemIsInsensitive`, `clearRunViewForProjectSwitch`) and relocating the *why* into `docs/implementation-notes.md` and `docs/decisions.md` per **A8**. Added the [`validate-code`](../.claude/skills/validate-code/SKILL.md) skill — the review counterpart to `architect`: the A1–A9 checklist plus the gate order. Unified the personas: text now lives in `domain/skills/personas/*.md` (Architect still composed from `architecture.md`), and `scripts/generate-skills.mjs` emits one `defaults.generated.ts`, replacing the split between a hand-written `defaults.ts` and a separate `architect.generated.ts`; `skill-generation.spec.ts` guards the drift.
 
-**Verified:** `lint`/`typecheck`/`test` (109, +45)/`build`/`e2e` (19) all green, plus `pnpm gen:skills --check`. Against the running app: two projects each showed only their own history, runs wrote into their own `.adhd/runs/`, nothing new landed in the ADHD repo, an API key set on one project stayed out of both project folders and off the other project, and a `developer.project.md` addendum appeared in the persona while the bundled base still supplied the text. Rationale in `docs/decisions.md`; layout in `docs/technical-architecture.md`. Version 0.5.0 → 0.6.0.
+**Verified:** `lint`/`typecheck`/`test` (109, +45)/`build`/`e2e` (19) all green, plus `pnpm gen:skills --check`. Against the running app: two projects each showed only their own history, runs wrote into their own `.adhd/runs/`, nothing new landed in the ADHD repo, an API key set on one project stayed out of both project folders and off the other project, and a `developer.project.md` addendum appeared in the persona while the bundled base still supplied the text. Rationale in `docs/decisions.md`; layout in `docs/architecture.md`. Version 0.5.0 → 0.6.0.
 
 ---
 
@@ -170,7 +207,7 @@ All five phases shipped. **A project is a directory that owns its own `.adhd/`**
 
 Produced a staff-level **Architect standard** — nine rules (A1–A9), stated transferably with per-tier (BE/FE/Mobile) shapes — and cleaned the codebase to it.
 
-**One source, two consumers.** [`docs/architect-standards.md`](../docs/architect-standards.md) is the canonical text; [`scripts/generate-architect-skill.mjs`](../scripts/generate-architect-skill.mjs) (`pnpm gen:skills`) emits both `.claude/skills/architect/SKILL.md` and `packages/server/src/domain/skills/architect.generated.ts` (`ARCHITECT_SKILL`, added to `DEFAULT_SKILLS`, seeds `.adhd/skills/architect.md` via the existing loader). Drift, rule-id coverage, and seeding are guarded by `architect-skill.spec.ts`. `code-quality.md` stays descriptive and links to the two new prescriptive docs; rationale lives in [`docs/decisions.md`](../docs/decisions.md) (rule A8).
+**One source, two consumers.** [`docs/architecture.md`](../docs/architecture.md) is the canonical text; [`scripts/generate-architect-skill.mjs`](../scripts/generate-architect-skill.mjs) (`pnpm gen:skills`) emits both `.claude/skills/architect/SKILL.md` and `packages/server/src/domain/skills/architect.generated.ts` (`ARCHITECT_SKILL`, added to `DEFAULT_SKILLS`, seeds `.adhd/skills/architect.md` via the existing loader). Drift, rule-id coverage, and seeding are guarded by `architect-skill.spec.ts`. `architecture.md` stays descriptive and links to the two new prescriptive docs; rationale lives in [`docs/decisions.md`](../docs/decisions.md) (rule A8).
 
 **Cleanup traceable to the rules:** server pure logic moved to `packages/server/src/domain/` (A3); all 12 UI components got named `XProps` types and `StageFocusPanel.tsx` got named style constants/builders (A6); comments compensating for bad names removed (A1). **TypeScript 6.0.3** (7.x crashes the lint gate — see decisions log) with `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` on (A7). SetupModal's ~108 inline styles deferred to TASK-063.
 
@@ -198,7 +235,7 @@ Made component tests the primary test level and introduced the repo's first test
 
 **Cross-platform:** temp roots via `os.tmpdir()` + `mkdtemp`; `dispose()` drains queued writes before `fs.rm`, which also retries and tolerates failure (Windows `EBUSY`); scripts are `vitest run` only. The comp suite never reaches `subprocess.ts`, so it has no platform branch to diverge on. Run on **Windows**; **untested on macOS**.
 
-**Known gap:** the abort-during-persona-resolution window is a genuine race and is not deterministically reproducible in a test — the adjacent case (abort before the stage is entered) is covered. Engine *adapter* output parsing also remains untested, since the fake adapter substitutes for it; noted as the next gap in `docs/code-quality.md`.
+**Known gap:** the abort-during-persona-resolution window is a genuine race and is not deterministically reproducible in a test — the adjacent case (abort before the stage is entered) is covered. Engine *adapter* output parsing also remains untested, since the fake adapter substitutes for it; noted as the next gap in `docs/architecture.md`.
 
 ---
 
@@ -215,7 +252,7 @@ Extended the existing Playwright suite from 8 free-tier tests to 16 free/seeded 
 - **Live smoke** — `e2e/live-dev-test.spec.ts`, skipped unless `ADHD_E2E_LIVE=1`. Proves only what the cheap tiers cannot: the boxes chain, and the Tester sees the Developer's file in the shared workspace. Not executed (needs an unsandboxed server + real spend).
 - **Test affordances** — `data-testid` on the run status word (stage nodes render the same words), stage nodes, stage profession/persona, and the artifact preview.
 - **Config** — `workers: 1` + `fullyParallel: false` (one shared server and run store); root `pnpm e2e`; `tsconfig.e2e.json` so the Node-side files typecheck without leaking `process` into `src/`.
-- **Docs** — `docs/e2e-test-plan.md` rewritten around the three tiers (`handoff.md`, third pipeline); run-app skill's `/pipelines` line and e2e commands corrected in both `.claude/` and `.agents/` copies; CI note updated in `docs/code-quality.md`.
+- **Docs** — `docs/e2e-test-plan.md` rewritten around the three tiers (`handoff.md`, third pipeline); run-app skill's `/pipelines` line and e2e commands corrected in both `.claude/` and `.agents/` copies; CI note updated in `docs/architecture.md`.
 
 ---
 
@@ -369,7 +406,7 @@ Known, documented limitation: `%VAR%` still expands inside quotes on the shim pa
 **Priority:** P3 | **Tags:** core, server
 **Updated:** 2026-07-20 14:20
 
-Done. Behavior-preserving quality pass over the Developer→Tester subsystem; assessment recorded in `docs/code-quality.md` (new "Subsystem review" section).
+Done. Behavior-preserving quality pass over the Developer→Tester subsystem; assessment recorded in `docs/architecture.md` (new "Subsystem review" section).
 
 Refactors applied:
 - **`resolveStageInputs()` extracted** — `executeEngineStage` inlined persona resolution + prompt building; it is now stage lifecycle only, as the plan required.
@@ -568,7 +605,7 @@ Done (adhd repo only — `taskplanner` migrated in a parallel stream): repos alr
 **Priority:** P1 | **Tags:** code, qualtiy, beauty | **Assignee:** Fedor
 **Updated:** 2026-07-15 22:53
 
-Done: ESLint 10 flat config at root (`eslint.config.mjs`: JS + typescript-eslint recommended, react-hooks for UI; `pnpm lint`/`lint:fix`) — clean. Code segregated by role: `@adhd/core` split into domain modules (`agents/engines/pipelines/runs/settings.ts`, barrel `index.ts`); server split into bootstrap-only `index.ts` → `app.ts` (composition) → `routes/` (controllers: health, pipelines, engines, settings, runs) → `services/run-orchestrator.ts` (ex mock-orchestrator) → pure helpers in `utils.ts`. All hosts/ports/timeouts moved to env-driven `config.ts` (reads root `.env`; `ADHD_HOST/ADHD_PORT/ADHD_CORS_ORIGINS/ADHD_ENGINE_TIMEOUT_MS/ADHD_UI_PORT/ADHD_SERVER_URL`) + `.env.example`; Vite proxy and Playwright baseURL env-driven too. Core relative imports use `.ts` extensions with `rewriteRelativeImportExtensions` (needed for Node type-stripping of source-served core). Conventions + next-steps recommendations in `docs/code-quality.md`. Verified: lint/typecheck/build green, UI bundle byte-identical, live smoke of all routes incl. SSE, gate approve, abort, and `ADHD_PORT` override.
+Done: ESLint 10 flat config at root (`eslint.config.mjs`: JS + typescript-eslint recommended, react-hooks for UI; `pnpm lint`/`lint:fix`) — clean. Code segregated by role: `@adhd/core` split into domain modules (`agents/engines/pipelines/runs/settings.ts`, barrel `index.ts`); server split into bootstrap-only `index.ts` → `app.ts` (composition) → `routes/` (controllers: health, pipelines, engines, settings, runs) → `services/run-orchestrator.ts` (ex mock-orchestrator) → pure helpers in `utils.ts`. All hosts/ports/timeouts moved to env-driven `config.ts` (reads root `.env`; `ADHD_HOST/ADHD_PORT/ADHD_CORS_ORIGINS/ADHD_ENGINE_TIMEOUT_MS/ADHD_UI_PORT/ADHD_SERVER_URL`) + `.env.example`; Vite proxy and Playwright baseURL env-driven too. Core relative imports use `.ts` extensions with `rewriteRelativeImportExtensions` (needed for Node type-stripping of source-served core). Conventions + next-steps recommendations in `docs/architecture.md`. Verified: lint/typecheck/build green, UI bundle byte-identical, live smoke of all routes incl. SSE, gate approve, abort, and `ADHD_PORT` override.
 
 ---
 
@@ -701,7 +738,7 @@ Set up `packages/core`, `packages/server` (Node + Hono), `packages/ui` (React + 
 
 Rename project to ADHD (Artificial Development, Human Directed). Update docs, CLI name, and `.adhd/` paths.
 
-Done: bulk rebrand landed earlier (commits 5f63631, a51b87e — docs, `@adhd/*` packages, `adhd` CLI examples, `.adhd/` paths, GitHub repo/remote). This pass fixed the last leftovers: repo layout tree root in `docs/technical-architecture.md` (`artificial-developer/` → `adhd/`) and added the "formerly Artificial Developer" historical note to the README intro.
+Done: bulk rebrand landed earlier (commits 5f63631, a51b87e — docs, `@adhd/*` packages, `adhd` CLI examples, `.adhd/` paths, GitHub repo/remote). This pass fixed the last leftovers: repo layout tree root in `docs/architecture.md` (`artificial-developer/` → `adhd/`) and added the "formerly Artificial Developer" historical note to the README intro.
 
 ---
 

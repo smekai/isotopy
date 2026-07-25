@@ -1,13 +1,12 @@
-// What survives a restart. The orchestrator is in-memory, so everything a user
-// sees after the server comes back has to have been reconstructed from the
-// project's run repository (a SQLite DB under .adhd/) — this suite is what proves
-// that round trip.
+// What survives a restart. The orchestrator's read model is in-memory, so
+// everything a user sees after the server comes back has to have been
+// reconstructed from the project's run repository (a SQLite DB under .adhd/) —
+// this suite is what proves that round trip.
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { RunRepository } from "../src/repository/run-repository.ts";
 import {
-  FAST_SIM,
   createTestApp,
   get,
   restartApp,
@@ -39,11 +38,11 @@ async function seedHomeRun(home: string, run: RunState): Promise<void> {
 
 test("runs are restored when the server comes back", async () => {
   const { app } = ctx;
+  ctx.engine.anticipate().reports("done");
   const run = await startRun(app, {
-    pipelineId: "sequential",
+    pipelineId: "one-box",
     task: "comp survives restart",
-    disabledStages: ["requirements", "design", "review", "test", "release", "deploy"],
-    ...FAST_SIM,
+    engine: "claude-code",
   });
   await waitForRunStatus(app, run.id, "completed");
   await ctx.orchestrator.shutdown();
@@ -59,20 +58,20 @@ test("runs are restored when the server comes back", async () => {
   await restarted.orchestrator.shutdown();
 });
 
-test("a run left mid-flight by a crash is reconciled to failed, not left running", async () => {
+test("a run left mid-flight by a crash with no durable run is reconciled to failed", async () => {
   const { home } = ctx;
   const runId = "crashed1";
   await seedHomeRun(home, {
     id: runId,
     number: 7,
     projectId: HOME_PROJECT_ID,
-    pipelineId: "sequential",
-    pipelineName: "Sequential lifecycle",
+    pipelineId: "dev-test",
+    pipelineName: "Developer + Tester",
     status: "running",
     task: "comp interrupted",
     stages: [
-      { id: "intake", label: "Intake", status: "passed", logs: [] },
-      { id: "requirements", label: "Requirements", status: "running", logs: [] },
+      { id: "implementation", label: "Developer", status: "passed", logs: [] },
+      { id: "test", label: "Tester", status: "running", logs: [] },
     ],
     createdAt: new Date().toISOString(),
   });
@@ -81,32 +80,30 @@ test("a run left mid-flight by a crash is reconciled to failed, not left running
 
   const { body } = await get<RunState>(restarted.app, `/runs/${runId}`);
   expect(body.status).toBe("failed");
-  expect(stageOf(body, "requirements").status).toBe("failed");
-  expect(stageOf(body, "requirements").logs.at(-1)?.message).toMatch(
-    /Interrupted by server restart/,
-  );
-  expect(stageOf(body, "intake").status).toBe("passed");
+  expect(stageOf(body, "test").status).toBe("failed");
+  expect(stageOf(body, "test").logs.at(-1)?.message).toMatch(/Interrupted by server restart/);
+  expect(stageOf(body, "implementation").status).toBe("passed");
   await restarted.orchestrator.shutdown();
 });
 
 test("run numbering continues from the highest number on disk", async () => {
   const { app } = ctx;
+  ctx.engine.anticipate().reports("done");
   const first = await startRun(app, {
-    pipelineId: "sequential",
+    pipelineId: "one-box",
     task: "comp numbering",
-    disabledStages: ["requirements", "design", "review", "test", "release", "deploy"],
-    ...FAST_SIM,
+    engine: "claude-code",
   });
   await waitForRunStatus(app, first.id, "completed");
   expect(first.number).toBe(1);
   await ctx.orchestrator.shutdown();
 
   const restarted = await restartApp();
+  ctx.engine.anticipate().reports("done");
   const second = await startRun(restarted.app, {
-    pipelineId: "sequential",
+    pipelineId: "one-box",
     task: "comp numbering after restart",
-    disabledStages: ["requirements", "design", "review", "test", "release", "deploy"],
-    ...FAST_SIM,
+    engine: "claude-code",
   });
 
   expect(second.number).toBe(2);

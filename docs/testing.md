@@ -110,7 +110,7 @@ pnpm e2e           # Playwright, free + seeded tiers
 ```
 
 CI wiring is still on the "adopt next" list in
-[`code-quality.md`](./code-quality.md). The Vitest suite is CI-ready today: no
+[`architecture.md`](./architecture.md). The Vitest suite is CI-ready today: no
 credentials, no engine, no browser.
 
 ## Cross-platform notes
