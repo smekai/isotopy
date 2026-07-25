@@ -41,29 +41,18 @@ export class RunRepository {
   private readonly handoffs = new Set<Promise<void>>();
 
   constructor(private readonly paths: ProjectPaths) {
-    this.db = new Database(
-      paths,
-      `${RunsTable.SCHEMA}\n${EventsTable.SCHEMA}\n${ActiveRunsTable.SCHEMA}`,
-    );
+    this.db = new Database(paths);
     this.runs = new RunsTable(this.db);
     this.events = new EventsTable(this.db);
     this.active = new ActiveRunsTable(this.db);
   }
 
   async writeState(runId: string, persisted: PersistedRun): Promise<void> {
-    try {
-      await this.runs.upsert(runId, JSON.stringify(persisted));
-    } catch (error) {
-      console.warn(`Failed to persist run ${runId}:`, error);
-    }
+    await this.runs.upsert(runId, JSON.stringify(persisted));
   }
 
   async appendEvent(runId: string, event: RunEvent): Promise<void> {
-    try {
-      await this.events.append(runId, JSON.stringify(event));
-    } catch (error) {
-      console.warn(`Failed to persist event for run ${runId}:`, error);
-    }
+    await this.events.append(runId, JSON.stringify(event));
   }
 
   async loadEvents(runId: string): Promise<RunEvent[]> {

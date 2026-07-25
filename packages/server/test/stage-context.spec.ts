@@ -6,8 +6,14 @@ import { describe, expect, test } from "vitest";
 import {
   buildStagePrompt,
   formatHandoff,
+  interpretEngineResult,
   parseStageVerdict,
 } from "../src/domain/stage-context.ts";
+import type { EngineRunResult } from "../src/engines/types.ts";
+
+function engineResult(over: Partial<EngineRunResult>): EngineRunResult {
+  return { success: true, exitCode: 0, ...over };
+}
 
 describe("parseStageVerdict", () => {
   test("reads a bare verdict line", () => {
@@ -113,5 +119,52 @@ describe("formatHandoff", () => {
     );
 
     expect(handoff).toContain("- **Engine:** Codex\n");
+  });
+});
+
+describe("interpretEngineResult", () => {
+  test("a clean success with no verdict passes and carries its output", () => {
+    expect(interpretEngineResult(engineResult({ result: "wrote greet.js" }), "Developer")).toEqual({
+      outcome: "passed",
+      output: "wrote greet.js",
+    });
+  });
+
+  test("a PASS verdict passes and records the verdict", () => {
+    expect(
+      interpretEngineResult(engineResult({ result: "ok\n\nVERDICT: PASS" }), "Tester"),
+    ).toEqual({ outcome: "passed", output: "ok\n\nVERDICT: PASS", verdict: "PASS" });
+  });
+
+  test("a FAIL verdict fails but still carries its output and a message", () => {
+    expect(
+      interpretEngineResult(engineResult({ result: "broken\n\nVERDICT: FAIL" }), "Tester"),
+    ).toEqual({
+      outcome: "failed",
+      output: "broken\n\nVERDICT: FAIL",
+      verdict: "FAIL",
+      failureMessage: "Tester reported VERDICT: FAIL",
+    });
+  });
+
+  test("empty engine output produces no output field", () => {
+    expect(interpretEngineResult(engineResult({ result: "   " }), "Developer")).toEqual({
+      outcome: "passed",
+    });
+  });
+
+  test("an engine failure fails with its error message", () => {
+    expect(
+      interpretEngineResult(
+        engineResult({ success: false, exitCode: 1, errorMessage: "claude exited 1" }),
+        "Developer",
+      ),
+    ).toEqual({ outcome: "failed", failureMessage: "claude exited 1" });
+  });
+
+  test("an engine failure with no message falls back to the profession", () => {
+    expect(
+      interpretEngineResult(engineResult({ success: false, exitCode: null }), "Developer"),
+    ).toEqual({ outcome: "failed", failureMessage: "Developer failed" });
   });
 });

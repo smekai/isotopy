@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS active_runs (
   started_at TEXT NOT NULL
 );`;
 
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) {
+    db.register(ActiveRunsTable.SCHEMA);
+  }
 
   async claim(projectId: string, runId: string, startedAt: string): Promise<boolean> {
     const connection = await this.db.connection();

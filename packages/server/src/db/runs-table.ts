@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS runs (
   updated_at TEXT NOT NULL
 );`;
 
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) {
+    db.register(RunsTable.SCHEMA);
+  }
 
   async upsert(runId: string, data: string): Promise<void> {
     const connection = await this.db.connection();

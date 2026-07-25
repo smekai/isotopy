@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_run_idx ON events(run_id);`;
 
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) {
+    db.register(EventsTable.SCHEMA);
+  }
 
   async append(runId: string, data: string): Promise<void> {
     const connection = await this.db.connection();

@@ -3,7 +3,7 @@ import type { RunState, StageDefinition } from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
-import { buildStagePrompt, parseStageVerdict } from "../domain/stage-context.ts";
+import { buildStagePrompt, interpretEngineResult } from "../domain/stage-context.ts";
 import type { UpstreamOutput } from "../domain/stage-context.ts";
 import { loadSkill } from "../services/skills.ts";
 import { nowIso } from "../utils.ts";
@@ -96,40 +96,32 @@ export async function runStageWork(
     return { outcome: "cancelled", startedAt, completedAt: nowIso() };
   }
 
-  if (outcome.success) {
-    const verdict = parseStageVerdict(outcome.result);
-    if (outcome.result !== undefined && outcome.result.trim() !== "") {
-      projection.captureStageOutput(runId, stageDef, outcome.result);
-    }
-    if (verdict !== undefined) {
-      projection.setVerdict(runId, stageDef.id, verdict);
-    }
-    if (verdict === "FAIL") {
-      projection.stageFailed(runId, stageDef.id, `${profession} reported VERDICT: FAIL`);
-      return {
-        outcome: "failed",
-        ...(outcome.result !== undefined ? { output: outcome.result } : {}),
-        verdict,
-        startedAt,
-        completedAt: nowIso(),
-      };
-    }
-    if (verdict === "PASS") {
+  const decision = interpretEngineResult(outcome, profession);
+
+  if (decision.output !== undefined) {
+    projection.captureStageOutput(runId, stageDef, decision.output);
+  }
+  if (decision.verdict !== undefined) {
+    projection.setVerdict(runId, stageDef.id, decision.verdict);
+  }
+
+  if (decision.outcome === "failed") {
+    projection.stageFailed(runId, stageDef.id, decision.failureMessage ?? `${profession} failed`);
+  } else {
+    if (decision.verdict === "PASS") {
       projection.log(runId, stageDef.id, "pass", `${profession} reported VERDICT: PASS`);
     }
     if (!stageDef.gateAfter) {
       projection.log(runId, stageDef.id, "pass", `✓ ${profession} finished — result ready`);
       projection.stagePassed(runId, stageDef.id);
     }
-    return {
-      outcome: "passed",
-      ...(outcome.result !== undefined ? { output: outcome.result } : {}),
-      ...(verdict !== undefined ? { verdict } : {}),
-      startedAt,
-      completedAt: nowIso(),
-    };
   }
 
-  projection.stageFailed(runId, stageDef.id, outcome.errorMessage ?? `${profession} failed`);
-  return { outcome: "failed", startedAt, completedAt: nowIso() };
+  return {
+    outcome: decision.outcome,
+    ...(decision.output !== undefined ? { output: decision.output } : {}),
+    ...(decision.verdict !== undefined ? { verdict: decision.verdict } : {}),
+    startedAt,
+    completedAt: nowIso(),
+  };
 }

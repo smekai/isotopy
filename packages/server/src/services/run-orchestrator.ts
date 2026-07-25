@@ -642,7 +642,9 @@ export class RunOrchestrator implements RunProjection {
   }
 
   private emit(event: RunEvent): void {
-    void this.repositoryForRun(event.runId).appendEvent(event.runId, event);
+    void this.repositoryForRun(event.runId)
+      .appendEvent(event.runId, event)
+      .catch((error) => console.warn(`Failed to persist event for run ${event.runId}:`, error));
     this.schedulePersist(event.runId, event.type !== "stage.log");
     const listeners = this.listeners.get(event.runId);
     if (!listeners) {
