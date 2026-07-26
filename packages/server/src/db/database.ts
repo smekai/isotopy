@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { DatabaseSync as SqliteConnection } from "node:sqlite";
 import { ensureProjectDataDir } from "../paths.ts";
-import type { ProjectPaths } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
 
 const BUSY_TIMEOUT_MS = 5000;
 
@@ -9,14 +9,14 @@ export class Database {
   private ready?: Promise<SqliteConnection>;
   private readonly schemas: string[] = [];
 
-  constructor(private readonly paths: ProjectPaths) {}
+  constructor(private readonly path: ProjectPath) {}
 
   register(schema: string): void {
     this.schemas.push(schema);
   }
 
   describe(): string {
-    return path.join(this.paths.dataDir, "runs.db");
+    return path.join(this.path.dataDir, "runs.db");
   }
 
   connection(): Promise<SqliteConnection> {
@@ -33,7 +33,7 @@ export class Database {
   }
 
   private async open(): Promise<SqliteConnection> {
-    await ensureProjectDataDir(this.paths);
+    await ensureProjectDataDir(this.path);
     const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(this.describe());
     db.exec("PRAGMA journal_mode=WAL");

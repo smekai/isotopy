@@ -50,8 +50,8 @@ export async function runStageWork(
   );
 
   const controller = deps.beginEngineStage(runId);
-  const paths = registry.resolve(run.projectId);
-  const persona = stageDef.skill ? await loadSkill(paths, stageDef.skill) : undefined;
+  const projectPath = registry.resolve(run.projectId);
+  const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
   if (stageDef.skill && !persona) {
     projection.log(
       runId,

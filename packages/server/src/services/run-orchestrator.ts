@@ -20,7 +20,7 @@ import {
 } from "@adhd/core";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
-import type { ProjectPaths } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
@@ -95,9 +95,9 @@ export class RunOrchestrator implements RunProjection {
 
   async init(): Promise<void> {
     for (const project of this.registry.all()) {
-      const paths = this.registry.resolve(project.id);
-      await this.loadProject(paths);
-      await this.runtimes.for(paths).start();
+      const projectPath = this.registry.resolve(project.id);
+      await this.loadProject(projectPath);
+      await this.runtimes.for(projectPath).start();
     }
   }
 
@@ -112,12 +112,12 @@ export class RunOrchestrator implements RunProjection {
     );
   }
 
-  private async loadProject(paths: ProjectPaths): Promise<void> {
-    const loaded = await this.repositoryFor(paths).loadAll();
-    let maxNumber = this.nextRunNumbers.get(paths.id) ?? 1;
+  private async loadProject(projectPath: ProjectPath): Promise<void> {
+    const loaded = await this.repositoryFor(projectPath).loadAll();
+    let maxNumber = this.nextRunNumbers.get(projectPath.id) ?? 1;
     for (const persisted of loaded) {
       const { run } = persisted;
-      run.projectId = paths.id;
+      run.projectId = projectPath.id;
       this.runs.set(run.id, run);
       if (persisted.permissionMode) {
         this.enginePermissionModes.set(run.id, persisted.permissionMode);
@@ -127,13 +127,13 @@ export class RunOrchestrator implements RunProjection {
       }
       maxNumber = Math.max(maxNumber, run.number + 1);
       if (!isTerminalRunStatus(run.status)) {
-        await this.reconcileOnLoad(paths, run);
+        await this.reconcileOnLoad(projectPath, run);
       }
     }
-    this.nextRunNumbers.set(paths.id, maxNumber);
+    this.nextRunNumbers.set(projectPath.id, maxNumber);
   }
 
-  private async reconcileOnLoad(paths: ProjectPaths, run: RunState): Promise<void> {
+  private async reconcileOnLoad(projectPath: ProjectPath, run: RunState): Promise<void> {
     const openWorkflowRunId = this.openWorkflowRunIds.get(run.id);
     if (!openWorkflowRunId) {
       this.markInterrupted(run.id);
@@ -141,7 +141,7 @@ export class RunOrchestrator implements RunProjection {
     }
     let status: string | undefined;
     try {
-      status = await this.runtimes.for(paths).runStatus(openWorkflowRunId);
+      status = await this.runtimes.for(projectPath).runStatus(openWorkflowRunId);
     } catch {
       return;
     }
@@ -193,7 +193,7 @@ export class RunOrchestrator implements RunProjection {
   }
 
   async startRun(
-    paths: ProjectPaths,
+    projectPath: ProjectPath,
     pipelineId: string,
     options: StartRunOptions = {},
   ): Promise<RunState> {
@@ -209,7 +209,7 @@ export class RunOrchestrator implements RunProjection {
       const engineId = engine ?? "claude-code";
       getEngineAdapter(engineId);
       assertEngineId(engineId);
-      const connection = this.settings.getEngineConnection(paths.id, engineId);
+      const connection = this.settings.getEngineConnection(projectPath.id, engineId);
       const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
       if (mode?.requiresApiKey && !connection.apiKey) {
         throw new Error(
@@ -218,10 +218,10 @@ export class RunOrchestrator implements RunProjection {
       }
     }
 
-    await ensureProjectDataDir(paths);
+    await ensureProjectDataDir(projectPath);
 
     const runId = randomUUID().slice(0, 8);
-    const admitted = await this.repositoryFor(paths).admitRun(runId);
+    const admitted = await this.repositoryFor(projectPath).admitRun(runId);
     if (!admitted) {
       throw new Error(
         "A run is already active in this project — wait for it to finish or abort it before starting another.",
@@ -230,8 +230,8 @@ export class RunOrchestrator implements RunProjection {
 
     const run = createInitialRunState({
       runId,
-      number: this.takeRunNumber(paths.id),
-      projectId: paths.id,
+      number: this.takeRunNumber(projectPath.id),
+      projectId: projectPath.id,
       pipeline,
       task,
     });
@@ -243,7 +243,7 @@ export class RunOrchestrator implements RunProjection {
       if (model !== undefined) {
         run.model = model;
       }
-      run.workspacePath = await resolveWorkspace(paths, runId);
+      run.workspacePath = await resolveWorkspace(projectPath, runId);
       this.enginePermissionModes.set(
         runId,
         permissionMode === "acceptEdits" ? "acceptEdits" : DEFAULT_PERMISSION_MODE,
@@ -253,7 +253,7 @@ export class RunOrchestrator implements RunProjection {
     this.runs.set(runId, run);
     await this.flushPersist(runId);
 
-    await this.launch(paths, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
+    await this.launch(projectPath, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
     return structuredClone(run);
   }
 
@@ -342,18 +342,18 @@ export class RunOrchestrator implements RunProjection {
   }
 
   private async launch(
-    paths: ProjectPaths,
+    projectPath: ProjectPath,
     run: RunState,
     extras: InputExtras,
   ): Promise<void> {
     if (extras.startStageId !== undefined) {
-      const admitted = await this.repositoryFor(paths).admitRun(run.id);
+      const admitted = await this.repositoryFor(projectPath).admitRun(run.id);
       if (!admitted) {
         this.markInterrupted(run.id);
         return;
       }
     }
-    const runtime = this.runtimes.for(paths);
+    const runtime = this.runtimes.for(projectPath);
     await runtime.start();
     const input = this.buildInput(run, extras);
     const openWorkflowRunId = await runtime.startRun(input);
@@ -655,13 +655,13 @@ export class RunOrchestrator implements RunProjection {
     }
   }
 
-  private repositoryFor(paths: ProjectPaths): RunRepository {
-    const existing = this.repositories.get(paths.id);
+  private repositoryFor(projectPath: ProjectPath): RunRepository {
+    const existing = this.repositories.get(projectPath.id);
     if (existing) {
       return existing;
     }
-    const repository = new RunRepository(paths);
-    this.repositories.set(paths.id, repository);
+    const repository = new RunRepository(projectPath);
+    this.repositories.set(projectPath.id, repository);
     return repository;
   }
 

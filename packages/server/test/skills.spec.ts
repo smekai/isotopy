@@ -9,13 +9,13 @@ import { DEFAULT_SKILLS } from "../src/domain/skills/defaults.generated.ts";
 import { composeSkill } from "../src/domain/skills/compose.ts";
 import { homeProjectPaths, skillsDir, userSkillsDir } from "../src/paths.ts";
 import { loadSkill } from "../src/services/skills.ts";
-import type { ProjectPaths } from "../src/paths.ts";
+import type { ProjectPath } from "../src/paths.ts";
 
 const ADDENDUM = "Always use pnpm, never npm.";
 
 let home: string;
 let userHome: string;
-let project: ProjectPaths;
+let project: ProjectPath;
 
 beforeEach(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), "adhd-skills-"));

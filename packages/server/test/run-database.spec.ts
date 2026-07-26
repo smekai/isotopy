@@ -5,17 +5,17 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { ProjectPaths } from "../src/paths.ts";
+import type { ProjectPath } from "../src/paths.ts";
 import { RunRepository } from "../src/repository/run-repository.ts";
 import type { PersistedRun } from "../src/repository/run-repository.ts";
 import { makePersistedRun } from "./support/run-fixtures.ts";
 
 let dir: string;
-let paths: ProjectPaths;
+let projectPath: ProjectPath;
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "adhd-db-"));
-  paths = { id: "p", root: dir, dataDir: dir };
+  projectPath = { id: "p", root: dir, dataDir: dir };
 });
 
 afterEach(async () => {
@@ -29,7 +29,7 @@ function dbPath(): string {
 }
 
 async function withRepository(fn: (repo: RunRepository) => Promise<void>): Promise<void> {
-  const repository = new RunRepository(paths);
+  const repository = new RunRepository(projectPath);
   try {
     await fn(repository);
   } finally {

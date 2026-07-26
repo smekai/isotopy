@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { skillsDir, userSkillsDir } from "../paths.ts";
-import type { ProjectPaths } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
 import { composeSkill } from "../domain/skills/compose.ts";
 import { DEFAULT_SKILLS } from "../domain/skills/defaults.generated.ts";
 
@@ -16,12 +16,12 @@ export function userSkillFilePath(skillId: string): string {
   return path.join(userSkillsDir(), `${skillId}.md`);
 }
 
-export function projectSkillFilePath(paths: ProjectPaths, skillId: string): string {
-  return path.join(skillsDir(paths), `${skillId}.md`);
+export function projectSkillFilePath(projectPath: ProjectPath, skillId: string): string {
+  return path.join(skillsDir(projectPath), `${skillId}.md`);
 }
 
-export function projectSkillAddendumPath(paths: ProjectPaths, skillId: string): string {
-  return path.join(skillsDir(paths), `${skillId}.project.md`);
+export function projectSkillAddendumPath(projectPath: ProjectPath, skillId: string): string {
+  return path.join(skillsDir(projectPath), `${skillId}.project.md`);
 }
 
 async function readCached(filePath: string): Promise<string | undefined> {
@@ -41,13 +41,13 @@ async function readCached(filePath: string): Promise<string | undefined> {
 }
 
 export async function loadSkill(
-  paths: ProjectPaths,
+  projectPath: ProjectPath,
   skillId: string,
 ): Promise<string | undefined> {
   const [userOverride, projectOverride, projectAddendum] = await Promise.all([
     readCached(userSkillFilePath(skillId)),
-    readCached(projectSkillFilePath(paths, skillId)),
-    readCached(projectSkillAddendumPath(paths, skillId)),
+    readCached(projectSkillFilePath(projectPath, skillId)),
+    readCached(projectSkillAddendumPath(projectPath, skillId)),
   ]);
   return composeSkill({
     base: userOverride ?? DEFAULT_SKILLS[skillId],

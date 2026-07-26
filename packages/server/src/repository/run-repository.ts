@@ -3,7 +3,7 @@ import { ActiveRunsTable } from "../db/active-runs-table.ts";
 import { Database } from "../db/database.ts";
 import { EventsTable } from "../db/events-table.ts";
 import { RunsTable } from "../db/runs-table.ts";
-import type { ProjectPaths } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils.ts";
 import { persistHandoff } from "./handoff.ts";
 
@@ -40,8 +40,8 @@ export class RunRepository {
   private readonly active: ActiveRunsTable;
   private readonly handoffs = new Set<Promise<void>>();
 
-  constructor(private readonly paths: ProjectPaths) {
-    this.db = new Database(paths);
+  constructor(private readonly path: ProjectPath) {
+    this.db = new Database(path);
     this.runs = new RunsTable(this.db);
     this.events = new EventsTable(this.db);
     this.active = new ActiveRunsTable(this.db);
@@ -67,15 +67,15 @@ export class RunRepository {
   }
 
   async admitRun(runId: string): Promise<boolean> {
-    return this.active.claim(this.paths.id, runId, nowIso());
+    return this.active.claim(this.path.id, runId, nowIso());
   }
 
   async releaseRun(runId: string): Promise<void> {
-    await this.active.release(this.paths.id, runId);
+    await this.active.release(this.path.id, runId);
   }
 
   writeHandoff(runId: string, stageId: string, content: string): Promise<void> {
-    const op = persistHandoff(this.paths, runId, stageId, content);
+    const op = persistHandoff(this.path, runId, stageId, content);
     this.handoffs.add(op);
     void op.finally(() => this.handoffs.delete(op));
     return op;

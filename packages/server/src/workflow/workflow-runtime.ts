@@ -2,7 +2,7 @@ import path from "node:path";
 import { OpenWorkflow } from "openworkflow";
 import type { Worker, Workflow } from "openworkflow";
 import { BackendSqlite } from "openworkflow/sqlite";
-import type { ProjectPaths } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { createPipelineWorkflow, gateSignal } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowResult } from "./pipeline-workflow.ts";
@@ -23,13 +23,13 @@ export class WorkflowRuntime {
   private started = false;
 
   constructor(
-    private readonly paths: ProjectPaths,
+    private readonly projectPath: ProjectPath,
     private readonly workflow: PipelineWorkflow,
   ) {}
 
   private ensure(): { client: OpenWorkflow; backend: BackendSqlite } {
     if (!this.client || !this.backend) {
-      this.backend = BackendSqlite.connect(path.join(this.paths.dataDir, RUNS_DB_FILE));
+      this.backend = BackendSqlite.connect(path.join(this.projectPath.dataDir, RUNS_DB_FILE));
       this.client = new OpenWorkflow({ backend: this.backend });
       this.client.implementWorkflow(this.workflow.spec, this.workflow.fn);
     }
@@ -93,13 +93,13 @@ export class WorkflowRuntimeRegistry {
     this.workflow = createPipelineWorkflow(deps);
   }
 
-  for(paths: ProjectPaths): WorkflowRuntime {
-    const existing = this.runtimes.get(paths.id);
+  for(projectPath: ProjectPath): WorkflowRuntime {
+    const existing = this.runtimes.get(projectPath.id);
     if (existing) {
       return existing;
     }
-    const runtime = new WorkflowRuntime(paths, this.workflow);
-    this.runtimes.set(paths.id, runtime);
+    const runtime = new WorkflowRuntime(projectPath, this.workflow);
+    this.runtimes.set(projectPath.id, runtime);
     return runtime;
   }
 

@@ -5,18 +5,18 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { ProjectPaths } from "../src/paths.ts";
+import type { ProjectPath } from "../src/paths.ts";
 import { RunRepository } from "../src/repository/run-repository.ts";
 import { makePersistedRun, makeRunEvent } from "./support/run-fixtures.ts";
 
 let dir: string;
-let paths: ProjectPaths;
+let projectPath: ProjectPath;
 let repository: RunRepository;
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "adhd-repo-"));
-  paths = { id: "p", root: dir, dataDir: dir };
-  repository = new RunRepository(paths);
+  projectPath = { id: "p", root: dir, dataDir: dir };
+  repository = new RunRepository(projectPath);
 });
 
 afterEach(async () => {

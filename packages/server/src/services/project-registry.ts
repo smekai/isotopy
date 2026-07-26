@@ -5,7 +5,7 @@ import { HOME_PROJECT_ID } from "@adhd/core";
 import type { Project, ProjectsView } from "@adhd/core";
 import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/projects.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
-import type { ProjectPaths } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
 
 type StoredProject = Omit<Project, "dataDir">;
 
@@ -16,12 +16,12 @@ interface RegistryFile {
 }
 
 function homeProject(): Project {
-  const paths = homeProjectPaths();
+  const projectPath = homeProjectPaths();
   return {
     id: HOME_PROJECT_ID,
     name: "Home",
-    root: paths.root,
-    dataDir: paths.dataDir,
+    root: projectPath.root,
+    dataDir: projectPath.dataDir,
     createdAt: new Date(0).toISOString(),
   };
 }
@@ -91,7 +91,7 @@ export class ProjectRegistry {
     return this.all().find((project) => project.id === projectId);
   }
 
-  resolve(projectId?: string | undefined): ProjectPaths {
+  resolve(projectId?: string | undefined): ProjectPath {
     const requested = projectId ? this.find(projectId) : undefined;
     const project = requested ?? this.find(this.activeId()) ?? homeProject();
     return projectPaths(project);

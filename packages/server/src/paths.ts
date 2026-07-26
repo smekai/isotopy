@@ -10,7 +10,7 @@ export const REPO_ROOT = path.resolve(
   "../../..",
 );
 
-export interface ProjectPaths {
+export interface ProjectPath {
   id: string;
   root: string;
   dataDir: string;
@@ -35,7 +35,7 @@ export function userSkillsDir(): string {
   return path.join(userAdhdDir(), "skills");
 }
 
-export function homeProjectPaths(): ProjectPaths {
+export function homeProjectPaths(): ProjectPath {
   const override = process.env.ADHD_HOME;
   const dataDir =
     override && override.trim() !== ""
@@ -46,42 +46,42 @@ export function homeProjectPaths(): ProjectPaths {
 
 export type ProjectLocation = Pick<Project, "id" | "root">;
 
-export function projectPaths(project: ProjectLocation): ProjectPaths {
+export function projectPaths(project: ProjectLocation): ProjectPath {
   return project.id === HOME_PROJECT_ID
     ? homeProjectPaths()
     : { id: project.id, root: project.root, dataDir: path.join(project.root, ".adhd") };
 }
 
-export function runsDir(paths: ProjectPaths): string {
-  return path.join(paths.dataDir, "runs");
+export function runsDir(projectPath: ProjectPath): string {
+  return path.join(projectPath.dataDir, "runs");
 }
 
-export function skillsDir(paths: ProjectPaths): string {
-  return path.join(paths.dataDir, "skills");
+export function skillsDir(projectPath: ProjectPath): string {
+  return path.join(projectPath.dataDir, "skills");
 }
 
-export function runWorkspaceDir(paths: ProjectPaths, runId: string): string {
-  return path.join(runsDir(paths), runId, "workspace");
+export function runWorkspaceDir(projectPath: ProjectPath, runId: string): string {
+  return path.join(runsDir(projectPath), runId, "workspace");
 }
 
 const SELF_IGNORING_GITIGNORE = "*\n";
 
-export async function ensureProjectDataDir(paths: ProjectPaths): Promise<void> {
-  await mkdir(paths.dataDir, { recursive: true });
-  await writeFile(path.join(paths.dataDir, ".gitignore"), SELF_IGNORING_GITIGNORE, {
+export async function ensureProjectDataDir(projectPath: ProjectPath): Promise<void> {
+  await mkdir(projectPath.dataDir, { recursive: true });
+  await writeFile(path.join(projectPath.dataDir, ".gitignore"), SELF_IGNORING_GITIGNORE, {
     flag: "wx",
   }).catch(() => undefined);
 }
 
-async function ensureRunWorkspace(paths: ProjectPaths, runId: string): Promise<string> {
-  const dir = runWorkspaceDir(paths, runId);
+async function ensureRunWorkspace(projectPath: ProjectPath, runId: string): Promise<string> {
+  const dir = runWorkspaceDir(projectPath, runId);
   await mkdir(dir, { recursive: true });
   return dir;
 }
 
 export async function resolveWorkspace(
-  paths: ProjectPaths,
+  projectPath: ProjectPath,
   runId: string,
 ): Promise<string> {
-  return paths.id === HOME_PROJECT_ID ? ensureRunWorkspace(paths, runId) : paths.root;
+  return projectPath.id === HOME_PROJECT_ID ? ensureRunWorkspace(projectPath, runId) : projectPath.root;
 }
