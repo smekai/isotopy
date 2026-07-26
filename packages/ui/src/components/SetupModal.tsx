@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw, Server, X } from "lucide-react";
 import type { EngineId, EngineModelList, EngineStatus } from "@adhd/core";
 import {
@@ -54,6 +55,486 @@ const SECTIONS: { id: SetupSection; label: string }[] = [
   { id: "appearance", label: "Appearance" },
   { id: "deploy", label: "Deploy Target" },
 ];
+
+interface DeployTarget {
+  id: string;
+  label: string;
+  desc: string;
+}
+
+const DEPLOY_TARGETS: DeployTarget[] = [
+  { id: "vercel", label: "Vercel", desc: "Auto-detected from project" },
+  { id: "railway", label: "Railway", desc: "railway.app" },
+  { id: "fly", label: "Fly.io", desc: "fly.io" },
+  { id: "custom", label: "Custom script", desc: "Run ./scripts/deploy.sh" },
+];
+
+const WHITE = "#FFF";
+const OK_GREEN = "#059669";
+const OK_TINT = "rgba(5,150,105,0.10)";
+const ERROR_RED = "#DC2626";
+const ERROR_BORDER = "rgba(220,38,38,0.35)";
+const ERROR_TINT = "rgba(220,38,38,0.06)";
+const SCRIM = "rgba(30,27,75,0.20)";
+
+interface Accent {
+  accent: string;
+  accentSoft: string;
+}
+
+const BACKDROP: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 50,
+  background: SCRIM,
+  backdropFilter: "blur(4px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 40,
+};
+
+function dialog(d: Dir): CSSProperties {
+  return {
+    background: WHITE,
+    borderRadius: 20,
+    width: 700,
+    maxHeight: "82vh",
+    display: "flex",
+    overflow: "hidden",
+    boxShadow: d.shadowLg,
+  };
+}
+
+function navRail(d: Dir): CSSProperties {
+  return {
+    width: 160,
+    background: d.surface2,
+    borderRight: `1px solid ${d.border}`,
+    display: "flex",
+    flexDirection: "column",
+    flexShrink: 0,
+  };
+}
+
+function navHeader(d: Dir): CSSProperties {
+  return { padding: "16px 16px 12px", borderBottom: `1px solid ${d.border}` };
+}
+
+function navTitle(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 800 };
+}
+
+function navButton(active: boolean, d: Dir): CSSProperties {
+  return {
+    textAlign: "left",
+    padding: "10px 16px",
+    border: "none",
+    background: active ? d.accentSoft : "transparent",
+    borderLeft: `3px solid ${active ? d.accent : "transparent"}`,
+    color: active ? d.accent : d.textMid,
+    fontFamily: SANS,
+    fontSize: 12,
+    fontWeight: active ? 700 : 500,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  };
+}
+
+function navCloseButton(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "12px 16px",
+    border: "none",
+    borderTop: `1px solid ${d.border}`,
+    background: "transparent",
+    color: d.textMuted,
+    fontFamily: SANS,
+    fontSize: 12,
+    cursor: "pointer",
+  };
+}
+
+const BODY: CSSProperties = { flex: 1, overflowY: "auto", padding: 24 };
+const FLEX_FILL: CSSProperties = { flex: 1 };
+const MONO_TEXT: CSSProperties = { fontFamily: MONO };
+
+function sectionTitle(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 };
+}
+
+function sectionSubtitle(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 };
+}
+
+function fieldLabel(d: Dir, marginBottom = 8): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom };
+}
+
+function mutedBody(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: 12 };
+}
+
+function mutedCaption(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: 11 };
+}
+
+function hintText(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: 10 };
+}
+
+const OPTION_STACK: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
+const ENGINE_STACK: CSSProperties = { ...OPTION_STACK, marginBottom: 20 };
+const GATE_STACK: CSSProperties = { display: "flex", flexDirection: "column", gap: 10 };
+
+function optionCard(selected: boolean, d: Dir, accent: Accent = d): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "12px 14px",
+    border: `2px solid ${selected ? accent.accent : d.border}`,
+    borderRadius: 12,
+    background: selected ? accent.accentSoft : "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+  };
+}
+
+function engineCard(selected: boolean, available: boolean, d: Dir): CSSProperties {
+  return {
+    ...optionCard(selected, d),
+    cursor: available ? "pointer" : "default",
+    opacity: available ? 1 : 0.45,
+  };
+}
+
+function radioDot(selected: boolean, d: Dir): CSSProperties {
+  return {
+    width: 12,
+    height: 12,
+    borderRadius: "50%",
+    border: `2px solid ${selected ? d.accent : d.border}`,
+    background: selected ? d.accent : "transparent",
+    flexShrink: 0,
+  };
+}
+
+function optionLabel(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 };
+}
+
+function accentBadge(d: Dir): CSSProperties {
+  return {
+    background: d.accentSoft,
+    color: d.accent,
+    borderRadius: 20,
+    padding: "2px 10px",
+    fontFamily: MONO,
+    fontSize: 9,
+    fontWeight: 700,
+  };
+}
+
+function dirSwatch(dir: Dir, selected: boolean): CSSProperties {
+  return {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    flexShrink: 0,
+    background: `linear-gradient(135deg, ${dir.accent}, ${dir.accentDark})`,
+    boxShadow: selected ? `0 0 0 3px ${dir.accentSoft}` : "none",
+  };
+}
+
+function gateCard(d: Dir): CSSProperties {
+  return { border: `1px solid ${d.border}`, borderRadius: 12, padding: "12px 14px" };
+}
+
+const GATE_CARD_HEADER: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 4,
+};
+
+function statusCard(missing: boolean, d: Dir): CSSProperties {
+  return {
+    border: `1px solid ${missing ? ERROR_BORDER : d.border}`,
+    background: missing ? ERROR_TINT : "transparent",
+    borderRadius: 12,
+    padding: "12px 14px",
+    marginBottom: 20,
+  };
+}
+
+const STATUS_HEADER: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+};
+
+const STATUS_BADGE_ROW: CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
+const OK_ICON: CSSProperties = { color: OK_GREEN, flexShrink: 0 };
+const OK_TEXT: CSSProperties = { color: OK_GREEN, fontFamily: SANS, fontSize: 12, fontWeight: 700 };
+const ERROR_ICON: CSSProperties = { color: ERROR_RED, flexShrink: 0 };
+const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: 12, fontWeight: 700 };
+const ERROR_NOTE: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: 11, marginTop: 8 };
+const CONNECTION_ERROR: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: 11, marginBottom: 12 };
+
+function recheckButton(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    border: `1px solid ${d.border}`,
+    borderRadius: 8,
+    background: "transparent",
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: 11,
+    fontWeight: 600,
+    padding: "4px 10px",
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+}
+
+function statusPath(d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: MONO,
+    fontSize: 10,
+    marginTop: 6,
+    wordBreak: "break-all",
+  };
+}
+
+function statusNote(installed: boolean, d: Dir): CSSProperties {
+  return {
+    color: installed ? d.textMuted : d.textMid,
+    fontFamily: SANS,
+    fontSize: 11,
+    marginTop: 6,
+  };
+}
+
+function cardDivider(d: Dir): CSSProperties {
+  return { marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 };
+}
+
+const ACTION_ROW: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  alignItems: "center",
+};
+
+function actionsLabel(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 11, fontWeight: 700, marginBottom: 8 };
+}
+
+function primaryAction(busy: boolean, d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    border: "none",
+    borderRadius: 8,
+    padding: "7px 12px",
+    background: busy ? d.surface2 : d.accent,
+    color: busy ? d.textMuted : WHITE,
+    fontFamily: SANS,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: busy ? "default" : "pointer",
+  };
+}
+
+function secondaryAction(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    border: `1px solid ${d.border}`,
+    borderRadius: 8,
+    padding: "7px 12px",
+    background: "transparent",
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+}
+
+function docsLink(d: Dir): CSSProperties {
+  return {
+    color: d.accent,
+    fontFamily: SANS,
+    fontSize: 12,
+    fontWeight: 600,
+    textDecoration: "none",
+  };
+}
+
+function installerHint(d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: SANS,
+    fontSize: 10,
+    marginTop: 8,
+    lineHeight: 1.5,
+  };
+}
+
+function connectionHint(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 10 };
+}
+
+function connectionStack(keyFormOpen: boolean): CSSProperties {
+  return { ...OPTION_STACK, marginBottom: keyFormOpen ? 12 : 20 };
+}
+
+const API_KEY_BLOCK: CSSProperties = { marginBottom: 20 };
+
+function apiKeyLabel(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 };
+}
+
+function apiKeyNote(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 };
+}
+
+const KEY_STATUS_ROW: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  marginBottom: 8,
+};
+
+const KEY_CONFIGURED_PILL: CSSProperties = {
+  background: OK_TINT,
+  color: OK_GREEN,
+  borderRadius: 20,
+  padding: "3px 10px",
+  fontFamily: MONO,
+  fontSize: 10,
+  fontWeight: 700,
+};
+
+const REMOVE_KEY_BUTTON: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: ERROR_RED,
+  fontFamily: SANS,
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  padding: 0,
+};
+
+const KEY_INPUT_ROW: CSSProperties = { display: "flex", gap: 8 };
+
+function apiKeyInput(d: Dir): CSSProperties {
+  return {
+    flex: 1,
+    border: `1px solid ${d.border}`,
+    borderRadius: 10,
+    padding: "9px 12px",
+    fontFamily: MONO,
+    fontSize: 11,
+    color: d.text,
+    outline: "none",
+    background: d.surface2,
+  };
+}
+
+function saveKeyButton(ready: boolean, d: Dir): CSSProperties {
+  return {
+    border: "none",
+    borderRadius: 10,
+    padding: "9px 14px",
+    background: ready ? d.accent : d.surface2,
+    color: ready ? WHITE : d.textMuted,
+    fontFamily: SANS,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: ready ? "pointer" : "default",
+    flexShrink: 0,
+  };
+}
+
+function modelSelect(d: Dir): CSSProperties {
+  return {
+    width: "100%",
+    border: `1px solid ${d.border}`,
+    borderRadius: 10,
+    padding: "9px 12px",
+    fontFamily: MONO,
+    fontSize: 12,
+    color: d.text,
+    background: WHITE,
+    outline: "none",
+    marginBottom: 6,
+  };
+}
+
+function modelMetaRow(followedByNote: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 6,
+    marginBottom: followedByNote ? 6 : 20,
+  };
+}
+
+function customIdToggle(d: Dir): CSSProperties {
+  return {
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    color: d.accent,
+    fontFamily: SANS,
+    fontSize: 11,
+    cursor: "pointer",
+    marginLeft: "auto",
+    flexShrink: 0,
+  };
+}
+
+function customModelInput(followedByNote: boolean, d: Dir): CSSProperties {
+  return {
+    width: "100%",
+    border: `1px solid ${d.border}`,
+    borderRadius: 10,
+    padding: "9px 12px",
+    fontFamily: MONO,
+    fontSize: 12,
+    color: d.text,
+    background: d.surface2,
+    outline: "none",
+    marginBottom: followedByNote ? 6 : 20,
+  };
+}
+
+const CREDITS_NOTE: CSSProperties = {
+  color: GOLD,
+  fontFamily: SANS,
+  fontSize: 11,
+  marginBottom: 20,
+};
+
+function deployIcon(selected: boolean, d: Dir): CSSProperties {
+  return { color: selected ? d.accent : d.textMuted, flexShrink: 0 };
+}
+
+function deployLabel(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600 };
+}
 
 export interface SetupModalProps {
   d: Dir;
@@ -224,71 +705,50 @@ export function SetupModal({
   const modelOptions = modelList.options;
   const modelOption = modelOptions.find((opt) => opt.id === model);
   const installer = INSTALLERS[harness];
+  const engineMissing = Boolean(engineStatus && !engineStatus.installed);
+  const keyFormOpen = connectionMode === "api-key";
+  const keyReady = keyInput.trim() !== "" && !keySaving;
+  const creditsNoteShown = Boolean(modelOption?.requiresUsageCredits);
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(30,27,75,0.20)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: "#FFF", borderRadius: 20, width: 700, maxHeight: "82vh", display: "flex", overflow: "hidden", boxShadow: d.shadowLg }}
-      >
-        <div style={{ width: 160, background: d.surface2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
-          <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${d.border}` }}>
-            <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 800 }}>Setup</div>
-            <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{projectName}</div>
+    <div onClick={onClose} style={BACKDROP}>
+      <div onClick={(e) => e.stopPropagation()} style={dialog(d)}>
+        <div style={navRail(d)}>
+          <div style={navHeader(d)}>
+            <div style={navTitle(d)}>Setup</div>
+            <div style={mutedCaption(d)}>{projectName}</div>
           </div>
           {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setSec(s.id)}
-              style={{
-                textAlign: "left", padding: "10px 16px", border: "none",
-                background: sec === s.id ? d.accentSoft : "transparent",
-                borderLeft: `3px solid ${sec === s.id ? d.accent : "transparent"}`,
-                color: sec === s.id ? d.accent : d.textMid,
-                fontFamily: SANS, fontSize: 12, fontWeight: sec === s.id ? 700 : 500,
-                cursor: "pointer", transition: "all 0.15s",
-              }}
-            >{s.label}</button>
+            <button key={s.id} onClick={() => setSec(s.id)} style={navButton(sec === s.id, d)}>
+              {s.label}
+            </button>
           ))}
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", border: "none", borderTop: `1px solid ${d.border}`, background: "transparent", color: d.textMuted, fontFamily: SANS, fontSize: 12, cursor: "pointer" }}>
+          <div style={FLEX_FILL} />
+          <button onClick={onClose} style={navCloseButton(d)}>
             <X size={12} /> Close
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+        <div style={BODY}>
           {sec === "appearance" && (
             <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Appearance</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>
+              <div style={sectionTitle(d)}>Appearance</div>
+              <div style={sectionSubtitle(d)}>
                 Pick a visual direction for the workspace. Applies instantly.
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={OPTION_STACK}>
                 {Object.values(DIRS).map((dir) => {
                   const sel = dir.id === dirId;
                   return (
                     <button
                       key={dir.id}
                       onClick={() => setDirId(dir.id)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
-                        border: `2px solid ${sel ? dir.accent : d.border}`, borderRadius: 12,
-                        background: sel ? dir.accentSoft : "transparent",
-                        cursor: "pointer", textAlign: "left",
-                      }}
+                      style={optionCard(sel, d, dir)}
                     >
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                        background: `linear-gradient(135deg, ${dir.accent}, ${dir.accentDark})`,
-                        boxShadow: sel ? `0 0 0 3px ${dir.accentSoft}` : "none",
-                      }} />
+                      <div style={dirSwatch(dir, sel)} />
                       <div>
-                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{dir.label}</div>
-                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{dir.desc}</div>
+                        <div style={optionLabel(d)}>{dir.label}</div>
+                        <div style={mutedCaption(d)}>{dir.desc}</div>
                       </div>
                     </button>
                   );
@@ -299,16 +759,16 @@ export function SetupModal({
 
           {sec === "gates" && (
             <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Human Gates</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>Approval checkpoints that pause the pipeline until a human reviews.</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={sectionTitle(d)}>Human Gates</div>
+              <div style={sectionSubtitle(d)}>Approval checkpoints that pause the pipeline until a human reviews.</div>
+              <div style={GATE_STACK}>
                 {GATED_STAGES.map((stage, i) => (
-                  <div key={stage.id} style={{ border: `1px solid ${d.border}`, borderRadius: 12, padding: "12px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                      <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>After {stage.label} · G{i + 1}</div>
-                      <div style={{ background: d.accentSoft, color: d.accent, borderRadius: 20, padding: "2px 10px", fontFamily: MONO, fontSize: 9, fontWeight: 700 }}>ENABLED</div>
+                  <div key={stage.id} style={gateCard(d)}>
+                    <div style={GATE_CARD_HEADER}>
+                      <div style={optionLabel(d)}>After {stage.label} · G{i + 1}</div>
+                      <div style={accentBadge(d)}>ENABLED</div>
                     </div>
-                    <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
+                    <div style={mutedBody(d)}>
                       The {agentForStage(stage.id).profession}'s output needs your approval before the team continues.
                     </div>
                   </div>
@@ -319,183 +779,167 @@ export function SetupModal({
 
           {sec === "harness" && (
             <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>AI Harness</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>The engine used by the Developer in single-agent runs.</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              <div style={sectionTitle(d)}>AI Harness</div>
+              <div style={sectionSubtitle(d)}>The engine used by the Developer in single-agent runs.</div>
+              <div style={ENGINE_STACK}>
                 {Object.values(ENGINES).map((opt) => {
                   const sel = harness === opt.id;
                   return (
                     <button key={opt.id}
                       onClick={() => opt.available && selectEngine(opt.id)}
                       disabled={!opt.available}
-                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: opt.available ? "pointer" : "default", textAlign: "left", opacity: opt.available ? 1 : 0.45 }}>
-                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
-                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                      style={engineCard(sel, opt.available, d)}>
+                      <div style={radioDot(sel, d)} />
+                      <div style={FLEX_FILL}>
+                        <div style={optionLabel(d)}>{opt.label}</div>
+                        <div style={mutedCaption(d)}>{opt.description}</div>
                       </div>
-                      {!opt.available && (
-                        <div style={{ background: d.accentSoft, color: d.accent, borderRadius: 20, padding: "2px 10px", fontFamily: MONO, fontSize: 9, fontWeight: 700 }}>SOON</div>
-                      )}
+                      {!opt.available && <div style={accentBadge(d)}>SOON</div>}
                     </button>
                   );
                 })}
               </div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Engine status</div>
-              <div style={{
-                border: `1px solid ${engineStatus && !engineStatus.installed ? "rgba(220,38,38,0.35)" : d.border}`,
-                background: engineStatus && !engineStatus.installed ? "rgba(220,38,38,0.06)" : "transparent",
-                borderRadius: 12, padding: "12px 14px", marginBottom: 20,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={fieldLabel(d)}>Engine status</div>
+              <div style={statusCard(engineMissing, d)}>
+                <div style={STATUS_HEADER}>
+                  <div style={STATUS_BADGE_ROW}>
                     {statusLoading ? (
-                      <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>Checking CLI…</span>
+                      <span style={mutedBody(d)}>Checking CLI…</span>
                     ) : engineStatus?.installed ? (
                       <>
-                        <CheckCircle2 size={14} style={{ color: "#059669", flexShrink: 0 }} />
-                        <span style={{ color: "#059669", fontFamily: SANS, fontSize: 12, fontWeight: 700 }}>
+                        <CheckCircle2 size={14} style={OK_ICON} />
+                        <span style={OK_TEXT}>
                           Installed{engineStatus.version ? ` · ${engineStatus.version}` : ""}
                         </span>
                       </>
                     ) : (
                       <>
-                        <AlertTriangle size={14} style={{ color: "#DC2626", flexShrink: 0 }} />
-                        <span style={{ color: "#DC2626", fontFamily: SANS, fontSize: 12, fontWeight: 700 }}>Not detected</span>
+                        <AlertTriangle size={14} style={ERROR_ICON} />
+                        <span style={ERROR_TEXT}>Not detected</span>
                       </>
                     )}
                   </div>
-                  <button onClick={() => setStatusNonce((n) => n + 1)}
-                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, borderRadius: 8, background: "transparent", color: d.textMid, fontFamily: SANS, fontSize: 11, fontWeight: 600, padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}>
+                  <button onClick={() => setStatusNonce((n) => n + 1)} style={recheckButton(d)}>
                     <RefreshCw size={11} /> Re-check
                   </button>
                 </div>
                 {!statusLoading && engineStatus?.installed && engineStatus.path && (
-                  <div style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, marginTop: 6, wordBreak: "break-all" }}>{engineStatus.path}</div>
+                  <div style={statusPath(d)}>{engineStatus.path}</div>
                 )}
                 {!statusLoading && engineStatus?.message && (
-                  <div style={{ color: engineStatus.installed ? d.textMuted : d.textMid, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>{engineStatus.message}</div>
+                  <div style={statusNote(engineStatus.installed, d)}>{engineStatus.message}</div>
                 )}
                 {!statusLoading && engineStatus?.installed && engineStatus.loggedIn === false && harness === "cursor" && (
-                  <div style={{ marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <div style={cardDivider(d)}>
+                    <div style={ACTION_ROW}>
                       <button onClick={() => void runLogin()} disabled={loggingIn}
-                        style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "7px 12px", background: loggingIn ? d.surface2 : d.accent, color: loggingIn ? d.textMuted : "#FFF", fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: loggingIn ? "default" : "pointer" }}>
+                        style={primaryAction(loggingIn, d)}>
                         <LogIn size={12} /> {loggingIn ? "Finish sign-in in your browser…" : "Log in to Cursor"}
                       </button>
-                      <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10 }}>Opens the Cursor sign-in in your browser.</span>
+                      <span style={hintText(d)}>Opens the Cursor sign-in in your browser.</span>
                     </div>
-                    {loginError && (
-                      <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginTop: 8 }}>{loginError}</div>
-                    )}
+                    {loginError && <div style={ERROR_NOTE}>{loginError}</div>}
                   </div>
                 )}
                 {!statusLoading && engineStatus && !engineStatus.installed && (engineStatus.installCommand || installer) && (
-                  <div style={{ marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 }}>
-                    <div style={{ color: d.text, fontFamily: SANS, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>Recommended actions</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <div style={cardDivider(d)}>
+                    <div style={actionsLabel(d)}>Recommended actions</div>
+                    <div style={ACTION_ROW}>
                       {installer && (
                         <button onClick={() => void runInstall()} disabled={installing}
-                          style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "7px 12px", background: installing ? d.surface2 : d.accent, color: installing ? d.textMuted : "#FFF", fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: installing ? "default" : "pointer" }}>
+                          style={primaryAction(installing, d)}>
                           <Download size={12} /> {installing ? "Installing… (up to ~1 min)" : installer.label}
                         </button>
                       )}
                       {engineStatus.installCommand && (
-                        <button onClick={() => void copyInstallCommand()}
-                          style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${d.border}`, borderRadius: 8, padding: "7px 12px", background: "transparent", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        <button onClick={() => void copyInstallCommand()} style={secondaryAction(d)}>
                           <Copy size={12} /> {copied ? "Copied ✓" : "Copy install command"}
                         </button>
                       )}
                       {engineStatus.docsUrl && (
-                        <a href={engineStatus.docsUrl} target="_blank" rel="noreferrer"
-                          style={{ color: d.accent, fontFamily: SANS, fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Docs ↗</a>
+                        <a href={engineStatus.docsUrl} target="_blank" rel="noreferrer" style={docsLink(d)}>Docs ↗</a>
                       )}
                     </div>
-                    {installError && (
-                      <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginTop: 8 }}>{installError}</div>
-                    )}
+                    {installError && <div style={ERROR_NOTE}>{installError}</div>}
                     {installer && (
-                      <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.5 }}>
-                        After install, run <span style={{ fontFamily: MONO }}>{installer.loginCmd}</span> once — or point <span style={{ fontFamily: MONO }}>{installer.envVar}</span> at an existing binary.
+                      <div style={installerHint(d)}>
+                        After install, run <span style={MONO_TEXT}>{installer.loginCmd}</span> once — or point <span style={MONO_TEXT}>{installer.envVar}</span> at an existing binary.
                       </div>
                     )}
                   </div>
                 )}
                 {!statusLoading && !engineStatus && (
-                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>Status unavailable — is the server running?</div>
+                  <div style={statusNote(true, d)}>Status unavailable — is the server running?</div>
                 )}
               </div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Connection</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 10 }}>
+              <div style={fieldLabel(d, 2)}>Connection</div>
+              <div style={connectionHint(d)}>
                 How {ENGINES[harness].label} authenticates and bills usage.
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: connectionMode === "api-key" ? 12 : 20 }}>
+              <div style={connectionStack(keyFormOpen)}>
                 {connectionModes.map((opt) => {
                   const sel = connectionMode === opt.id;
                   return (
                     <button key={opt.id}
                       onClick={() => void applyConnectionUpdate({ connectionMode: opt.id })}
-                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
-                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
+                      style={optionCard(sel, d)}>
+                      <div style={radioDot(sel, d)} />
                       <div>
-                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
-                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                        <div style={optionLabel(d)}>{opt.label}</div>
+                        <div style={mutedCaption(d)}>{opt.description}</div>
                       </div>
                     </button>
                   );
                 })}
                 {connectionModes.length === 0 && (
-                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
+                  <div style={mutedBody(d)}>
                     No connection options for {ENGINES[harness].label} yet.
                   </div>
                 )}
               </div>
-              {connectionMode === "api-key" && (
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{apiKeyMode?.label ?? "API key"}</div>
-                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 }}>
+              {keyFormOpen && (
+                <div style={API_KEY_BLOCK}>
+                  <div style={apiKeyLabel(d)}>{apiKeyMode?.label ?? "API key"}</div>
+                  <div style={apiKeyNote(d)}>
                     Stored server-side in your user-level ~/.adhd/settings.json for {projectName} — never inside the project folder, never sent back to the browser.
                   </div>
                   {apiKeyConfigured && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <span style={{ background: "rgba(5,150,105,0.10)", color: "#059669", borderRadius: 20, padding: "3px 10px", fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>KEY CONFIGURED ✓</span>
+                    <div style={KEY_STATUS_ROW}>
+                      <span style={KEY_CONFIGURED_PILL}>KEY CONFIGURED ✓</span>
                       <button onClick={() => void applyConnectionUpdate({ apiKey: null })}
-                        style={{ border: "none", background: "transparent", color: "#DC2626", fontFamily: SANS, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                        style={REMOVE_KEY_BUTTON}>
                         Remove
                       </button>
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={KEY_INPUT_ROW}>
                     <input type="password" value={keyInput}
                       onChange={(e) => setKeyInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && void saveApiKey()}
                       placeholder={apiKeyConfigured ? "Replace key…" : harness === "claude-code" ? "sk-ant-api03-..." : "Paste your API key…"}
-                      style={{ flex: 1, border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 11, color: d.text, outline: "none", background: d.surface2 }} />
+                      style={apiKeyInput(d)} />
                     <button onClick={() => void saveApiKey()} disabled={keySaving || keyInput.trim() === ""}
-                      style={{ border: "none", borderRadius: 10, padding: "9px 14px", background: keyInput.trim() && !keySaving ? d.accent : d.surface2, color: keyInput.trim() && !keySaving ? "#FFF" : d.textMuted, fontFamily: SANS, fontSize: 12, fontWeight: 700, cursor: keyInput.trim() && !keySaving ? "pointer" : "default", flexShrink: 0 }}>
+                      style={saveKeyButton(keyReady, d)}>
                       {keySaving ? "Saving…" : "Save key"}
                     </button>
                   </div>
                 </div>
               )}
-              {connectionError && (
-                <div style={{ color: "#DC2626", fontFamily: SANS, fontSize: 11, marginBottom: 12 }}>{connectionError}</div>
-              )}
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Model</div>
+              {connectionError && <div style={CONNECTION_ERROR}>{connectionError}</div>}
+              <div style={fieldLabel(d)}>Model</div>
               <select value={model}
                 onChange={(e) => selectModel(e.target.value)}
-                style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: "#FFF", outline: "none", marginBottom: 6 }}>
+                style={modelSelect(d)}>
                 {modelOptions.map((opt) => (
                   <option key={opt.id} value={opt.id}>{opt.hint ? `${opt.label} — ${opt.hint}` : opt.label}</option>
                 ))}
                 {!modelOption && <option value={model}>{model} (custom)</option>}
               </select>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: modelOption?.requiresUsageCredits || customModel ? 6 : 20 }}>
-                <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>
+              <div style={modelMetaRow(creditsNoteShown || customModel)}>
+                <span style={mutedCaption(d)}>
                   {MODEL_SOURCE_LABEL[modelList.source]}{modelList.note ? ` · ${modelList.note}` : ""}
                 </span>
-                <button onClick={() => setCustomModel((on) => !on)}
-                  style={{ border: "none", background: "transparent", padding: 0, color: d.accent, fontFamily: SANS, fontSize: 11, cursor: "pointer", marginLeft: "auto", flexShrink: 0 }}>
+                <button onClick={() => setCustomModel((on) => !on)} style={customIdToggle(d)}>
                   {customModel ? "Hide custom ID" : "Custom ID…"}
                 </button>
               </div>
@@ -505,27 +949,27 @@ export function SetupModal({
                   onBlur={() => selectModel(customModelDraft)}
                   onKeyDown={(e) => e.key === "Enter" && selectModel(customModelDraft)}
                   placeholder="Exact model ID passed to the CLI (blank = Auto)"
-                  style={{ width: "100%", border: `1px solid ${d.border}`, borderRadius: 10, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: d.text, background: d.surface2, outline: "none", marginBottom: modelOption?.requiresUsageCredits ? 6 : 20 }} />
+                  style={customModelInput(creditsNoteShown, d)} />
               )}
-              {modelOption?.requiresUsageCredits && (
-                <div style={{ color: GOLD, fontFamily: SANS, fontSize: 11, marginBottom: 20 }}>
+              {creditsNoteShown && (
+                <div style={CREDITS_NOTE}>
                   1M context requires usage credits on your Claude plan (claude.ai/settings/usage) or an API key connection.
                 </div>
               )}
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Permissions</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={fieldLabel(d)}>Permissions</div>
+              <div style={OPTION_STACK}>
                 {PERMISSION_MODES.map((opt) => {
                   const sel = permissionMode === opt.id;
                   return (
                     <button key={opt.id}
                       onClick={() => settings.update({ permissionMode: opt.id })}
-                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${sel ? d.accent : d.border}`, borderRadius: 12, background: sel ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
-                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${sel ? d.accent : d.border}`, background: sel ? d.accent : "transparent", flexShrink: 0 }} />
+                      style={optionCard(sel, d)}>
+                      <div style={radioDot(sel, d)} />
                       <div>
-                        <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>
+                        <div style={optionLabel(d)}>
                           {opt.recommended ? `${opt.label} (recommended)` : opt.label}
                         </div>
-                        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                        <div style={mutedCaption(d)}>{opt.description}</div>
                       </div>
                     </button>
                   );
@@ -536,16 +980,15 @@ export function SetupModal({
 
           {sec === "deploy" && (
             <div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Deploy Target</div>
-              <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 }}>Where the SRE deploys your release.</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {[{ id: "vercel", label: "Vercel", desc: "Auto-detected from project" }, { id: "railway", label: "Railway", desc: "railway.app" }, { id: "fly", label: "Fly.io", desc: "fly.io" }, { id: "custom", label: "Custom script", desc: "Run ./scripts/deploy.sh" }].map((opt, i) => (
-                  <button key={opt.id}
-                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: `2px solid ${i === 0 ? d.accent : d.border}`, borderRadius: 12, background: i === 0 ? d.accentSoft : "transparent", cursor: "pointer", textAlign: "left" }}>
-                    <Server size={14} style={{ color: i === 0 ? d.accent : d.textMuted, flexShrink: 0 }} />
+              <div style={sectionTitle(d)}>Deploy Target</div>
+              <div style={sectionSubtitle(d)}>Where the SRE deploys your release.</div>
+              <div style={OPTION_STACK}>
+                {DEPLOY_TARGETS.map((opt, i) => (
+                  <button key={opt.id} style={optionCard(i === 0, d)}>
+                    <Server size={14} style={deployIcon(i === 0, d)} />
                     <div>
-                      <div style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600 }}>{opt.label}</div>
-                      <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.desc}</div>
+                      <div style={deployLabel(d)}>{opt.label}</div>
+                      <div style={mutedCaption(d)}>{opt.desc}</div>
                     </div>
                   </button>
                 ))}

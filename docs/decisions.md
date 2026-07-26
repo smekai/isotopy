@@ -325,3 +325,20 @@ has ~108 inline styles.
 large, visually risky diff with no unit coverage; folding it into the standards
 task would bury the standard under churn. All components did get named `XProps`
 types (low risk, mechanical); only `StageFocusPanel` got the style extraction.
+
+## 2026-07-26 — SetupModal styles named in-file, not in a sibling module
+
+**Context:** TASK-063 lifted the 100 inline `style={{…}}` objects out of
+`SetupModal.tsx`. At that volume a separate `SetupModal.styles.ts` is tempting.
+
+**Decision:** the named constants and builders live in the component file, above
+the props type, exactly as `StageFocusPanel.tsx` does it. A6 asks for *names*, not
+for a particular file; a sibling styles module would split one component's markup
+from its presentation across two files and make the pattern inconsistent with the
+reference case. Repetition drove the naming: the five option-card call sites
+collapse to one `optionCard(selected, d, accent = d)` builder — where the
+`accent` parameter exists because the Appearance section colours each card from
+the theme it *offers*, not the theme in use — and six muted descriptions to one
+`mutedCaption(d)`. Booleans that a builder branches on are named at the top of the
+component (`engineMissing`, `keyReady`, `creditsNoteShown`) rather than inlined as
+expressions at the call site.

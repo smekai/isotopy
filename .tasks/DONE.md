@@ -1,5 +1,23 @@
 # Done
 
+## TASK-063: Extract SetupModal inline styles to named constants (Architect rule A6)
+**Priority:** P3 | **Tags:** ui
+**Updated:** 2026-07-26 23:20
+
+Follow-up from TASK-052, deferred there as a visually risky diff with no unit coverage. `SetupModal.tsx` carried the last 100 inline `style={{…}}` objects in the codebase.
+
+### Done summary
+- **100 → 0 inline style literals.** All lifted to module-level `CSSProperties` constants (static) and small named builders (theme-/state-dependent), above the props type, matching the `StageFocusPanel.tsx` reference.
+- **Repetition collapsed, which was the real A6 win:** the five option-card call sites became one `optionCard(selected, d, accent = d)` — the `accent` parameter exists because the Appearance section colours each card from the theme it *offers*, not the one in use; `engineCard` spreads it and adds the disabled/opacity variation. Six muted descriptions became `mutedCaption(d)`, three body notes `mutedBody(d)`, and the two install/login buttons `primaryAction(busy, d)`.
+- **Named the booleans the builders branch on** — `engineMissing`, `keyFormOpen`, `keyReady`, `creditsNoteShown` — instead of repeating truthiness expressions at call sites.
+- **Palette literals named:** `OK_GREEN` / `OK_TINT` / `ERROR_RED` / `ERROR_BORDER` / `ERROR_TINT` / `SCRIM` / `WHITE`. The inline deploy-target array became `DEPLOY_TARGETS: DeployTarget[]` (A6 covers config blobs too).
+- **Zero behaviour change, proven not asserted:** 12 screenshots (4 sections × 3 themes) captured before and after against the running app are **byte-identical**.
+- Gates: lint + typecheck + 145 tests + build + `gen:skills --check` green. E2E 21 passed / 1 skipped / **1 pre-existing failure** — `project-drawer.spec.ts:30` expects the text "Pipeline Stages", which exists nowhere in the source; confirmed failing identically on unmodified `HEAD`. Left for a separate task.
+- `docs/decisions.md` records why the styles stayed in the component file rather than a sibling `SetupModal.styles.ts` (A8). Versions 0.6.12.
+- **Cross-platform:** n/a — pure UI, no paths, no platform branches.
+
+---
+
 ## TASK-070: Simplify the durable runtime (post-TASK-068 review)
 **Priority:** P2 | **Tags:** server, core, ui, engine
 **Updated:** 2026-07-24 22:00

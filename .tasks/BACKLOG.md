@@ -1,8 +1,7 @@
 # Backlog
 
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
-**Priority:** P2
-**Tags:** server, engine, infra
+**Priority:** P2 | **Tags:** server, engine, infra
 **Updated:** 2026-07-23 13:00
 
 The standing second choice from [`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md) §9 is **Aiki** — TypeScript, Apache-2.0, and the only candidate ADHD has a contributor on, so its gaps are ours to close. It is not the recommendation only because it requires **PostgreSQL 14+ today** (SQLite is "coming soon", i.e. we'd write it) and documents no fork-from-step (S2). This task builds the same durable runtime as TASK-068 but on Aiki, **on a separate branch**, to compare the two against ADHD's real shape before committing.
@@ -18,20 +17,6 @@ The standing second choice from [`docs/workflow-runtime-options.md`](../docs/wor
 **Deliverable:** a runnable Aiki branch behind the same runtime seam as TASK-068, a head-to-head write-up, and a go/no-go recommendation. If Aiki wins, its branch merges to `main`; otherwise TASK-068's OpenWorkflow branch is what merges.
 
 **Cross-platform:** the deciding question **is** cross-platform — Aiki's Postgres-14+ requirement would mean bundling a database server invisibly on Windows *and* macOS, the packaging burden that eliminated it in the doc. The spike must confirm whether an embedded `node:sqlite` backend avoids that on both OSes, or Aiki fails the same platform bar as DBOS/Restate/Resonate. Tested on Windows; macOS packaging reasoned through.
-
----
-
-## TASK-063: Extract SetupModal inline styles to named constants (Architect rule A6)
-**Priority:** P3 | **Tags:** ui
-**Updated:** 2026-07-22 12:40
-
-Follow-up from TASK-052. The Architect standard (rule **A6**, `docs/architecture.md`) bans large inline `style={{…}}` blocks; `StageFocusPanel.tsx` was cleaned as the reference case, but [`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) still carries ~108 inline style objects. Lift them into named module-level constants (static) and small named builder functions (theme-/state-dependent), matching the `StageFocusPanel.tsx` pattern.
-
-Deliberately deferred from TASK-052 (see `docs/decisions.md`, 2026-07-22): the extraction is a large, visually risky diff with no unit coverage, and folding it into the standards task would have buried the standard under churn.
-
-**Verify:** `pnpm lint && pnpm typecheck && pnpm build` green; `pnpm --filter @adhd/ui e2e` still passes (the Setup → AI Harness smoke tests exercise this modal); no visual regression when opening Setup.
-
-**Cross-platform:** n/a — pure UI.
 
 ---
 
@@ -65,23 +50,6 @@ Add a **third box** to the workflow, after the Tester: a *Manual Tester* persona
 - Keep the `executeStage()` seam untouched — this is a new stage with a persona, so it should need **no orchestrator changes** (a good test that the TASK-046 design generalizes).
 
 **Verify:** a real run on a small web app — Manual Tester writes a spec, runs it headless, reports PASS/FAIL, and leaves screenshots + the spec as artifacts. Confirm no orphaned browser/server processes remain.
-
----
-
-## TASK-039: Pluggable run persistence — storage adapter + selectable DB backend
-**Priority:** P2 | **Tags:** server, core, infra
-**Updated:** 2026-07-17 00:00
-
-The file-backed store from TASK-005 (`state.json` + `events.jsonl` under `.adhd/runs/`) works but flat JSON files are not a great long-term home for run state. Introduce a `RunStore` interface and make the backend selectable, then implement a real DB adapter alongside the JSON one.
-
-**Scope:**
-- Extract a `RunStore` interface from `packages/server/src/services/run-store.ts` (`writeState`, `appendEvent`, `loadAllRuns`) so the orchestrator depends on the interface, not the file functions.
-- Keep the current JSON files as the **default** adapter (`JsonRunStore`) — no behaviour change out of the box.
-- Add at least one real DB adapter (candidate: **SQLite** via better-sqlite3/libsql — single-file, zero-server, fits the local-first story; evaluate vs. Postgres for the hosted story).
-- Config/env selector (e.g. `ADHD_RUN_STORE=json|sqlite`) wired through `config.ts`; document in `.env.example`.
-- Migration note: how existing `.adhd/runs/*` JSON is imported into the DB (one-shot importer or lazy).
-
-**Deliverable:** `RunStore` interface + `JsonRunStore` (default) + one DB adapter, selectable by config, with the orchestrator unchanged behind the interface. Depends on TASK-005.
 
 ---
 
