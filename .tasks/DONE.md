@@ -1,5 +1,27 @@
 # Done
 
+## TASK-076: Epic — the agent window and conversational runs
+**Priority:** P1 | **Tags:** ui, server, core, engine
+**Updated:** 2026-07-27 00:00
+
+Umbrella for TASK-077…080. A run was a *canvas you watch* — one prompt, a horizontal pipeline walk, a flat log, history in a drawer that fetched once on mount, and an approval gate as the only human-in-the-loop mechanism. This epic turned it into a **conversation you take part in**.
+
+### Done summary
+
+Closed as an epic: the four children delivered the shape, and this task validated
+it end to end and closed the one verification gap they left.
+
+- **The target shape is present, bullet by bullet.** Header mark + `ProjectSwitcher` untouched (`App.tsx`); persistent left rail with live status and "New run" (`RunRail`/`RunCard`, fed by the project-scoped `/runs/events` channel); one thread per run (`ChatPanel` over the derived `buildTranscript`, carrying stage boundaries, agent prose, tool rows, notices, questions and user turns in one order); the durable question loop (`runStageTurns` parks on `answer:<runId>:<stageId>`, `POST /runs/:id/messages` signals it, the stage resumes on `resumeSessionId` rather than re-running); and exactly two presets in `DEMO_PIPELINES` — `pm-dev-test` and `solo`.
+- **`asking` is a run status as well as a stage status.** Worth recording because the UI depends on it: `ChatPanel` keys its placeholder and focus off `run.status === "asking"`, and `stageAsking`/`stageAnswered` set both, on the server and in the client reducer. A stage-only status would have left the composer silently inert.
+- **The gap the children left was verification, not behaviour.** The question loop is the epic's central promise and had **no browser-level test** — the server proves the park and the resume in `run-questions.comp.ts`, but the UI contract TASK-079 claimed (violet question block, "Answer the question…" placeholder, composer focus, `ASKING` in the rail, the answer reaching the endpoint) was hand-verified once and unguarded since.
+- **`e2e/run-question.spec.ts`** — four seeded cases in the `dev-test-flow` style: route interception, a `RunState` typed against core so a model change breaks typecheck, zero tokens. Reuses the existing testid roster; no new testid.
+- **Both behavioural claims were mutation-checked**, per the rule the previous commit set: forcing `asking` to `false` fails only the composer case, and dropping `question: true` from `transcript.ts` fails only the question-block case. A test that cannot fail is not a test.
+- **Verified:** lint, typecheck, **207 tests**, build, `gen:skills --check`, **Playwright 27 passed, 1 skipped** (the live tier). Docs: `architecture-ui.md` §9 — the seeded tier now names `run-question`, and the testid roster gains `chat-question`, which TASK-079 added without recording. Versions **0.7.0** — the epic that made a run a conversation is what the minor bump marks.
+
+**Not fixed here:** no gap in the §10 table closes — the epic's own out-of-scope list owns them. `mock-content.ts` is still imported by `StageFocusPanel` (**TASK-075**), voice stays decorative, the theme stays light-only, Cursor stays `conversational: false` until someone with the CLI verifies its session-id emission (gap #10), and an unprompted message with nothing asking is still only recorded (gap #9). `StageFocusPanel` remains the largest component. The `pm-dev-test` flow still has not been driven against a real CLI end to end — the live tier is the only thing that would prove it, and it costs money.
+
+---
+
 ## TASK-080: Project Manager agent and the two-preset pipeline set
 **Priority:** P1 | **Tags:** core, server
 **Updated:** 2026-07-27 00:00

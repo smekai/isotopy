@@ -1,32 +1,5 @@
 # Backlog
 
-## TASK-076: Epic — the agent window and conversational runs
-**Priority:** P1 | **Tags:** ui, server, core, engine
-**Updated:** 2026-07-27 00:00
-
-Umbrella for TASK-077…080. Today a run is a *canvas you watch*: one prompt into [`EmptyState`](../packages/ui/src/components/EmptyState.tsx), a horizontal walk through [`PipelineRow`](../packages/ui/src/components/PipelineRow.tsx), a flat log in [`StageFocusPanel`](../packages/ui/src/components/StageFocusPanel.tsx), history parked in a right-hand drawer that fetches once on mount. The only human-in-the-loop mechanism is the approval gate, and it is binary — `client.sendSignal` carries no payload, so there is no reject, no comment, no reply. [`SteerChat.tsx`](../packages/ui/src/components/SteerChat.tsx) is the shell for the missing feature and fabricates its agent reply after 700 ms.
-
-This epic turns a run into a **conversation you take part in**, in the shape Codex and the Cursor agent window have.
-
-**Target shape:**
-- The header keeps the ADHD mark and [`ProjectSwitcher`](../packages/ui/src/components/ProjectSwitcher.tsx) exactly as they are now.
-- A persistent **left rail** lists this project's runs with live status, and a "New run" action on top.
-- The main pane is **one thread per run**: user turns, agent narration, tool activity, stage boundaries and questions, in order.
-- An agent running on a **conversational** engine may stop and ask a question. The run parks durably until the user answers, then continues **in the same session** — not from scratch.
-- Exactly two pipelines: **Project Manager → Developer → Tester**, and a **single all-purpose agent**.
-
-**Children, in order — each ships and is verifiable alone:**
-1. **TASK-077** — left run rail, routing, live run list.
-2. **TASK-078** — the transcript and a message endpoint (lands against today's Developer + Tester; no new agent needed).
-3. **TASK-079** — session capture, resume, and question mode. The load-bearing one.
-4. **TASK-080** — the Project Manager persona and the two-preset set.
-
-**Out of scope** — name it here so the children don't creep: voice ([`VoiceControls`](../packages/ui/src/components/VoiceControls.tsx), [`Waveform`](../packages/ui/src/components/Waveform.tsx) stay decorative), dark mode (the theme is light-only and a dark palette is a change to the `Dir` *shape*, not three more entries), the Reasoning tab's fixtures (TASK-075 owns those), and the six roster professions that have labels but no persona.
-
-**Cross-platform:** carried by each child; TASK-079 is the only one with real platform surface.
-
----
-
 ## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-27 00:00

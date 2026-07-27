@@ -407,8 +407,9 @@ hooks are exercised through `renderHook`, never called in a test body.
 
 The Playwright suite runs in three tiers, deliberately: **free** (`ui-smoke`,
 `project-switcher`, `project-drawer` — no engine spend), **seeded**
-(`dev-test-flow` — a fabricated `RunState` injected by route interception, so
-per-stage rendering is asserted at zero cost), and **live** (`live-dev-test`, skipped
+(`dev-test-flow` and `run-question` — a fabricated `RunState` injected by route
+interception, so per-stage rendering and the parked-question UI are asserted at
+zero cost), and **live** (`live-dev-test`, skipped
 unless `ADHD_E2E_LIVE=1`, described in-file as "a canary, not a proof"). It runs
 against an isolated `ADHD_USER_HOME` under `os.tmpdir()` on its own ports
 (9499 / 5199) — **a test must never touch the real `~/.adhd`**. Because preferences
@@ -422,7 +423,8 @@ list card. The current roster:
 `project-drawer` · `project-root` · `run-status` · `stage-node-<stageId>` ·
 `stage-profession` · `stage-persona` · `stage-verdict` · `stage-scroll` ·
 `artifact-preview` · `artifact-view-<view>` · `artifact-files` · `run-card` ·
-`run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer`
+`run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer` ·
+`chat-question`
 
 ---
 
