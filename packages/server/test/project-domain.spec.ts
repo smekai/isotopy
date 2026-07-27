@@ -5,7 +5,6 @@ import { describe, expect, test } from "vitest";
 import {
   normalizeProjectRoot,
   projectIdFor,
-  projectNameFor,
   sameProjectRoot,
 } from "../src/domain/projects.ts";
 
@@ -22,10 +21,6 @@ describe("normalizeProjectRoot", () => {
     expect(normalizeProjectRoot(`${root}${path.sep}`)).toBe(normalizeProjectRoot(root));
   });
 
-  test("ignores surrounding whitespace", () => {
-    const root = path.resolve("dev", "my-app");
-    expect(normalizeProjectRoot(`  ${root}  `)).toBe(normalizeProjectRoot(root));
-  });
 });
 
 describe("sameProjectRoot", () => {
@@ -38,18 +33,9 @@ describe("sameProjectRoot", () => {
     const root = path.resolve("dev", "My-App");
     expect(sameProjectRoot(root, root.toLowerCase())).toBe(isWindows);
   });
-
-  test("different folders stay different", () => {
-    expect(sameProjectRoot(path.resolve("dev", "a"), path.resolve("dev", "b"))).toBe(false);
-  });
 });
 
 describe("projectIdFor", () => {
-  test("is stable for the same folder", () => {
-    const root = path.resolve("dev", "my-app");
-    expect(projectIdFor(root)).toBe(projectIdFor(root));
-  });
-
   test("carries the folder name so it is readable", () => {
     expect(projectIdFor(path.resolve("dev", "my-app"))).toMatch(/^my-app-[0-9a-f]{8}$/);
   });
@@ -60,19 +46,7 @@ describe("projectIdFor", () => {
     expect(left).not.toBe(right);
   });
 
-  test("is never the raw path", () => {
-    const id = projectIdFor(path.resolve("dev", "my-app"));
-    expect(id).not.toContain(path.sep);
-    expect(id).not.toContain("/");
-  });
-
   test("a name with spaces or dots is slugged into a safe id", () => {
     expect(projectIdFor(path.resolve("dev", "My App v2.0"))).toMatch(/^my-app-v2-0-[0-9a-f]{8}$/);
-  });
-});
-
-describe("projectNameFor", () => {
-  test("is the folder's own name", () => {
-    expect(projectNameFor(path.resolve("dev", "my-app"))).toBe("my-app");
   });
 });

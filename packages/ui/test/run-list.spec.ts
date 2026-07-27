@@ -4,7 +4,7 @@
 import { describe, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunStatus, RunSummary } from "@adhd/core";
-import { firstActiveRunId, mergeSummaries, mergeSummary } from "../src/run-list";
+import { mergeSummaries, mergeSummary } from "../src/run-list";
 
 function summary(id: string, status: RunStatus, number = 1): RunSummary {
   return {
@@ -51,26 +51,4 @@ describe("mergeSummaries", () => {
     expect(merged[0]?.status).toBe("completed");
   });
 
-  test("an empty buffer leaves the snapshot alone", () => {
-    const snapshot = [summary("a", "running")];
-    expect(mergeSummaries(snapshot, [])).toEqual(snapshot);
-  });
-});
-
-describe("firstActiveRunId", () => {
-  test("finds the first run that has not reached a terminal status", () => {
-    expect(
-      firstActiveRunId([summary("done", "completed"), summary("live", "running")]),
-    ).toBe("live");
-  });
-
-  test("a run awaiting a gate still counts as active", () => {
-    expect(firstActiveRunId([summary("gate", "awaiting")])).toBe("gate");
-  });
-
-  test("returns null when every run is finished", () => {
-    expect(
-      firstActiveRunId([summary("a", "completed"), summary("b", "cancelled")]),
-    ).toBeNull();
-  });
 });

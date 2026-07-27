@@ -2,15 +2,11 @@
 // must degrade to home rather than producing a run id the server never had.
 // Round-tripping matters because run ids reach the URL verbatim.
 import { describe, expect, test } from "vitest";
-import { HOME_ROUTE, parseRoute, routeHash, routeRunId, runRoute } from "../src/route";
+import { HOME_ROUTE, parseRoute, routeHash, runRoute } from "../src/route";
 
 describe("parseRoute", () => {
   test("an empty hash is home", () => {
     expect(parseRoute("")).toEqual(HOME_ROUTE);
-  });
-
-  test("the home hash is home", () => {
-    expect(parseRoute("#/")).toEqual(HOME_ROUTE);
   });
 
   test("a run hash carries the run id", () => {
@@ -32,22 +28,9 @@ describe("parseRoute", () => {
 });
 
 describe("routeHash", () => {
-  test("home is the root hash", () => {
-    expect(routeHash(HOME_ROUTE)).toBe("#/");
-  });
-
-  test("a run id round-trips through the hash", () => {
+  test("a run id needing escapes round-trips through the hash", () => {
+    // The id reaches the URL verbatim, so encode and decode have to agree.
     const route = runRoute("a/b");
     expect(parseRoute(routeHash(route))).toEqual(route);
-  });
-});
-
-describe("routeRunId", () => {
-  test("is null on home", () => {
-    expect(routeRunId(HOME_ROUTE)).toBeNull();
-  });
-
-  test("is the run id on a run route", () => {
-    expect(routeRunId(runRoute("ab12cd34"))).toBe("ab12cd34");
   });
 });

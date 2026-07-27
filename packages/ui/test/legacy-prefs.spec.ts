@@ -3,7 +3,6 @@
 // what this covers is the read-then-forget, including the junk a hand-edited or
 // half-written storage can hold.
 import { beforeEach, describe, expect, test } from "vitest";
-import { HOME_PROJECT_ID } from "@adhd/core";
 import { clearLegacyPreferences, readLegacyPreferences } from "../src/legacy-prefs";
 
 class MemoryStorage {
@@ -69,12 +68,6 @@ describe("readLegacyPreferences", () => {
     store(BETA, "engine", "codex");
 
     expect(readLegacyPreferences(ALPHA)).toBeNull();
-  });
-
-  test("the home project is scoped like any other", () => {
-    store(HOME_PROJECT_ID, "pipelineId", "solo");
-
-    expect(readLegacyPreferences(HOME_PROJECT_ID)).toEqual({ pipelineId: "solo" });
   });
 
   test("values the server would reject are dropped rather than sent", () => {

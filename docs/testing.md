@@ -29,14 +29,25 @@ A rule of thumb: if a check would still make sense with the React app deleted,
 it is a component test.
 
 **A test must be able to fail for a real reason.** A spec exists for logic
-complicated enough to get wrong — a parser, a reducer, an ordering rule. It is
-not there to confirm that a constant still holds a value, that a document still
-contains a word, or that prose still ends a particular way. Those pass until
-someone writes a perfectly good sentence, then fail for no reason anybody cares
-about, and the fix is always to edit the test. TASK-080 deleted four such checks
-from `skill-generation.spec.ts` — including one asserting every persona's last
-word was `prompt.`, which broke on a new persona that was entirely correct. If
-you cannot name the bug a test would catch, it is not a test.
+complicated enough to get wrong — a parser, a reducer, an ordering rule, a
+platform difference. **If you cannot name the bug a test would catch, it is not
+a test.** Three patterns fail that question every time:
+
+| Anti-pattern | Why it is worthless | Example removed |
+| --- | --- | --- |
+| Asserting a **constant** back | The test and the code are the same edit. It fails when a value legitimately changes, never when behaviour breaks. | `expect(DEMO_PIPELINES.map(p => p.id)).toEqual(["pm-dev-test", "solo"])` |
+| Asserting on **prose** | Passes until someone writes a perfectly good sentence. | `expect(persona.endsWith("prompt.")).toBe(true)` — broke on a correct new persona |
+| Covering a **one-line expression** | `isValid(x) ? x : default` has no room for a bug the type system does not already catch. | the five `normalizeProjectPreferences` cases |
+
+Two rounds of review deleted ~35 such tests. What survived is the shape to copy:
+`parsePreferencesUpdate` (four validated fields, partial output, legacy rewrite)
+is covered; `normalizeProjectPreferences` beside it is not, because it is four
+ternaries whose only real logic is shared with the parser. `sameProjectRoot` is
+covered because it folds case **only on Windows**; `projectNameFor` is not,
+because it is `path.basename`.
+
+The cost of a worthless test is not the milliseconds. It is that every future
+change drags it along, and that a red suite stops meaning something is broken.
 
 **The extension picks the environment.** `pnpm test` runs two Vitest projects
 from one root config: `node` takes `packages/*/test/**/*.{comp,spec}.ts`, and

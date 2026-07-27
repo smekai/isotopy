@@ -1,60 +1,12 @@
-// The settings file is hand-editable and predates the preference block, so a
-// read has to survive anything; a write is the API contract and must not.
+// A write is the API contract: `parsePreferencesUpdate` validates four
+// independent fields, returns a partial update of only what was sent, and
+// rewrites legacy model ids on the way in. That branching is what this covers.
+//
+// `normalizeProjectPreferences` is deliberately not covered here — it is four
+// `isValid(x) ? x : default` ternaries, and its one piece of real logic (the
+// legacy alias rewrite in `readEngineModels`) is shared with the parser below.
 import { describe, expect, test } from "vitest";
-import { defaultProjectPreferences } from "@adhd/core";
-import {
-  normalizeProjectPreferences,
-  parsePreferencesUpdate,
-} from "../src/domain/preferences.ts";
-
-describe("normalizeProjectPreferences", () => {
-  test("an absent block reads as the built-in defaults", () => {
-    expect(normalizeProjectPreferences(undefined)).toEqual(defaultProjectPreferences());
-  });
-
-  test("junk in every field falls back field by field", () => {
-    expect(
-      normalizeProjectPreferences({
-        engine: "not-an-engine",
-        engineModels: "nope",
-        permissionMode: "yolo",
-        pipelineId: "no-such-pipeline",
-      }),
-    ).toEqual(defaultProjectPreferences());
-  });
-
-  test("known values survive", () => {
-    expect(
-      normalizeProjectPreferences({
-        engine: "codex",
-        engineModels: { codex: "gpt-5.1-codex-max" },
-        permissionMode: "acceptEdits",
-        pipelineId: "solo",
-      }),
-    ).toEqual({
-      engine: "codex",
-      engineModels: { codex: "gpt-5.1-codex-max" },
-      permissionMode: "acceptEdits",
-      pipelineId: "solo",
-    });
-  });
-
-  test("a legacy model id migrates to its CLI alias", () => {
-    const preferences = normalizeProjectPreferences({
-      engineModels: { "claude-code": "claude-sonnet-4-6" },
-    });
-
-    expect(preferences.engineModels["claude-code"]).toBe("sonnet");
-  });
-
-  test("an unknown engine key is dropped from the model bag", () => {
-    const preferences = normalizeProjectPreferences({
-      engineModels: { "claude-code": "opus", gemini: "pro" },
-    });
-
-    expect(preferences.engineModels).toEqual({ "claude-code": "opus" });
-  });
-});
+import { parsePreferencesUpdate } from "../src/domain/preferences.ts";
 
 describe("parsePreferencesUpdate", () => {
   test("an empty body is a valid no-op update", () => {

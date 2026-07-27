@@ -63,7 +63,3 @@ test("writeHandoff writes handoff.md under the run's stage dir", async () => {
   );
   expect(content).toBe("# handoff body");
 });
-
-test("an empty repository loads no runs", async () => {
-  expect(await repository.loadAll()).toEqual([]);
-});
