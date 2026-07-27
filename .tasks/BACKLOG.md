@@ -27,27 +27,6 @@ This epic turns a run into a **conversation you take part in**, in the shape Cod
 
 ---
 
-## TASK-077: Agent-window shell — left run rail and a routed run view
-**Priority:** P1 | **Tags:** ui, server
-**Updated:** 2026-07-27 00:00
-
-Replace the drawer-and-canvas layout with a two-column shell. [`HistoryDrawer`](../packages/ui/src/components/HistoryDrawer.tsx) is the closest thing to a run list today and it is wrong in three ways: it is an overlay rather than a place, it calls `fetchRuns()` once on mount and never again, and it has no selection state.
-
-**Scope:**
-1. **Left rail** — ~280px, persistent, below the existing header. "New run" button, then run cards: `#number`, status dot, task snippet, relative time, pipeline name. Selecting a card loads that run in the main pane and shows as active. Reuse the status vocabulary already in [`theme.ts`](../packages/ui/src/theme.ts) — `RUN_PILL`, `runDot`, `statusClr` — do not invent colours.
-2. **Delete `HistoryDrawer.tsx`.** Resume / Restart / Rerun move onto the run card or the run header; `handleRestart` and `handleRerun` in [`App.tsx`](../packages/ui/src/App.tsx#L225) already exist and keep their semantics.
-3. **Routing.** [`architecture-ui.md`](../docs/architecture-ui.md) §1 names the router as "likely the first absence to fall", triggered by deep-linking a run — which is exactly this. Adopt one and add the **dated [`decisions.md`](../docs/decisions.md) entry naming which absence-row it invalidates**; §1 requires that, it is not optional.
-4. **Live run list.** `GET /runs` is one-shot; SSE is per-run only ([`routes/runs.ts`](../packages/server/src/routes/runs.ts)). Add a **project-scoped SSE channel** — `GET /runs/events`, scoped through the existing `X-ADHD-Project` header via [`routes/project-scope.ts`](../packages/server/src/routes/project-scope.ts) — emitting a compact run summary on every status transition. [`RunOrchestrator`](../packages/server/src/services/run-orchestrator.ts) already owns a per-run listener registry and is the single writer of the read model; add a project-level listener beside it. Consume it from a new `useRunList` hook. **`fetch`/`EventSource` stay inside [`api.ts`](../packages/ui/src/api.ts)** — that seam is a rule, not a habit. Remember to add the new proxy path to both [`vite.config.ts`](../packages/ui/vite.config.ts) and [`app.ts`](../packages/server/src/app.ts) if the prefix is new.
-5. **Main pane unchanged for now** — `RunStatusBar` + `PipelineRow` + `StageFocusPanel` stay; TASK-078 replaces the body. `EmptyState`'s composer becomes the empty right-hand pane.
-6. **Accessible from the start.** The rail is a list of real `<button>`s with `aria-current` on the selection — no `div` click handlers. The existing overlays fail §8 (no `role="dialog"`, no Escape, no focus management); do not add a fourth offender.
-7. **Test fallout:** `data-testid="history-card" | "history-resume" | "history-restart" | "history-rerun"` disappear. Rename to `run-card` etc. and update the specs in [`packages/ui/e2e/`](../packages/ui/e2e/). A *new* testid beyond those renames needs justification per the roster rule.
-
-**Cross-platform:** n/a — UI plus one JSON/SSE route; no subprocesses, paths, or shell.
-
-**Verify:** two runs in one project with one running — the rail reflects the running one's status change without a reload; `/runs/:id` deep-links to that run; `pnpm --filter @adhd/ui e2e` green.
-
----
-
 ## TASK-078: Run chat — one transcript per run, and a message endpoint
 **Priority:** P1 | **Tags:** core, server, ui
 **Updated:** 2026-07-27 00:00

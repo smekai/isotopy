@@ -5,6 +5,7 @@ import type {
   PipelineDefinition,
   RunEvent,
   RunState,
+  RunSummary,
   StageDefinition,
   StageState,
   StageVerdict,
@@ -17,7 +18,9 @@ import {
   createInitialRunState,
   isTerminalRunStatus,
   pipelineUsesEngine,
+  toRunSummary,
 } from "@adhd/core";
+import { ListenerRegistry } from "./listener-registry.ts";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -47,6 +50,8 @@ const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
 
 type RunListener = (event: RunEvent) => void;
 
+type RunSummaryListener = (summary: RunSummary) => void;
+
 export interface StartRunOptions {
   task?: string | undefined;
   engine?: string | undefined;
@@ -67,7 +72,8 @@ interface InputExtras {
 
 export class RunOrchestrator implements RunProjection {
   private readonly runs = new Map<string, RunState>();
-  private readonly listeners = new Map<string, Set<RunListener>>();
+  private readonly listeners = new ListenerRegistry<RunEvent>();
+  private readonly projectListeners = new ListenerRegistry<RunSummary>();
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
@@ -177,15 +183,11 @@ export class RunOrchestrator implements RunProjection {
   }
 
   subscribe(runId: string, listener: RunListener): () => void {
-    const bucket = this.listeners.get(runId) ?? new Set<RunListener>();
-    bucket.add(listener);
-    this.listeners.set(runId, bucket);
-    return () => {
-      bucket.delete(listener);
-      if (bucket.size === 0) {
-        this.listeners.delete(runId);
-      }
-    };
+    return this.listeners.add(runId, listener);
+  }
+
+  subscribeProject(projectId: string, listener: RunSummaryListener): () => void {
+    return this.projectListeners.add(projectId, listener);
   }
 
   async replayEvents(runId: string): Promise<RunEvent[]> {
@@ -646,13 +648,19 @@ export class RunOrchestrator implements RunProjection {
       .appendEvent(event.runId, event)
       .catch((error) => console.warn(`Failed to persist event for run ${event.runId}:`, error));
     this.schedulePersist(event.runId, event.type !== "stage.log");
-    const listeners = this.listeners.get(event.runId);
-    if (!listeners) {
+    this.listeners.emit(event.runId, event);
+    this.publishSummary(event);
+  }
+
+  private publishSummary(event: RunEvent): void {
+    if (event.type === "stage.log") {
       return;
     }
-    for (const listener of listeners) {
-      listener(event);
+    const run = this.runs.get(event.runId);
+    if (!run || !this.projectListeners.has(run.projectId)) {
+      return;
     }
+    this.projectListeners.emit(run.projectId, toRunSummary(run));
   }
 
   private repositoryFor(projectPath: ProjectPath): RunRepository {

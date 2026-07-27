@@ -116,11 +116,10 @@ async function seedRun(page: Page): Promise<void> {
   );
 }
 
-/** Open the seeded run through the history drawer (it is already finished). */
+/** Open the seeded run from the run rail (it is already finished). */
 async function attachSeededRun(page: Page): Promise<void> {
   await page.goto("/");
-  await page.getByRole("button", { name: "History" }).click();
-  await page.getByTestId("history-card").filter({ hasText: "seeded two-box run" }).click();
+  await page.getByTestId("run-card").filter({ hasText: "seeded two-box run" }).click();
   await expect(page.getByTestId("run-status")).toHaveText("COMPLETED");
 }
 

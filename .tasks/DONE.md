@@ -1,5 +1,25 @@
 # Done
 
+## TASK-077: Agent-window shell — left run rail and a routed run view
+**Priority:** P1 | **Tags:** ui, server
+**Updated:** 2026-07-27 00:00
+
+The run list was an overlay (`HistoryDrawer`) that fetched once on mount, never refetched, and had no selection state — so the only way to see a run's status change was to close it and open it again. The app had one screen and no router, which meant a run could not be linked, bookmarked, or reached with the back button.
+
+### Done summary
+- **A persistent left rail replaces the drawer.** `RunRail.tsx` (~130 lines) + `RunCard.tsx` (~215) — 280px, `<nav aria-label="Runs">` over a `<ul>` of real `<button>`s with `aria-current` on the open one. Resume / Restart / Rerun moved onto the card as siblings of the open button, not children, so no `<button>` nests inside another. `HistoryDrawer.tsx` is deleted; testids renamed `history-*` → `run-*`.
+- **A hand-rolled hash router, and no fifth dependency.** `route.ts` is a pure `parseRoute`/`routeHash` pair over a two-member discriminated union; `useRoute` is a `hashchange` listener. `activeRunId` is now `routeRunId(route)` rather than state, so back/forward work and `#/runs/:id` is linkable. **The hash is load-bearing:** `/runs` belongs to the API and is proxied by `vite.config.ts`, so a path router would have been answered with run JSON instead of the app (A8 → `decisions.md`).
+- **A project-scoped SSE channel makes the rail live.** `GET /runs/events` emits a compact `RunSummary` on every non-log event. `toRunSummary` lives in `@adhd/core` so both sides share one declaration, and it deliberately drops `stages[].logs` — the bulk of a `RunState`, and worthless for painting a status dot. `ListenerRegistry<T>` extracts what the per-run and per-project subscriptions had in common, collapsing `subscribe` to one line.
+- **`EventSource` cannot set headers**, so `projectScope` gained a `?project=` fallback; the `X-ADHD-Project` header stays the rule everywhere else.
+- **Snapshot still comes from `GET /runs`.** `useRunList` subscribes first, fetches second, and replays what arrived in the gap — the ordering `useRunEvents` already uses, and the reason `mergeSummaries` exists.
+- **Boot auto-attach is guarded.** An `attachedProject` ref fires it once per project, so it cannot yank the user back to a running run after they deliberately clicked "New run".
+- **Tests:** +30. `route.spec.ts` (13), `run-list.spec.ts` (9) and `useRunList.comp.tsx` (8) are new; `run-stream.comp.ts` (4) covers the channel end to end — push on transition, no logs in the payload, project scoping, and the query-parameter path. `deferred.ts` extracts what the two stream fakes share.
+- **Verified:** lint, typecheck, **203 tests** (4 consecutive clean runs), build, `gen:skills --check`, and the **full Playwright suite (22 passed, 1 skipped)**. Also driven in a real browser: deep link → correct run, card click → navigation, "New run" → composer, browser Back → previous run, exactly one `aria-current`. Docs: `architecture-ui.md` §1/§2/§3/§5/§8/§9 and gap #5, plus a dated `decisions.md` entry. Versions 0.6.17.
+
+**Not fixed here:** the main pane is still `RunStatusBar` + `PipelineRow` + `StageFocusPanel` — TASK-078 replaces it with the transcript.
+
+---
+
 ## TASK-073: Split `SetupModal.tsx` into per-section components
 **Priority:** P3 | **Tags:** ui
 **Updated:** 2026-07-27 00:00

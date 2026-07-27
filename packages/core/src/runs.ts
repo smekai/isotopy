@@ -66,6 +66,50 @@ export interface RunState {
   completedAt?: string;
 }
 
+export interface RunSummaryStage {
+  id: string;
+  label: string;
+  status: StageStatus;
+}
+
+export interface RunSummary {
+  id: string;
+  number: number;
+  projectId: string;
+  pipelineId: string;
+  pipelineName: string;
+  status: RunStatus;
+  task?: string;
+  engine?: EngineId;
+  model?: string;
+  createdAt: string;
+  completedAt?: string;
+  stages: RunSummaryStage[];
+}
+
+export const RUN_SUMMARY_EVENT = "run.summary";
+
+export function toRunSummary(run: RunState): RunSummary {
+  return {
+    id: run.id,
+    number: run.number,
+    projectId: run.projectId,
+    pipelineId: run.pipelineId,
+    pipelineName: run.pipelineName,
+    status: run.status,
+    ...(run.task !== undefined ? { task: run.task } : {}),
+    ...(run.engine !== undefined ? { engine: run.engine } : {}),
+    ...(run.model !== undefined ? { model: run.model } : {}),
+    createdAt: run.createdAt,
+    ...(run.completedAt !== undefined ? { completedAt: run.completedAt } : {}),
+    stages: run.stages.map((stage) => ({
+      id: stage.id,
+      label: stage.label,
+      status: stage.status,
+    })),
+  };
+}
+
 export type RunEventType =
   | "run.started"
   | "run.completed"

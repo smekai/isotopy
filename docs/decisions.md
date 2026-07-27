@@ -6,6 +6,46 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-27 — The run rail routes on the hash, and rides a summary channel (TASK-077)
+
+**Context:** the run list moved from an overlay (`HistoryDrawer`, one `fetchRuns()`
+on mount, no selection state) to a persistent left rail. That trips two absences
+`architecture-ui.md` §1 records as deliberate — the router, and the fact that no
+transport pushes run-*list* changes. §1 requires an entry naming the row it
+invalidates, so this is it: the **Router** row falls, on the trigger it predicted
+("the need to deep-link a run").
+
+**Decision — a hand-rolled hash router, not `react-router`.** The dependency table
+is four entries and adding a fifth needs to earn it; one route pattern (`#/runs/:id`)
+does not. `route.ts` is a pure `parseRoute`/`routeHash` pair over a two-member
+discriminated union with a unit spec, and `useRoute` is a `hashchange` listener.
+Back/forward work because the hash *is* history.
+
+**Why the hash and not a real path.** `/runs` is the API's. The UI and server share
+an origin, and `packages/ui/vite.config.ts` proxies `/runs` to the server — so a
+browser navigation to `/runs/ab12cd34` would be proxied and answered with run JSON
+instead of the app. A path router would need a dev-proxy bypass *and* an SPA
+fallback wherever the built UI is served. The hash is invisible to both and costs
+nothing. Revisit if the API ever moves under a prefix (`/api/*`).
+
+**Decision — the rail's transport carries `RunSummary`, not `RunState`.** A new
+project-scoped SSE channel (`GET /runs/events`) emits a compact summary on every
+non-log event. Summaries exist because `RunState` carries `stages[].logs`, which is
+almost all of its bytes and grows for the life of a run; re-sending it on every
+status transition to paint a status dot would be absurd. `toRunSummary` lives in
+`@adhd/core` so both sides reference one declaration. The channel deliberately
+skips `stage.log` — a log never changes what the rail draws.
+
+**The project arrives as a query parameter, not the `X-ADHD-Project` header.**
+`EventSource` cannot set headers. `projectScope` now falls back to `?project=`;
+the header stays the rule for every other call.
+
+**The snapshot still comes from `GET /runs`.** The stream carries changes only, so
+`useRunList` fetches the snapshot and replays anything that arrived in the gap —
+the same subscribe-then-fetch ordering `useRunEvents` uses (§5), for the same
+reason. A snapshot event on the channel would have duplicated an endpoint that
+already exists and works under route interception in the e2e suite.
+
 ## 2026-07-27 — Setup is a folder of sections over a shared style module (TASK-073)
 
 **Context:** `SetupModal.tsx` was 1002 lines owning four unrelated settings

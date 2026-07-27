@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { DEFAULT_PIPELINE_ID, isTerminalRunStatus } from "@adhd/core";
+import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@adhd/core";
 import type { RunEvent } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
@@ -16,6 +16,30 @@ export function createRunRoutes(
 ): Hono {
   return new Hono()
     .get("/", (c) => c.json(orchestrator.listRuns(projectScope(registry, c).id)))
+
+    .get("/events", (c) => {
+      const projectId = projectScope(registry, c).id;
+
+      return streamSSE(c, async (stream) => {
+        await new Promise<void>((resolve) => {
+          const unsubscribe = orchestrator.subscribeProject(projectId, (summary) => {
+            void stream.writeSSE({
+              event: RUN_SUMMARY_EVENT,
+              data: JSON.stringify(summary),
+            });
+          });
+          const keepAlive = setInterval(() => {
+            void stream.writeSSE({ event: "ping", data: "" });
+          }, SSE_KEEPALIVE_MS);
+          keepAlive.unref();
+          stream.onAbort(() => {
+            clearInterval(keepAlive);
+            unsubscribe();
+            resolve();
+          });
+        });
+      });
+    })
 
     .get("/:id", (c) => {
       const run = orchestrator.getRun(c.req.param("id"));

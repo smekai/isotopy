@@ -28,7 +28,7 @@ by accident and nobody defends them past their usefulness.
 
 | Absent | Why it is fine today | What would change it |
 | --- | --- | --- |
-| **Router** | One screen. Overlays are conditional renders in [`App.tsx`](../packages/ui/src/App.tsx). | A second genuine screen, or the need to deep-link a run (`/runs/:id`) — likely the first to fall. |
+| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied — see [`decisions.md`](./decisions.md) 2026-07-27. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. One `#/runs/:id` does not. |
 | **State library** | State is either server state (three hooks) or one screen's view state. | State shared between siblings that are not both children of `App`. |
 | **CSS framework** | Theme switching is runtime, driven by a JS token object. | See §7 — the token gap is the real problem, not the absence of Tailwind. |
 | **Data-fetching library** | Every read is one call and one owner; SSE carries updates, so there is no cache to invalidate. | Refetch-on-focus, retries, or two components needing the same request. |
@@ -53,8 +53,10 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | Module | Role |
 | --- | --- |
 | [`main.tsx`](../packages/ui/src/main.tsx) | Bootstrap: `createRoot` + `StrictMode` + `ThemeProvider`. Nothing else ever goes here. |
-| [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run view vs. empty state, every overlay. See §6 for what it may own. |
+| [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run rail, run view vs. composer, every overlay. See §6 for what it may own. |
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
+| [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union. Unit-tested. |
+| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
 | [`index.css`](../packages/ui/src/index.css) | The only stylesheet: reset, body font, `@keyframes adhd-*`, scrollbar. |
@@ -63,8 +65,8 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
 | [`mock-content.ts`](../packages/ui/src/mock-content.ts) | **Prototype fixture data still wired into a shipped component.** See Known gaps / TASK-075. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useElapsed`. §5, §6. |
-| `components/` | 16 flat component files, plus `setup/` — the one feature folder. §3. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useRoute`, `useElapsed`. §5, §6. |
+| `components/` | 17 flat component files, plus `setup/` — the one feature folder. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
 
@@ -108,13 +110,17 @@ them without exception.
 The split as it stands:
 
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
-  `RunStatusBar`, `PipelineRow`, `TeamController`.
+  `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`.
 - **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `SteerChat`,
   `VoiceControls` — own open/draft state, no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
-  `HistoryDrawer`, `StageFocusPanel`, and inside `setup/` — `EngineStatusCard`,
+  `StageFocusPanel`, and inside `setup/` — `EngineStatusCard`,
   `EngineConnection`, `EngineModelPicker` — call `api.ts` themselves. `SetupModal`
   itself is chrome: nav rail, section switching, close.
+
+`RunRail` is worth noting as the pattern for new surfaces: it fetches nothing. The
+list, its loading state and its live updates all arrive as props from `useRunList`,
+which is what lets the rail be exercised without a network at all.
 
 **Rule.** A component file that passes ~300 lines is a signal, not a limit — look for
 the axis it is splitting along and split there. `SetupModal.tsx` was the standing
@@ -166,9 +172,16 @@ This is the section most expensive to re-derive from source. It is the one to re
 before touching anything run-related.
 
 ```
-useProjects ──ready──▶ App effect ──▶ fetchRuns() ──▶ first non-terminal run
+useProjects ──ready──▶ useRunList(projectId) ──▶ RunRail
+                          │                           │
+             fetchRuns() + /runs/events SSE     onOpen(runId)
+                          │                           │
+             first non-terminal run ──▶ replace(#/runs/:id) ◀┘
                                                               │
 EmptyState ──onStart──▶ App.handleStart ──▶ startRun() ────────┤
+                                                              ▼
+                                              useRoute() ──▶ routeRunId
+                                                              │
                                                               ▼
                                                     useRunEvents(runId)
                                                               │
@@ -184,15 +197,25 @@ EmptyState ──onStart──▶ App.handleStart ──▶ startRun() ───
                        run.completed / terminal ──▶ source.close()
 ```
 
-The five things that are load-bearing:
+**There are two independent SSE channels**, and they answer different questions.
+`/runs/:id/events` carries one run in full detail and closes when that run ends;
+`/runs/events` carries a compact `RunSummary` for *every* run in the project on each
+non-log event, and stays open for the life of the page. The rail reads the second,
+the run view reads the first. Never widen the summary channel into a second copy of
+`RunState` — the reason it exists is that logs must not ride it
+([`decisions.md`](./decisions.md) 2026-07-27).
 
-1. **Nothing project-scoped loads until `projects.ready`.** `App`'s boot effect keys
-   on `[projects.ready, projectId]` and clears the run view on every project switch.
+The seven things that are load-bearing:
+
+1. **Nothing project-scoped loads until `projects.ready`.** `useRunList` is inert
+   until then, and re-subscribes on every project switch.
    A test asserting on the project name must wait for the list — the switcher shows a
    placeholder for the first tick.
 2. **The SSE subscription opens *before* the snapshot fetch.** Events arriving in the
    gap are buffered and replayed onto the snapshot once it lands, so nothing is lost.
    The log dedupe in `applyEvent` (matching `ts` + `message`) absorbs the overlap.
+   `useRunList` does the same dance for the same reason, with `mergeSummaries` as its
+   replay.
 3. **`applyEvent` is a pure reducer** — `structuredClone`, mutate the clone, return
    it. It is the single place run state advances, and it lives in its own module
    ([`run-events.ts`](../packages/ui/src/run-events.ts)) rather than inside the hook
@@ -203,7 +226,14 @@ The five things that are load-bearing:
    it.
 5. **Re-attaching is a key bump.** `useRunEvents(runId, resubscribeKey)` — `App`
    increments `resubKey` in `attachRun` to force a fresh subscription when the same
-   run id is re-opened (view from history, restart-here).
+   run id is re-opened (open from the rail, restart-here). It matters most when the
+   route does *not* change: restarting the run you are already looking at.
+6. **The URL owns which run is open.** `activeRunId` is `routeRunId(route)`, not
+   state. Opening a run is a navigation, so back/forward work and a run is linkable.
+7. **The boot auto-attach fires once per project.** If the route is home and the
+   project has a non-terminal run, `App` *replaces* the route with it — guarded by an
+   `attachedProject` ref so it cannot yank the user back to a run after they have
+   deliberately clicked "New run".
 
 **Rule.** Run state is never mutated outside `applyEvent`. A mutation that needs to
 happen in response to a user action goes to the server and comes back as an event —
@@ -321,8 +351,9 @@ The baseline that already exists, and is the pattern to copy:
 
 **Rule** for new overlays: `role="dialog"` + `aria-modal="true"`, Escape to close,
 focus moved in on open and restored on close, and no focusable content behind the
-overlay. The two largest overlays — `SetupModal` and `HistoryDrawer` — meet none of
-this today (Known gaps).
+overlay. `SetupModal` meets none of this today (Known gaps). The run list is no
+longer an overlay at all — TASK-077 made it a persistent `<nav aria-label="Runs">`
+of real `<button>`s, with `aria-current` marking the open run.
 
 **Rule** for interactive elements: use a real `<button>`. Do not attach `onClick` to
 a `<div>` — it costs keyboard and screen-reader access for nothing.
@@ -336,8 +367,8 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
-| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events` |
-| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked |
+| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events`, `route`, `run-list` |
+| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList` |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
 The root [`vitest.config.ts`](../vitest.config.ts) declares two projects: **`node`**
@@ -349,7 +380,8 @@ a time with `pnpm vitest run --project ui`.
 
 **Rule.** A component test substitutes the network boundary and nothing else:
 `vi.mock("../src/api")`, with the deferred-promise and SSE-callback plumbing in
-`test/support/` rather than in a test body. `useRunEvents.comp.tsx` is the reference —
+`test/support/` rather than in a test body (`deferred.ts` holds what the two stream
+fakes share). `useRunEvents.comp.tsx` is the reference —
 it drives the subscribe-buffer-replay ordering from §5 directly, which no e2e test can
 observe. Because `react-hooks/rules-of-hooks` is an **error** across `packages/ui/**`,
 hooks are exercised through `renderHook`, never called in a test body.
@@ -370,8 +402,8 @@ list card. The current roster:
 `open-project` · `workspace-chip` · `folder-picker` · `project-switcher` ·
 `project-drawer` · `project-root` · `run-status` · `stage-node-<stageId>` ·
 `stage-profession` · `stage-persona` · `stage-verdict` · `stage-scroll` ·
-`artifact-preview` · `artifact-view-<view>` · `artifact-files` · `history-card` ·
-`history-resume` · `history-restart` · `history-rerun`
+`artifact-preview` · `artifact-view-<view>` · `artifact-files` · `run-card` ·
+`run-resume` · `run-restart` · `run-rerun`
 
 ---
 
@@ -386,7 +418,7 @@ actionable rather than merely noted.
 | 2 | **Fixture data ships.** `mock-content.ts` (hardcoded OAuth-demo reasoning/artifacts) is imported by `StageFocusPanel.tsx:9`; the Reasoning tab renders it regardless of the real run. | Real data where a source exists, an honest empty state where it does not, file deleted. | TASK-075 |
 | 3 | ~~**No component tests.**~~ **Closed by TASK-074** — a `jsdom` vitest project takes `*.comp.tsx`, `applyEvent` is covered by `run-events.spec.ts`, and `useRunEvents.comp.tsx` drives the subscribe-buffer-replay ordering. Only that hook is covered so far; the components still have none. | Extend the layer to presentational components as they change. | — |
 | 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. `StageFocusPanel.tsx` (625) inherits the title of largest component. | The same treatment for `StageFocusPanel` when it next changes. | — |
-| 5 | **`SetupModal` and `HistoryDrawer` are not accessible overlays** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. | The §8 overlay rule applied to both. | — |
+| 5 | **`SetupModal` is not an accessible overlay** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. (`HistoryDrawer` shared this and was deleted by TASK-077.) | The §8 overlay rule applied. | — |
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click), `SteerChat` (no send endpoint) and `Waveform` are visual placeholders. | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
 | 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@adhd/core` when its shape stabilises. | — |
 | 8 | **Theme is light-only.** No dark values, no `prefers-color-scheme`. | A decision, not a bug — recorded so it is not discovered mid-redesign. | — |

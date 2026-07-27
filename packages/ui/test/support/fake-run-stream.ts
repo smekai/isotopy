@@ -6,30 +6,8 @@ import { act } from "@testing-library/react";
 import { vi } from "vitest";
 import type { RunEvent, RunState } from "@adhd/core";
 import { fetchRun, subscribeRunEvents } from "../../src/api";
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve(value: T): void;
-  reject(reason: Error): void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: Error) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-function last<T>(items: T[]): T {
-  const item = items[items.length - 1];
-  if (item === undefined) {
-    throw new Error("useRunEvents has not called the api yet");
-  }
-  return item;
-}
+import { deferred, last } from "./deferred";
+import type { Deferred } from "./deferred";
 
 export interface FakeRunStream {
   /** Resolve the snapshot request the hook is currently waiting on. */
@@ -66,17 +44,17 @@ export function fakeRunStream(): FakeRunStream {
   return {
     async snapshot(state) {
       await act(async () => {
-        last(snapshots).resolve(state);
+        last(snapshots, "useRunEvents").resolve(state);
       });
     },
     async failSnapshot(message) {
       await act(async () => {
-        last(snapshots).reject(new Error(message));
+        last(snapshots, "useRunEvents").reject(new Error(message));
       });
     },
     async emit(event) {
       await act(async () => {
-        last(listeners)(event);
+        last(listeners, "useRunEvents")(event);
       });
     },
     subscribeCount: () => listeners.length,

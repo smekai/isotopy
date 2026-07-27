@@ -1,4 +1,13 @@
-import type { RunState } from "@adhd/core";
+import type { StageStatus } from "@adhd/core";
+
+export interface StageProgress {
+  id: string;
+  status: StageStatus;
+}
+
+export interface RunProgress {
+  stages: readonly StageProgress[];
+}
 
 const SCRATCH_WORKSPACE = /\/runs\/[^/]+\/workspace$/;
 
@@ -14,7 +23,7 @@ export function childPath(base: string, child: string): string {
     : `${base}/${child}`;
 }
 
-export function resumeStageId(run: RunState): string | null {
+export function resumeStageId(run: RunProgress): string | null {
   const failed = run.stages.find((stage) => stage.status === "failed");
   if (failed) {
     return failed.id;
@@ -23,6 +32,6 @@ export function resumeStageId(run: RunState): string | null {
   return skipped?.id ?? null;
 }
 
-export function firstStageId(run: RunState): string | null {
+export function firstStageId(run: RunProgress): string | null {
   return run.stages[0]?.id ?? null;
 }

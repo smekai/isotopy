@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { readPreferences, resetPreferences, writePreferences } from "./support/preferences";
 
 // Free tier of docs/e2e-test-plan.md: picker, Setup modal, persistence,
-// history drawer. Starts no runs — safe to execute on every change.
-// Assumes a quiet server (no in-flight run, otherwise the empty state
+// run rail. Starts no runs — safe to execute on every change.
+// Assumes a quiet server (no in-flight run, otherwise the composer
 // is replaced by the run view).
 
 test.beforeEach(async ({ page }) => {
@@ -174,11 +174,15 @@ test("a preference left in localStorage by an older build is adopted once", asyn
   ).toBeNull();
 });
 
-test("history drawer opens and renders", async ({ page }) => {
+test("the run rail is always present and offers a new run", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "History" }).click();
 
-  await expect(page.getByText("Run History")).toBeVisible();
+  const rail = page.getByRole("navigation", { name: "Runs" });
+  await expect(rail).toBeVisible();
+  await expect(rail.getByRole("button", { name: "New run" })).toBeVisible();
+
   // fresh server → empty message; otherwise at least one run card exists
-  await expect(page.getByText("No runs yet.").or(page.getByText(/^#\d+$/).first())).toBeVisible();
+  await expect(
+    page.getByText("No runs yet.").or(page.getByTestId("run-card").first()),
+  ).toBeVisible();
 });

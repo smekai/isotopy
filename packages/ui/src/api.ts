@@ -6,9 +6,15 @@ import type {
   ProjectsView,
   RunEvent,
   RunState,
+  RunSummary,
   SettingsView,
 } from "@adhd/core";
-import { DEFAULT_PIPELINE_ID, HOME_PROJECT_ID, RUN_EVENT_TYPES } from "@adhd/core";
+import {
+  DEFAULT_PIPELINE_ID,
+  HOME_PROJECT_ID,
+  RUN_EVENT_TYPES,
+  RUN_SUMMARY_EVENT,
+} from "@adhd/core";
 
 const API_BASE = "";
 const PROJECT_HEADER = "X-ADHD-Project";
@@ -189,6 +195,26 @@ export function abortRun(runId: string): Promise<RunState> {
 
 export function restartRun(runId: string, stageId: string): Promise<RunState> {
   return postJson<RunState>(`/runs/${runId}/restart`, { stageId });
+}
+
+export function subscribeRunSummaries(
+  projectId: string,
+  onSummary: (summary: RunSummary) => void,
+): () => void {
+  const source = new EventSource(
+    `${API_BASE}/runs/events?project=${encodeURIComponent(projectId)}`,
+  );
+
+  source.addEventListener(RUN_SUMMARY_EVENT, (message) => {
+    if (!(message instanceof MessageEvent) || !message.data) {
+      return;
+    }
+    try {
+      onSummary(JSON.parse(message.data) as RunSummary);
+    } catch {}
+  });
+
+  return () => source.close();
 }
 
 export function subscribeRunEvents(

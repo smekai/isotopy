@@ -8,7 +8,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { Hono } from "hono";
-import type { EngineId, RunState } from "@adhd/core";
+import { RUN_SUMMARY_EVENT } from "@adhd/core";
+import type { EngineId, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
@@ -232,6 +233,92 @@ export function waitForStageStatus(
     (run) => run.stages.find((stage) => stage.id === stageId)?.status === status,
     `stage "${stageId}" to be "${status}"`,
   );
+}
+
+export interface SseEvent {
+  event: string;
+  data: string;
+}
+
+export interface SseCollector {
+  /** Poll until the collected events satisfy `predicate`, then return them. */
+  waitFor(
+    predicate: (events: SseEvent[]) => boolean,
+    description: string,
+  ): Promise<SseEvent[]>;
+  close(): Promise<void>;
+}
+
+function parseSseFrame(frame: string): SseEvent {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of frame.split(/\r?\n/)) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      data.push(line.slice("data:".length).trim());
+    }
+  }
+  return { event, data: data.join("\n") };
+}
+
+/** Open an SSE route and collect its frames in the background. */
+export async function openSse(
+  app: Hono,
+  route: string,
+  headers: TestHeaders = {},
+): Promise<SseCollector> {
+  const response = await app.request(route, { headers });
+  if (!response.body) {
+    throw new Error(`No SSE body from ${route}`);
+  }
+
+  const events: SseEvent[] = [];
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const pump = (async () => {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      let split = buffer.indexOf("\n\n");
+      while (split !== -1) {
+        events.push(parseSseFrame(buffer.slice(0, split)));
+        buffer = buffer.slice(split + 2);
+        split = buffer.indexOf("\n\n");
+      }
+    }
+  })().catch(() => undefined);
+
+  return {
+    async waitFor(predicate, description) {
+      const deadline = Date.now() + WAIT_TIMEOUT_MS;
+      while (!predicate(events) && Date.now() < deadline) {
+        await sleep(POLL_INTERVAL_MS);
+      }
+      if (!predicate(events)) {
+        throw new Error(
+          `Timed out waiting for ${description}. Saw: ${JSON.stringify(events, null, 2)}`,
+        );
+      }
+      return [...events];
+    },
+    async close() {
+      await reader.cancel().catch(() => undefined);
+      await pump;
+    },
+  };
+}
+
+/** The `run.summary` payloads out of a collected project stream. */
+export function summariesOf(events: SseEvent[]): RunSummary[] {
+  return events
+    .filter((event) => event.event === RUN_SUMMARY_EVENT)
+    .map((event) => JSON.parse(event.data) as RunSummary);
 }
 
 /** The stage entry from a run, for assertions. */
