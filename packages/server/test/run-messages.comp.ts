@@ -32,7 +32,7 @@ test("a message is recorded on the run and survives a re-read", async () => {
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await engine.waitForCall(1);
 
   // Act
@@ -52,7 +52,7 @@ test("a message reaches the run's event stream so an open tab sees it", async ()
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await engine.waitForCall(1);
   const stream = await openSse(app, `/runs/${run.id}/events`);
 
@@ -77,7 +77,7 @@ test("an empty message is rejected before anything is recorded", async () => {
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await engine.waitForCall(1);
 
   // Act
@@ -96,7 +96,7 @@ test("a finished run refuses the message rather than storing one nobody will rea
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await waitForRunStatus(app, run.id, "completed");
 
   // Act
@@ -128,7 +128,7 @@ test("messages survive a server restart", async () => {
   // reaches a terminal status, which would refuse it.
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await engine.waitForCall(1);
   await post(app, `/runs/${run.id}/messages`, { text: "written mid-run" });
   await post(app, `/runs/${run.id}/abort`);

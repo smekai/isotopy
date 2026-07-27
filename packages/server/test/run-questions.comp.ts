@@ -37,17 +37,17 @@ test("an interactive stage parks the run in asking, not awaiting", async () => {
   engine.anticipate({ as: "opening turn" }).asks(QUESTION, SESSION);
 
   // Act
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
-  const parked = await waitForStageStatus(app, run.id, "implementation", "asking");
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+  const parked = await waitForStageStatus(app, run.id, "solo", "asking");
 
   // Assert — `asking` is distinct from `awaiting`, so "Approve" never means two things
   expect(parked.status).toBe("asking");
-  expect(stageOf(parked, "implementation").status).toBe("asking");
+  expect(stageOf(parked, "solo").status).toBe("asking");
   expect(parked.messages.at(-1)).toMatchObject({
     role: "agent",
     kind: "question",
     text: QUESTION,
-    stageId: "implementation",
+    stageId: "solo",
   });
 });
 
@@ -60,14 +60,14 @@ test("answering resumes the same session rather than starting a new one", async 
     .reports(DONE);
 
   // Act
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
-  await waitForStageStatus(app, run.id, "implementation", "asking");
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+  await waitForStageStatus(app, run.id, "solo", "asking");
   const { status } = await post(app, `/runs/${run.id}/messages`, { text: "SQLite" });
   const finished = await waitForRunStatus(app, run.id, "completed");
 
   // Assert
   expect(status).toBe(201);
-  expect(stageOf(finished, "implementation").status).toBe("passed");
+  expect(stageOf(finished, "solo").status).toBe("passed");
   expect(finished.result).toBe(DONE);
   // The opening turn carried the task; the second carried only the answer.
   engine.verify();
@@ -80,8 +80,8 @@ test("the answer is recorded as the user's turn in the transcript", async () => 
   engine.anticipate({ as: "resumed turn" }).reports(DONE);
 
   // Act
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
-  await waitForStageStatus(app, run.id, "implementation", "asking");
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+  await waitForStageStatus(app, run.id, "solo", "asking");
   await post(app, `/runs/${run.id}/messages`, { text: "SQLite" });
   const finished = await waitForRunStatus(app, run.id, "completed");
 
@@ -93,26 +93,31 @@ test("the answer is recorded as the user's turn in the transcript", async () => 
 });
 
 test("a non-interactive stage never parks, even if it prints a QUESTION line", async () => {
-  // Arrange — dev-test's boxes are not interactive, so the line is just output.
+  // Arrange — only the Project Manager is interactive; the Developer printing
+  // the marker must not stall the run.
   const { app, engine } = ctx;
+  engine.anticipate({ as: "Project Manager" }).reports("Build it with SQLite.");
   engine.anticipate({ as: "Developer" }).asks(QUESTION, SESSION);
   engine.anticipate({ as: "Tester" }).reports("Checked it.\n\nVERDICT: PASS");
 
   // Act
-  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" });
+  await waitForStageStatus(app, run.id, "intake", "awaiting");
+  await post(app, `/runs/${run.id}/gates/intake/approve`);
   const finished = await waitForRunStatus(app, run.id, "completed");
 
   // Assert
   expect(stageOf(finished, "implementation").status).toBe("passed");
   expect(finished.messages).toEqual([]);
+  engine.verify();
 });
 
 test("a parked question survives a server restart", async () => {
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "opening turn" }).asks(QUESTION, SESSION);
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
-  await waitForStageStatus(app, run.id, "implementation", "asking");
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+  await waitForStageStatus(app, run.id, "solo", "asking");
   await ctx.orchestrator.shutdown();
 
   // Act
@@ -121,7 +126,7 @@ test("a parked question survives a server restart", async () => {
 
   // Assert — a durable park, not a setTimeout: the question is still open.
   expect(body.status).toBe("asking");
-  expect(stageOf(body, "implementation").status).toBe("asking");
+  expect(stageOf(body, "solo").status).toBe("asking");
   expect(body.messages.at(-1)?.text).toBe(QUESTION);
   await restarted.orchestrator.shutdown();
 });
@@ -130,13 +135,13 @@ test("aborting a parked run skips the asking stage rather than stranding it", as
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "opening turn" }).asks(QUESTION, SESSION);
-  const run = await startRun(app, { pipelineId: "one-box", task: TASK, engine: "claude-code" });
-  await waitForStageStatus(app, run.id, "implementation", "asking");
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+  await waitForStageStatus(app, run.id, "solo", "asking");
 
   // Act
   await post(app, `/runs/${run.id}/abort`);
   const aborted = await waitForRunStatus(app, run.id, "cancelled");
 
   // Assert
-  expect(stageOf(aborted, "implementation").status).toBe("skipped");
+  expect(stageOf(aborted, "solo").status).toBe("skipped");
 });

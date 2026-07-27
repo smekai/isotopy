@@ -12,16 +12,15 @@ test.beforeEach(async ({ page }) => {
 
 test("empty state shows the pipeline dropdown and a disabled start button", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Developer + Tester" })).toBeVisible();
-  await expect(page.getByText("What should the Developer build?")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Project Manager + Developer + Tester" })).toBeVisible();
+  await expect(page.getByText("What do you want to build?")).toBeVisible();
   await expect(page.getByRole("button", { name: /Start run/ })).toBeDisabled();
 
   // the dropdown opens with every pipeline and closes on Escape
-  await page.getByRole("button", { name: "Developer + Tester" }).click();
-  await expect(page.getByRole("option")).toHaveCount(3);
+  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
+  await expect(page.getByRole("option")).toHaveCount(2);
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
-  await expect(page.getByRole("option", { name: /Developer \+ approval \+ Tester/ })).toBeVisible();
-  await expect(page.getByRole("option", { name: "Developer + Tester" })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Project Manager \+ Developer \+ Tester/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeHidden();
 
@@ -31,10 +30,10 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
 
 test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
 
-  await expect(page.getByText("What should the Developer build?")).toBeVisible();
+  await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
   // The folder is the project's, so the composer states it and offers no way
@@ -103,7 +102,7 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
 
 test("pipeline, model, and permission mode persist across a reload", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
 
   await page.getByRole("button", { name: "Setup" }).click();
@@ -115,7 +114,7 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   await page.reload();
 
   // pipeline + model resurface in the empty-state caption
-  await expect(page.getByText("What should the Developer build?")).toBeVisible();
+  await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · haiku/)).toBeVisible();
 
   // Setup select reflects the stored model
@@ -129,14 +128,14 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
 
 test("preferences survive a browser with no storage of its own", async ({ page }) => {
   await page.goto("/");
-  await writePreferences(page, { pipelineId: "one-box" });
+  await writePreferences(page, { pipelineId: "solo" });
 
   // Wiping storage is what "open it in another browser" means: nothing is
   // carried over but the server's own state.
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  await expect(page.getByText("What should the Developer build?")).toBeVisible();
+  await expect(page.getByText("What should the Agent build?")).toBeVisible();
 });
 
 test("legacy full model IDs migrate to standard-context CLI aliases", async ({ page }) => {
@@ -144,7 +143,7 @@ test("legacy full model IDs migrate to standard-context CLI aliases", async ({ p
   await writePreferences(page, { engineModels: { "claude-code": "claude-sonnet-4-6" } });
   await page.reload();
 
-  await page.getByRole("button", { name: "Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
@@ -154,20 +153,20 @@ test("legacy full model IDs migrate to standard-context CLI aliases", async ({ p
 
 test("a preference left in localStorage by an older build is adopted once", async ({ page }) => {
   await page.goto("/");
-  await writePreferences(page, { pipelineId: "one-box" });
+  await writePreferences(page, { pipelineId: "pm-dev-test" });
   const { activeProjectId } = (await (await page.request.get("/projects")).json()) as {
     activeProjectId: string;
   };
   await page.evaluate(
-    (id) => localStorage.setItem(`adhd.${id}.pipelineId`, "dev-test"),
+    (id) => localStorage.setItem(`adhd.${id}.pipelineId`, "solo"),
     activeProjectId,
   );
   await page.reload();
 
-  await expect(page.getByText("What should the Developer build?")).toBeVisible();
+  await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect
     .poll(async () => (await readPreferences(page)).pipelineId)
-    .toBe("dev-test");
+    .toBe("solo");
   // adopted once: the key is gone, so a later server-side change is not undone
   expect(
     await page.evaluate((id) => localStorage.getItem(`adhd.${id}.pipelineId`), activeProjectId),

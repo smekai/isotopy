@@ -124,28 +124,32 @@ async function attachSeededRun(page: Page): Promise<void> {
   await expect(page.getByTestId("run-status")).toHaveText("COMPLETED");
 }
 
-test("dev-test is selectable in the picker and describes both boxes", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Developer + Tester" }).click();
-  await page.getByRole("option", { name: /Developer \+ Tester/ }).click();
+const PM_DEV_TEST = "Project Manager + Developer + Tester";
 
-  // The trigger now shows the chosen pipeline, and the composer copy follows.
-  await expect(page.getByRole("button", { name: "Developer + Tester" })).toBeVisible();
-  await expect(page.getByText("What should the Developer build?")).toBeVisible();
-  await expect(page.getByText(/A Developer implements it, then a Tester verifies the result/)).toBeVisible();
+test("the default pipeline is selectable in the picker and previews all three boxes", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: PM_DEV_TEST }).click();
+  await page.getByRole("option", { name: new RegExp(PM_DEV_TEST.replace(/\+/g, "\\+")) }).click();
+
+  // The trigger shows the chosen pipeline, and the composer copy follows.
+  await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
+  await expect(page.getByText("What do you want to build?")).toBeVisible();
+  await expect(
+    page.getByText(/A Project Manager works out what to build and recommends an approach/),
+  ).toBeVisible();
 
   // Engine-backed, so the folder chip and engine caption appear.
   await expect(page.getByTestId("workspace-chip")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
-  // The ghost pipeline previews exactly two boxes, by profession. (The
-  // headline's "Developer" sits in a longer sentence, so `exact` skips it.)
+  // The ghost pipeline previews exactly three boxes, by profession.
+  await expect(page.getByText("Project Manager", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Developer", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Tester", { exact: true })).toHaveCount(1);
 
-  // The choice survives a reload (stored server-side), like the other pipelines.
+  // The choice survives a reload (stored server-side), like the other pipeline.
   await page.reload();
-  await expect(page.getByRole("button", { name: "Developer + Tester" })).toBeVisible();
+  await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
 });
 
 test("both boxes render as Developer and Tester with their persona badges", async ({ page }) => {

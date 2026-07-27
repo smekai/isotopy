@@ -19,7 +19,7 @@ import {
 import type { TestApp } from "./support/harness.ts";
 
 /** One real (mocked) engine box — the shortest run that has a workspace. */
-const ENGINE_RUN = { pipelineId: "one-box", task: "work here", engine: "claude-code" };
+const ENGINE_RUN = { pipelineId: "solo", task: "work here", engine: "claude-code" };
 
 let ctx: TestApp;
 

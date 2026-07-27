@@ -11,7 +11,7 @@ function summary(id: string, status: RunStatus, number = 1): RunSummary {
     id,
     number,
     projectId: HOME_PROJECT_ID,
-    pipelineId: "dev-test",
+    pipelineId: "pm-dev-test",
     pipelineName: "Developer + Tester",
     status,
     createdAt: "2026-07-27T10:00:00.000Z",

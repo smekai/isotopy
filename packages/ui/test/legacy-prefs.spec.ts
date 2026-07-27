@@ -49,20 +49,20 @@ describe("readLegacyPreferences", () => {
     store(ALPHA, "engine", "codex");
     store(ALPHA, "engineModel.codex", "gpt-5.1-codex-max");
     store(ALPHA, "permissionMode", "acceptEdits");
-    store(ALPHA, "pipelineId", "one-box");
+    store(ALPHA, "pipelineId", "solo");
 
     expect(readLegacyPreferences(ALPHA)).toEqual({
       engine: "codex",
       engineModels: { codex: "gpt-5.1-codex-max" },
       permissionMode: "acceptEdits",
-      pipelineId: "one-box",
+      pipelineId: "solo",
     });
   });
 
   test("a partially configured project yields only the keys it has", () => {
-    store(ALPHA, "pipelineId", "dev-test");
+    store(ALPHA, "pipelineId", "solo");
 
-    expect(readLegacyPreferences(ALPHA)).toEqual({ pipelineId: "dev-test" });
+    expect(readLegacyPreferences(ALPHA)).toEqual({ pipelineId: "solo" });
   });
 
   test("another project's keys are not adopted", () => {
@@ -72,9 +72,9 @@ describe("readLegacyPreferences", () => {
   });
 
   test("the home project is scoped like any other", () => {
-    store(HOME_PROJECT_ID, "pipelineId", "one-box");
+    store(HOME_PROJECT_ID, "pipelineId", "solo");
 
-    expect(readLegacyPreferences(HOME_PROJECT_ID)).toEqual({ pipelineId: "one-box" });
+    expect(readLegacyPreferences(HOME_PROJECT_ID)).toEqual({ pipelineId: "solo" });
   });
 
   test("values the server would reject are dropped rather than sent", () => {
@@ -98,7 +98,7 @@ describe("clearLegacyPreferences", () => {
   test("adoption happens once — the keys are gone afterwards", () => {
     store(ALPHA, "engine", "codex");
     store(ALPHA, "engineModel.codex", "gpt-5.1-codex-max");
-    store(ALPHA, "pipelineId", "one-box");
+    store(ALPHA, "pipelineId", "solo");
 
     clearLegacyPreferences(ALPHA);
 

@@ -29,13 +29,13 @@ describe("normalizeProjectPreferences", () => {
         engine: "codex",
         engineModels: { codex: "gpt-5.1-codex-max" },
         permissionMode: "acceptEdits",
-        pipelineId: "one-box",
+        pipelineId: "solo",
       }),
     ).toEqual({
       engine: "codex",
       engineModels: { codex: "gpt-5.1-codex-max" },
       permissionMode: "acceptEdits",
-      pipelineId: "one-box",
+      pipelineId: "solo",
     });
   });
 
@@ -62,9 +62,9 @@ describe("parsePreferencesUpdate", () => {
   });
 
   test("only the fields present are returned", () => {
-    expect(parsePreferencesUpdate({ pipelineId: "dev-test" })).toEqual({
+    expect(parsePreferencesUpdate({ pipelineId: "pm-dev-test" })).toEqual({
       ok: true,
-      update: { pipelineId: "dev-test" },
+      update: { pipelineId: "pm-dev-test" },
     });
   });
 

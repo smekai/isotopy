@@ -6,10 +6,10 @@ import { describe, expect, test } from "vitest";
 import type { PipelineDefinition } from "../src/pipelines.ts";
 import {
   DEMO_PIPELINES,
-  DEV_TEST_PIPELINE,
-  GATED_DEV_TEST_PIPELINE,
-  ONE_BOX_PIPELINE,
+  PM_DEV_TEST_PIPELINE,
+  SOLO_PIPELINE,
   findPipeline,
+  isRetiredPipeline,
   flattenPipelineStages,
   pipelineUsesEngine,
   pipelineUsesEngineById,
@@ -30,8 +30,9 @@ describe("flattenPipelineStages", () => {
     expect(flattenPipelineStages(pipeline).map((stage) => stage.id)).toEqual(["a", "b", "c"]);
   });
 
-  test("the two-box pipeline is Developer then Tester", () => {
-    expect(flattenPipelineStages(DEV_TEST_PIPELINE).map((stage) => stage.label)).toEqual([
+  test("the three-box pipeline is Project Manager, Developer, then Tester", () => {
+    expect(flattenPipelineStages(PM_DEV_TEST_PIPELINE).map((stage) => stage.label)).toEqual([
+      "Project Manager",
       "Developer",
       "Tester",
     ]);
@@ -50,9 +51,8 @@ describe("pipelineUsesEngine", () => {
   });
 
   test("a pipeline with any persona-bearing stage runs a real harness", () => {
-    expect(pipelineUsesEngine(ONE_BOX_PIPELINE)).toBe(true);
-    expect(pipelineUsesEngine(DEV_TEST_PIPELINE)).toBe(true);
-    expect(pipelineUsesEngine(GATED_DEV_TEST_PIPELINE)).toBe(true);
+    expect(pipelineUsesEngine(SOLO_PIPELINE)).toBe(true);
+    expect(pipelineUsesEngine(PM_DEV_TEST_PIPELINE)).toBe(true);
   });
 
   test("one persona among plain stages is enough", () => {
@@ -73,9 +73,8 @@ describe("pipelineUsesEngine", () => {
 
 describe("pipelineUsesEngineById", () => {
   test("classifies the built-in pipelines", () => {
-    expect(pipelineUsesEngineById("one-box")).toBe(true);
-    expect(pipelineUsesEngineById("dev-test")).toBe(true);
-    expect(pipelineUsesEngineById("gated-dev-test")).toBe(true);
+    expect(pipelineUsesEngineById("solo")).toBe(true);
+    expect(pipelineUsesEngineById("pm-dev-test")).toBe(true);
   });
 
   test("an unknown id is not engine-backed", () => {
@@ -91,5 +90,34 @@ describe("findPipeline", () => {
 
   test("returns undefined for an unknown id", () => {
     expect(findPipeline("nope")).toBeUndefined();
+  });
+
+  test("a retired id is gone from the picker but still recognised", () => {
+    // Runs already on disk name these; the UI must be able to say so rather
+    // than throwing an Unknown pipeline error at the user.
+    expect(findPipeline("dev-test")).toBeUndefined();
+    expect(isRetiredPipeline("dev-test")).toBe(true);
+    expect(isRetiredPipeline("pm-dev-test")).toBe(false);
+    expect(isRetiredPipeline("nope")).toBe(false);
+  });
+});
+
+describe("the shipped set", () => {
+  test("is exactly two presets, with the Project Manager flow first", () => {
+    expect(DEMO_PIPELINES.map((pipeline) => pipeline.id)).toEqual(["pm-dev-test", "solo"]);
+  });
+
+  test("both interactive stages sit behind a persona that knows the QUESTION contract", () => {
+    const interactive = DEMO_PIPELINES.flatMap(flattenPipelineStages).filter(
+      (stage) => stage.interactive === true,
+    );
+    expect(interactive.map((stage) => stage.skill)).toEqual(["project-manager", "solo"]);
+  });
+
+  test("the human gate survives on the Project Manager handoff", () => {
+    const gated = flattenPipelineStages(PM_DEV_TEST_PIPELINE).filter(
+      (stage) => stage.gateAfter === true,
+    );
+    expect(gated.map((stage) => stage.id)).toEqual(["intake"]);
   });
 });

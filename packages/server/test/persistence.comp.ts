@@ -47,7 +47,7 @@ test("runs are restored when the server comes back", async () => {
   const { app } = ctx;
   ctx.engine.anticipate().reports("done");
   const run = await startRun(app, {
-    pipelineId: "one-box",
+    pipelineId: "solo",
     task: "comp survives restart",
     engine: "claude-code",
   });
@@ -125,7 +125,7 @@ test("run numbering continues from the highest number on disk", async () => {
   const { app } = ctx;
   ctx.engine.anticipate().reports("done");
   const first = await startRun(app, {
-    pipelineId: "one-box",
+    pipelineId: "solo",
     task: "comp numbering",
     engine: "claude-code",
   });
@@ -136,7 +136,7 @@ test("run numbering continues from the highest number on disk", async () => {
   const restarted = await restartApp();
   ctx.engine.anticipate().reports("done");
   const second = await startRun(restarted.app, {
-    pipelineId: "one-box",
+    pipelineId: "solo",
     task: "comp numbering after restart",
     engine: "claude-code",
   });

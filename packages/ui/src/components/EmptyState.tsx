@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FolderOpen, Play } from "lucide-react";
 import {
+  DEMO_PIPELINES,
   ENGINES,
   HOME_PROJECT_ID,
   agentForStage,
@@ -33,17 +34,15 @@ const DEFAULT_PIPELINE_COPY: PipelineCopy = {
 };
 
 const PIPELINE_COPY: Record<string, PipelineCopy> = {
-  "one-box": {
-    headline: "What should the Developer build?",
-    subtitle: "One prompt, one agent, one result — powered by a real engine.",
+  solo: {
+    headline: "What should the Agent build?",
+    subtitle: "One box does everything, and asks you if something is genuinely unclear.",
   },
-  "dev-test": {
-    headline: "What should the Developer build?",
-    subtitle: "A Developer implements it, then a Tester verifies the result — real engine.",
-  },
-  "gated-dev-test": {
-    headline: "What should the Developer build?",
-    subtitle: "A Developer implements it, you approve at a gate, then a Tester verifies it.",
+  "pm-dev-test": {
+    headline: "What do you want to build?",
+    subtitle:
+      "A Project Manager works out what to build and recommends an approach — " +
+      "you approve it, then a Developer builds it and a Tester verifies it.",
   },
 };
 
@@ -216,23 +215,11 @@ export function EmptyState({
   const stages = selectedPipeline ? flattenPipelineStages(selectedPipeline) : [];
   const engine = ENGINES[settings.preferences.engine];
 
-  const pipelineOptions: PipelineOption[] = [
-    {
-      id: "one-box",
-      label: "Single agent",
-      description: `Real engine — ${engine.label}`,
-    },
-    {
-      id: "dev-test",
-      label: "Developer + Tester",
-      description: `Developer implements, Tester verifies — ${engine.label}`,
-    },
-    {
-      id: "gated-dev-test",
-      label: "Developer + approval + Tester",
-      description: `Approve the work at a gate, then test — ${engine.label}`,
-    },
-  ];
+  const pipelineOptions: PipelineOption[] = DEMO_PIPELINES.map((pipeline) => ({
+    id: pipeline.id,
+    label: pipeline.name,
+    description: `${pipeline.description} — ${engine.label}`,
+  }));
 
   const copy = PIPELINE_COPY[pipelineId] ?? DEFAULT_PIPELINE_COPY;
 

@@ -18,28 +18,34 @@ export interface PipelineDefinition {
   groups: PipelineGroup[];
 }
 
-export const ONE_BOX_PIPELINE: PipelineDefinition = {
-  id: "one-box",
+export const SOLO_PIPELINE: PipelineDefinition = {
+  id: "solo",
   name: "Single agent",
   description:
     "One box that does everything, and may stop to ask you a clarifying question.",
   groups: [
     {
-      stages: [
-        { id: "implementation", label: "Implementation", skill: "developer", interactive: true },
-      ],
+      stages: [{ id: "solo", label: "Agent", skill: "solo", interactive: true }],
     },
   ],
 };
 
-export const DEV_TEST_PIPELINE: PipelineDefinition = {
-  id: "dev-test",
-  name: "Developer + Tester",
+export const PM_DEV_TEST_PIPELINE: PipelineDefinition = {
+  id: "pm-dev-test",
+  name: "Project Manager + Developer + Tester",
   description:
-    "Two boxes: a Developer implements the task, then a Tester verifies it in the same workspace.",
+    "A Project Manager works out what to build and recommends an approach; you approve it; " +
+    "then a Developer implements it and a Tester verifies the result.",
   groups: [
     {
       stages: [
+        {
+          id: "intake",
+          label: "Project Manager",
+          skill: "project-manager",
+          interactive: true,
+          gateAfter: true,
+        },
         { id: "implementation", label: "Developer", skill: "developer" },
         { id: "test", label: "Tester", skill: "tester" },
       ],
@@ -47,26 +53,13 @@ export const DEV_TEST_PIPELINE: PipelineDefinition = {
   ],
 };
 
-export const GATED_DEV_TEST_PIPELINE: PipelineDefinition = {
-  id: "gated-dev-test",
-  name: "Developer + approval + Tester",
-  description:
-    "A Developer implements the task; you approve the work at a gate; then a Tester verifies it.",
-  groups: [
-    {
-      stages: [
-        { id: "implementation", label: "Developer", skill: "developer", gateAfter: true },
-        { id: "test", label: "Tester", skill: "tester" },
-      ],
-    },
-  ],
-};
-
 export const DEMO_PIPELINES: PipelineDefinition[] = [
-  ONE_BOX_PIPELINE,
-  DEV_TEST_PIPELINE,
-  GATED_DEV_TEST_PIPELINE,
+  PM_DEV_TEST_PIPELINE,
+  SOLO_PIPELINE,
 ];
+
+/** Presets removed in TASK-080. Runs on disk still name them. */
+export const RETIRED_PIPELINE_IDS: string[] = ["one-box", "dev-test", "gated-dev-test"];
 
 export function flattenPipelineStages(
   pipeline: PipelineDefinition,
@@ -74,7 +67,11 @@ export function flattenPipelineStages(
   return pipeline.groups.flatMap((group) => group.stages);
 }
 
-export const DEFAULT_PIPELINE_ID: string = DEV_TEST_PIPELINE.id;
+export const DEFAULT_PIPELINE_ID: string = PM_DEV_TEST_PIPELINE.id;
+
+export function isRetiredPipeline(pipelineId: string): boolean {
+  return RETIRED_PIPELINE_IDS.includes(pipelineId);
+}
 
 export function pipelineUsesEngine(pipeline: PipelineDefinition): boolean {
   return flattenPipelineStages(pipeline).some((stage) => stage.skill !== undefined);

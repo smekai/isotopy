@@ -27,31 +27,6 @@ This epic turns a run into a **conversation you take part in**, in the shape Cod
 
 ---
 
-## TASK-080: Project Manager agent and the two-preset pipeline set
-**Priority:** P1 | **Tags:** core, server
-**Updated:** 2026-07-27 00:00
-
-Add the agent that talks to the user first, and collapse the pipeline picker to two options. The Project Manager is **already in the roster** — [`agents.ts:8`](../packages/core/src/agents.ts#L8) has `intake: { profession: "Project Manager", glyph: "◈" }` — it has simply never had a persona or a pipeline. Six of the eight roster professions are in that state; this task promotes one of them.
-
-**Scope:**
-1. **`packages/server/src/domain/skills/personas/project-manager.md`** — the persona for the `intake` stage. **No roster change needed.** Contract: interrogate the need with `QUESTION:` turns until the ask is unambiguous; investigate the actual repository; survey external and third-party options; recommend **one** solution, justified against this system's limits; emit an implementable spec as its handoff. `buildStagePrompt` passes that verbatim to the Developer under `## Handoff from previous steps`, so the handoff *is* the deliverable — write the persona knowing its output is a downstream prompt.
-2. **`personas/solo.md`** — the all-purpose agent: clarify → design → implement → verify in one box. It needs a stage id, and `AGENTS` has no entry for "does everything"; `agentForStage` silently degrades an unknown id to `{ profession: stageId, glyph: "◈" }`, which would print raw ids in the log. Add one honest `AGENTS` entry rather than mislabelling it "Developer". **Settle the profession wording while writing the persona.**
-3. **Run `pnpm gen:skills`** and commit [`defaults.generated.ts`](../packages/server/src/domain/skills/defaults.generated.ts) — the drift test runs `--check` and fails otherwise. Never hand-edit the generated file.
-4. **[`pipelines.ts`](../packages/core/src/pipelines.ts) — `DEMO_PIPELINES` becomes exactly two:**
-   - `pm-dev-test` — "Project Manager + Developer + Tester": `intake` (`skill: project-manager`, `interactive: true`, **`gateAfter: true`**) → `implementation` (`developer`) → `test` (`tester`).
-   - `solo` — one stage, `interactive: true`.
-   - `DEFAULT_PIPELINE_ID` → `pm-dev-test`. Delete `ONE_BOX_PIPELINE`, `DEV_TEST_PIPELINE` and `GATED_DEV_TEST_PIPELINE`.
-   - **Why the gate sits on the PM stage:** dropping `gated-dev-test` would otherwise orphan the approval gate — it is the only preset that exercises it, and [`GatesSection.tsx`](../packages/ui/src/components/setup/GatesSection.tsx) derives its display from `DEMO_PIPELINES` + `gateAfter`. Approving the recommendation *before* any code is written is also the better product shape for a tool whose name ends in "Human Directed". Reversible if it proves to be friction.
-5. **[`EmptyState.tsx`](../packages/ui/src/components/EmptyState.tsx) duplicates the preset list** — a hardcoded `pipelineOptions` array repeating the ids and labels, so adding a preset today means editing two places. Fix it by reading `DEMO_PIPELINES` from `@adhd/core`. (`GET /pipelines` exists server-side and the UI has never called it; leave that alone under this task.)
-6. **Migration — retiring a preset breaks restart on old runs.** `RunOrchestrator.buildInput` throws `Unknown pipeline: ${run.pipelineId}` ([`run-orchestrator.ts:364`](../packages/server/src/services/run-orchestrator.ts#L364)), so Restart/Rerun on any `dev-test` run already in `runs.db` will fail. Preferences already degrade safely — `normalizeProjectPreferences` falls back to the default for an unknown stored id. **Pick one and implement it:** an id alias map, or an explicit "this run used a retired pipeline" state on the run card. Pre-1.0 with no external users, so refusing is acceptable — but it must refuse *accurately*, not throw.
-7. **Test fallout:** [`dev-test-pipeline.comp.ts`](../packages/server/test/dev-test-pipeline.comp.ts), [`dev-test-flow.spec.ts`](../packages/ui/e2e/dev-test-flow.spec.ts), [`live-dev-test.spec.ts`](../packages/ui/e2e/live-dev-test.spec.ts) and `GatesSection.tsx` all reference the removed ids.
-
-**Cross-platform:** n/a — persona markdown plus pure `@adhd/core` data. [`generate-skills.mjs`](../scripts/generate-skills.mjs) is already dependency-free Node ESM and runs identically on both OSes.
-
-**Verify:** the picker shows exactly two options; a `pm-dev-test` run has the PM ask a clarifying question, take the answer, produce a recommendation, park at the gate, and — once approved — hand a spec the Developer implements and the Tester verifies; `solo` runs one box end to end.
-
----
-
 ## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-27 00:00

@@ -12,6 +12,7 @@ import {
 import type { TestApp } from "./support/harness.ts";
 
 const TASK = "add a greet function";
+const PM_REPORT = "Build a greet function. Done when it prints a greeting.";
 const DEV_REPORT = "Implemented it. MARKER-DEVELOPER";
 const TESTER_REPORT = "Verified it.\n\nVERDICT: PASS";
 
@@ -28,18 +29,19 @@ afterEach(async () => {
 test("a gate holds the run at awaiting until it is approved", async () => {
   // Arrange
   const { app, engine } = ctx;
+  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
 
   // Act
   const run = await startRun(app, {
-    pipelineId: "gated-dev-test",
+    pipelineId: "pm-dev-test",
     task: TASK,
     engine: "claude-code",
   });
-  const waiting = await waitForStageStatus(app, run.id, "implementation", "awaiting");
+  const waiting = await waitForStageStatus(app, run.id, "intake", "awaiting");
   expect(waiting.status).toBe("awaiting");
-  const { status } = await post(app, `/runs/${run.id}/gates/implementation/approve`);
+  const { status } = await post(app, `/runs/${run.id}/gates/intake/approve`);
 
   // Assert
   expect(status).toBe(200);
@@ -52,15 +54,14 @@ test("a gate holds the run at awaiting until it is approved", async () => {
 test("approving a gate that is not awaiting is a conflict", async () => {
   // Arrange
   const { app, engine } = ctx;
-  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
-  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await waitForRunStatus(app, run.id, "completed");
 
-  // Act
+  // Act — the stage exists but has long since passed
   const { status, body } = await post<{ error: string }>(
     app,
-    `/runs/${run.id}/gates/implementation/approve`,
+    `/runs/${run.id}/gates/solo/approve`,
   );
 
   // Assert
@@ -72,7 +73,7 @@ test("restarting a run that is still going is a conflict", async () => {
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await engine.waitForCall(1);
 
   // Act
@@ -91,7 +92,7 @@ test("restart without a stageId is rejected", async () => {
   // Arrange
   const { app, engine } = ctx;
   engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await engine.waitForCall(1);
 
   // Act
@@ -109,9 +110,9 @@ test("runs are listed newest first", async () => {
   engine.anticipate({ as: "Test 1" }).reports(TESTER_REPORT);
   engine.anticipate({ as: "Dev 2" }).reports(DEV_REPORT);
   engine.anticipate({ as: "Test 2" }).reports(TESTER_REPORT);
-  const first = await startRun(app, { pipelineId: "dev-test", task: "comp older", engine: "claude-code" });
+  const first = await startRun(app, { pipelineId: "solo", task: "comp older", engine: "claude-code" });
   await waitForRunStatus(app, first.id, "completed");
-  const second = await startRun(app, { pipelineId: "dev-test", task: "comp newer", engine: "claude-code" });
+  const second = await startRun(app, { pipelineId: "solo", task: "comp newer", engine: "claude-code" });
   await waitForRunStatus(app, second.id, "completed");
 
   // Act

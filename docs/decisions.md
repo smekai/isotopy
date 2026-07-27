@@ -6,6 +6,54 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-27 — Two presets, a Project Manager, and fewer prose assertions (TASK-080)
+
+**Context:** three presets shipped (`one-box`, `dev-test`, `gated-dev-test`), all of
+them variations on "Developer, maybe a Tester". The roster in `agents.ts` named six
+professions that had never had a persona. The picker described the *mechanism*
+rather than the job.
+
+**Decision — exactly two presets.** `pm-dev-test` (Project Manager → gate →
+Developer → Tester) and `solo` (one all-purpose box). The Project Manager reuses the
+existing `intake` stage, so this promoted a roster entry rather than inventing one.
+`solo` needed a new `AGENTS` entry: `agentForStage` silently degrades an unknown id
+to `{ profession: stageId }`, which would have printed raw ids in the log.
+
+**The gate moved onto the Project Manager's handoff.** Retiring `gated-dev-test`
+would have orphaned the approval gate — the only preset exercising it — and
+`GatesSection` derives its display from `DEMO_PIPELINES` + `gateAfter`. Approving a
+*recommendation* before any code is written is also the better shape for a tool whose
+name ends in "Human Directed". Reversible if it proves to be friction.
+
+**Retired ids are refused, not aliased.** `getPipeline` reads `DEMO_PIPELINES`, so a
+run stored against `dev-test` cannot restart. `restartRun` now checks up front and
+fails with *"This run used the "dev-test" pipeline, which no longer exists — start a
+new run instead"* rather than throwing `Unknown pipeline`. Legacy `localStorage`
+preferences naming a retired id are likewise dropped rather than adopted — migrating
+a preference the picker cannot display would be worse than ignoring it. Pre-1.0 with
+no external users, so refusing accurately is enough; an alias map can come later if
+anyone actually has runs worth restarting.
+
+**A generator bug this surfaced.** `scripts/generate-skills.mjs` emitted unquoted
+object keys, so `project-manager` — the first kebab-case persona id — produced a
+syntactically invalid `defaults.generated.ts`. Keys are `JSON.stringify`d now.
+
+**`skill-generation.spec.ts` lost four of its six tests.** They asserted on English
+prose, not behaviour: that every persona's last word is `prompt.`, that the architect
+persona contains the substrings `A1`…`A9`, that it contains `VERDICT: PASS`, and a
+verbatim-bundling check already covered byte-for-byte by `gen:skills --check`. The
+first of those actually *failed* on a perfectly good new persona, which is the
+clearest possible evidence it was testing the wrong thing. What remains is the drift
+check and one rewritten test that now derives the skill ids from `DEMO_PIPELINES` —
+a stage naming a missing persona runs with no persona and only logs a warning, so
+nothing else would catch that typo.
+
+**`dev-test-pipeline.comp.ts` became `pm-dev-test-pipeline.comp.ts`.** The flow
+contract should test the flow that ships. The eleven cases — ordering, shared
+workspace, per-box persona, handoff quoting, `VERDICT: FAIL`, abort, restart-from-
+stage — all survived; each gained a Project Manager anticipation and one
+`approveIntake()` call, which is now a harness helper rather than eleven copies.
+
 ## 2026-07-27 — An agent that asks parks on its own status, and resumes its session (TASK-079)
 
 **Context:** the whole point of a chat is that the agent can answer back. Every

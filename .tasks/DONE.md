@@ -1,5 +1,26 @@
 # Done
 
+## TASK-080: Project Manager agent and the two-preset pipeline set
+**Priority:** P1 | **Tags:** core, server
+**Updated:** 2026-07-27 00:00
+
+Three presets shipped, all variations on "Developer, maybe a Tester", and the picker described the mechanism rather than the job. Six of the eight roster professions in `agents.ts` had a label and nothing else.
+
+### Done summary
+- **Two presets, and the roster gained its first promotion.** `pm-dev-test` (Project Manager → gate → Developer → Tester) and `solo` (one all-purpose box). The Project Manager reuses the existing `intake` stage, so no roster change was needed; `solo` got an honest `AGENTS` entry because `agentForStage` silently degrades an unknown id to `{ profession: stageId }` and would have printed raw ids in the log.
+- **`personas/project-manager.md`** — interrogate the need one `QUESTION:` at a time, read the repository before recommending, survey what already exists, recommend **one** solution with the decisive trade-off, and emit a spec structured as Problem / Recommendation / Considered and rejected / Scope / Done when / Risks. The persona is told outright that its handoff *is* the Developer's prompt. **`personas/solo.md`** carries the same question contract plus the `VERDICT:` one.
+- **The gate moved onto the PM's handoff.** Retiring `gated-dev-test` would have orphaned the approval gate — the only preset exercising it, and what `GatesSection` reads. Approving a recommendation before code is written is also the better shape for "Human Directed".
+- **Retired ids refuse accurately instead of throwing.** `restartRun` now says *"This run used the "dev-test" pipeline, which no longer exists — start a new run instead"*. Legacy `localStorage` preferences naming a retired id are dropped rather than adopted — migrating a preference the picker cannot show would be worse than ignoring it.
+- **`EmptyState` reads `DEMO_PIPELINES`** instead of a hardcoded array that duplicated every id and label.
+- **Generator bug found and fixed:** `generate-skills.mjs` emitted unquoted object keys, so `project-manager` — the first kebab-case persona id — produced a syntactically invalid `defaults.generated.ts`.
+- **`skill-generation.spec.ts` lost four of six tests.** They asserted on English prose: that every persona ends with the word `prompt.`, that the architect persona contains the substrings `A1`…`A9`, that it contains `VERDICT: PASS`, and a verbatim check already covered byte-for-byte by `gen:skills --check`. The first *failed on a perfectly correct new persona*, which is the clearest evidence it tested the wrong thing. What remains: the drift check, and one rewritten test that derives skill ids from `DEMO_PIPELINES` — a stage naming a missing persona only logs a warning, so nothing else would catch it. `docs/testing.md` now states the rule: if you cannot name the bug a test would catch, it is not a test.
+- **`dev-test-pipeline.comp.ts` → `pm-dev-test-pipeline.comp.ts`.** The flow contract now tests the flow that ships. All eleven cases survived — ordering, shared workspace, per-box persona, handoff quoting, `VERDICT: FAIL`, abort, restart-from-stage — each gaining a Project Manager anticipation and one `approveIntake()` call, now a harness helper rather than eleven copies.
+- **Verified:** lint, typecheck, **237 tests**, build, `gen:skills --check`, **Playwright 23 passed, 1 skipped**. Picker confirmed in a real browser: exactly two options with their new descriptions. Docs: dated `decisions.md` entry, `testing.md` updated. Versions 0.6.20.
+
+**Not fixed here:** no alias map for retired pipeline ids — refusing accurately is enough pre-1.0, and an alias can be added if anyone turns out to have runs worth restarting. The `pm-dev-test` flow has not been run against a real CLI end to end; the live tier (`ADHD_E2E_LIVE=1`) is still the only thing that would prove that, and it costs money.
+
+---
+
 ## TASK-079: Conversational engines — session capture, resume, and question mode
 **Priority:** P1 | **Tags:** engine, adapters, server, core
 **Updated:** 2026-07-27 00:00

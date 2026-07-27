@@ -28,6 +28,16 @@ runner.
 A rule of thumb: if a check would still make sense with the React app deleted,
 it is a component test.
 
+**A test must be able to fail for a real reason.** A spec exists for logic
+complicated enough to get wrong — a parser, a reducer, an ordering rule. It is
+not there to confirm that a constant still holds a value, that a document still
+contains a word, or that prose still ends a particular way. Those pass until
+someone writes a perfectly good sentence, then fail for no reason anybody cares
+about, and the fix is always to edit the test. TASK-080 deleted four such checks
+from `skill-generation.spec.ts` — including one asserting every persona's last
+word was `prompt.`, which broke on a new persona that was entirely correct. If
+you cannot name the bug a test would catch, it is not a test.
+
 **The extension picks the environment.** `pnpm test` runs two Vitest projects
 from one root config: `node` takes `packages/*/test/**/*.{comp,spec}.ts`, and
 `ui` takes `packages/ui/test/**/*.comp.tsx` under `jsdom`. So a UI check that
@@ -88,11 +98,13 @@ test("a FAIL verdict fails the stage and the run even though the engine exited c
   const { app, engine } = ctx;
 
   // Anticipate — the Tester succeeds at the process level but reports FAIL.
+  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "Tester" }).reports("Broken.\n\nVERDICT: FAIL");
 
   // Act
-  const run = await startRun(app, { pipelineId: "dev-test", task: TASK, engine: "claude-code" });
+  const run = await startRun(app, { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" });
+  await approveIntake(app, run.id);
 
   // Assert
   const finished = await waitForRunStatus(app, run.id, "failed");
@@ -111,9 +123,9 @@ code path never touched an engine. Every simulated-pipeline test ends with one.
 
 ## Why the live test still exists
 
-It no longer proves the two boxes chain — `dev-test-pipeline.comp.ts` does that
-for free, including that the Tester's prompt quotes the Developer's report and
-that both boxes share one workspace. The live test now answers only the question
+It no longer proves the boxes chain — `pm-dev-test-pipeline.comp.ts` does that
+for free, including that each prompt quotes every upstream report and that all
+three boxes share one workspace. The live test now answers only the question
 a mock cannot: *does the real CLI still work?* — found on PATH, authenticated,
 honouring `--model`, emitting parseable output, writing files where expected.
 

@@ -45,7 +45,7 @@ test("a preference set through the API is visible to a second server over the sa
     engine: "codex",
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
-    pipelineId: "one-box",
+    pipelineId: "solo",
   });
   const { app } = await restartApp();
 
@@ -57,7 +57,7 @@ test("a preference set through the API is visible to a second server over the sa
     engine: "codex",
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
-    pipelineId: "one-box",
+    pipelineId: "solo",
   });
 });
 
@@ -70,13 +70,13 @@ test("an update touches only the fields it carries", async () => {
 
   // Act
   const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", {
-    pipelineId: "dev-test",
+    pipelineId: "pm-dev-test",
   });
 
   // Assert
   expect(body.preferences.engine).toBe("codex");
   expect(body.preferences.engineModels).toEqual({ "claude-code": "opus" });
-  expect(body.preferences.pipelineId).toBe("dev-test");
+  expect(body.preferences.pipelineId).toBe("pm-dev-test");
 });
 
 test("a model stored for one engine does not disturb another engine's model", async () => {
@@ -100,7 +100,7 @@ test("a model stored for one engine does not disturb another engine's model", as
 test("preferences do not cross projects", async () => {
   // Arrange
   const alpha = await addTestProject(ctx.registry, "alpha");
-  await put<SettingsView>(ctx.app, "/settings/preferences", { pipelineId: "one-box" }, alpha.headers);
+  await put<SettingsView>(ctx.app, "/settings/preferences", { pipelineId: "solo" }, alpha.headers);
   const beta = await addTestProject(ctx.registry, "beta");
 
   // Act

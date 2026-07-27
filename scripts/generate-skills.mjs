@@ -81,7 +81,8 @@ function buildDefaultsModule(personas) {
     "// Drift from the sources is caught by skill-generation.spec.ts.",
     "",
     "export const DEFAULT_SKILLS: Record<string, string> = {",
-    ...entries.map(([id, text]) => `  ${id}: ${toTemplateLiteral(text)},`),
+    // Keys are quoted because a persona id may be kebab-case (project-manager).
+    ...entries.map(([id, text]) => `  ${JSON.stringify(id)}: ${toTemplateLiteral(text)},`),
     "};",
     "",
   ].join("\n");

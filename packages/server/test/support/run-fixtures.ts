@@ -8,7 +8,7 @@ export function makePersistedRun(id: string, status: RunStatus): PersistedRun {
       id,
       number: 1,
       projectId: "p",
-      pipelineId: "dev-test",
+      pipelineId: "pm-dev-test",
       pipelineName: "Developer + Tester",
       status,
       stages: [],

@@ -321,6 +321,19 @@ export function summariesOf(events: SseEvent[]): RunSummary[] {
     .map((event) => JSON.parse(event.data) as RunSummary);
 }
 
+/**
+ * Wait for the Project Manager's gate and approve it. Every `pm-dev-test` run
+ * parks there before the Developer starts, so a test about the Developer→Tester
+ * handoff has to get past it first.
+ */
+export async function approveIntake(app: Hono, runId: string): Promise<void> {
+  await waitForStageStatus(app, runId, "intake", "awaiting");
+  const { status } = await post(app, `/runs/${runId}/gates/intake/approve`);
+  if (status !== 200) {
+    throw new Error(`Expected 200 approving the intake gate, got ${status}`);
+  }
+}
+
 /** The stage entry from a run, for assertions. */
 export function stageOf(run: RunState, stageId: string) {
   const stage = run.stages.find((item) => item.id === stageId);

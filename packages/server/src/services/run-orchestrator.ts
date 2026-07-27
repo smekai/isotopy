@@ -360,6 +360,11 @@ export class RunOrchestrator implements RunProjection {
     if (run.status !== "failed" && run.status !== "cancelled") {
       throw new Error(`Run ${runId} can only be restarted after failing or being aborted`);
     }
+    if (!this.getPipeline(run.pipelineId)) {
+      throw new Error(
+        `This run used the "${run.pipelineId}" pipeline, which no longer exists — start a new run instead`,
+      );
+    }
     const startIndex = run.stages.findIndex((stage) => stage.id === stageId);
     if (startIndex === -1) {
       throw new Error(`Stage not found: ${stageId}`);
