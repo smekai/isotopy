@@ -24,10 +24,17 @@ export function isPersistedRun(value: unknown): value is PersistedRun {
   );
 }
 
+function backfillMessages(persisted: PersistedRun): PersistedRun {
+  const messages: unknown = persisted.run.messages;
+  return Array.isArray(messages)
+    ? persisted
+    : { ...persisted, run: { ...persisted.run, messages: [] } };
+}
+
 export function parsePersistedRun(text: string): PersistedRun | undefined {
   try {
-    const value = JSON.parse(text);
-    return isPersistedRun(value) ? value : undefined;
+    const value: unknown = JSON.parse(text);
+    return isPersistedRun(value) ? backfillMessages(value) : undefined;
   } catch {
     return undefined;
   }

@@ -89,6 +89,26 @@ export function createRunRoutes(
       }
     })
 
+    .post("/:id/messages", async (c) => {
+      const runId = c.req.param("id");
+      if (!orchestrator.getRun(runId)) {
+        return c.json({ error: "Run not found" }, 404);
+      }
+      const body = await c.req
+        .json<{ text?: string }>()
+        .catch(() => ({}) as Record<string, never>);
+      const text = body.text?.trim();
+      if (!text) {
+        return c.json({ error: "text is required" }, 400);
+      }
+      try {
+        return c.json(orchestrator.postMessage(runId, text), 201);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to post message";
+        return c.json({ error: message }, 409);
+      }
+    })
+
     .post("/:id/abort", (c) => {
       const runId = c.req.param("id");
       if (!orchestrator.getRun(runId)) {
@@ -173,13 +193,23 @@ export function createRunRoutes(
           });
         };
 
+        const buffered: RunEvent[] = [];
+        let replayed = false;
+        const unsubscribe = orchestrator.subscribe(runId, (event) => {
+          if (replayed) {
+            void send(event);
+            return;
+          }
+          buffered.push(event);
+        });
+
         for (const event of await orchestrator.replayEvents(runId)) {
           await send(event);
         }
-
-        const unsubscribe = orchestrator.subscribe(runId, (event) => {
-          void send(event);
-        });
+        replayed = true;
+        for (const event of buffered.splice(0)) {
+          await send(event);
+        }
 
         const keepAlive = setInterval(() => {
           void stream.writeSSE({ event: "ping", data: "" });

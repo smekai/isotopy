@@ -1,5 +1,29 @@
 # Done
 
+## TASK-078: Run chat — one transcript per run, and a message endpoint
+**Priority:** P1 | **Tags:** core, server, ui
+**Updated:** 2026-07-27 00:00
+
+A run was something you watched: a pipeline canvas, a stage panel you had to click open, and a flat log. `SteerChat.tsx` was the shape of the missing feature and faked its agent reply after 700 ms with no endpoint behind it.
+
+### Done summary
+- **The transcript is derived, not stored twice.** `transcript.ts` — `buildTranscript(run)` maps stage logs onto agent prose (`info`), tool rows (`run`/`warn`) and notices (`pass`/`fail`/`error`) through a `switch` closed by exhaustiveness, and merges in `run.messages`, which holds **only the user's turns**. The adapters already streamed all of it; a second copy would have been a reconciliation problem the first time one changed what it logs (A8 → `decisions.md`).
+- **`ChatPanel` is the body of a run** — thread plus composer, Enter to send, Shift+Enter for a newline, and an honest "this run has finished" in place of a box you cannot use. `StageFocusPanel` became an opt-in inspector: it no longer auto-opens, and it owns its own tab state.
+- **`RunMessage` + `run.message`** in `@adhd/core`, added to **both** the `RunEventType` union and `RUN_EVENT_TYPES`; `RunEvent` carries a named `chatMessage?: RunMessage`, not a `payload: unknown` (A7). `applyEvent` appends and dedupes by id.
+- **`POST /runs/:id/messages`** — 404 unknown, 400 empty, 409 on a *terminal* run, 201 otherwise.
+- **Found and fixed a real ordering bug.** `GET /runs/:id/events` replayed stored events and *then* subscribed, with an `await` between — anything emitted during the replay was lost. It now subscribes, buffers, replays, then flushes. The client-side dedupe makes the overlap safe. A test drove this out; it was not a test artefact.
+- **Old rows on disk are repaired on load.** `messages` is required on `RunState`, so `parsePersistedRun` backfills `[]` — the one place `unknown` is confined. A persistence test writes a pre-078 run and asserts it loads with an empty transcript.
+- **`App` shed three pieces of state**, applying the threshold `architecture-ui.md` §6 already stated: `focusTab` and `tabChosenByUser` moved into their only reader, and `pinned` disappeared with the auto-open. ~14 `useState` → ~9. `useFollowScroll` extracts the follow-scroll logic both panels need; `logLevelColor` moves the level→colour map into `theme.ts` instead of a second copy.
+- **Deleted:** `SteerChat.tsx` and the `steer` tab.
+- **Tests:** +19. `transcript.spec.ts` (9) covers the merge — interleaving, two stages in order, same-millisecond stability, key uniqueness; `run-messages.comp.ts` (6) covers the route, the event, and restart survival; 3 reducer cases; 1 migration case; 1 e2e asserting both boxes in one thread and no composer on a finished run.
+- **Verified:** lint, typecheck, **222 tests**, build, `gen:skills --check`, **Playwright 23 passed, 1 skipped**. Driven in a real browser: divider → prose → tool rows → user bubble → notice → next box, composer live. Docs: `architecture-ui.md` §2/§3/§5/§6/§9, gaps #6 and a new #9, plus a dated `decisions.md` entry. Versions 0.6.18.
+
+**Two deviations, both recorded in `decisions.md`:** `RunMessage` has no `kind` field — nothing can produce a question until TASK-079, and union members no code can construct are speculative generality. And the endpoint records on a live run instead of always 409-ing as the task text said; a composer whose every send fails is the mock this task deleted.
+
+**Not fixed here:** **nothing consumes a posted message yet** — TASK-079 is what gives an asking stage something to resume from. Logged as gap #9 rather than hidden behind a control that looks wired. `StageFocusPanel` is still ~570 lines.
+
+---
+
 ## TASK-077: Agent-window shell — left run rail and a routed run view
 **Priority:** P1 | **Tags:** ui, server
 **Updated:** 2026-07-27 00:00

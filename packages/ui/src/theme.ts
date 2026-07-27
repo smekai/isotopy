@@ -1,4 +1,4 @@
-import type { RunStatus, StageStatus } from "@adhd/core";
+import type { LogLevel, RunStatus, StageStatus } from "@adhd/core";
 
 export const SPACE = {
   xxs: 2,
@@ -203,6 +203,26 @@ export const RUN_PILL: Record<RunStatus, { text: string; bg: string }> = {
   failed:    { text: "#DC2626", bg: "rgba(220,38,38,0.10)" },
   cancelled: { text: "#6B7280", bg: "rgba(156,163,175,0.12)" },
 };
+
+export const FAIL_RED = "#DC2626";
+export const PASS_GREEN = "#059669";
+export const WARN_AMBER = "#D97706";
+
+export function logLevelColor(level: LogLevel, d: Dir): string {
+  switch (level) {
+    case "error":
+    case "fail":
+      return FAIL_RED;
+    case "pass":
+      return PASS_GREEN;
+    case "warn":
+      return WARN_AMBER;
+    case "run":
+      return d.accent;
+    case "info":
+      return d.textMid;
+  }
+}
 
 export function runDot(status: RunStatus, d: Dir): string {
   if (status === "running" || status === "pending") return d.accent;

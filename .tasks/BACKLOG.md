@@ -27,27 +27,6 @@ This epic turns a run into a **conversation you take part in**, in the shape Cod
 
 ---
 
-## TASK-078: Run chat — one transcript per run, and a message endpoint
-**Priority:** P1 | **Tags:** core, server, ui
-**Updated:** 2026-07-27 00:00
-
-Make the main pane a conversation. **The design decision to record in [`decisions.md`](../docs/decisions.md): the transcript is a derived view, not a second store.** The server already streams everything the agent says — [`claude-code.ts`](../packages/server/src/engines/claude-code.ts), [`codex.ts`](../packages/server/src/engines/codex.ts) and [`cursor.ts`](../packages/server/src/engines/cursor.ts) all call `onLog(level, text)` where `info` is assistant text, `run` is a tool-use summary and `warn` is a tool error. The chat/tool distinction exists in the data already; it is flattened into `LogLevel`. The only genuinely new persisted data is **the user's turns**.
-
-**Scope:**
-1. **[`packages/core/src/runs.ts`](../packages/core/src/runs.ts)** — add `RunMessage { id, ts, role: "user" | "agent", stageId?, kind: "text" | "question" | "answer", text }` and `RunState.messages`. Add `"run.message"` to **both** the `RunEventType` union **and** the `RUN_EVENT_TYPES` array — the UI iterates that array to register `EventSource` listeners, so missing it means the event silently never arrives. `RunEvent` has no free-form payload field; add a **named** `chatMessage?: RunMessage`, not a `payload: unknown` (A7).
-2. **[`run-events.ts`](../packages/ui/src/run-events.ts)** — handle `run.message` in `applyEvent`: append, dedupe by `id`, keep the clone-then-mutate discipline. Run state is never mutated outside this reducer.
-3. **New pure module `packages/ui/src/transcript.ts`** — `buildTranscript(run): TranscriptItem[]`, merging stage logs and `run.messages` by timestamp into agent text, collapsed tool rows, user bubbles and stage-boundary separators. Pure, so it gets a unit spec at `packages/ui/test/transcript.spec.ts` — tests live in `test/`, never beside source.
-4. **`ChatPanel`** becomes the default body. Reuse [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) for rendering and lift the follow-scroll logic (`FOLLOW_THRESHOLD_PX = 40`) out of `StageFocusPanel` rather than duplicating it. The artifacts / files / log views **survive** as a collapsible right inspector opened from a stage chip — do not delete them.
-5. **Delete [`SteerChat.tsx`](../packages/ui/src/components/SteerChat.tsx)** and the `steer` entry in `FocusTab`. Its bubble styling is the reference for `ChatPanel`; its fake reply goes.
-6. **`POST /runs/:id/messages`** taking `{ text }` — records the message, emits `run.message`, persists through [`RunRepository`](../packages/server/src/repository/run-repository.ts). In this task it **409s when nothing is waiting for input**; TASK-079 makes it resume a parked run.
-7. `StageFocusPanel.tsx` is 625 lines and already flagged as the next split candidate (gap #4, ~300-line signal). Extracting the chat is the moment to split it — do not grow it.
-
-**Cross-platform:** n/a — pure core/UI plus one JSON route.
-
-**Verify:** a two-stage run shows Developer narration, tool rows, the stage boundary and then Tester in one ordered thread; posting a message with nothing waiting returns 409 with a readable message; the transcript spec covers interleaved timestamps across two stages.
-
----
-
 ## TASK-079: Conversational engines — session capture, resume, and question mode
 **Priority:** P1 | **Tags:** engine, adapters, server, core
 **Updated:** 2026-07-27 00:00

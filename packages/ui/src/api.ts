@@ -5,6 +5,7 @@ import type {
   ProjectPreferencesUpdate,
   ProjectsView,
   RunEvent,
+  RunMessage,
   RunState,
   RunSummary,
   SettingsView,
@@ -183,6 +184,10 @@ export function fetchRunFileContent(
   return requestJson<WorkspaceFileContent>(
     `/runs/${runId}/files/content?path=${encodeURIComponent(filePath)}`,
   );
+}
+
+export function postRunMessage(runId: string, text: string): Promise<RunMessage> {
+  return postJson<RunMessage>(`/runs/${runId}/messages`, { text });
 }
 
 export function approveGate(runId: string, stageId: string): Promise<RunState> {

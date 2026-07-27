@@ -6,6 +6,49 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-27 — The transcript is derived; only the user's turns are stored (TASK-078)
+
+**Context:** the run view became a conversation. The obvious implementation is a
+`messages` table the agents write to as they speak — and it would have duplicated
+everything the system already records. All three adapters call `onLog(level, text)`
+where `info` is assistant prose, `run` is a tool-use summary and `warn` is a tool
+error; the chat/tool distinction already exists in the data, flattened into
+`LogLevel`.
+
+**Decision:** the thread is a **derived view**. `buildTranscript(run)` maps stage
+logs onto agent prose, tool rows and notices, and merges in `run.messages` — which
+holds **only what the user typed**. One writer, one ordering, and no way for the
+transcript to disagree with the log. The mapping is a `switch` over `LogLevel`
+closed by exhaustiveness, so a new level is a compile error rather than a silently
+mis-rendered line. Rejected: a `messages` array the projection also appends agent
+text to — two copies of the same sentences, and a reconciliation problem the first
+time an adapter changes what it logs.
+
+**Ordering is timestamp-first with a collection sequence breaking ties.** Logs
+inside a stage already carry increasing timestamps and stages run in order, so the
+timestamp alone is nearly sufficient; the sequence number exists because a fast
+stage can emit several entries inside the same millisecond, and a stable thread
+matters more than which of them is "really" first.
+
+**`RunMessage` has no `kind` field yet.** The plan called for
+`"text" | "question" | "answer"`, but nothing can produce a question until the
+engines can be resumed (TASK-079). Union members no code can construct are
+speculative generality; 079 adds `kind` when it has something to put in it.
+
+**The endpoint records on a live run rather than refusing.** The task text said
+`POST /runs/:id/messages` should 409 "when nothing is waiting for input", which
+today means *always* — a composer whose every send fails is precisely the
+`SteerChat` mock this work deleted. So: 404 unknown run, 409 on a **terminal** run,
+accept otherwise. **Nothing consumes the message until TASK-079** — that is stated
+in `architecture-ui.md` rather than concealed behind a control that looks wired.
+
+**A real ordering bug fell out of testing this.** `GET /runs/:id/events` replayed
+stored events and *then* subscribed — with an `await` in between, so anything
+emitted during the replay was lost. It now subscribes first, buffers, replays, and
+flushes the buffer. Duplicates across the seam are safe: `applyEvent` dedupes logs
+by `ts`+`message` and messages by `id`. This is the mirror of the ordering
+`useRunEvents` has always had on the client.
+
 ## 2026-07-27 — The run rail routes on the hash, and rides a summary channel (TASK-077)
 
 **Context:** the run list moved from an overlay (`HistoryDrawer`, one `fetchRuns()`

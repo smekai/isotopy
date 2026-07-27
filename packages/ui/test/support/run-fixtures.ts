@@ -1,7 +1,9 @@
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type {
+  MessageRole,
   RunEvent,
   RunEventType,
+  RunMessage,
   RunState,
   RunStatus,
   StageState,
@@ -26,8 +28,18 @@ export function run(stages: StageState[], status: RunStatus = "running"): RunSta
     pipelineName: "Developer + Tester",
     status,
     stages,
+    messages: [],
     createdAt: CREATED_AT,
   };
+}
+
+export function message(
+  id: string,
+  text: string,
+  ts: string,
+  role: MessageRole = "user",
+): RunMessage {
+  return { id, ts, role, text };
 }
 
 export function event(type: RunEventType, extra: Partial<RunEvent> = {}): RunEvent {

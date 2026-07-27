@@ -37,6 +37,16 @@ export interface StageLogEntry {
 
 export type StageVerdict = "PASS" | "FAIL";
 
+export type MessageRole = "user" | "agent";
+
+export interface RunMessage {
+  id: string;
+  ts: string;
+  role: MessageRole;
+  stageId?: string;
+  text: string;
+}
+
 export interface StageState {
   id: string;
   label: string;
@@ -62,6 +72,7 @@ export interface RunState {
   stageOutputs?: Record<string, string>;
   workspacePath?: string;
   stages: StageState[];
+  messages: RunMessage[];
   createdAt: string;
   completedAt?: string;
 }
@@ -119,7 +130,8 @@ export type RunEventType =
   | "stage.failed"
   | "stage.awaiting"
   | "stage.approved"
-  | "stage.skipped";
+  | "stage.skipped"
+  | "run.message";
 
 export const RUN_EVENT_TYPES: RunEventType[] = [
   "run.started",
@@ -131,6 +143,7 @@ export const RUN_EVENT_TYPES: RunEventType[] = [
   "stage.awaiting",
   "stage.approved",
   "stage.skipped",
+  "run.message",
 ];
 
 export interface RunEvent {
@@ -142,6 +155,7 @@ export interface RunEvent {
   status?: StageStatus | RunStatus;
   level?: LogLevel;
   result?: string;
+  chatMessage?: RunMessage;
 }
 
 export interface NewRunInput {
@@ -168,6 +182,7 @@ export function createInitialRunState({
     status: "pending",
     ...(task !== undefined ? { task } : {}),
     stageOutputs: {},
+    messages: [],
     createdAt: new Date().toISOString(),
     stages: flattenPipelineStages(pipeline).map((stage) => ({
       id: stage.id,

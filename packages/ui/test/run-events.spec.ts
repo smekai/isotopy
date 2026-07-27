@@ -5,7 +5,7 @@
 // that the snapshot may already contain.
 import { describe, expect, test } from "vitest";
 import { applyEvent } from "../src/run-events";
-import { event, run, stage, stageOf } from "./support/run-fixtures";
+import { event, message, run, stage, stageOf } from "./support/run-fixtures";
 
 describe("applyEvent", () => {
   test("run.started puts the run back into running and clears the completion time", () => {
@@ -155,6 +155,33 @@ describe("applyEvent", () => {
     );
 
     expect(stageOf(after, "design").status).toBe("skipped");
+  });
+
+  test("run.message appends the message to the transcript", () => {
+    const after = applyEvent(
+      run([stage("design", "running")]),
+      event("run.message", { chatMessage: message("m1", "use the dark palette", "2026-07-21T10:00:01.000Z") }),
+    );
+
+    expect(after.messages.map((entry) => entry.text)).toEqual(["use the dark palette"]);
+  });
+
+  test("a message already held is not appended twice by the replay", () => {
+    const chatMessage = message("m1", "use the dark palette", "2026-07-21T10:00:01.000Z");
+    const before = run([stage("design", "running")]);
+    before.messages = [chatMessage];
+
+    const after = applyEvent(before, event("run.message", { chatMessage }));
+
+    expect(after.messages).toHaveLength(1);
+  });
+
+  test("run.message with no payload is ignored rather than appending a blank", () => {
+    const before = run([stage("design", "running")]);
+
+    const after = applyEvent(before, event("run.message"));
+
+    expect(after.messages).toEqual([]);
   });
 
   test("an event naming a stage the run does not have changes nothing", () => {

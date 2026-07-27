@@ -1,33 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { Brain, FileText, FolderOpen, MessageSquare, RotateCcw, Terminal, X } from "lucide-react";
+import { Brain, FileText, FolderOpen, RotateCcw, Terminal, X } from "lucide-react";
 import type { LogLevel, RunState, StageState, StageVerdict } from "@adhd/core";
 import { agentForStage } from "@adhd/core";
 import { fetchRunFileContent, fetchRunFiles } from "../api";
 import type { WorkspaceFile, WorkspaceFileContent } from "../api";
+import { useFollowScroll } from "../hooks/useFollowScroll";
 import { renderInlineMarkdown } from "../inline-md";
 import { ARTIFACTS, REASONING } from "../mock-content";
 import type { Dir } from "../theme";
-import { EASE, ELEVATION, FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, sLabel, specColor, statusClr } from "../theme";
+import { EASE, ELEVATION, FAIL_RED, FONT, ICON, MONO, MOTION, PASS_GREEN, RADIUS, SANS, SPACE, WEIGHT, logLevelColor, sLabel, specColor, statusClr } from "../theme";
 import { StatusIcon } from "./StatusIcon";
-import { SteerChat } from "./SteerChat";
-import type { VoiceState } from "./VoiceControls";
 
-export type FocusTab = "artifacts" | "log" | "reasoning" | "steer";
+export type FocusTab = "artifacts" | "log" | "reasoning";
 
 type ArtifactView = "workflow" | "files";
 
 type SpecColor = ReturnType<typeof specColor>;
 type StatusColor = ReturnType<typeof statusClr>;
 
-const PASS_GREEN = "#059669";
-const FAIL_RED = "#DC2626";
-
-const FOLLOW_THRESHOLD_PX = 40;
 const GLYPH_SIZE = 32;
 const ARTIFACT_SIDEBAR_WIDTH = 180;
 const FILE_SIDEBAR_WIDTH = 220;
-const WARN_AMBER = "#D97706";
 
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
@@ -322,17 +316,14 @@ export interface StageFocusPanelProps {
   stage: StageState;
   run: RunState;
   d: Dir;
-  tab: FocusTab;
-  onTabChange: (t: FocusTab) => void;
-  vs: VoiceState;
-  onCycleVoice: () => void;
   onClose: () => void;
   onRestartHere: (stageId: string) => void;
 }
 
 export function StageFocusPanel({
-  stage, run, d, tab, onTabChange, vs, onCycleVoice, onClose, onRestartHere,
+  stage, run, d, onClose, onRestartHere,
 }: StageFocusPanelProps) {
+  const [tab, setTab] = useState<FocusTab>("artifacts");
   const agent = agentForStage(stage.id);
   const sc = specColor(stage.id);
   const st = statusClr(stage.status);
@@ -400,30 +391,11 @@ export function StageFocusPanel({
     };
   }, [run.id, selectedFile]);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const followRef = useRef(true);
-
-  function handleScroll() {
-    const el = scrollRef.current;
-    if (el) {
-      followRef.current =
-        el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD_PX;
-    }
-  }
-
-  useEffect(() => {
-    if (tab !== "log") {
-      return;
-    }
-    const el = scrollRef.current;
-    if (el && followRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [tab, stage.id, stage.logs.length]);
-
-  useEffect(() => {
-    followRef.current = true;
-  }, [stage.id, tab]);
+  const follow = useFollowScroll({
+    length: stage.logs.length,
+    resetKey: `${stage.id}:${tab}`,
+    enabled: tab === "log",
+  });
 
   const restartable = run.status === "failed" || run.status === "cancelled";
 
@@ -431,16 +403,9 @@ export function StageFocusPanel({
     { id: "artifacts", label: "Artifacts", ico: <FileText size={ICON.sm} /> },
     { id: "log", label: "Live Log", ico: <Terminal size={ICON.sm} /> },
     { id: "reasoning", label: "Reasoning", ico: <Brain size={ICON.sm} /> },
-    { id: "steer", label: "Steer", ico: <MessageSquare size={ICON.sm} /> },
   ];
 
-  const logColor = (level: LogLevel) => {
-    if (level === "error" || level === "fail") return FAIL_RED;
-    if (level === "pass") return PASS_GREEN;
-    if (level === "run") return d.accent;
-    if (level === "warn") return WARN_AMBER;
-    return d.textMid;
-  };
+  const logColor = (level: LogLevel) => logLevelColor(level, d);
 
   return (
     <div style={panelContainer(d, sc)}>
@@ -489,7 +454,7 @@ export function StageFocusPanel({
         {tabs.map((t) => (
           <button
             key={t.id}
-            onClick={() => onTabChange(t.id)}
+            onClick={() => setTab(t.id)}
             style={tabButton(tab === t.id, sc, d)}
           >
             {t.ico}{t.label}
@@ -498,10 +463,10 @@ export function StageFocusPanel({
       </div>
 
       <div
-        ref={scrollRef}
-        onScroll={handleScroll}
+        ref={follow.ref}
+        onScroll={follow.onScroll}
         data-testid="stage-scroll"
-        style={{ flex: 1, minHeight: 0, overflowY: tab === "steer" ? "hidden" : "auto" }}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
       >
         {tab === "artifacts" && (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -614,10 +579,6 @@ export function StageFocusPanel({
               ))
             }
           </div>
-        )}
-
-        {tab === "steer" && (
-          <SteerChat stageId={stage.id} stageLabel={stage.label} d={d} vs={vs} onCycle={onCycleVoice} />
         )}
       </div>
     </div>

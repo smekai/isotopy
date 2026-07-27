@@ -12,6 +12,7 @@ export function makePersistedRun(id: string, status: RunStatus): PersistedRun {
       pipelineName: "Developer + Tester",
       status,
       stages: [],
+      messages: [],
       createdAt: "2026-07-23T00:00:00.000Z",
     },
   };

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings, Sparkles } from "lucide-react";
 import type { RunSummary } from "@adhd/core";
-import { isTerminalRunStatus, modelForEngine } from "@adhd/core";
-import { abortRun, approveGate, restartRun, startRun } from "./api";
+import { modelForEngine } from "@adhd/core";
+import { abortRun, approveGate, postRunMessage, restartRun, startRun } from "./api";
+import { ChatPanel } from "./components/ChatPanel";
 import { EmptyState } from "./components/EmptyState";
 import { PipelineRow } from "./components/PipelineRow";
 import { ProjectDrawer } from "./components/ProjectDrawer";
@@ -13,7 +14,6 @@ import { RunStatusBar } from "./components/RunStatusBar";
 import { SetupModal } from "./components/setup/SetupModal";
 import type { SetupSection } from "./components/setup/SetupModal";
 import { StageFocusPanel } from "./components/StageFocusPanel";
-import type { FocusTab } from "./components/StageFocusPanel";
 import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
@@ -124,15 +124,12 @@ export function App() {
   const runs = useRunList(projectId, projects.ready);
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [pinned, setPinned] = useState(false);
-  const [focusTab, setFocusTab] = useState<FocusTab>("log");
-  const tabChosenByUser = useRef(false);
   const attachedProject = useRef<string | null>(null);
   const [pipeVs, setPipeVs] = useState<VoiceState>("idle");
-  const [stageVs, setStageVs] = useState<VoiceState>("idle");
   const [setupSection, setSetupSection] = useState<SetupSection | null>(null);
   const [showProject, setShowProject] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ key: string; task: string } | null>(null);
 
@@ -153,49 +150,20 @@ export function App() {
     }
   }, [runs.ready, runs.runs, projectId, route, replace]);
 
-  const runStatus = run?.status;
-  useEffect(() => {
-    if (runStatus && isTerminalRunStatus(runStatus) && !tabChosenByUser.current) {
-      setFocusTab("artifacts");
-    }
-  }, [runStatus]);
-
-  function handleTabChange(next: FocusTab) {
-    tabChosenByUser.current = true;
-    setFocusTab(next);
-  }
-
-  useEffect(() => {
-    if (!run || pinned) {
-      return;
-    }
-    const hot =
-      run.stages.find((stage) => stage.status === "running") ??
-      run.stages.find((stage) => stage.status === "awaiting") ??
-      run.stages.find((stage) => stage.status === "failed");
-    if (hot) {
-      setFocusedId(hot.id);
-    }
-  }, [run, pinned]);
-
   function attachRun(runId: string) {
     navigate(runRoute(runId));
     setResubKey((key) => key + 1);
-    setPinned(false);
-    setFocusTab("log");
-    tabChosenByUser.current = false;
+    setFocusedId(null);
   }
 
   function openComposer() {
     navigate(HOME_ROUTE);
     setFocusedId(null);
-    setPinned(false);
   }
 
   function handleSelectProject(id: string) {
     navigate(HOME_ROUTE);
     setFocusedId(null);
-    setPinned(false);
     void projects.select(id);
   }
 
@@ -217,6 +185,21 @@ export function App() {
       setError(err instanceof Error ? err.message : "Failed to start run");
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function handleSend(text: string) {
+    if (!activeRunId) {
+      return;
+    }
+    setError(null);
+    setSending(true);
+    try {
+      await postRunMessage(activeRunId, text);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -260,13 +243,7 @@ export function App() {
   }
 
   function handleNodeClick(stageId: string) {
-    if (focusedId === stageId) {
-      setFocusedId(null);
-      setPinned(false);
-      return;
-    }
-    setFocusedId(stageId);
-    setPinned(true);
+    setFocusedId((current) => (current === stageId ? null : stageId));
   }
 
   const awaitingStage = run?.stages.find((stage) => stage.status === "awaiting");
@@ -345,20 +322,19 @@ export function App() {
                 onNodeClick={handleNodeClick}
                 onApprove={(stageId) => void handleApprove(stageId)}
               />
+              <ChatPanel
+                run={run}
+                d={d}
+                sending={sending}
+                onSend={(text) => void handleSend(text)}
+              />
               {focusedStage && (
                 <StageFocusPanel
                   key={focusedStage.id}
                   stage={focusedStage}
                   run={run}
                   d={d}
-                  tab={focusTab}
-                  onTabChange={handleTabChange}
-                  vs={stageVs}
-                  onCycleVoice={() => setStageVs((v) => cycleVS(v))}
-                  onClose={() => {
-                    setFocusedId(null);
-                    setPinned(false);
-                  }}
+                  onClose={() => setFocusedId(null)}
                   onRestartHere={(stageId) => void handleRestart(run.id, stageId)}
                 />
               )}

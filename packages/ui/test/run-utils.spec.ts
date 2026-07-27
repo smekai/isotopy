@@ -19,6 +19,7 @@ function run(stages: StageState[]): RunState {
     pipelineName: "Developer + Tester",
     status: "failed",
     stages,
+    messages: [],
     createdAt: "2026-07-21T10:00:00.000Z",
   };
 }

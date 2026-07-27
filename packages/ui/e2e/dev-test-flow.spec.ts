@@ -59,6 +59,7 @@ const SEEDED_RUN: RunState = {
   result: TESTER_OUTPUT,
   stageOutputs: { implementation: DEV_OUTPUT, test: TESTER_OUTPUT },
   workspacePath: "/seeded/workspace",
+  messages: [],
   createdAt: STARTED_AT,
   completedAt: FINISHED_AT,
   stages: [
@@ -167,6 +168,26 @@ test("both boxes render as Developer and Tester with their persona badges", asyn
   await expect(page.getByTestId("stage-profession")).toHaveText("Tester");
   await expect(page.getByTestId("stage-persona")).toHaveText("TESTER");
   await expect(page.getByTestId("stage-verdict")).toHaveText("PASS");
+});
+
+test("the run opens on one thread carrying both boxes in order", async ({ page }) => {
+  await seedRun(page);
+  await attachSeededRun(page);
+
+  // The chat is the body of a run now — no stage has to be clicked to see it.
+  const thread = page.getByTestId("chat-thread");
+  await expect(thread).toContainText("Developer online");
+  await expect(thread).toContainText("Tester online");
+
+  // Both boxes' dividers are present, and the Developer's precedes the Tester's.
+  const developerFirst = await thread.innerText();
+  expect(developerFirst.indexOf("Developer online")).toBeLessThan(
+    developerFirst.indexOf("Tester online"),
+  );
+
+  // A finished run cannot be messaged, and says so instead of offering a box.
+  await expect(page.getByTestId("chat-composer")).toHaveCount(0);
+  await expect(page.getByText(/This run has finished/)).toBeVisible();
 });
 
 test("each box's Artifacts tab shows that box's own handoff.md", async ({ page }) => {

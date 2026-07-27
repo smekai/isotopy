@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import type {
   EnginePermissionMode,
   LogLevel,
+  MessageRole,
   PipelineDefinition,
   RunEvent,
+  RunMessage,
   RunState,
   RunSummary,
   StageDefinition,
@@ -68,6 +70,12 @@ interface InputExtras {
   startedMessage: string;
   seededOutputs?: Record<string, string>;
   startStageId?: string;
+}
+
+interface MessageDraft {
+  role: MessageRole;
+  stageId?: string;
+  text: string;
 }
 
 export class RunOrchestrator implements RunProjection {
@@ -296,6 +304,36 @@ export class RunOrchestrator implements RunProjection {
     this.markCancelled(runId);
     void this.repositoryForRun(runId).releaseRun(runId);
     return structuredClone(run);
+  }
+
+  postMessage(runId: string, text: string): RunMessage {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (isTerminalRunStatus(run.status)) {
+      throw new Error(`Run ${runId} has finished — start a new run to say more`);
+    }
+    return this.appendMessage(run, { role: "user", text });
+  }
+
+  private appendMessage(run: RunState, draft: MessageDraft): RunMessage {
+    const message: RunMessage = {
+      id: randomUUID().slice(0, 8),
+      ts: nowIso(),
+      role: draft.role,
+      ...(draft.stageId !== undefined ? { stageId: draft.stageId } : {}),
+      text: draft.text,
+    };
+    run.messages.push(message);
+    this.emit({
+      ts: message.ts,
+      type: "run.message",
+      runId: run.id,
+      ...(message.stageId !== undefined ? { stageId: message.stageId } : {}),
+      chatMessage: message,
+    });
+    return message;
   }
 
   restartRun(runId: string, stageId: string): RunState {

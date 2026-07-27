@@ -19,6 +19,14 @@ export function applyEvent(run: RunState, event: RunEvent): RunState {
     }
   }
 
+  if (event.type === "run.message" && event.chatMessage) {
+    const message = event.chatMessage;
+    if (!next.messages.some((entry) => entry.id === message.id)) {
+      next.messages.push(message);
+    }
+    return next;
+  }
+
   if (!event.stageId) {
     return next;
   }

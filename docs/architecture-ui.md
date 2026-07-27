@@ -57,6 +57,7 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
 | [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union. Unit-tested. |
 | [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`. Unit-tested. |
+| [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
 | [`index.css`](../packages/ui/src/index.css) | The only stylesheet: reset, body font, `@keyframes adhd-*`, scrollbar. |
@@ -65,7 +66,7 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
 | [`mock-content.ts`](../packages/ui/src/mock-content.ts) | **Prototype fixture data still wired into a shipped component.** See Known gaps / TASK-075. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useRoute`, `useElapsed`. §5, §6. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
 | `components/` | 17 flat component files, plus `setup/` — the one feature folder. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
@@ -111,7 +112,7 @@ The split as it stands:
 
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
   `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`.
-- **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `SteerChat`,
+- **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `ChatPanel`,
   `VoiceControls` — own open/draft state, no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
   `StageFocusPanel`, and inside `setup/` — `EngineStatusCard`,
@@ -197,6 +198,17 @@ EmptyState ──onStart──▶ App.handleStart ──▶ startRun() ───
                        run.completed / terminal ──▶ source.close()
 ```
 
+**A run's body is the transcript**, not the stage panel. `ChatPanel` renders
+`buildTranscript(run)` — the agents' narration (stage logs, mapped by level onto
+prose / tool rows / notices) merged with `run.messages`, which holds only the
+user's own turns. `StageFocusPanel` is now an inspector: it opens when a stage node
+is clicked and owns its own tab state, so `App` holds neither.
+
+**A message posted from the composer is recorded and broadcast, and nothing reads
+it yet.** `POST /runs/:id/messages` appends to `run.messages` and emits
+`run.message`; TASK-079 is what gives a parked stage something to resume from. Do
+not describe the composer as steering the agent until that lands.
+
 **There are two independent SSE channels**, and they answer different questions.
 `/runs/:id/events` carries one run in full detail and closes when that run ends;
 `/runs/events` carries a compact `RunSummary` for *every* run in the project on each
@@ -249,7 +261,7 @@ Four tiers. Put state in the **lowest** one that works.
 | --- | --- | --- |
 | **Server** | Anything that must survive reload or be shared across clients | Engine, model, permission mode, pipeline, project list (TASK-065 moved preferences here from `localStorage`) |
 | **Hook** | Server state plus its lifecycle, reusable | `useProjects`, `useSettings`, `useRunEvents` |
-| **`App`** | Cross-cutting view state that two or more children need | `activeRunId`, `focusedId`, `pinned`, `focusTab`, overlay flags |
+| **`App`** | Cross-cutting view state that two or more children need | `focusedId`, overlay flags, `starting`/`sending`. (`activeRunId` is the URL now; `focusTab` moved into `StageFocusPanel` and `pinned` disappeared when the panel stopped auto-opening.) |
 | **Component** | State no one else can observe | Dropdown open, textarea draft, file selection |
 
 The hooks each return a single named controller interface — `ProjectsController`,
@@ -264,13 +276,14 @@ Two patterns worth copying:
 - **Whole-view replacement** (`useProjects.apply`): every mutation returns a fresh
   `ProjectsView` that is applied wholesale. No partial patching of a list.
 
-`App` currently holds ~14 `useState` plus a `useRef`. That is defensible for one
-screen with five overlays, and most of it is genuinely cross-cutting. The threshold
-at which it stops being defensible: **when a piece of `App` state is read by exactly
-one subtree**, it belongs in that subtree. The `tabChosenByUser` ref is the honest
-edge case — it exists to distinguish a user's tab choice from the automatic switch to
-`artifacts` on completion, which a plain `useState` cannot express without an extra
-render.
+`App` holds ~9 `useState` plus one `useRef`, down from ~14 — TASK-077 and TASK-078
+applied the threshold below rather than restating it. **When a piece of `App` state
+is read by exactly one subtree, it belongs in that subtree.** Three moved out on
+that rule: `activeRunId` became the URL (`routeRunId(route)`), `focusTab` and
+`tabChosenByUser` moved into `StageFocusPanel` — the only reader — and `pinned`
+stopped existing when the panel stopped auto-opening. The remaining `useRef`,
+`attachedProject`, is the honest edge case: it makes the boot auto-attach fire once
+per project, which a `useState` cannot express without an extra render.
 
 ---
 
@@ -367,7 +380,7 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
-| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events`, `route`, `run-list` |
+| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events`, `route`, `run-list`, `transcript` |
 | Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList` |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
@@ -403,7 +416,7 @@ list card. The current roster:
 `project-drawer` · `project-root` · `run-status` · `stage-node-<stageId>` ·
 `stage-profession` · `stage-persona` · `stage-verdict` · `stage-scroll` ·
 `artifact-preview` · `artifact-view-<view>` · `artifact-files` · `run-card` ·
-`run-resume` · `run-restart` · `run-rerun`
+`run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer`
 
 ---
 
@@ -419,7 +432,8 @@ actionable rather than merely noted.
 | 3 | ~~**No component tests.**~~ **Closed by TASK-074** — a `jsdom` vitest project takes `*.comp.tsx`, `applyEvent` is covered by `run-events.spec.ts`, and `useRunEvents.comp.tsx` drives the subscribe-buffer-replay ordering. Only that hook is covered so far; the components still have none. | Extend the layer to presentational components as they change. | — |
 | 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. `StageFocusPanel.tsx` (625) inherits the title of largest component. | The same treatment for `StageFocusPanel` when it next changes. | — |
 | 5 | **`SetupModal` is not an accessible overlay** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. (`HistoryDrawer` shared this and was deleted by TASK-077.) | The §8 overlay rule applied. | — |
-| 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click), `SteerChat` (no send endpoint) and `Waveform` are visual placeholders. | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
+| 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click) and `Waveform` are visual placeholders. (`SteerChat` was the third and was deleted by TASK-078, replaced by `ChatPanel` over a real endpoint.) | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
+| 9 | **A posted message is stored and shown, but no agent reads it.** `ChatPanel`'s composer is wired end to end — route, event, reducer, transcript — and stops there. | TASK-079 lands question mode, where an asking stage resumes from the user's reply. | TASK-079 |
 | 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@adhd/core` when its shape stabilises. | — |
 | 8 | **Theme is light-only.** No dark values, no `prefers-color-scheme`. | A decision, not a bug — recorded so it is not discovered mid-redesign. | — |
 
