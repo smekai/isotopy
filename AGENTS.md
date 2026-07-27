@@ -110,4 +110,4 @@ All workspace packages (root + `packages/*`) share one version, bumped together.
 - **Patch** (0.0.x): fixes and small tweaks between features.
 - **Major** (1.0.0): when everything planned for the milestone set is done and the product is ready.
 
-Current: 0.6.1.
+Current: 0.6.13.

@@ -135,7 +135,9 @@ expression, and a change is judged against its tier.
   logic in hooks. Exactly one module talks to the network; components call it
   rather than fetching directly. Props types are named (A6); styles are named
   constants or builders, not sprawling inline literals; pure view helpers stay
-  apart from stateful modules.
+  apart from stateful modules. In this repo the tier is written out in full —
+  module map, data flow, state ownership, design tokens, accessibility — in
+  `docs/ui-architecture.md`; read it before changing UI code.
 
 - **Mobile** — the same domain, pulled from the shared package, with
   platform-specific code behind an interface so a screen never branches on the
@@ -325,6 +327,8 @@ Dependency direction: `index.ts → app.ts → routes → services → engines/c
 - `api.ts` is the only module that talks HTTP; components import functions from it, never `fetch` directly.
 - Pure helpers (`run-utils.ts`, `theme.ts`) stay separate from stateful modules.
 - `test/` holds unit specs; `e2e/` holds the Playwright suite. Neither lives in `src/`.
+
+The frontend tier is documented in full — module map, the network seam, run data flow, state ownership, design tokens, accessibility, testing layers and known gaps — in [`ui-architecture.md`](./ui-architecture.md). Read that before changing UI code; the summary above is only the layout.
 
 ## Configuration & constants
 
@@ -865,27 +869,35 @@ user-level root; both exist so tests get isolated roots.
 ## Local dashboard architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  React/Vite SPA (localhost:9477)        │
-│  - Task backlog / list                  │
-│  - Run list + stage timeline            │
-├─────────────────────────────────────────┤
-│  REST API (Hono)                        │
-│  Tasks:                                 │
-│  - GET /tasks, POST /tasks              │
-│  - GET /tasks/:id, PATCH /tasks/:id     │
-│  - POST /tasks/:id/runs (start run)     │
-│  Runs:                                  │
-│  - GET /runs, GET /runs/:id             │
-│  - POST /runs/:id/approve, /reject      │
-│  - POST /runs/:id/restart               │
-│  - GET /runs/:id/events (SSE)           │
-├─────────────────────────────────────────┤
-│  Orchestrator + TaskManager (in-process)│
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  React/Vite SPA (localhost:5173 in dev)          │
+│  - Pipeline row + stage focus panel              │
+│  - Run history, project switcher, setup          │
+│  Vite proxies /runs /projects /settings          │
+│  /engines /pipelines /fs /health to the API      │
+├──────────────────────────────────────────────────┤
+│  REST + SSE API (Hono, localhost:9477)           │
+│  Runs:                                           │
+│  - GET /runs, POST /runs, GET /runs/:id          │
+│  - POST /runs/:id/gates/:stageId/approve         │
+│  - POST /runs/:id/abort, /runs/:id/restart       │
+│  - GET /runs/:id/files, /runs/:id/files/content  │
+│  - GET /runs/:id/events (SSE)                    │
+│  Projects / settings / engines / fs:             │
+│  - GET|POST /projects, DELETE /projects/:id      │
+│  - POST /projects/:id/activate                   │
+│  - GET /settings, PUT /settings/preferences      │
+│  - PUT /settings/engines/:id                     │
+│  - GET /engines/:id/status|models                │
+│  - POST /engines/:id/install|login               │
+│  - GET /pipelines, GET /fs/dirs, GET /health     │
+├──────────────────────────────────────────────────┤
+│  RunOrchestrator (durable OpenWorkflow runtime)  │
+│  + per-project SQLite read model                 │
+└──────────────────────────────────────────────────┘
 ```
 
-Single binary or `adhd ui` spawns API + static UI. No external database — reads `index.json`, task markdown, `state.json`, and `events.jsonl` directly.
+Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow's SQLite state is the source of truth and the run snapshot/event tables are a rebuildable read model. The frontend side of this picture is [`ui-architecture.md`](./ui-architecture.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 

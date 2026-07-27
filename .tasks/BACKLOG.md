@@ -1,5 +1,72 @@
 # Backlog
 
+## TASK-072: Extend `theme.ts` with spacing, radius, type and elevation scales
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-27 00:00
+
+[`theme.ts`](../packages/ui/src/theme.ts) tokenises **colour only** — three `Dir` palettes, `SPEC_COLOR` per stage, `STATUS_COLORS`, `RUN_PILL`, `SANS`/`MONO`, `GOLD`. Every other visual dimension is a magic number inline in the component: paddings (`"6px 12px"`), radii (`9`, `10`, `12`), font sizes (`11`…`15`), icon sizes (`13`, `15`), the 50px top bar, `z-index` values, and the durations in `index.css`.
+
+The practical consequence: a consistent restyle today means editing all 17 components by hand and eyeballing whether `borderRadius: 10` here and `borderRadius: 9` there was intentional. **This is the prerequisite for any UI beautification work** — the scales have to exist before there is anything to tune.
+
+**Scope:**
+1. Add named scales beside the palettes: spacing, radius, font size + weight, icon size, elevation (fold the existing `shadow`/`shadowSm`/`shadowLg` in), z-index layers (base / drawer / modal), and motion durations.
+2. Derive the values from what the components already use — this is an extraction, not a redesign. Where two components disagree by a pixel or two, pick one and note it.
+3. Migrate the components to the scales. `borderRadius: RADIUS.md` must mean something; do not introduce a token per call site.
+4. Keep the A6 rule intact: style builders stay in the component's own file (see [`decisions.md`](../docs/decisions.md) 2026-07-26); only the *scales* are shared.
+
+**Note:** `App.tsx:198` builds the dot-grid background with `d.border.replace("0.12", "0.20")`, which silently no-ops for the `sakura` palette whose border alpha is `0.14`. A proper token removes the string surgery.
+
+**Cross-platform:** n/a — pure UI.
+
+---
+
+## TASK-074: Add a component-test layer for the UI
+**Priority:** P2 | **Tags:** ui, testing
+**Updated:** 2026-07-27 00:00
+
+**There are no component tests at all.** The root [`vitest.config.ts`](../vitest.config.ts) includes `packages/*/test/**/*.{comp,spec}.ts` and sets `environment: "node"` — the glob cannot match `.tsx` and the environment cannot render. UI coverage is therefore two pure-helper specs (`run-utils`, `legacy-prefs`) plus Playwright, which is slow, serial (`workers: 1`), and only runs when a change is structural enough to warrant `pnpm e2e`.
+
+The gap that matters most is [`useRunEvents.ts`](../packages/ui/src/hooks/useRunEvents.ts): `applyEvent` is a pure reducer over `RunState` covering nine event types and a log-dedupe branch, and the subscribe-buffer-replay ordering around it is genuinely subtle. It is exactly the shape unit tests are for, and today nothing tests it directly.
+
+**Scope:**
+1. Extend the vitest config to a UI-capable project: `.tsx` in the include glob and a DOM environment (`jsdom`/`happy-dom`) scoped so the server package keeps `node`.
+2. Add `@testing-library/react` and write `*.comp.tsx` tests for the highest-value units — `applyEvent` first (pure, no DOM needed), then the hooks and a presentational component or two.
+3. Keep the layering rule from [`testing.md`](../docs/testing.md): component tests assert behaviour with deps mocked; anything needing a real server stays in `e2e/`.
+4. Tests stay in `packages/ui/test/`, never beside source.
+
+**Cross-platform:** n/a — pure UI/tooling.
+
+---
+
+## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-27 00:00
+
+[`mock-content.ts`](../packages/ui/src/mock-content.ts) holds hardcoded `REASONING` and `ARTIFACTS` demo data from an OAuth example, and it is still imported by [`StageFocusPanel.tsx:9`](../packages/ui/src/components/StageFocusPanel.tsx#L9). The Reasoning tab renders that fixture regardless of what the run actually did, so a user inspecting a real stage is shown text about a feature they never asked for. This is prototype scaffolding that outlived the prototype.
+
+**Scope:**
+1. Decide per tab what the real source is — the Artifacts tab already has `/runs/:id/files`; Reasoning has no server-side equivalent today.
+2. Where real data exists, use it. Where it does not, render an honest empty state ("no reasoning captured for this stage") rather than fiction — do not invent an endpoint under this task.
+3. Delete `mock-content.ts` once nothing imports it.
+
+**Cross-platform:** n/a — pure UI.
+
+---
+
+## TASK-073: Split `SetupModal.tsx` into per-section components
+**Priority:** P3 | **Tags:** ui
+**Updated:** 2026-07-27 00:00
+
+[`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) is **1002 lines** with roughly 50 style builders in one file — by a wide margin the largest module in `packages/ui`, and the one place where A2's single-responsibility rule is visibly broken: it owns four unrelated settings surfaces (`harness | gates | appearance | deploy`), each with its own state, server calls and styling.
+
+Split along the axis that already exists — the `SetupSection` union — into one component per section, with `SetupModal` reduced to the shell: chrome, section switching, close handling.
+
+**Note:** [`decisions.md`](../docs/decisions.md) 2026-07-26 ruled that a component's styles stay in its *own* file rather than a sibling styles module ("A6 asks for *names*, not for a particular file"). Splitting by section respects that decision — each section's builders move with its markup — whereas extracting a `SetupModal.styles.ts` would contradict it.
+
+**Cross-platform:** n/a — pure UI.
+
+---
+
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P2 | **Tags:** server, engine, infra
 **Updated:** 2026-07-23 13:00
@@ -20,11 +87,38 @@ The standing second choice from [`docs/workflow-runtime-options.md`](../docs/wor
 
 ---
 
-## TASK-061: Limit is over
-**Priority:** P2 | **Tags:** limits, model | **Assignee:** Fedor
-**Updated:** 2026-07-21 11:55
+## TASK-061: Limit is over — pause the run on a plan limit instead of failing it
+**Priority:** P2 | **Tags:** engine, server, ui | **Assignee:** Fedor
+**Updated:** 2026-07-26 00:00
 
-We need to wait when subsription reached a limit, in this case we are going to wait by default. But we need to notify user with popup and may be notification that thereis this problem - and recoomend to change a plan or change a harness fro this worklow run, or just cancel the run, or change a model to cheaper or free one. Basically give all the options. This should work for any harness and mac or windows systmes, Error in logs now: You've hit your session limit · resets 4:30pm (Europe/Tallinn) 14:52:00 ✗ Claude subscription session limit reached — wait for the reset time shown in the log, or switch to an API key in Setup → Connection.
+When a harness reports a subscription/plan limit, the run should **wait for the reset by default** rather than die — and tell the user it is waiting, with a popup (and an OS notification, since the point of a limit wait is that nobody is watching) offering *all* the options: keep waiting, switch to a cheaper or free model, switch harness or connection mode, change plan, or cancel the run. Must work for every harness on both macOS and Windows. The trigger, verbatim from the log:
+
+```
+You've hit your session limit · resets 4:30pm (Europe/Tallinn)
+14:52:00 ✗ Claude subscription session limit reached — wait for the reset time shown in the log, or switch to an API key in Setup → Connection.
+```
+
+**Today (re-checked 2026-07-26) a limit is a hard failure with a friendlier string.** All three adapters pattern-match it into a static hint — [claude-code.ts:110](../packages/server/src/engines/claude-code.ts#L110), [codex.ts:83](../packages/server/src/engines/codex.ts#L83), [cursor.ts:126](../packages/server/src/engines/cursor.ts#L126) — which flows through `interpretEngineResult` → `stageFailed` → run `failed`. Recovery is manual `restartRun(runId, stageId)`, which needs the user present and re-runs the whole stage. **The reset time is thrown away:** the adapter logs the raw line as `warn` and replaces the message with the hint, so nothing downstream knows *when* to retry. And the UI has no popup, toast or notification machinery at all — the only modal is `SetupModal`, and the only user-facing pause is the gate (`GateMarker`, `TeamController`) driven by `stage.status === "awaiting"`.
+
+**What changed under this task since it was written (2026-07-21):**
+- **TASK-068 landed the durable OpenWorkflow runtime on `main`.** [pipeline-workflow.ts:63](../packages/server/src/workflow/pipeline-workflow.ts#L63) already parks a run on `step.waitForSignal` for 3650d and survives a hard process kill. That is the mechanism for "wait for the reset" — a *durable* pause, not a `setTimeout`, which matters because a multi-hour wait will outlive the server process. `docs/workflow-runtime-options.md` names this exact "durable sleep (TASK-061)" shape as one of the reasons the runtime was chosen.
+- **TASK-065 moved engine/model/permission mode server-side** (`PUT /settings/preferences`), so "switch to a cheaper model" is now a server-side edit. But a run snapshots `engine`/`model` onto `RunState` at start and `buildInput()` reads that snapshot — **mid-run switching needs the run's own engine/model to become mutable**, then the parked stage relaunched with the new value.
+
+**Scope:**
+1. **Detect, don't just label.** Promote the limit patterns in the three adapters to a typed outcome on `EngineRunResult` (e.g. `limit: { resetAt?, raw }`) — a limit is its own result, not a failure with nicer prose. Parse the reset time where the CLI prints one; when it can't be parsed, fall back to a fixed retry interval rather than guessing.
+2. **A state of its own.** `RunStatus`/`StageStatus` need `blocked` distinct from `awaiting`: reusing the gate state would let "Approve Gate" mean two different things. Add the matching `RunEventType` so the SSE stream carries it, and handle it in `markCancelled`/`markInterrupted`.
+3. **Durable wait in the workflow.** On a limit outcome, `runOneStage` parks on a `limit:<runId>:<stageId>` signal with `timeout` = time-to-reset, then re-runs the same stage. Timeout fired = the reset passed; signal fired = the user chose something. Decide the retry budget (two limits in a row → fail?) — `STAGE_RETRY` is `maximumAttempts: 1` today.
+4. **The options are signals.** One endpoint (`POST /runs/:id/limit/:stageId/resolve`) carrying the choice: `retry-now`, `switch-model`, `switch-engine`/`switch-connection`, or `abort` (existing `abortRun`). Everything but abort resumes the *same* stage with the changed setting, persisted — no re-running finished stages.
+5. **UI.** The popup is the app's first modal-over-a-run: which limit, reset time in local time, remaining countdown, and each option with its cost consequence ("Haiku is included in your plan"). Plus a browser `Notification` when the tab isn't focused; request permission at the moment of the first limit, never on load.
+6. **Docs:** decision-log entry for pause-not-fail and for how the reset time is parsed.
+
+**Cross-platform (Windows + macOS):**
+- **Reset parsing is timezone-shaped** — the CLI prints local wall-clock plus a named zone (`4:30pm (Europe/Tallinn)`). Derive a *duration from now* rather than storing an absolute local time; never assume server and CLI agree on timezone, and don't hand-roll DST.
+- **Notifications:** browser `Notification` API on both OSes — no native notifier binary, no Electron dependency. Confirm permission actually grants over `http://localhost` in Chrome *and* Safari.
+- **A multi-hour wait meets laptop sleep** (Windows sleep, macOS App Nap both suspend timers). Lease-based recovery in the durable runtime is what should cover it — verify a limit-parked run resumes after a real sleep/wake on both OSes, not just after a clean restart.
+- **Project admission:** `admitRun` allows one active run per project, so a limit-parked run holds the slot for hours. Decide whether pausing should release it — that decision is the same on both platforms but has to be made.
+
+**Verify:** force a limit (adapter test hook is fine) → run parks with the popup showing the reset time; kill the server and restart → still parked, then resumes on its own; choosing "switch to Haiku" resumes that stage on the new model without re-running completed stages.
 
 ---
 

@@ -1,5 +1,21 @@
 # Done
 
+## TASK-071: Document the UI architecture and review `packages/ui`
+**Priority:** P2 | **Tags:** ui, infra
+**Updated:** 2026-07-27 00:00
+
+`packages/ui` was ~5.4k lines with no dedicated documentation — UI context was split across A9's six-line frontend clause, a five-bullet layout section, four notes in `implementation-notes.md`, and two styling entries in `decisions.md`. Every UI task re-derived the same context from `App.tsx`, `api.ts` and `theme.ts`.
+
+### Done summary
+- **New [`docs/ui-architecture.md`](../docs/ui-architecture.md)** — ten sections: the stack and its four deliberate absences (each with the trigger that would reverse it), module map, component conventions, the `api.ts` network seam, the run data flow end to end, the four-tier state-ownership model, the design system, accessibility, testing layers, known gaps. Descriptive throughout, with binding paragraphs marked **Rule**.
+- **Wired into the generated standard.** A9's frontend bullet in the `gen:shared` block now points at it, so the pointer reaches both `.claude/skills/architect/SKILL.md` and the shipped Architect persona via `pnpm gen:skills`. Also cross-linked from the `### packages/ui` section and the `README.md` doc index.
+- **Fixed the stale `## Local dashboard architecture` block** — it claimed the SPA served on 9477 and listed a `/tasks` REST surface that never existed. Replaced with the real port split, the seven proxied route groups, the actual endpoint roster, and the `X-ADHD-Project` header.
+- **Review findings raised as tasks:** TASK-072 (no spacing/radius/type/z-index scales — the prerequisite for any beautification), TASK-074 (no component tests at all; the vitest glob cannot match `.tsx`), TASK-075 (`mock-content.ts` fixtures still rendering in `StageFocusPanel`), TASK-073 (`SetupModal.tsx` at 1002 lines). Three further gaps — overlay accessibility, hand-mirrored response types, light-only theme — are recorded in §10 without tasks.
+
+**Verified:** `pnpm gen:skills` regenerated both artifacts; `pnpm test` 145/145 including the drift test; `pnpm lint` and `pnpm typecheck` clean. No `packages/ui/src` changes.
+
+---
+
 ## TASK-063: Extract SetupModal inline styles to named constants (Architect rule A6)
 **Priority:** P3 | **Tags:** ui
 **Updated:** 2026-07-26 23:20
