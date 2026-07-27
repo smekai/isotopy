@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { FolderOpen, History, Settings, Sparkles } from "lucide-react";
 import type { RunState, RunStatus } from "@adhd/core";
 import { modelForEngine } from "@adhd/core";
@@ -19,10 +20,81 @@ import type { VoiceState } from "./components/VoiceControls";
 import { useProjects } from "./hooks/useProjects";
 import { useRunEvents } from "./hooks/useRunEvents";
 import { useSettings } from "./hooks/useSettings";
-import { SANS } from "./theme";
+import type { Dir } from "./theme";
+import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "./theme";
 import { useTheme } from "./ThemeContext";
 
 const TERMINAL_RUN_STATUSES: RunStatus[] = ["completed", "failed", "cancelled"];
+
+const TOP_BAR_HEIGHT = 50;
+const LOGO_SIZE = 30;
+const DIVIDER_HEIGHT = 22;
+const DOT_GRID_SIZE = 26;
+
+const BANNER_RED = "#DC2626";
+
+function topBar(d: Dir): CSSProperties {
+  return {
+    background: d.surface,
+    borderBottom: `1px solid ${d.border}`,
+    height: TOP_BAR_HEIGHT,
+    display: "flex",
+    alignItems: "center",
+    padding: `0 ${SPACE.xxxl}px`,
+    gap: SPACE.xxl,
+    flexShrink: 0,
+    boxShadow: d.elevation.sm,
+  };
+}
+
+function logoMark(d: Dir): CSSProperties {
+  return {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: RADIUS.lg,
+    background: `linear-gradient(135deg, ${d.accent}, ${d.accentDark})`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+}
+
+function wordmark(d: Dir): CSSProperties {
+  return {
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.xl,
+    fontWeight: WEIGHT.heavy,
+    letterSpacing: "-0.02em",
+  };
+}
+
+function topBarButton(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.sm,
+    background: d.surface2,
+    border: `1px solid ${d.border}`,
+    borderRadius: RADIUS.lg,
+    padding: `${SPACE.sm}px ${SPACE.xl}px`,
+    cursor: "pointer",
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.medium,
+  };
+}
+
+const ERROR_BANNER: CSSProperties = {
+  background: "rgba(220,38,38,0.08)",
+  borderBottom: "1px solid rgba(220,38,38,0.20)",
+  color: BANNER_RED,
+  fontFamily: SANS,
+  fontSize: FONT.md,
+  padding: `${SPACE.sm}px ${SPACE.xxxl}px`,
+  flexShrink: 0,
+};
 
 export function App() {
   const { d } = useTheme();
@@ -195,19 +267,19 @@ export function App() {
   const showEmpty = booted && !activeRunId;
   const banner = error ?? runError ?? projects.error ?? settings.error;
 
-  const dotGrid = `radial-gradient(circle, ${d.border.replace("0.12", "0.20")} 1px, transparent 1px)`;
+  const dotGrid = `radial-gradient(circle, ${d.borderStrong} 1px, transparent 1px)`;
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
-      <div style={{ background: d.surface, borderBottom: `1px solid ${d.border}`, height: 50, display: "flex", alignItems: "center", padding: "0 20px", gap: 14, flexShrink: 0, boxShadow: d.shadowSm }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 9, background: `linear-gradient(135deg, ${d.accent}, ${d.accentDark})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Sparkles size={15} style={{ color: "#FFF" }} />
+      <div style={topBar(d)}>
+        <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
+          <div style={logoMark(d)}>
+            <Sparkles size={ICON.lg} style={{ color: "#FFF" }} />
           </div>
-          <span style={{ color: d.text, fontFamily: SANS, fontSize: 15, fontWeight: 800, letterSpacing: "-0.02em" }}>ADHD</span>
+          <span style={wordmark(d)}>ADHD</span>
         </div>
 
-        <div style={{ width: 1, height: 22, background: d.border }} />
+        <div style={{ width: 1, height: DIVIDER_HEIGHT, background: d.border }} />
 
         <ProjectSwitcher
           d={d}
@@ -220,29 +292,22 @@ export function App() {
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => setShowProject(true)} data-testid="open-project"
-            style={{ display: "flex", alignItems: "center", gap: 6, background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 500 }}>
-            <FolderOpen size={13} /> Project
+        <div style={{ display: "flex", gap: SPACE.sm }}>
+          <button onClick={() => setShowProject(true)} data-testid="open-project" style={topBarButton(d)}>
+            <FolderOpen size={ICON.md} /> Project
           </button>
-          <button onClick={() => setShowHistory(true)}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 500 }}>
-            <History size={13} /> History
+          <button onClick={() => setShowHistory(true)} style={topBarButton(d)}>
+            <History size={ICON.md} /> History
           </button>
-          <button onClick={() => setSetupSection("harness")}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: d.surface2, border: `1px solid ${d.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 500 }}>
-            <Settings size={13} /> Setup
+          <button onClick={() => setSetupSection("harness")} style={topBarButton(d)}>
+            <Settings size={ICON.md} /> Setup
           </button>
         </div>
       </div>
 
-      {banner && (
-        <div style={{ background: "rgba(220,38,38,0.08)", borderBottom: "1px solid rgba(220,38,38,0.20)", color: "#DC2626", fontFamily: SANS, fontSize: 12, padding: "6px 20px", flexShrink: 0 }}>
-          {banner}
-        </div>
-      )}
+      {banner && <div style={ERROR_BANNER}>{banner}</div>}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundImage: dotGrid, backgroundSize: "26px 26px" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundImage: dotGrid, backgroundSize: `${DOT_GRID_SIZE}px ${DOT_GRID_SIZE}px` }}>
         {showEmpty ? (
           <EmptyState
             key={`${projectId}:${prefill?.key ?? "composer"}`}

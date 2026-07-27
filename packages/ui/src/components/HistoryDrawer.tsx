@@ -1,16 +1,112 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { PlayCircle, Repeat, RotateCcw, X } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import { fetchRuns } from "../api";
 import { formatDuration } from "../hooks/useElapsed";
 import { firstStageId, resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";
-import { MONO, RUN_PILL, SANS } from "../theme";
+import { FONT, ICON, MONO, RADIUS, RUN_PILL, SANS, SPACE, WEIGHT, Z } from "../theme";
+
+const PANEL_WIDTH = 360;
+const FAIL_RED = "#DC2626";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
+}
+
+function panel(d: Dir): CSSProperties {
+  return {
+    position: "fixed",
+    inset: "0 0 0 auto",
+    zIndex: Z.overlay,
+    width: PANEL_WIDTH,
+    background: "#FFF",
+    borderLeft: `1px solid ${d.border}`,
+    display: "flex",
+    flexDirection: "column",
+    boxShadow: d.elevation.lg,
+  };
+}
+
+function header(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: `${SPACE.xxl}px ${SPACE.xxl}px`,
+    borderBottom: `1px solid ${d.border}`,
+  };
+}
+
+function headerTitle(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.xl, fontWeight: WEIGHT.bold };
+}
+
+function closeButton(d: Dir): CSSProperties {
+  return { background: "none", border: "none", cursor: "pointer", color: d.textMuted };
+}
+
+function placeholder(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md, padding: SPACE.xxl };
+}
+
+function card(d: Dir): CSSProperties {
+  return {
+    padding: `${SPACE.xxl}px ${SPACE.xxl}px`,
+    borderBottom: `1px solid ${d.border}`,
+    cursor: "pointer",
+  };
+}
+
+function metaText(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: MONO, fontSize: FONT.xs };
+}
+
+function statusPill(pill: { text: string; bg: string }): CSSProperties {
+  return {
+    background: pill.bg,
+    color: pill.text,
+    borderRadius: RADIUS.pill,
+    padding: `${SPACE.xxs}px ${SPACE.md}px`,
+    fontFamily: MONO,
+    fontSize: FONT.xxs,
+    fontWeight: WEIGHT.bold,
+  };
+}
+
+function dateText(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.xs, marginLeft: "auto" };
+}
+
+function taskText(d: Dir): CSSProperties {
+  return {
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.lg,
+    fontWeight: WEIGHT.semibold,
+    marginBottom: SPACE.xs,
+  };
+}
+
+const FAILED_STAGE: CSSProperties = { color: FAIL_RED, fontFamily: SANS, fontSize: FONT.xs };
+
+function cardAction(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.sm,
+    border: `1px solid ${d.border}`,
+    background: d.surface2,
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.xs}px ${SPACE.lg}px`,
+    fontFamily: SANS,
+    fontSize: FONT.sm,
+    color: d.textMid,
+    cursor: "pointer",
+  };
 }
 
 export interface HistoryDrawerProps {
@@ -31,18 +127,14 @@ export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: Histor
   }, []);
 
   return (
-    <div style={{ position: "fixed", inset: "0 0 0 auto", zIndex: 50, width: 360, background: "#FFF", borderLeft: `1px solid ${d.border}`, display: "flex", flexDirection: "column", boxShadow: d.shadowLg }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${d.border}` }}>
-        <div style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700 }}>Run History</div>
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: d.textMuted }}><X size={16} /></button>
+    <div style={panel(d)}>
+      <div style={header(d)}>
+        <div style={headerTitle(d)}>Run History</div>
+        <button onClick={onClose} style={closeButton(d)}><X size={ICON.lg} /></button>
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {runs === null && (
-          <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, padding: 16 }}>Loading...</div>
-        )}
-        {runs?.length === 0 && (
-          <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, padding: 16 }}>No runs yet.</div>
-        )}
+        {runs === null && <div style={placeholder(d)}>Loading...</div>}
+        {runs?.length === 0 && <div style={placeholder(d)}>No runs yet.</div>}
         {runs?.map((run) => {
           const pill = RUN_PILL[run.status];
           const failedStage = run.stages.find((stage) => stage.status === "failed");
@@ -60,24 +152,19 @@ export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: Histor
               onClick={() => onView(run.id)}
               data-testid="history-card"
               data-run-id={run.id}
-              style={{ padding: "14px 16px", borderBottom: `1px solid ${d.border}`, cursor: "pointer" }}
+              style={card(d)}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10 }}>#{run.number}</span>
-                <div style={{
-                  background: pill.bg, color: pill.text,
-                  borderRadius: 20, padding: "2px 8px", fontFamily: MONO, fontSize: 9, fontWeight: 700,
-                }}>{run.status.toUpperCase()}</div>
-                <span style={{ color: d.textMuted, fontFamily: SANS, fontSize: 10, marginLeft: "auto" }}>{formatDate(run.createdAt)}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: SPACE.md, marginBottom: SPACE.xs }}>
+                <span style={metaText(d)}>#{run.number}</span>
+                <div style={statusPill(pill)}>{run.status.toUpperCase()}</div>
+                <span style={dateText(d)}>{formatDate(run.createdAt)}</span>
               </div>
-              <div style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                {run.task ?? "Untitled run"}
+              <div style={taskText(d)}>{run.task ?? "Untitled run"}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: SPACE.lg }}>
+                <span style={metaText(d)}>{duration}</span>
+                {failedStage && <span style={FAILED_STAGE}>✗ {failedStage.label}</span>}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10 }}>{duration}</span>
-                {failedStage && <span style={{ color: "#DC2626", fontFamily: SANS, fontSize: 10 }}>✗ {failedStage.label}</span>}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: SPACE.sm, marginTop: SPACE.md }}>
                 {showResume && resumeId && (
                   <button
                     onClick={(e) => {
@@ -86,8 +173,8 @@ export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: Histor
                     }}
                     data-testid="history-resume"
                     title="Continue from the stage that stopped — earlier stages keep their work"
-                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
-                    <PlayCircle size={10} /> Resume
+                    style={cardAction(d)}>
+                    <PlayCircle size={ICON.xs} /> Resume
                   </button>
                 )}
                 {restartId && (
@@ -98,8 +185,8 @@ export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: Histor
                     }}
                     data-testid="history-restart"
                     title="Re-run the whole pipeline from the first stage"
-                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
-                    <RotateCcw size={10} /> Restart
+                    style={cardAction(d)}>
+                    <RotateCcw size={ICON.xs} /> Restart
                   </button>
                 )}
                 {run.task && (
@@ -110,8 +197,8 @@ export function HistoryDrawer({ d, onClose, onView, onRestart, onRerun }: Histor
                     }}
                     data-testid="history-rerun"
                     title="Load this run's task and settings into the composer — you can edit before starting"
-                    style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${d.border}`, background: d.surface2, borderRadius: 8, padding: "4px 10px", fontFamily: SANS, fontSize: 11, color: d.textMid, cursor: "pointer" }}>
-                    <Repeat size={10} /> Rerun
+                    style={cardAction(d)}>
+                    <Repeat size={ICON.xs} /> Rerun
                   </button>
                 )}
               </div>

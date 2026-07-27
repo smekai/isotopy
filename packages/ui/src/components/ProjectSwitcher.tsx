@@ -3,8 +3,11 @@ import { Check, ChevronDown, FolderPlus, Home, Trash2 } from "lucide-react";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { Project } from "@adhd/core";
 import type { Dir } from "../theme";
-import { MONO, SANS } from "../theme";
+import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT, Z } from "../theme";
 import { FolderPicker } from "./FolderPicker";
+
+const MENU_MIN_WIDTH = 300;
+const MENU_MAX_WIDTH = 420;
 
 export interface ProjectSwitcherProps {
   d: Dir;
@@ -17,36 +20,70 @@ export interface ProjectSwitcherProps {
 
 function triggerStyle(d: Dir, open: boolean): React.CSSProperties {
   return {
-    display: "flex", alignItems: "center", gap: 5,
+    display: "flex", alignItems: "center", gap: SPACE.sm,
     background: open ? d.surface2 : "none",
-    border: "none", borderRadius: 8, padding: "5px 8px", cursor: "pointer",
-    color: d.textMid, fontFamily: SANS, fontSize: 13, fontWeight: 500,
+    border: "none", borderRadius: RADIUS.md, padding: `${SPACE.sm}px ${SPACE.md}px`, cursor: "pointer",
+    color: d.textMid, fontFamily: SANS, fontSize: FONT.lg, fontWeight: WEIGHT.medium,
   };
 }
 
 function menuStyle(d: Dir): React.CSSProperties {
   return {
-    position: "absolute", top: "calc(100% + 6px)", left: 0,
-    minWidth: 300, maxWidth: 420, background: d.surface,
-    border: `1px solid ${d.border}`, borderRadius: 14, padding: 5,
-    boxShadow: d.shadowLg, zIndex: 40,
+    position: "absolute", top: `calc(100% + ${SPACE.sm}px)`, left: 0,
+    minWidth: MENU_MIN_WIDTH, maxWidth: MENU_MAX_WIDTH, background: d.surface,
+    border: `1px solid ${d.border}`, borderRadius: RADIUS.xl, padding: SPACE.sm,
+    boxShadow: d.elevation.lg, zIndex: Z.popover,
   };
 }
+
+const ROW_BASE: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: SPACE.lg, width: "100%",
+  border: "none", borderRadius: RADIUS.lg, padding: `${SPACE.lg}px ${SPACE.xl}px`, textAlign: "left",
+  cursor: "pointer",
+};
 
 function rowStyle(d: Dir, selected: boolean, hovered: boolean): React.CSSProperties {
   return {
-    display: "flex", alignItems: "center", gap: 9, width: "100%",
-    border: "none", borderRadius: 10, padding: "9px 11px", textAlign: "left",
+    ...ROW_BASE,
     background: selected ? d.accentSoft : hovered ? d.surface2 : "transparent",
-    cursor: "pointer",
   };
 }
 
-const ADD_ROW_STYLE: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 9, width: "100%",
-  border: "none", borderRadius: 10, padding: "9px 11px", textAlign: "left",
-  background: "transparent", cursor: "pointer",
-};
+function projectName(d: Dir, selected: boolean): React.CSSProperties {
+  return {
+    color: selected ? d.accent : d.text,
+    fontFamily: SANS,
+    fontSize: FONT.lg,
+    fontWeight: selected ? WEIGHT.bold : WEIGHT.semibold,
+  };
+}
+
+function projectPath(d: Dir): React.CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: MONO,
+    fontSize: FONT.xs,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+}
+
+function removeButton(d: Dir): React.CSSProperties {
+  return { background: "none", border: "none", cursor: "pointer", color: d.textMuted, padding: `0 ${SPACE.md}px` };
+}
+
+function separator(d: Dir): React.CSSProperties {
+  return { height: 1, background: d.border, margin: `${SPACE.sm}px 0` };
+}
+
+function addRowStyle(d: Dir, hovered: boolean): React.CSSProperties {
+  return { ...ROW_BASE, background: hovered ? d.surface2 : "transparent" };
+}
+
+function addLabel(d: Dir): React.CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.lg, fontWeight: WEIGHT.semibold };
+}
 
 export function ProjectSwitcher({
   d,
@@ -94,7 +131,7 @@ export function ProjectSwitcher({
         style={triggerStyle(d, open)}
       >
         {active?.name ?? "Home"}
-        <ChevronDown size={13} style={{ color: d.textMuted }} />
+        <ChevronDown size={ICON.md} style={{ color: d.textMuted }} />
       </button>
 
       {open && (
@@ -118,32 +155,30 @@ export function ProjectSwitcher({
                   style={rowStyle(d, selected, hovered === project.id)}
                 >
                   {project.id === HOME_PROJECT_ID && (
-                    <Home size={13} style={{ color: d.textMuted, flexShrink: 0 }} />
+                    <Home size={ICON.md} style={{ color: d.textMuted, flexShrink: 0 }} />
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: selected ? d.accent : d.text, fontFamily: SANS, fontSize: 13, fontWeight: selected ? 700 : 600 }}>
-                      {project.name}
-                    </div>
-                    <div style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={projectName(d, selected)}>{project.name}</div>
+                    <div style={projectPath(d)}>
                       {project.id === HOME_PROJECT_ID ? "Scratch runs outside any project" : project.root}
                     </div>
                   </div>
-                  {selected && <Check size={14} style={{ color: d.accent, flexShrink: 0 }} />}
+                  {selected && <Check size={ICON.md} style={{ color: d.accent, flexShrink: 0 }} />}
                 </button>
                 {project.id !== HOME_PROJECT_ID && hovered === project.id && (
                   <button
                     onClick={() => onRemove(project.id)}
                     title="Remove from the list — the folder and its history stay on disk"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: d.textMuted, padding: "0 8px" }}
+                    style={removeButton(d)}
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={ICON.md} />
                   </button>
                 )}
               </div>
             );
           })}
 
-          <div style={{ height: 1, background: d.border, margin: "5px 0" }} />
+          <div style={separator(d)} />
 
           <button
             onClick={() => {
@@ -152,12 +187,10 @@ export function ProjectSwitcher({
             }}
             onMouseEnter={() => setHovered("add")}
             onMouseLeave={() => setHovered(null)}
-            style={{ ...ADD_ROW_STYLE, background: hovered === "add" ? d.surface2 : "transparent" }}
+            style={addRowStyle(d, hovered === "add")}
           >
-            <FolderPlus size={13} style={{ color: d.accent, flexShrink: 0 }} />
-            <span style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 }}>
-              Add project…
-            </span>
+            <FolderPlus size={ICON.md} style={{ color: d.accent, flexShrink: 0 }} />
+            <span style={addLabel(d)}>Add project…</span>
           </button>
         </div>
       )}

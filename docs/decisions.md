@@ -6,6 +6,72 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-27 — The UI scales are extracted, not designed (TASK-072)
+
+**Context:** `theme.ts` tokenised colour only. Spacing, radii, type, icon sizes,
+z-index and motion were inline literals across all 17 components — 19 distinct
+padding/gap values, 13 radii, 11 font sizes, 7 icon sizes. `borderRadius: 10` next to
+`borderRadius: 9` carried no information about whether the difference was deliberate,
+so a restyle meant editing every component by hand.
+
+**Decision:** the scales are an **extraction of current usage**, not a redesign.
+Values were derived by measuring the components, then near-duplicates were **snapped
+to one step each** and the snaps recorded here. Every snap is ≤2px:
+
+| Dimension | Snapped |
+| --- | --- |
+| space | 1→2, 3→4, 5→6, 7→8, 9→10, 11→12, 14→16, 18→20, 28→24 |
+| radius | 1→2, 3→4, 6→8, 9→10, 14→12 |
+| font | 11.5→12, 15→14, 18→16 |
+| icon | 11→12, 13→14, 15→16 |
+| transition | 0.18s and 0.22s → `MOTION.base` (0.2s) |
+| animation | `GateMarker`'s `adhd-pulse 1.4s` → `MOTION.pulse` (1.2s), matching the three other pulse sites |
+
+**`md` and `lg` stay 2px apart** in both `SPACE` (8/10) and `RADIUS` (8/10). Merging
+them would have been the tightest scale, but the two values are two *roles* — 8 is the
+chip/small-card radius (12 sites), 10 the control radius (16 sites) — and collapsing
+them would have been a redesign, which this task explicitly is not.
+
+**Naming runs `xxs…xxxl` then `x4l`/`x5l`.** Tailwind's `2xl`/`3xl` is the familiar
+convention but is not dot-accessible in TS; the chosen names stay monotonic and
+readable at every step.
+
+**Elevation nests, the rest are flat.** Shadows are palette-tinted, so `d.shadow` /
+`shadowSm` / `shadowLg` became `d.elevation.{sm,md,lg}` on `Dir` rather than a shared
+scale. Only the two *untinted* shadows — the `StageFocusPanel` and `TeamController`
+top edges — moved to a shared `ELEVATION`.
+
+**`theme.ts` owns motion; `index.css` keeps only `@keyframes`.** The two utility
+classes (`.animate-spin`, `.animate-pulse`) carried durations that no TS file could
+see, so they were deleted and their four call sites now use the inline `animation`
+shorthand the other components already used. Rejected: mirroring the literals in both
+files (nothing enforces agreement), and exporting `"var(--adhd-fast)"` strings from
+`theme.ts` (one source, but token values become opaque in TS and depend on the
+stylesheet loading).
+
+**`borderStrong` replaces string surgery.** `App.tsx` built the dot-grid with
+`d.border.replace("0.12", "0.20")`, which silently no-ops for `sakura` (border alpha
+`0.14`). Each palette now carries `borderStrong` explicitly — indigo `0.20`, forest
+`0.20`, sakura `0.22` (its base border is already `0.14` because pink reads lighter).
+**Behaviour change:** sakura's dot grid was being drawn at the plain border alpha and
+is now visibly stronger, as the other two palettes always were.
+
+**One-off dimensions stay local.** The 50px top bar, the drawer widths (320/360), the
+dialog widths (560/700) and the focus-panel sidebars got named constants in their own
+component files, following the existing `PANEL_WIDTH` in `ProjectDrawer`. A shared
+token used at exactly one call site is worse than the literal it replaces — the task
+asked for scales, not a dictionary. Style builders likewise stayed in-file (**A6**,
+consistent with the 2026-07-26 entry below).
+
+**Verification:** lint, typecheck, 173 unit/component tests and build are green; the
+app was driven headless across all three palettes with before/after screenshots of
+every surface. Pixel diffs are 0.3–4.6% — the expected 1–2px reflow — except the log
+tab at 6.8%, where every row shifts 1px from `marginBottom: 5→6`. The one failing e2e
+spec (`project-drawer`, expecting a "Pipeline Stages" heading that does not exist)
+fails identically on the unmodified baseline and is unrelated.
+
+---
+
 ## 2026-07-24 — OpenWorkflow is the durable workflow runtime (TASK-068)
 
 **Context:** `RunOrchestrator` was an in-memory `Map` firing `void simulateRun(...)`;

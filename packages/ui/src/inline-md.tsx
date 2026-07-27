@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { MONO } from "./theme";
+import { MONO, RADIUS, SPACE } from "./theme";
 
 const INLINE_TOKEN =
   /\*\*(.+?)\*\*|~~(.+?)~~|`([^`\n]+?)`|\*([^*\n]+?)\*|(?<!\w)_([^_\n]+?)_(?!\w)/g;
@@ -8,8 +8,8 @@ const codeStyle: CSSProperties = {
   fontFamily: MONO,
   fontSize: "0.9em",
   background: "rgba(127,127,127,0.16)",
-  borderRadius: 3,
-  padding: "1px 4px",
+  borderRadius: RADIUS.sm,
+  padding: `${SPACE.xxs}px ${SPACE.xs}px`,
 };
 
 export function renderInlineMarkdown(text: string): ReactNode[] {

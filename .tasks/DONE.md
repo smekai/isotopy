@@ -1,5 +1,21 @@
 # Done
 
+## TASK-072: Extend `theme.ts` with spacing, radius, type and elevation scales
+**Priority:** P2 | **Tags:** ui
+**Updated:** 2026-07-27 00:00
+
+[`theme.ts`](../packages/ui/src/theme.ts) tokenised **colour only** — three `Dir` palettes, `SPEC_COLOR` per stage, `STATUS_COLORS`, `RUN_PILL`, `SANS`/`MONO`, `GOLD`. Every other visual dimension was a magic number inline in the component: paddings, radii, font sizes, icon sizes, the 50px top bar, `z-index` values, and the durations in `index.css`. A consistent restyle meant editing all 17 components by hand while eyeballing whether `borderRadius: 10` here and `9` there was intentional. This was the prerequisite for any UI beautification work.
+
+### Done summary
+- **Nine scales in `theme.ts`**, extracted from measured usage, not designed: `SPACE` (2→40, 10 steps), `RADIUS` (2→20 plus `round`), `FONT` (9→16 plus `display`), `WEIGHT`, `ICON` (10/12/14/16), `Z` (dropdown/popover/overlay/overlayNested), `MOTION` + `EASE`, `ELEVATION`, and a `focusRing(soft)` helper for the repeated `0 0 0 3px` ring.
+- **Near-duplicates snapped to one step**, every snap ≤2px and all of them tabulated in [`decisions.md`](../docs/decisions.md) 2026-07-27. `SPACE.md`/`lg` (8/10) and `RADIUS.md`/`lg` (8/10) were deliberately **kept apart** — chip radius vs control radius are two roles, and merging them would have been a redesign.
+- **`Dir` gained `elevation: { sm, md, lg }`** (replacing the three flat shadow fields — shadows are palette-tinted, so they belong on the palette) **and `borderStrong`**, which ends the `d.border.replace("0.12","0.20")` string surgery. Sakura's dot grid was being drawn at the plain border alpha because the replace silently no-opped; it is now as strong as the other two palettes.
+- **`index.css` keeps only the six `@keyframes`.** The `.animate-spin` / `.animate-pulse` utility classes carried durations no TS file could see; they are deleted and their four call sites use the inline `animation` shorthand with a `MOTION` token, making `theme.ts` the single source for timing.
+- **All 19 files migrated** — `App.tsx`, `inline-md.tsx` and the 17 components, including the 1002-line `SetupModal`. Style builders stayed in each component's own file (**A6**); one-off structural dimensions (top-bar height, drawer/dialog widths, sidebar widths) became named local constants rather than shared tokens, since a token per call site is worse than the literal.
+- **Verified:** lint, typecheck, 173 tests and build green; driven headless across all three palettes with before/after screenshots of every surface — diffs are the expected 1–2px reflow. One e2e spec (`project-drawer`) fails identically on the unmodified baseline and is unrelated.
+
+---
+
 ## TASK-074: Add a component-test layer for the UI
 **Priority:** P2 | **Tags:** ui, testing
 **Updated:** 2026-07-27 00:00

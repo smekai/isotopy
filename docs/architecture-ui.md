@@ -245,25 +245,40 @@ All of it lives in [`theme.ts`](../packages/ui/src/theme.ts) as pure data:
 | `GOLD` / `GOLD_SOFT` | two constants | Human gates, exclusively. Gold means "a human must act". |
 | `SANS` / `MONO` | Nunito / JetBrains Mono | Loaded from Google Fonts in `index.html`. |
 
+Each `Dir` also carries `border` / `borderStrong` (the emphasis border, used for the
+dot-grid background) and `elevation: { sm, md, lg }` — the shadows are palette-tinted,
+which is why they live on the palette rather than in the shared scale below.
+
 The palette is selected in Setup → Appearance and persisted by `ThemeContext` under
-`localStorage["adhd.direction"]`. Animations are six `@keyframes adhd-*` in
-`index.css`.
+`localStorage["adhd.direction"]`.
 
-### What is **not** tokenised
+### The non-colour scales
 
-**Spacing, radii, font sizes, icon sizes, z-index and motion durations are magic
-numbers inline in all 17 components.** `borderRadius: 10` next to `borderRadius: 9`
-carries no information about whether the difference was intentional. There is no
-scale to be consistent *with*, so consistency is currently maintained by copy-paste.
+Beside the palettes, `theme.ts` exports the scales every component styles against
+(TASK-072). They were **extracted** from what the components already used, not
+designed — see [`decisions.md`](decisions.md) 2026-07-27 for the values that were
+snapped together and why.
 
-This is the single biggest obstacle to changing how the app looks: a restyle today
-means editing every component by hand. **Extracting those scales is the prerequisite
-for any beautification work** — TASK-072.
+| Scale | Steps | Used for |
+| --- | --- | --- |
+| `SPACE` | `xxs` 2 → `x5l` 40 (10 steps) | padding, gap, margin. Composite paddings read `` `${SPACE.sm}px ${SPACE.xl}px` ``. |
+| `RADIUS` | `xs` 2 → `pill` 20, plus `round: "50%"` | `borderRadius`. `md` (8) is the chip radius, `lg` (10) the control radius. |
+| `FONT` | `xxs` 9 → `xxl` 16, plus `display` 26 | `fontSize`. |
+| `WEIGHT` | `medium` 500 → `heavy` 800 | `fontWeight`. |
+| `ICON` | `xs` 10, `sm` 12, `md` 14, `lg` 16 | the lucide `size` prop. |
+| `Z` | `dropdown` 30, `popover` 40, `overlay` 50, `overlayNested` 60 | `zIndex`. `overlayNested` is for a surface opened *from* an overlay — the `FolderPicker` over `SetupModal`. |
+| `MOTION` / `EASE` | `instant`…`slow`; `spin`/`pulse`/`ring`/`shimmer` | every `transition` and `animation` duration. |
+| `ELEVATION` | `panelUp`, `barUp` | the two *untinted* shadows (`StageFocusPanel` and `TeamController` top edges). Tinted shadows are `d.elevation.*`. |
+| `focusRing(soft)` | — | the repeated `0 0 0 3px <accentSoft>` ring. |
 
-A symptom worth knowing: `App.tsx:198` builds the dot-grid background with
-`d.border.replace("0.12", "0.20")`. That is string surgery on a token, and it
-silently no-ops for `sakura`, whose border alpha is `0.14`. A real token removes the
-class of bug.
+`index.css` holds only the six `@keyframes adhd-*` — **no durations**. A component
+applies one with the `animation` shorthand and a `MOTION` token, so `theme.ts` is the
+single source for timing.
+
+**Two rules when styling.** A one-off structural dimension (the 50px top bar, a drawer
+width, a dialog width) gets a named `const` in *its own component* — a shared token
+per call site would be worse than the literal. And style builders stay in the
+component's file (**A6**); only the scales are shared.
 
 Two further constraints on any visual work:
 
@@ -352,7 +367,7 @@ actionable rather than merely noted.
 
 | # | Gap | Target | Task |
 | --- | --- | --- | --- |
-| 1 | **No non-colour tokens.** Spacing, radii, type, icon, z-index and motion values are inline literals across all 17 components. | Named scales in `theme.ts`, extracted from current usage; components migrated. | TASK-072 |
+| 1 | ~~**No non-colour tokens.**~~ **Closed by TASK-072** — `SPACE`/`RADIUS`/`FONT`/`WEIGHT`/`ICON`/`Z`/`MOTION`/`EASE`/`ELEVATION` are in `theme.ts` (§7) and all 19 files are migrated. Nothing enforces their use, so a new literal can still creep in. | Prefer a token in review; a lint rule if drift appears. | — |
 | 2 | **Fixture data ships.** `mock-content.ts` (hardcoded OAuth-demo reasoning/artifacts) is imported by `StageFocusPanel.tsx:9`; the Reasoning tab renders it regardless of the real run. | Real data where a source exists, an honest empty state where it does not, file deleted. | TASK-075 |
 | 3 | ~~**No component tests.**~~ **Closed by TASK-074** — a `jsdom` vitest project takes `*.comp.tsx`, `applyEvent` is covered by `run-events.spec.ts`, and `useRunEvents.comp.tsx` drives the subscribe-buffer-replay ordering. Only that hook is covered so far; the components still have none. | Extend the layer to presentational components as they change. | — |
 | 4 | **`SetupModal.tsx` is 1002 lines** with ~50 style builders, owning four unrelated settings surfaces. | One component per `SetupSection`; the modal reduced to shell and section switching. | TASK-073 |

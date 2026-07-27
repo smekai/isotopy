@@ -21,7 +21,7 @@ import {
 import type { EngineConnectionUpdate } from "../api";
 import type { SettingsController } from "../hooks/useSettings";
 import { useTheme } from "../ThemeContext";
-import { DIRS, GOLD, MONO, SANS } from "../theme";
+import { DIRS, FONT, GOLD, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, Z, focusRing } from "../theme";
 import type { Dir } from "../theme";
 
 const GATED_STAGES = Array.from(
@@ -77,6 +77,10 @@ const ERROR_BORDER = "rgba(220,38,38,0.35)";
 const ERROR_TINT = "rgba(220,38,38,0.06)";
 const SCRIM = "rgba(30,27,75,0.20)";
 
+const DIALOG_WIDTH = 700;
+const NAV_RAIL_WIDTH = 160;
+const COPY_FEEDBACK_MS = 2000;
+
 interface Accent {
   accent: string;
   accentSoft: string;
@@ -85,30 +89,30 @@ interface Accent {
 const BACKDROP: CSSProperties = {
   position: "fixed",
   inset: 0,
-  zIndex: 50,
+  zIndex: Z.overlay,
   background: SCRIM,
   backdropFilter: "blur(4px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: 40,
+  padding: SPACE.x5l,
 };
 
 function dialog(d: Dir): CSSProperties {
   return {
     background: WHITE,
-    borderRadius: 20,
-    width: 700,
+    borderRadius: RADIUS.pill,
+    width: DIALOG_WIDTH,
     maxHeight: "82vh",
     display: "flex",
     overflow: "hidden",
-    boxShadow: d.shadowLg,
+    boxShadow: d.elevation.lg,
   };
 }
 
 function navRail(d: Dir): CSSProperties {
   return {
-    width: 160,
+    width: NAV_RAIL_WIDTH,
     background: d.surface2,
     borderRight: `1px solid ${d.border}`,
     display: "flex",
@@ -118,26 +122,26 @@ function navRail(d: Dir): CSSProperties {
 }
 
 function navHeader(d: Dir): CSSProperties {
-  return { padding: "16px 16px 12px", borderBottom: `1px solid ${d.border}` };
+  return { padding: `${SPACE.xxl}px ${SPACE.xxl}px ${SPACE.xl}px`, borderBottom: `1px solid ${d.border}` };
 }
 
 function navTitle(d: Dir): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 800 };
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.xl, fontWeight: WEIGHT.heavy };
 }
 
 function navButton(active: boolean, d: Dir): CSSProperties {
   return {
     textAlign: "left",
-    padding: "10px 16px",
+    padding: `${SPACE.lg}px ${SPACE.xxl}px`,
     border: "none",
     background: active ? d.accentSoft : "transparent",
     borderLeft: `3px solid ${active ? d.accent : "transparent"}`,
     color: active ? d.accent : d.textMid,
     fontFamily: SANS,
-    fontSize: 12,
+    fontSize: FONT.md,
     fontWeight: active ? 700 : 500,
     cursor: "pointer",
-    transition: "all 0.15s",
+    transition: `all ${MOTION.fast}`,
   };
 }
 
@@ -145,58 +149,58 @@ function navCloseButton(d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    padding: "12px 16px",
+    gap: SPACE.md,
+    padding: `${SPACE.xl}px ${SPACE.xxl}px`,
     border: "none",
     borderTop: `1px solid ${d.border}`,
     background: "transparent",
     color: d.textMuted,
     fontFamily: SANS,
-    fontSize: 12,
+    fontSize: FONT.md,
     cursor: "pointer",
   };
 }
 
-const BODY: CSSProperties = { flex: 1, overflowY: "auto", padding: 24 };
+const BODY: CSSProperties = { flex: 1, overflowY: "auto", padding: SPACE.x4l };
 const FLEX_FILL: CSSProperties = { flex: 1 };
 const MONO_TEXT: CSSProperties = { fontFamily: MONO };
 
 function sectionTitle(d: Dir): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700, marginBottom: 4 };
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.xl, fontWeight: WEIGHT.bold, marginBottom: SPACE.xs };
 }
 
 function sectionSubtitle(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: 12, marginBottom: 16 };
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md, marginBottom: SPACE.xxl };
 }
 
-function fieldLabel(d: Dir, marginBottom = 8): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600, marginBottom };
+function fieldLabel(d: Dir, marginBottom: number = SPACE.md): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.lg, fontWeight: WEIGHT.semibold, marginBottom };
 }
 
 function mutedBody(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: 12 };
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md };
 }
 
 function mutedCaption(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: 11 };
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.sm };
 }
 
 function hintText(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: 10 };
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.xs };
 }
 
-const OPTION_STACK: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
-const ENGINE_STACK: CSSProperties = { ...OPTION_STACK, marginBottom: 20 };
-const GATE_STACK: CSSProperties = { display: "flex", flexDirection: "column", gap: 10 };
+const OPTION_STACK: CSSProperties = { display: "flex", flexDirection: "column", gap: SPACE.md };
+const ENGINE_STACK: CSSProperties = { ...OPTION_STACK, marginBottom: SPACE.xxxl };
+const GATE_STACK: CSSProperties = { display: "flex", flexDirection: "column", gap: SPACE.lg };
 
 function optionCard(selected: boolean, d: Dir, accent: Accent = d): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    padding: "12px 14px",
+    gap: SPACE.xl,
+    padding: `${SPACE.xl}px ${SPACE.xxl}px`,
     border: `2px solid ${selected ? accent.accent : d.border}`,
-    borderRadius: 12,
+    borderRadius: RADIUS.xl,
     background: selected ? accent.accentSoft : "transparent",
     cursor: "pointer",
     textAlign: "left",
@@ -215,7 +219,7 @@ function radioDot(selected: boolean, d: Dir): CSSProperties {
   return {
     width: 12,
     height: 12,
-    borderRadius: "50%",
+    borderRadius: RADIUS.round,
     border: `2px solid ${selected ? d.accent : d.border}`,
     background: selected ? d.accent : "transparent",
     flexShrink: 0,
@@ -223,18 +227,18 @@ function radioDot(selected: boolean, d: Dir): CSSProperties {
 }
 
 function optionLabel(d: Dir): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 600 };
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.lg, fontWeight: WEIGHT.semibold };
 }
 
 function accentBadge(d: Dir): CSSProperties {
   return {
     background: d.accentSoft,
     color: d.accent,
-    borderRadius: 20,
-    padding: "2px 10px",
+    borderRadius: RADIUS.pill,
+    padding: `${SPACE.xxs}px ${SPACE.lg}px`,
     fontFamily: MONO,
-    fontSize: 9,
-    fontWeight: 700,
+    fontSize: FONT.xxs,
+    fontWeight: WEIGHT.bold,
   };
 }
 
@@ -242,31 +246,31 @@ function dirSwatch(dir: Dir, selected: boolean): CSSProperties {
   return {
     width: 28,
     height: 28,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     flexShrink: 0,
     background: `linear-gradient(135deg, ${dir.accent}, ${dir.accentDark})`,
-    boxShadow: selected ? `0 0 0 3px ${dir.accentSoft}` : "none",
+    boxShadow: selected ? focusRing(dir.accentSoft) : "none",
   };
 }
 
 function gateCard(d: Dir): CSSProperties {
-  return { border: `1px solid ${d.border}`, borderRadius: 12, padding: "12px 14px" };
+  return { border: `1px solid ${d.border}`, borderRadius: RADIUS.xl, padding: `${SPACE.xl}px ${SPACE.xxl}px` };
 }
 
 const GATE_CARD_HEADER: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  marginBottom: 4,
+  marginBottom: SPACE.xs,
 };
 
 function statusCard(missing: boolean, d: Dir): CSSProperties {
   return {
     border: `1px solid ${missing ? ERROR_BORDER : d.border}`,
     background: missing ? ERROR_TINT : "transparent",
-    borderRadius: 12,
-    padding: "12px 14px",
-    marginBottom: 20,
+    borderRadius: RADIUS.xl,
+    padding: `${SPACE.xl}px ${SPACE.xxl}px`,
+    marginBottom: SPACE.xxxl,
   };
 }
 
@@ -274,30 +278,30 @@ const STATUS_HEADER: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 8,
+  gap: SPACE.md,
 };
 
-const STATUS_BADGE_ROW: CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
+const STATUS_BADGE_ROW: CSSProperties = { display: "flex", alignItems: "center", gap: SPACE.md };
 const OK_ICON: CSSProperties = { color: OK_GREEN, flexShrink: 0 };
-const OK_TEXT: CSSProperties = { color: OK_GREEN, fontFamily: SANS, fontSize: 12, fontWeight: 700 };
+const OK_TEXT: CSSProperties = { color: OK_GREEN, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.bold };
 const ERROR_ICON: CSSProperties = { color: ERROR_RED, flexShrink: 0 };
-const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: 12, fontWeight: 700 };
-const ERROR_NOTE: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: 11, marginTop: 8 };
-const CONNECTION_ERROR: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: 11, marginBottom: 12 };
+const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.bold };
+const ERROR_NOTE: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: FONT.sm, marginTop: SPACE.md };
+const CONNECTION_ERROR: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: FONT.sm, marginBottom: SPACE.xl };
 
 function recheckButton(d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 5,
+    gap: SPACE.sm,
     border: `1px solid ${d.border}`,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     background: "transparent",
     color: d.textMid,
     fontFamily: SANS,
-    fontSize: 11,
-    fontWeight: 600,
-    padding: "4px 10px",
+    fontSize: FONT.sm,
+    fontWeight: WEIGHT.semibold,
+    padding: `${SPACE.xs}px ${SPACE.lg}px`,
     cursor: "pointer",
     flexShrink: 0,
   };
@@ -307,8 +311,8 @@ function statusPath(d: Dir): CSSProperties {
   return {
     color: d.textMuted,
     fontFamily: MONO,
-    fontSize: 10,
-    marginTop: 6,
+    fontSize: FONT.xs,
+    marginTop: SPACE.sm,
     wordBreak: "break-all",
   };
 }
@@ -317,39 +321,39 @@ function statusNote(installed: boolean, d: Dir): CSSProperties {
   return {
     color: installed ? d.textMuted : d.textMid,
     fontFamily: SANS,
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: FONT.sm,
+    marginTop: SPACE.sm,
   };
 }
 
 function cardDivider(d: Dir): CSSProperties {
-  return { marginTop: 12, borderTop: `1px solid ${d.border}`, paddingTop: 12 };
+  return { marginTop: SPACE.xl, borderTop: `1px solid ${d.border}`, paddingTop: SPACE.xl };
 }
 
 const ACTION_ROW: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
-  gap: 8,
+  gap: SPACE.md,
   alignItems: "center",
 };
 
 function actionsLabel(d: Dir): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 11, fontWeight: 700, marginBottom: 8 };
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.sm, fontWeight: WEIGHT.bold, marginBottom: SPACE.md };
 }
 
 function primaryAction(busy: boolean, d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.sm,
     border: "none",
-    borderRadius: 8,
-    padding: "7px 12px",
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.md}px ${SPACE.xl}px`,
     background: busy ? d.surface2 : d.accent,
     color: busy ? d.textMuted : WHITE,
     fontFamily: SANS,
-    fontSize: 12,
-    fontWeight: 700,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.bold,
     cursor: busy ? "default" : "pointer",
   };
 }
@@ -358,15 +362,15 @@ function secondaryAction(d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.sm,
     border: `1px solid ${d.border}`,
-    borderRadius: 8,
-    padding: "7px 12px",
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.md}px ${SPACE.xl}px`,
     background: "transparent",
     color: d.textMid,
     fontFamily: SANS,
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.semibold,
     cursor: "pointer",
   };
 }
@@ -375,8 +379,8 @@ function docsLink(d: Dir): CSSProperties {
   return {
     color: d.accent,
     fontFamily: SANS,
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.semibold,
     textDecoration: "none",
   };
 }
@@ -385,45 +389,45 @@ function installerHint(d: Dir): CSSProperties {
   return {
     color: d.textMuted,
     fontFamily: SANS,
-    fontSize: 10,
-    marginTop: 8,
+    fontSize: FONT.xs,
+    marginTop: SPACE.md,
     lineHeight: 1.5,
   };
 }
 
 function connectionHint(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 10 };
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.sm, marginBottom: SPACE.lg };
 }
 
 function connectionStack(keyFormOpen: boolean): CSSProperties {
   return { ...OPTION_STACK, marginBottom: keyFormOpen ? 12 : 20 };
 }
 
-const API_KEY_BLOCK: CSSProperties = { marginBottom: 20 };
+const API_KEY_BLOCK: CSSProperties = { marginBottom: SPACE.xxxl };
 
 function apiKeyLabel(d: Dir): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, marginBottom: 2 };
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.semibold, marginBottom: SPACE.xxs };
 }
 
 function apiKeyNote(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: 11, marginBottom: 8 };
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.sm, marginBottom: SPACE.md };
 }
 
 const KEY_STATUS_ROW: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
-  marginBottom: 8,
+  gap: SPACE.lg,
+  marginBottom: SPACE.md,
 };
 
 const KEY_CONFIGURED_PILL: CSSProperties = {
   background: OK_TINT,
   color: OK_GREEN,
-  borderRadius: 20,
-  padding: "3px 10px",
+  borderRadius: RADIUS.pill,
+  padding: `${SPACE.xs}px ${SPACE.lg}px`,
   fontFamily: MONO,
-  fontSize: 10,
-  fontWeight: 700,
+  fontSize: FONT.xs,
+  fontWeight: WEIGHT.bold,
 };
 
 const REMOVE_KEY_BUTTON: CSSProperties = {
@@ -431,22 +435,22 @@ const REMOVE_KEY_BUTTON: CSSProperties = {
   background: "transparent",
   color: ERROR_RED,
   fontFamily: SANS,
-  fontSize: 11,
-  fontWeight: 600,
+  fontSize: FONT.sm,
+  fontWeight: WEIGHT.semibold,
   cursor: "pointer",
   padding: 0,
 };
 
-const KEY_INPUT_ROW: CSSProperties = { display: "flex", gap: 8 };
+const KEY_INPUT_ROW: CSSProperties = { display: "flex", gap: SPACE.md };
 
 function apiKeyInput(d: Dir): CSSProperties {
   return {
     flex: 1,
     border: `1px solid ${d.border}`,
-    borderRadius: 10,
-    padding: "9px 12px",
+    borderRadius: RADIUS.lg,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
     fontFamily: MONO,
-    fontSize: 11,
+    fontSize: FONT.sm,
     color: d.text,
     outline: "none",
     background: d.surface2,
@@ -456,13 +460,13 @@ function apiKeyInput(d: Dir): CSSProperties {
 function saveKeyButton(ready: boolean, d: Dir): CSSProperties {
   return {
     border: "none",
-    borderRadius: 10,
-    padding: "9px 14px",
+    borderRadius: RADIUS.lg,
+    padding: `${SPACE.lg}px ${SPACE.xxl}px`,
     background: ready ? d.accent : d.surface2,
     color: ready ? WHITE : d.textMuted,
     fontFamily: SANS,
-    fontSize: 12,
-    fontWeight: 700,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.bold,
     cursor: ready ? "pointer" : "default",
     flexShrink: 0,
   };
@@ -472,14 +476,14 @@ function modelSelect(d: Dir): CSSProperties {
   return {
     width: "100%",
     border: `1px solid ${d.border}`,
-    borderRadius: 10,
-    padding: "9px 12px",
+    borderRadius: RADIUS.lg,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
     fontFamily: MONO,
-    fontSize: 12,
+    fontSize: FONT.md,
     color: d.text,
     background: WHITE,
     outline: "none",
-    marginBottom: 6,
+    marginBottom: SPACE.sm,
   };
 }
 
@@ -487,7 +491,7 @@ function modelMetaRow(followedByNote: boolean): CSSProperties {
   return {
     display: "flex",
     alignItems: "baseline",
-    gap: 6,
+    gap: SPACE.sm,
     marginBottom: followedByNote ? 6 : 20,
   };
 }
@@ -499,7 +503,7 @@ function customIdToggle(d: Dir): CSSProperties {
     padding: 0,
     color: d.accent,
     fontFamily: SANS,
-    fontSize: 11,
+    fontSize: FONT.sm,
     cursor: "pointer",
     marginLeft: "auto",
     flexShrink: 0,
@@ -510,10 +514,10 @@ function customModelInput(followedByNote: boolean, d: Dir): CSSProperties {
   return {
     width: "100%",
     border: `1px solid ${d.border}`,
-    borderRadius: 10,
-    padding: "9px 12px",
+    borderRadius: RADIUS.lg,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
     fontFamily: MONO,
-    fontSize: 12,
+    fontSize: FONT.md,
     color: d.text,
     background: d.surface2,
     outline: "none",
@@ -524,8 +528,8 @@ function customModelInput(followedByNote: boolean, d: Dir): CSSProperties {
 const CREDITS_NOTE: CSSProperties = {
   color: GOLD,
   fontFamily: SANS,
-  fontSize: 11,
-  marginBottom: 20,
+  fontSize: FONT.sm,
+  marginBottom: SPACE.xxxl,
 };
 
 function deployIcon(selected: boolean, d: Dir): CSSProperties {
@@ -533,7 +537,7 @@ function deployIcon(selected: boolean, d: Dir): CSSProperties {
 }
 
 function deployLabel(d: Dir): CSSProperties {
-  return { color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600 };
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.semibold };
 }
 
 export interface SetupModalProps {
@@ -692,7 +696,7 @@ export function SetupModal({
     try {
       await navigator.clipboard.writeText(engineStatus.installCommand);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
     } catch {
     }
   }
@@ -725,7 +729,7 @@ export function SetupModal({
           ))}
           <div style={FLEX_FILL} />
           <button onClick={onClose} style={navCloseButton(d)}>
-            <X size={12} /> Close
+            <X size={ICON.sm} /> Close
           </button>
         </div>
 
@@ -807,20 +811,20 @@ export function SetupModal({
                       <span style={mutedBody(d)}>Checking CLI…</span>
                     ) : engineStatus?.installed ? (
                       <>
-                        <CheckCircle2 size={14} style={OK_ICON} />
+                        <CheckCircle2 size={ICON.md} style={OK_ICON} />
                         <span style={OK_TEXT}>
                           Installed{engineStatus.version ? ` · ${engineStatus.version}` : ""}
                         </span>
                       </>
                     ) : (
                       <>
-                        <AlertTriangle size={14} style={ERROR_ICON} />
+                        <AlertTriangle size={ICON.md} style={ERROR_ICON} />
                         <span style={ERROR_TEXT}>Not detected</span>
                       </>
                     )}
                   </div>
                   <button onClick={() => setStatusNonce((n) => n + 1)} style={recheckButton(d)}>
-                    <RefreshCw size={11} /> Re-check
+                    <RefreshCw size={ICON.sm} /> Re-check
                   </button>
                 </div>
                 {!statusLoading && engineStatus?.installed && engineStatus.path && (
@@ -834,7 +838,7 @@ export function SetupModal({
                     <div style={ACTION_ROW}>
                       <button onClick={() => void runLogin()} disabled={loggingIn}
                         style={primaryAction(loggingIn, d)}>
-                        <LogIn size={12} /> {loggingIn ? "Finish sign-in in your browser…" : "Log in to Cursor"}
+                        <LogIn size={ICON.sm} /> {loggingIn ? "Finish sign-in in your browser…" : "Log in to Cursor"}
                       </button>
                       <span style={hintText(d)}>Opens the Cursor sign-in in your browser.</span>
                     </div>
@@ -848,12 +852,12 @@ export function SetupModal({
                       {installer && (
                         <button onClick={() => void runInstall()} disabled={installing}
                           style={primaryAction(installing, d)}>
-                          <Download size={12} /> {installing ? "Installing… (up to ~1 min)" : installer.label}
+                          <Download size={ICON.sm} /> {installing ? "Installing… (up to ~1 min)" : installer.label}
                         </button>
                       )}
                       {engineStatus.installCommand && (
                         <button onClick={() => void copyInstallCommand()} style={secondaryAction(d)}>
-                          <Copy size={12} /> {copied ? "Copied ✓" : "Copy install command"}
+                          <Copy size={ICON.sm} /> {copied ? "Copied ✓" : "Copy install command"}
                         </button>
                       )}
                       {engineStatus.docsUrl && (
@@ -985,7 +989,7 @@ export function SetupModal({
               <div style={OPTION_STACK}>
                 {DEPLOY_TARGETS.map((opt, i) => (
                   <button key={opt.id} style={optionCard(i === 0, d)}>
-                    <Server size={14} style={deployIcon(i === 0, d)} />
+                    <Server size={ICON.md} style={deployIcon(i === 0, d)} />
                     <div>
                       <div style={deployLabel(d)}>{opt.label}</div>
                       <div style={mutedCaption(d)}>{opt.desc}</div>

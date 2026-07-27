@@ -74,14 +74,6 @@ body {
   }
 }
 
-.animate-spin {
-  animation: adhd-spin 1s linear infinite;
-}
-
-.animate-pulse {
-  animation: adhd-fade-pulse 1.6s ease-in-out infinite;
-}
-
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;

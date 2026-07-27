@@ -1,6 +1,90 @@
 import type { RunStatus, StageStatus } from "@adhd/core";
 
+export const SPACE = {
+  xxs: 2,
+  xs: 4,
+  sm: 6,
+  md: 8,
+  lg: 10,
+  xl: 12,
+  xxl: 16,
+  xxxl: 20,
+  x4l: 24,
+  x5l: 40,
+} as const;
+
+export const RADIUS = {
+  xs: 2,
+  sm: 4,
+  md: 8,
+  lg: 10,
+  xl: 12,
+  xxl: 16,
+  pill: 20,
+  round: "50%",
+} as const;
+
+export const FONT = {
+  xxs: 9,
+  xs: 10,
+  sm: 11,
+  md: 12,
+  lg: 13,
+  xl: 14,
+  xxl: 16,
+  display: 26,
+} as const;
+
+export const WEIGHT = {
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+  heavy: 800,
+} as const;
+
+export const ICON = { xs: 10, sm: 12, md: 14, lg: 16 } as const;
+
+export const Z = {
+  dropdown: 30,
+  popover: 40,
+  overlay: 50,
+  overlayNested: 60,
+} as const;
+
+export const MOTION = {
+  instant: "0.1s",
+  fast: "0.15s",
+  base: "0.2s",
+  slow: "0.3s",
+  spin: "1s",
+  pulse: "1.2s",
+  ring: "1.4s",
+  shimmer: "1.6s",
+} as const;
+
+export const EASE = {
+  linear: "linear",
+  out: "ease-out",
+  inOut: "ease-in-out",
+  spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+} as const;
+
+export const ELEVATION = {
+  panelUp: "0 -4px 24px rgba(0,0,0,0.06)",
+  barUp: "0 -2px 12px rgba(0,0,0,0.05)",
+} as const;
+
+export function focusRing(soft: string): string {
+  return `0 0 0 3px ${soft}`;
+}
+
 export type DirId = "indigo" | "sakura" | "forest";
+
+export interface Elevation {
+  sm: string;
+  md: string;
+  lg: string;
+}
 
 export interface Dir {
   id: DirId;
@@ -15,12 +99,11 @@ export interface Dir {
   surface: string;
   surface2: string;
   border: string;
+  borderStrong: string;
   text: string;
   textMid: string;
   textMuted: string;
-  shadow: string;
-  shadowSm: string;
-  shadowLg: string;
+  elevation: Elevation;
   runBorder: string;
 }
 
@@ -30,10 +113,13 @@ export const DIRS: Record<DirId, Dir> = {
     accent: "#6366F1", accentDark: "#4F46E5",
     accentSoft: "rgba(99,102,241,0.09)", accentMid: "rgba(99,102,241,0.18)", accentText: "#FFFFFF",
     bg: "#EDEEFF", surface: "#FFFFFF", surface2: "#F5F5FF",
-    border: "rgba(99,102,241,0.12)", text: "#1E1B4B", textMid: "#4C4899", textMuted: "#A5A8CF",
-    shadow: "0 2px 10px rgba(99,102,241,0.10), 0 1px 2px rgba(0,0,0,0.04)",
-    shadowSm: "0 1px 4px rgba(99,102,241,0.08)",
-    shadowLg: "0 8px 32px rgba(99,102,241,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    border: "rgba(99,102,241,0.12)", borderStrong: "rgba(99,102,241,0.20)",
+    text: "#1E1B4B", textMid: "#4C4899", textMuted: "#A5A8CF",
+    elevation: {
+      sm: "0 1px 4px rgba(99,102,241,0.08)",
+      md: "0 2px 10px rgba(99,102,241,0.10), 0 1px 2px rgba(0,0,0,0.04)",
+      lg: "0 8px 32px rgba(99,102,241,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    },
     runBorder: "rgba(99,102,241,0.30)",
   },
   sakura: {
@@ -41,10 +127,13 @@ export const DIRS: Record<DirId, Dir> = {
     accent: "#E879A0", accentDark: "#D1548A",
     accentSoft: "rgba(232,121,160,0.09)", accentMid: "rgba(232,121,160,0.18)", accentText: "#FFFFFF",
     bg: "#FFF0F6", surface: "#FFFFFF", surface2: "#FFF5F9",
-    border: "rgba(232,121,160,0.14)", text: "#3D1A2E", textMid: "#7A3D58", textMuted: "#C48AAA",
-    shadow: "0 2px 10px rgba(232,121,160,0.10), 0 1px 2px rgba(0,0,0,0.04)",
-    shadowSm: "0 1px 4px rgba(232,121,160,0.08)",
-    shadowLg: "0 8px 32px rgba(232,121,160,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    border: "rgba(232,121,160,0.14)", borderStrong: "rgba(232,121,160,0.22)",
+    text: "#3D1A2E", textMid: "#7A3D58", textMuted: "#C48AAA",
+    elevation: {
+      sm: "0 1px 4px rgba(232,121,160,0.08)",
+      md: "0 2px 10px rgba(232,121,160,0.10), 0 1px 2px rgba(0,0,0,0.04)",
+      lg: "0 8px 32px rgba(232,121,160,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    },
     runBorder: "rgba(232,121,160,0.35)",
   },
   forest: {
@@ -52,10 +141,13 @@ export const DIRS: Record<DirId, Dir> = {
     accent: "#059669", accentDark: "#047857",
     accentSoft: "rgba(5,150,105,0.09)", accentMid: "rgba(5,150,105,0.18)", accentText: "#FFFFFF",
     bg: "#EDFAF4", surface: "#FFFFFF", surface2: "#F3FBF7",
-    border: "rgba(5,150,105,0.12)", text: "#064E3B", textMid: "#2D6A4F", textMuted: "#86BBAD",
-    shadow: "0 2px 10px rgba(5,150,105,0.10), 0 1px 2px rgba(0,0,0,0.04)",
-    shadowSm: "0 1px 4px rgba(5,150,105,0.08)",
-    shadowLg: "0 8px 32px rgba(5,150,105,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    border: "rgba(5,150,105,0.12)", borderStrong: "rgba(5,150,105,0.20)",
+    text: "#064E3B", textMid: "#2D6A4F", textMuted: "#86BBAD",
+    elevation: {
+      sm: "0 1px 4px rgba(5,150,105,0.08)",
+      md: "0 2px 10px rgba(5,150,105,0.10), 0 1px 2px rgba(0,0,0,0.04)",
+      lg: "0 8px 32px rgba(5,150,105,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    },
     runBorder: "rgba(5,150,105,0.30)",
   },
 };

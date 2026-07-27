@@ -1,11 +1,105 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { Send } from "lucide-react";
 import { agentForStage } from "@adhd/core";
 import type { Dir } from "../theme";
-import { SANS } from "../theme";
+import { EASE, FONT, ICON, MOTION, RADIUS, SANS, SPACE } from "../theme";
 import { VoiceBtn } from "./VoiceControls";
 import type { VoiceState } from "./VoiceControls";
 import { Waveform } from "./Waveform";
+
+const LISTENING_RED = "#EF4444";
+const BUBBLE_MAX_WIDTH = "78%";
+const AGENT_REPLY_DELAY_MS = 700;
+
+const TRANSCRIPT: CSSProperties = {
+  flex: 1,
+  overflowY: "auto",
+  padding: SPACE.xxl,
+  display: "flex",
+  flexDirection: "column",
+  gap: SPACE.lg,
+};
+
+function emptyHint(d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    textAlign: "center",
+    marginTop: SPACE.xxl,
+  };
+}
+
+function bubble(mine: boolean, d: Dir): CSSProperties {
+  const round = `${RADIUS.xl}px`;
+  const tail = `${RADIUS.sm}px`;
+  return {
+    maxWidth: BUBBLE_MAX_WIDTH,
+    padding: `${SPACE.md}px ${SPACE.xl}px`,
+    borderRadius: mine
+      ? `${round} ${round} ${tail} ${round}`
+      : `${round} ${round} ${round} ${tail}`,
+    background: mine ? d.accentSoft : d.surface2,
+    border: `1px solid ${mine ? d.border : "rgba(0,0,0,0.06)"}`,
+    color: mine ? d.accent : d.text,
+    fontSize: FONT.md,
+    fontFamily: SANS,
+    lineHeight: 1.6,
+  };
+}
+
+function voiceBar(d: Dir): CSSProperties {
+  return {
+    borderTop: `1px solid ${d.border}`,
+    padding: `${SPACE.md}px ${SPACE.xxl}px`,
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.lg,
+    background: d.surface2,
+  };
+}
+
+const LISTENING_LABEL: CSSProperties = {
+  color: LISTENING_RED,
+  fontSize: FONT.md,
+  fontFamily: SANS,
+  animation: `adhd-fade-pulse ${MOTION.shimmer} ${EASE.inOut} infinite`,
+};
+
+function transcribingLabel(d: Dir): CSSProperties {
+  return { color: d.text, fontSize: FONT.md, fontStyle: "italic", fontFamily: SANS };
+}
+
+function speakingLabel(d: Dir): CSSProperties {
+  return { color: d.accent, fontSize: FONT.md, fontFamily: SANS };
+}
+
+function composer(d: Dir): CSSProperties {
+  return {
+    borderTop: `1px solid ${d.border}`,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.lg,
+  };
+}
+
+function composerInput(d: Dir): CSSProperties {
+  return {
+    flex: 1,
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+  };
+}
+
+function sendButton(d: Dir): CSSProperties {
+  return { background: "none", border: "none", cursor: "pointer", color: d.accent, padding: SPACE.xs };
+}
 
 export interface SteerChatProps {
   stageId: string;
@@ -27,55 +121,43 @@ export function SteerChat({ stageId, stageLabel, d, vs, onCycle }: SteerChatProp
     setInput("");
     setTimeout(() => {
       setChat((c) => [...c, { role: "agent", text: `Got it — I'll adjust the ${stageLabel.toLowerCase()} work.` }]);
-    }, 700);
+    }, AGENT_REPLY_DELAY_MS);
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={TRANSCRIPT}>
         {chat.length === 0 && (
-          <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12, textAlign: "center", marginTop: 16 }}>
+          <div style={emptyHint(d)}>
             Steer the {profession} mid-run — type below or use voice.
           </div>
         )}
         {chat.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{
-              maxWidth: "78%", padding: "8px 12px", borderRadius: m.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-              background: m.role === "user" ? d.accentSoft : d.surface2,
-              border: `1px solid ${m.role === "user" ? d.border : "rgba(0,0,0,0.06)"}`,
-              color: m.role === "user" ? d.accent : d.text,
-              fontSize: 12, fontFamily: SANS, lineHeight: 1.6,
-            }}>
-              {m.text}
-            </div>
+            <div style={bubble(m.role === "user", d)}>{m.text}</div>
           </div>
         ))}
       </div>
 
       {vs !== "idle" && (
-        <div style={{ borderTop: `1px solid ${d.border}`, padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, background: d.surface2 }}>
-          {vs === "listening" && <><Waveform color="#EF4444" /><span style={{ color: "#EF4444", fontSize: 12, fontFamily: SANS }} className="animate-pulse">Listening...</span></>}
-          {vs === "transcribing" && <span style={{ color: d.text, fontSize: 12, fontStyle: "italic", fontFamily: SANS }}>"Focus on making the API stateless..."</span>}
-          {vs === "speaking" && <><Waveform color={d.accent} /><span style={{ color: d.accent, fontSize: 12, fontFamily: SANS }}>{profession} is responding...</span></>}
+        <div style={voiceBar(d)}>
+          {vs === "listening" && <><Waveform color={LISTENING_RED} /><span style={LISTENING_LABEL}>Listening...</span></>}
+          {vs === "transcribing" && <span style={transcribingLabel(d)}>"Focus on making the API stateless..."</span>}
+          {vs === "speaking" && <><Waveform color={d.accent} /><span style={speakingLabel(d)}>{profession} is responding...</span></>}
         </div>
       )}
 
-      <div style={{ borderTop: `1px solid ${d.border}`, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={composer(d)}>
         <VoiceBtn vs={vs} d={d} onCycle={onCycle} />
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={`Direct the ${profession}...`}
-          style={{
-            flex: 1, border: "none", outline: "none",
-            background: "transparent", color: d.text,
-            fontFamily: SANS, fontSize: 12,
-          }}
+          style={composerInput(d)}
         />
-        <button onClick={send} style={{ background: "none", border: "none", cursor: "pointer", color: d.accent, padding: 4 }}>
-          <Send size={14} />
+        <button onClick={send} style={sendButton(d)}>
+          <Send size={ICON.md} />
         </button>
       </div>
     </div>

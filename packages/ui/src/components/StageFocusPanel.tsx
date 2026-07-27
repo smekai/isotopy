@@ -8,7 +8,7 @@ import type { WorkspaceFile, WorkspaceFileContent } from "../api";
 import { renderInlineMarkdown } from "../inline-md";
 import { ARTIFACTS, REASONING } from "../mock-content";
 import type { Dir } from "../theme";
-import { MONO, SANS, sLabel, specColor, statusClr } from "../theme";
+import { EASE, ELEVATION, FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, sLabel, specColor, statusClr } from "../theme";
 import { StatusIcon } from "./StatusIcon";
 import { SteerChat } from "./SteerChat";
 import type { VoiceState } from "./VoiceControls";
@@ -24,6 +24,10 @@ const PASS_GREEN = "#059669";
 const FAIL_RED = "#DC2626";
 
 const FOLLOW_THRESHOLD_PX = 40;
+const GLYPH_SIZE = 32;
+const ARTIFACT_SIDEBAR_WIDTH = 180;
+const FILE_SIDEBAR_WIDTH = 220;
+const WARN_AMBER = "#D97706";
 
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
@@ -36,18 +40,18 @@ function formatTs(ts: string): string {
 const listPreview: CSSProperties = {
   color: "inherit",
   fontFamily: MONO,
-  fontSize: 11,
+  fontSize: FONT.sm,
   lineHeight: 1.75,
   whiteSpace: "pre-wrap",
   margin: 0,
 };
 
 const pillBase: CSSProperties = {
-  borderRadius: 20,
-  padding: "3px 10px",
+  borderRadius: RADIUS.pill,
+  padding: `${SPACE.xs}px ${SPACE.lg}px`,
   fontFamily: MONO,
-  fontSize: 9,
-  fontWeight: 700,
+  fontSize: FONT.xxs,
+  fontWeight: WEIGHT.bold,
   letterSpacing: "0.06em",
 };
 
@@ -59,7 +63,7 @@ function panelContainer(d: Dir, sc: SpecColor): CSSProperties {
     flexDirection: "column",
     background: d.surface,
     borderTop: `3px solid ${sc.main}`,
-    boxShadow: "0 -4px 24px rgba(0,0,0,0.06)",
+    boxShadow: ELEVATION.panelUp,
   };
 }
 
@@ -67,8 +71,8 @@ function headerRow(d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    padding: "10px 16px",
+    gap: SPACE.xl,
+    padding: `${SPACE.lg}px ${SPACE.xxl}px`,
     borderBottom: `1px solid ${d.border}`,
     flexShrink: 0,
   };
@@ -76,14 +80,14 @@ function headerRow(d: Dir): CSSProperties {
 
 function agentGlyph(sc: SpecColor): CSSProperties {
   return {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
+    width: GLYPH_SIZE,
+    height: GLYPH_SIZE,
+    borderRadius: RADIUS.lg,
     background: sc.gradient,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 16,
+    fontSize: FONT.xxl,
   };
 }
 
@@ -110,10 +114,10 @@ function statusPill(st: StatusColor): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.sm,
     background: st.bg,
-    borderRadius: 20,
-    padding: "3px 10px",
+    borderRadius: RADIUS.pill,
+    padding: `${SPACE.xs}px ${SPACE.lg}px`,
   };
 }
 
@@ -121,17 +125,17 @@ function restartButton(d: Dir, restartable: boolean): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.sm,
     background: d.surface2,
     border: `1px solid ${d.border}`,
-    borderRadius: 8,
-    padding: "5px 10px",
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.sm}px ${SPACE.lg}px`,
     cursor: restartable ? "pointer" : "default",
     opacity: restartable ? 1 : 0.45,
     color: d.textMid,
     fontFamily: SANS,
-    fontSize: 11,
-    fontWeight: 600,
+    fontSize: FONT.sm,
+    fontWeight: WEIGHT.semibold,
   };
 }
 
@@ -139,7 +143,7 @@ function tabsRow(d: Dir): CSSProperties {
   return {
     display: "flex",
     borderBottom: `1px solid ${d.border}`,
-    padding: "0 16px",
+    padding: `0 ${SPACE.xxl}px`,
     flexShrink: 0,
   };
 }
@@ -148,8 +152,8 @@ function tabButton(active: boolean, sc: SpecColor, d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    padding: "10px 14px",
+    gap: SPACE.sm,
+    padding: `${SPACE.lg}px ${SPACE.xxl}px`,
     marginBottom: -1,
     border: "none",
     borderBottom: `2px solid ${active ? sc.main : "transparent"}`,
@@ -157,9 +161,9 @@ function tabButton(active: boolean, sc: SpecColor, d: Dir): CSSProperties {
     cursor: "pointer",
     color: active ? sc.main : d.textMuted,
     fontFamily: SANS,
-    fontSize: 12,
-    fontWeight: active ? 700 : 500,
-    transition: "all 0.18s",
+    fontSize: FONT.md,
+    fontWeight: active ? WEIGHT.bold : WEIGHT.medium,
+    transition: `all ${MOTION.base}`,
   };
 }
 
@@ -167,16 +171,16 @@ function viewToggle(active: boolean, d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.sm,
     border: `1px solid ${active ? d.accent : d.border}`,
-    borderRadius: 8,
-    padding: "4px 12px",
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.xs}px ${SPACE.xl}px`,
     background: active ? d.accentSoft : "transparent",
     color: active ? d.accent : d.textMid,
     cursor: "pointer",
     fontFamily: SANS,
-    fontSize: 11,
-    fontWeight: active ? 700 : 500,
+    fontSize: FONT.sm,
+    fontWeight: active ? WEIGHT.bold : WEIGHT.medium,
   };
 }
 
@@ -185,8 +189,8 @@ function listButton(active: boolean, d: Dir): CSSProperties {
     width: "100%",
     display: "flex",
     alignItems: "flex-start",
-    gap: 8,
-    padding: "10px 12px",
+    gap: SPACE.md,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
     border: "none",
     borderBottom: `1px solid ${d.border}`,
     background: active ? d.accentSoft : "transparent",
@@ -205,7 +209,7 @@ function sidebar(width: number, d: Dir): CSSProperties {
 }
 
 function emptyNote(d: Dir): CSSProperties {
-  return { color: d.textMuted, padding: 16, fontSize: 12, fontFamily: SANS };
+  return { color: d.textMuted, padding: SPACE.xxl, fontSize: FONT.md, fontFamily: SANS };
 }
 
 const HEADER_TITLE_STACK: CSSProperties = { display: "flex" };
@@ -214,10 +218,105 @@ const CLOSE_BUTTON: CSSProperties = {
   background: "none",
   border: "none",
   cursor: "pointer",
-  padding: 4,
+  padding: SPACE.xs,
 };
 const SPLIT_PANE: CSSProperties = { display: "flex", flex: 1, minHeight: 0 };
-const READING_PANE: CSSProperties = { flex: 1, padding: 16, overflowY: "auto" };
+const READING_PANE: CSSProperties = { flex: 1, padding: SPACE.xxl, overflowY: "auto" };
+
+function professionText(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.xl, fontWeight: WEIGHT.bold };
+}
+
+function stageLabelText(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontSize: FONT.sm, fontFamily: SANS };
+}
+
+function statusLabel(st: StatusColor): CSSProperties {
+  return {
+    color: st.text,
+    fontFamily: MONO,
+    fontSize: FONT.xxs,
+    fontWeight: WEIGHT.bold,
+    letterSpacing: "0.06em",
+  };
+}
+
+function viewToggleRow(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    gap: SPACE.xs,
+    padding: `${SPACE.md}px ${SPACE.xxl}px`,
+    borderBottom: `1px solid ${d.border}`,
+    flexShrink: 0,
+  };
+}
+
+function listItemName(active: boolean, d: Dir): CSSProperties {
+  return {
+    color: active ? d.accent : d.text,
+    fontFamily: MONO,
+    fontSize: FONT.xs,
+    lineHeight: 1.4,
+  };
+}
+
+function listItemSize(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontSize: FONT.xxs };
+}
+
+function listItemIcon(active: boolean, d: Dir): CSSProperties {
+  return { color: active ? d.accent : d.textMuted, marginTop: SPACE.xxs, flexShrink: 0 };
+}
+
+function bodyNote(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md };
+}
+
+const TAB_BODY: CSSProperties = { padding: `${SPACE.xl}px ${SPACE.xxl}px` };
+
+const REASONING_BODY: CSSProperties = {
+  ...TAB_BODY,
+  display: "flex",
+  flexDirection: "column",
+  gap: SPACE.xl,
+};
+
+function logTimestamp(d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: MONO,
+    fontSize: FONT.xs,
+    flexShrink: 0,
+    paddingTop: SPACE.xxs,
+  };
+}
+
+function logMessage(color: string): CSSProperties {
+  return { color, fontFamily: MONO, fontSize: FONT.sm, lineHeight: 1.6 };
+}
+
+function caret(d: Dir): CSSProperties {
+  return {
+    color: d.accent,
+    fontFamily: MONO,
+    fontSize: FONT.md,
+    animation: `adhd-fade-pulse ${MOTION.shimmer} ${EASE.inOut} infinite`,
+  };
+}
+
+function reasoningRule(sc: SpecColor): CSSProperties {
+  return {
+    width: 2,
+    background: sc.soft,
+    borderRadius: RADIUS.xs,
+    flexShrink: 0,
+    alignSelf: "stretch",
+  };
+}
+
+function reasoningText(d: Dir): CSSProperties {
+  return { color: d.textMid, fontSize: FONT.md, lineHeight: 1.75, fontFamily: SANS, margin: 0 };
+}
 
 export interface StageFocusPanelProps {
   stage: StageState;
@@ -329,17 +428,17 @@ export function StageFocusPanel({
   const restartable = run.status === "failed" || run.status === "cancelled";
 
   const tabs: { id: FocusTab; label: string; ico: React.ReactNode }[] = [
-    { id: "artifacts", label: "Artifacts", ico: <FileText size={12} /> },
-    { id: "log", label: "Live Log", ico: <Terminal size={12} /> },
-    { id: "reasoning", label: "Reasoning", ico: <Brain size={12} /> },
-    { id: "steer", label: "Steer", ico: <MessageSquare size={12} /> },
+    { id: "artifacts", label: "Artifacts", ico: <FileText size={ICON.sm} /> },
+    { id: "log", label: "Live Log", ico: <Terminal size={ICON.sm} /> },
+    { id: "reasoning", label: "Reasoning", ico: <Brain size={ICON.sm} /> },
+    { id: "steer", label: "Steer", ico: <MessageSquare size={ICON.sm} /> },
   ];
 
   const logColor = (level: LogLevel) => {
     if (level === "error" || level === "fail") return FAIL_RED;
     if (level === "pass") return PASS_GREEN;
     if (level === "run") return d.accent;
-    if (level === "warn") return "#D97706";
+    if (level === "warn") return WARN_AMBER;
     return d.textMid;
   };
 
@@ -348,8 +447,8 @@ export function StageFocusPanel({
       <div style={headerRow(d)}>
         <div style={agentGlyph(sc)}>{agent.glyph}</div>
         <div style={HEADER_TITLE_STACK}>
-          <div data-testid="stage-profession" style={{ color: d.text, fontFamily: SANS, fontSize: 14, fontWeight: 700 }}>{agent.profession}</div>
-          <div style={{ color: d.textMuted, fontSize: 11, fontFamily: SANS }}>{stage.label} stage</div>
+          <div data-testid="stage-profession" style={professionText(d)}>{agent.profession}</div>
+          <div style={stageLabelText(d)}>{stage.label} stage</div>
         </div>
         {stage.verdict && (
           <div
@@ -370,8 +469,8 @@ export function StageFocusPanel({
           </div>
         )}
         <div style={statusPill(st)}>
-          <StatusIcon s={stage.status} size={11} />
-          <span style={{ color: st.text, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em" }}>{sLabel(stage.status)}</span>
+          <StatusIcon s={stage.status} size={ICON.sm} />
+          <span style={statusLabel(st)}>{sLabel(stage.status)}</span>
         </div>
         <div style={FLEX_SPACER} />
         <button
@@ -379,10 +478,10 @@ export function StageFocusPanel({
           disabled={!restartable}
           title={restartable ? undefined : "Available after a failed or aborted run"}
           style={restartButton(d, restartable)}>
-          <RotateCcw size={11} /> Restart here
+          <RotateCcw size={ICON.sm} /> Restart here
         </button>
         <button onClick={onClose} style={{ ...CLOSE_BUTTON, color: d.textMuted }}>
-          <X size={16} />
+          <X size={ICON.lg} />
         </button>
       </div>
 
@@ -407,7 +506,7 @@ export function StageFocusPanel({
         {tab === "artifacts" && (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             {canBrowseFiles && (
-              <div style={{ display: "flex", gap: 4, padding: "8px 16px", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
+              <div style={viewToggleRow(d)}>
                 {(["workflow", "files"] as ArtifactView[]).map((view) => (
                   <button
                     key={view}
@@ -415,7 +514,7 @@ export function StageFocusPanel({
                     data-testid={`artifact-view-${view}`}
                     style={viewToggle(artifactView === view, d)}
                   >
-                    {view === "workflow" ? <FileText size={11} /> : <FolderOpen size={11} />}
+                    {view === "workflow" ? <FileText size={ICON.sm} /> : <FolderOpen size={ICON.sm} />}
                     {view === "workflow" ? "Workflow" : "Files"}
                   </button>
                 ))}
@@ -424,7 +523,7 @@ export function StageFocusPanel({
 
             {artifactView === "workflow" || !canBrowseFiles ? (
               <div style={SPLIT_PANE}>
-                <div style={sidebar(180, d)}>
+                <div style={sidebar(ARTIFACT_SIDEBAR_WIDTH, d)}>
                   {artifacts.length === 0
                     ? <div style={emptyNote(d)}>No artifacts yet.</div>
                     : artifacts.map((a, i) => (
@@ -433,10 +532,10 @@ export function StageFocusPanel({
                         onClick={() => setArtIdx(i)}
                         style={listButton(i === artIdx, d)}
                       >
-                        <FileText size={11} style={{ color: i === artIdx ? d.accent : d.textMuted, marginTop: 2, flexShrink: 0 }} />
+                        <FileText size={ICON.sm} style={listItemIcon(i === artIdx, d)} />
                         <div>
-                          <div style={{ color: i === artIdx ? d.accent : d.text, fontFamily: MONO, fontSize: 10, lineHeight: 1.4 }}>{a.name}</div>
-                          <div style={{ color: d.textMuted, fontSize: 9 }}>{a.size}</div>
+                          <div style={listItemName(i === artIdx, d)}>{a.name}</div>
+                          <div style={listItemSize(d)}>{a.size}</div>
                         </div>
                       </button>
                     ))
@@ -452,7 +551,7 @@ export function StageFocusPanel({
               </div>
             ) : (
               <div style={SPLIT_PANE} data-testid="artifact-files">
-                <div style={sidebar(220, d)}>
+                <div style={sidebar(FILE_SIDEBAR_WIDTH, d)}>
                   {filesError
                     ? <div style={{ ...emptyNote(d), color: FAIL_RED }}>{filesError}</div>
                     : files.length === 0
@@ -464,10 +563,10 @@ export function StageFocusPanel({
                           title={file.path}
                           style={listButton(file.path === selectedFile, d)}
                         >
-                          <FileText size={11} style={{ color: file.path === selectedFile ? d.accent : d.textMuted, marginTop: 2, flexShrink: 0 }} />
+                          <FileText size={ICON.sm} style={listItemIcon(file.path === selectedFile, d)} />
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ color: file.path === selectedFile ? d.accent : d.text, fontFamily: MONO, fontSize: 10, lineHeight: 1.4, wordBreak: "break-all" }}>{file.path}</div>
-                            <div style={{ color: d.textMuted, fontSize: 9 }}>{formatBytes(file.size)}</div>
+                            <div style={{ ...listItemName(file.path === selectedFile, d), wordBreak: "break-all" }}>{file.path}</div>
+                            <div style={listItemSize(d)}>{formatBytes(file.size)}</div>
                           </div>
                         </button>
                       ))
@@ -475,7 +574,7 @@ export function StageFocusPanel({
                 </div>
                 <div style={READING_PANE}>
                   {fileContent?.truncated
-                    ? <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>File is too large to preview ({formatBytes(fileContent.size)}).</div>
+                    ? <div style={bodyNote(d)}>File is too large to preview ({formatBytes(fileContent.size)}).</div>
                     : fileContent && (
                       <pre style={{ ...listPreview, color: d.text }}>
                         {fileContent.content}
@@ -489,30 +588,28 @@ export function StageFocusPanel({
         )}
 
         {tab === "log" && (
-          <div style={{ padding: "12px 16px" }}>
+          <div style={TAB_BODY}>
             {stage.logs.length === 0
-              ? <span style={{ color: d.textMuted, fontSize: 12, fontFamily: SANS }}>No log entries.</span>
+              ? <span style={bodyNote(d)}>No log entries.</span>
               : stage.logs.map((entry, i) => (
-                <div key={i} style={{ display: "flex", gap: 12, marginBottom: 5 }}>
-                  <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, flexShrink: 0, paddingTop: 2 }}>{formatTs(entry.ts)}</span>
-                  <span style={{ color: logColor(entry.level), fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>{renderInlineMarkdown(entry.message)}</span>
+                <div key={i} style={{ display: "flex", gap: SPACE.xl, marginBottom: SPACE.sm }}>
+                  <span style={logTimestamp(d)}>{formatTs(entry.ts)}</span>
+                  <span style={logMessage(logColor(entry.level))}>{renderInlineMarkdown(entry.message)}</span>
                 </div>
               ))
             }
-            {stage.status === "running" && (
-              <span style={{ color: d.accent, fontFamily: MONO, fontSize: 12 }} className="animate-pulse">▊</span>
-            )}
+            {stage.status === "running" && <span style={caret(d)}>▊</span>}
           </div>
         )}
 
         {tab === "reasoning" && (
-          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={REASONING_BODY}>
             {reasoning.length === 0
-              ? <span style={{ color: d.textMuted, fontSize: 12, fontFamily: SANS }}>No reasoning trace available.</span>
+              ? <span style={bodyNote(d)}>No reasoning trace available.</span>
               : reasoning.map((t, i) => (
-                <div key={i} style={{ display: "flex", gap: 12 }}>
-                  <div style={{ width: 2, background: sc.soft, borderRadius: 1, flexShrink: 0, alignSelf: "stretch" }} />
-                  <p style={{ color: d.textMid, fontSize: 12, lineHeight: 1.75, fontFamily: SANS, margin: 0 }}>{renderInlineMarkdown(t)}</p>
+                <div key={i} style={{ display: "flex", gap: SPACE.xl }}>
+                  <div style={reasoningRule(sc)} />
+                  <p style={reasoningText(d)}>{renderInlineMarkdown(t)}</p>
                 </div>
               ))
             }

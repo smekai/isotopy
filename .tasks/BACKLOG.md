@@ -1,25 +1,5 @@
 # Backlog
 
-## TASK-072: Extend `theme.ts` with spacing, radius, type and elevation scales
-**Priority:** P2 | **Tags:** ui
-**Updated:** 2026-07-27 00:00
-
-[`theme.ts`](../packages/ui/src/theme.ts) tokenises **colour only** — three `Dir` palettes, `SPEC_COLOR` per stage, `STATUS_COLORS`, `RUN_PILL`, `SANS`/`MONO`, `GOLD`. Every other visual dimension is a magic number inline in the component: paddings (`"6px 12px"`), radii (`9`, `10`, `12`), font sizes (`11`…`15`), icon sizes (`13`, `15`), the 50px top bar, `z-index` values, and the durations in `index.css`.
-
-The practical consequence: a consistent restyle today means editing all 17 components by hand and eyeballing whether `borderRadius: 10` here and `borderRadius: 9` there was intentional. **This is the prerequisite for any UI beautification work** — the scales have to exist before there is anything to tune.
-
-**Scope:**
-1. Add named scales beside the palettes: spacing, radius, font size + weight, icon size, elevation (fold the existing `shadow`/`shadowSm`/`shadowLg` in), z-index layers (base / drawer / modal), and motion durations.
-2. Derive the values from what the components already use — this is an extraction, not a redesign. Where two components disagree by a pixel or two, pick one and note it.
-3. Migrate the components to the scales. `borderRadius: RADIUS.md` must mean something; do not introduce a token per call site.
-4. Keep the A6 rule intact: style builders stay in the component's own file (see [`decisions.md`](../docs/decisions.md) 2026-07-26); only the *scales* are shared.
-
-**Note:** `App.tsx:198` builds the dot-grid background with `d.border.replace("0.12", "0.20")`, which silently no-ops for the `sakura` palette whose border alpha is `0.14`. A proper token removes the string surgery.
-
-**Cross-platform:** n/a — pure UI.
-
----
-
 ## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-27 00:00

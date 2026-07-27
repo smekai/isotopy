@@ -1,8 +1,70 @@
+import type { CSSProperties } from "react";
 import type { RunState } from "@adhd/core";
 import { ENGINES } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
-import { MONO, SANS, runDot } from "../theme";
+import { EASE, FONT, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, runDot } from "../theme";
+
+const BAR_HEIGHT = 36;
+const DIVIDER_HEIGHT = 14;
+const STATUS_DOT_SIZE = 7;
+
+function bar(d: Dir): CSSProperties {
+  return {
+    background: "rgba(255,255,255,0.85)",
+    backdropFilter: "blur(8px)",
+    borderBottom: `1px solid ${d.border}`,
+    height: BAR_HEIGHT,
+    display: "flex",
+    alignItems: "center",
+    padding: `0 ${SPACE.xxxl}px`,
+    gap: SPACE.lg,
+    flexShrink: 0,
+  };
+}
+
+function divider(d: Dir): CSSProperties {
+  return { width: 1, height: DIVIDER_HEIGHT, background: d.border };
+}
+
+function metaText(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: MONO, fontSize: FONT.xs };
+}
+
+function taskText(d: Dir): CSSProperties {
+  return {
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.semibold,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+}
+
+function engineText(d: Dir): CSSProperties {
+  return { color: d.textMid, fontFamily: MONO, fontSize: FONT.xs, fontWeight: WEIGHT.semibold, whiteSpace: "nowrap" };
+}
+
+function statusDot(dot: string, running: boolean, d: Dir): CSSProperties {
+  return {
+    width: STATUS_DOT_SIZE,
+    height: STATUS_DOT_SIZE,
+    borderRadius: RADIUS.round,
+    background: dot,
+    ...(running
+      ? {
+          boxShadow: `0 0 7px ${d.accent}`,
+          animation: `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite`,
+        }
+      : {}),
+  };
+}
+
+function statusText(d: Dir): CSSProperties {
+  return { color: d.textMid, fontFamily: MONO, fontSize: FONT.xs, fontWeight: WEIGHT.semibold };
+}
 
 export interface RunStatusBarProps {
   run: RunState;
@@ -15,30 +77,23 @@ export function RunStatusBar({ run, d }: RunStatusBarProps) {
   const dot = runDot(run.status, d);
 
   return (
-    <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${d.border}`, height: 36, display: "flex", alignItems: "center", padding: "0 20px", gap: 10, flexShrink: 0 }}>
-      <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10 }}>RUN <span style={{ color: d.textMid }}>#{run.number}</span></span>
-      <div style={{ width: 1, height: 14, background: d.border }} />
-      <span style={{ color: d.text, fontFamily: SANS, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {run.task ?? run.pipelineName}
-      </span>
+    <div style={bar(d)}>
+      <span style={metaText(d)}>RUN <span style={{ color: d.textMid }}>#{run.number}</span></span>
+      <div style={divider(d)} />
+      <span style={taskText(d)}>{run.task ?? run.pipelineName}</span>
       {run.engine && (
         <>
-          <div style={{ width: 1, height: 14, background: d.border }} />
-          <span style={{ color: d.textMid, fontFamily: MONO, fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}>
+          <div style={divider(d)} />
+          <span style={engineText(d)}>
             ⬡ {ENGINES[run.engine].label}{run.model ? ` · ${run.model}` : ""}
           </span>
         </>
       )}
-      <div style={{ width: 1, height: 14, background: d.border }} />
-      <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10 }}>{elapsed}</span>
+      <div style={divider(d)} />
+      <span style={metaText(d)}>{elapsed}</span>
       <div style={{ flex: 1 }} />
-      <div style={{
-        width: 7, height: 7, borderRadius: "50%",
-        background: dot,
-        boxShadow: running ? `0 0 7px ${d.accent}` : undefined,
-        animation: running ? "adhd-pulse 1.2s ease-in-out infinite" : undefined,
-      }} />
-      <span data-testid="run-status" style={{ color: d.textMid, fontFamily: MONO, fontSize: 10, fontWeight: 600 }}>{run.status.toUpperCase()}</span>
+      <div style={statusDot(dot, running, d)} />
+      <span data-testid="run-status" style={statusText(d)}>{run.status.toUpperCase()}</span>
     </div>
   );
 }

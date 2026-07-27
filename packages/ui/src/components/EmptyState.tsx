@@ -12,9 +12,15 @@ import {
 import type { Project } from "@adhd/core";
 import type { SettingsController } from "../hooks/useSettings";
 import type { Dir } from "../theme";
-import { MONO, SANS, specColor } from "../theme";
+import { FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, specColor } from "../theme";
 import { PipelineDropdown } from "./PipelineDropdown";
 import type { PipelineOption } from "./PipelineDropdown";
+
+type SpecColor = ReturnType<typeof specColor>;
+
+const AGENT_GLYPH_SIZE = 34;
+const COMPOSER_MAX_WIDTH = 540;
+const RULE_THICKNESS = 2;
 
 interface PipelineCopy {
   headline: string;
@@ -43,10 +49,141 @@ const PIPELINE_COPY: Record<string, PipelineCopy> = {
 
 function workspaceChipStyle(d: Dir): React.CSSProperties {
   return {
-    display: "flex", alignItems: "center", gap: 8, alignSelf: "center",
-    border: `1px solid ${d.border}`, borderRadius: 12, padding: "7px 12px",
+    display: "flex", alignItems: "center", gap: SPACE.md, alignSelf: "center",
+    border: `1px solid ${d.border}`, borderRadius: RADIUS.xl, padding: `${SPACE.md}px ${SPACE.xl}px`,
     background: d.surface2, cursor: "pointer", maxWidth: "100%",
   };
+}
+
+const PAGE: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: SPACE.x4l,
+  padding: `0 ${SPACE.x5l}px`,
+};
+
+function agentGlyph(spec: SpecColor, d: Dir): React.CSSProperties {
+  return {
+    width: AGENT_GLYPH_SIZE,
+    height: AGENT_GLYPH_SIZE,
+    borderRadius: RADIUS.lg,
+    border: `1.5px solid ${spec.main}`,
+    background: spec.soft,
+    boxShadow: d.elevation.sm,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: FONT.xl,
+    color: spec.main,
+  };
+}
+
+function agentCaption(d: Dir): React.CSSProperties {
+  return {
+    fontFamily: SANS,
+    fontSize: FONT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: d.textMid,
+    whiteSpace: "nowrap",
+  };
+}
+
+function agentConnector(d: Dir): React.CSSProperties {
+  return {
+    width: SPACE.xxl,
+    height: RULE_THICKNESS,
+    borderRadius: RADIUS.xs,
+    background: d.runBorder,
+    alignSelf: "flex-start",
+    marginTop: SPACE.xxl,
+  };
+}
+
+function headline(d: Dir): React.CSSProperties {
+  return {
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.display,
+    fontWeight: WEIGHT.heavy,
+    letterSpacing: "-0.02em",
+    marginBottom: SPACE.md,
+  };
+}
+
+function subtitle(d: Dir): React.CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.xl };
+}
+
+function composerCard(d: Dir): React.CSSProperties {
+  return {
+    background: "#FFF",
+    border: `1.5px solid ${d.border}`,
+    borderRadius: RADIUS.xxl,
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.xl,
+    padding: `${SPACE.lg}px ${SPACE.lg}px ${SPACE.lg}px ${SPACE.xxxl}px`,
+    boxShadow: d.elevation.md,
+  };
+}
+
+function composerInput(d: Dir): React.CSSProperties {
+  return {
+    flex: 1,
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.xl,
+  };
+}
+
+function startButton(canStart: boolean, d: Dir): React.CSSProperties {
+  return {
+    background: canStart ? `linear-gradient(135deg, ${d.accent}, ${d.accentDark})` : d.surface2,
+    color: canStart ? "#FFF" : d.textMuted,
+    border: "none",
+    borderRadius: RADIUS.xl,
+    padding: `${SPACE.lg}px ${SPACE.xxxl}px`,
+    fontFamily: SANS,
+    fontSize: FONT.lg,
+    fontWeight: WEIGHT.heavy,
+    cursor: canStart ? "pointer" : "default",
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.md,
+    boxShadow: canStart ? `0 2px 10px ${d.accentMid}` : "none",
+    transition: `all ${MOTION.base}`,
+  };
+}
+
+function chipName(d: Dir): React.CSSProperties {
+  return {
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.semibold,
+    whiteSpace: "nowrap",
+  };
+}
+
+function chipPath(d: Dir): React.CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: MONO,
+    fontSize: FONT.xs,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+}
+
+function footerHint(d: Dir): React.CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md };
 }
 
 export interface EmptyStateProps {
@@ -110,76 +247,59 @@ export function EmptyState({
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "0 40px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={PAGE}>
+      <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
         {stages.map((stage, i) => {
           const agent = agentForStage(stage.id);
           const spec = specColor(stage.id);
           return (
-            <div key={stage.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, border: `1.5px solid ${spec.main}`, background: spec.soft, boxShadow: d.shadowSm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: spec.main }}>{agent.glyph}</div>
-                <div style={{ fontFamily: SANS, fontSize: 10, fontWeight: 600, color: d.textMid, whiteSpace: "nowrap" }}>{agent.profession}</div>
+            <div key={stage.id} style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: SPACE.sm }}>
+                <div style={agentGlyph(spec, d)}>{agent.glyph}</div>
+                <div style={agentCaption(d)}>{agent.profession}</div>
               </div>
-              {i < stages.length - 1 && <div style={{ width: 16, height: 2, borderRadius: 1, background: d.runBorder, alignSelf: "flex-start", marginTop: 16 }} />}
+              {i < stages.length - 1 && <div style={agentConnector(d)} />}
             </div>
           );
         })}
       </div>
 
       <div style={{ textAlign: "center" }}>
-        <div style={{ color: d.text, fontFamily: SANS, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 8 }}>
-          {copy.headline}
-        </div>
-        <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 14 }}>
-          {copy.subtitle}
-        </div>
+        <div style={headline(d)}>{copy.headline}</div>
+        <div style={subtitle(d)}>{copy.subtitle}</div>
       </div>
 
       <PipelineDropdown d={d} options={pipelineOptions} value={pipelineId} onSelect={selectPipeline} />
 
-      <div style={{ maxWidth: 540, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ background: "#FFF", border: `1.5px solid ${d.border}`, borderRadius: 16, display: "flex", alignItems: "center", gap: 12, padding: "10px 10px 10px 18px", boxShadow: d.shadow }}>
+      <div style={{ maxWidth: COMPOSER_MAX_WIDTH, width: "100%", display: "flex", flexDirection: "column", gap: SPACE.lg }}>
+        <div style={composerCard(d)}>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && start()}
             placeholder="Describe the task..."
             autoFocus
-            style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: d.text, fontFamily: SANS, fontSize: 14 }}
+            style={composerInput(d)}
           />
-          <button
-            onClick={start}
-            disabled={!canStart}
-            style={{
-              background: canStart ? `linear-gradient(135deg, ${d.accent}, ${d.accentDark})` : d.surface2,
-              color: canStart ? "#FFF" : d.textMuted,
-              border: "none", borderRadius: 12, padding: "10px 20px",
-              fontFamily: SANS, fontSize: 13, fontWeight: 800,
-              cursor: canStart ? "pointer" : "default",
-              display: "flex", alignItems: "center", gap: 7,
-              boxShadow: canStart ? `0 2px 10px ${d.accentMid}` : "none",
-              transition: "all 0.2s",
-            }}
-          >
-            <Play size={13} /> {starting ? "Starting..." : "Start run"}
+          <button onClick={start} disabled={!canStart} style={startButton(canStart, d)}>
+            <Play size={ICON.md} /> {starting ? "Starting..." : "Start run"}
           </button>
         </div>
 
         {usesEngine && (
           <button onClick={onOpenProject} data-testid="workspace-chip" style={workspaceChipStyle(d)}>
-            <FolderOpen size={13} style={{ color: d.textMuted, flexShrink: 0 }} />
-            <span style={{ color: d.textMid, fontFamily: SANS, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+            <FolderOpen size={ICON.md} style={{ color: d.textMuted, flexShrink: 0 }} />
+            <span style={chipName(d)}>
               {scratch ? "Scratch workspace" : (project?.name ?? "Project")}
             </span>
-            <span style={{ color: d.textMuted, fontFamily: MONO, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={chipPath(d)}>
               {scratch ? "this run gets its own folder" : (project?.root ?? "")}
             </span>
           </button>
         )}
       </div>
 
-      <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 12 }}>
+      <div style={footerHint(d)}>
         {usesEngine
           ? <>Engine: {engine.label} · {modelForEngine(settings.preferences, engine.id)} — change in Setup</>
           : <>↵ to start · ⌘⇧V for voice</>}

@@ -1,9 +1,21 @@
 import type { RunState } from "@adhd/core";
 import { findPipeline, flattenPipelineStages } from "@adhd/core";
+import type { CSSProperties } from "react";
 import type { Dir } from "../theme";
-import { GOLD } from "../theme";
+import { GOLD, RADIUS, SPACE } from "../theme";
 import { GateMarker } from "./GateMarker";
 import { StageNode } from "./StageNode";
+
+const RULE_THICKNESS = 2;
+
+function gateStub(awaiting: boolean, d: Dir): CSSProperties {
+  return {
+    width: SPACE.xl,
+    height: RULE_THICKNESS,
+    borderRadius: RADIUS.xs,
+    background: awaiting ? GOLD : d.border,
+  };
+}
 
 interface ConnectorProps {
   d: Dir;
@@ -12,8 +24,8 @@ interface ConnectorProps {
 
 function Connector({ d, dim }: ConnectorProps) {
   return (
-    <div style={{ display: "flex", alignItems: "center", width: 20, flexShrink: 0 }}>
-      <div style={{ flex: 1, height: 2, borderRadius: 1, background: dim ? "rgba(0,0,0,0.07)" : d.accentMid }} />
+    <div style={{ display: "flex", alignItems: "center", width: SPACE.xxxl, flexShrink: 0 }}>
+      <div style={{ flex: 1, height: RULE_THICKNESS, borderRadius: RADIUS.xs, background: dim ? "rgba(0,0,0,0.07)" : d.accentMid }} />
     </div>
   );
 }
@@ -34,7 +46,7 @@ export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: Pipel
   );
 
   return (
-    <div style={{ flexShrink: 0, overflowX: "auto", padding: "20px 24px" }}>
+    <div style={{ flexShrink: 0, overflowX: "auto", padding: `${SPACE.xxxl}px ${SPACE.x4l}px` }}>
       <div style={{ display: "flex", alignItems: "center", minWidth: "max-content" }}>
         {run.stages.map((stage, i) => {
           const def = stageDefs.get(stage.id);
@@ -70,14 +82,14 @@ export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: Pipel
           return (
             <div key={stage.id} style={{ display: "flex", alignItems: "center" }}>
               {node}
-              <div style={{ width: 12, height: 2, borderRadius: 1, background: gateAwaiting ? GOLD : d.border }} />
+              <div style={gateStub(gateAwaiting, d)} />
               <GateMarker
                 index={gateIndex}
                 d={d}
                 awaiting={gateAwaiting}
                 onApprove={gateAwaiting ? () => onApprove(stage.id) : undefined}
               />
-              <div style={{ width: 12, height: 2, borderRadius: 1, background: gateAwaiting ? GOLD : d.border }} />
+              <div style={gateStub(gateAwaiting, d)} />
             </div>
           );
         })}

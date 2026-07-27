@@ -1,7 +1,82 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import type { Dir } from "../theme";
-import { SANS } from "../theme";
+import { FONT, ICON, MOTION, RADIUS, SANS, SPACE, WEIGHT, Z, focusRing } from "../theme";
+
+const MENU_MIN_WIDTH = 300;
+
+function trigger(open: boolean, d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.lg,
+    background: "#FFF",
+    border: `1.5px solid ${open ? d.accent : d.border}`,
+    borderRadius: RADIUS.xl,
+    padding: `${SPACE.lg}px ${SPACE.xxl}px`,
+    boxShadow: open ? focusRing(d.accentSoft) : d.elevation.sm,
+    cursor: "pointer",
+    transition: `all ${MOTION.fast}`,
+  };
+}
+
+function triggerLabel(d: Dir): CSSProperties {
+  return { color: d.text, fontFamily: SANS, fontSize: FONT.lg, fontWeight: WEIGHT.bold };
+}
+
+function chevron(open: boolean, d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    transform: open ? "rotate(180deg)" : "none",
+    transition: `transform ${MOTION.fast}`,
+  };
+}
+
+function menu(d: Dir): CSSProperties {
+  return {
+    position: "absolute",
+    top: `calc(100% + ${SPACE.sm}px)`,
+    left: "50%",
+    transform: "translateX(-50%)",
+    minWidth: MENU_MIN_WIDTH,
+    background: "#FFF",
+    border: `1px solid ${d.border}`,
+    borderRadius: RADIUS.xl,
+    padding: SPACE.sm,
+    boxShadow: d.elevation.lg,
+    zIndex: Z.dropdown,
+  };
+}
+
+function menuItem(selected: boolean, hovered: boolean, d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.lg,
+    width: "100%",
+    border: "none",
+    borderRadius: RADIUS.lg,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
+    textAlign: "left",
+    background: selected ? d.accentSoft : hovered ? d.surface2 : "transparent",
+    cursor: "pointer",
+    transition: `background ${MOTION.instant}`,
+  };
+}
+
+function itemLabel(selected: boolean, d: Dir): CSSProperties {
+  return {
+    color: selected ? d.accent : d.text,
+    fontFamily: SANS,
+    fontSize: FONT.lg,
+    fontWeight: selected ? WEIGHT.bold : WEIGHT.semibold,
+  };
+}
+
+function itemDescription(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.sm };
+}
 
 export interface PipelineOption {
   id: string;
@@ -50,32 +125,16 @@ export function PipelineDropdown({ d, options, value, onSelect }: PipelineDropdo
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        style={{
-          display: "flex", alignItems: "center", gap: 10,
-          background: "#FFF", border: `1.5px solid ${open ? d.accent : d.border}`,
-          borderRadius: 12, padding: "9px 14px",
-          boxShadow: open ? `0 0 0 3px ${d.accentSoft}` : d.shadowSm,
-          cursor: "pointer", transition: "all 0.15s",
-        }}
+        style={trigger(open, d)}
       >
-        <span style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 700 }}>
+        <span style={triggerLabel(d)}>
           {selected?.label}
         </span>
-        <ChevronDown
-          size={14}
-          style={{ color: d.textMuted, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
-        />
+        <ChevronDown size={ICON.md} style={chevron(open, d)} />
       </button>
 
       {open && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute", top: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
-            minWidth: 300, background: "#FFF", border: `1px solid ${d.border}`,
-            borderRadius: 14, padding: 5, boxShadow: d.shadowLg, zIndex: 30,
-          }}
-        >
+        <div role="listbox" style={menu(d)}>
           {options.map((opt) => {
             const sel = opt.id === value;
             return (
@@ -89,20 +148,13 @@ export function PipelineDropdown({ d, options, value, onSelect }: PipelineDropdo
                 }}
                 onMouseEnter={() => setHovered(opt.id)}
                 onMouseLeave={() => setHovered(null)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%",
-                  border: "none", borderRadius: 10, padding: "10px 12px", textAlign: "left",
-                  background: sel ? d.accentSoft : hovered === opt.id ? d.surface2 : "transparent",
-                  cursor: "pointer", transition: "background 0.1s",
-                }}
+                style={menuItem(sel, hovered === opt.id, d)}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ color: sel ? d.accent : d.text, fontFamily: SANS, fontSize: 13, fontWeight: sel ? 700 : 600 }}>
-                    {opt.label}
-                  </div>
-                  <div style={{ color: d.textMuted, fontFamily: SANS, fontSize: 11 }}>{opt.description}</div>
+                  <div style={itemLabel(sel, d)}>{opt.label}</div>
+                  <div style={itemDescription(d)}>{opt.description}</div>
                 </div>
-                {sel && <Check size={14} style={{ color: d.accent, flexShrink: 0 }} />}
+                {sel && <Check size={ICON.md} style={{ color: d.accent, flexShrink: 0 }} />}
               </button>
             );
           })}
