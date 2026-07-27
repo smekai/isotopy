@@ -20,24 +20,6 @@ The practical consequence: a consistent restyle today means editing all 17 compo
 
 ---
 
-## TASK-074: Add a component-test layer for the UI
-**Priority:** P2 | **Tags:** ui, testing
-**Updated:** 2026-07-27 00:00
-
-**There are no component tests at all.** The root [`vitest.config.ts`](../vitest.config.ts) includes `packages/*/test/**/*.{comp,spec}.ts` and sets `environment: "node"` — the glob cannot match `.tsx` and the environment cannot render. UI coverage is therefore two pure-helper specs (`run-utils`, `legacy-prefs`) plus Playwright, which is slow, serial (`workers: 1`), and only runs when a change is structural enough to warrant `pnpm e2e`.
-
-The gap that matters most is [`useRunEvents.ts`](../packages/ui/src/hooks/useRunEvents.ts): `applyEvent` is a pure reducer over `RunState` covering nine event types and a log-dedupe branch, and the subscribe-buffer-replay ordering around it is genuinely subtle. It is exactly the shape unit tests are for, and today nothing tests it directly.
-
-**Scope:**
-1. Extend the vitest config to a UI-capable project: `.tsx` in the include glob and a DOM environment (`jsdom`/`happy-dom`) scoped so the server package keeps `node`.
-2. Add `@testing-library/react` and write `*.comp.tsx` tests for the highest-value units — `applyEvent` first (pure, no DOM needed), then the hooks and a presentational component or two.
-3. Keep the layering rule from [`testing.md`](../docs/testing.md): component tests assert behaviour with deps mocked; anything needing a real server stays in `e2e/`.
-4. Tests stay in `packages/ui/test/`, never beside source.
-
-**Cross-platform:** n/a — pure UI/tooling.
-
----
-
 ## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-27 00:00

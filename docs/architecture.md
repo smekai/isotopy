@@ -137,7 +137,7 @@ expression, and a change is judged against its tier.
   constants or builders, not sprawling inline literals; pure view helpers stay
   apart from stateful modules. In this repo the tier is written out in full —
   module map, data flow, state ownership, design tokens, accessibility — in
-  `docs/ui-architecture.md`; read it before changing UI code.
+  `docs/architecture-ui.md`; read it before changing UI code.
 
 - **Mobile** — the same domain, pulled from the shared package, with
   platform-specific code behind an interface so a screen never branches on the
@@ -328,7 +328,7 @@ Dependency direction: `index.ts → app.ts → routes → services → engines/c
 - Pure helpers (`run-utils.ts`, `theme.ts`) stay separate from stateful modules.
 - `test/` holds unit specs; `e2e/` holds the Playwright suite. Neither lives in `src/`.
 
-The frontend tier is documented in full — module map, the network seam, run data flow, state ownership, design tokens, accessibility, testing layers and known gaps — in [`ui-architecture.md`](./ui-architecture.md). Read that before changing UI code; the summary above is only the layout.
+The frontend tier is documented in full — module map, the network seam, run data flow, state ownership, design tokens, accessibility, testing layers and known gaps — in [`architecture-ui.md`](./architecture-ui.md). Read that before changing UI code; the summary above is only the layout.
 
 ## Configuration & constants
 
@@ -897,7 +897,7 @@ user-level root; both exist so tests get isolated roots.
 └──────────────────────────────────────────────────┘
 ```
 
-Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow's SQLite state is the source of truth and the run snapshot/event tables are a rebuildable read model. The frontend side of this picture is [`ui-architecture.md`](./ui-architecture.md).
+Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow's SQLite state is the source of truth and the run snapshot/event tables are a rebuildable read model. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 

@@ -59,6 +59,7 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
 | [`index.css`](../packages/ui/src/index.css) | The only stylesheet: reset, body font, `@keyframes adhd-*`, scrollbar. |
 | [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`). Unit-tested. |
+| [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
 | [`mock-content.ts`](../packages/ui/src/mock-content.ts) | **Prototype fixture data still wired into a shipped component.** See Known gaps / TASK-075. |
@@ -179,9 +180,10 @@ The five things that are load-bearing:
    gap are buffered and replayed onto the snapshot once it lands, so nothing is lost.
    The log dedupe in `applyEvent` (matching `ts` + `message`) absorbs the overlap.
 3. **`applyEvent` is a pure reducer** — `structuredClone`, mutate the clone, return
-   it. It is the single place run state advances. Keeping it pure is what makes it
-   testable without a DOM (and it is the highest-value untested unit in the package —
-   TASK-074).
+   it. It is the single place run state advances, and it lives in its own module
+   ([`run-events.ts`](../packages/ui/src/run-events.ts)) rather than inside the hook
+   precisely so it stays testable without a DOM; `run-events.spec.ts` covers all nine
+   event types plus the dedupe.
 4. **The stream is closed explicitly** on `run.completed`, and on a terminal status in
    the snapshot. Without that, `EventSource` reconnects forever once the server closes
    it.
@@ -304,14 +306,23 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
-| Unit spec | Vitest (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs` |
-| Component | Vitest | *does not exist yet* — TASK-074 | Behaviour with deps mocked |
+| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events` |
+| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
-The root [`vitest.config.ts`](../vitest.config.ts) includes
-`packages/*/test/**/*.{comp,spec}.ts` with `environment: "node"` — so `.tsx` is never
-matched and nothing can render. **Everything above two pure-helper modules is covered
-only by Playwright.**
+The root [`vitest.config.ts`](../vitest.config.ts) declares two projects: **`node`**
+takes `packages/*/test/**/*.{comp,spec}.ts`, and **`ui`** takes
+`packages/ui/test/**/*.comp.tsx` under `jsdom`. **The extension picks the
+environment** — a UI check that must render is a `.comp.tsx`; a UI check over a pure
+function stays a `.spec.ts` and runs in `node` with the rest of the suite. Run one at
+a time with `pnpm vitest run --project ui`.
+
+**Rule.** A component test substitutes the network boundary and nothing else:
+`vi.mock("../src/api")`, with the deferred-promise and SSE-callback plumbing in
+`test/support/` rather than in a test body. `useRunEvents.comp.tsx` is the reference —
+it drives the subscribe-buffer-replay ordering from §5 directly, which no e2e test can
+observe. Because `react-hooks/rules-of-hooks` is an **error** across `packages/ui/**`,
+hooks are exercised through `renderHook`, never called in a test body.
 
 The Playwright suite runs in three tiers, deliberately: **free** (`ui-smoke`,
 `project-switcher`, `project-drawer` — no engine spend), **seeded**
@@ -343,7 +354,7 @@ actionable rather than merely noted.
 | --- | --- | --- | --- |
 | 1 | **No non-colour tokens.** Spacing, radii, type, icon, z-index and motion values are inline literals across all 17 components. | Named scales in `theme.ts`, extracted from current usage; components migrated. | TASK-072 |
 | 2 | **Fixture data ships.** `mock-content.ts` (hardcoded OAuth-demo reasoning/artifacts) is imported by `StageFocusPanel.tsx:9`; the Reasoning tab renders it regardless of the real run. | Real data where a source exists, an honest empty state where it does not, file deleted. | TASK-075 |
-| 3 | **No component tests.** The vitest glob cannot match `.tsx` and the environment is `node`. `applyEvent` — nine event types and a dedupe branch — is untested. | A DOM-capable vitest project and `*.comp.tsx` tests, starting with `applyEvent`. | TASK-074 |
+| 3 | ~~**No component tests.**~~ **Closed by TASK-074** — a `jsdom` vitest project takes `*.comp.tsx`, `applyEvent` is covered by `run-events.spec.ts`, and `useRunEvents.comp.tsx` drives the subscribe-buffer-replay ordering. Only that hook is covered so far; the components still have none. | Extend the layer to presentational components as they change. | — |
 | 4 | **`SetupModal.tsx` is 1002 lines** with ~50 style builders, owning four unrelated settings surfaces. | One component per `SetupSection`; the modal reduced to shell and section switching. | TASK-073 |
 | 5 | **`SetupModal` and `HistoryDrawer` are not accessible overlays** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. | The §8 overlay rule applied to both. | — |
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click), `SteerChat` (no send endpoint) and `Waveform` are visual placeholders. | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |

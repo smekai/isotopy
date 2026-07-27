@@ -9,8 +9,9 @@ indirect, and harder to diagnose when it breaks.
 
 | Layer | Files | Runner | Command | Scope |
 | --- | --- | --- | --- | --- |
-| **Component** | `packages/*/test/*.comp.ts` | Vitest | `pnpm test` | The default. Request in → behaviour out, through the real routes, services, orchestrator and run-store. |
-| **Spec** | `packages/*/test/*.spec.ts` | Vitest | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
+| **Component** | `packages/*/test/*.comp.ts` | Vitest (`node`) | `pnpm test` | The default. Request in → behaviour out, through the real routes, services, orchestrator and run-store. |
+| **Component (render)** | `packages/ui/test/*.comp.tsx` | Vitest (`jsdom`) | `pnpm test` | The same, for React code that must render — hooks and components, deps mocked. |
+| **Spec** | `packages/*/test/*.spec.ts` | Vitest (`node`) | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
 | **E2E** | `packages/ui/e2e/*.spec.ts` | Playwright | `pnpm e2e` | Only what needs a browser: rendering, focus, tab wiring. |
 | **Live** | `e2e/live-dev-test.spec.ts` | Playwright | `ADHD_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
 
@@ -26,6 +27,21 @@ runner.
 (the whole suite is ~1.5s) while exercising the code paths that actually break.
 A rule of thumb: if a check would still make sense with the React app deleted,
 it is a component test.
+
+**The extension picks the environment.** `pnpm test` runs two Vitest projects
+from one root config: `node` takes `packages/*/test/**/*.{comp,spec}.ts`, and
+`ui` takes `packages/ui/test/**/*.comp.tsx` under `jsdom`. So a UI check that
+needs to render is a `.comp.tsx`; a UI check over a pure function stays a
+`.spec.ts` and runs in `node` with everything else. Run one project at a time
+with `pnpm vitest run --project ui`. React state updates must go through
+`renderHook`/`render` — `react-hooks/rules-of-hooks` is an **error** across
+`packages/ui/**`, so calling a hook directly in a test body fails lint.
+
+**What a UI component test substitutes.** The same principle as the server's
+two substitutions: replace the boundary, keep the rest real. For the UI that
+boundary is [`api.ts`](../packages/ui/src/api.ts) — the only module that talks
+to the network — mocked with `vi.mock("../src/api")`. Anything that needs a real
+server, a real browser or real rendering of the whole app stays in `e2e/`.
 
 **Specs are deliberately narrow.** They live in the same `test/` directory as
 the component tests, and earn their place only where the logic is intricate

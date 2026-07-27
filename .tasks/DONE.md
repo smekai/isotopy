@@ -1,5 +1,25 @@
 # Done
 
+## TASK-074: Add a component-test layer for the UI
+**Priority:** P2 | **Tags:** ui, testing
+**Updated:** 2026-07-27 00:00
+
+The root `vitest.config.ts` included `packages/*/test/**/*.{comp,spec}.ts` with `environment: "node"` — the glob could not match `.tsx` and the environment could not render, so everything above two pure-helper specs was covered only by Playwright. `applyEvent` — nine event types, a log-dedupe branch, and the subscribe-buffer-replay ordering around it — had no direct test at all.
+
+### Done summary
+- **Two vitest projects from one root config.** `node` keeps `packages/*/test/**/*.{comp,spec}.ts`; the new `ui` project takes `packages/ui/test/**/*.comp.tsx` under `jsdom`. **The extension picks the environment** — that is the whole convention, and it means a pure UI check stays a `.spec.ts` in the fast node project. `pnpm vitest run --project ui` runs one at a time.
+- **Extracted `applyEvent` to [`src/run-events.ts`](../packages/ui/src/run-events.ts)** — A9 wants pure helpers apart from stateful modules, and keeping the reducer out of the hook is what lets it be tested with no DOM. `useRunEvents.ts` now also reuses `isTerminalRunStatus` from `@adhd/core` instead of its own copy of the terminal-status array. (`App.tsx:25` still has the same duplicate; left alone, out of scope.)
+- **28 new tests.** `run-events.spec.ts` (18, node) covers all nine event types, the `failed`/`cancelled`/default status mapping, the dedupe on `ts` + `message`, an event naming an unknown stage, and that the input run is never mutated. `useRunEvents.comp.tsx` (10, jsdom) drives the ordering that no e2e test can observe: an event arriving *before* the snapshot is replayed onto it, an overlapping log is absorbed, `run.completed` and an already-terminal snapshot both close the stream, a resubscribe-key bump opens a second subscription, unmount unsubscribes.
+- **Substitutes the network boundary only.** `vi.mock("../src/api")` — the repo's first, chosen over a fake `fetch`/`EventSource` harness for a much smaller diff. AAAAA forbids logic in a test body, so the deferred promises, SSE-callback capture and `act()` wrapping live in `test/support/fake-run-stream.ts`, with fixtures in `test/support/run-fixtures.ts`.
+- **Deps placed by consumer:** `jsdom` at the root (vitest lives there), `@testing-library/react` + `@testing-library/dom` in `packages/ui` (React lives there). No `jest-dom` — the repo has no custom matchers.
+- Docs updated: `testing.md` gained a **Component (render)** layer row, the environment-by-extension rule and the api.ts-substitution rule; `architecture-ui.md` §2/§5/§9 and known-gap #3.
+
+**Verified:** `pnpm test` 173/173 across both projects, `pnpm lint` and `pnpm typecheck` clean. Confirmed the split is real by running each project alone (`ui` picks up only the one `.comp.tsx`), and confirmed the layer can fail by breaking the dedupe guard — both the spec and the hook test caught it independently, then reverted.
+
+**Not fixed here:** `pnpm e2e` has one failing spec, `project-drawer.spec.ts:39` ("the drawer summarises the engine and pipeline and links into Setup"). Verified pre-existing — it fails identically with this task's only `src` change stashed. Needs its own task.
+
+---
+
 ## TASK-071: Document the UI architecture and review `packages/ui`
 **Priority:** P2 | **Tags:** ui, infra
 **Updated:** 2026-07-27 00:00
@@ -7,7 +27,7 @@
 `packages/ui` was ~5.4k lines with no dedicated documentation — UI context was split across A9's six-line frontend clause, a five-bullet layout section, four notes in `implementation-notes.md`, and two styling entries in `decisions.md`. Every UI task re-derived the same context from `App.tsx`, `api.ts` and `theme.ts`.
 
 ### Done summary
-- **New [`docs/ui-architecture.md`](../docs/ui-architecture.md)** — ten sections: the stack and its four deliberate absences (each with the trigger that would reverse it), module map, component conventions, the `api.ts` network seam, the run data flow end to end, the four-tier state-ownership model, the design system, accessibility, testing layers, known gaps. Descriptive throughout, with binding paragraphs marked **Rule**.
+- **New [`docs/architecture-ui.md`](../docs/architecture-ui.md)** — ten sections: the stack and its four deliberate absences (each with the trigger that would reverse it), module map, component conventions, the `api.ts` network seam, the run data flow end to end, the four-tier state-ownership model, the design system, accessibility, testing layers, known gaps. Descriptive throughout, with binding paragraphs marked **Rule**.
 - **Wired into the generated standard.** A9's frontend bullet in the `gen:shared` block now points at it, so the pointer reaches both `.claude/skills/architect/SKILL.md` and the shipped Architect persona via `pnpm gen:skills`. Also cross-linked from the `### packages/ui` section and the `README.md` doc index.
 - **Fixed the stale `## Local dashboard architecture` block** — it claimed the SPA served on 9477 and listed a `/tasks` REST surface that never existed. Replaced with the real port split, the seven proxied route groups, the actual endpoint roster, and the `X-ADHD-Project` header.
 - **Review findings raised as tasks:** TASK-072 (no spacing/radius/type/z-index scales — the prerequisite for any beautification), TASK-074 (no component tests at all; the vitest glob cannot match `.tsx`), TASK-075 (`mock-content.ts` fixtures still rendering in `StageFocusPanel`), TASK-073 (`SetupModal.tsx` at 1002 lines). Three further gaps — overlay accessibility, hand-mirrored response types, light-only theme — are recorded in §10 without tasks.

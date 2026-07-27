@@ -112,7 +112,7 @@ expression, and a change is judged against its tier.
   constants or builders, not sprawling inline literals; pure view helpers stay
   apart from stateful modules. In this repo the tier is written out in full —
   module map, data flow, state ownership, design tokens, accessibility — in
-  `docs/ui-architecture.md`; read it before changing UI code.
+  `docs/architecture-ui.md`; read it before changing UI code.
 
 - **Mobile** — the same domain, pulled from the shared package, with
   platform-specific code behind an interface so a screen never branches on the
