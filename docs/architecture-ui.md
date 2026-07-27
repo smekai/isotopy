@@ -64,13 +64,17 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
 | [`mock-content.ts`](../packages/ui/src/mock-content.ts) | **Prototype fixture data still wired into a shipped component.** See Known gaps / TASK-075. |
 | `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useElapsed`. §5, §6. |
-| `components/` | 17 flat component files. §3. |
+| `components/` | 16 flat component files, plus `setup/` — the one feature folder. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
 
 **Rule.** `components/` stays flat until a *feature* owns four or more files that no
 other feature imports; then it gets a folder named for the feature, not for the file
 kind. Do not create `components/ui/`, `components/common/`, or a barrel.
+`components/setup/` is the only feature folder so far (TASK-073) and the pattern to
+copy: the entry component keeps the feature's name and public types, its siblings are
+named for what they own, and the builders shared by two or more of them — and only
+those — sit in one `setup-styles.ts` beside them.
 
 ---
 
@@ -92,7 +96,9 @@ them without exception.
    [`StageFocusPanel.tsx`](../packages/ui/src/components/StageFocusPanel.tsx) is the
    reference. They live **in-file**: [`decisions.md`](./decisions.md) 2026-07-26
    ruled that A6 asks for *names*, not for a particular file, and that a sibling
-   `*.styles.ts` would split one component's markup from its presentation.
+   `*.styles.ts` would split one component's markup from its presentation. The one
+   exception is a *shared* vocabulary inside a feature folder — builders two or more
+   siblings use, which would otherwise be copied (`setup/setup-styles.ts`).
 4. **Callbacks are `onX`; the parent owns the decision.** A component reports what
    happened (`onNodeClick`), it does not decide what it means.
 5. **Presentational unless it has a reason not to.** A component that only renders
@@ -106,11 +112,19 @@ The split as it stands:
 - **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `SteerChat`,
   `VoiceControls` — own open/draft state, no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
-  `HistoryDrawer`, `SetupModal`, `StageFocusPanel` — call `api.ts` themselves.
+  `HistoryDrawer`, `StageFocusPanel`, and inside `setup/` — `EngineStatusCard`,
+  `EngineConnection`, `EngineModelPicker` — call `api.ts` themselves. `SetupModal`
+  itself is chrome: nav rail, section switching, close.
 
 **Rule.** A component file that passes ~300 lines is a signal, not a limit — look for
-the axis it is splitting along and split there. `SetupModal.tsx` at 1002 lines is the
-standing counter-example (TASK-073), not a precedent.
+the axis it is splitting along and split there. `SetupModal.tsx` was the standing
+counter-example at 1002 lines; TASK-073 split it along the `SetupSection` union it
+already carried, and then split the harness section again along the same axis — one
+component per block that owns its own state and server calls. That is the worked
+example of the rule: nine files replace the one, the largest of them
+(`EngineStatusCard`, 322 lines — half of it style builders) is one responsibility
+and stays whole. `StageFocusPanel.tsx` at 625 lines is now the package's largest
+component and the next candidate for the same treatment.
 
 ---
 
@@ -278,7 +292,8 @@ single source for timing.
 **Two rules when styling.** A one-off structural dimension (the 50px top bar, a drawer
 width, a dialog width) gets a named `const` in *its own component* — a shared token
 per call site would be worse than the literal. And style builders stay in the
-component's file (**A6**); only the scales are shared.
+component's file (**A6**); only the scales, and a feature folder's own shared
+vocabulary (§3), are shared.
 
 Two further constraints on any visual work:
 
@@ -370,7 +385,7 @@ actionable rather than merely noted.
 | 1 | ~~**No non-colour tokens.**~~ **Closed by TASK-072** — `SPACE`/`RADIUS`/`FONT`/`WEIGHT`/`ICON`/`Z`/`MOTION`/`EASE`/`ELEVATION` are in `theme.ts` (§7) and all 19 files are migrated. Nothing enforces their use, so a new literal can still creep in. | Prefer a token in review; a lint rule if drift appears. | — |
 | 2 | **Fixture data ships.** `mock-content.ts` (hardcoded OAuth-demo reasoning/artifacts) is imported by `StageFocusPanel.tsx:9`; the Reasoning tab renders it regardless of the real run. | Real data where a source exists, an honest empty state where it does not, file deleted. | TASK-075 |
 | 3 | ~~**No component tests.**~~ **Closed by TASK-074** — a `jsdom` vitest project takes `*.comp.tsx`, `applyEvent` is covered by `run-events.spec.ts`, and `useRunEvents.comp.tsx` drives the subscribe-buffer-replay ordering. Only that hook is covered so far; the components still have none. | Extend the layer to presentational components as they change. | — |
-| 4 | **`SetupModal.tsx` is 1002 lines** with ~50 style builders, owning four unrelated settings surfaces. | One component per `SetupSection`; the modal reduced to shell and section switching. | TASK-073 |
+| 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. `StageFocusPanel.tsx` (625) inherits the title of largest component. | The same treatment for `StageFocusPanel` when it next changes. | — |
 | 5 | **`SetupModal` and `HistoryDrawer` are not accessible overlays** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. | The §8 overlay rule applied to both. | — |
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click), `SteerChat` (no send endpoint) and `Waveform` are visual placeholders. | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
 | 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@adhd/core` when its shape stabilises. | — |

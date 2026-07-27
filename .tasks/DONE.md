@@ -1,5 +1,21 @@
 # Done
 
+## TASK-073: Split `SetupModal.tsx` into per-section components
+**Priority:** P3 | **Tags:** ui
+**Updated:** 2026-07-27 00:00
+
+`SetupModal.tsx` was **1002 lines** with roughly 50 style builders in one file — the largest module in `packages/ui` and the one place where A2's single-responsibility rule was visibly broken: it owned four unrelated settings surfaces (`harness | gates | appearance | deploy`), each with its own state, server calls and styling.
+
+### Done summary
+- **`components/setup/` — nine files replace the one**, and the first feature folder in the package (taken under the `architecture-ui.md` §2 rule: a feature owning ≥4 files no other feature imports). `SetupModal.tsx` (151) is chrome only — backdrop, nav rail, section switching, close — plus `AppearanceSection` (58), `GatesSection` (52), `DeploySection` (56), `HarnessSection` (105).
+- **The harness section split again along the same axis.** Left whole it would have been ~570 lines and still the package's largest file; its three blocks each own state *and* server calls, so each became a component: `EngineStatusCard` (322 — status fetch, install, login, copy-command), `EngineConnection` (206 — modes + API-key form), `EngineModelPicker` (149 — model roster, custom ID).
+- **Shared style vocabulary in `setup/setup-styles.ts`** — the ~13 names two or more sections use (`optionCard`, `radioDot`, `optionLabel`, `sectionTitle`, `mutedCaption`, …). Section-specific builders moved with their markup, as [`decisions.md`](../docs/decisions.md) 2026-07-26 requires; the shared module is a vocabulary across siblings, not the rejected `SetupModal.styles.ts`, and the 2026-07-27 entry records why the distinction holds.
+- **Two couplings became explicit props** rather than surviving as shared mutable state: `statusNonce` → a `refreshKey` owned by `HarnessSection` and passed to both the status card and the model picker (an install/login must refresh the CLI's model roster), and `customModelDraft`'s reset → an effect on the `model` prop instead of a reach-in from `selectEngine`.
+- **No behaviour or DOM change.** Each section now mounts only while selected, which deletes the four `if (sec !== "harness") return;` guards — the old effect deps already included `sec`, so fetch timing is identical.
+- **Verified:** lint, typecheck, 173 tests, build and the **full Playwright suite (22 passed)** green. The `project-drawer` spec that failed on the TASK-072 baseline was a stale assertion on `"Pipeline Stages"` — UI deleted with skip-steps and present only in `design/` — corrected to `"Human Gates"`, the section its "Edit in Setup" link actually opens. Docs: `architecture-ui.md` §2/§3/§7 and gap #4 updated; versions 0.6.16.
+
+---
+
 ## TASK-072: Extend `theme.ts` with spacing, radius, type and elevation scales
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-27 00:00

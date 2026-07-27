@@ -36,7 +36,7 @@ test("the drawer summarises the engine and pipeline and links into Setup", async
   await expect(drawer).toContainText("Never block");
 
   await drawer.getByRole("button", { name: /Edit in Setup/ }).nth(1).click();
-  await expect(page.getByText("Pipeline Stages")).toBeVisible();
+  await expect(page.getByText("Human Gates")).toBeVisible();
 });
 
 test("Escape closes the drawer", async ({ page }) => {

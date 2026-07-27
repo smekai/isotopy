@@ -15,20 +15,6 @@
 
 ---
 
-## TASK-073: Split `SetupModal.tsx` into per-section components
-**Priority:** P3 | **Tags:** ui
-**Updated:** 2026-07-27 00:00
-
-[`SetupModal.tsx`](../packages/ui/src/components/SetupModal.tsx) is **1002 lines** with roughly 50 style builders in one file — by a wide margin the largest module in `packages/ui`, and the one place where A2's single-responsibility rule is visibly broken: it owns four unrelated settings surfaces (`harness | gates | appearance | deploy`), each with its own state, server calls and styling.
-
-Split along the axis that already exists — the `SetupSection` union — into one component per section, with `SetupModal` reduced to the shell: chrome, section switching, close handling.
-
-**Note:** [`decisions.md`](../docs/decisions.md) 2026-07-26 ruled that a component's styles stay in its *own* file rather than a sibling styles module ("A6 asks for *names*, not for a particular file"). Splitting by section respects that decision — each section's builders move with its markup — whereas extracting a `SetupModal.styles.ts` would contradict it.
-
-**Cross-platform:** n/a — pure UI.
-
----
-
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P2 | **Tags:** server, engine, infra
 **Updated:** 2026-07-23 13:00

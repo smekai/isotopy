@@ -6,6 +6,44 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-27 — Setup is a folder of sections over a shared style module (TASK-073)
+
+**Context:** `SetupModal.tsx` was 1002 lines owning four unrelated settings
+surfaces. The obvious split is one component per `SetupSection`, but that
+immediately collides with the 2026-07-26 entry below: if styles stay in a
+component's own file, where do the builders that *four* sections share go?
+
+**Decision:** `components/setup/` — the first feature folder, taken under the
+`architecture-ui.md` §2 rule (a feature that owns four or more files no other
+feature imports). Section-specific builders moved with their markup, exactly as
+the 2026-07-26 entry requires; the ~13 names used by two or more sections
+(`optionCard`, `radioDot`, `optionLabel`, `sectionTitle`, `mutedCaption`, …) went
+to `setup/setup-styles.ts`. That is **not** the sibling `SetupModal.styles.ts`
+rejected before: this module is a vocabulary shared across sibling components —
+`theme.ts` scoped to one surface — not one component's presentation exiled from
+its own markup. The alternative, copying `optionCard` into four files, trades an
+A6 violation for a worse one.
+
+**The harness section split again, one level down.** `HarnessSection` alone would
+have been ~570 lines and still the largest file in `packages/ui`. Its three
+stateful blocks each own state *and* server calls, which is the same axis the
+task split on: `EngineStatusCard` (`fetchEngineStatus` / `installEngine` /
+`loginEngine`), `EngineConnection` (`updateConnection`, the API-key form),
+`EngineModelPicker` (`fetchEngineModels`, custom ID). Nothing lands over ~300
+lines.
+
+**Two couplings survived the split as explicit props.** A successful install or
+login must refresh the *model* list too — the CLI's roster is only readable once
+it exists — so the `statusNonce` counter became a `refreshKey` owned by
+`HarnessSection` and passed to both children. And `customModelDraft`, which the
+old component reset from inside `selectEngine`, is now an effect on the `model`
+prop; the reset happens on engine switch and on selection exactly as before,
+without a callback threaded back up.
+
+**No behaviour changed.** Each section mounts only while selected, which deletes
+the four `if (sec !== "harness") return;` guards from the effects — the old deps
+already included `sec`, so the fetch timing is identical.
+
 ## 2026-07-27 — The UI scales are extracted, not designed (TASK-072)
 
 **Context:** `theme.ts` tokenised colour only. Spacing, radii, type, icon sizes,

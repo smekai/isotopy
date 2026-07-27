@@ -6,7 +6,7 @@ import type { SettingsController } from "../hooks/useSettings";
 import { childPath, isScratchWorkspace } from "../run-utils";
 import type { Dir } from "../theme";
 import { FONT, ICON, MONO, RADIUS, RUN_PILL, SANS, SPACE, WEIGHT, Z } from "../theme";
-import type { SetupSection } from "./SetupModal";
+import type { SetupSection } from "./setup/SetupModal";
 
 const PANEL_WIDTH = 320;
 const COPY_FEEDBACK_MS = 2000;
