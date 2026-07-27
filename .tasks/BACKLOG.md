@@ -1,5 +1,132 @@
 # Backlog
 
+## TASK-076: Epic — the agent window and conversational runs
+**Priority:** P1 | **Tags:** ui, server, core, engine
+**Updated:** 2026-07-27 00:00
+
+Umbrella for TASK-077…080. Today a run is a *canvas you watch*: one prompt into [`EmptyState`](../packages/ui/src/components/EmptyState.tsx), a horizontal walk through [`PipelineRow`](../packages/ui/src/components/PipelineRow.tsx), a flat log in [`StageFocusPanel`](../packages/ui/src/components/StageFocusPanel.tsx), history parked in a right-hand drawer that fetches once on mount. The only human-in-the-loop mechanism is the approval gate, and it is binary — `client.sendSignal` carries no payload, so there is no reject, no comment, no reply. [`SteerChat.tsx`](../packages/ui/src/components/SteerChat.tsx) is the shell for the missing feature and fabricates its agent reply after 700 ms.
+
+This epic turns a run into a **conversation you take part in**, in the shape Codex and the Cursor agent window have.
+
+**Target shape:**
+- The header keeps the ADHD mark and [`ProjectSwitcher`](../packages/ui/src/components/ProjectSwitcher.tsx) exactly as they are now.
+- A persistent **left rail** lists this project's runs with live status, and a "New run" action on top.
+- The main pane is **one thread per run**: user turns, agent narration, tool activity, stage boundaries and questions, in order.
+- An agent running on a **conversational** engine may stop and ask a question. The run parks durably until the user answers, then continues **in the same session** — not from scratch.
+- Exactly two pipelines: **Project Manager → Developer → Tester**, and a **single all-purpose agent**.
+
+**Children, in order — each ships and is verifiable alone:**
+1. **TASK-077** — left run rail, routing, live run list.
+2. **TASK-078** — the transcript and a message endpoint (lands against today's Developer + Tester; no new agent needed).
+3. **TASK-079** — session capture, resume, and question mode. The load-bearing one.
+4. **TASK-080** — the Project Manager persona and the two-preset set.
+
+**Out of scope** — name it here so the children don't creep: voice ([`VoiceControls`](../packages/ui/src/components/VoiceControls.tsx), [`Waveform`](../packages/ui/src/components/Waveform.tsx) stay decorative), dark mode (the theme is light-only and a dark palette is a change to the `Dir` *shape*, not three more entries), the Reasoning tab's fixtures (TASK-075 owns those), and the six roster professions that have labels but no persona.
+
+**Cross-platform:** carried by each child; TASK-079 is the only one with real platform surface.
+
+---
+
+## TASK-077: Agent-window shell — left run rail and a routed run view
+**Priority:** P1 | **Tags:** ui, server
+**Updated:** 2026-07-27 00:00
+
+Replace the drawer-and-canvas layout with a two-column shell. [`HistoryDrawer`](../packages/ui/src/components/HistoryDrawer.tsx) is the closest thing to a run list today and it is wrong in three ways: it is an overlay rather than a place, it calls `fetchRuns()` once on mount and never again, and it has no selection state.
+
+**Scope:**
+1. **Left rail** — ~280px, persistent, below the existing header. "New run" button, then run cards: `#number`, status dot, task snippet, relative time, pipeline name. Selecting a card loads that run in the main pane and shows as active. Reuse the status vocabulary already in [`theme.ts`](../packages/ui/src/theme.ts) — `RUN_PILL`, `runDot`, `statusClr` — do not invent colours.
+2. **Delete `HistoryDrawer.tsx`.** Resume / Restart / Rerun move onto the run card or the run header; `handleRestart` and `handleRerun` in [`App.tsx`](../packages/ui/src/App.tsx#L225) already exist and keep their semantics.
+3. **Routing.** [`architecture-ui.md`](../docs/architecture-ui.md) §1 names the router as "likely the first absence to fall", triggered by deep-linking a run — which is exactly this. Adopt one and add the **dated [`decisions.md`](../docs/decisions.md) entry naming which absence-row it invalidates**; §1 requires that, it is not optional.
+4. **Live run list.** `GET /runs` is one-shot; SSE is per-run only ([`routes/runs.ts`](../packages/server/src/routes/runs.ts)). Add a **project-scoped SSE channel** — `GET /runs/events`, scoped through the existing `X-ADHD-Project` header via [`routes/project-scope.ts`](../packages/server/src/routes/project-scope.ts) — emitting a compact run summary on every status transition. [`RunOrchestrator`](../packages/server/src/services/run-orchestrator.ts) already owns a per-run listener registry and is the single writer of the read model; add a project-level listener beside it. Consume it from a new `useRunList` hook. **`fetch`/`EventSource` stay inside [`api.ts`](../packages/ui/src/api.ts)** — that seam is a rule, not a habit. Remember to add the new proxy path to both [`vite.config.ts`](../packages/ui/vite.config.ts) and [`app.ts`](../packages/server/src/app.ts) if the prefix is new.
+5. **Main pane unchanged for now** — `RunStatusBar` + `PipelineRow` + `StageFocusPanel` stay; TASK-078 replaces the body. `EmptyState`'s composer becomes the empty right-hand pane.
+6. **Accessible from the start.** The rail is a list of real `<button>`s with `aria-current` on the selection — no `div` click handlers. The existing overlays fail §8 (no `role="dialog"`, no Escape, no focus management); do not add a fourth offender.
+7. **Test fallout:** `data-testid="history-card" | "history-resume" | "history-restart" | "history-rerun"` disappear. Rename to `run-card` etc. and update the specs in [`packages/ui/e2e/`](../packages/ui/e2e/). A *new* testid beyond those renames needs justification per the roster rule.
+
+**Cross-platform:** n/a — UI plus one JSON/SSE route; no subprocesses, paths, or shell.
+
+**Verify:** two runs in one project with one running — the rail reflects the running one's status change without a reload; `/runs/:id` deep-links to that run; `pnpm --filter @adhd/ui e2e` green.
+
+---
+
+## TASK-078: Run chat — one transcript per run, and a message endpoint
+**Priority:** P1 | **Tags:** core, server, ui
+**Updated:** 2026-07-27 00:00
+
+Make the main pane a conversation. **The design decision to record in [`decisions.md`](../docs/decisions.md): the transcript is a derived view, not a second store.** The server already streams everything the agent says — [`claude-code.ts`](../packages/server/src/engines/claude-code.ts), [`codex.ts`](../packages/server/src/engines/codex.ts) and [`cursor.ts`](../packages/server/src/engines/cursor.ts) all call `onLog(level, text)` where `info` is assistant text, `run` is a tool-use summary and `warn` is a tool error. The chat/tool distinction exists in the data already; it is flattened into `LogLevel`. The only genuinely new persisted data is **the user's turns**.
+
+**Scope:**
+1. **[`packages/core/src/runs.ts`](../packages/core/src/runs.ts)** — add `RunMessage { id, ts, role: "user" | "agent", stageId?, kind: "text" | "question" | "answer", text }` and `RunState.messages`. Add `"run.message"` to **both** the `RunEventType` union **and** the `RUN_EVENT_TYPES` array — the UI iterates that array to register `EventSource` listeners, so missing it means the event silently never arrives. `RunEvent` has no free-form payload field; add a **named** `chatMessage?: RunMessage`, not a `payload: unknown` (A7).
+2. **[`run-events.ts`](../packages/ui/src/run-events.ts)** — handle `run.message` in `applyEvent`: append, dedupe by `id`, keep the clone-then-mutate discipline. Run state is never mutated outside this reducer.
+3. **New pure module `packages/ui/src/transcript.ts`** — `buildTranscript(run): TranscriptItem[]`, merging stage logs and `run.messages` by timestamp into agent text, collapsed tool rows, user bubbles and stage-boundary separators. Pure, so it gets a unit spec at `packages/ui/test/transcript.spec.ts` — tests live in `test/`, never beside source.
+4. **`ChatPanel`** becomes the default body. Reuse [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) for rendering and lift the follow-scroll logic (`FOLLOW_THRESHOLD_PX = 40`) out of `StageFocusPanel` rather than duplicating it. The artifacts / files / log views **survive** as a collapsible right inspector opened from a stage chip — do not delete them.
+5. **Delete [`SteerChat.tsx`](../packages/ui/src/components/SteerChat.tsx)** and the `steer` entry in `FocusTab`. Its bubble styling is the reference for `ChatPanel`; its fake reply goes.
+6. **`POST /runs/:id/messages`** taking `{ text }` — records the message, emits `run.message`, persists through [`RunRepository`](../packages/server/src/repository/run-repository.ts). In this task it **409s when nothing is waiting for input**; TASK-079 makes it resume a parked run.
+7. `StageFocusPanel.tsx` is 625 lines and already flagged as the next split candidate (gap #4, ~300-line signal). Extracting the chat is the moment to split it — do not grow it.
+
+**Cross-platform:** n/a — pure core/UI plus one JSON route.
+
+**Verify:** a two-stage run shows Developer narration, tool rows, the stage boundary and then Tester in one ordered thread; posting a message with nothing waiting returns 409 with a readable message; the transcript spec covers interleaved timestamps across two stages.
+
+---
+
+## TASK-079: Conversational engines — session capture, resume, and question mode
+**Priority:** P1 | **Tags:** engine, adapters, server, core
+**Updated:** 2026-07-27 00:00
+
+The load-bearing task: let an agent stop, ask, and continue. **All three adapters are strictly one-shot today** — prompt in, `child.stdin.end()` immediately, process exits, `EngineRunResult.result` out. **No session id is captured anywhere**: [`codex.ts:139`](../packages/server/src/engines/codex.ts#L139) declares `thread_id` on `CodexEvent` and never reads it. So "resume" is genuinely new work in every adapter, and that is the cost this task is buying.
+
+**Scope:**
+1. **The capability flag.** `EngineDefinition` in [`engines.ts`](../packages/core/src/engines.ts) gains **`conversational: boolean`**. It belongs in `core` because the UI must read it — to explain *why* an engine cannot be asked questions — and the UI never imports adapters. A non-conversational engine simply never enters question mode.
+2. **The seam.** `EngineRunContext` gains `resumeSessionId?`; `EngineRunResult` gains `sessionId?` ([`engines/types.ts`](../packages/server/src/engines/types.ts)). One `run()` method, not a second `resume()` — the flag declares the capability, the context drives the behaviour.
+3. **Per adapter** — capture the id from the JSON-lines stream that is already being parsed, and resume through `runSubprocess`:
+   - `claude-code.ts` — `session_id` off the stream-json init/result events; resume with `--resume`.
+   - `codex.ts` — keep the `thread_id` that is already parsed; resume with `codex exec resume`.
+   - `cursor.ts` — capture the chat/session id; resume with `--resume`.
+   - **Confirm every flag against the installed CLI's `--help` before wiring it.** A CLI that cannot resume gets `conversational: false` and an accurate message, never a silent failure.
+4. **Per-stage mode.** `StageDefinition` in [`pipelines.ts`](../packages/core/src/pipelines.ts) gains `interactive?: boolean` — the question / non-question switch. Only interactive stages may ask; Developer and Tester stay non-interactive.
+5. **The question contract.** A trailing `QUESTION: <text>` line, parsed by a new `parseStageQuestion` in [`stage-context.ts`](../packages/server/src/domain/stage-context.ts) that **mirrors `parseStageVerdict` exactly** — last-line-first, tolerant of `*`/`` ` ``/`_` wrapping. `EngineStageOutcome` gains a third outcome beside passed/failed.
+6. **A state of its own.** `StageStatus`/`RunStatus` gain **`"asking"`, distinct from `"awaiting"`** — for exactly the reason TASK-061 gives for `blocked`: reusing the gate state would make "Approve" mean two different things. Add `stage.asking` and `stage.answered` to **both** the `RunEventType` union and `RUN_EVENT_TYPES`, and handle the new status in `applyEvent`, `markCancelled`, `markInterrupted` and `reconcileOnLoad`.
+7. **Durable park.** In `runOneStage` ([`pipeline-workflow.ts:34`](../packages/server/src/workflow/pipeline-workflow.ts#L34)), park on `answerSignal(runId, stageId)` = `answer:<runId>:<stageId>` via `step.waitForSignal<{ text: string }>`. **The signal channel is already typed to carry a payload** — `StepApiLike.waitForSignal` returns `{ data: Output } | null` and ADHD has simply never sent one. On the signal, re-invoke `runStageWork` with `resumeSessionId` and the answer as the prompt. Bound it with a `MAX_QUESTION_TURNS` so a misbehaving persona cannot loop forever, and decide the park timeout (the gate uses `3650d`).
+8. **Wire the endpoint.** `POST /runs/:id/messages` sends the signal when the stage is `asking`, and keeps TASK-078's 409 otherwise.
+9. **UI.** The question renders as an agent bubble, the composer takes focus, and a parked run reads "waiting for you" in the left rail.
+
+**Cross-platform (Windows + macOS):**
+- Every resume spawn goes through **[`runSubprocess`](../packages/server/src/engines/subprocess.ts)** — it already handles the Windows `.cmd`/`.bat` shell rule and `taskkill /T` vs `SIGTERM→SIGKILL`. Do not hand-roll `spawn`.
+- Session ids come from **stdout JSON only**. Never read a CLI's own session directory (`~/.claude` vs `%USERPROFILE%\.claude`) — that is a per-OS path guess we do not need to make. Split stream output on `/\r?\n/`, not `"\n"`.
+- The three CLIs take the id differently (argv for codex/cursor, `--resume <id>` for claude). Keep that per-adapter; no shared shell one-liner.
+- A parked run can wait for hours and meet laptop sleep (Windows sleep, macOS App Nap both suspend timers). Lease-based recovery in the durable runtime is what should cover it — verify resume-after-restart at minimum on the tested OS, and reason the other through.
+- **`admitRun` allows one active run per project**, so a parked run holds the slot indefinitely. Decide whether `asking` releases it — the decision is the same on both platforms but it has to be made.
+- Note which OS was actually tested.
+
+**Verify:** a persona forced to emit `QUESTION:` parks the run in `asking` with the question in the thread; **kill the server and restart — still parked**; answering resumes the *same session* (the agent references context from before the question, which is what distinguishes resume from a re-run) and the stage completes without re-running upstream stages.
+
+---
+
+## TASK-080: Project Manager agent and the two-preset pipeline set
+**Priority:** P1 | **Tags:** core, server
+**Updated:** 2026-07-27 00:00
+
+Add the agent that talks to the user first, and collapse the pipeline picker to two options. The Project Manager is **already in the roster** — [`agents.ts:8`](../packages/core/src/agents.ts#L8) has `intake: { profession: "Project Manager", glyph: "◈" }` — it has simply never had a persona or a pipeline. Six of the eight roster professions are in that state; this task promotes one of them.
+
+**Scope:**
+1. **`packages/server/src/domain/skills/personas/project-manager.md`** — the persona for the `intake` stage. **No roster change needed.** Contract: interrogate the need with `QUESTION:` turns until the ask is unambiguous; investigate the actual repository; survey external and third-party options; recommend **one** solution, justified against this system's limits; emit an implementable spec as its handoff. `buildStagePrompt` passes that verbatim to the Developer under `## Handoff from previous steps`, so the handoff *is* the deliverable — write the persona knowing its output is a downstream prompt.
+2. **`personas/solo.md`** — the all-purpose agent: clarify → design → implement → verify in one box. It needs a stage id, and `AGENTS` has no entry for "does everything"; `agentForStage` silently degrades an unknown id to `{ profession: stageId, glyph: "◈" }`, which would print raw ids in the log. Add one honest `AGENTS` entry rather than mislabelling it "Developer". **Settle the profession wording while writing the persona.**
+3. **Run `pnpm gen:skills`** and commit [`defaults.generated.ts`](../packages/server/src/domain/skills/defaults.generated.ts) — the drift test runs `--check` and fails otherwise. Never hand-edit the generated file.
+4. **[`pipelines.ts`](../packages/core/src/pipelines.ts) — `DEMO_PIPELINES` becomes exactly two:**
+   - `pm-dev-test` — "Project Manager + Developer + Tester": `intake` (`skill: project-manager`, `interactive: true`, **`gateAfter: true`**) → `implementation` (`developer`) → `test` (`tester`).
+   - `solo` — one stage, `interactive: true`.
+   - `DEFAULT_PIPELINE_ID` → `pm-dev-test`. Delete `ONE_BOX_PIPELINE`, `DEV_TEST_PIPELINE` and `GATED_DEV_TEST_PIPELINE`.
+   - **Why the gate sits on the PM stage:** dropping `gated-dev-test` would otherwise orphan the approval gate — it is the only preset that exercises it, and [`GatesSection.tsx`](../packages/ui/src/components/setup/GatesSection.tsx) derives its display from `DEMO_PIPELINES` + `gateAfter`. Approving the recommendation *before* any code is written is also the better product shape for a tool whose name ends in "Human Directed". Reversible if it proves to be friction.
+5. **[`EmptyState.tsx`](../packages/ui/src/components/EmptyState.tsx) duplicates the preset list** — a hardcoded `pipelineOptions` array repeating the ids and labels, so adding a preset today means editing two places. Fix it by reading `DEMO_PIPELINES` from `@adhd/core`. (`GET /pipelines` exists server-side and the UI has never called it; leave that alone under this task.)
+6. **Migration — retiring a preset breaks restart on old runs.** `RunOrchestrator.buildInput` throws `Unknown pipeline: ${run.pipelineId}` ([`run-orchestrator.ts:364`](../packages/server/src/services/run-orchestrator.ts#L364)), so Restart/Rerun on any `dev-test` run already in `runs.db` will fail. Preferences already degrade safely — `normalizeProjectPreferences` falls back to the default for an unknown stored id. **Pick one and implement it:** an id alias map, or an explicit "this run used a retired pipeline" state on the run card. Pre-1.0 with no external users, so refusing is acceptable — but it must refuse *accurately*, not throw.
+7. **Test fallout:** [`dev-test-pipeline.comp.ts`](../packages/server/test/dev-test-pipeline.comp.ts), [`dev-test-flow.spec.ts`](../packages/ui/e2e/dev-test-flow.spec.ts), [`live-dev-test.spec.ts`](../packages/ui/e2e/live-dev-test.spec.ts) and `GatesSection.tsx` all reference the removed ids.
+
+**Cross-platform:** n/a — persona markdown plus pure `@adhd/core` data. [`generate-skills.mjs`](../scripts/generate-skills.mjs) is already dependency-free Node ESM and runs identically on both OSes.
+
+**Verify:** the picker shows exactly two options; a `pm-dev-test` run has the PM ask a clarifying question, take the answer, produce a recommendation, park at the gate, and — once approved — hand a spec the Developer implements and the Tester verifies; `solo` runs one box end to end.
+
+---
+
 ## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
 **Priority:** P2 | **Tags:** ui
 **Updated:** 2026-07-27 00:00
