@@ -27,6 +27,8 @@ export interface Anticipation {
   persona?: Matcher;
   /** The prompt the box receives, task plus any upstream handoff. */
   prompt?: Matcher;
+  /** The CLI session this call is expected to continue, if any. */
+  resumeSessionId?: string;
   /** Label used in failure messages, e.g. "Developer". */
   as?: string;
 }
@@ -46,6 +48,11 @@ export interface AnticipationOutcome {
   fails(errorMessage: string): FakeEngine;
   /** Blocks until the run is aborted — the vehicle for abort tests. */
   hangsUntilAborted(): FakeEngine;
+  /**
+   * The box stops and asks, handing back a session id. A real CLI would print
+   * this on its event stream; the workflow feeds it back as `resumeSessionId`.
+   */
+  asks(question: string, sessionId: string): FakeEngine;
 }
 
 function describeMatcher(matcher: Matcher): string {
@@ -85,6 +92,17 @@ export class FakeEngine implements EngineAdapter {
         push(() => Promise.resolve({ success: true, exitCode: 0, result })),
       fails: (errorMessage) =>
         push(() => Promise.resolve({ success: false, exitCode: 1, errorMessage })),
+      asks: (question, sessionId) =>
+        push(() =>
+          Promise.resolve({
+            success: true,
+            exitCode: 0,
+            result: `Working on it.
+
+QUESTION: ${question}`,
+            sessionId,
+          }),
+        ),
       hangsUntilAborted: () =>
         push(
           (ctx) =>
@@ -182,5 +200,6 @@ export class FakeEngine implements EngineAdapter {
     check("permissionMode", ctx.permissionMode, anticipation.permissionMode);
     check("persona", ctx.appendSystemPrompt, anticipation.persona);
     check("prompt", ctx.prompt, anticipation.prompt);
+    check("resumeSessionId", ctx.resumeSessionId, anticipation.resumeSessionId);
   }
 }

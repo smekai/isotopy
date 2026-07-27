@@ -12,7 +12,14 @@ export type TranscriptItem =
       glyph: string;
       status: StageStatus;
     }
-  | { kind: "agent"; key: string; ts: string; stageId?: string; text: string }
+  | {
+      kind: "agent";
+      key: string;
+      ts: string;
+      stageId?: string;
+      text: string;
+      question?: boolean;
+    }
   | { kind: "tool"; key: string; ts: string; stageId: string; text: string; failed: boolean }
   | { kind: "notice"; key: string; ts: string; stageId: string; text: string; level: LogLevel }
   | { kind: "user"; key: string; ts: string; text: string };
@@ -90,6 +97,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
               key: `msg:${message.id}`,
               ts: message.ts,
               ...(message.stageId !== undefined ? { stageId: message.stageId } : {}),
+              ...(message.kind === "question" ? { question: true } : {}),
               text: message.text,
             },
     });

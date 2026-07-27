@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { isTerminalRunStatus } from "@adhd/core";
@@ -9,6 +9,7 @@ import type { TranscriptItem } from "../transcript";
 import { useFollowScroll } from "../hooks/useFollowScroll";
 import type { Dir } from "../theme";
 import {
+  ASK_VIOLET,
   FONT,
   ICON,
   MONO,
@@ -107,6 +108,16 @@ function agentText(d: Dir): CSSProperties {
     fontSize: FONT.lg,
     lineHeight: 1.65,
     whiteSpace: "pre-wrap",
+  };
+}
+
+function questionBlock(d: Dir): CSSProperties {
+  return {
+    ...agentText(d),
+    borderLeft: `3px solid ${ASK_VIOLET}`,
+    background: "rgba(124,58,237,0.06)",
+    borderRadius: `0 ${RADIUS.md}px ${RADIUS.md}px 0`,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
   };
 }
 
@@ -239,7 +250,14 @@ function TranscriptRow({ item, d }: { item: TranscriptItem; d: Dir }) {
   if (item.kind === "notice") {
     return <div style={noticeRow(item.level, d)}>{item.text}</div>;
   }
-  return <div style={agentText(d)}>{renderInlineMarkdown(item.text)}</div>;
+  return (
+    <div
+      style={item.question ? questionBlock(d) : agentText(d)}
+      data-testid={item.question ? "chat-question" : undefined}
+    >
+      {renderInlineMarkdown(item.text)}
+    </div>
+  );
 }
 
 export interface ChatPanelProps {
@@ -251,8 +269,16 @@ export interface ChatPanelProps {
 
 export function ChatPanel({ run, d, sending, onSend }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const items = buildTranscript(run);
   const closed = isTerminalRunStatus(run.status);
+  const asking = run.status === "asking";
+
+  useEffect(() => {
+    if (asking) {
+      inputRef.current?.focus();
+    }
+  }, [asking]);
   const follow = useFollowScroll({ length: items.length, resetKey: run.id });
   const canSend = draft.trim() !== "" && !sending && !closed;
 
@@ -290,11 +316,12 @@ export function ChatPanel({ run, d, sending, onSend }: ChatPanelProps) {
         ) : (
           <div style={composerInner(d)}>
             <textarea
+              ref={inputRef}
               value={draft}
               rows={COMPOSER_MIN_ROWS}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message the team…"
+              placeholder={asking ? "Answer the question…" : "Message the team…"}
               aria-label="Message the team"
               data-testid="chat-composer"
               style={composerInput(d)}

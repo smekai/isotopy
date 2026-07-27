@@ -1,5 +1,26 @@
 # Done
 
+## TASK-079: Conversational engines — session capture, resume, and question mode
+**Priority:** P1 | **Tags:** engine, adapters, server, core
+**Updated:** 2026-07-27 00:00
+
+Every adapter was one-shot — prompt in, `stdin.end()`, process exits — and no session id was captured anywhere; `codex.ts` declared `thread_id` and never read it. So an agent could narrate but never ask, and the composer TASK-078 shipped had nothing to talk to.
+
+### Done summary
+- **Resume, not re-run.** `EngineRunContext.resumeSessionId` + `EngineRunResult.sessionId`, one `run()` method — the flag declares the capability, the context drives the behaviour, exactly as `model` and `permissionMode` already do. Re-running was rejected: a PM's investigation is the expensive part, and paying for it again per clarifying question makes the feature not worth having (A8 → `decisions.md`).
+- **Verified against the installed CLIs, not their docs.** `claude -r <id>` and `codex exec resume <SESSION_ID> [PROMPT]` both confirmed by `--help`. One finding worth the record: **`codex exec resume` does not accept `--sandbox`**, only the bypass flag, so a resumed Codex turn under `acceptEdits` falls back to Codex's own default sandbox. **Cursor is `conversational: false`** — `cursor-agent` is not installed here and its session-id emission could not be confirmed; a capability asserted from documentation is the silent failure this task existed to avoid. Logged as gap #10.
+- **`asking` is its own status.** Distinct from `awaiting` for the reason TASK-061 gives for `blocked` — reusing the gate state would make "Approve" mean two things. Violet in `theme.ts`; GOLD stays gates-only. `stage.asking` / `stage.answered` added to **both** the union and `RUN_EVENT_TYPES`, and handled in `applyEvent`, `markCancelled` and `markInterrupted`.
+- **The question contract mirrors the verdict contract.** `parseStageQuestion` is `parseStageVerdict` with a different keyword — last-line-first, CRLF-tolerant, markdown-tolerant. A persona that knows `VERDICT:` needs no new mental model.
+- **Three conditions gate a question:** `stageDef.interactive`, `isConversational(engine)`, and `MAX_QUESTION_TURNS = 6`. The budget matters because each loop is a durable park; a Developer that happens to print `QUESTION:` is not interactive and passes straight through.
+- **Each turn is a durable step** (`stageId:turn:N`), parked on `answer:<runId>:<stageId>` — the first use of the signal channel's payload, which `waitForSignal` has been typed to carry all along. `POST /runs/:id/messages` sends it when a stage is asking, and records the answer as the user's turn.
+- **UI:** the question renders as a violet-ruled block, the composer takes focus and changes its placeholder, and the rail shows `ASKING`.
+- **Tests:** +15. `run-questions.comp.ts` (6) proves the park, the resume (`resumeSessionId` asserted on the second call, with the answer as its whole prompt), the transcript, non-interactive pass-through, abort, and **survival across a hard restart**; 9 unit cases cover the parser and the `canAsk` split. `FakeEngine` gained `.asks(question, sessionId)` and a `resumeSessionId` anticipation.
+- **Verified:** lint, typecheck, **237 tests**, build, `gen:skills --check`, **Playwright 23 passed, 1 skipped**. Tested on **Windows**; the macOS branch is the same code path — every spawn goes through `runSubprocess`, session ids come from stdout JSON only, and no CLI session directory is ever read.
+
+**Not fixed here:** Cursor stays non-conversational until someone with the CLI verifies it. `admitRun` still holds the project slot while parked — deliberate: releasing it would let a second run write to the same workspace, which is worse than making the user answer or abort. A message sent while *nothing* is asking is still only recorded.
+
+---
+
 ## TASK-078: Run chat — one transcript per run, and a message endpoint
 **Priority:** P1 | **Tags:** core, server, ui
 **Updated:** 2026-07-27 00:00

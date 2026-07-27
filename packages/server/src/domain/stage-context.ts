@@ -45,22 +45,56 @@ export function parseStageVerdict(output: string | undefined): StageVerdict | un
   return undefined;
 }
 
+const QUESTION_LINE = /^[*`_\s]*QUESTION:\s*(.+?)[*`_\s]*$/i;
+
+export function parseStageQuestion(output: string | undefined): string | undefined {
+  if (!output) {
+    return undefined;
+  }
+  const linesLastFirst = output.split("\n").reverse();
+  for (const line of linesLastFirst) {
+    const match = QUESTION_LINE.exec(line.replace(/\r$/, "").trim());
+    const question = match?.[1]?.trim();
+    if (question) {
+      return question;
+    }
+  }
+  return undefined;
+}
+
 export interface EngineStageOutcome {
-  outcome: "passed" | "failed";
+  outcome: "passed" | "failed" | "asking";
   output?: string;
   verdict?: StageVerdict;
+  question?: string;
   failureMessage?: string;
+}
+
+export interface InterpretOptions {
+  profession: string;
+  /** Only an interactive stage on a conversational engine may park on a question. */
+  canAsk: boolean;
 }
 
 export function interpretEngineResult(
   result: EngineRunResult,
-  profession: string,
+  { profession, canAsk }: InterpretOptions,
 ): EngineStageOutcome {
   if (!result.success) {
     return { outcome: "failed", failureMessage: result.errorMessage ?? `${profession} failed` };
   }
   const output =
     result.result !== undefined && result.result.trim() !== "" ? result.result : undefined;
+
+  const question = canAsk ? parseStageQuestion(result.result) : undefined;
+  if (question !== undefined) {
+    return {
+      outcome: "asking",
+      ...(output !== undefined ? { output } : {}),
+      question,
+    };
+  }
+
   const verdict = parseStageVerdict(result.result);
   if (verdict === "FAIL") {
     return {

@@ -175,11 +175,15 @@ export const MONO = "'JetBrains Mono', monospace";
 export const GOLD = "#D97706";
 export const GOLD_SOFT = "rgba(217,119,6,0.12)";
 
+/** A question waiting on the user. Distinct from GOLD, which is gates only. */
+export const ASK_VIOLET = "#7C3AED";
+
 export const STATUS_COLORS: Record<StageStatus, { text: string; bg: string; dot: string }> = {
   running:  { text: "#6366F1", bg: "rgba(99,102,241,0.10)",  dot: "#6366F1" },
   passed:   { text: "#059669", bg: "rgba(5,150,105,0.10)",   dot: "#059669" },
   failed:   { text: "#DC2626", bg: "rgba(220,38,38,0.10)",   dot: "#DC2626" },
   awaiting: { text: "#D97706", bg: "rgba(217,119,6,0.10)",   dot: "#D97706" },
+  asking:   { text: "#7C3AED", bg: "rgba(124,58,237,0.10)",  dot: "#7C3AED" },
   skipped:  { text: "#9CA3AF", bg: "rgba(156,163,175,0.10)", dot: "#9CA3AF" },
   pending:  { text: "#C0C0D8", bg: "rgba(192,192,216,0.10)", dot: "#D4D4E8" },
 };
@@ -191,7 +195,7 @@ export function statusClr(s: StageStatus): { text: string; bg: string; dot: stri
 export function sLabel(s: StageStatus): string {
   return {
     running: "RUNNING", passed: "PASSED", failed: "FAILED",
-    awaiting: "AWAITING", skipped: "SKIPPED", pending: "PENDING",
+    awaiting: "AWAITING", asking: "ASKING", skipped: "SKIPPED", pending: "PENDING",
   }[s];
 }
 
@@ -199,6 +203,7 @@ export const RUN_PILL: Record<RunStatus, { text: string; bg: string }> = {
   pending:   { text: "#9B9BC8", bg: "rgba(192,192,216,0.10)" },
   running:   { text: "#6366F1", bg: "rgba(99,102,241,0.10)" },
   awaiting:  { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
+  asking:    { text: "#7C3AED", bg: "rgba(124,58,237,0.10)" },
   completed: { text: "#059669", bg: "rgba(5,150,105,0.10)" },
   failed:    { text: "#DC2626", bg: "rgba(220,38,38,0.10)" },
   cancelled: { text: "#6B7280", bg: "rgba(156,163,175,0.12)" },
@@ -227,6 +232,7 @@ export function logLevelColor(level: LogLevel, d: Dir): string {
 export function runDot(status: RunStatus, d: Dir): string {
   if (status === "running" || status === "pending") return d.accent;
   if (status === "awaiting") return GOLD;
+  if (status === "asking") return ASK_VIOLET;
   if (status === "failed") return "#DC2626";
   if (status === "cancelled") return "#9CA3AF";
   return "#059669";

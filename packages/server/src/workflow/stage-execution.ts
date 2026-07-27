@@ -1,5 +1,5 @@
-import { DEFAULT_PERMISSION_MODE, ENGINES, agentForStage } from "@adhd/core";
-import type { RunState, StageDefinition } from "@adhd/core";
+import { DEFAULT_PERMISSION_MODE, ENGINES, agentForStage, isConversational } from "@adhd/core";
+import type { EngineId, RunState, StageDefinition } from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
@@ -7,9 +7,23 @@ import { buildStagePrompt, interpretEngineResult } from "../domain/stage-context
 import type { UpstreamOutput } from "../domain/stage-context.ts";
 import { loadSkill } from "../services/skills.ts";
 import { nowIso } from "../utils.ts";
-import type { PipelineWorkflowInput, StageResult, WorkflowDeps } from "./types.ts";
+import type {
+  PipelineWorkflowInput,
+  StageResult,
+  StageTurn,
+  WorkflowDeps,
+} from "./types.ts";
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
+
+/** Bounds the question loop so a persona that always asks cannot run forever. */
+export const MAX_QUESTION_TURNS = 6;
+
+function canAsk(stageDef: StageDefinition, engine: EngineId, turn: number): boolean {
+  return (
+    stageDef.interactive === true && isConversational(engine) && turn < MAX_QUESTION_TURNS
+  );
+}
 
 function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
   const index = run.stages.findIndex((stage) => stage.id === stageId);
@@ -31,6 +45,7 @@ export async function runStageWork(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,
   stageDef: StageDefinition,
+  turn: StageTurn,
 ): Promise<StageResult> {
   const { projection, registry, settings } = deps;
   const { runId } = input;
@@ -40,14 +55,19 @@ export async function runStageWork(
     return { outcome: "passed", startedAt, completedAt: nowIso() };
   }
   const profession = agentForStage(stageDef.id).profession;
+  const resuming = turn.resumeSessionId !== undefined;
 
-  projection.stageStarted(runId, stageDef.id);
-  projection.log(
-    runId,
-    stageDef.id,
-    "info",
-    `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
-  );
+  if (resuming) {
+    projection.stageAnswered(runId, stageDef.id);
+  } else {
+    projection.stageStarted(runId, stageDef.id);
+    projection.log(
+      runId,
+      stageDef.id,
+      "info",
+      `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
+    );
+  }
 
   const controller = deps.beginEngineStage(runId);
   const projectPath = registry.resolve(run.projectId);
@@ -60,7 +80,9 @@ export async function runStageWork(
       `No skill "${stageDef.skill}" found — running without a persona`,
     );
   }
-  const prompt = buildStagePrompt(input.task ?? "", upstreamFor(run, stageDef.id));
+  const prompt = resuming
+    ? (turn.answer ?? "")
+    : buildStagePrompt(input.task ?? "", upstreamFor(run, stageDef.id));
 
   if (deps.isCancelled(runId)) {
     deps.endEngineStage(runId);
@@ -78,6 +100,7 @@ export async function runStageWork(
       appendSystemPrompt: persona,
       permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
       connection: settings.getEngineConnection(run.projectId, run.engine),
+      resumeSessionId: turn.resumeSessionId,
       timeoutMs: config.engineTimeoutMs,
       signal: controller.signal,
       onLog: (level, message) => projection.log(runId, stageDef.id, level, message),
@@ -96,7 +119,21 @@ export async function runStageWork(
     return { outcome: "cancelled", startedAt, completedAt: nowIso() };
   }
 
-  const decision = interpretEngineResult(outcome, profession);
+  const decision = interpretEngineResult(outcome, {
+    profession,
+    canAsk: canAsk(stageDef, run.engine, turn.index),
+  });
+
+  if (decision.outcome === "asking" && decision.question !== undefined) {
+    projection.stageAsking(runId, stageDef.id, decision.question);
+    return {
+      outcome: "asking",
+      question: decision.question,
+      ...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
 
   if (decision.output !== undefined) {
     projection.captureStageOutput(runId, stageDef, decision.output);
@@ -118,9 +155,10 @@ export async function runStageWork(
   }
 
   return {
-    outcome: decision.outcome,
+    outcome: decision.outcome === "asking" ? "passed" : decision.outcome,
     ...(decision.output !== undefined ? { output: decision.output } : {}),
     ...(decision.verdict !== undefined ? { verdict: decision.verdict } : {}),
+    ...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
     startedAt,
     completedAt: nowIso(),
   };

@@ -24,14 +24,23 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
-export type StageOutcome = "passed" | "failed" | "cancelled";
+export type StageOutcome = "passed" | "failed" | "cancelled" | "asking";
 
 export interface StageResult {
   outcome: StageOutcome;
   output?: string;
   verdict?: StageVerdict;
+  question?: string;
+  sessionId?: string;
   startedAt: string;
   completedAt: string;
+}
+
+export interface StageTurn {
+  /** 0 is the stage's opening turn; later turns resume the CLI session. */
+  index: number;
+  resumeSessionId?: string;
+  answer?: string;
 }
 
 export interface RunProjection {
@@ -41,6 +50,8 @@ export interface RunProjection {
   stageStarted(runId: string, stageId: string): void;
   log(runId: string, stageId: string, level: LogLevel, message: string): void;
   stageAwaiting(runId: string, stageId: string): void;
+  stageAsking(runId: string, stageId: string, question: string): void;
+  stageAnswered(runId: string, stageId: string): void;
   gateApproved(runId: string, stageId: string): void;
   stagePassed(runId: string, stageId: string): void;
   stageFailed(runId: string, stageId: string, message: string): void;

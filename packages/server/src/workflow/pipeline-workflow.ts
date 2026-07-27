@@ -6,6 +6,7 @@ import { runStageWork } from "./stage-execution.ts";
 import type {
   PipelineWorkflowInput,
   StageOutcome,
+  StageTurn,
   WorkflowDeps,
 } from "./types.ts";
 
@@ -15,12 +16,22 @@ const STAGE_RETRY = { maximumAttempts: 1 } as const;
 
 const GATE_TIMEOUT = "3650d";
 
+const ANSWER_TIMEOUT = "3650d";
+
 export interface PipelineWorkflowResult {
   status: "completed" | "failed" | "cancelled";
 }
 
 export function gateSignal(runId: string, stageId: string): string {
   return `gate:${runId}:${stageId}`;
+}
+
+export function answerSignal(runId: string, stageId: string): string {
+  return `answer:${runId}:${stageId}`;
+}
+
+export interface AnswerSignalPayload {
+  text: string;
 }
 
 interface StepApiLike {
@@ -31,6 +42,46 @@ interface StepApiLike {
   }): Promise<{ data: Output } | null>;
 }
 
+async function runStageTurns(
+  step: StepApiLike,
+  deps: WorkflowDeps,
+  input: PipelineWorkflowInput,
+  stageDef: StageDefinition,
+): Promise<StageOutcome> {
+  const { runId } = input;
+  let turn: StageTurn = { index: 0 };
+
+  for (;;) {
+    const result = await step.run({ name: `${stageDef.id}:turn:${turn.index}` }, () =>
+      runStageWork(deps, input, stageDef, turn),
+    );
+    if (result.outcome !== "asking") {
+      return result.outcome;
+    }
+
+    const signal = await step.waitForSignal<AnswerSignalPayload>({
+      signal: answerSignal(runId, stageDef.id),
+      timeout: ANSWER_TIMEOUT,
+    });
+    if (deps.isCancelled(runId)) {
+      return "cancelled";
+    }
+    if (signal === null) {
+      await step.run({ name: `${stageDef.id}:answer:timeout:${turn.index}` }, () => {
+        deps.projection.stageFailed(runId, stageDef.id, "Nobody answered the question");
+        return null;
+      });
+      return "failed";
+    }
+
+    turn = {
+      index: turn.index + 1,
+      ...(result.sessionId !== undefined ? { resumeSessionId: result.sessionId } : {}),
+      answer: signal.data.text,
+    };
+  }
+}
+
 async function runOneStage(
   step: StepApiLike,
   deps: WorkflowDeps,
@@ -38,11 +89,9 @@ async function runOneStage(
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
   const { runId } = input;
-  const result = await step.run({ name: stageDef.id }, () =>
-    runStageWork(deps, input, stageDef),
-  );
-  if (result.outcome !== "passed") {
-    return result.outcome;
+  const outcome = await runStageTurns(step, deps, input, stageDef);
+  if (outcome !== "passed") {
+    return outcome;
   }
 
   if (!stageDef.gateAfter) {

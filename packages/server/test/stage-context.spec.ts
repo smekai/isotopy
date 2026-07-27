@@ -7,6 +7,7 @@ import {
   buildStagePrompt,
   formatHandoff,
   interpretEngineResult,
+  parseStageQuestion,
   parseStageVerdict,
 } from "../src/domain/stage-context.ts";
 import type { EngineRunResult } from "../src/engines/types.ts";
@@ -124,7 +125,7 @@ describe("formatHandoff", () => {
 
 describe("interpretEngineResult", () => {
   test("a clean success with no verdict passes and carries its output", () => {
-    expect(interpretEngineResult(engineResult({ result: "wrote greet.js" }), "Developer")).toEqual({
+    expect(interpretEngineResult(engineResult({ result: "wrote greet.js" }), { profession: "Developer", canAsk: false })).toEqual({
       outcome: "passed",
       output: "wrote greet.js",
     });
@@ -132,13 +133,13 @@ describe("interpretEngineResult", () => {
 
   test("a PASS verdict passes and records the verdict", () => {
     expect(
-      interpretEngineResult(engineResult({ result: "ok\n\nVERDICT: PASS" }), "Tester"),
+      interpretEngineResult(engineResult({ result: "ok\n\nVERDICT: PASS" }), { profession: "Tester", canAsk: false }),
     ).toEqual({ outcome: "passed", output: "ok\n\nVERDICT: PASS", verdict: "PASS" });
   });
 
   test("a FAIL verdict fails but still carries its output and a message", () => {
     expect(
-      interpretEngineResult(engineResult({ result: "broken\n\nVERDICT: FAIL" }), "Tester"),
+      interpretEngineResult(engineResult({ result: "broken\n\nVERDICT: FAIL" }), { profession: "Tester", canAsk: false }),
     ).toEqual({
       outcome: "failed",
       output: "broken\n\nVERDICT: FAIL",
@@ -148,7 +149,7 @@ describe("interpretEngineResult", () => {
   });
 
   test("empty engine output produces no output field", () => {
-    expect(interpretEngineResult(engineResult({ result: "   " }), "Developer")).toEqual({
+    expect(interpretEngineResult(engineResult({ result: "   " }), { profession: "Developer", canAsk: false })).toEqual({
       outcome: "passed",
     });
   });
@@ -157,14 +158,81 @@ describe("interpretEngineResult", () => {
     expect(
       interpretEngineResult(
         engineResult({ success: false, exitCode: 1, errorMessage: "claude exited 1" }),
-        "Developer",
+        { profession: "Developer", canAsk: false },
       ),
     ).toEqual({ outcome: "failed", failureMessage: "claude exited 1" });
   });
 
   test("an engine failure with no message falls back to the profession", () => {
     expect(
-      interpretEngineResult(engineResult({ success: false, exitCode: null }), "Developer"),
+      interpretEngineResult(engineResult({ success: false, exitCode: null }), { profession: "Developer", canAsk: false }),
     ).toEqual({ outcome: "failed", failureMessage: "Developer failed" });
+  });
+});
+
+describe("parseStageQuestion", () => {
+  test("reads the trailing QUESTION line", () => {
+    expect(parseStageQuestion("Looking into it.\n\nQUESTION: Which database?")).toBe(
+      "Which database?",
+    );
+  });
+
+  test("scans backwards, so an earlier mention loses to the last one", () => {
+    const output = ["QUESTION: the old one", "thinking", "QUESTION: the real one"].join("\n");
+    expect(parseStageQuestion(output)).toBe("the real one");
+  });
+
+  test("sees through the markdown wrapping real runs produce", () => {
+    expect(parseStageQuestion("**QUESTION: Which database?**")).toBe("Which database?");
+  });
+
+  test("handles CRLF output", () => {
+    expect(parseStageQuestion("Thinking.\r\nQUESTION: Which database?\r\n")).toBe(
+      "Which database?",
+    );
+  });
+
+  test("an empty marker is not a question", () => {
+    expect(parseStageQuestion("QUESTION:")).toBeUndefined();
+    expect(parseStageQuestion("QUESTION:   ")).toBeUndefined();
+  });
+
+  test("returns undefined when nothing was asked", () => {
+    expect(parseStageQuestion("all done")).toBeUndefined();
+    expect(parseStageQuestion(undefined)).toBeUndefined();
+  });
+});
+
+describe("interpretEngineResult and questions", () => {
+  const asked = "ok\n\nQUESTION: Which database?";
+
+  test("a question parks the stage when the stage is allowed to ask", () => {
+    expect(interpretEngineResult(engineResult({ result: asked }), {
+      profession: "Agent",
+      canAsk: true,
+    })).toEqual({
+      outcome: "asking",
+      output: asked,
+      question: "Which database?",
+    });
+  });
+
+  test("the same output passes straight through when the stage may not ask", () => {
+    // A Developer that happens to print the marker must not stall the run.
+    expect(
+      interpretEngineResult(engineResult({ result: asked }), {
+        profession: "Developer",
+        canAsk: false,
+      }).outcome,
+    ).toBe("passed");
+  });
+
+  test("a failed engine never becomes a question", () => {
+    expect(
+      interpretEngineResult(
+        engineResult({ success: false, exitCode: 1, errorMessage: "boom" }),
+        { profession: "Agent", canAsk: true },
+      ).outcome,
+    ).toBe("failed");
   });
 });

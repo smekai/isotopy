@@ -4,7 +4,7 @@ import type { Worker, Workflow } from "openworkflow";
 import { BackendSqlite } from "openworkflow/sqlite";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
-import { createPipelineWorkflow, gateSignal } from "./pipeline-workflow.ts";
+import { answerSignal, createPipelineWorkflow, gateSignal } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowResult } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
@@ -55,6 +55,11 @@ export class WorkflowRuntime {
   async approveGate(runId: string, stageId: string): Promise<void> {
     const { client } = this.ensure();
     await client.sendSignal({ signal: gateSignal(runId, stageId) });
+  }
+
+  async answerQuestion(runId: string, stageId: string, text: string): Promise<void> {
+    const { client } = this.ensure();
+    await client.sendSignal({ signal: answerSignal(runId, stageId), data: { text } });
   }
 
   async cancel(openWorkflowRunId: string): Promise<void> {

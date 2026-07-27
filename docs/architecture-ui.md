@@ -204,10 +204,16 @@ prose / tool rows / notices) merged with `run.messages`, which holds only the
 user's own turns. `StageFocusPanel` is now an inspector: it opens when a stage node
 is clicked and owns its own tab state, so `App` holds neither.
 
-**A message posted from the composer is recorded and broadcast, and nothing reads
-it yet.** `POST /runs/:id/messages` appends to `run.messages` and emits
-`run.message`; TASK-079 is what gives a parked stage something to resume from. Do
-not describe the composer as steering the agent until that lands.
+**A message posted from the composer either answers a question or is just
+recorded.** `POST /runs/:id/messages` appends to `run.messages` and emits
+`run.message`. If a stage is `asking`, the same call releases the durable park and
+the stage resumes its CLI session with that text as the prompt (TASK-079). If not,
+the message is stored and shown, and nothing reads it — that is still true for
+ordinary mid-run steering.
+
+**`asking` is not `awaiting`.** `awaiting` is a human *gate* (gold, "Approve");
+`asking` is a human *answer* (violet, the composer). They are separate statuses so
+neither control has to mean two things.
 
 **There are two independent SSE channels**, and they answer different questions.
 `/runs/:id/events` carries one run in full detail and closes when that run ends;
@@ -433,7 +439,8 @@ actionable rather than merely noted.
 | 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. `StageFocusPanel.tsx` (625) inherits the title of largest component. | The same treatment for `StageFocusPanel` when it next changes. | — |
 | 5 | **`SetupModal` is not an accessible overlay** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. (`HistoryDrawer` shared this and was deleted by TASK-077.) | The §8 overlay rule applied. | — |
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click) and `Waveform` are visual placeholders. (`SteerChat` was the third and was deleted by TASK-078, replaced by `ChatPanel` over a real endpoint.) | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
-| 9 | **A posted message is stored and shown, but no agent reads it.** `ChatPanel`'s composer is wired end to end — route, event, reducer, transcript — and stops there. | TASK-079 lands question mode, where an asking stage resumes from the user's reply. | TASK-079 |
+| 9 | **An answer resumes a parked stage; an unprompted message still goes nowhere.** TASK-079 wired the `asking` path end to end. A message sent while no stage is asking is recorded and displayed only. | Decide whether mid-run steering should reach the *next* stage's prompt, or be refused. | — |
+| 10 | **Cursor is `conversational: false`.** The CLI is not installed on the machine that built TASK-079, so its session-id emission is unverified; claiming the capability from docs alone would fail silently at runtime. | Verify `cursor-agent --resume` and its stream-json session id, then flip the flag. | — |
 | 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@adhd/core` when its shape stabilises. | — |
 | 8 | **Theme is light-only.** No dark values, no `prefers-color-scheme`. | A decision, not a bug — recorded so it is not discovered mid-redesign. | — |
 

@@ -19,6 +19,8 @@ export interface EngineRunContext {
   appendSystemPrompt?: string | undefined;
   permissionMode: EnginePermissionMode;
   connection?: EngineConnection | undefined;
+  /** Continue this CLI session instead of starting a new one. */
+  resumeSessionId?: string | undefined;
   timeoutMs: number;
   signal: AbortSignal;
   onLog: (level: LogLevel, message: string) => void;
@@ -27,6 +29,8 @@ export interface EngineRunContext {
 export interface EngineRunResult {
   success: boolean;
   result?: string | undefined;
+  /** Feed back as `resumeSessionId` to continue this conversation. */
+  sessionId?: string | undefined;
   exitCode: number | null;
   errorMessage?: string | undefined;
   costUsd?: number | undefined;

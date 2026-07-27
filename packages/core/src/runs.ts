@@ -8,11 +8,13 @@ export type StageStatus =
   | "passed"
   | "failed"
   | "awaiting"
+  | "asking"
   | "skipped";
 export type RunStatus =
   | "pending"
   | "running"
   | "awaiting"
+  | "asking"
   | "completed"
   | "failed"
   | "cancelled";
@@ -39,11 +41,15 @@ export type StageVerdict = "PASS" | "FAIL";
 
 export type MessageRole = "user" | "agent";
 
+/** Absent means ordinary chat; a question parks the run until an answer arrives. */
+export type MessageKind = "question" | "answer";
+
 export interface RunMessage {
   id: string;
   ts: string;
   role: MessageRole;
   stageId?: string;
+  kind?: MessageKind;
   text: string;
 }
 
@@ -131,6 +137,8 @@ export type RunEventType =
   | "stage.awaiting"
   | "stage.approved"
   | "stage.skipped"
+  | "stage.asking"
+  | "stage.answered"
   | "run.message";
 
 export const RUN_EVENT_TYPES: RunEventType[] = [
@@ -143,6 +151,8 @@ export const RUN_EVENT_TYPES: RunEventType[] = [
   "stage.awaiting",
   "stage.approved",
   "stage.skipped",
+  "stage.asking",
+  "stage.answered",
   "run.message",
 ];
 

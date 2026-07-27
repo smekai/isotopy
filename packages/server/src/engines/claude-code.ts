@@ -135,6 +135,7 @@ function toolUseSummary(name: string, input: Record<string, unknown>): string {
 interface ClaudeStreamEvent {
   type?: string;
   subtype?: string;
+  session_id?: string;
   model?: string;
   tools?: unknown[];
   result?: string;
@@ -244,6 +245,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       "stream-json",
       "--verbose",
       ...(ctx.connection?.mode === "api-key" ? ["--bare"] : []),
+      ...(ctx.resumeSessionId ? ["--resume", ctx.resumeSessionId] : []),
       ...(ctx.model ? ["--model", ctx.model] : []),
       ...(personaViaFlag && ctx.appendSystemPrompt
         ? ["--append-system-prompt", ctx.appendSystemPrompt]
@@ -254,6 +256,7 @@ export const claudeCodeAdapter: EngineAdapter = {
     ];
 
     let finalEvent: ClaudeStreamEvent | undefined;
+    let sessionId: string | undefined = ctx.resumeSessionId;
     const result = await runSubprocess({
       command: binary,
       args,
@@ -271,7 +274,11 @@ export const claudeCodeAdapter: EngineAdapter = {
           return;
         }
         try {
-          const captured = handleClaudeEvent(JSON.parse(trimmed) as ClaudeStreamEvent, ctx.onLog);
+          const event = JSON.parse(trimmed) as ClaudeStreamEvent;
+          if (event.session_id) {
+            sessionId = event.session_id;
+          }
+          const captured = handleClaudeEvent(event, ctx.onLog);
           if (captured) {
             finalEvent = captured;
           }
@@ -308,6 +315,7 @@ export const claudeCodeAdapter: EngineAdapter = {
     return {
       success,
       result: finalEvent?.result,
+      sessionId,
       exitCode: result.exitCode,
       errorMessage,
       costUsd: finalEvent?.total_cost_usd,

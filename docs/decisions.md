@@ -6,6 +6,58 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-27 — An agent that asks parks on its own status, and resumes its session (TASK-079)
+
+**Context:** the whole point of a chat is that the agent can answer back. Every
+adapter was one-shot — prompt in, `stdin.end()`, process exits — and no session id
+was captured anywhere (`codex.ts` declared `thread_id` and never read it). Two
+mechanisms were possible: re-run the stage with the question and answer folded into
+a fresh prompt, or resume the CLI session.
+
+**Decision: resume the session.** `EngineRunContext` gained `resumeSessionId` and
+`EngineRunResult` gained `sessionId`; one `run()` method, not a second `resume()` —
+the *flag* declares the capability and the *context* drives the behaviour, matching
+how `model` and `permissionMode` already work. Re-running was rejected because a
+Project Manager's investigation is the expensive part: paying for it twice per
+clarifying question, and losing the model's working context each time, makes the
+feature not worth having.
+
+**Verified against the installed CLIs, not the docs.** `claude -r <id>` and
+`codex exec resume <SESSION_ID> [PROMPT]` both exist and both accept the flags the
+adapters already pass — with one exception worth recording: **`codex exec resume`
+does not accept `--sandbox`**, only `--dangerously-bypass-approvals-and-sandbox`.
+So a resumed Codex turn under `acceptEdits` runs on Codex's own default sandbox
+rather than `workspace-write`. **Cursor is `conversational: false`** — the CLI is
+not installed here and the session-id emission could not be confirmed, and a flag
+asserted from documentation alone is exactly the silent failure this task set out
+to avoid. Flip it when someone with `cursor-agent` verifies it.
+
+**`asking` is its own status, not `awaiting`.** TASK-061 already argued this for
+`blocked`: reusing the gate state would make "Approve" mean two different things.
+`asking` is violet in `theme.ts` — GOLD stays reserved for human gates.
+
+**The question contract mirrors the verdict contract.** `parseStageQuestion` is
+`parseStageVerdict` with a different keyword: last-line-first, CRLF-tolerant,
+markdown-emphasis-tolerant. A persona that already knows `VERDICT: PASS|FAIL` needs
+no new mental model, and the parser's failure modes are ones we have already tested.
+
+**Only an interactive stage on a conversational engine may ask.** Three conditions
+in one predicate — `stageDef.interactive`, `isConversational(engine)`, and a turn
+budget (`MAX_QUESTION_TURNS = 6`). The turn budget matters because a persona that
+always ends with a question would otherwise loop forever, and each loop is a
+durable park. A Developer that happens to print `QUESTION:` is not interactive, so
+its output passes straight through.
+
+**A turn is a durable step.** `runStageTurns` names each `stageId:turn:N`, so
+OpenWorkflow replays completed turns rather than re-running them, and the park uses
+the signal channel's payload — typed as `{ data: Output } | null` all along, never
+used until now.
+
+**`admitRun` still holds the project slot while parked.** A question can wait for
+hours, exactly like a gate, and a gate already behaves this way. Releasing the slot
+would let a second run start and write to the same workspace; that is a worse
+failure than making the user answer or abort.
+
 ## 2026-07-27 — The transcript is derived; only the user's turns are stored (TASK-078)
 
 **Context:** the run view became a conversation. The obvious implementation is a

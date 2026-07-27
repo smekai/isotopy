@@ -27,39 +27,6 @@ This epic turns a run into a **conversation you take part in**, in the shape Cod
 
 ---
 
-## TASK-079: Conversational engines — session capture, resume, and question mode
-**Priority:** P1 | **Tags:** engine, adapters, server, core
-**Updated:** 2026-07-27 00:00
-
-The load-bearing task: let an agent stop, ask, and continue. **All three adapters are strictly one-shot today** — prompt in, `child.stdin.end()` immediately, process exits, `EngineRunResult.result` out. **No session id is captured anywhere**: [`codex.ts:139`](../packages/server/src/engines/codex.ts#L139) declares `thread_id` on `CodexEvent` and never reads it. So "resume" is genuinely new work in every adapter, and that is the cost this task is buying.
-
-**Scope:**
-1. **The capability flag.** `EngineDefinition` in [`engines.ts`](../packages/core/src/engines.ts) gains **`conversational: boolean`**. It belongs in `core` because the UI must read it — to explain *why* an engine cannot be asked questions — and the UI never imports adapters. A non-conversational engine simply never enters question mode.
-2. **The seam.** `EngineRunContext` gains `resumeSessionId?`; `EngineRunResult` gains `sessionId?` ([`engines/types.ts`](../packages/server/src/engines/types.ts)). One `run()` method, not a second `resume()` — the flag declares the capability, the context drives the behaviour.
-3. **Per adapter** — capture the id from the JSON-lines stream that is already being parsed, and resume through `runSubprocess`:
-   - `claude-code.ts` — `session_id` off the stream-json init/result events; resume with `--resume`.
-   - `codex.ts` — keep the `thread_id` that is already parsed; resume with `codex exec resume`.
-   - `cursor.ts` — capture the chat/session id; resume with `--resume`.
-   - **Confirm every flag against the installed CLI's `--help` before wiring it.** A CLI that cannot resume gets `conversational: false` and an accurate message, never a silent failure.
-4. **Per-stage mode.** `StageDefinition` in [`pipelines.ts`](../packages/core/src/pipelines.ts) gains `interactive?: boolean` — the question / non-question switch. Only interactive stages may ask; Developer and Tester stay non-interactive.
-5. **The question contract.** A trailing `QUESTION: <text>` line, parsed by a new `parseStageQuestion` in [`stage-context.ts`](../packages/server/src/domain/stage-context.ts) that **mirrors `parseStageVerdict` exactly** — last-line-first, tolerant of `*`/`` ` ``/`_` wrapping. `EngineStageOutcome` gains a third outcome beside passed/failed.
-6. **A state of its own.** `StageStatus`/`RunStatus` gain **`"asking"`, distinct from `"awaiting"`** — for exactly the reason TASK-061 gives for `blocked`: reusing the gate state would make "Approve" mean two different things. Add `stage.asking` and `stage.answered` to **both** the `RunEventType` union and `RUN_EVENT_TYPES`, and handle the new status in `applyEvent`, `markCancelled`, `markInterrupted` and `reconcileOnLoad`.
-7. **Durable park.** In `runOneStage` ([`pipeline-workflow.ts:34`](../packages/server/src/workflow/pipeline-workflow.ts#L34)), park on `answerSignal(runId, stageId)` = `answer:<runId>:<stageId>` via `step.waitForSignal<{ text: string }>`. **The signal channel is already typed to carry a payload** — `StepApiLike.waitForSignal` returns `{ data: Output } | null` and ADHD has simply never sent one. On the signal, re-invoke `runStageWork` with `resumeSessionId` and the answer as the prompt. Bound it with a `MAX_QUESTION_TURNS` so a misbehaving persona cannot loop forever, and decide the park timeout (the gate uses `3650d`).
-8. **Wire the endpoint.** `POST /runs/:id/messages` sends the signal when the stage is `asking`, and keeps TASK-078's 409 otherwise.
-9. **UI.** The question renders as an agent bubble, the composer takes focus, and a parked run reads "waiting for you" in the left rail.
-
-**Cross-platform (Windows + macOS):**
-- Every resume spawn goes through **[`runSubprocess`](../packages/server/src/engines/subprocess.ts)** — it already handles the Windows `.cmd`/`.bat` shell rule and `taskkill /T` vs `SIGTERM→SIGKILL`. Do not hand-roll `spawn`.
-- Session ids come from **stdout JSON only**. Never read a CLI's own session directory (`~/.claude` vs `%USERPROFILE%\.claude`) — that is a per-OS path guess we do not need to make. Split stream output on `/\r?\n/`, not `"\n"`.
-- The three CLIs take the id differently (argv for codex/cursor, `--resume <id>` for claude). Keep that per-adapter; no shared shell one-liner.
-- A parked run can wait for hours and meet laptop sleep (Windows sleep, macOS App Nap both suspend timers). Lease-based recovery in the durable runtime is what should cover it — verify resume-after-restart at minimum on the tested OS, and reason the other through.
-- **`admitRun` allows one active run per project**, so a parked run holds the slot indefinitely. Decide whether `asking` releases it — the decision is the same on both platforms but it has to be made.
-- Note which OS was actually tested.
-
-**Verify:** a persona forced to emit `QUESTION:` parks the run in `asking` with the question in the thread; **kill the server and restart — still parked**; answering resumes the *same session* (the agent references context from before the question, which is what distinguishes resume from a re-run) and the stage completes without re-running upstream stages.
-
----
-
 ## TASK-080: Project Manager agent and the two-preset pipeline set
 **Priority:** P1 | **Tags:** core, server
 **Updated:** 2026-07-27 00:00

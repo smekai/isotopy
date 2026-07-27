@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   EnginePermissionMode,
   LogLevel,
+  MessageKind,
   MessageRole,
   PipelineDefinition,
   RunEvent,
@@ -75,6 +76,7 @@ interface InputExtras {
 interface MessageDraft {
   role: MessageRole;
   stageId?: string;
+  kind?: MessageKind;
   text: string;
 }
 
@@ -314,7 +316,20 @@ export class RunOrchestrator implements RunProjection {
     if (isTerminalRunStatus(run.status)) {
       throw new Error(`Run ${runId} has finished — start a new run to say more`);
     }
-    return this.appendMessage(run, { role: "user", text });
+
+    const asking = run.stages.find((stage) => stage.status === "asking");
+    if (!asking) {
+      return this.appendMessage(run, { role: "user", text });
+    }
+
+    const message = this.appendMessage(run, {
+      role: "user",
+      stageId: asking.id,
+      kind: "answer",
+      text,
+    });
+    void this.runtimes.forProject(run.projectId).answerQuestion(runId, asking.id, text);
+    return message;
   }
 
   private appendMessage(run: RunState, draft: MessageDraft): RunMessage {
@@ -323,6 +338,7 @@ export class RunOrchestrator implements RunProjection {
       ts: nowIso(),
       role: draft.role,
       ...(draft.stageId !== undefined ? { stageId: draft.stageId } : {}),
+      ...(draft.kind !== undefined ? { kind: draft.kind } : {}),
       text: draft.text,
     };
     run.messages.push(message);
@@ -475,6 +491,43 @@ export class RunOrchestrator implements RunProjection {
     });
   }
 
+  stageAsking(runId: string, stageId: string, question: string): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage) {
+      return;
+    }
+    stage.status = "asking";
+    run.status = "asking";
+    this.appendMessage(run, { role: "agent", stageId, kind: "question", text: question });
+    this.emit({
+      ts: nowIso(),
+      type: "stage.asking",
+      runId,
+      stageId,
+      status: "asking",
+      message: question,
+    });
+  }
+
+  stageAnswered(runId: string, stageId: string): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage) {
+      return;
+    }
+    stage.status = "running";
+    run.status = "running";
+    this.emit({
+      ts: nowIso(),
+      type: "stage.answered",
+      runId,
+      stageId,
+      status: "running",
+      message: `${agentForStage(stageId).profession} is continuing`,
+    });
+  }
+
   gateApproved(runId: string, stageId: string): void {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
@@ -608,7 +661,8 @@ export class RunOrchestrator implements RunProjection {
       if (
         stage.status === "pending" ||
         stage.status === "running" ||
-        stage.status === "awaiting"
+        stage.status === "awaiting" ||
+        stage.status === "asking"
       ) {
         stage.status = "skipped";
         this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId: stage.id, status: "skipped" });
@@ -632,7 +686,7 @@ export class RunOrchestrator implements RunProjection {
     }
     const ts = nowIso();
     for (const stage of run.stages) {
-      if (stage.status === "running" || stage.status === "awaiting") {
+      if (stage.status === "running" || stage.status === "awaiting" || stage.status === "asking") {
         stage.status = "failed";
         stage.completedAt = ts;
         stage.logs.push({ ts, level: "fail", message: "✗ Interrupted by server restart" });

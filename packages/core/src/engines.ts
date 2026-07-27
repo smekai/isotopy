@@ -43,7 +43,13 @@ export interface EngineDefinition {
   label: string;
   description: string;
   available: boolean;
+  /** The CLI can resume a session, so an agent on it may stop and ask a question. */
+  conversational: boolean;
   connections: EngineConnectionDefinition[];
+}
+
+export function isConversational(engineId: EngineId): boolean {
+  return ENGINES[engineId].conversational;
 }
 
 export const ENGINES: Record<EngineId, EngineDefinition> = {
@@ -52,6 +58,7 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Claude Code",
     description: "Anthropic's agentic coding CLI",
     available: true,
+    conversational: true,
     connections: [
       {
         id: "subscription",
@@ -73,6 +80,7 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Cursor",
     description: "Cursor CLI agent",
     available: true,
+    conversational: false,
     connections: [
       {
         id: "subscription",
@@ -95,6 +103,7 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Codex",
     description: "OpenAI Codex CLI",
     available: true,
+    conversational: true,
     connections: [
       {
         id: "subscription",

@@ -105,12 +105,30 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
 }
 
 function buildArgs(ctx: EngineRunContext): string[] {
+  if (ctx.resumeSessionId) {
+    return buildResumeArgs(ctx, ctx.resumeSessionId);
+  }
   return [
     "exec",
     "--json",
     "--skip-git-repo-check",
     ...(ctx.permissionMode === "acceptEdits"
       ? ["--sandbox", "workspace-write"]
+      : ["--dangerously-bypass-approvals-and-sandbox"]),
+    ...(ctx.model ? ["--model", ctx.model] : []),
+    "-",
+  ];
+}
+
+function buildResumeArgs(ctx: EngineRunContext, sessionId: string): string[] {
+  return [
+    "exec",
+    "resume",
+    sessionId,
+    "--json",
+    "--skip-git-repo-check",
+    ...(ctx.permissionMode === "acceptEdits"
+      ? []
       : ["--dangerously-bypass-approvals-and-sandbox"]),
     ...(ctx.model ? ["--model", ctx.model] : []),
     "-",
@@ -145,6 +163,7 @@ interface CodexEvent {
 
 interface CodexCapture {
   lastMessage?: string;
+  threadId?: string | undefined;
   usage?: CodexUsage | undefined;
   turnCompleted: boolean;
   errorMessage?: string;
@@ -186,6 +205,9 @@ function handleCodexEvent(
   capture: CodexCapture,
 ): void {
   const item = event.item;
+  if (event.thread_id) {
+    capture.threadId = event.thread_id;
+  }
   switch (event.type) {
     case "thread.started":
       onLog("info", "Codex agent online");
@@ -363,7 +385,7 @@ export const codexAdapter: EngineAdapter = {
 
     const runCtx = withPersonaPrompt(ctx);
 
-    const capture: CodexCapture = { turnCompleted: false };
+    const capture: CodexCapture = { turnCompleted: false, threadId: ctx.resumeSessionId };
     const result = await runSubprocess({
       command: binary,
       args: buildArgs(runCtx),
@@ -416,6 +438,7 @@ export const codexAdapter: EngineAdapter = {
     return {
       success,
       result: capture.lastMessage,
+      sessionId: capture.threadId,
       exitCode: result.exitCode,
       errorMessage,
       durationMs: result.durationMs,

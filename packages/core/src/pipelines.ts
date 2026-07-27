@@ -2,6 +2,8 @@ export interface StageDefinition {
   id: string;
   label: string;
   gateAfter?: boolean;
+  /** May stop and ask the user a question mid-stage, on an engine that can resume. */
+  interactive?: boolean;
   skill?: string;
 }
 
@@ -19,10 +21,13 @@ export interface PipelineDefinition {
 export const ONE_BOX_PIPELINE: PipelineDefinition = {
   id: "one-box",
   name: "Single agent",
-  description: "One Developer box: prompt in, result out — runs a real engine.",
+  description:
+    "One box that does everything, and may stop to ask you a clarifying question.",
   groups: [
     {
-      stages: [{ id: "implementation", label: "Implementation", skill: "developer" }],
+      stages: [
+        { id: "implementation", label: "Implementation", skill: "developer", interactive: true },
+      ],
     },
   ],
 };

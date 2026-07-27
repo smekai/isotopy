@@ -70,6 +70,16 @@ export function applyEvent(run: RunState, event: RunEvent): RunState {
     next.status = "awaiting";
   }
 
+  if (event.type === "stage.asking") {
+    stage.status = "asking";
+    next.status = "asking";
+  }
+
+  if (event.type === "stage.answered") {
+    stage.status = "running";
+    next.status = "running";
+  }
+
   if (event.type === "stage.approved") {
     stage.status = "passed";
     stage.completedAt = event.ts;
