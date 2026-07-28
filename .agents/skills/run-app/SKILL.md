@@ -37,8 +37,8 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
 ## Smoke checks
 
 - API: `curl http://localhost:9477/health` → `{"ok":true,...}`;
-  `curl http://localhost:9477/pipelines` → `sequential`, `one-box`,
-  `dev-test` (the two-box Developer→Tester flow).
+  `curl http://localhost:9477/pipelines` → `full-delivery`,
+  `pm-dev-test`, and `solo`.
 - CLI detection: `curl http://localhost:9477/engines/Codex/status`
   → `{"installed":true,"path":...,"version":...}`.
 - Connection settings: `GET /settings`, `PUT /settings/engines/Codex`
@@ -55,8 +55,8 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
 in the user-level ms-playwright cache (`npx playwright install
 chromium --only-shell` inside `packages/ui` if missing). Useful
 selectors: the pipeline picker is a dropdown — trigger button shows
-the selected label ("Full team" / "Single agent" / "Developer +
-Tester"), menu entries are
+the selected label ("Full Delivery" / "Product Manager + Developer +
+QA" / "Single agent"), menu entries are
 `role=option`; header buttons "Setup" / "History"; task input
 placeholder "Describe the task..."; status-bar engine pill matches
 `/^⬡ Codex · /`. History run cards are clickable divs (no View
@@ -73,7 +73,7 @@ this), `stage-node-<stageId>`, `stage-profession`, `stage-persona`,
 
 ```bash
 curl -s -X POST http://localhost:9477/runs -H "content-type: application/json" \
-  -d '{"pipelineId":"one-box","task":"...","engine":"Codex","model":"haiku","workspaceDir":"C:/some/existing/dir"}'
+  -d '{"pipelineId":"full-delivery","task":"...","engine":"claude-code","model":"haiku"}'
 # then stream: curl -N http://localhost:9477/runs/<id>/events
 ```
 

@@ -144,7 +144,7 @@ test("the default pipeline is selectable in the picker and previews all three bo
   await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
   await expect(page.getByText("What do you want to build?")).toBeVisible();
   await expect(
-    page.getByText(/A Project Manager works out what to build and recommends an approach/),
+    page.getByText(/A Product Manager works out what to build and recommends an approach/),
   ).toBeVisible();
 
   // Engine-backed, so the folder chip and engine caption appear.

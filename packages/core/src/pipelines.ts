@@ -5,7 +5,18 @@ export interface StageDefinition {
   interactive?: boolean;
   skill?: string;
   stepTask?: string;
+  executionPolicy?: StageExecutionPolicy;
 }
+
+export const STAGE_EXECUTION_POLICIES = {
+  STANDARD: "standard",
+  QUALITY: "quality",
+  DELIVERY: "delivery",
+  CLOSEOUT: "closeout",
+} as const;
+
+export type StageExecutionPolicy =
+  (typeof STAGE_EXECUTION_POLICIES)[keyof typeof STAGE_EXECUTION_POLICIES];
 
 export interface PipelineGroup {
   stages: StageDefinition[];
@@ -64,7 +75,83 @@ export const PM_DEV_TEST_PIPELINE: PipelineDefinition = {
   ],
 };
 
+export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
+  id: "full-delivery",
+  name: "Full Delivery",
+  description:
+    "A complete delivery loop with approved scope, design and architecture, implementation, " +
+    "independent review, QA, release preparation, preview deployment, and closeout.",
+  groups: [
+    {
+      stages: [
+        {
+          id: "intake",
+          label: "Product Manager",
+          skill: "project-manager",
+          stepTask: "plan-feature",
+          interactive: true,
+          gateAfter: true,
+        },
+        {
+          id: "product-design",
+          label: "Product Designer",
+          skill: "product-designer",
+          stepTask: "design-experience",
+        },
+        {
+          id: "architecture",
+          label: "Software Architect",
+          skill: "software-architect",
+          stepTask: "design-architecture",
+        },
+        {
+          id: "implementation",
+          label: "Developer",
+          skill: "developer",
+          stepTask: "implement-feature",
+        },
+        {
+          id: "review",
+          label: "Software Architect",
+          skill: "software-architect",
+          stepTask: "review-implementation",
+          executionPolicy: STAGE_EXECUTION_POLICIES.QUALITY,
+        },
+        {
+          id: "test",
+          label: "QA Engineer",
+          skill: "tester",
+          stepTask: "verify-feature",
+          executionPolicy: STAGE_EXECUTION_POLICIES.QUALITY,
+        },
+        {
+          id: "release",
+          label: "Release Manager",
+          skill: "release-manager",
+          stepTask: "prepare-release",
+          executionPolicy: STAGE_EXECUTION_POLICIES.DELIVERY,
+        },
+        {
+          id: "deploy",
+          label: "SRE",
+          skill: "sre",
+          stepTask: "deploy-preview",
+          executionPolicy: STAGE_EXECUTION_POLICIES.DELIVERY,
+        },
+        {
+          id: "closeout",
+          label: "Product Manager",
+          skill: "project-manager",
+          stepTask: "closeout-feature",
+          executionPolicy: STAGE_EXECUTION_POLICIES.CLOSEOUT,
+        },
+      ],
+    },
+  ],
+};
+
 export const DEMO_PIPELINES: PipelineDefinition[] = [
+  FULL_DELIVERY_PIPELINE,
   PM_DEV_TEST_PIPELINE,
   SOLO_PIPELINE,
 ];

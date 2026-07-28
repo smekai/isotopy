@@ -34,6 +34,12 @@ const DEFAULT_PIPELINE_COPY: PipelineCopy = {
 };
 
 const PIPELINE_COPY: Record<string, PipelineCopy> = {
+  "full-delivery": {
+    headline: "What should the delivery team build?",
+    subtitle:
+      "Approved scope flows through design, implementation, independent review, QA, " +
+      "release preparation, preview deployment, and closeout.",
+  },
   solo: {
     headline: "What should the Agent build?",
     subtitle: "One box does everything, and asks you if something is genuinely unclear.",
@@ -41,8 +47,8 @@ const PIPELINE_COPY: Record<string, PipelineCopy> = {
   "pm-dev-test": {
     headline: "What do you want to build?",
     subtitle:
-      "A Project Manager works out what to build and recommends an approach — " +
-      "you approve it, then a Developer builds it and a Tester verifies it.",
+      "A Product Manager works out what to build and recommends an approach — " +
+      "you approve it, then a Developer builds it and a QA Engineer verifies it.",
   },
 };
 
@@ -235,7 +241,16 @@ export function EmptyState({
 
   return (
     <div style={PAGE}>
-      <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: SPACE.md,
+          maxWidth: "100%",
+          overflowX: "auto",
+          paddingBottom: SPACE.sm,
+        }}
+      >
         {stages.map((stage, i) => {
           const agent = agentForStage(stage.id);
           const spec = specColor(stage.id);
