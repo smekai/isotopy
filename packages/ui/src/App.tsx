@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { FolderOpen, Settings, Sparkles } from "lucide-react";
+import { FolderOpen, Settings } from "lucide-react";
 import type { RunSummary } from "@adhd/core";
 import { modelForEngine } from "@adhd/core";
 import { abortRun, approveGate, postRunMessage, restartRun, startRun } from "./api";
@@ -48,15 +48,13 @@ function topBar(d: Dir): CSSProperties {
   };
 }
 
-function logoMark(d: Dir): CSSProperties {
+function appLogo(): CSSProperties {
   return {
     width: LOGO_SIZE,
     height: LOGO_SIZE,
     borderRadius: RADIUS.lg,
-    background: `linear-gradient(135deg, ${d.accent}, ${d.accentDark})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    display: "block",
+    flexShrink: 0,
   };
 }
 
@@ -253,9 +251,7 @@ export function App() {
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
       <div style={topBar(d)}>
         <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
-          <div style={logoMark(d)}>
-            <Sparkles size={ICON.lg} style={{ color: "#FFF" }} />
-          </div>
+          <img src="/adhd-icon.png" alt="" width={LOGO_SIZE} height={LOGO_SIZE} style={appLogo()} />
           <span style={wordmark(d)}>ADHD</span>
         </div>
 
