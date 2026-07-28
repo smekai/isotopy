@@ -16,11 +16,13 @@ export type RunStatus =
   | "awaiting"
   | "asking"
   | "completed"
+  | "needs_attention"
   | "failed"
   | "cancelled";
 
 export const TERMINAL_RUN_STATUSES: RunStatus[] = [
   "completed",
+  "needs_attention",
   "failed",
   "cancelled",
 ];
@@ -47,6 +49,7 @@ export type StageVerdict = (typeof STAGE_VERDICTS)[keyof typeof STAGE_VERDICTS];
 
 export const STAGE_OUTCOMES = {
   PASSED: "passed",
+  NEEDS_ATTENTION: "needs_attention",
   FAILED: "failed",
   SKIPPED: "skipped",
   CANCELLED: "cancelled",

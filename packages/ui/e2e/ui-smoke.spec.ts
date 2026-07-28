@@ -12,15 +12,15 @@ test.beforeEach(async ({ page }) => {
 
 test("empty state shows the pipeline dropdown and a disabled start button", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Project Manager + Developer + Tester" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Product Manager + Developer + QA" })).toBeVisible();
   await expect(page.getByText("What do you want to build?")).toBeVisible();
   await expect(page.getByRole("button", { name: /Start run/ })).toBeDisabled();
 
   // the dropdown opens with every pipeline and closes on Escape
-  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
   await expect(page.getByRole("option")).toHaveCount(2);
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
-  await expect(page.getByRole("option", { name: /Project Manager \+ Developer \+ Tester/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Product Manager \+ Developer \+ QA/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeHidden();
 
@@ -30,7 +30,7 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
 
 test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
 
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
@@ -102,7 +102,7 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
 
 test("pipeline, model, and permission mode persist across a reload", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
 
   await page.getByRole("button", { name: "Setup" }).click();
@@ -143,7 +143,7 @@ test("legacy full model IDs migrate to standard-context CLI aliases", async ({ p
   await writePreferences(page, { engineModels: { "claude-code": "claude-sonnet-4-6" } });
   await page.reload();
 
-  await page.getByRole("button", { name: "Project Manager + Developer + Tester" }).click();
+  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 

@@ -23,6 +23,15 @@ describe("applyEvent", () => {
     expect(after.status).toBe("failed");
   });
 
+  test("run.completed preserves a needs-attention status", () => {
+    const after = applyEvent(
+      run([stage("design")]),
+      event("run.completed", { status: "needs_attention" }),
+    );
+
+    expect(after.status).toBe("needs_attention");
+  });
+
   test("run.completed with a cancelled status carries that status through", () => {
     const after = applyEvent(
       run([stage("design")]),

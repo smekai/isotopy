@@ -204,6 +204,7 @@ export const RUN_PILL: Record<RunStatus, { text: string; bg: string }> = {
   awaiting:  { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
   asking:    { text: "#7C3AED", bg: "rgba(124,58,237,0.10)" },
   completed: { text: "#059669", bg: "rgba(5,150,105,0.10)" },
+  needs_attention: { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
   failed:    { text: "#DC2626", bg: "rgba(220,38,38,0.10)" },
   cancelled: { text: "#6B7280", bg: "rgba(156,163,175,0.12)" },
 };
@@ -211,6 +212,10 @@ export const RUN_PILL: Record<RunStatus, { text: string; bg: string }> = {
 export const FAIL_RED = "#DC2626";
 export const PASS_GREEN = "#059669";
 export const WARN_AMBER = "#D97706";
+
+export function runStatusLabel(status: RunStatus): string {
+  return status.replace("_", " ").toUpperCase();
+}
 
 export function logLevelColor(level: LogLevel, d: Dir): string {
   switch (level) {
@@ -232,6 +237,7 @@ export function runDot(status: RunStatus, d: Dir): string {
   if (status === "running" || status === "pending") return d.accent;
   if (status === "awaiting") return GOLD;
   if (status === "asking") return ASK_VIOLET;
+  if (status === "needs_attention") return WARN_AMBER;
   if (status === "failed") return "#DC2626";
   if (status === "cancelled") return "#9CA3AF";
   return "#059669";

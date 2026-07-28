@@ -23,7 +23,7 @@ const SKILL_DESCRIPTION =
 
 function extractBlock(markdown, name) {
   const pattern = new RegExp(
-    `<!-- gen:${name}:start -->\\n([\\s\\S]*?)\\n<!-- gen:${name}:end -->`,
+    `<!-- gen:${name}:start -->\\r?\\n([\\s\\S]*?)\\r?\\n<!-- gen:${name}:end -->`,
   );
   const match = pattern.exec(markdown);
   if (!match) {
@@ -70,9 +70,16 @@ async function buildOutputs() {
   ];
 }
 
+function normalizeLineEndings(value) {
+  return value.replace(/\r\n/g, "\n");
+}
+
 async function fileMatches(filePath, expected) {
   try {
-    return (await readFile(filePath, "utf8")) === expected;
+    return (
+      normalizeLineEndings(await readFile(filePath, "utf8")) ===
+      normalizeLineEndings(expected)
+    );
   } catch {
     return false;
   }

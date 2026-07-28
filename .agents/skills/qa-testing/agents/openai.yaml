@@ -1,0 +1,4 @@
+interface:
+  display_name: "QA Testing"
+  short_description: "Run ADHD UI verification safely"
+  default_prompt: "Use $qa-testing to validate this ADHD UI change."

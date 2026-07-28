@@ -1,5 +1,23 @@
 # Done
 
+## TASK-086: Stabilization — classify blocking verdicts as needs attention
+**Priority:** P0 | **Tags:** core, server, ui, testing, infra
+**Updated:** 2026-07-28 18:16
+
+Done. A clean `VERDICT: FAIL` now leaves its stage failed but closes the run as terminal `needs_attention`; engine/runtime failures remain `failed`.
+
+- `needs_attention` flows through workflow outcomes, persisted run state, events, summaries, restart/resume, and terminal detection;
+- the UI renders `NEEDS ATTENTION` with an amber warning treatment in the run rail, status bar, and project drawer;
+- persisted needs-attention runs remain terminal after server restart;
+- the prepared TASK-084 GitHub Actions workflow is included with Linux lint/typecheck/build/tests/E2E and Windows/macOS typecheck/tests;
+- stale Playwright expectations were aligned with Product Manager and QA Engineer naming so CI starts green.
+
+Cross-platform: pure TypeScript status logic. Validated on Windows. macOS validation is configured in CI and remains untested locally.
+
+Verified: lint, typecheck, build, 237 unit/component tests, 30 Playwright tests (1 paid live test intentionally skipped), and `gen:skills --check`.
+
+---
+
 ## TASK-085: Support VERDICT: SKIP as a stage outcome
 **Priority:** P0 | **Tags:** core, server, testing
 **Updated:** 2026-07-28 17:32

@@ -153,11 +153,11 @@ describe("interpretEngineResult", () => {
     ).toEqual({ outcome: "passed", output: "ok\n\nVERDICT: PASS", verdict: "PASS" });
   });
 
-  test("a FAIL verdict fails but still carries its output and a message", () => {
+  test("a FAIL verdict needs attention but still carries its output and a message", () => {
     expect(
       interpretEngineResult(engineResult({ result: "broken\n\nVERDICT: FAIL" }), { profession: "Tester", canAsk: false }),
     ).toEqual({
-      outcome: "failed",
+      outcome: "needs_attention",
       output: "broken\n\nVERDICT: FAIL",
       verdict: "FAIL",
       failureMessage: "Tester reported VERDICT: FAIL",
