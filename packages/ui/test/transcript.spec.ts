@@ -4,7 +4,7 @@
 // ordering across the two sources is what this covers.
 import { describe, expect, test } from "vitest";
 import type { LogLevel, RunState, StageState, StageStatus } from "@adhd/core";
-import { buildTranscript } from "../src/transcript";
+import { buildTranscript, conversationOnly } from "../src/transcript";
 import { message, run, stage } from "./support/run-fixtures";
 
 function log(ts: string, level: LogLevel, text: string) {
@@ -137,5 +137,72 @@ describe("buildTranscript", () => {
     state.messages = [message("q1", "Which database?", "2026-07-27T10:00:00.000Z", "agent")];
 
     expect(threadOf(state)).toEqual([["agent", "Which database?"]]);
+  });
+});
+
+// Chat and Logs read one ordering; the chat is that ordering with the machinery
+// removed. The split is structural — tool calls, tool errors and engine chatter
+// all arrive as `tool` items — so nothing below matches on prose.
+describe("conversationOnly", () => {
+  const noisy = run([
+    started("implementation", "passed", "2026-07-27T10:00:00.000Z", [
+      log("2026-07-27T10:00:01.000Z", "run", "Developer online · Claude Code · haiku"),
+      log("2026-07-27T10:00:02.000Z", "info", "Looking at the repository now."),
+      log("2026-07-27T10:00:03.000Z", "run", "Read src/auth.ts"),
+      log("2026-07-27T10:00:04.000Z", "warn", "Tool error: file not found"),
+      log("2026-07-27T10:00:05.000Z", "pass", "✓ Developer finished"),
+    ]),
+  ]);
+
+  test("the machinery is dropped and the conversation kept", () => {
+    expect(buildTranscript(noisy).map((item) => item.kind)).toEqual([
+      "stage",
+      "tool",
+      "agent",
+      "tool",
+      "tool",
+      "notice",
+    ]);
+    expect(conversationOnly(buildTranscript(noisy)).map((item) => item.kind)).toEqual([
+      "stage",
+      "agent",
+      "notice",
+    ]);
+  });
+
+  test("engine chatter and tool rows leave the chat but stay in the log", () => {
+    const chat = conversationOnly(buildTranscript(noisy))
+      .map((item) => ("text" in item ? item.text : ""))
+      .join("\n");
+    const logs = buildTranscript(noisy)
+      .map((item) => ("text" in item ? item.text : ""))
+      .join("\n");
+
+    for (const machinery of ["Developer online", "Read src/auth.ts", "Tool error"]) {
+      expect(chat).not.toContain(machinery);
+      expect(logs).toContain(machinery);
+    }
+  });
+
+  test("who is working and how it ended are not machinery", () => {
+    const items = conversationOnly(buildTranscript(noisy));
+
+    expect(items[0]?.kind === "stage" && items[0].profession).toBe("Developer");
+    expect(items[2]?.kind === "notice" && items[2].level).toBe("pass");
+    expect(items[2]?.kind === "notice" && items[2].text).toContain("Developer finished");
+  });
+
+  test("questions and the user's own turns survive the filter", () => {
+    const state = run([started("intake", "asking", "2026-07-27T10:00:00.000Z", [])]);
+    state.messages = [
+      message("q1", "SQLite or Postgres?", "2026-07-27T10:00:01.000Z", "agent"),
+      message("a1", "SQLite", "2026-07-27T10:00:02.000Z"),
+    ];
+
+    expect(conversationOnly(buildTranscript(state)).map((item) => item.kind)).toEqual([
+      "stage",
+      "agent",
+      "user",
+    ]);
   });
 });

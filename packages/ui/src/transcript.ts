@@ -107,3 +107,13 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
     .sort((a, b) => a.item.ts.localeCompare(b.item.ts) || a.seq - b.seq)
     .map((entry) => entry.item);
 }
+
+export type ConversationItem = Exclude<TranscriptItem, { kind: "tool" }>;
+
+/**
+ * The conversation is the transcript minus the machinery: tool calls, tool
+ * errors and engine chatter all arrive as `tool` items, and belong in the log.
+ */
+export function conversationOnly(items: TranscriptItem[]): ConversationItem[] {
+  return items.filter((item): item is ConversationItem => item.kind !== "tool");
+}

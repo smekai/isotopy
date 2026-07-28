@@ -4,16 +4,15 @@ import { FolderOpen, Settings, Sparkles } from "lucide-react";
 import type { RunSummary } from "@adhd/core";
 import { modelForEngine } from "@adhd/core";
 import { abortRun, approveGate, postRunMessage, restartRun, startRun } from "./api";
-import { ChatPanel } from "./components/ChatPanel";
 import { EmptyState } from "./components/EmptyState";
 import { PipelineRow } from "./components/PipelineRow";
 import { ProjectDrawer } from "./components/ProjectDrawer";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunRail } from "./components/RunRail";
 import { RunStatusBar } from "./components/RunStatusBar";
+import { RunTabs } from "./components/run/RunTabs";
 import { SetupModal } from "./components/setup/SetupModal";
 import type { SetupSection } from "./components/setup/SetupModal";
-import { StageFocusPanel } from "./components/StageFocusPanel";
 import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
@@ -247,7 +246,6 @@ export function App() {
   }
 
   const awaitingStage = run?.stages.find((stage) => stage.status === "awaiting");
-  const focusedStage = run?.stages.find((stage) => stage.id === focusedId);
   const showEmpty = runs.ready && activeRunId === null;
   const banner = error ?? runError ?? projects.error ?? settings.error ?? runs.error;
 
@@ -322,22 +320,14 @@ export function App() {
                 onNodeClick={handleNodeClick}
                 onApprove={(stageId) => void handleApprove(stageId)}
               />
-              <ChatPanel
+              <RunTabs
                 run={run}
-                d={d}
+                focusedStageId={focusedId}
                 sending={sending}
+                d={d}
                 onSend={(text) => void handleSend(text)}
+                onClearFocus={() => setFocusedId(null)}
               />
-              {focusedStage && (
-                <StageFocusPanel
-                  key={focusedStage.id}
-                  stage={focusedStage}
-                  run={run}
-                  d={d}
-                  onClose={() => setFocusedId(null)}
-                  onRestartHere={(stageId) => void handleRestart(run.id, stageId)}
-                />
-              )}
             </>
           ) : null}
         </div>

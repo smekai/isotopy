@@ -70,7 +70,6 @@ export const EASE = {
 } as const;
 
 export const ELEVATION = {
-  panelUp: "0 -4px 24px rgba(0,0,0,0.06)",
   barUp: "0 -2px 12px rgba(0,0,0,0.05)",
 } as const;
 

@@ -54,9 +54,12 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
   await expect(page.getByText("⬡ Claude Code · haiku")).toBeVisible();
   await expect(page.getByTestId("run-status")).toHaveText("RUNNING");
 
-  // Box 1 runs first and is auto-focused.
-  await expect(page.getByTestId("stage-profession")).toHaveText("Developer", { timeout: 120_000 });
-  await expect(page.getByTestId("stage-persona")).toHaveText("DEVELOPER");
+  // Box 1 runs first, and the Logs tab names it with its persona.
+  await page.getByTestId("run-tab-logs").click();
+  await expect(page.getByTestId("stage-profession").first()).toHaveText("Developer", {
+    timeout: 120_000,
+  });
+  await expect(page.getByTestId("stage-persona").first()).toHaveText("DEVELOPER");
 
   // Box 2 only starts once box 1 has passed — that ordering is the chain.
   await expect(page.getByTestId("stage-node-implementation")).toContainText("PASSED", {
@@ -67,18 +70,20 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
   });
   await expect(page.getByTestId("run-status")).toHaveText("COMPLETED");
 
-  // Each box reported its own handoff, and the Tester declared a verdict.
-  await page.getByTestId("stage-node-implementation").click();
-  await page.getByRole("button", { name: "Artifacts" }).click();
+  // A real run reports what it spent, so the total is on the status bar.
+  await expect(page.getByTestId("run-cost")).toContainText("$");
+
+  // The Tester declared a verdict, and each box reported its own handoff.
+  await expect(page.getByTestId("stage-verdict")).toHaveText(["PASS"]);
+
+  await page.getByTestId("run-tab-artifacts").click();
   await expect(page.getByTestId("artifact-preview")).not.toBeEmpty();
   const developerHandoff = await page.getByTestId("artifact-preview").innerText();
 
-  await page.getByTestId("stage-node-test").click();
-  await expect(page.getByTestId("stage-verdict")).toHaveText("PASS");
+  await page.getByText("test/handoff.md").click();
   await expect(page.getByTestId("artifact-preview")).not.toHaveText(developerHandoff);
 
-  // The Tester worked in the Developer's workspace, so the produced file is
-  // visible from either box's Files view.
+  // Both boxes shared one workspace, so the produced file is in the solution folder.
   await page.getByTestId("artifact-view-files").click();
   await expect(page.getByTestId("artifact-files")).toContainText("hello-adhd.txt");
 });

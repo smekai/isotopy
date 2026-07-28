@@ -65,9 +65,8 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
-| [`mock-content.ts`](../packages/ui/src/mock-content.ts) | **Prototype fixture data still wired into a shipped component.** See Known gaps / TASK-075. |
 | `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
-| `components/` | 17 flat component files, plus `setup/` — the one feature folder. §3. |
+| `components/` | 13 flat component files, plus two feature folders — `setup/` and `run/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
 
@@ -96,12 +95,13 @@ them without exception.
    Static styles become module-level constants (`const SPLIT_PANE: CSSProperties`);
    theme- or state-dependent ones become small builders
    (`function panelStyle(d: Dir): CSSProperties`).
-   [`StageFocusPanel.tsx`](../packages/ui/src/components/StageFocusPanel.tsx) is the
-   reference. They live **in-file**: [`decisions.md`](./decisions.md) 2026-07-26
+   [`EngineStatusCard.tsx`](../packages/ui/src/components/setup/EngineStatusCard.tsx) is
+   the reference. They live **in-file**: [`decisions.md`](./decisions.md) 2026-07-26
    ruled that A6 asks for *names*, not for a particular file, and that a sibling
    `*.styles.ts` would split one component's markup from its presentation. The one
    exception is a *shared* vocabulary inside a feature folder — builders two or more
-   siblings use, which would otherwise be copied (`setup/setup-styles.ts`).
+   siblings use, which would otherwise be copied (`setup/setup-styles.ts`,
+   `run/run-styles.ts`).
 4. **Callbacks are `onX`; the parent owns the decision.** A component reports what
    happened (`onNodeClick`), it does not decide what it means.
 5. **Presentational unless it has a reason not to.** A component that only renders
@@ -112,12 +112,12 @@ The split as it stands:
 
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
   `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`.
-- **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `ChatPanel`,
-  `VoiceControls` — own open/draft state, no I/O.
+- **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `VoiceControls`,
+  and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state, no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
-  `StageFocusPanel`, and inside `setup/` — `EngineStatusCard`,
+  `run/ArtifactsPanel`, and inside `setup/` — `EngineStatusCard`,
   `EngineConnection`, `EngineModelPicker` — call `api.ts` themselves. `SetupModal`
-  itself is chrome: nav rail, section switching, close.
+  and `RunTabs` are chrome: they switch between surfaces and own nothing else.
 
 `RunRail` is worth noting as the pattern for new surfaces: it fetches nothing. The
 list, its loading state and its live updates all arrive as props from `useRunList`,
@@ -130,8 +130,9 @@ already carried, and then split the harness section again along the same axis �
 component per block that owns its own state and server calls. That is the worked
 example of the rule: nine files replace the one, the largest of them
 (`EngineStatusCard`, 322 lines — half of it style builders) is one responsibility
-and stays whole. `StageFocusPanel.tsx` at 625 lines is now the package's largest
-component and the next candidate for the same treatment.
+and stays whole. TASK-082 applied the same treatment to the 586-line
+`StageFocusPanel`, which is gone: `components/run/` replaces it with one file per
+run view. Nothing in `packages/ui` is over ~330 lines now.
 
 ---
 
@@ -198,11 +199,14 @@ EmptyState ──onStart──▶ App.handleStart ──▶ startRun() ───
                        run.completed / terminal ──▶ source.close()
 ```
 
-**A run's body is the transcript**, not the stage panel. `ChatPanel` renders
-`buildTranscript(run)` — the agents' narration (stage logs, mapped by level onto
-prose / tool rows / notices) merged with `run.messages`, which holds only the
-user's own turns. `StageFocusPanel` is now an inspector: it opens when a stage node
-is clicked and owns its own tab state, so `App` holds neither.
+**A run's body is three tabs over one derived ordering.** `buildTranscript(run)`
+merges the agents' narration (stage logs, mapped by level onto prose / tool rows /
+notices) with `run.messages`, which holds only the user's own turns. `LogsPanel`
+shows all of it; `ChatPanel` shows `conversationOnly()` of it — the same ordering
+minus `tool` items, which is where tool calls, tool errors and engine chatter all
+land. **The chat is a projection of the log, never a second source.** `RunTabs`
+owns which tab is open, so `App` does not; a stage-node click sets `focusedId`,
+which filters Logs and Artifacts rather than opening a pane.
 
 **A message posted from the composer either answers a question or is just
 recorded.** `POST /runs/:id/messages` appends to `run.messages` and emits
@@ -267,7 +271,7 @@ Four tiers. Put state in the **lowest** one that works.
 | --- | --- | --- |
 | **Server** | Anything that must survive reload or be shared across clients | Engine, model, permission mode, pipeline, project list (TASK-065 moved preferences here from `localStorage`) |
 | **Hook** | Server state plus its lifecycle, reusable | `useProjects`, `useSettings`, `useRunEvents` |
-| **`App`** | Cross-cutting view state that two or more children need | `focusedId`, overlay flags, `starting`/`sending`. (`activeRunId` is the URL now; `focusTab` moved into `StageFocusPanel` and `pinned` disappeared when the panel stopped auto-opening.) |
+| **`App`** | Cross-cutting view state that two or more children need | `focusedId` (the pipeline row sets it, `RunTabs` filters on it), overlay flags, `starting`/`sending`. (`activeRunId` is the URL now; the focused tab lives in `RunTabs`.) |
 | **Component** | State no one else can observe | Dropdown open, textarea draft, file selection |
 
 The hooks each return a single named controller interface — `ProjectsController`,
@@ -285,9 +289,9 @@ Two patterns worth copying:
 `App` holds ~9 `useState` plus one `useRef`, down from ~14 — TASK-077 and TASK-078
 applied the threshold below rather than restating it. **When a piece of `App` state
 is read by exactly one subtree, it belongs in that subtree.** Three moved out on
-that rule: `activeRunId` became the URL (`routeRunId(route)`), `focusTab` and
-`tabChosenByUser` moved into `StageFocusPanel` — the only reader — and `pinned`
-stopped existing when the panel stopped auto-opening. The remaining `useRef`,
+that rule: `activeRunId` became the URL (`routeRunId(route)`), the focused tab moved
+into `RunTabs` — the only reader — and `pinned` stopped existing when the panel
+stopped auto-opening. The remaining `useRef`,
 `attachedProject`, is the honest edge case: it makes the boot auto-attach fire once
 per project, which a `useState` cannot express without an extra render.
 
@@ -331,7 +335,7 @@ snapped together and why.
 | `ICON` | `xs` 10, `sm` 12, `md` 14, `lg` 16 | the lucide `size` prop. |
 | `Z` | `dropdown` 30, `popover` 40, `overlay` 50, `overlayNested` 60 | `zIndex`. `overlayNested` is for a surface opened *from* an overlay — the `FolderPicker` over `SetupModal`. |
 | `MOTION` / `EASE` | `instant`…`slow`; `spin`/`pulse`/`ring`/`shimmer` | every `transition` and `animation` duration. |
-| `ELEVATION` | `panelUp`, `barUp` | the two *untinted* shadows (`StageFocusPanel` and `TeamController` top edges). Tinted shadows are `d.elevation.*`. |
+| `ELEVATION` | `barUp` | the one *untinted* shadow (`TeamController`'s top edge). Tinted shadows are `d.elevation.*`. |
 | `focusRing(soft)` | — | the repeated `0 0 0 3px <accentSoft>` ring. |
 
 `index.css` holds only the six `@keyframes adhd-*` — **no durations**. A component
@@ -420,11 +424,11 @@ when a stable hook is genuinely needed — a status string, a dynamic stage node
 list card. The current roster:
 
 `open-project` · `workspace-chip` · `folder-picker` · `project-switcher` ·
-`project-drawer` · `project-root` · `run-status` · `stage-node-<stageId>` ·
-`stage-profession` · `stage-persona` · `stage-verdict` · `stage-scroll` ·
-`artifact-preview` · `artifact-view-<view>` · `artifact-files` · `run-card` ·
-`run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer` ·
-`chat-question`
+`project-drawer` · `project-root` · `run-status` · `run-cost` ·
+`run-tab-<chat|logs|artifacts>` · `stage-node-<stageId>` · `stage-profession` ·
+`stage-persona` · `stage-verdict` · `stage-scroll` · `artifact-preview` ·
+`artifact-view-<view>` · `artifact-files` · `run-card` · `run-resume` ·
+`run-restart` · `run-rerun` · `chat-thread` · `chat-composer` · `chat-question`
 
 ---
 
@@ -436,9 +440,9 @@ actionable rather than merely noted.
 | # | Gap | Target | Task |
 | --- | --- | --- | --- |
 | 1 | ~~**No non-colour tokens.**~~ **Closed by TASK-072** — `SPACE`/`RADIUS`/`FONT`/`WEIGHT`/`ICON`/`Z`/`MOTION`/`EASE`/`ELEVATION` are in `theme.ts` (§7) and all 19 files are migrated. Nothing enforces their use, so a new literal can still creep in. | Prefer a token in review; a lint rule if drift appears. | — |
-| 2 | **Fixture data ships.** `mock-content.ts` (hardcoded OAuth-demo reasoning/artifacts) is imported by `StageFocusPanel.tsx:9`; the Reasoning tab renders it regardless of the real run. | Real data where a source exists, an honest empty state where it does not, file deleted. | TASK-075 |
+| 2 | ~~**Fixture data ships.**~~ **Closed by TASK-082** — `mock-content.ts` is deleted and there is no Reasoning tab. The server captures no reasoning trace, so a tab for it could only ever have shown fiction; if a real source lands, it earns a tab then. | — | — |
 | 3 | ~~**No component tests.**~~ **Closed by TASK-074** — a `jsdom` vitest project takes `*.comp.tsx`, `applyEvent` is covered by `run-events.spec.ts`, and `useRunEvents.comp.tsx` drives the subscribe-buffer-replay ordering. Only that hook is covered so far; the components still have none. | Extend the layer to presentational components as they change. | — |
-| 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. `StageFocusPanel.tsx` (625) inherits the title of largest component. | The same treatment for `StageFocusPanel` when it next changes. | — |
+| 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. **TASK-082 did the same to `StageFocusPanel` (586)**, which `components/run/` replaces. | — | — |
 | 5 | **`SetupModal` is not an accessible overlay** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. (`HistoryDrawer` shared this and was deleted by TASK-077.) | The §8 overlay rule applied. | — |
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click) and `Waveform` are visual placeholders. (`SteerChat` was the third and was deleted by TASK-078, replaced by `ChatPanel` over a real endpoint.) | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
 | 9 | **An answer resumes a parked stage; an unprompted message still goes nowhere.** TASK-079 wired the `asking` path end to end. A message sent while no stage is asking is recorded and displayed only. | Decide whether mid-run steering should reach the *next* stage's prompt, or be refused. | — |

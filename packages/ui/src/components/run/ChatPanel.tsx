@@ -1,44 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Send } from "lucide-react";
-import { isTerminalRunStatus } from "@adhd/core";
-import type { LogLevel, RunState, StageStatus } from "@adhd/core";
-import { renderInlineMarkdown } from "../inline-md";
-import { buildTranscript } from "../transcript";
-import type { TranscriptItem } from "../transcript";
-import { useFollowScroll } from "../hooks/useFollowScroll";
-import type { Dir } from "../theme";
+import { formatUsage, isTerminalRunStatus } from "@adhd/core";
+import type { LogLevel, RunState, StageState, StageStatus } from "@adhd/core";
+import { renderInlineMarkdown } from "../../inline-md";
+import { buildTranscript, conversationOnly } from "../../transcript";
+import type { ConversationItem } from "../../transcript";
+import { useFollowScroll } from "../../hooks/useFollowScroll";
+import type { Dir } from "../../theme";
 import {
   ASK_VIOLET,
   FONT,
   ICON,
-  MONO,
   RADIUS,
   SANS,
   SPACE,
-  WARN_AMBER,
   WEIGHT,
+  MONO,
   logLevelColor,
   statusClr,
-} from "../theme";
+} from "../../theme";
+import { PANEL, SCROLL_BODY, stageGlyph, stageHeadingText, stageSpendText } from "./run-styles";
 
 const BUBBLE_MAX_WIDTH = "76%";
 const THREAD_MAX_WIDTH = 860;
 const GLYPH_SIZE = 22;
 const COMPOSER_MIN_ROWS = 1;
-
-const SHELL: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  display: "flex",
-  flexDirection: "column",
-};
-
-const SCROLL: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  overflowY: "auto",
-};
 
 const THREAD: CSSProperties = {
   maxWidth: THREAD_MAX_WIDTH,
@@ -65,26 +52,7 @@ function stageRow(d: Dir): CSSProperties {
     alignItems: "center",
     gap: SPACE.md,
     marginTop: SPACE.md,
-    color: d.textMid,
-    fontFamily: SANS,
-    fontSize: FONT.md,
-    fontWeight: WEIGHT.bold,
-  };
-}
-
-function stageGlyph(d: Dir): CSSProperties {
-  return {
-    width: GLYPH_SIZE,
-    height: GLYPH_SIZE,
-    borderRadius: RADIUS.round,
-    background: d.surface2,
-    border: `1px solid ${d.border}`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: FONT.md,
-    color: d.accent,
-    flexShrink: 0,
+    ...stageHeadingText(d),
   };
 }
 
@@ -120,20 +88,6 @@ function questionBlock(d: Dir): CSSProperties {
     padding: `${SPACE.lg}px ${SPACE.xl}px`,
   };
 }
-
-function toolRow(failed: boolean, d: Dir): CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: SPACE.sm,
-    color: failed ? WARN_AMBER : d.textMuted,
-    fontFamily: MONO,
-    fontSize: FONT.sm,
-    lineHeight: 1.5,
-  };
-}
-
-const TOOL_MARKER: CSSProperties = { opacity: 0.7, flexShrink: 0 };
 
 function noticeRow(level: LogLevel, d: Dir): CSSProperties {
   return {
@@ -221,13 +175,20 @@ function closedHint(d: Dir): CSSProperties {
   };
 }
 
-function TranscriptRow({ item, d }: { item: TranscriptItem; d: Dir }) {
+interface TranscriptRowProps {
+  item: ConversationItem;
+  spend?: string | undefined;
+  d: Dir;
+}
+
+function TranscriptRow({ item, spend, d }: TranscriptRowProps) {
   if (item.kind === "stage") {
     return (
       <div style={stageRow(d)}>
-        <span style={stageGlyph(d)}>{item.glyph}</span>
+        <span style={stageGlyph(d, GLYPH_SIZE)}>{item.glyph}</span>
         <span>{item.profession}</span>
         <span style={stageStatusText(item.status)}>{item.status.toUpperCase()}</span>
+        {spend && <span style={stageSpendText(d)}>{spend}</span>}
         <span style={stageRule(d)} />
       </div>
     );
@@ -236,14 +197,6 @@ function TranscriptRow({ item, d }: { item: TranscriptItem; d: Dir }) {
     return (
       <div style={USER_ROW}>
         <div style={userBubble(d)}>{renderInlineMarkdown(item.text)}</div>
-      </div>
-    );
-  }
-  if (item.kind === "tool") {
-    return (
-      <div style={toolRow(item.failed, d)}>
-        <span style={TOOL_MARKER}>⎿</span>
-        <span>{item.text}</span>
       </div>
     );
   }
@@ -260,6 +213,11 @@ function TranscriptRow({ item, d }: { item: TranscriptItem; d: Dir }) {
   );
 }
 
+function spendOf(stages: StageState[], stageId: string): string | undefined {
+  const usage = stages.find((stage) => stage.id === stageId)?.usage;
+  return usage ? formatUsage(usage) : undefined;
+}
+
 export interface ChatPanelProps {
   run: RunState;
   d: Dir;
@@ -270,7 +228,7 @@ export interface ChatPanelProps {
 export function ChatPanel({ run, d, sending, onSend }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const items = buildTranscript(run);
+  const items = conversationOnly(buildTranscript(run));
   const closed = isTerminalRunStatus(run.status);
   const asking = run.status === "asking";
 
@@ -298,14 +256,19 @@ export function ChatPanel({ run, d, sending, onSend }: ChatPanelProps) {
   }
 
   return (
-    <div style={SHELL}>
-      <div ref={follow.ref} onScroll={follow.onScroll} style={SCROLL} data-testid="chat-thread">
+    <div style={PANEL}>
+      <div ref={follow.ref} onScroll={follow.onScroll} style={SCROLL_BODY} data-testid="chat-thread">
         <div style={THREAD}>
           {items.length === 0 && (
             <div style={emptyHint(d)}>The team has not said anything yet.</div>
           )}
           {items.map((item) => (
-            <TranscriptRow key={item.key} item={item} d={d} />
+            <TranscriptRow
+              key={item.key}
+              item={item}
+              spend={item.kind === "stage" ? spendOf(run.stages, item.stageId) : undefined}
+              d={d}
+            />
           ))}
         </div>
       </div>

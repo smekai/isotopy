@@ -6,6 +6,94 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-28 — The chat is a projection of the log (TASK-082)
+
+**Context:** the agent-window epic made the chat the run's whole body, and
+`buildTranscript` maps *every* stage log line into it. So the conversation
+carried `⎿ Read(auth.ts)`, `Tool error: …` and `Developer online · Claude Code ·
+haiku` alongside what the agent actually said, while Logs and Artifacts were
+reachable only inside `StageFocusPanel` — a second pane below the chat that
+opened when a stage node was clicked, with the workspace file browser three
+clicks deep.
+
+**Decision:** one derived ordering, three tabs over it. `buildTranscript(run)` is
+unchanged and feeds Logs; `conversationOnly(items)` feeds Chat. The chat is never
+a second source — that is what keeps a line from existing in one view and not the
+other for reasons nobody can reconstruct.
+
+**The filter is structural, not textual.** It drops `kind: "tool"` and nothing
+else. Matching prose (`startsWith("cost ")`, `/online ·/`) was the obvious
+alternative and is the one that rots: it silently stops working the day an
+adapter rewords a string. TASK-083 went first precisely so the chatter would
+already *be* tool-level, which made this filter one predicate.
+
+**`conversationOnly` returns a narrowed type**, `Exclude<TranscriptItem, { kind:
+"tool" }>`, so `ChatPanel` cannot be handed a tool row at all. The compiler found
+this: with a plain `TranscriptItem[]` return, the row component still had to
+handle a case that could never arrive.
+
+**The stage header keeps its place in the thread.** Who is working, how their
+stage ended, and what it cost are not machinery — they are the three things a
+person watching a run actually wants, and they already had a home in the divider
+row. Cost arrives there via `formatUsage(stage.usage)`; the run total sits in the
+status bar, visible from every tab.
+
+**A stage-node click filters instead of opening a pane.** The pipeline row reports
+what was clicked (`focusedId` in `App`); `RunTabs` decides that this means
+"narrow Logs and Artifacts to that stage". It deliberately does **not** switch
+tabs — a component reports what happened, the parent decides what it means, and
+yanking someone out of the chat mid-read is the opposite of that.
+
+**No Reasoning tab.** It rendered `mock-content.ts` — hardcoded OAuth-demo text,
+shown regardless of what the run did. There is no server-side reasoning source,
+so the honest options were an always-empty tab or no tab; a tab that promises
+something the system never captures is worse than its absence. The file is
+deleted, which closes TASK-075.
+
+## 2026-07-28 — Engine usage is data, not prose (TASK-083)
+
+**Context:** a run could not say what it cost. `claude-code.ts` read
+`total_cost_usd` off the CLI's result event, formatted `cost $0.0123 · 3 turns ·
+41s` into an `info` log line, and dropped the number; `codex.ts` did the same
+with token counts. Because `info` logs render as agent prose in the chat, the
+figure was simultaneously *unavailable as data* and *noise in the conversation*.
+
+**Decision:** an adapter that knows a number hands it up the seam. The three
+loose fields on `EngineRunResult` (`costUsd`, `durationMs`, `numTurns`) collapse
+to one named `StageUsage` imported from core, and the log lines that formatted
+them are deleted.
+
+**The run total is derived, not stored.** `runUsage(run)` sums the stages. A
+stored `RunState.costUsd` would be a second source of truth that drifts the
+moment a stage is restarted — and `restartRun` deliberately leaves `stage.usage`
+alone while clearing `verdict`, `logs` and the timestamps, because money spent on
+a failed attempt was still spent.
+
+**Accumulation happens on the server; the event carries the total.**
+`stageUsage()` folds each turn into `stage.usage` with `addUsage`, then emits the
+*accumulated* figure rather than the delta. A stage runs several times across a
+question loop, so an assignment would report only the last turn — but the event
+must also survive `replayEvents`, and a delta applied twice would double-count.
+Accumulate once, at the single writer; the reducer assigns.
+
+**`formatUsage` is the one place the engines' differences are expressed.** Claude
+Code reports dollars, Codex reports only tokens, Cursor reports neither. Every
+alternative — a price table per model, or a UI that branches on engine id — either
+invents numbers or spreads that knowledge across call sites. Dollars where an
+engine gives them, tokens where it only counts those, nothing where it says
+nothing, and nothing is not an error state.
+
+**Engine chatter demoted to `run` level.** `Claude Code online · …`,
+`${profession} online · …` and Cursor's `done in Ns` were `info`, which is the
+level the transcript maps to agent prose. They are tool-level noise and now say
+so, which lets TASK-082 filter the chat structurally instead of matching strings.
+
+**Not asserted from documentation.** Claude's result event is documented to carry
+a token `usage` block, but only `total_cost_usd` / `duration_ms` / `num_turns` are
+proven by the code that already read them, so only those are mapped. Adding
+speculative fields would have bought nothing — `formatUsage` prefers dollars
+anyway — at the cost of an untested path.
+
 ## 2026-07-27 — Two presets, a Project Manager, and fewer prose assertions (TASK-080)
 
 **Context:** three presets shipped (`one-box`, `dev-test`, `gated-dev-test`), all of

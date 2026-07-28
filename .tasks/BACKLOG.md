@@ -1,20 +1,5 @@
 # Backlog
 
-## TASK-075: Remove the `mock-content.ts` fixtures from `StageFocusPanel`
-**Priority:** P2 | **Tags:** ui
-**Updated:** 2026-07-27 00:00
-
-[`mock-content.ts`](../packages/ui/src/mock-content.ts) holds hardcoded `REASONING` and `ARTIFACTS` demo data from an OAuth example, and it is still imported by [`StageFocusPanel.tsx:9`](../packages/ui/src/components/StageFocusPanel.tsx#L9). The Reasoning tab renders that fixture regardless of what the run actually did, so a user inspecting a real stage is shown text about a feature they never asked for. This is prototype scaffolding that outlived the prototype.
-
-**Scope:**
-1. Decide per tab what the real source is — the Artifacts tab already has `/runs/:id/files`; Reasoning has no server-side equivalent today.
-2. Where real data exists, use it. Where it does not, render an honest empty state ("no reasoning captured for this stage") rather than fiction — do not invent an endpoint under this task.
-3. Delete `mock-content.ts` once nothing imports it.
-
-**Cross-platform:** n/a — pure UI.
-
----
-
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P2 | **Tags:** server, engine, infra
 **Updated:** 2026-07-23 13:00

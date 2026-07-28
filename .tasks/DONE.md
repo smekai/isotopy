@@ -1,5 +1,77 @@
 # Done
 
+## TASK-082: Run-level tabs — Chat, Logs, Artifacts
+**Priority:** P1 | **Tags:** ui
+**Updated:** 2026-07-28 00:00
+
+The agent-window epic left the run with one body — the chat — and put Logs and Artifacts inside `StageFocusPanel`, a *second pane below the chat* that only opened when a stage node was clicked. The workspace file browser (the "solution folder") was three clicks deep. And the chat rendered every stage log line, so `⎿ Read(auth.ts)`, `Tool error: …` and engine chatter sat in the conversation.
+
+### Done summary
+- **`components/run/` — the second feature folder**, taken under the same `architecture-ui.md` §2 rule as `setup/`. `RunTabs` is chrome — tab strip, body switch, and the only owner of which tab is open; plus `ChatPanel` (moved), `LogsPanel`, `ArtifactsPanel`, and `run-styles.ts` for the vocabulary two or more of them share.
+- **The chat is a projection of the log, not a second source.** `buildTranscript(run)` is unchanged and feeds Logs; the new pure `conversationOnly(items)` feeds Chat. The filter is **structural** — it drops `kind: "tool"` and nothing else — which only works because TASK-083 demoted engine chatter to the `run` log level first. No prose matching anywhere.
+- **`conversationOnly` returns a narrowed type** (`Exclude<TranscriptItem, { kind: "tool" }>`), so `ChatPanel` cannot be handed a tool row. The compiler found this: with a plain `TranscriptItem[]` return, the row component still had to handle a case that could never arrive (**A7**).
+- **The stage header row keeps who is working, how it ended, and what it cost** — `formatUsage(stage.usage)` beside the profession and status. The run total sits in the status bar, visible from every tab.
+- **A stage-node click filters instead of opening a pane.** `App` still owns `focusedId`; `RunTabs` narrows Logs and Artifacts to that stage and offers "show all". It deliberately does **not** switch tabs — the parent reports what happened, the tab decides what it means (§3 convention 4).
+- **Artifacts lists every stage's handoff**, not the focused one's, and the workspace browser is now one click ("Solution folder") rather than a toggle inside a tab inside a panel.
+- **Deleted:** `StageFocusPanel.tsx` (586 lines — the package's largest component), the old `components/ChatPanel.tsx`, `mock-content.ts`, and the now-unused `ELEVATION.panelUp`. **No Reasoning tab** — it rendered hardcoded OAuth-demo fixtures regardless of the run, and there is no server-side reasoning source, so the honest options were an always-empty tab or none. **Closes TASK-075.**
+- **Tests: +10.** `transcript.spec.ts` gains a `conversationOnly` block (4) proving the split both ways — machinery absent from chat, present in the log; `RunTabs.comp.tsx` (6) drives the tabs rendered, including that Artifacts shows each stage's own handoff. Uses `fireEvent` rather than adding `@testing-library/user-event`, so no new dependency.
+- **Mutation-checked:** making the filter a no-op fails exactly four tests, all of them the ones asserting the split.
+- **e2e rewritten, and the seeded fixture made faithful** — it declared the "Developer online" line at `info`, a level the server no longer emits for it. Now `run`, with real `info` prose and per-stage `usage`, so the fixture matches what a real run produces. `dev-test-flow` grew from 3 to 6 run-view cases (chat contents, log contents, cost total, artifacts, solution folder); `live-dev-test` reaches the badges via the Logs tab.
+- **Verified:** lint, typecheck, **229 tests**, build, `gen:skills`, **Playwright 30 passed, 1 skipped**. Driven in a real browser across all four surfaces with screenshots — chat carries prose and verdicts only, logs carry the machinery with timestamps and badges, artifacts list both handoffs, and the solution folder lists the workspace. Docs: dated `decisions.md` entry; `architecture-ui.md` §2/§3/§5/§6/§7/§9 and gaps #2 and #4. Versions 0.7.2.
+
+---
+
+## TASK-084: GitHub Actions CI — build, tests, and required PR checks
+**Priority:** P1 | **Tags:** infra, testing, setup
+**Updated:** 2026-07-28 13:25
+
+Add a GitHub Actions workflow that runs lint, typecheck, build, unit tests, and Playwright e2e on every pull request and push to `main`. Configure branch protection so PRs cannot merge until all CI jobs are green.
+
+**Cross-platform:** n/a — CI configuration, runs on ubuntu runners.
+
+### Done summary
+- Added [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) with two parallel jobs on `ubuntu-latest`: **`checks`** (lint → typecheck → build → vitest) and **`e2e`** (Playwright chromium, free/seeded tier only).
+- Triggers on every `pull_request` and `push` to `main`; concurrency cancels in-flight runs for the same ref.
+- **Branch protection:** `gh api` returned 403 — private repos need **GitHub Pro** (or public visibility) for required-status-check rules. After the workflow has run once on a PR, enable manually: **Settings → Branches → Add rule** on `main` → require status checks **`CI / checks`** and **`CI / e2e`**, require branches up to date before merging.
+- **Verified locally:** lint, typecheck, build, 229 unit tests pass. Versions 0.7.2.
+
+---
+
+## TASK-083: Structured engine usage — cost and tokens on the run
+**Priority:** P1 | **Tags:** core, server, engine
+**Updated:** 2026-07-28 00:00
+
+A run could not say what it cost. `claude-code.ts` read `total_cost_usd` off the CLI's result event, formatted it into a log line, and threw the number away; `codex.ts` did the same with token counts. Nothing reached `RunState`. The same lines were also chat noise, because `info`-level logs render as agent prose.
+
+### Done summary
+- **`StageUsage` in core** — `costUsd`, `tokensIn`/`tokensOut`/`cachedTokensIn`, `durationMs`, `turns`; `StageState.usage`; a `stage.usage` event on both the union and `RUN_EVENT_TYPES`. Three pure helpers: `addUsage` (fold one turn in), `runUsage` (the run's total, **derived** — a stored total drifts the moment a stage restarts), `formatUsage` (the display rule).
+- **`EngineRunResult.usage` replaces three loose fields** (`costUsd`, `durationMs`, `numTurns`). One named shape imported from core, both sides of the seam.
+- **`formatUsage` is where the engines' differences live.** Claude Code reports dollars, Codex only tokens, Cursor neither — so no caller branches on engine id, and "nothing" is a legitimate answer rather than an error state. Sub-cent spend keeps four decimals (`$0.0042`), the rest two (`$0.14`).
+- **Accumulation on the server, totals on the wire.** `stageUsage()` folds each turn in with `addUsage` and emits the *accumulated* figure, so the UI reducer assigns. A delta would double-count under `replayEvents`; an assignment would report only the last turn of a question loop. `restartRun` deliberately leaves `usage` alone while clearing `verdict`/`logs`/timestamps — money spent on a failed attempt was still spent.
+- **Engine chatter demoted `info` → `run`** in all three adapters and in `stage-execution.ts`. `Claude Code online · …`, `${profession} online · …` and Cursor's `done in Ns` are tool-level noise and now say so — which is what lets TASK-082 filter the chat structurally instead of matching strings.
+- **The running total shows in `RunStatusBar`** (`data-testid="run-cost"`), so it is visible from every tab.
+- **Tests: +12.** `core/test/usage.spec.ts` (8) covers the fold, the derived total, and every branch of the format rule; `server/test/run-usage.comp.ts` (5) covers the stage figure, the **question-loop accumulation**, the run total, an engine that reports nothing, and survival across a server restart. `FakeEngine`'s `reports()`/`asks()` gained an optional usage argument.
+- **Mutation-checked:** replacing `addUsage(stage.usage, usage)` with a plain assignment fails exactly one test — the accumulation one — and nothing else.
+- **Verified:** lint, typecheck, **219 tests**, build, `gen:skills`, **Playwright 27 passed, 1 skipped**. Docs: dated `decisions.md` entry; `architecture-ui.md` testid roster gains `run-cost`. Versions 0.7.1.
+
+**Not done here:** Claude's result event is documented to carry a token `usage` block, but only the three fields the existing code already read are mapped — asserting a shape from documentation is the failure mode TASK-079 recorded. No price table converts Codex tokens to dollars; inventing a number is worse than showing tokens.
+
+---
+
+## TASK-081: Update ADHD app icon to Smekai graphite family
+**Priority:** P2 | **Tags:** ui, setup
+**Updated:** 2026-07-28 12:40
+
+Replace the legacy comic-burst favicon and `adhd-icon.png` with the approved graphite ADHD icon from `smekai/.github/brand/identity/`.
+
+**Cross-platform:** n/a — static image assets only.
+
+### Done summary
+
+Rasterized `smek_ai_icon_graphite_adhd@2x.png` into `adhd-icon.png` (128), `favicon-32.png`, `favicon.ico`, and `favicon.svg`. Committed on worktree branch `chore/update-adhd-graphite-icon` (`a65165b`), based on `origin/main`.
+
+---
+
 ## TASK-076: Epic — the agent window and conversational runs
 **Priority:** P1 | **Tags:** ui, server, core, engine
 **Updated:** 2026-07-27 00:00

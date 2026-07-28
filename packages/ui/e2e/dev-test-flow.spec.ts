@@ -38,6 +38,10 @@ const TESTER_OUTPUT = [
   "VERDICT: PASS",
 ].join("\n");
 
+/** What each box actually *said* — `info` logs, the only thing chat renders. */
+const DEV_PROSE = "I created greet.js and wired it into the entry point.";
+const TESTER_PROSE = "I ran the suite; every case passes.";
+
 const STARTED_AT = "2026-07-20T10:00:00.000Z";
 const FINISHED_AT = "2026-07-20T10:02:30.000Z";
 
@@ -70,8 +74,11 @@ const SEEDED_RUN: RunState = {
       status: "passed",
       startedAt: STARTED_AT,
       completedAt: "2026-07-20T10:01:00.000Z",
+      usage: { costUsd: 0.18, turns: 4 },
       logs: [
-        { ts: STARTED_AT, level: "info", message: "Developer online · Claude Code · haiku" },
+        { ts: STARTED_AT, level: "run", message: "Developer online · Claude Code · haiku" },
+        { ts: "2026-07-20T10:00:20.000Z", level: "info", message: DEV_PROSE },
+        { ts: "2026-07-20T10:00:30.000Z", level: "run", message: "▶ Write greet.js" },
         { ts: "2026-07-20T10:01:00.000Z", level: "pass", message: "✓ Developer finished — result ready" },
       ],
     },
@@ -83,8 +90,10 @@ const SEEDED_RUN: RunState = {
       status: "passed",
       startedAt: "2026-07-20T10:01:00.000Z",
       completedAt: FINISHED_AT,
+      usage: { costUsd: 0.07, turns: 2 },
       logs: [
-        { ts: "2026-07-20T10:01:00.000Z", level: "info", message: "Tester online · Claude Code · haiku" },
+        { ts: "2026-07-20T10:01:00.000Z", level: "run", message: "Tester online · Claude Code · haiku" },
+        { ts: "2026-07-20T10:01:30.000Z", level: "info", message: TESTER_PROSE },
         { ts: FINISHED_AT, level: "pass", message: "Tester reported VERDICT: PASS" },
       ],
     },
@@ -162,51 +171,82 @@ test("both boxes render as Developer and Tester with their persona badges", asyn
   await expect(page.getByTestId("stage-node-implementation")).toContainText("Developer");
   await expect(page.getByTestId("stage-node-test")).toContainText("Tester");
 
-  await page.getByTestId("stage-node-implementation").click();
-  await expect(page.getByTestId("stage-profession")).toHaveText("Developer");
-  await expect(page.getByTestId("stage-persona")).toHaveText("DEVELOPER");
+  // The badges live on the Logs tab's per-stage header now that the stage panel
+  // is retired; a stage node filters that tab rather than opening a pane.
+  await page.getByTestId("run-tab-logs").click();
+  await expect(page.getByTestId("stage-profession")).toHaveText(["Developer", "Tester"]);
+  await expect(page.getByTestId("stage-persona")).toHaveText(["DEVELOPER", "TESTER"]);
   // Only the verification box declares a verdict.
-  await expect(page.getByTestId("stage-verdict")).toHaveCount(0);
+  await expect(page.getByTestId("stage-verdict")).toHaveText(["PASS"]);
 
-  await page.getByTestId("stage-node-test").click();
-  await expect(page.getByTestId("stage-profession")).toHaveText("Tester");
-  await expect(page.getByTestId("stage-persona")).toHaveText("TESTER");
-  await expect(page.getByTestId("stage-verdict")).toHaveText("PASS");
+  await page.getByTestId("stage-node-implementation").click();
+  await expect(page.getByTestId("stage-profession")).toHaveText(["Developer"]);
+  await expect(page.getByTestId("stage-verdict")).toHaveCount(0);
 });
 
-test("the run opens on one thread carrying both boxes in order", async ({ page }) => {
+test("the chat carries what the boxes said, in order, and nothing else", async ({ page }) => {
   await seedRun(page);
   await attachSeededRun(page);
 
   // The chat is the body of a run now — no stage has to be clicked to see it.
   const thread = page.getByTestId("chat-thread");
-  await expect(thread).toContainText("Developer online");
-  await expect(thread).toContainText("Tester online");
+  await expect(thread).toContainText(DEV_PROSE);
+  await expect(thread).toContainText(TESTER_PROSE);
 
-  // Both boxes' dividers are present, and the Developer's precedes the Tester's.
-  const developerFirst = await thread.innerText();
-  expect(developerFirst.indexOf("Developer online")).toBeLessThan(
-    developerFirst.indexOf("Tester online"),
-  );
+  const said = await thread.innerText();
+  expect(said.indexOf(DEV_PROSE)).toBeLessThan(said.indexOf(TESTER_PROSE));
+
+  // Machinery belongs in the log, not the conversation.
+  await expect(thread).not.toContainText("Developer online");
+  await expect(thread).not.toContainText("Write greet.js");
+  // …but the result does stay: a verdict is not machinery.
+  await expect(thread).toContainText("VERDICT: PASS");
 
   // A finished run cannot be messaged, and says so instead of offering a box.
   await expect(page.getByTestId("chat-composer")).toHaveCount(0);
   await expect(page.getByText(/This run has finished/)).toBeVisible();
 });
 
-test("each box's Artifacts tab shows that box's own handoff.md", async ({ page }) => {
+test("the log holds the machinery the chat leaves out", async ({ page }) => {
+  await seedRun(page);
+  await attachSeededRun(page);
+
+  await page.getByTestId("run-tab-logs").click();
+  const log = page.getByTestId("stage-scroll");
+  await expect(log).toContainText("Developer online · Claude Code · haiku");
+  await expect(log).toContainText("Write greet.js");
+  await expect(log).toContainText(DEV_PROSE);
+});
+
+test("the status bar totals what the run cost", async ({ page }) => {
+  await seedRun(page);
+  await attachSeededRun(page);
+
+  // 0.18 + 0.07, summed across the boxes rather than stored on the run.
+  await expect(page.getByTestId("run-cost")).toHaveText("$0.25");
+});
+
+test("the Artifacts tab shows each box's own handoff.md", async ({ page }) => {
   await seedRun(page);
   await attachSeededRun(page);
 
   // Regression guard for TASK-047: every stage used to show run.result, which
   // holds only the last box's output.
-  await page.getByTestId("stage-node-implementation").click();
-  await page.getByRole("button", { name: "Artifacts" }).click();
-  await expect(page.getByText("handoff.md")).toBeVisible();
+  await page.getByTestId("run-tab-artifacts").click();
+  await expect(page.getByText("implementation/handoff.md")).toBeVisible();
   await expect(page.getByTestId("artifact-preview")).toContainText(DEV_MARKER);
   await expect(page.getByTestId("artifact-preview")).not.toContainText(TESTER_MARKER);
 
-  await page.getByTestId("stage-node-test").click();
+  await page.getByText("test/handoff.md").click();
   await expect(page.getByTestId("artifact-preview")).toContainText(TESTER_MARKER);
   await expect(page.getByTestId("artifact-preview")).not.toContainText(DEV_MARKER);
+});
+
+test("the solution folder is one click from the run, not three", async ({ page }) => {
+  await seedRun(page);
+  await attachSeededRun(page);
+
+  await page.getByTestId("run-tab-artifacts").click();
+  await page.getByTestId("artifact-view-files").click();
+  await expect(page.getByTestId("artifact-files")).toBeVisible();
 });
