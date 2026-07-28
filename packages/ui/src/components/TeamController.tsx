@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Play, RotateCcw, Sparkles, Square, UserCheck } from "lucide-react";
+import { Play, RotateCcw, Square, UserCheck } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
 import { resumeStageId } from "../run-utils";
@@ -30,15 +30,13 @@ function bar(d: Dir): CSSProperties {
   };
 }
 
-function logoMark(d: Dir): CSSProperties {
+function appLogo(): CSSProperties {
   return {
     width: LOGO_SIZE,
     height: LOGO_SIZE,
     borderRadius: RADIUS.md,
-    background: `linear-gradient(135deg, ${d.accent}, ${d.accentDark})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    display: "block",
+    flexShrink: 0,
   };
 }
 
@@ -172,9 +170,7 @@ export function TeamController({
   return (
     <div style={bar(d)}>
       <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
-        <div style={logoMark(d)}>
-          <Sparkles size={ICON.md} style={{ color: "#FFF" }} />
-        </div>
+        <img src="/adhd-icon.png" alt="" width={LOGO_SIZE} height={LOGO_SIZE} style={appLogo()} />
         <span style={wordmark(d)}>ADHD</span>
       </div>
 
