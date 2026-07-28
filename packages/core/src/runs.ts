@@ -37,7 +37,7 @@ export interface StageLogEntry {
   message: string;
 }
 
-export type StageVerdict = "PASS" | "FAIL";
+export type StageVerdict = "PASS" | "FAIL" | "SKIP";
 
 export type MessageRole = "user" | "agent";
 

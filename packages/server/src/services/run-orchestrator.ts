@@ -576,6 +576,27 @@ export class RunOrchestrator implements RunProjection {
     });
   }
 
+  stageSkipped(runId: string, stageId: string): void {
+    if (!this.live(runId)) {
+      return;
+    }
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    const completedAt = nowIso();
+    stage.completedAt = completedAt;
+    stage.status = "skipped";
+    this.emit({
+      ts: completedAt,
+      type: "stage.skipped",
+      runId,
+      stageId,
+      status: "skipped",
+      message: `${agentForStage(stageId).profession} skipped`,
+    });
+  }
+
   stageFailed(runId: string, stageId: string, message: string): void {
     if (!this.live(runId)) {
       return;

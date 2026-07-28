@@ -24,6 +24,7 @@ import type { TestApp } from "./support/harness.ts";
 const PM_REPORT = "Add a greet function. Done when it prints a greeting. MARKER-PM";
 const DEV_REPORT = "Added greet.js and a smoke check. MARKER-DEVELOPER";
 const TESTER_REPORT = "Ran the suite, all green. MARKER-TESTER\n\nVERDICT: PASS";
+const SKIP_REPORT = "No product planning is required. MARKER-SKIP\n\nVERDICT: SKIP";
 
 const TASK = "add a greet function";
 
@@ -191,6 +192,28 @@ test("a PASS verdict is recorded on the verifying stage only", async () => {
   // Neither upstream persona declares a verdict contract, so both stay undefined.
   expect(stageOf(finished, "implementation").verdict).toBeUndefined();
   expect(stageOf(finished, "intake").verdict).toBeUndefined();
+});
+
+test("a SKIP verdict records evidence and continues to downstream stages", async () => {
+  const { app, engine, home } = ctx;
+  engine.anticipate({ as: "Product Manager" }).reports(SKIP_REPORT);
+  engine
+    .anticipate({ as: "Developer", prompt: /MARKER-SKIP/ })
+    .reports(DEV_REPORT);
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+
+  const run = await startRun(app, PIPELINE);
+
+  const finished = await waitForRunStatus(app, run.id, "completed");
+  const intake = stageOf(finished, "intake");
+  expect(intake.status).toBe("skipped");
+  expect(intake.verdict).toBe("SKIP");
+  expect(intake.completedAt).toBeDefined();
+  expect(finished.stageOutputs?.intake).toBe(SKIP_REPORT);
+  expect(stageOf(finished, "implementation").status).toBe("passed");
+  expect(stageOf(finished, "test").status).toBe("passed");
+  expect(await readHandoff(home, run.id, "intake")).toContain(SKIP_REPORT);
+  engine.verify();
 });
 
 test("a failing Developer stops the run before QA is ever called", async () => {

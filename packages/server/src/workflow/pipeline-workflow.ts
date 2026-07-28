@@ -160,7 +160,7 @@ async function runGroup(
       }
     }
     const outcome = await runOneStage(step, deps, input, stageDef);
-    if (outcome !== "passed") {
+    if (outcome === "failed" || outcome === "cancelled") {
       return outcome;
     }
   }

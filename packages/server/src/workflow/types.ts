@@ -25,7 +25,7 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
-export type StageOutcome = "passed" | "failed" | "cancelled" | "asking";
+export type StageOutcome = "passed" | "failed" | "skipped" | "cancelled" | "asking";
 
 export interface StageResult {
   outcome: StageOutcome;
@@ -55,6 +55,7 @@ export interface RunProjection {
   stageAnswered(runId: string, stageId: string): void;
   gateApproved(runId: string, stageId: string): void;
   stagePassed(runId: string, stageId: string): void;
+  stageSkipped(runId: string, stageId: string): void;
   stageFailed(runId: string, stageId: string, message: string): void;
   setVerdict(runId: string, stageId: string, verdict: StageVerdict): void;
   stageUsage(runId: string, stageId: string, usage: StageUsage): void;

@@ -155,6 +155,7 @@ describe("applyEvent", () => {
     );
 
     expect(stageOf(after, "design").status).toBe("skipped");
+    expect(stageOf(after, "design").completedAt).toBe("2026-07-21T10:00:01.000Z");
   });
 
   test("run.message appends the message to the transcript", () => {

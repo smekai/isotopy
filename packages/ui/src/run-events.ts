@@ -92,6 +92,7 @@ export function applyEvent(run: RunState, event: RunEvent): RunState {
 
   if (event.type === "stage.skipped") {
     stage.status = "skipped";
+    stage.completedAt = event.ts;
   }
 
   return next;

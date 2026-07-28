@@ -158,6 +158,9 @@ export async function runStageWork(
 
   if (decision.outcome === "failed") {
     projection.stageFailed(runId, stageDef.id, decision.failureMessage ?? `${profession} failed`);
+  } else if (decision.outcome === "skipped") {
+    projection.log(runId, stageDef.id, "warn", `${profession} reported VERDICT: SKIP`);
+    projection.stageSkipped(runId, stageDef.id);
   } else {
     if (decision.verdict === "PASS") {
       projection.log(runId, stageDef.id, "pass", `${profession} reported VERDICT: PASS`);

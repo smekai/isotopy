@@ -1,5 +1,22 @@
 # Done
 
+## TASK-085: Support VERDICT: SKIP as a stage outcome
+**Priority:** P0 | **Tags:** core, server, testing
+**Updated:** 2026-07-28 17:32
+
+Done. Added `VERDICT: SKIP` as a first-class verdict and non-blocking stage outcome.
+
+- parser accepts bare, Markdown-wrapped, case-insensitive, and CRLF SKIP verdicts;
+- skipped stages retain verdict, output, handoff, completion time, and a neutral UI treatment;
+- a skipped gated stage bypasses approval and downstream stages continue;
+- PASS, FAIL, cancellation, and no-verdict behaviour remain unchanged.
+
+Cross-platform: pure TypeScript logic; validated on Windows with CRLF coverage and platform-neutral behaviour.
+
+Verified: lint, typecheck, 233 tests, build, and `gen:skills --check`.
+
+---
+
 ## TASK-082: Run-level tabs — Chat, Logs, Artifacts
 **Priority:** P1 | **Tags:** ui
 **Updated:** 2026-07-28 00:00
@@ -940,8 +957,7 @@ Done: added to `packages/core/src/index.ts` — `EngineModelOption` + `CLAUDE_MO
 ---
 
 ## TASK-023: Adopt TASK-020 verification assets — test plan, run skill, free-tier E2E
-**Priority:** P1
-**Tags:** testing, infra
+**Priority:** P1 | **Tags:** testing, infra
 **Updated:** 2026-07-14 16:20
 
 Fold the throwaway TASK-020 verification work into the project: test plan doc, project run skill, free-tier Playwright suite (live tier stays manual/documented).

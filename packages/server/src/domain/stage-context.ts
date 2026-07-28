@@ -43,7 +43,7 @@ export function buildStagePrompt(
   ].join("\n\n");
 }
 
-const VERDICT_LINE = /^[*`_\s]*VERDICT:\s*(PASS|FAIL)[*`_\s]*$/i;
+const VERDICT_LINE = /^[*`_\s]*VERDICT:\s*(PASS|FAIL|SKIP)[*`_\s]*$/i;
 
 export function parseStageVerdict(output: string | undefined): StageVerdict | undefined {
   if (!output) {
@@ -77,7 +77,7 @@ export function parseStageQuestion(output: string | undefined): string | undefin
 }
 
 export interface EngineStageOutcome {
-  outcome: "passed" | "failed" | "asking";
+  outcome: "passed" | "failed" | "skipped" | "asking";
   output?: string;
   verdict?: StageVerdict;
   question?: string;
@@ -116,6 +116,13 @@ export function interpretEngineResult(
       ...(output !== undefined ? { output } : {}),
       verdict,
       failureMessage: `${profession} reported VERDICT: FAIL`,
+    };
+  }
+  if (verdict === "SKIP") {
+    return {
+      outcome: "skipped",
+      ...(output !== undefined ? { output } : {}),
+      verdict,
     };
   }
   return {
