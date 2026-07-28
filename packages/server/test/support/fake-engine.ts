@@ -7,7 +7,7 @@
 // Registered via `setEngineAdapter()` (packages/server/src/engines/registry.ts),
 // which is what keeps a component test from ever spawning a real CLI.
 import { expect } from "vitest";
-import type { EngineId } from "@adhd/core";
+import type { EngineId, StageUsage } from "@adhd/core";
 import type {
   EngineAdapter,
   EngineRunContext,
@@ -42,8 +42,8 @@ interface Scripted {
 
 /** Chainable outcome for one anticipated call. */
 export interface AnticipationOutcome {
-  /** The box succeeds and reports this text. */
-  reports(result: string): FakeEngine;
+  /** The box succeeds and reports this text, having spent `usage` if given. */
+  reports(result: string, usage?: StageUsage): FakeEngine;
   /** The engine itself fails (non-zero exit, crash, timeout). */
   fails(errorMessage: string): FakeEngine;
   /** Blocks until the run is aborted — the vehicle for abort tests. */
@@ -52,7 +52,7 @@ export interface AnticipationOutcome {
    * The box stops and asks, handing back a session id. A real CLI would print
    * this on its event stream; the workflow feeds it back as `resumeSessionId`.
    */
-  asks(question: string, sessionId: string): FakeEngine;
+  asks(question: string, sessionId: string, usage?: StageUsage): FakeEngine;
 }
 
 function describeMatcher(matcher: Matcher): string {
@@ -88,11 +88,11 @@ export class FakeEngine implements EngineAdapter {
       return this;
     };
     return {
-      reports: (result) =>
-        push(() => Promise.resolve({ success: true, exitCode: 0, result })),
+      reports: (result, usage) =>
+        push(() => Promise.resolve({ success: true, exitCode: 0, result, usage })),
       fails: (errorMessage) =>
         push(() => Promise.resolve({ success: false, exitCode: 1, errorMessage })),
-      asks: (question, sessionId) =>
+      asks: (question, sessionId, usage) =>
         push(() =>
           Promise.resolve({
             success: true,
@@ -101,6 +101,7 @@ export class FakeEngine implements EngineAdapter {
 
 QUESTION: ${question}`,
             sessionId,
+            usage,
           }),
         ),
       hangsUntilAborted: () =>

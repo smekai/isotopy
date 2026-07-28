@@ -195,7 +195,7 @@ function handleCursorEvent(
   onLog: EngineRunContext["onLog"],
 ): CursorStreamEvent | undefined {
   if (event.type === "system" && event.subtype === "init") {
-    onLog("info", truncate(`Cursor agent online · ${event.model ?? "default model"}`));
+    onLog("run", truncate(`Cursor agent online · ${event.model ?? "default model"}`));
     return undefined;
   }
   if (event.type === "assistant") {
@@ -211,8 +211,6 @@ function handleCursorEvent(
     return undefined;
   }
   if (event.type === "result") {
-    const secs = event.duration_ms !== undefined ? `${Math.round(event.duration_ms / 1000)}s` : "?";
-    onLog("info", `done in ${secs}`);
     return event;
   }
   return undefined;
@@ -438,7 +436,7 @@ export const cursorAdapter: EngineAdapter = {
       result: finalEvent?.result,
       exitCode: result.exitCode,
       errorMessage,
-      durationMs: finalEvent?.duration_ms ?? result.durationMs,
+      usage: { durationMs: finalEvent?.duration_ms ?? result.durationMs, turns: 1 },
     };
   },
 };

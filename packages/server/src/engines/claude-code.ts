@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineStatus } from "@adhd/core";
+import type { EngineStatus, StageUsage } from "@adhd/core";
 import { firstLine, truncate } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
@@ -161,7 +161,7 @@ function handleClaudeEvent(
 ): ClaudeStreamEvent | undefined {
   if (event.type === "system" && event.subtype === "init") {
     const tools = Array.isArray(event.tools) ? `${event.tools.length} tools` : "";
-    onLog("info", truncate(`Claude Code online · ${event.model ?? "default model"} · ${tools}`));
+    onLog("run", truncate(`Claude Code online · ${event.model ?? "default model"} · ${tools}`));
     return undefined;
   }
   if (event.type === "assistant") {
@@ -183,13 +183,21 @@ function handleClaudeEvent(
     return undefined;
   }
   if (event.type === "result") {
-    const cost = event.total_cost_usd !== undefined ? `$${event.total_cost_usd.toFixed(4)}` : "?";
-    const turns = event.num_turns ?? "?";
-    const secs = event.duration_ms !== undefined ? `${Math.round(event.duration_ms / 1000)}s` : "?";
-    onLog("info", `cost ${cost} · ${turns} turns · ${secs}`);
     return event;
   }
   return undefined;
+}
+
+function usageFrom(event: ClaudeStreamEvent | undefined): StageUsage | undefined {
+  if (!event) {
+    return undefined;
+  }
+  const usage: StageUsage = {
+    ...(event.total_cost_usd !== undefined ? { costUsd: event.total_cost_usd } : {}),
+    ...(event.duration_ms !== undefined ? { durationMs: event.duration_ms } : {}),
+    ...(event.num_turns !== undefined ? { turns: event.num_turns } : {}),
+  };
+  return Object.keys(usage).length > 0 ? usage : undefined;
 }
 
 export const claudeCodeAdapter: EngineAdapter = {
@@ -318,9 +326,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       sessionId,
       exitCode: result.exitCode,
       errorMessage,
-      costUsd: finalEvent?.total_cost_usd,
-      durationMs: finalEvent?.duration_ms,
-      numTurns: finalEvent?.num_turns,
+      usage: usageFrom(finalEvent),
     };
   },
 };

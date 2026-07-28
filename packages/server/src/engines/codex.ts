@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { CODEX_MODEL_OPTIONS } from "@adhd/core";
-import type { EngineModelList, EngineStatus } from "@adhd/core";
+import type { EngineModelList, EngineStatus, StageUsage } from "@adhd/core";
 import { firstLine, truncate } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
@@ -169,6 +169,21 @@ interface CodexCapture {
   errorMessage?: string;
 }
 
+function usageFrom(codex: CodexUsage | undefined, durationMs: number): StageUsage | undefined {
+  if (!codex) {
+    return undefined;
+  }
+  return {
+    ...(codex.input_tokens !== undefined ? { tokensIn: codex.input_tokens } : {}),
+    ...(codex.output_tokens !== undefined ? { tokensOut: codex.output_tokens } : {}),
+    ...(codex.cached_input_tokens !== undefined
+      ? { cachedTokensIn: codex.cached_input_tokens }
+      : {}),
+    durationMs,
+    turns: 1,
+  };
+}
+
 function errorMessageOf(error: CodexEvent["error"]): string | undefined {
   if (!error) {
     return undefined;
@@ -227,17 +242,11 @@ function handleCodexEvent(
         onLog("warn", truncate(message));
       }
       break;
-    case "turn.completed": {
+    case "turn.completed":
       capture.turnCompleted = true;
       capture.usage = event.usage;
-      const u = event.usage;
-      const tokens = u
-        ? `tokens: in ${u.input_tokens ?? "?"} · out ${u.output_tokens ?? "?"}` +
-          (u.cached_input_tokens ? ` · cached ${u.cached_input_tokens}` : "")
-        : "turn complete";
-      onLog("info", tokens);
+      onLog("run", "turn complete");
       break;
-    }
     case "turn.failed":
       capture.errorMessage ??= errorMessageOf(event.error) ?? "Codex turn failed";
       break;
@@ -441,7 +450,7 @@ export const codexAdapter: EngineAdapter = {
       sessionId: capture.threadId,
       exitCode: result.exitCode,
       errorMessage,
-      durationMs: result.durationMs,
+      usage: usageFrom(capture.usage, result.durationMs),
     };
   },
 };

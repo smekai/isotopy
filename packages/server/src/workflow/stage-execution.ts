@@ -64,7 +64,7 @@ export async function runStageWork(
     projection.log(
       runId,
       stageDef.id,
-      "info",
+      "run",
       `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
     );
   }
@@ -113,6 +113,10 @@ export async function runStageWork(
     };
   } finally {
     deps.endEngineStage(runId);
+  }
+
+  if (outcome.usage) {
+    projection.stageUsage(runId, stageDef.id, outcome.usage);
   }
 
   if (deps.isCancelled(runId)) {

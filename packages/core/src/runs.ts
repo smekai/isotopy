@@ -53,12 +53,23 @@ export interface RunMessage {
   text: string;
 }
 
+/** What one engine turn spent. Engines report different halves of this. */
+export interface StageUsage {
+  costUsd?: number;
+  tokensIn?: number;
+  tokensOut?: number;
+  cachedTokensIn?: number;
+  durationMs?: number;
+  turns?: number;
+}
+
 export interface StageState {
   id: string;
   label: string;
   skill?: string;
   verdict?: StageVerdict;
   status: StageStatus;
+  usage?: StageUsage;
   logs: StageLogEntry[];
   startedAt?: string;
   completedAt?: string;
@@ -104,6 +115,51 @@ export interface RunSummary {
   stages: RunSummaryStage[];
 }
 
+const USAGE_FIELDS = [
+  "costUsd",
+  "tokensIn",
+  "tokensOut",
+  "cachedTokensIn",
+  "durationMs",
+  "turns",
+] as const;
+
+export function addUsage(base: StageUsage | undefined, next: StageUsage): StageUsage {
+  const total: StageUsage = { ...base };
+  for (const field of USAGE_FIELDS) {
+    const spent = next[field];
+    if (spent !== undefined) {
+      total[field] = (total[field] ?? 0) + spent;
+    }
+  }
+  return total;
+}
+
+export function runUsage(run: RunState): StageUsage {
+  return run.stages.reduce<StageUsage>(
+    (total, stage) => (stage.usage ? addUsage(total, stage.usage) : total),
+    {},
+  );
+}
+
+const CENT = 0.01;
+const THOUSAND = 1000;
+
+function formatTokenCount(count: number): string {
+  return count < THOUSAND ? `${count}` : `${(count / THOUSAND).toFixed(1)}k`;
+}
+
+/** Dollars where an engine reports them, tokens where it only counts those. */
+export function formatUsage(usage: StageUsage): string | undefined {
+  if (usage.costUsd !== undefined) {
+    return `$${usage.costUsd.toFixed(usage.costUsd < CENT ? 4 : 2)}`;
+  }
+  if (usage.tokensIn !== undefined || usage.tokensOut !== undefined) {
+    return `${formatTokenCount(usage.tokensIn ?? 0)} in · ${formatTokenCount(usage.tokensOut ?? 0)} out`;
+  }
+  return undefined;
+}
+
 export const RUN_SUMMARY_EVENT = "run.summary";
 
 export function toRunSummary(run: RunState): RunSummary {
@@ -139,6 +195,7 @@ export type RunEventType =
   | "stage.skipped"
   | "stage.asking"
   | "stage.answered"
+  | "stage.usage"
   | "run.message";
 
 export const RUN_EVENT_TYPES: RunEventType[] = [
@@ -153,6 +210,7 @@ export const RUN_EVENT_TYPES: RunEventType[] = [
   "stage.skipped",
   "stage.asking",
   "stage.answered",
+  "stage.usage",
   "run.message",
 ];
 
@@ -166,6 +224,7 @@ export interface RunEvent {
   level?: LogLevel;
   result?: string;
   chatMessage?: RunMessage;
+  usage?: StageUsage;
 }
 
 export interface NewRunInput {

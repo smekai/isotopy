@@ -4,6 +4,7 @@ import type {
   EnginePermissionMode,
   EngineStatus,
   LogLevel,
+  StageUsage,
 } from "@adhd/core";
 
 export interface EngineConnection {
@@ -33,9 +34,7 @@ export interface EngineRunResult {
   sessionId?: string | undefined;
   exitCode: number | null;
   errorMessage?: string | undefined;
-  costUsd?: number | undefined;
-  durationMs?: number | undefined;
-  numTurns?: number | undefined;
+  usage?: StageUsage | undefined;
 }
 
 export interface EngineActionResult {

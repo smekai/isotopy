@@ -5,6 +5,7 @@ import type {
   PipelineDefinition,
   RunState,
   StageDefinition,
+  StageUsage,
   StageVerdict,
 } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
@@ -56,6 +57,7 @@ export interface RunProjection {
   stagePassed(runId: string, stageId: string): void;
   stageFailed(runId: string, stageId: string, message: string): void;
   setVerdict(runId: string, stageId: string, verdict: StageVerdict): void;
+  stageUsage(runId: string, stageId: string, usage: StageUsage): void;
   captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
   runCompleted(runId: string, status: "completed" | "failed"): void;

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { RunState } from "@adhd/core";
-import { ENGINES } from "@adhd/core";
+import { ENGINES, formatUsage, runUsage } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
 import { EASE, FONT, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, runDot } from "../theme";
@@ -47,6 +47,10 @@ function engineText(d: Dir): CSSProperties {
   return { color: d.textMid, fontFamily: MONO, fontSize: FONT.xs, fontWeight: WEIGHT.semibold, whiteSpace: "nowrap" };
 }
 
+function spendText(d: Dir): CSSProperties {
+  return { color: d.textMid, fontFamily: MONO, fontSize: FONT.xs, fontWeight: WEIGHT.semibold };
+}
+
 function statusDot(dot: string, running: boolean, d: Dir): CSSProperties {
   return {
     width: STATUS_DOT_SIZE,
@@ -75,6 +79,7 @@ export function RunStatusBar({ run, d }: RunStatusBarProps) {
   const elapsed = useElapsed(run.createdAt, run.completedAt);
   const running = run.status === "running";
   const dot = runDot(run.status, d);
+  const spend = formatUsage(runUsage(run));
 
   return (
     <div style={bar(d)}>
@@ -91,6 +96,12 @@ export function RunStatusBar({ run, d }: RunStatusBarProps) {
       )}
       <div style={divider(d)} />
       <span style={metaText(d)}>{elapsed}</span>
+      {spend && (
+        <>
+          <div style={divider(d)} />
+          <span data-testid="run-cost" style={spendText(d)}>{spend}</span>
+        </>
+      )}
       <div style={{ flex: 1 }} />
       <div style={statusDot(dot, running, d)} />
       <span data-testid="run-status" style={statusText(d)}>{run.status.toUpperCase()}</span>

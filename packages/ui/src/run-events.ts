@@ -55,6 +55,10 @@ export function applyEvent(run: RunState, event: RunEvent): RunState {
     }
   }
 
+  if (event.type === "stage.usage" && event.usage) {
+    stage.usage = event.usage;
+  }
+
   if (event.type === "stage.completed") {
     stage.status = "passed";
     stage.completedAt = event.ts;

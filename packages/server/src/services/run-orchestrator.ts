@@ -11,12 +11,14 @@ import type {
   RunSummary,
   StageDefinition,
   StageState,
+  StageUsage,
   StageVerdict,
 } from "@adhd/core";
 import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
   ENGINES,
+  addUsage,
   agentForStage,
   createInitialRunState,
   isTerminalRunStatus,
@@ -593,6 +595,16 @@ export class RunOrchestrator implements RunProjection {
     if (stage) {
       stage.verdict = verdict;
     }
+  }
+
+  stageUsage(runId: string, stageId: string, usage: StageUsage): void {
+    const stage = this.findStage(runId, stageId);
+    if (!stage) {
+      return;
+    }
+    stage.usage = addUsage(stage.usage, usage);
+    this.emit({ ts: nowIso(), type: "stage.usage", runId, stageId, usage: stage.usage });
+    this.schedulePersist(runId, false);
   }
 
   captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void {
