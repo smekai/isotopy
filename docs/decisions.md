@@ -607,6 +607,8 @@ path, and **nothing is written to disk on read**. Composition is a pure function
 
 ## 2026-07-22 — All personas are markdown, bundled through one generated module
 
+> Superseded on 2026-07-28 by *Persona Markdown ships as runtime assets* below.
+
 **Context:** persona text lived in two shapes. `developer` and `tester` were
 hand-written template literals inside `domain/skills/defaults.ts`; `architect`
 was a separate generated module, `architect.generated.ts`, because it is composed
@@ -630,6 +632,23 @@ failure would then surface as a persona-less run rather than a build error.
 **Rejected:** *generating into the hand-written `defaults.ts`.* Partially
 rewriting a file that also holds hand-authored content is exactly the fragility
 the generator exists to avoid.
+
+## 2026-07-28 — Persona Markdown ships as runtime assets
+
+**Context:** `defaults.generated.ts` still duplicated every Markdown persona
+inside a TypeScript template literal. That made persona-only reviews look much
+larger than their authored change and blurred the distinction between source
+and transport.
+
+**Decision:** the server reads bundled personas and step tasks directly from
+Markdown. The server build copies `domain/skills/personas/` and
+`domain/skills/step-tasks/` into the matching `dist` path using a
+platform-neutral Node script. `generate-skills.mjs` now generates only the two
+Architect Markdown consumers from `architecture.md`.
+
+**Consequence:** `defaults.generated.ts` and its exported maps no longer exist.
+Missing or unsafe prompt ids resolve to no prompt, while build, drift, and
+pipeline-reference checks guard the packaged assets.
 
 ## 2026-07-22 — Architect standard: one source, two generated consumers
 

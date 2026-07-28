@@ -88,7 +88,7 @@ test("the log shows every stage, and one stage when a node is focused", () => {
 
   expect(screen.getAllByTestId("stage-profession").map((el) => el.textContent)).toEqual([
     "Developer",
-    "Tester",
+    "QA Engineer",
   ]);
 
   rerender(
@@ -102,7 +102,9 @@ test("the log shows every stage, and one stage when a node is focused", () => {
     />,
   );
 
-  expect(screen.getAllByTestId("stage-profession").map((el) => el.textContent)).toEqual(["Tester"]);
+  expect(screen.getAllByTestId("stage-profession").map((el) => el.textContent)).toEqual([
+    "QA Engineer",
+  ]);
 });
 
 test("artifacts list every stage's handoff, not just the last one's", () => {

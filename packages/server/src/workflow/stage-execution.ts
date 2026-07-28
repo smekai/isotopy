@@ -6,6 +6,7 @@ import type { EngineRunResult } from "../engines/types.ts";
 import { buildStagePrompt, interpretEngineResult } from "../domain/stage-context.ts";
 import type { UpstreamOutput } from "../domain/stage-context.ts";
 import { loadSkill } from "../services/skills.ts";
+import { loadStepTask } from "../services/step-tasks.ts";
 import { nowIso } from "../utils.ts";
 import type {
   PipelineWorkflowInput,
@@ -72,6 +73,7 @@ export async function runStageWork(
   const controller = deps.beginEngineStage(runId);
   const projectPath = registry.resolve(run.projectId);
   const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
+  const stepTask = stageDef.stepTask ? await loadStepTask(stageDef.stepTask) : undefined;
   if (stageDef.skill && !persona) {
     projection.log(
       runId,
@@ -80,9 +82,17 @@ export async function runStageWork(
       `No skill "${stageDef.skill}" found — running without a persona`,
     );
   }
+  if (stageDef.stepTask && !stepTask) {
+    projection.log(
+      runId,
+      stageDef.id,
+      "warn",
+      `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
+    );
+  }
   const prompt = resuming
     ? (turn.answer ?? "")
-    : buildStagePrompt(input.task ?? "", upstreamFor(run, stageDef.id));
+    : buildStagePrompt(input.task ?? "", upstreamFor(run, stageDef.id), stepTask);
 
   if (deps.isCancelled(runId)) {
     deps.endEngineStage(runId);
