@@ -1,10 +1,23 @@
 import type { CSSProperties } from "react";
+import { STAGE_VERDICTS } from "@adhd/core";
 import type { StageVerdict } from "@adhd/core";
 import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
 
 export const PASS_GREEN = "#059669";
 export const FAIL_RED = "#DC2626";
+export const SKIP_AMBER = "#D97706";
+
+interface VerdictPalette {
+  color: string;
+  rgb: string;
+}
+
+const VERDICT_PALETTE: Record<StageVerdict, VerdictPalette> = {
+  [STAGE_VERDICTS.PASS]: { color: PASS_GREEN, rgb: "5,150,105" },
+  [STAGE_VERDICTS.FAIL]: { color: FAIL_RED, rgb: "220,38,38" },
+  [STAGE_VERDICTS.SKIP]: { color: SKIP_AMBER, rgb: "217,119,6" },
+};
 
 export const PANEL: CSSProperties = { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" };
 export const SCROLL_BODY: CSSProperties = { flex: 1, minHeight: 0, overflowY: "auto" };
@@ -30,12 +43,12 @@ const pillBase: CSSProperties = {
 };
 
 export function verdictPill(verdict: StageVerdict): CSSProperties {
-  const pass = verdict === "PASS";
+  const palette = VERDICT_PALETTE[verdict];
   return {
     ...pillBase,
-    background: pass ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
-    border: `1px solid ${pass ? "rgba(5,150,105,0.35)" : "rgba(220,38,38,0.35)"}`,
-    color: pass ? PASS_GREEN : FAIL_RED,
+    background: `rgba(${palette.rgb},0.10)`,
+    border: `1px solid rgba(${palette.rgb},0.35)`,
+    color: palette.color,
   };
 }
 

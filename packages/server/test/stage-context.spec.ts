@@ -20,21 +20,25 @@ describe("parseStageVerdict", () => {
   test("reads a bare verdict line", () => {
     expect(parseStageVerdict("All good.\n\nVERDICT: PASS")).toBe("PASS");
     expect(parseStageVerdict("Broken.\n\nVERDICT: FAIL")).toBe("FAIL");
+    expect(parseStageVerdict("Not applicable.\n\nVERDICT: SKIP")).toBe("SKIP");
   });
 
   test("sees through the markdown wrapping real runs produce", () => {
     expect(parseStageVerdict("**VERDICT: PASS**")).toBe("PASS");
     expect(parseStageVerdict("`VERDICT: FAIL`")).toBe("FAIL");
     expect(parseStageVerdict("_VERDICT: PASS_")).toBe("PASS");
+    expect(parseStageVerdict("**VERDICT: SKIP**")).toBe("SKIP");
   });
 
   test("normalises case", () => {
     expect(parseStageVerdict("verdict: pass")).toBe("PASS");
+    expect(parseStageVerdict("verdict: skip")).toBe("SKIP");
   });
 
   test("handles CRLF output", () => {
     // Windows engine output is \r\n; without the strip this returns undefined.
     expect(parseStageVerdict("Checked it.\r\nVERDICT: PASS\r\n")).toBe("PASS");
+    expect(parseStageVerdict("Not needed.\r\nVERDICT: SKIP\r\n")).toBe("SKIP");
   });
 
   test("takes the last verdict line, not the first", () => {
@@ -157,6 +161,19 @@ describe("interpretEngineResult", () => {
       output: "broken\n\nVERDICT: FAIL",
       verdict: "FAIL",
       failureMessage: "Tester reported VERDICT: FAIL",
+    });
+  });
+
+  test("a SKIP verdict skips and carries its output", () => {
+    expect(
+      interpretEngineResult(engineResult({ result: "not applicable\n\nVERDICT: SKIP" }), {
+        profession: "Designer",
+        canAsk: false,
+      }),
+    ).toEqual({
+      outcome: "skipped",
+      output: "not applicable\n\nVERDICT: SKIP",
+      verdict: "SKIP",
     });
   });
 

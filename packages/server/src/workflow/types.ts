@@ -5,6 +5,7 @@ import type {
   PipelineDefinition,
   RunState,
   StageDefinition,
+  StageOutcome,
   StageUsage,
   StageVerdict,
 } from "@adhd/core";
@@ -25,11 +26,11 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
-export type StageOutcome = "passed" | "failed" | "cancelled" | "asking";
+export type { StageOutcome } from "@adhd/core";
 
 export interface StageResult {
   outcome: StageOutcome;
-  output?: string;
+  output?: string | undefined;
   verdict?: StageVerdict;
   question?: string;
   sessionId?: string;
@@ -55,6 +56,7 @@ export interface RunProjection {
   stageAnswered(runId: string, stageId: string): void;
   gateApproved(runId: string, stageId: string): void;
   stagePassed(runId: string, stageId: string): void;
+  stageSkipped(runId: string, stageId: string): void;
   stageFailed(runId: string, stageId: string, message: string): void;
   setVerdict(runId: string, stageId: string, verdict: StageVerdict): void;
   stageUsage(runId: string, stageId: string, usage: StageUsage): void;

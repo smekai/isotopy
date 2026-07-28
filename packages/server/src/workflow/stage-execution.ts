@@ -1,4 +1,11 @@
-import { DEFAULT_PERMISSION_MODE, ENGINES, agentForStage, isConversational } from "@adhd/core";
+import {
+  DEFAULT_PERMISSION_MODE,
+  ENGINES,
+  STAGE_OUTCOMES,
+  STAGE_VERDICTS,
+  agentForStage,
+  isConversational,
+} from "@adhd/core";
 import type { EngineId, RunState, StageDefinition } from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
@@ -53,7 +60,7 @@ export async function runStageWork(
   const startedAt = nowIso();
   const run = projection.getRun(runId);
   if (!run || !run.engine) {
-    return { outcome: "passed", startedAt, completedAt: nowIso() };
+    return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
   }
   const profession = agentForStage(stageDef.id).profession;
   const resuming = turn.resumeSessionId !== undefined;
@@ -96,7 +103,7 @@ export async function runStageWork(
 
   if (deps.isCancelled(runId)) {
     deps.endEngineStage(runId);
-    return { outcome: "cancelled", startedAt, completedAt: nowIso() };
+    return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };
   }
 
   let outcome: EngineRunResult;
@@ -130,7 +137,7 @@ export async function runStageWork(
   }
 
   if (deps.isCancelled(runId)) {
-    return { outcome: "cancelled", startedAt, completedAt: nowIso() };
+    return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };
   }
 
   const decision = interpretEngineResult(outcome, {
@@ -138,10 +145,10 @@ export async function runStageWork(
     canAsk: canAsk(stageDef, run.engine, turn.index),
   });
 
-  if (decision.outcome === "asking" && decision.question !== undefined) {
+  if (decision.outcome === STAGE_OUTCOMES.ASKING && decision.question !== undefined) {
     projection.stageAsking(runId, stageDef.id, decision.question);
     return {
-      outcome: "asking",
+      outcome: STAGE_OUTCOMES.ASKING,
       question: decision.question,
       ...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
       startedAt,
@@ -156,10 +163,13 @@ export async function runStageWork(
     projection.setVerdict(runId, stageDef.id, decision.verdict);
   }
 
-  if (decision.outcome === "failed") {
+  if (decision.outcome === STAGE_OUTCOMES.FAILED) {
     projection.stageFailed(runId, stageDef.id, decision.failureMessage ?? `${profession} failed`);
+  } else if (decision.outcome === STAGE_OUTCOMES.SKIPPED) {
+    projection.log(runId, stageDef.id, "warn", `${profession} reported VERDICT: SKIP`);
+    projection.stageSkipped(runId, stageDef.id);
   } else {
-    if (decision.verdict === "PASS") {
+    if (decision.verdict === STAGE_VERDICTS.PASS) {
       projection.log(runId, stageDef.id, "pass", `${profession} reported VERDICT: PASS`);
     }
     if (!stageDef.gateAfter) {
@@ -169,8 +179,11 @@ export async function runStageWork(
   }
 
   return {
-    outcome: decision.outcome === "asking" ? "passed" : decision.outcome,
-    ...(decision.output !== undefined ? { output: decision.output } : {}),
+    outcome:
+      decision.outcome === STAGE_OUTCOMES.ASKING
+        ? STAGE_OUTCOMES.PASSED
+        : decision.outcome,
+    output: decision.output,
     ...(decision.verdict !== undefined ? { verdict: decision.verdict } : {}),
     ...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
     startedAt,
