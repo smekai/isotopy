@@ -5,6 +5,7 @@ import type {
   PipelineDefinition,
   RunState,
   StageDefinition,
+  StageOutcome,
   StageUsage,
   StageVerdict,
 } from "@adhd/core";
@@ -25,11 +26,11 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
-export type StageOutcome = "passed" | "failed" | "skipped" | "cancelled" | "asking";
+export type { StageOutcome } from "@adhd/core";
 
 export interface StageResult {
   outcome: StageOutcome;
-  output?: string;
+  output?: string | undefined;
   verdict?: StageVerdict;
   question?: string;
   sessionId?: string;

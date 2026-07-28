@@ -1,6 +1,6 @@
 import { defineWorkflow } from "openworkflow";
 import type { Workflow } from "openworkflow";
-import { agentForStage } from "@adhd/core";
+import { STAGE_OUTCOMES, agentForStage } from "@adhd/core";
 import type { PipelineGroup, StageDefinition } from "@adhd/core";
 import { runStageWork } from "./stage-execution.ts";
 import type {
@@ -55,7 +55,7 @@ async function runStageTurns(
     const result = await step.run({ name: `${stageDef.id}:turn:${turn.index}` }, () =>
       runStageWork(deps, input, stageDef, turn),
     );
-    if (result.outcome !== "asking") {
+    if (result.outcome !== STAGE_OUTCOMES.ASKING) {
       return result.outcome;
     }
 
@@ -64,14 +64,14 @@ async function runStageTurns(
       timeout: ANSWER_TIMEOUT,
     });
     if (deps.isCancelled(runId)) {
-      return "cancelled";
+      return STAGE_OUTCOMES.CANCELLED;
     }
     if (signal === null) {
       await step.run({ name: `${stageDef.id}:answer:timeout:${turn.index}` }, () => {
         deps.projection.stageFailed(runId, stageDef.id, "Nobody answered the question");
         return null;
       });
-      return "failed";
+      return STAGE_OUTCOMES.FAILED;
     }
 
     turn = {
@@ -90,12 +90,12 @@ async function runOneStage(
 ): Promise<StageOutcome> {
   const { runId } = input;
   const outcome = await runStageTurns(step, deps, input, stageDef);
-  if (outcome !== "passed") {
+  if (outcome !== STAGE_OUTCOMES.PASSED) {
     return outcome;
   }
 
   if (!stageDef.gateAfter) {
-    return "passed";
+    return STAGE_OUTCOMES.PASSED;
   }
 
   await step.run({ name: `${stageDef.id}:gate:awaiting` }, () => {
@@ -114,21 +114,21 @@ async function runOneStage(
     timeout: GATE_TIMEOUT,
   });
   if (deps.isCancelled(runId)) {
-    return "cancelled";
+    return STAGE_OUTCOMES.CANCELLED;
   }
   if (signal === null) {
     await step.run({ name: `${stageDef.id}:gate:timeout` }, () => {
       deps.projection.stageFailed(runId, stageDef.id, "Gate approval timed out");
       return null;
     });
-    return "failed";
+    return STAGE_OUTCOMES.FAILED;
   }
 
   await step.run({ name: `${stageDef.id}:gate:approved` }, () => {
     deps.projection.gateApproved(runId, stageDef.id);
     return null;
   });
-  return "passed";
+  return STAGE_OUTCOMES.PASSED;
 }
 
 interface WalkState {
@@ -160,11 +160,14 @@ async function runGroup(
       }
     }
     const outcome = await runOneStage(step, deps, input, stageDef);
-    if (outcome === "failed" || outcome === "cancelled") {
+    if (
+      outcome === STAGE_OUTCOMES.FAILED ||
+      outcome === STAGE_OUTCOMES.CANCELLED
+    ) {
       return outcome;
     }
   }
-  return "passed";
+  return STAGE_OUTCOMES.PASSED;
 }
 
 export function createPipelineWorkflow(
@@ -185,10 +188,10 @@ export function createPipelineWorkflow(
 
       for (const group of pipeline.groups) {
         const outcome = await runGroup(step, deps, input, group, walk);
-        if (outcome === "cancelled") {
+        if (outcome === STAGE_OUTCOMES.CANCELLED) {
           return { status: "cancelled" };
         }
-        if (outcome === "failed") {
+        if (outcome === STAGE_OUTCOMES.FAILED) {
           terminal = "failed";
           break;
         }

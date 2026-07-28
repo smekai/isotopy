@@ -37,7 +37,23 @@ export interface StageLogEntry {
   message: string;
 }
 
-export type StageVerdict = "PASS" | "FAIL" | "SKIP";
+export const STAGE_VERDICTS = {
+  PASS: "PASS",
+  FAIL: "FAIL",
+  SKIP: "SKIP",
+} as const;
+
+export type StageVerdict = (typeof STAGE_VERDICTS)[keyof typeof STAGE_VERDICTS];
+
+export const STAGE_OUTCOMES = {
+  PASSED: "passed",
+  FAILED: "failed",
+  SKIPPED: "skipped",
+  CANCELLED: "cancelled",
+  ASKING: "asking",
+} as const;
+
+export type StageOutcome = (typeof STAGE_OUTCOMES)[keyof typeof STAGE_OUTCOMES];
 
 export type MessageRole = "user" | "agent";
 

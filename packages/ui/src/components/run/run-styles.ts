@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { STAGE_VERDICTS } from "@adhd/core";
 import type { StageVerdict } from "@adhd/core";
 import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
@@ -13,9 +14,9 @@ interface VerdictPalette {
 }
 
 const VERDICT_PALETTE: Record<StageVerdict, VerdictPalette> = {
-  PASS: { color: PASS_GREEN, rgb: "5,150,105" },
-  FAIL: { color: FAIL_RED, rgb: "220,38,38" },
-  SKIP: { color: SKIP_AMBER, rgb: "217,119,6" },
+  [STAGE_VERDICTS.PASS]: { color: PASS_GREEN, rgb: "5,150,105" },
+  [STAGE_VERDICTS.FAIL]: { color: FAIL_RED, rgb: "220,38,38" },
+  [STAGE_VERDICTS.SKIP]: { color: SKIP_AMBER, rgb: "217,119,6" },
 };
 
 export const PANEL: CSSProperties = { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" };
