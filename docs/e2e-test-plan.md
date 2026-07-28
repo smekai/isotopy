@@ -45,14 +45,16 @@ The free and seeded tiers create real runs under `.adhd/runs/` (gitignored) but
 never spawn an engine. Every test leaves its run in a terminal state, so the
 empty-state specs still see a quiet server.
 
-CI wiring is still on the "adopt next" list in
-[`architecture.md`](./architecture.md) — the suite is run locally for now.
+The GitHub Actions workflow runs this suite on Linux and runs the core checks
+on Windows and macOS.
 
 ## Free tier
 
 1. **Empty state & pipeline picker** — ghost pipeline, task input, and the
-   dropdown with all three pipelines ("Full team", "Single agent",
-   "Developer + Tester"). "Start run" is disabled while the input is empty.
+   dropdown with all three presets: Full Delivery, Product Manager + Developer
+   + QA, and Single agent. The Full Delivery preview renders its nine stages in
+   a horizontally scrollable row. "Start run" is disabled while the input is
+   empty.
 2. **Single-agent mode** — heading switches to "What should the Developer
    build?", the working-directory input appears, footer reads
    `Engine: <label> · <model> — change in Setup`.
@@ -78,8 +80,9 @@ CI wiring is still on the "adopt next" list in
 
    *That the abort actually cancels the run, that gates hold it, and that a
    restart resumes correctly are asserted in `runs.comp.ts`.*
-7. **`dev-test` picker** — selectable, composer copy names both boxes, ghost
-   pipeline previews exactly Developer and Tester, choice survives a reload.
+7. **`pm-dev-test` picker** — selectable, composer copy names all three boxes,
+   ghost pipeline previews Product Manager, Developer, and QA Engineer, and the
+   choice survives a reload.
 
 ## Seeded tier
 

@@ -22,6 +22,7 @@ export interface PipelineWorkflowInput {
   permissionMode: EnginePermissionMode;
   workspacePath?: string;
   seededOutputs?: Record<string, string>;
+  seededOutcomes?: Record<string, StageOutcome>;
   startStageId?: string;
   startedMessage: string;
 }

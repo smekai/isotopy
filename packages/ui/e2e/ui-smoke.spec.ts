@@ -18,7 +18,8 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
 
   // the dropdown opens with every pipeline and closes on Escape
   await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
-  await expect(page.getByRole("option")).toHaveCount(2);
+  await expect(page.getByRole("option")).toHaveCount(3);
+  await expect(page.getByRole("option", { name: /Full Delivery/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /Product Manager \+ Developer \+ QA/ })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -26,6 +27,21 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
 
   await page.getByPlaceholder("Describe the task...").fill("smoke");
   await expect(page.getByRole("button", { name: /Start run/ })).toBeEnabled();
+});
+
+test("Full Delivery previews the revised persona team", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
+  await page.getByRole("option", { name: /Full Delivery/ }).click();
+
+  await expect(page.getByText("What should the delivery team build?")).toBeVisible();
+  await expect(page.getByText("Product Manager", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Product Designer", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("Software Architect", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Developer", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("QA Engineer", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("Release Manager", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("SRE", { exact: true })).toHaveCount(1);
 });
 
 test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
