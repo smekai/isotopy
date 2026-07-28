@@ -119,7 +119,7 @@ export function interpretEngineResult(
   const verdict = parseStageVerdict(result.result);
   if (verdict === STAGE_VERDICTS.FAIL) {
     return {
-      outcome: STAGE_OUTCOMES.FAILED,
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
       output,
       verdict,
       failureMessage: `${profession} reported VERDICT: FAIL`,

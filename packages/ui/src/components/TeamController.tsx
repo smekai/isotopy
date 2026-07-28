@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { Play, RotateCcw, Square, UserCheck } from "lucide-react";
+import { isTerminalRunStatus } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
 import { resumeStageId } from "../run-utils";
@@ -158,14 +159,17 @@ export function TeamController({
   d, run, pipeVs, onCycleVoice, onApprove, onAbort, onRestart, onNewRun,
 }: TeamControllerProps) {
   const elapsed = useElapsed(run?.createdAt, run?.completedAt);
-  const resumeId = run && (run.status === "failed" || run.status === "cancelled")
+  const resumeId = run && (
+    run.status === "needs_attention" ||
+    run.status === "failed" ||
+    run.status === "cancelled"
+  )
     ? resumeStageId(run)
     : null;
   const resumeLabel = resumeId
     ? run?.stages.find((stage) => stage.id === resumeId)?.label
     : null;
-  const terminal = run !== null &&
-    (run.status === "completed" || run.status === "failed" || run.status === "cancelled");
+  const terminal = run !== null && isTerminalRunStatus(run.status);
 
   return (
     <div style={bar(d)}>

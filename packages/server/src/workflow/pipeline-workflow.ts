@@ -5,6 +5,7 @@ import type { PipelineGroup, StageDefinition } from "@adhd/core";
 import { runStageWork } from "./stage-execution.ts";
 import type {
   PipelineWorkflowInput,
+  RunCompletionStatus,
   StageOutcome,
   StageTurn,
   WorkflowDeps,
@@ -19,7 +20,7 @@ const GATE_TIMEOUT = "3650d";
 const ANSWER_TIMEOUT = "3650d";
 
 export interface PipelineWorkflowResult {
-  status: "completed" | "failed" | "cancelled";
+  status: RunCompletionStatus | "cancelled";
 }
 
 export function gateSignal(runId: string, stageId: string): string {
@@ -162,6 +163,7 @@ async function runGroup(
     const outcome = await runOneStage(step, deps, input, stageDef);
     if (
       outcome === STAGE_OUTCOMES.FAILED ||
+      outcome === STAGE_OUTCOMES.NEEDS_ATTENTION ||
       outcome === STAGE_OUTCOMES.CANCELLED
     ) {
       return outcome;
@@ -190,6 +192,10 @@ export function createPipelineWorkflow(
         const outcome = await runGroup(step, deps, input, group, walk);
         if (outcome === STAGE_OUTCOMES.CANCELLED) {
           return { status: "cancelled" };
+        }
+        if (outcome === STAGE_OUTCOMES.NEEDS_ATTENTION) {
+          terminal = "needs_attention";
+          break;
         }
         if (outcome === STAGE_OUTCOMES.FAILED) {
           terminal = "failed";

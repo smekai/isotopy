@@ -5,7 +5,18 @@ import type { Project, RunState } from "@adhd/core";
 import type { SettingsController } from "../hooks/useSettings";
 import { childPath, isScratchWorkspace } from "../run-utils";
 import type { Dir } from "../theme";
-import { FONT, ICON, MONO, RADIUS, RUN_PILL, SANS, SPACE, WEIGHT, Z } from "../theme";
+import {
+  FONT,
+  ICON,
+  MONO,
+  RADIUS,
+  RUN_PILL,
+  SANS,
+  SPACE,
+  WEIGHT,
+  Z,
+  runStatusLabel,
+} from "../theme";
 import type { SetupSection } from "./setup/SetupModal";
 
 const PANEL_WIDTH = 320;
@@ -194,7 +205,9 @@ export function ProjectDrawer({
             <div style={sectionTitleStyle(d)}>THIS RUN</div>
             <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
               <span style={runNumberStyle(d)}>#{run.number}</span>
-              <div style={runPillStyle(RUN_PILL[run.status])}>{run.status.toUpperCase()}</div>
+              <div style={runPillStyle(RUN_PILL[run.status])}>
+                {runStatusLabel(run.status)}
+              </div>
             </div>
             <Field
               d={d}

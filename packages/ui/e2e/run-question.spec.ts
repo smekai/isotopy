@@ -39,7 +39,7 @@ const ASKING_RUN: RunState = {
   number: 9101,
   projectId: "home",
   pipelineId: "pm-dev-test",
-  pipelineName: "Project Manager + Developer + Tester",
+  pipelineName: "Product Manager + Developer + QA",
   status: "asking",
   task: "seeded parked question",
   engine: "claude-code",
@@ -77,7 +77,7 @@ const ASKING_RUN: RunState = {
       ],
     },
     { id: "implementation", label: "Developer", skill: "developer", status: "pending", logs: [] },
-    { id: "test", label: "Tester", skill: "tester", status: "pending", logs: [] },
+    { id: "test", label: "QA Engineer", skill: "tester", status: "pending", logs: [] },
   ],
 };
 

@@ -10,7 +10,9 @@ export function applyEvent(run: RunState, event: RunEvent): RunState {
 
   if (event.type === "run.completed") {
     next.status =
-      event.status === "failed" || event.status === "cancelled"
+      event.status === "failed" ||
+      event.status === "needs_attention" ||
+      event.status === "cancelled"
         ? event.status
         : "completed";
     next.completedAt = event.ts;

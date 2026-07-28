@@ -15,6 +15,7 @@ import {
   SPACE,
   WEIGHT,
   runDot,
+  runStatusLabel,
 } from "../theme";
 
 const DOT_SIZE = 7;
@@ -154,7 +155,10 @@ export interface RunCardProps {
 
 export function RunCard({ run, selected, d, onOpen, onRestart, onRerun }: RunCardProps) {
   const pill = RUN_PILL[run.status];
-  const restartable = run.status === "failed" || run.status === "cancelled";
+  const restartable =
+    run.status === "needs_attention" ||
+    run.status === "failed" ||
+    run.status === "cancelled";
   const resumeId = restartable ? resumeStageId(run) : null;
   const restartId = restartable ? firstStageId(run) : null;
   const showResume = resumeId !== null && resumeId !== restartId;
@@ -173,7 +177,7 @@ export function RunCard({ run, selected, d, onOpen, onRestart, onRerun }: RunCar
         <span style={TOP_ROW}>
           <span style={dot(runDot(run.status, d))} />
           <span style={numberText(d)}>#{run.number}</span>
-          <span style={statusText(pill)}>{run.status.toUpperCase()}</span>
+          <span style={statusText(pill)}>{runStatusLabel(run.status)}</span>
           <span style={dateText(d)}>{formatDate(run.createdAt)}</span>
         </span>
         <span style={taskText(selected, d)}>{run.task ?? "Untitled run"}</span>

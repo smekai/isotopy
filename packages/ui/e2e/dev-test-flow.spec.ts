@@ -84,7 +84,7 @@ const SEEDED_RUN: RunState = {
     },
     {
       id: "test",
-      label: "Tester",
+      label: "QA Engineer",
       skill: "tester",
       verdict: "PASS",
       status: "passed",
@@ -92,9 +92,9 @@ const SEEDED_RUN: RunState = {
       completedAt: FINISHED_AT,
       usage: { costUsd: 0.07, turns: 2 },
       logs: [
-        { ts: "2026-07-20T10:01:00.000Z", level: "run", message: "Tester online · Claude Code · haiku" },
+        { ts: "2026-07-20T10:01:00.000Z", level: "run", message: "QA Engineer online · Claude Code · haiku" },
         { ts: "2026-07-20T10:01:30.000Z", level: "info", message: TESTER_PROSE },
-        { ts: FINISHED_AT, level: "pass", message: "Tester reported VERDICT: PASS" },
+        { ts: FINISHED_AT, level: "pass", message: "QA Engineer reported VERDICT: PASS" },
       ],
     },
   ],
@@ -133,7 +133,7 @@ async function attachSeededRun(page: Page): Promise<void> {
   await expect(page.getByTestId("run-status")).toHaveText("COMPLETED");
 }
 
-const PM_DEV_TEST = "Project Manager + Developer + Tester";
+const PM_DEV_TEST = "Product Manager + Developer + QA";
 
 test("the default pipeline is selectable in the picker and previews all three boxes", async ({ page }) => {
   await page.goto("/");
@@ -152,16 +152,16 @@ test("the default pipeline is selectable in the picker and previews all three bo
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
   // The ghost pipeline previews exactly three boxes, by profession.
-  await expect(page.getByText("Project Manager", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("Product Manager", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Developer", { exact: true })).toHaveCount(1);
-  await expect(page.getByText("Tester", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("QA Engineer", { exact: true })).toHaveCount(1);
 
   // The choice survives a reload (stored server-side), like the other pipeline.
   await page.reload();
   await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
 });
 
-test("both boxes render as Developer and Tester with their persona badges", async ({ page }) => {
+test("both boxes render as Developer and QA Engineer with their persona badges", async ({ page }) => {
   await seedRun(page);
   await attachSeededRun(page);
 
@@ -169,12 +169,12 @@ test("both boxes render as Developer and Tester with their persona badges", asyn
   await expect(page.getByText("⬡ Claude Code · haiku")).toBeVisible();
 
   await expect(page.getByTestId("stage-node-implementation")).toContainText("Developer");
-  await expect(page.getByTestId("stage-node-test")).toContainText("Tester");
+  await expect(page.getByTestId("stage-node-test")).toContainText("QA Engineer");
 
   // The badges live on the Logs tab's per-stage header now that the stage panel
   // is retired; a stage node filters that tab rather than opening a pane.
   await page.getByTestId("run-tab-logs").click();
-  await expect(page.getByTestId("stage-profession")).toHaveText(["Developer", "Tester"]);
+  await expect(page.getByTestId("stage-profession")).toHaveText(["Developer", "QA Engineer"]);
   await expect(page.getByTestId("stage-persona")).toHaveText(["DEVELOPER", "TESTER"]);
   // Only the verification box declares a verdict.
   await expect(page.getByTestId("stage-verdict")).toHaveText(["PASS"]);

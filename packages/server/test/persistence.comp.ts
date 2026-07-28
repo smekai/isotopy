@@ -7,6 +7,7 @@ import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { RunRepository } from "../src/repository/run-repository.ts";
 import {
+  approveIntake,
   createTestApp,
   get,
   restartApp,
@@ -62,6 +63,29 @@ test("runs are restored when the server comes back", async () => {
   expect(restoredRun?.id).toBe(run.id);
   expect(restoredRun?.task).toBe("comp survives restart");
   expect(restoredRun?.status).toBe("completed");
+  await restarted.orchestrator.shutdown();
+});
+
+test("a needs-attention run remains terminal when the server comes back", async () => {
+  const { app } = ctx;
+  ctx.engine.anticipate().reports("Scope approved.");
+  ctx.engine.anticipate().reports("Implemented.");
+  ctx.engine.anticipate().reports("Required behaviour is broken.\n\nVERDICT: FAIL");
+  const run = await startRun(app, {
+    pipelineId: "pm-dev-test",
+    task: "persist a blocking verdict",
+    engine: "claude-code",
+  });
+  await approveIntake(app, run.id);
+  await waitForRunStatus(app, run.id, "needs_attention");
+  await ctx.orchestrator.shutdown();
+
+  const restarted = await restartApp();
+
+  const { body } = await get<RunState>(restarted.app, `/runs/${run.id}`);
+  expect(body.status).toBe("needs_attention");
+  expect(stageOf(body, "test").status).toBe("failed");
+  expect(stageOf(body, "test").verdict).toBe("FAIL");
   await restarted.orchestrator.shutdown();
 });
 

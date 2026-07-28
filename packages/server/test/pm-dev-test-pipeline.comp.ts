@@ -150,7 +150,7 @@ test("each box's output is stored per stage and written as its own handoff.md", 
   expect(testerHandoff).toContain("MARKER-TESTER");
 });
 
-test("a FAIL verdict fails the stage and the run even though the engine exited cleanly", async () => {
+test("a FAIL verdict fails the stage and leaves the run needing attention", async () => {
   // Arrange
   const { app, engine } = ctx;
 
@@ -166,7 +166,7 @@ test("a FAIL verdict fails the stage and the run even though the engine exited c
   await approveIntake(app, run.id);
 
   // Assert
-  const finished = await waitForRunStatus(app, run.id, "failed");
+  const finished = await waitForRunStatus(app, run.id, "needs_attention");
   expect(stageOf(finished, "test").status).toBe("failed");
   expect(stageOf(finished, "test").verdict).toBe("FAIL");
   expect(stageOf(finished, "implementation").status).toBe("passed");
@@ -264,7 +264,7 @@ test("restarting from QA keeps the upstream output and re-runs only QA", async (
   engine.anticipate({ as: "QA, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
-  await waitForRunStatus(app, run.id, "failed");
+  await waitForRunStatus(app, run.id, "needs_attention");
 
   // Anticipate — the retry is handed the Developer's original report again,
   // proving the surviving upstream output is what feeds the re-run.
@@ -315,7 +315,7 @@ test("restarting a stage drops its old report, so a failed retry leaves no stale
   engine.anticipate({ as: "QA, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
-  await waitForRunStatus(app, run.id, "failed");
+  await waitForRunStatus(app, run.id, "needs_attention");
 
   // Anticipate — the retry dies at the process level, producing no report at all.
   engine.anticipate({ as: "QA, retry" }).fails("claude exited with code 1");

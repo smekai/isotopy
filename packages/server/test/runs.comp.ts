@@ -85,7 +85,9 @@ test("restarting a run that is still going is a conflict", async () => {
 
   // Assert
   expect(status).toBe(409);
-  expect(body.error).toMatch(/only be restarted after failing or being aborted/);
+  expect(body.error).toMatch(
+    /only be restarted after needing attention, failing, or being aborted/,
+  );
 });
 
 test("restart without a stageId is rejected", async () => {

@@ -3,7 +3,18 @@ import type { RunState } from "@adhd/core";
 import { ENGINES, formatUsage, runUsage } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
-import { EASE, FONT, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, runDot } from "../theme";
+import {
+  EASE,
+  FONT,
+  MONO,
+  MOTION,
+  RADIUS,
+  SANS,
+  SPACE,
+  WEIGHT,
+  runDot,
+  runStatusLabel,
+} from "../theme";
 
 const BAR_HEIGHT = 36;
 const DIVIDER_HEIGHT = 14;
@@ -104,7 +115,7 @@ export function RunStatusBar({ run, d }: RunStatusBarProps) {
       )}
       <div style={{ flex: 1 }} />
       <div style={statusDot(dot, running, d)} />
-      <span data-testid="run-status" style={statusText(d)}>{run.status.toUpperCase()}</span>
+      <span data-testid="run-status" style={statusText(d)}>{runStatusLabel(run.status)}</span>
     </div>
   );
 }

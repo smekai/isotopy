@@ -28,6 +28,8 @@ export interface PipelineWorkflowInput {
 
 export type { StageOutcome } from "@adhd/core";
 
+export type RunCompletionStatus = "completed" | "needs_attention" | "failed";
+
 export interface StageResult {
   outcome: StageOutcome;
   output?: string | undefined;
@@ -62,7 +64,7 @@ export interface RunProjection {
   stageUsage(runId: string, stageId: string, usage: StageUsage): void;
   captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
-  runCompleted(runId: string, status: "completed" | "failed"): void;
+  runCompleted(runId: string, status: RunCompletionStatus): void;
 }
 
 export interface WorkflowDeps {

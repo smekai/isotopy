@@ -38,6 +38,7 @@ import { nowIso } from "../utils.ts";
 import { WorkflowRuntimeRegistry } from "../workflow/workflow-runtime.ts";
 import type {
   PipelineWorkflowInput,
+  RunCompletionStatus,
   RunProjection,
   WorkflowDeps,
 } from "../workflow/types.ts";
@@ -45,6 +46,16 @@ import type {
 const PERSIST_DEBOUNCE_MS = 150;
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
+
+function completionMessage(status: RunCompletionStatus): string {
+  if (status === "completed") {
+    return "Run completed successfully";
+  }
+  if (status === "needs_attention") {
+    return "Run needs attention";
+  }
+  return "Run failed";
+}
 
 const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
   "succeeded",
@@ -359,8 +370,14 @@ export class RunOrchestrator implements RunProjection {
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
     }
-    if (run.status !== "failed" && run.status !== "cancelled") {
-      throw new Error(`Run ${runId} can only be restarted after failing or being aborted`);
+    if (
+      run.status !== "needs_attention" &&
+      run.status !== "failed" &&
+      run.status !== "cancelled"
+    ) {
+      throw new Error(
+        `Run ${runId} can only be restarted after needing attention, failing, or being aborted`,
+      );
     }
     if (!this.getPipeline(run.pipelineId)) {
       throw new Error(
@@ -672,7 +689,7 @@ export class RunOrchestrator implements RunProjection {
     });
   }
 
-  runCompleted(runId: string, status: "completed" | "failed"): void {
+  runCompleted(runId: string, status: RunCompletionStatus): void {
     const run = this.live(runId);
     if (!run) {
       return;
@@ -684,7 +701,7 @@ export class RunOrchestrator implements RunProjection {
       type: "run.completed",
       runId,
       status,
-      message: status === "completed" ? "Run completed successfully" : "Run failed",
+      message: completionMessage(status),
       ...(run.result !== undefined ? { result: run.result } : {}),
     });
     void this.repositoryForRun(runId).releaseRun(runId);
