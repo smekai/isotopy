@@ -1,5 +1,75 @@
 # Backlog
 
+## TASK-095: Post-MVP — agent-native browser testing for QA
+**Priority:** P3 | **Tags:** testing, adapters, engine, milestone-d
+**Updated:** 2026-07-28 22:11
+
+Add a vendor-neutral testing seam for browser-control capabilities exposed by Codex, Cursor, Claude, or another active harness. QA may use an available native browser first for exploratory and visual checks, then promote stable behaviour into repository-owned Playwright tests. When no compatible capability exists, Playwright remains the complete fallback and CI authority.
+
+Cross-platform: support Windows and macOS capability detection and degrade to Playwright with an accurate recorded reason. This is explicitly outside the Milestone D MVP.
+
+---
+
+## TASK-094: Dogfood Full Delivery and close Milestone D at 0.8.0
+**Priority:** P1 | **Tags:** testing, infra, milestone-d
+**Updated:** 2026-07-28 13:23
+
+Run deterministic suites, a disposable sample-app Full Delivery run, and one real ADHD feature through the TaskPlanner backend. Verify carry-forward, QA evidence, preview deployment, closeout tasks, cleanup, and milestone finalization; then update documentation and bump all workspace packages together to 0.8.0.
+
+Cross-platform: test Windows directly, use macOS CI where available, and record remaining manual-only checks accurately.
+
+---
+
+## TASK-093: Milestone dashboard, autorun controls, and delivery artifacts
+**Priority:** P1 | **Tags:** ui, core, testing, milestone-d
+**Updated:** 2026-07-28 13:23
+
+Add the main-screen milestone view with feature progress, run history, findings, and Auto-run next feature. Render the Full Delivery pipeline, skipped and needs-attention states, created-task links, closeout documents, QA screenshots/traces, and preview deployment results in Artifacts.
+
+Cross-platform: browser UI; validate Chromium on Windows and macOS CI where available.
+
+---
+
+## TASK-092: Release management and preview deployment automation
+**Priority:** P1 | **Tags:** server, adapters, setup, infra, milestone-d
+**Updated:** 2026-07-28 13:23
+
+Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
+
+Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
+
+---
+
+## TASK-091: Product Manager closeout, task writers, and safe cleanup
+**Priority:** P0 | **Tags:** server, infra, testing, milestone-d
+**Updated:** 2026-07-28 13:23
+
+Run the Product Manager again in closeout mode with the same delivery context. Validate and persist closeout JSON/Markdown plus milestone decisions, knowledge, problems, and cleanup reports. Create idempotent follow-up tasks through TaskPlanner or the built-in writer, link their source, transition selected tasks, and remove only allow-listed run-owned temporary resources.
+
+Cross-platform: use Node path/OS helpers and existing process-tree termination on Windows and POSIX.
+
+---
+
+## TASK-088: Milestone domain, persistence, APIs, and autorun
+**Priority:** P0 | **Tags:** core, server, ui, milestone-d
+**Updated:** 2026-07-28 13:22
+
+Add persisted Milestone and MilestoneFeature models, run/task links, progress and statuses; milestone CRUD/start-next/finalize APIs; and server-side Auto-run next. Autorun preserves the Product Manager approval gate and stops on runtime failure, cancellation, unanswered interaction, or an empty backlog.
+
+Cross-platform: pure domain/API/UI with SQLite persistence.
+
+---
+
+## TASK-087: Epic — Milestone D: Full Delivery Loop
+**Priority:** P0 | **Tags:** core, server, ui, engine, infra, testing, milestone-d
+**Updated:** 2026-07-28 13:23
+
+Ship and dogfood the reusable Full Delivery milestone workflow, then close version 0.8.0. Child tasks are TASK-088 through TASK-094 plus the revised TASK-051 QA browser lifecycle; TASK-095 is explicitly post-MVP.
+
+Cross-platform: all process, browser, path, command, and cleanup behaviour must support Windows and macOS.
+
+---
+
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P2 | **Tags:** server, engine, infra
 **Updated:** 2026-07-23 13:00
@@ -55,28 +125,15 @@ You've hit your session limit · resets 4:30pm (Europe/Tallinn)
 
 ---
 
-## TASK-051: Manual-Tester box — Playwright-driven verification stage in the workflow
-**Priority:** P2 | **Tags:** core, server, engine
-**Updated:** 2026-07-20 22:30
+## TASK-051: QA Engineer application lifecycle and Playwright evidence
+**Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-d
+**Updated:** 2026-07-28 22:11
 
-Add a **third box** to the workflow, after the Tester: a *Manual Tester* persona that verifies the app the pipeline just built **through a real browser** with Playwright — the check a unit test cannot make ("does it actually work when a human clicks it?"). Builds on the persona/handoff machinery from TASK-043…046.
+Expand the existing QA Engineer instead of adding a Manual Tester persona. For interactive UI work, QA starts the configured application, decides whether durable E2E coverage is needed, authors and runs Playwright scenarios headlessly, performs limited exploratory checks where stable assertions are unsuitable, and preserves specs, screenshots, and traces as artifacts.
 
-**Guiding principle — automate first, drive manually only where it cannot.** The box must not narrate clicks turn-by-turn; that burns tokens and is slow and non-reproducible. Instead:
-1. **Write a Playwright spec, then run it.** One LLM turn authors the spec; the *run* costs zero tokens per assertion and is repeatable. This is the default path.
-2. **Only fall back to interactive driving** for genuinely exploratory checks (unexpected layout, a flow the spec cannot express).
-3. **Report failures + a short summary, not a transcript.** The persona's output is the handoff, so it must stay compact.
+Always tear down browser and server processes started by the run. A QA failure continues to Product Manager closeout while blocking release and deploy work. Agent-native browser adapters are deferred to post-MVP TASK-095.
 
-**Work:**
-- `.adhd/skills/manual-tester.md` persona (+ a bundled default in `services/skill-defaults.ts`, since `.adhd/` is gitignored) encoding the automate-first rule and a `VERDICT: PASS/FAIL` contract matching the Tester's.
-- New pipeline in `core/pipelines.ts` — either a third stage on `dev-test` or a separate `dev-test-manual`; reuse `agentForStage` for the label/glyph. **Decide which**; a separate pipeline keeps the cheap two-box flow intact.
-- **Resolve the environment questions** (the real design work here):
-  - How does the box get a *running* app? It must start the built app in the shared workspace (port selection, teardown, no orphaned processes — see the stray-process gotcha in the run-app skill).
-  - Browser availability — Playwright needs a browser binary; decide install/caching strategy so a run does not download Chromium every time.
-  - Headless by default.
-- **Artifacts** — save the generated spec, screenshots, and any trace into `.adhd/runs/<id>/<stageId>/` alongside `handoff.md` so a failure is inspectable after the fact.
-- Keep the `executeStage()` seam untouched — this is a new stage with a persona, so it should need **no orchestrator changes** (a good test that the TASK-046 design generalizes).
-
-**Verify:** a real run on a small web app — Manual Tester writes a spec, runs it headless, reports PASS/FAIL, and leaves screenshots + the spec as artifacts. Confirm no orphaned browser/server processes remain.
+Cross-platform: use typed automation commands and `runSubprocess`; browser cache and temporary roots use Node OS/path helpers; verify process-tree teardown on Windows and macOS/POSIX.
 
 ---
 

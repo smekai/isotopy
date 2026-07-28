@@ -1,7 +1,15 @@
 import { defineWorkflow } from "openworkflow";
 import type { Workflow } from "openworkflow";
-import { STAGE_OUTCOMES, agentForStage } from "@adhd/core";
-import type { PipelineGroup, StageDefinition } from "@adhd/core";
+import {
+  STAGE_EXECUTION_POLICIES,
+  STAGE_OUTCOMES,
+  agentForStage,
+} from "@adhd/core";
+import type {
+  PipelineGroup,
+  StageDefinition,
+  StageExecutionPolicy,
+} from "@adhd/core";
 import { runStageWork } from "./stage-execution.ts";
 import type {
   PipelineWorkflowInput,
@@ -134,6 +142,58 @@ async function runOneStage(
 
 interface WalkState {
   reached: boolean;
+  status: RunCompletionStatus;
+}
+
+function executionPolicy(stageDef: StageDefinition): StageExecutionPolicy {
+  return stageDef.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD;
+}
+
+function canRunStage(stageDef: StageDefinition, status: RunCompletionStatus): boolean {
+  if (status === "completed") {
+    return true;
+  }
+  const policy = executionPolicy(stageDef);
+  if (status === "needs_attention") {
+    return (
+      policy === STAGE_EXECUTION_POLICIES.QUALITY ||
+      policy === STAGE_EXECUTION_POLICIES.CLOSEOUT
+    );
+  }
+  return policy === STAGE_EXECUTION_POLICIES.CLOSEOUT;
+}
+
+function mergeOutcome(status: RunCompletionStatus, outcome: StageOutcome): RunCompletionStatus {
+  if (outcome === STAGE_OUTCOMES.FAILED) {
+    return "failed";
+  }
+  if (outcome === STAGE_OUTCOMES.NEEDS_ATTENTION && status !== "failed") {
+    return "needs_attention";
+  }
+  return status;
+}
+
+async function suppressStage(
+  step: StepApiLike,
+  deps: WorkflowDeps,
+  runId: string,
+  stageDef: StageDefinition,
+  status: RunCompletionStatus,
+): Promise<void> {
+  await step.run({ name: `${stageDef.id}:suppressed:${status}` }, () => {
+    const reason =
+      status === "failed"
+        ? "an earlier engine or runtime failure"
+        : "blocking quality findings";
+    deps.projection.log(
+      runId,
+      stageDef.id,
+      "warn",
+      `${agentForStage(stageDef.id).profession} suppressed because of ${reason}`,
+    );
+    deps.projection.stageSkipped(runId, stageDef.id);
+    return null;
+  });
 }
 
 async function runGroup(
@@ -142,8 +202,9 @@ async function runGroup(
   input: PipelineWorkflowInput,
   group: PipelineGroup,
   walk: WalkState,
-): Promise<StageOutcome> {
+): Promise<boolean> {
   const seeded = input.seededOutputs ?? {};
+  const seededOutcomes = input.seededOutcomes ?? {};
 
   for (const stageDef of group.stages) {
     if (!walk.reached) {
@@ -157,19 +218,24 @@ async function runGroup(
             return null;
           });
         }
+        const seededOutcome = seededOutcomes[stageDef.id];
+        if (seededOutcome !== undefined) {
+          walk.status = mergeOutcome(walk.status, seededOutcome);
+        }
         continue;
       }
     }
-    const outcome = await runOneStage(step, deps, input, stageDef);
-    if (
-      outcome === STAGE_OUTCOMES.FAILED ||
-      outcome === STAGE_OUTCOMES.NEEDS_ATTENTION ||
-      outcome === STAGE_OUTCOMES.CANCELLED
-    ) {
-      return outcome;
+    if (!canRunStage(stageDef, walk.status)) {
+      await suppressStage(step, deps, input.runId, stageDef, walk.status);
+      continue;
     }
+    const outcome = await runOneStage(step, deps, input, stageDef);
+    if (outcome === STAGE_OUTCOMES.CANCELLED) {
+      return true;
+    }
+    walk.status = mergeOutcome(walk.status, outcome);
   }
-  return STAGE_OUTCOMES.PASSED;
+  return false;
 }
 
 export function createPipelineWorkflow(
@@ -185,21 +251,15 @@ export function createPipelineWorkflow(
         return null;
       });
 
-      const walk: WalkState = { reached: input.startStageId == null };
-      let terminal: PipelineWorkflowResult["status"] = "completed";
+      const walk: WalkState = {
+        reached: input.startStageId == null,
+        status: "completed",
+      };
 
       for (const group of pipeline.groups) {
-        const outcome = await runGroup(step, deps, input, group, walk);
-        if (outcome === STAGE_OUTCOMES.CANCELLED) {
+        const cancelled = await runGroup(step, deps, input, group, walk);
+        if (cancelled) {
           return { status: "cancelled" };
-        }
-        if (outcome === STAGE_OUTCOMES.NEEDS_ATTENTION) {
-          terminal = "needs_attention";
-          break;
-        }
-        if (outcome === STAGE_OUTCOMES.FAILED) {
-          terminal = "failed";
-          break;
         }
       }
 
@@ -207,7 +267,7 @@ export function createPipelineWorkflow(
         return { status: "cancelled" };
       }
 
-      const status = terminal;
+      const status = walk.status;
       await step.run({ name: "run:completed" }, () => {
         deps.projection.runCompleted(runId, status);
         return null;

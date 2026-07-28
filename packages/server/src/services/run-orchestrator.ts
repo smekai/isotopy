@@ -10,6 +10,7 @@ import type {
   RunState,
   RunSummary,
   StageDefinition,
+  StageOutcome,
   StageState,
   StageUsage,
   StageVerdict,
@@ -22,6 +23,7 @@ import {
   agentForStage,
   createInitialRunState,
   isTerminalRunStatus,
+  STAGE_OUTCOMES,
   pipelineUsesEngine,
   toRunSummary,
 } from "@adhd/core";
@@ -46,6 +48,18 @@ import type {
 const PERSIST_DEBOUNCE_MS = 150;
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
+
+function outcomeForRestart(stage: StageState): StageOutcome {
+  if (stage.status === "failed") {
+    return stage.verdict === "FAIL"
+      ? STAGE_OUTCOMES.NEEDS_ATTENTION
+      : STAGE_OUTCOMES.FAILED;
+  }
+  if (stage.status === "skipped") {
+    return STAGE_OUTCOMES.SKIPPED;
+  }
+  return STAGE_OUTCOMES.PASSED;
+}
 
 function completionMessage(status: RunCompletionStatus): string {
   if (status === "completed") {
@@ -83,6 +97,7 @@ export interface RunOrchestratorDependencies {
 interface InputExtras {
   startedMessage: string;
   seededOutputs?: Record<string, string>;
+  seededOutcomes?: Record<string, StageOutcome>;
   startStageId?: string;
 }
 
@@ -391,7 +406,9 @@ export class RunOrchestrator implements RunProjection {
 
     const outputs = { ...run.stageOutputs };
     const seededOutputs: Record<string, string> = {};
+    const seededOutcomes: Record<string, StageOutcome> = {};
     for (const stage of run.stages.slice(0, startIndex)) {
+      seededOutcomes[stage.id] = outcomeForRestart(stage);
       const output = outputs[stage.id];
       if (output !== undefined) {
         seededOutputs[stage.id] = output;
@@ -416,6 +433,7 @@ export class RunOrchestrator implements RunProjection {
     void this.launch(this.registry.resolve(run.projectId), run, {
       startedMessage: `Restarted from ${profession}`,
       seededOutputs,
+      seededOutcomes,
       startStageId: stageId,
     });
     return structuredClone(run);
@@ -456,6 +474,9 @@ export class RunOrchestrator implements RunProjection {
       ...(run.workspacePath !== undefined ? { workspacePath: run.workspacePath } : {}),
       startedMessage: extras.startedMessage,
       ...(extras.seededOutputs !== undefined ? { seededOutputs: extras.seededOutputs } : {}),
+      ...(extras.seededOutcomes !== undefined
+        ? { seededOutcomes: extras.seededOutcomes }
+        : {}),
       ...(extras.startStageId !== undefined ? { startStageId: extras.startStageId } : {}),
     };
   }
@@ -675,18 +696,8 @@ export class RunOrchestrator implements RunProjection {
     if (!run || !stage) {
       return;
     }
-    stage.status = "passed";
-    stage.completedAt = nowIso();
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
     run.result = output;
-    this.emit({
-      ts: nowIso(),
-      type: "stage.completed",
-      runId,
-      stageId: stageDef.id,
-      status: "passed",
-      message: `Reused ${agentForStage(stageDef.id).profession} output from the previous run`,
-    });
   }
 
   runCompleted(runId: string, status: RunCompletionStatus): void {

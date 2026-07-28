@@ -231,7 +231,7 @@ test("a failing Developer stops the run before QA is ever called", async () => {
   // Assert
   const finished = await waitForRunStatus(app, run.id, "failed");
   expect(stageOf(finished, "implementation").status).toBe("failed");
-  expect(stageOf(finished, "test").status).toBe("pending");
+  expect(stageOf(finished, "test").status).toBe("skipped");
   engine.verify();
 });
 

@@ -2,7 +2,7 @@
   "version": 2,
   "taskplannerVersion": "2.1.4",
   "idPrefix": "TASK",
-  "nextId": 87,
+  "nextId": 96,
   "states": [
     {
       "name": "Backlog",
@@ -46,7 +46,8 @@
     "infra",
     "setup",
     "testing",
-    "milestone-c"
+    "milestone-c",
+    "milestone-d"
   ],
   "insertPosition": "top",
   "aiPlanRequired": false,

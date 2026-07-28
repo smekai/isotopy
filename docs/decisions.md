@@ -6,6 +6,31 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-28 — Full Delivery uses reusable personas and explicit stage policy (TASK-089, TASK-090)
+
+**Context:** the comprehensive preset needs conditional design and deployment,
+continued QA after a blocking review, suppression of unsafe release work, and a
+closeout even after engine failure. The same human role also performs more than
+one assignment: Product Manager plans and closes; Software Architect designs
+and independently reviews; QA owns automated, E2E, and exploratory checks.
+
+**Decision:** personas remain stable identities while step-task Markdown defines
+each assignment. Full Delivery therefore reuses Product Manager and Software
+Architect instead of introducing Code Reviewer, Manual Tester, Project Steward,
+or Engineering Manager personas.
+
+Workflow control is declared through `executionPolicy`: quality work may
+continue after `VERDICT: FAIL`, delivery work is suppressed by any blocker, and
+closeout is the only paid stage allowed after an engine/runtime failure.
+Cancellation starts no closeout agent. Restart carries prior stage outcomes in
+addition to handoff text, preserving blockers across a downstream retry.
+
+**Rejected:** hardcoding stage IDs in the workflow loop. That would couple
+control semantics to today’s labels and make a custom or renamed pipeline
+silently unsafe.
+
+---
+
 ## 2026-07-28 — The chat is a projection of the log (TASK-082)
 
 **Context:** the agent-window epic made the chat the run's whole body, and

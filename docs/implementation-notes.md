@@ -181,6 +181,12 @@ the workspace is the source of truth, the reports only add what a box *said*.
 - **A stage is engine-backed iff it carries a `skill`.** `pipelineUsesEngine`
   keys off the stage model, not a hardcoded pipeline id, so a new engine-backed
   pipeline needs no orchestrator change to get engine validation and a workspace.
+- **Full Delivery behaviour is stage policy, not stage-name branching.**
+  `executionPolicy` identifies quality, delivery, and closeout work. Blocking
+  verdicts continue through quality evidence and closeout while suppressing
+  release/deploy; engine failures suppress everything except closeout.
+  Restart inputs carry upstream outcomes as well as handoff text, so retrying a
+  downstream stage cannot erase an earlier blocker.
 
 ## Configuration & paths (`server/config.ts`, `server/paths.ts`)
 

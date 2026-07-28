@@ -1,5 +1,29 @@
 # Done
 
+## TASK-090: Full Delivery pipeline and revised persona team
+**Priority:** P0 | **Tags:** core, server, engine, milestone-d
+**Updated:** 2026-07-28 22:40
+
+Added the Full Delivery preset while preserving Single Agent and Product Manager + Developer + QA. Its nine assignments reuse Product Manager for intake/closeout, Software Architect for design/review, and QA Engineer for all verification; Product Designer, Developer, Release Manager, and SRE remain distinct. Six bundled step tasks define conditional design, review, release, preview deployment, and closeout contracts.
+
+Cross-platform: every new assignment requires Windows/macOS reasoning and accurate platform evidence. Validated on Windows; macOS validation is delegated to the PR CI matrix.
+
+Verified: lint, typecheck, build, 242 unit/component tests, 31 Playwright tests with one paid live canary skipped, and skill drift.
+
+---
+
+## TASK-089: Continue quality evidence and always close Full Delivery runs
+**Priority:** P0 | **Tags:** core, server, engine, testing, milestone-d
+**Updated:** 2026-07-28 22:40
+
+Added explicit standard/quality/delivery/closeout execution policies. Blocking review or QA verdicts continue through safe evidence and Product Manager closeout while suppressing release/deploy. Runtime failures run only closeout; cancellation starts no paid closeout. Restart now carries upstream outcomes so an earlier blocker survives a downstream retry.
+
+Cross-platform: pure durable workflow/domain logic; subprocess behaviour is unchanged. Validated on Windows; macOS validation is delegated to the PR CI matrix.
+
+Verified: focused Full Delivery happy/finding/runtime/restart/cancellation scenarios plus the complete lint, typecheck, build, 242-test, Playwright, and skill-drift suites.
+
+---
+
 ## TASK-086: Stabilization — classify blocking verdicts as needs attention
 **Priority:** P0 | **Tags:** core, server, ui, testing, infra
 **Updated:** 2026-07-28 18:16
