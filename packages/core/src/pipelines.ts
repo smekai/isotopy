@@ -2,9 +2,9 @@ export interface StageDefinition {
   id: string;
   label: string;
   gateAfter?: boolean;
-  /** May stop and ask the user a question mid-stage, on an engine that can resume. */
   interactive?: boolean;
   skill?: string;
+  stepTask?: string;
 }
 
 export interface PipelineGroup {
@@ -32,22 +32,33 @@ export const SOLO_PIPELINE: PipelineDefinition = {
 
 export const PM_DEV_TEST_PIPELINE: PipelineDefinition = {
   id: "pm-dev-test",
-  name: "Project Manager + Developer + Tester",
+  name: "Product Manager + Developer + QA",
   description:
-    "A Project Manager works out what to build and recommends an approach; you approve it; " +
-    "then a Developer implements it and a Tester verifies the result.",
+    "A Product Manager works out what to build and recommends an approach; you approve it; " +
+    "then a Developer implements it and a QA Engineer verifies the result.",
   groups: [
     {
       stages: [
         {
           id: "intake",
-          label: "Project Manager",
+          label: "Product Manager",
           skill: "project-manager",
+          stepTask: "plan-feature",
           interactive: true,
           gateAfter: true,
         },
-        { id: "implementation", label: "Developer", skill: "developer" },
-        { id: "test", label: "Tester", skill: "tester" },
+        {
+          id: "implementation",
+          label: "Developer",
+          skill: "developer",
+          stepTask: "implement-feature",
+        },
+        {
+          id: "test",
+          label: "QA Engineer",
+          skill: "tester",
+          stepTask: "verify-feature",
+        },
       ],
     },
   ],
@@ -58,7 +69,6 @@ export const DEMO_PIPELINES: PipelineDefinition[] = [
   SOLO_PIPELINE,
 ];
 
-/** Presets removed in TASK-080. Runs on disk still name them. */
 export const RETIRED_PIPELINE_IDS: string[] = ["one-box", "dev-test", "gated-dev-test"];
 
 export function flattenPipelineStages(

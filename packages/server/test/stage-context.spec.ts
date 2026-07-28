@@ -62,6 +62,18 @@ describe("buildStagePrompt", () => {
     expect(buildStagePrompt("add a greet function", [])).toBe("add a greet function");
   });
 
+  test("keeps the agent assignment separate from the user task", () => {
+    const prompt = buildStagePrompt(
+      "add a greet function",
+      [],
+      "Implement the approved feature.",
+    );
+
+    expect(prompt).toContain("## Step task\n\nImplement the approved feature.");
+    expect(prompt).toContain("## Task\n\nadd a greet function");
+    expect(prompt.indexOf("## Step task")).toBeLessThan(prompt.indexOf("## Task"));
+  });
+
   test("adds a handoff block per upstream box, in order", () => {
     const prompt = buildStagePrompt("add a greet function", [
       { label: "Developer", output: "wrote greet.js" },

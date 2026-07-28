@@ -3,7 +3,7 @@ import path from "node:path";
 import { skillsDir, userSkillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { composeSkill } from "../domain/skills/compose.ts";
-import { DEFAULT_SKILLS } from "../domain/skills/defaults.generated.ts";
+import { loadBundledPersona } from "./bundled-prompts.ts";
 
 interface CacheEntry {
   mtimeMs: number;
@@ -44,13 +44,14 @@ export async function loadSkill(
   projectPath: ProjectPath,
   skillId: string,
 ): Promise<string | undefined> {
-  const [userOverride, projectOverride, projectAddendum] = await Promise.all([
+  const [bundled, userOverride, projectOverride, projectAddendum] = await Promise.all([
+    loadBundledPersona(skillId),
     readCached(userSkillFilePath(skillId)),
     readCached(projectSkillFilePath(projectPath, skillId)),
     readCached(projectSkillAddendumPath(projectPath, skillId)),
   ]);
   return composeSkill({
-    base: userOverride ?? DEFAULT_SKILLS[skillId],
+    base: userOverride ?? bundled,
     projectOverride,
     projectAddendum,
   });

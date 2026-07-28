@@ -1,4 +1,4 @@
-// The shipped three-box flow: Project Manager → gate → Developer → Tester.
+// The shipped three-box flow: Product Manager → gate → Developer → QA Engineer.
 //
 // This is the suite that made the live tier cheap: it proves the boxes genuinely
 // chain — each one is handed what the previous reported and works in the same
@@ -52,11 +52,11 @@ test("the boxes run in order, in one shared workspace, each with its own persona
   // that handoff is the whole point of the multi-box flow.
   engine
     .anticipate({
-      as: "Project Manager",
+      as: "Product Manager",
       model: "haiku",
       permissionMode: "skip",
-      persona: /# Role: Project Manager/,
-      prompt: TASK,
+      persona: /# Role: Product Manager/,
+      prompt: /# Assignment: Plan a feature/,
     })
     .reports(PM_REPORT);
   engine
@@ -69,9 +69,9 @@ test("the boxes run in order, in one shared workspace, each with its own persona
     .reports(DEV_REPORT);
   engine
     .anticipate({
-      as: "Tester",
+      as: "QA Engineer",
       model: "haiku",
-      persona: /# Role: Tester/,
+      persona: /# Role: QA Engineer/,
       prompt: /MARKER-DEVELOPER/,
     })
     .reports(TESTER_REPORT);
@@ -97,9 +97,9 @@ test("each prompt quotes every upstream report under a handoff heading", async (
   const { app, engine } = ctx;
 
   // Anticipate
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -110,11 +110,13 @@ test("each prompt quotes every upstream report under a handoff heading", async (
   const testerPrompt = engine.callAt(2).prompt;
   expect(testerPrompt).toContain("## Task");
   expect(testerPrompt).toContain("## Handoff from previous steps");
-  expect(testerPrompt).toContain("### Project Manager");
+  expect(testerPrompt).toContain("### Product Manager");
   expect(testerPrompt).toContain("### Developer");
   expect(testerPrompt).toContain(DEV_REPORT);
-  // The Project Manager runs first and has nothing upstream, so it gets the bare task.
-  expect(engine.callAt(0).prompt).toBe(TASK);
+  // The Product Manager runs first: its prompt combines the reusable step task
+  // with the user's request while its stable identity stays in the persona.
+  expect(engine.callAt(0).prompt).toContain("# Assignment: Plan a feature");
+  expect(engine.callAt(0).prompt).toContain(`## Task\n\n${TASK}`);
 });
 
 test("each box's output is stored per stage and written as its own handoff.md", async () => {
@@ -122,9 +124,9 @@ test("each box's output is stored per stage and written as its own handoff.md", 
   const { app, engine, home } = ctx;
 
   // Anticipate
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -143,7 +145,7 @@ test("each box's output is stored per stage and written as its own handoff.md", 
   expect(developerHandoff).toContain("# Developer — handoff");
   expect(developerHandoff).toContain(DEV_REPORT);
   expect(developerHandoff).not.toContain("MARKER-TESTER");
-  expect(testerHandoff).toContain("# Tester — handoff");
+  expect(testerHandoff).toContain("# QA Engineer — handoff");
   expect(testerHandoff).toContain("MARKER-TESTER");
 });
 
@@ -151,11 +153,11 @@ test("a FAIL verdict fails the stage and the run even though the engine exited c
   // Arrange
   const { app, engine } = ctx;
 
-  // Anticipate — the Tester succeeds at the process level but reports FAIL.
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  // Anticipate — QA succeeds at the process level but reports FAIL.
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine
-    .anticipate({ as: "Tester" })
+    .anticipate({ as: "QA Engineer" })
     .reports("The greet function returns undefined.\n\nVERDICT: FAIL");
 
   // Act
@@ -175,9 +177,9 @@ test("a PASS verdict is recorded on the verifying stage only", async () => {
   const { app, engine } = ctx;
 
   // Anticipate
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -191,12 +193,12 @@ test("a PASS verdict is recorded on the verifying stage only", async () => {
   expect(stageOf(finished, "intake").verdict).toBeUndefined();
 });
 
-test("a failing Developer stops the run before the Tester is ever called", async () => {
+test("a failing Developer stops the run before QA is ever called", async () => {
   // Arrange
   const { app, engine } = ctx;
 
-  // Anticipate — two calls. verify() proves the Tester never ran.
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  // Anticipate — two calls. verify() proves QA never ran.
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).fails("claude exited with code 1");
 
   // Act
@@ -215,7 +217,7 @@ test("aborting a run signals the engine it is running", async () => {
   const { app, engine } = ctx;
 
   // Anticipate — the box blocks until the abort signal fires.
-  engine.anticipate({ as: "Project Manager" }).hangsUntilAborted();
+  engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
   const run = await startRun(app, PIPELINE);
   await engine.waitForCall(1);
 
@@ -231,12 +233,12 @@ test("aborting a run signals the engine it is running", async () => {
   engine.verify();
 });
 
-test("restarting from the Tester keeps the upstream output and re-runs only the Tester", async () => {
+test("restarting from QA keeps the upstream output and re-runs only QA", async () => {
   // Arrange
   const { app, engine } = ctx;
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  engine.anticipate({ as: "Tester, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
+  engine.anticipate({ as: "QA, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
   await waitForRunStatus(app, run.id, "failed");
@@ -244,7 +246,7 @@ test("restarting from the Tester keeps the upstream output and re-runs only the 
   // Anticipate — the retry is handed the Developer's original report again,
   // proving the surviving upstream output is what feeds the re-run.
   engine
-    .anticipate({ as: "Tester, retry", prompt: /MARKER-DEVELOPER/ })
+    .anticipate({ as: "QA, retry", prompt: /MARKER-DEVELOPER/ })
     .reports(TESTER_REPORT);
 
   // Act
@@ -283,17 +285,17 @@ test("aborting before the box starts means the engine is never spawned at all", 
 });
 
 test("restarting a stage drops its old report, so a failed retry leaves no stale handoff", async () => {
-  // Arrange — a run whose Tester reported, then gets restarted.
+  // Arrange — a run whose QA Engineer reported, then gets restarted.
   const { app, engine } = ctx;
-  engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-  engine.anticipate({ as: "Tester, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
+  engine.anticipate({ as: "QA, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
   await waitForRunStatus(app, run.id, "failed");
 
   // Anticipate — the retry dies at the process level, producing no report at all.
-  engine.anticipate({ as: "Tester, retry" }).fails("claude exited with code 1");
+  engine.anticipate({ as: "QA, retry" }).fails("claude exited with code 1");
 
   // Act
   await post(app, `/runs/${run.id}/restart`, { stageId: "test" });

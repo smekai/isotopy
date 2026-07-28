@@ -16,15 +16,14 @@ single source the two Architect consumers are generated from.
 
 > **This file is the source of truth for the Architect persona.** Do not
 > hand-edit [`.claude/skills/architect/SKILL.md`](../.claude/skills/architect/SKILL.md)
-> or `packages/server/src/domain/skills/defaults.generated.ts` — both are emitted
+> or `packages/server/src/domain/skills/personas/architect.md` — both are emitted
 > by [`scripts/generate-skills.mjs`](../scripts/generate-skills.mjs). Edit the
 > `gen:` blocks below and run `pnpm gen:skills`. A drift test
 > (`skill-generation.spec.ts`) fails the build if the committed outputs diverge.
 >
 > The other personas are plain markdown in
-> `packages/server/src/domain/skills/personas/` and feed the same generated
-> module; only the Architect is composed from this document, because it must stay
-> identical to the standard it enforces.
+> `packages/server/src/domain/skills/personas/`. Only the Architect is composed
+> from this document because it must stay identical to the standard it enforces.
 
 The generator reads four named blocks — `shared`, `skill`, `persona-head`,
 `persona-tail` — delimited by `<!-- gen:NAME:start -->` / `<!-- gen:NAME:end -->`.
@@ -312,7 +311,7 @@ Core stays dependency-free and side-effect-free: types, constants, and pure func
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/services/` | I/O and lifecycle (run orchestrator, persistence, skill loading); no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: `stage-context.ts` (prompt/handoff/verdict), `skills/defaults.generated.ts` + `skills/personas/*.md` (bundled persona text), `skills/compose.ts` (persona layering). No I/O — the thin-service/fat-domain split (A3) |
+| `src/domain/` | Server-only **pure** logic: `stage-context.ts` (prompt/handoff/verdict), `skills/personas/*.md` + `skills/step-tasks/*.md` (bundled prompts), `skills/compose.ts` (persona layering). No I/O — the thin-service/fat-domain split (A3) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |
 | `src/utils.ts` | Pure, context-free helpers (no I/O, no internal imports) |
@@ -839,9 +838,11 @@ git working tree, so credentials live only in the user-level store, keyed by
 project id, with user-level defaults a new project inherits until it overrides
 them.
 
-**Skills layer rather than replace:** bundled default (`domain/skills/defaults.generated.ts`)
-→ user-level override → project addendum appended. Nothing is written to disk on
-read, so improvements to a bundled persona keep reaching every project.
+**Skills layer rather than replace:** bundled Markdown persona
+(`domain/skills/personas/<id>.md`) → user-level override → project addendum
+appended. The build copies bundled persona and step-task Markdown into `dist`;
+nothing is written to user or project data on read, so improvements to a
+bundled persona keep reaching every project.
 
 **Resolving the active project:** the registry names one, and any request may
 override it with an `X-ADHD-Project` header. Run-scoped routes (`/runs/:id/...`)

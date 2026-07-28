@@ -7,25 +7,39 @@ export interface UpstreamOutput {
 }
 
 const TASK_HEADING = "## Task";
+const ASSIGNMENT_HEADING = "## Step task";
 
 const HANDOFF_HEADING = "## Handoff from previous steps";
 const HANDOFF_NOTE =
   "These are reports from the boxes that ran before you, in order. They describe " +
   "intent — the working directory is the source of truth. Verify rather than assume.";
 
-export function buildStagePrompt(task: string, upstream: UpstreamOutput[]): string {
+export function buildStagePrompt(
+  task: string,
+  upstream: UpstreamOutput[],
+  stepTask?: string,
+): string {
   const reports = upstream.filter((entry) => entry.output.trim() !== "");
-  if (reports.length === 0) {
+  if (reports.length === 0 && stepTask === undefined) {
     return task;
   }
 
-  const blocks = reports.map(
+  const taskBlock = `${TASK_HEADING}\n\n${task}`;
+  const blocks =
+    stepTask === undefined
+      ? [taskBlock]
+      : [`${ASSIGNMENT_HEADING}\n\n${stepTask.trim()}`, taskBlock];
+  if (reports.length === 0) {
+    return blocks.join("\n\n");
+  }
+
+  const handoffs = reports.map(
     (entry) => `### ${entry.label}\n\n${entry.output.trim()}`,
   );
   return [
-    `${TASK_HEADING}\n\n${task}`,
-    `${HANDOFF_HEADING}\n\n${HANDOFF_NOTE}`,
     ...blocks,
+    `${HANDOFF_HEADING}\n\n${HANDOFF_NOTE}`,
+    ...handoffs,
   ].join("\n\n");
 }
 
