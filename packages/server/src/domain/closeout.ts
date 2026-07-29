@@ -36,7 +36,7 @@ const cleanupCandidateSchema = z
   })
   .strict();
 
-const closeoutSchema = z
+export const productManagerCloseoutSchema = z
   .object({
     summary: requiredText,
     deliveredScope: uniqueStrings,
@@ -111,7 +111,7 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
     };
   }
 
-  const parsed = closeoutSchema.safeParse(input);
+  const parsed = productManagerCloseoutSchema.safeParse(input);
   if (!parsed.success) {
     return {
       report: emptyCloseout(output.trim()),
