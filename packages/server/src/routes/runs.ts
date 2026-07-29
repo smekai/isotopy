@@ -4,8 +4,15 @@ import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@ad
 import type { RunEvent } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
+import {
+  postRunMessageSchema,
+  restartRunSchema,
+  startRunSchema,
+} from "../domain/request-schemas.ts";
+import { invalidRequest } from "../domain/validation.ts";
 import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-files.ts";
 import { projectScope } from "./project-scope.ts";
+import { parseRequestBody } from "./request-body.ts";
 
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;
@@ -50,18 +57,11 @@ export function createRunRoutes(
     })
 
     .post("/", async (c) => {
-      const body = await c.req
-        .json<{
-          pipelineId?: string;
-          task?: string;
-          engine?: string;
-          model?: string;
-          permissionMode?: string;
-          milestoneId?: string;
-          featureId?: string;
-          sourceTaskIds?: string[];
-        }>()
-        .catch(() => ({}) as Record<string, never>);
+      const parsed = await parseRequestBody(c.req, startRunSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      const body = parsed.value;
       const pipelineId = body.pipelineId ?? DEFAULT_PIPELINE_ID;
 
       try {
@@ -100,15 +100,12 @@ export function createRunRoutes(
       if (!orchestrator.getRun(runId)) {
         return c.json({ error: "Run not found" }, 404);
       }
-      const body = await c.req
-        .json<{ text?: string }>()
-        .catch(() => ({}) as Record<string, never>);
-      const text = body.text?.trim();
-      if (!text) {
-        return c.json({ error: "text is required" }, 400);
+      const parsed = await parseRequestBody(c.req, postRunMessageSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
       }
       try {
-        return c.json(orchestrator.postMessage(runId, text), 201);
+        return c.json(orchestrator.postMessage(runId, parsed.value.text), 201);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to post message";
         return c.json({ error: message }, 409);
@@ -133,14 +130,12 @@ export function createRunRoutes(
       if (!orchestrator.getRun(runId)) {
         return c.json({ error: "Run not found" }, 404);
       }
-      const body = await c.req
-        .json<{ stageId?: string }>()
-        .catch(() => ({}) as Record<string, never>);
-      if (!body.stageId) {
-        return c.json({ error: "stageId is required" }, 400);
+      const parsed = await parseRequestBody(c.req, restartRunSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
       }
       try {
-        return c.json(orchestrator.restartRun(runId, body.stageId));
+        return c.json(orchestrator.restartRun(runId, parsed.value.stageId));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to restart run";
         return c.json({ error: message }, 409);

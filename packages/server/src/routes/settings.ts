@@ -1,15 +1,15 @@
 import { Hono } from "hono";
 import { ENGINES } from "@adhd/core";
 import type { EngineId } from "@adhd/core";
-import { parsePreferencesUpdate } from "../domain/preferences.ts";
+import {
+  engineConnectionUpdateSchema,
+  projectPreferencesUpdateSchema,
+} from "../domain/request-schemas.ts";
+import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 import { projectScope } from "./project-scope.ts";
-
-interface ConnectionUpdateBody {
-  connectionMode?: string;
-  apiKey?: string | null;
-}
+import { parseRequestBody } from "./request-body.ts";
 
 export function createSettingsRoutes(
   registry: ProjectRegistry,
@@ -19,12 +19,12 @@ export function createSettingsRoutes(
     .get("/", (c) => c.json(settings.getSettingsView(projectScope(registry, c).id)))
 
     .put("/preferences", async (c) => {
-      const parsed = parsePreferencesUpdate(await c.req.json<unknown>().catch(() => ({})));
+      const parsed = await parseRequestBody(c.req, projectPreferencesUpdateSchema);
       if (!parsed.ok) {
-        return c.json({ error: parsed.error }, 400);
+        return c.json(invalidRequest(parsed.issues), 400);
       }
       return c.json(
-        settings.updatePreferences(projectScope(registry, c).id, parsed.update),
+        settings.updatePreferences(projectScope(registry, c).id, parsed.value),
       );
     })
 
@@ -34,9 +34,11 @@ export function createSettingsRoutes(
         return c.json({ error: `Unknown engine: ${engineId}` }, 400);
       }
       const id = engineId as EngineId;
-      const body = await c.req
-        .json<ConnectionUpdateBody>()
-        .catch(() => ({}) as ConnectionUpdateBody);
+      const parsed = await parseRequestBody(c.req, engineConnectionUpdateSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      const body = parsed.value;
       if (body.connectionMode !== undefined) {
         const known = ENGINES[id].connections.some((mode) => mode.id === body.connectionMode);
         if (!known) {

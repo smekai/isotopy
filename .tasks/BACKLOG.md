@@ -10,16 +10,6 @@ Add tests for insert defaults, automatic update behavior, migration/restart comp
 
 ---
 
-## TASK-098: Standardize strict runtime schemas at every untrusted boundary
-**Priority:** P0 | **Tags:** core, server, testing
-**Updated:** 2026-07-29 09:59
-
-Replace recurrent hand-written Record<string, unknown>, stringOf/findingsOf-style mappings with a shared runtime-schema approach at HTTP, engine, database, settings, and persisted-file boundaries. Domain and service layers must receive validated, strongly typed values only. Reject malformed nested data with precise errors instead of silently dropping fields, and document where validation ownership lives.
-
-Cross-platform: n/a — pure TypeScript validation and architecture.
-
----
-
 ## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
 **Priority:** P2 | **Tags:** core, server, ui, engine
 **Updated:** 2026-07-29 08:56

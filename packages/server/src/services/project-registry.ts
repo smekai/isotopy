@@ -3,17 +3,15 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { Project, ProjectsView } from "@adhd/core";
+import {
+  registryFileSchema,
+  type RegistryFile,
+  type StoredProject,
+} from "../domain/project-registry-file.ts";
 import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/projects.ts";
+import { formatValidationIssues, parseJson } from "../domain/validation.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
-
-type StoredProject = Omit<Project, "dataDir">;
-
-interface RegistryFile {
-  version: 1;
-  activeProjectId: string;
-  projects: StoredProject[];
-}
 
 function homeProject(): Project {
   const projectPath = homeProjectPaths();
@@ -30,17 +28,6 @@ function withDataDir(project: StoredProject): Project {
   return { ...project, dataDir: projectPaths(project).dataDir };
 }
 
-function isProject(value: unknown): value is StoredProject {
-  const candidate = value as StoredProject;
-  return (
-    typeof candidate === "object" &&
-    candidate !== null &&
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    typeof candidate.root === "string"
-  );
-}
-
 export class ProjectRegistry {
   private file: RegistryFile = { version: 1, activeProjectId: HOME_PROJECT_ID, projects: [] };
   private loaded = false;
@@ -50,13 +37,18 @@ export class ProjectRegistry {
       return this.file;
     }
     try {
-      const parsed: unknown = JSON.parse(readFileSync(projectsFilePath(), "utf8"));
-      const candidate = parsed as RegistryFile;
-      if (typeof candidate === "object" && candidate !== null && Array.isArray(candidate.projects)) {
+      const parsed = parseJson(
+        registryFileSchema,
+        readFileSync(projectsFilePath(), "utf8"),
+      );
+      if (!parsed.ok) {
+        console.warn(
+          `Ignoring invalid project registry ${projectsFilePath()}: ${formatValidationIssues(parsed.issues)}`,
+        );
+      } else {
         this.file = {
-          version: 1,
-          activeProjectId: candidate.activeProjectId ?? HOME_PROJECT_ID,
-          projects: candidate.projects.filter(isProject).filter((p) => p.id !== HOME_PROJECT_ID),
+          ...parsed.value,
+          projects: parsed.value.projects.filter((project) => project.id !== HOME_PROJECT_ID),
         };
       }
     } catch {}

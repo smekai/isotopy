@@ -20,21 +20,18 @@ import {
   takeTaskSection,
   taskIdsIn,
 } from "../domain/markdown/task-board.ts";
+import {
+  boardConfigSchema,
+  ownedBoardConfigSchema,
+  type BoardConfig,
+  type StateConfig,
+} from "../domain/task-board-config.ts";
+import {
+  formatValidationIssues,
+  parseJson,
+} from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils.ts";
-
-interface StateConfig {
-  name: string;
-  fileName: string;
-}
-
-interface BoardConfig {
-  idPrefix: string;
-  nextId: number;
-  states: StateConfig[];
-  tags?: string[];
-  insertPosition?: "top" | "bottom";
-}
 
 interface Board {
   backend: "taskplanner" | "adhd";
@@ -52,23 +49,20 @@ async function readText(filePath: string): Promise<string | undefined> {
   return readFile(filePath, "utf8").catch(() => undefined);
 }
 
-function isConfig(value: unknown): value is BoardConfig {
-  const config = value as Partial<BoardConfig>;
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof config.idPrefix === "string" &&
-    typeof config.nextId === "number" &&
-    Array.isArray(config.states)
+async function readConfig(
+  configPath: string,
+  external: boolean,
+): Promise<BoardConfig> {
+  const parsed = parseJson(
+    external ? boardConfigSchema : ownedBoardConfigSchema,
+    await readFile(configPath, "utf8"),
   );
-}
-
-async function readConfig(configPath: string): Promise<BoardConfig> {
-  const value: unknown = JSON.parse(await readFile(configPath, "utf8"));
-  if (!isConfig(value)) {
-    throw new Error(`Invalid task board config: ${configPath}`);
+  if (!parsed.ok) {
+    throw new Error(
+      `Invalid task board config ${configPath}: ${formatValidationIssues(parsed.issues)}`,
+    );
   }
-  return value;
+  return parsed.value;
 }
 
 async function builtInBoard(projectPath: ProjectPath): Promise<Board> {
@@ -81,7 +75,7 @@ async function builtInBoard(projectPath: ProjectPath): Promise<Board> {
       backend: "adhd",
       dir,
       configPath,
-      config: await readConfig(configPath),
+      config: await readConfig(configPath, false),
     };
   }
   const config: BoardConfig = {
@@ -116,7 +110,7 @@ async function boardFor(projectPath: ProjectPath, create: boolean): Promise<Boar
       backend: "taskplanner",
       dir: path.dirname(taskPlannerConfig),
       configPath: taskPlannerConfig,
-      config: await readConfig(taskPlannerConfig),
+      config: await readConfig(taskPlannerConfig, true),
     };
   }
   const builtInConfig = path.join(projectPath.dataDir, "tasks", "config.json");
@@ -125,7 +119,7 @@ async function boardFor(projectPath: ProjectPath, create: boolean): Promise<Boar
       backend: "adhd",
       dir: path.dirname(builtInConfig),
       configPath: builtInConfig,
-      config: await readConfig(builtInConfig),
+      config: await readConfig(builtInConfig, false),
     };
   }
   return create ? builtInBoard(projectPath) : undefined;

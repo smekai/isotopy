@@ -117,21 +117,21 @@ test("an engine run works in the project folder itself", async () => {
   expect(ctx.engine.callAt(0).cwd).toBe(project.root);
 });
 
-test("a workspaceDir sent by the client cannot move the run out of the project", async () => {
+test("a workspaceDir sent by the client is rejected at the boundary", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "hardened");
-  ctx.engine.anticipate({ as: "Developer" }).reports("done");
-
   // Act
-  const run = await startRun(
+  const { status, body } = await post<{ error: string; issues: { message: string }[] }>(
     ctx.app,
+    "/runs",
     { ...ENGINE_RUN, workspaceDir: ctx.userHome },
     project.headers,
   );
 
   // Assert
-  const finished = await waitForRunStatus(ctx.app, run.id, "completed");
-  expect(finished.workspacePath).toBe(project.root);
+  expect(status).toBe(400);
+  expect(body.error).toBe("Invalid request");
+  expect(body.issues[0]?.message).toContain("workspaceDir");
 });
 
 test("a home run works in a scratch folder of its own, not in a real project", async () => {

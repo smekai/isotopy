@@ -102,7 +102,7 @@ test("restart without a stageId is rejected", async () => {
 
   // Assert
   expect(status).toBe(400);
-  expect(body.error).toBe("stageId is required");
+  expect(body.error).toBe("Invalid request");
 });
 
 test("runs are listed newest first", async () => {

@@ -8,26 +8,18 @@ import type {
   SettingsView,
 } from "@adhd/core";
 import { normalizeProjectPreferences } from "../domain/preferences.ts";
+import { settingsFileSchema } from "../domain/settings-file.ts";
+import type {
+  EngineConnectionSettings,
+  ProjectSettings,
+  SettingsFile,
+} from "../domain/settings-file.ts";
+import {
+  formatValidationIssues,
+  parseJson,
+} from "../domain/validation.ts";
 import type { EngineConnection } from "../engines/types.ts";
 import { userSettingsPath } from "../paths.ts";
-
-interface EngineConnectionSettings {
-  connectionMode: string;
-  apiKey?: string;
-}
-
-type EngineSettings = Partial<Record<EngineId, EngineConnectionSettings>>;
-
-interface ProjectSettings {
-  engines: EngineSettings;
-  preferences?: ProjectPreferencesUpdate;
-}
-
-interface SettingsFile {
-  version: 1;
-  defaults: ProjectSettings;
-  projects: Record<string, ProjectSettings>;
-}
 
 export interface EngineConnectionUpdate {
   connectionMode?: string;
@@ -40,10 +32,6 @@ function emptyProjectSettings(): ProjectSettings {
 
 function emptySettings(): SettingsFile {
   return { version: 1, defaults: emptyProjectSettings(), projects: {} };
-}
-
-function readEngineBag(value: unknown): EngineSettings {
-  return typeof value === "object" && value !== null ? (value as EngineSettings) : {};
 }
 
 function resolvedEntry(
@@ -94,20 +82,14 @@ export class SettingsStore {
     } catch {
       return emptySettings();
     }
-    try {
-      const parsed = JSON.parse(raw) as Partial<SettingsFile>;
-      return {
-        version: 1,
-        defaults: {
-          engines: readEngineBag(parsed.defaults?.engines),
-          ...(parsed.defaults?.preferences ? { preferences: parsed.defaults.preferences } : {}),
-        },
-        projects:
-          typeof parsed.projects === "object" && parsed.projects !== null ? parsed.projects : {},
-      };
-    } catch {
+    const parsed = parseJson(settingsFileSchema, raw);
+    if (!parsed.ok) {
+      console.warn(
+        `Ignoring invalid settings file ${userSettingsPath()}: ${formatValidationIssues(parsed.issues)}`,
+      );
       return emptySettings();
     }
+    return parsed.value;
   }
 
   private write(settings: SettingsFile): void {

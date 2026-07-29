@@ -127,13 +127,15 @@ test("a legacy model id stored on disk is migrated on read", async () => {
 
 test("an unknown engine is rejected and nothing is stored", async () => {
   // Act
-  const { status, body } = await put<{ error: string }>(ctx.app, "/settings/preferences", {
-    engine: "gemini",
-  });
+  const { status, body } = await put<{
+    error: string;
+    issues: { path: (string | number)[]; message: string }[];
+  }>(ctx.app, "/settings/preferences", { engine: "gemini" });
 
   // Assert
   expect(status).toBe(400);
-  expect(body.error).toContain("gemini");
+  expect(body.error).toBe("Invalid request");
+  expect(body.issues[0]).toMatchObject({ path: ["engine"] });
 });
 
 test("an unknown pipeline is rejected", async () => {
