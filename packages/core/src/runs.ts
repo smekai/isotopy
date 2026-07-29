@@ -189,27 +189,26 @@ export function formatUsage(usage: StageUsage): string | undefined {
 export const RUN_SUMMARY_EVENT = "run.summary";
 
 export function toRunSummary(run: RunState): RunSummary {
-  const summary: RunSummary = {
+  return {
     id: run.id,
     number: run.number,
     projectId: run.projectId,
+    milestoneId: run.milestoneId,
+    featureId: run.featureId,
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     status: run.status,
+    task: run.task,
+    engine: run.engine,
+    model: run.model,
     createdAt: run.createdAt,
+    completedAt: run.completedAt,
     stages: run.stages.map((stage) => ({
       id: stage.id,
       label: stage.label,
       status: stage.status,
     })),
   };
-  if (run.milestoneId !== undefined) summary.milestoneId = run.milestoneId;
-  if (run.featureId !== undefined) summary.featureId = run.featureId;
-  if (run.task !== undefined) summary.task = run.task;
-  if (run.engine !== undefined) summary.engine = run.engine;
-  if (run.model !== undefined) summary.model = run.model;
-  if (run.completedAt !== undefined) summary.completedAt = run.completedAt;
-  return summary;
 }
 
 export type RunEventType =
@@ -277,30 +276,26 @@ export function createInitialRunState({
   featureId,
   sourceTaskIds,
 }: NewRunInput): RunState {
-  const state: RunState = {
+  return {
     id: runId,
     number,
     projectId,
+    milestoneId,
+    featureId,
+    sourceTaskIds,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",
+    task,
     stageOutputs: {},
     messages: [],
     createdAt: new Date().toISOString(),
-    stages: flattenPipelineStages(pipeline).map((stage) => {
-      const state: StageState = {
-        id: stage.id,
-        label: stage.label,
-        status: "pending",
-        logs: [],
-      };
-      if (stage.skill !== undefined) state.skill = stage.skill;
-      return state;
-    }),
+    stages: flattenPipelineStages(pipeline).map((stage) => ({
+      id: stage.id,
+      label: stage.label,
+      skill: stage.skill,
+      status: "pending",
+      logs: [],
+    })),
   };
-  if (milestoneId !== undefined) state.milestoneId = milestoneId;
-  if (featureId !== undefined) state.featureId = featureId;
-  if (sourceTaskIds !== undefined) state.sourceTaskIds = sourceTaskIds;
-  if (task !== undefined) state.task = task;
-  return state;
 }

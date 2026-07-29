@@ -6,7 +6,6 @@ import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
 import { listWorkspaceFiles, readWorkspaceFile } from "../services/workspace-files.ts";
 import { projectScope } from "./project-scope.ts";
-import { runOptionsFrom } from "./run-options.ts";
 
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;
@@ -66,11 +65,15 @@ export function createRunRoutes(
       const pipelineId = body.pipelineId ?? DEFAULT_PIPELINE_ID;
 
       try {
-        const run = await orchestrator.startRun(
-          projectScope(registry, c),
-          pipelineId,
-          runOptionsFrom(body),
-        );
+        const run = await orchestrator.startRun(projectScope(registry, c), pipelineId, {
+          task: body.task,
+          engine: body.engine,
+          model: body.model,
+          permissionMode: body.permissionMode,
+          milestoneId: body.milestoneId,
+          featureId: body.featureId,
+          sourceTaskIds: body.sourceTaskIds,
+        });
         return c.json(run, 201);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to start run";

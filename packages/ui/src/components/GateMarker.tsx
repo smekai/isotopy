@@ -49,7 +49,7 @@ export interface GateMarkerProps {
   index: number;
   d: Dir;
   awaiting: boolean;
-  onApprove: (() => void) | undefined;
+  onApprove?: () => void;
 }
 
 export function GateMarker({ index, awaiting, onApprove }: GateMarkerProps) {

@@ -1,7 +1,7 @@
 export interface SkillLayers {
-  base: string | undefined;
-  projectOverride: string | undefined;
-  projectAddendum: string | undefined;
+  base?: string;
+  projectOverride?: string;
+  projectAddendum?: string;
 }
 
 const ADDENDUM_HEADING = "## Project-specific instructions";

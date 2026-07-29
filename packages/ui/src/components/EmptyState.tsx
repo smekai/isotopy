@@ -194,13 +194,13 @@ function footerHint(d: Dir): React.CSSProperties {
 export interface EmptyStateProps {
   d: Dir;
   projectId: string;
-  project: Project | undefined;
+  project?: Project;
   settings: SettingsController;
   onOpenProject: () => void;
   onStart: (task: string, pipelineId: string) => void;
   onPlanMilestone: (goal: string) => void;
   starting?: boolean;
-  initialTask: string | undefined;
+  initialTask?: string;
 }
 
 export function EmptyState({

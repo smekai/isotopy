@@ -94,74 +94,49 @@ export interface InterpretOptions {
   canAsk: boolean;
 }
 
-function engineStageOutcome(
-  outcome: EngineStageOutcome["outcome"],
-  output: string | undefined,
-  verdict: StageVerdict | undefined,
-  question: string | undefined,
-  failureMessage: string | undefined,
-): EngineStageOutcome {
-  const result: EngineStageOutcome = { outcome };
-  if (output !== undefined) result.output = output;
-  if (verdict !== undefined) result.verdict = verdict;
-  if (question !== undefined) result.question = question;
-  if (failureMessage !== undefined) result.failureMessage = failureMessage;
-  return result;
-}
-
 export function interpretEngineResult(
   result: EngineRunResult,
   { profession, canAsk }: InterpretOptions,
 ): EngineStageOutcome {
   if (!result.success) {
-    return engineStageOutcome(
-      STAGE_OUTCOMES.FAILED,
-      undefined,
-      undefined,
-      undefined,
-      result.errorMessage ?? `${profession} failed`,
-    );
+    return {
+      outcome: STAGE_OUTCOMES.FAILED,
+      failureMessage: result.errorMessage ?? `${profession} failed`,
+    };
   }
   const output =
     result.result !== undefined && result.result.trim() !== "" ? result.result : undefined;
 
   const question = canAsk ? parseStageQuestion(result.result) : undefined;
   if (question !== undefined) {
-    return engineStageOutcome(
-      STAGE_OUTCOMES.ASKING,
+    return {
+      outcome: STAGE_OUTCOMES.ASKING,
       output,
-      undefined,
       question,
-      undefined,
-    );
+    };
   }
 
   const verdict = parseStageVerdict(result.result);
   if (verdict === STAGE_VERDICTS.FAIL) {
-    return engineStageOutcome(
-      STAGE_OUTCOMES.NEEDS_ATTENTION,
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
       output,
       verdict,
-      undefined,
-      `${profession} reported VERDICT: FAIL`,
-    );
+      failureMessage: `${profession} reported VERDICT: FAIL`,
+    };
   }
   if (verdict === STAGE_VERDICTS.SKIP) {
-    return engineStageOutcome(
-      STAGE_OUTCOMES.SKIPPED,
+    return {
+      outcome: STAGE_OUTCOMES.SKIPPED,
       output,
       verdict,
-      undefined,
-      undefined,
-    );
+    };
   }
-  return engineStageOutcome(
-    STAGE_OUTCOMES.PASSED,
+  return {
+    outcome: STAGE_OUTCOMES.PASSED,
     output,
     verdict,
-    undefined,
-    undefined,
-  );
+  };
 }
 
 export interface HandoffMeta {

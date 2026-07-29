@@ -220,7 +220,7 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
           errorMessage = `Process exited with code ${code}${tail ? ` — ${tail}` : ""}`;
         }
       }
-      const result: SubprocessResult = {
+      finish({
         success,
         exitCode: code,
         termSignal: termSignal ?? null,
@@ -229,9 +229,8 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
         stdout,
         stderrTail,
         durationMs: Date.now() - startedAt,
-      };
-      if (errorMessage !== undefined) result.errorMessage = errorMessage;
-      finish(result);
+        errorMessage,
+      });
     });
 
     child.stdin?.on("error", () => {});

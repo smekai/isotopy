@@ -120,6 +120,6 @@ Current: 0.8.0.
   `Record<string, unknown>` traversal or silently filter malformed nested data.
 - Derive runtime value lists and TypeScript unions from one exported `as const`
   tuple.
-- With `exactOptionalPropertyTypes`, use `field?: T` for an omitted key and
-  `field: T | undefined` for a required fixed-shape key. Never write the
-  optional marker together with an explicit `undefined` union.
+- Use `field?: T` when a property may be absent or `undefined`; those states have
+  the same meaning in ADHD contracts. Use `null` only when the contract needs an
+  explicit cleared or removed value.

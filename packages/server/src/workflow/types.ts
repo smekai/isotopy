@@ -16,14 +16,14 @@ export interface PipelineWorkflowInput {
   runId: string;
   projectId: string;
   pipeline: PipelineDefinition;
-  task: string | undefined;
-  engine: EngineId | undefined;
-  model: string | undefined;
+  task?: string;
+  engine?: EngineId;
+  model?: string;
   permissionMode: EnginePermissionMode;
-  workspacePath: string | undefined;
-  seededOutputs: Record<string, string> | undefined;
-  seededOutcomes: Record<string, StageOutcome> | undefined;
-  startStageId: string | undefined;
+  workspacePath?: string;
+  seededOutputs?: Record<string, string>;
+  seededOutcomes?: Record<string, StageOutcome>;
+  startStageId?: string;
   startedMessage: string;
 }
 

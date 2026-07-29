@@ -17,9 +17,9 @@ type PipelineWorkflow = Workflow<
 >;
 
 export class WorkflowRuntime {
-  private backend: BackendSqlite | undefined;
-  private client: OpenWorkflow | undefined;
-  private worker: Worker | undefined;
+  private backend?: BackendSqlite;
+  private client?: OpenWorkflow;
+  private worker?: Worker;
   private started = false;
 
   constructor(

@@ -173,16 +173,15 @@ function usageFrom(codex: CodexUsage | undefined, durationMs: number): StageUsag
   if (!codex) {
     return undefined;
   }
-  const usage: StageUsage = {
+  return {
+    tokensIn: codex.input_tokens,
+    tokensOut: codex.output_tokens,
+    ...(codex.cached_input_tokens !== undefined
+      ? { cachedTokensIn: codex.cached_input_tokens }
+      : {}),
     durationMs,
     turns: 1,
   };
-  if (codex.input_tokens !== undefined) usage.tokensIn = codex.input_tokens;
-  if (codex.output_tokens !== undefined) usage.tokensOut = codex.output_tokens;
-  if (codex.cached_input_tokens !== undefined) {
-    usage.cachedTokensIn = codex.cached_input_tokens;
-  }
-  return usage;
 }
 
 function errorMessageOf(error: CodexEvent["error"]): string | undefined {
@@ -245,7 +244,7 @@ function handleCodexEvent(
       break;
     case "turn.completed":
       capture.turnCompleted = true;
-      if (event.usage !== undefined) capture.usage = event.usage;
+      capture.usage = event.usage;
       onLog("run", "turn complete");
       break;
     case "turn.failed":
@@ -346,17 +345,15 @@ export const codexAdapter: EngineAdapter = {
       : authText && /not logged in|logged out|no.*credentials/i.test(authText)
         ? false
         : undefined;
-    const status: EngineStatus = {
+    return {
       engine: "codex",
       installed: true,
       path: resolved.path,
+      version: firstLine(version.stdout),
       source: resolved.source,
       message: truncate(authText ?? "auth status unknown — run `codex login` in a terminal"),
+      loggedIn,
     };
-    const versionText = firstLine(version.stdout);
-    if (versionText !== undefined) status.version = versionText;
-    if (loggedIn !== undefined) status.loggedIn = loggedIn;
-    return status;
   },
 
   async install(): Promise<EngineActionResult> {
@@ -369,24 +366,16 @@ export const codexAdapter: EngineAdapter = {
     });
     if (result.success) {
       cachedBinary = undefined;
-      const action: EngineActionResult = {
+      return {
         ok: true,
+        output: firstLine(result.stdout),
         message: "Codex CLI installed. Run `codex login` next.",
       };
-      const output = firstLine(result.stdout);
-      if (output !== undefined) action.output = output;
-      return action;
     }
     const reason = result.timedOut
       ? "Installer timed out after 300s"
       : result.stderrTail.join(" ").trim() || result.errorMessage || "npm install failed";
-    const action: EngineActionResult = {
-      ok: false,
-      message: truncate(reason),
-    };
-    const output = firstLine(result.stdout);
-    if (output !== undefined) action.output = output;
-    return action;
+    return { ok: false, output: firstLine(result.stdout), message: truncate(reason) };
   },
 
   async run(ctx: EngineRunContext): Promise<EngineRunResult> {
@@ -405,10 +394,7 @@ export const codexAdapter: EngineAdapter = {
 
     const runCtx = withPersonaPrompt(ctx);
 
-    const capture: CodexCapture = { turnCompleted: false };
-    if (ctx.resumeSessionId !== undefined) {
-      capture.threadId = ctx.resumeSessionId;
-    }
+    const capture: CodexCapture = { turnCompleted: false, threadId: ctx.resumeSessionId };
     const result = await runSubprocess({
       command: binary,
       args: buildArgs(runCtx),
@@ -458,17 +444,13 @@ export const codexAdapter: EngineAdapter = {
       }
     }
 
-    const engineResult: EngineRunResult = {
+    return {
       success,
+      result: capture.lastMessage,
+      sessionId: capture.threadId,
       exitCode: result.exitCode,
+      errorMessage,
+      usage: usageFrom(capture.usage, result.durationMs),
     };
-    if (capture.lastMessage !== undefined) {
-      engineResult.result = capture.lastMessage;
-    }
-    if (capture.threadId !== undefined) engineResult.sessionId = capture.threadId;
-    if (errorMessage !== undefined) engineResult.errorMessage = errorMessage;
-    const usage = usageFrom(capture.usage, result.durationMs);
-    if (usage !== undefined) engineResult.usage = usage;
-    return engineResult;
   },
 };

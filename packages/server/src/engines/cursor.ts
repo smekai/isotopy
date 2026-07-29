@@ -301,17 +301,15 @@ export const cursorAdapter: EngineAdapter = {
     const auth = await probeCommand(resolved.path, ["status"]);
     const authText = firstLine(auth.stdout) ?? firstLine(auth.stderrTail.join("\n"));
     const loggedIn = authText ? !/not logged in|logged out|no.*auth/i.test(authText) : undefined;
-    const status: EngineStatus = {
+    return {
       engine: "cursor",
       installed: true,
       path: resolved.path,
+      version: firstLine(version.stdout),
       source: resolved.source,
       message: truncate(authText ?? "auth status unknown — click Log in to Cursor"),
+      loggedIn,
     };
-    const versionText = firstLine(version.stdout);
-    if (versionText !== undefined) status.version = versionText;
-    if (loggedIn !== undefined) status.loggedIn = loggedIn;
-    return status;
   },
 
   async install(): Promise<EngineActionResult> {
@@ -329,24 +327,16 @@ export const cursorAdapter: EngineAdapter = {
     });
     if (result.success) {
       cachedBinary = undefined;
-      const action: EngineActionResult = {
+      return {
         ok: true,
+        output: firstLine(result.stdout),
         message: "Cursor CLI installed. Run `agent login` next.",
       };
-      const output = firstLine(result.stdout);
-      if (output !== undefined) action.output = output;
-      return action;
     }
     const reason = result.timedOut
       ? "Installer timed out after 180s"
       : (result.stderrTail.join(" ").trim() || result.errorMessage || "Installer failed");
-    const action: EngineActionResult = {
-      ok: false,
-      message: truncate(reason),
-    };
-    const output = firstLine(result.stdout);
-    if (output !== undefined) action.output = output;
-    return action;
+    return { ok: false, output: firstLine(result.stdout), message: truncate(reason) };
   },
 
   async login(): Promise<EngineActionResult> {
@@ -363,24 +353,16 @@ export const cursorAdapter: EngineAdapter = {
       timeoutMs: 300_000,
     });
     if (result.success) {
-      const action: EngineActionResult = {
+      return {
         ok: true,
+        output: firstLine(result.stdout),
         message: "Logged in to Cursor.",
       };
-      const output = firstLine(result.stdout);
-      if (output !== undefined) action.output = output;
-      return action;
     }
     const reason = result.timedOut
       ? "Login timed out — finish the browser sign-in, then Re-check."
       : (result.stderrTail.join(" ").trim() || result.errorMessage || "Login failed");
-    const action: EngineActionResult = {
-      ok: false,
-      message: truncate(reason),
-    };
-    const output = firstLine(result.stdout);
-    if (output !== undefined) action.output = output;
-    return action;
+    return { ok: false, output: firstLine(result.stdout), message: truncate(reason) };
   },
 
   async run(ctx: EngineRunContext): Promise<EngineRunResult> {
@@ -404,11 +386,12 @@ export const cursorAdapter: EngineAdapter = {
     }
 
     let finalEvent: CursorStreamEvent | undefined;
-    const subprocess: Parameters<typeof runSubprocess>[0] = {
+    const result = await runSubprocess({
       command: binary,
       args: buildArgs(runCtx, promptViaArg),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection),
+      input: promptViaArg ? undefined : runCtx.prompt,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,
       onLine: (stream, line) => {
@@ -428,11 +411,7 @@ export const cursorAdapter: EngineAdapter = {
           return;
         }
       },
-    };
-    if (!promptViaArg) {
-      subprocess.input = runCtx.prompt;
-    }
-    const result = await runSubprocess(subprocess);
+    });
 
     const success = result.success && finalEvent?.type === "result" && !finalEvent.is_error;
     let errorMessage: string | undefined;
@@ -460,13 +439,12 @@ export const cursorAdapter: EngineAdapter = {
       }
     }
 
-    const engineResult: EngineRunResult = {
+    return {
       success,
+      result: finalEvent?.result,
       exitCode: result.exitCode,
+      errorMessage,
       usage: { durationMs: finalEvent?.duration_ms ?? result.durationMs, turns: 1 },
     };
-    if (finalEvent?.result !== undefined) engineResult.result = finalEvent.result;
-    if (errorMessage !== undefined) engineResult.errorMessage = errorMessage;
-    return engineResult;
   },
 };

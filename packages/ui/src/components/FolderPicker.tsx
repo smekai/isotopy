@@ -154,8 +154,8 @@ export interface FolderPickerProps {
 }
 
 interface ListTarget {
-  path: string | undefined;
-  entry: string | undefined;
+  path?: string;
+  entry?: string;
 }
 
 export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPickerProps) {

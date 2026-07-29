@@ -189,10 +189,10 @@ of the source. When you strip or avoid a comment, that is where its content goes
   interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
   into named constants and builders.
 
-- **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict`,
-  `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Reset an optional
-  field with `delete obj.field`, not `= undefined`; omit an absent key with a
-  conditional spread rather than writing `undefined` into it. No `unknown` /
+- **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
+  `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or
+  `undefined`; both mean "not supplied". Reserve `null` for an explicit cleared
+  or removed value. No `unknown` /
   `as unknown as` in business logic — `repository/run-repository.ts` confines it to
   one `parsePersistedRun` guard, and `db/runs-table.ts` narrows `node:sqlite`'s own
   `Record<string, SQLOutputValue>` rows instead of casting. Relative imports use
@@ -370,7 +370,7 @@ Recommended next steps, in rough priority order:
 3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
 4. **Structured logger** — replace `console.*` (tracked as TASK-022; `LOG_LEVEL` should join `config.ts`).
 5. **Request validation** — zod (or Hono's validator) at route boundaries instead of hand-rolled `body.x !== undefined` checks; the parsed types then flow into services for free.
-6. ~~**Stricter compiler flags**~~ — done in TASK-052: `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are on in `tsconfig.base.json`, and TypeScript is on 6.0.3. See [`decisions.md`](./decisions.md) for the version pin and the two migration idioms.
+6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because ADHD intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).
 
 ---

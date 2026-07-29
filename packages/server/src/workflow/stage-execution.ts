@@ -147,14 +147,13 @@ export async function runStageWork(
 
   if (decision.outcome === STAGE_OUTCOMES.ASKING && decision.question !== undefined) {
     projection.stageAsking(runId, stageDef.id, decision.question);
-    const result: StageResult = {
+    return {
       outcome: STAGE_OUTCOMES.ASKING,
       question: decision.question,
+      sessionId: outcome.sessionId,
       startedAt,
       completedAt: nowIso(),
     };
-    if (outcome.sessionId !== undefined) result.sessionId = outcome.sessionId;
-    return result;
   }
 
   if (decision.output !== undefined) {
@@ -182,16 +181,15 @@ export async function runStageWork(
     }
   }
 
-  const result: StageResult = {
+  return {
     outcome:
       decision.outcome === STAGE_OUTCOMES.ASKING
         ? STAGE_OUTCOMES.PASSED
         : decision.outcome,
+    output: decision.output,
+    verdict: decision.verdict,
+    sessionId: outcome.sessionId,
     startedAt,
     completedAt: nowIso(),
   };
-  if (decision.output !== undefined) result.output = decision.output;
-  if (decision.verdict !== undefined) result.verdict = decision.verdict;
-  if (outcome.sessionId !== undefined) result.sessionId = outcome.sessionId;
-  return result;
 }

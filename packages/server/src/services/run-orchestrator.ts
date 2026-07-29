@@ -9,7 +9,6 @@ import type {
   Milestone,
   MilestoneFeature,
   MilestoneProposal,
-  NewRunInput,
   PipelineDefinition,
   RunEvent,
   RunMessage,
@@ -46,7 +45,6 @@ import type { PersistedRun } from "../repository/run-repository.ts";
 import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
 import { formatHandoff } from "../domain/stage-context.ts";
-import type { HandoffMeta } from "../domain/stage-context.ts";
 import { parseMilestonePlan } from "../domain/milestone-plan.ts";
 import { nowIso } from "../utils.ts";
 import { WorkflowRuntimeRegistry } from "../workflow/workflow-runtime.ts";
@@ -284,6 +282,7 @@ export class RunOrchestrator implements RunProjection {
       id: randomUUID().slice(0, 8),
       projectId: projectPath.id,
       name,
+      goal: input.goal?.trim() || undefined,
       status: input.status ?? "active",
       autoRunNext: input.autoRunNext ?? false,
       features: (input.features ?? []).map((feature) =>
@@ -293,8 +292,6 @@ export class RunOrchestrator implements RunProjection {
       createdAt: now,
       updatedAt: now,
     };
-    const goal = input.goal?.trim();
-    if (goal) milestone.goal = goal;
     this.milestones.set(milestone.id, milestone);
     await this.persistMilestone(milestone);
     return structuredClone(milestone);
@@ -652,17 +649,16 @@ export class RunOrchestrator implements RunProjection {
       );
     }
 
-    const initialRun: NewRunInput = {
+    const run = createInitialRunState({
       runId,
       number: this.takeRunNumber(projectPath.id),
       projectId: projectPath.id,
       pipeline,
-    };
-    if (task !== undefined) initialRun.task = task;
-    if (milestoneId !== undefined) initialRun.milestoneId = milestoneId;
-    if (featureId !== undefined) initialRun.featureId = featureId;
-    if (sourceTaskIds !== undefined) initialRun.sourceTaskIds = sourceTaskIds;
-    const run = createInitialRunState(initialRun);
+      task,
+      milestoneId,
+      featureId,
+      sourceTaskIds,
+    });
 
     if (usesEngine) {
       const engineId = engine ?? "claude-code";
@@ -781,19 +777,18 @@ export class RunOrchestrator implements RunProjection {
       id: randomUUID().slice(0, 8),
       ts: nowIso(),
       role: draft.role,
+      stageId: draft.stageId,
+      kind: draft.kind,
       text: draft.text,
     };
-    if (draft.stageId !== undefined) message.stageId = draft.stageId;
-    if (draft.kind !== undefined) message.kind = draft.kind;
     run.messages.push(message);
-    const event: RunEvent = {
+    this.emit({
       ts: message.ts,
       type: "run.message",
       runId: run.id,
+      stageId: message.stageId,
       chatMessage: message,
-    };
-    if (message.stageId !== undefined) event.stageId = message.stageId;
-    this.emit(event);
+    });
     return message;
   }
 
@@ -1116,17 +1111,19 @@ export class RunOrchestrator implements RunProjection {
         await this.persistMilestone(milestone);
       }
     }
-    const handoffMeta: HandoffMeta = {
-      stageLabel: stageDef.label,
-      profession: agentForStage(stageDef.id).profession,
-      engine: this.engineLabel(run),
-      completedAt: nowIso(),
-    };
-    if (run.model !== undefined) handoffMeta.model = run.model;
     await this.repositoryForRun(runId).writeHandoff(
       runId,
       stageDef.id,
-      formatHandoff(handoffMeta, output),
+      formatHandoff(
+        {
+          stageLabel: stageDef.label,
+          profession: agentForStage(stageDef.id).profession,
+          engine: this.engineLabel(run),
+          model: run.model,
+          completedAt: nowIso(),
+        },
+        output,
+      ),
     );
     if (run.pipelineId === "full-delivery" && stageDef.id === "closeout") {
       run.closeout = await applyProductManagerCloseout(
@@ -1155,15 +1152,14 @@ export class RunOrchestrator implements RunProjection {
     }
     run.status = status;
     run.completedAt = nowIso();
-    const event: RunEvent = {
+    this.emit({
       ts: nowIso(),
       type: "run.completed",
       runId,
       status,
       message: completionMessage(status),
-    };
-    if (run.result !== undefined) event.result = run.result;
-    this.emit(event);
+      result: run.result,
+    });
     void this.settleCompletedRun(run);
   }
 
@@ -1350,9 +1346,10 @@ export class RunOrchestrator implements RunProjection {
     if (!title) {
       throw new Error("Feature title is required");
     }
-    const feature: MilestoneFeature = {
+    return {
       id: randomUUID().slice(0, 8),
       title,
+      description: input.description?.trim() || undefined,
       acceptanceCriteria: this.cleanStrings(input.acceptanceCriteria ?? []),
       status: "ready",
       taskIds: this.cleanStrings(input.taskIds ?? []),
@@ -1361,9 +1358,6 @@ export class RunOrchestrator implements RunProjection {
       createdAt: now,
       updatedAt: now,
     };
-    const description = input.description?.trim();
-    if (description) feature.description = description;
-    return feature;
   }
 
   private cleanStrings(values: string[]): string[] {
@@ -1424,17 +1418,14 @@ export class RunOrchestrator implements RunProjection {
       ) {
         return;
       }
-      const nextOptions: StartRunOptions = {};
-      if (run.engine !== undefined) nextOptions.engine = run.engine;
-      if (run.model !== undefined) nextOptions.model = run.model;
-      const permissionMode = this.enginePermissionModes.get(run.id);
-      if (permissionMode !== undefined) {
-        nextOptions.permissionMode = permissionMode;
-      }
       await this.startNextMilestoneRun(
         this.registry.resolve(run.projectId),
         milestone.id,
-        nextOptions,
+        {
+          engine: run.engine,
+          model: run.model,
+          permissionMode: this.enginePermissionModes.get(run.id),
+        },
       );
     } finally {
       this.completingMilestoneRuns.delete(run.id);

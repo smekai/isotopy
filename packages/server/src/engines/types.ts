@@ -16,12 +16,12 @@ export interface EngineRunContext {
   runId: string;
   prompt: string;
   cwd: string;
-  model: string | undefined;
-  appendSystemPrompt: string | undefined;
+  model?: string;
+  appendSystemPrompt?: string;
   permissionMode: EnginePermissionMode;
   connection: EngineConnection;
   /** Continue this CLI session instead of starting a new one. */
-  resumeSessionId: string | undefined;
+  resumeSessionId?: string;
   timeoutMs: number;
   signal: AbortSignal;
   onLog: (level: LogLevel, message: string) => void;

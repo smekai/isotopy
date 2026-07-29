@@ -6,6 +6,22 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-29 — Optional and `undefined` represent the same domain state
+
+**Context:** `exactOptionalPropertyTypes` forced callers and constructors to
+distinguish a missing property from a property whose value is `undefined`. ADHD
+does not assign different domain meaning to those two JavaScript shapes, so the
+flag produced required `T | undefined` fields and conditional object assembly
+without protecting a real invariant.
+
+**Decision:** remove `exactOptionalPropertyTypes`. A value that may be absent is
+written as `field?: T`; callers may omit it or supply `undefined`. `null` is
+reserved for contracts that need an explicit cleared or removed state. Runtime
+schemas still validate untrusted input at the boundary, and
+`noUncheckedIndexedAccess` remains enabled.
+
+---
+
 ## 2026-07-29 — Milestones begin as an approved Product Manager proposal (TASK-088, TASK-091, TASK-096)
 
 **Context:** a user can describe an outcome more easily than a complete delivery
@@ -747,6 +763,9 @@ the UI). `@types/node` was bumped to v26 to match.
 
 ## 2026-07-22 — Adopted `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
 
+> `exactOptionalPropertyTypes` was removed on 2026-07-29; the
+> `noUncheckedIndexedAccess` part of this decision remains active.
+
 **Context:** both flags were parked in `architecture.md` as "once the codebase is
 ready." Rule A7 pushes for them.
 
@@ -796,9 +815,7 @@ milestone-summary boundaries. Invalid nested data is rejected with a path-aware
 error before it enters service or domain logic. Runtime value lists such as task
 priorities are exported `as const` and also define their TypeScript unions.
 
-This refines the `exactOptionalPropertyTypes` decision above. `field?: T` means
-the key is genuinely omitted; a fixed-shape internal record uses
-`field: T | undefined` when the key is always present. Combining an optional
-marker with an explicit `undefined` union is prohibited. Constructors add truly
-optional properties only when a value exists, without conditional object-spread
-expressions.
+TypeScript types remain strict after boundary validation. The optional-property
+convention described here was superseded on 2026-07-29: absence and `undefined`
+now intentionally represent the same domain state, while `null` represents an
+explicit clear where supported.

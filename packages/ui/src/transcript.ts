@@ -87,27 +87,19 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
   }
 
   for (const message of run.messages) {
-    let item: TranscriptItem;
-    if (message.role === "user") {
-      item = {
-        kind: "user",
-        key: `msg:${message.id}`,
-        ts: message.ts,
-        text: message.text,
-      };
-    } else {
-      item = {
-        kind: "agent",
-        key: `msg:${message.id}`,
-        ts: message.ts,
-        text: message.text,
-      };
-      if (message.stageId !== undefined) item.stageId = message.stageId;
-      if (message.kind === "question") item.question = true;
-    }
     ordered.push({
       seq: seq++,
-      item,
+      item:
+        message.role === "user"
+          ? { kind: "user", key: `msg:${message.id}`, ts: message.ts, text: message.text }
+          : {
+              kind: "agent",
+              key: `msg:${message.id}`,
+              ts: message.ts,
+              stageId: message.stageId,
+              question: message.kind === "question" || undefined,
+              text: message.text,
+            },
     });
   }
 
