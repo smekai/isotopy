@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { config } from "./config.ts";
+import { createAutomationRoutes } from "./routes/automation.ts";
 import { engineRoutes } from "./routes/engines.ts";
 import { fsRoutes } from "./routes/fs.ts";
 import { healthRoutes } from "./routes/health.ts";
@@ -10,16 +11,23 @@ import { createProjectRoutes } from "./routes/projects.ts";
 import { createRunRoutes } from "./routes/runs.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
 import type { ProjectRegistry } from "./services/project-registry.ts";
+import type { AutomationConfigStore } from "./services/automation-config-store.ts";
 import type { RunOrchestrator } from "./services/run-orchestrator.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
 
 export interface AppDependencies {
+  automation: AutomationConfigStore;
   orchestrator: RunOrchestrator;
   registry: ProjectRegistry;
   settings: SettingsStore;
 }
 
-export function createApp({ orchestrator, registry, settings }: AppDependencies): Hono {
+export function createApp({
+  automation,
+  orchestrator,
+  registry,
+  settings,
+}: AppDependencies): Hono {
   const app = new Hono();
 
   app.use(
@@ -30,6 +38,7 @@ export function createApp({ orchestrator, registry, settings }: AppDependencies)
   );
 
   app.route("/health", healthRoutes);
+  app.route("/automation", createAutomationRoutes(registry, automation));
   app.route("/projects", createProjectRoutes(registry));
   app.route("/pipelines", createPipelineRoutes(orchestrator));
   app.route("/milestones", createMilestoneRoutes(orchestrator, registry));

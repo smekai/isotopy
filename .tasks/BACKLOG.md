@@ -40,16 +40,6 @@ Cross-platform: browser UI; validate Chromium on Windows and macOS CI where avai
 
 ---
 
-## TASK-092: Release management and preview deployment automation
-**Priority:** P1 | **Tags:** server, adapters, setup, infra, milestone-d
-**Updated:** 2026-07-28 13:23
-
-Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
-
-Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
-
----
-
 ## TASK-087: Epic — Milestone D: Full Delivery Loop
 **Priority:** P0 | **Tags:** core, server, ui, engine, infra, testing, milestone-d
 **Updated:** 2026-07-28 13:23

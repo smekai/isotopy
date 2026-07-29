@@ -11,6 +11,7 @@ import type { Hono } from "hono";
 import { RUN_SUMMARY_EVENT } from "@adhd/core";
 import type { EngineId, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
+import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
@@ -23,6 +24,7 @@ const POLL_INTERVAL_MS = 10;
 
 export interface TestApp {
   app: Hono;
+  automation: AutomationConfigStore;
   orchestrator: RunOrchestrator;
   registry: ProjectRegistry;
   settings: SettingsStore;
@@ -57,12 +59,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   setEngineAdapter(engineId, engine);
 
   const registry = new ProjectRegistry();
+  const automation = new AutomationConfigStore();
   const settings = new SettingsStore();
   const orchestrator = new RunOrchestrator({ registry, settings });
-  const app = createApp({ orchestrator, registry, settings });
+  const app = createApp({ automation, orchestrator, registry, settings });
 
   return {
     app,
+    automation,
     orchestrator,
     registry,
     settings,
@@ -93,10 +97,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 /** A second orchestrator over the same data roots — a server restart. */
 export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrchestrator }> {
   const registry = new ProjectRegistry();
+  const automation = new AutomationConfigStore();
   const settings = new SettingsStore();
   const orchestrator = new RunOrchestrator({ registry, settings });
   await orchestrator.init();
-  return { app: createApp({ orchestrator, registry, settings }), orchestrator };
+  return {
+    app: createApp({ automation, orchestrator, registry, settings }),
+    orchestrator,
+  };
 }
 
 /** Register a temp directory as a project and return it with its API header. */
@@ -342,4 +350,3 @@ export function stageOf(run: RunState, stageId: string) {
   }
   return stage;
 }
-
