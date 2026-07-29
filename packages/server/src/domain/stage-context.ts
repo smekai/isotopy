@@ -2,48 +2,6 @@ import { STAGE_OUTCOMES, STAGE_VERDICTS } from "@adhd/core";
 import type { StageOutcome, StageVerdict } from "@adhd/core";
 import type { EngineRunResult } from "../engines/types.ts";
 
-export interface UpstreamOutput {
-  label: string;
-  output: string;
-}
-
-const TASK_HEADING = "## Task";
-const ASSIGNMENT_HEADING = "## Step task";
-
-const HANDOFF_HEADING = "## Handoff from previous steps";
-const HANDOFF_NOTE =
-  "These are reports from the boxes that ran before you, in order. They describe " +
-  "intent — the working directory is the source of truth. Verify rather than assume.";
-
-export function buildStagePrompt(
-  task: string,
-  upstream: UpstreamOutput[],
-  stepTask?: string,
-): string {
-  const reports = upstream.filter((entry) => entry.output.trim() !== "");
-  if (reports.length === 0 && stepTask === undefined) {
-    return task;
-  }
-
-  const taskBlock = `${TASK_HEADING}\n\n${task}`;
-  const blocks =
-    stepTask === undefined
-      ? [taskBlock]
-      : [`${ASSIGNMENT_HEADING}\n\n${stepTask.trim()}`, taskBlock];
-  if (reports.length === 0) {
-    return blocks.join("\n\n");
-  }
-
-  const handoffs = reports.map(
-    (entry) => `### ${entry.label}\n\n${entry.output.trim()}`,
-  );
-  return [
-    ...blocks,
-    `${HANDOFF_HEADING}\n\n${HANDOFF_NOTE}`,
-    ...handoffs,
-  ].join("\n\n");
-}
-
 const VERDICT_LINE = new RegExp(
   `^[*\`_\\s]*VERDICT:\\s*(${Object.values(STAGE_VERDICTS).join("|")})[*\`_\\s]*$`,
   "i",
@@ -137,28 +95,4 @@ export function interpretEngineResult(
     output,
     verdict,
   };
-}
-
-export interface HandoffMeta {
-  stageLabel: string;
-  profession: string;
-  engine: string;
-  model?: string;
-  completedAt: string;
-}
-
-export function formatHandoff(meta: HandoffMeta, output: string): string {
-  const lines = [
-    `# ${meta.stageLabel} — handoff`,
-    "",
-    `- **Agent:** ${meta.profession}`,
-    `- **Engine:** ${meta.engine}${meta.model ? ` · ${meta.model}` : ""}`,
-    `- **Completed:** ${meta.completedAt}`,
-    "",
-    "---",
-    "",
-    output.trim(),
-    "",
-  ];
-  return lines.join("\n");
 }

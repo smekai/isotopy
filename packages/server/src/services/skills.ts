@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { skillsDir, userSkillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
-import { composeSkill } from "../domain/skills/compose.ts";
+import { composeSkill } from "../domain/markdown/skill.ts";
 import { loadBundledPersona } from "./bundled-prompts.ts";
 
 interface CacheEntry {

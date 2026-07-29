@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { composeSkill } from "../src/domain/skills/compose.ts";
+import { composeSkill } from "../src/domain/markdown/skill.ts";
 import { homeProjectPaths, skillsDir, userSkillsDir } from "../src/paths.ts";
 import { loadBundledPersona } from "../src/services/bundled-prompts.ts";
 import { loadSkill } from "../src/services/skills.ts";
@@ -80,7 +80,10 @@ describe("composeSkill", () => {
 
 describe("loadSkill", () => {
   test("falls back to the bundled default and writes nothing to disk", async () => {
-    expect(await loadSkill(project, "developer")).toBe(await loadBundledPersona("developer"));
+    const bundled = await loadBundledPersona("developer");
+    expect(await loadSkill(project, "developer")).toBe(
+      bundled?.replace(/\r\n/g, "\n").trim(),
+    );
     expect(await readdir(home)).toEqual([]);
     expect(await readdir(userHome)).toEqual([]);
   });

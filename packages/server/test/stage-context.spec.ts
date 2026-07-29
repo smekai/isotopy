@@ -6,6 +6,8 @@ import { describe, expect, test } from "vitest";
 import {
   buildStagePrompt,
   formatHandoff,
+} from "../src/domain/markdown/stage.ts";
+import {
   interpretEngineResult,
   parseStageQuestion,
   parseStageVerdict,
