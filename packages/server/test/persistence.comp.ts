@@ -28,19 +28,12 @@ afterEach(async () => {
 });
 
 /**
- * A run as a process older than TASK-078 wrote it: `messages` did not exist yet.
- * The cast below is the point of the type — these tests deliberately write a
- * shape the current model forbids, to prove the load path repairs it.
- */
-type LegacyRun = Omit<RunState, "messages"> & { messages?: RunState["messages"] };
-
-/**
  * Seed a run straight into the home project's DB, the way a crashed process
  * would have left it — used to drive the crash-recovery path on restart.
  */
-async function seedHomeRun(home: string, run: LegacyRun): Promise<void> {
+async function seedHomeRun(home: string, run: RunState): Promise<void> {
   const repository = new RunRepository({ id: HOME_PROJECT_ID, root: home, dataDir: home });
-  await repository.writeState(run.id, { version: 1, run: run as RunState });
+  await repository.writeState(run.id, { version: 1, run });
   await repository.settle();
 }
 
@@ -104,6 +97,7 @@ test("a run left mid-flight by a crash with no durable run is reconciled to fail
       { id: "implementation", label: "Developer", status: "passed", logs: [] },
       { id: "test", label: "Tester", status: "running", logs: [] },
     ],
+    messages: [],
     createdAt: new Date().toISOString(),
   });
 
@@ -114,34 +108,6 @@ test("a run left mid-flight by a crash with no durable run is reconciled to fail
   expect(stageOf(body, "test").status).toBe("failed");
   expect(stageOf(body, "test").logs.at(-1)?.message).toMatch(/Interrupted by server restart/);
   expect(stageOf(body, "implementation").status).toBe("passed");
-  await restarted.orchestrator.shutdown();
-});
-
-test("a run stored before transcripts existed loads with an empty one", async () => {
-  // Arrange — `messages` is required on RunState now, but rows already on disk
-  // predate it; without a backfill the UI would read undefined and throw.
-  const { home } = ctx;
-  const runId = "legacy01";
-  await seedHomeRun(home, {
-    id: runId,
-    number: 3,
-    projectId: HOME_PROJECT_ID,
-    pipelineId: "dev-test",
-    pipelineName: "Developer + Tester",
-    status: "completed",
-    task: "comp written before messages",
-    stages: [{ id: "implementation", label: "Developer", status: "passed", logs: [] }],
-    createdAt: new Date().toISOString(),
-    completedAt: new Date().toISOString(),
-  });
-
-  // Act
-  const restarted = await restartApp();
-  const { body } = await get<RunState>(restarted.app, `/runs/${runId}`);
-
-  // Assert
-  expect(body.messages).toEqual([]);
-  expect(body.task).toBe("comp written before messages");
   await restarted.orchestrator.shutdown();
 });
 

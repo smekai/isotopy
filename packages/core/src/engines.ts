@@ -1,8 +1,12 @@
-export type EngineId = "claude-code" | "cursor" | "codex";
+export const ENGINE_IDS = ["claude-code", "cursor", "codex"] as const;
+
+export type EngineId = (typeof ENGINE_IDS)[number];
 
 export const DEFAULT_ENGINE_ID: EngineId = "claude-code";
 
-export type EnginePermissionMode = "skip" | "acceptEdits";
+export const PERMISSION_MODE_IDS = ["skip", "acceptEdits"] as const;
+
+export type EnginePermissionMode = (typeof PERMISSION_MODE_IDS)[number];
 
 export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";
 

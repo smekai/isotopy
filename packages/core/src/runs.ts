@@ -3,36 +3,52 @@ import type { RunCloseoutRecord } from "./closeout.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { flattenPipelineStages } from "./pipelines.ts";
 
-export type StageStatus =
-  | "pending"
-  | "running"
-  | "passed"
-  | "failed"
-  | "awaiting"
-  | "asking"
-  | "skipped";
-export type RunStatus =
-  | "pending"
-  | "running"
-  | "awaiting"
-  | "asking"
-  | "completed"
-  | "needs_attention"
-  | "failed"
-  | "cancelled";
+export const STAGE_STATUSES = [
+  "pending",
+  "running",
+  "passed",
+  "failed",
+  "awaiting",
+  "asking",
+  "skipped",
+] as const;
 
-export const TERMINAL_RUN_STATUSES: RunStatus[] = [
+export type StageStatus = (typeof STAGE_STATUSES)[number];
+
+export const RUN_STATUSES = [
+  "pending",
+  "running",
+  "awaiting",
+  "asking",
   "completed",
   "needs_attention",
   "failed",
   "cancelled",
-];
+] as const;
+
+export type RunStatus = (typeof RUN_STATUSES)[number];
+
+export const TERMINAL_RUN_STATUSES = [
+  "completed",
+  "needs_attention",
+  "failed",
+  "cancelled",
+] as const;
 
 export function isTerminalRunStatus(status: RunStatus): boolean {
-  return TERMINAL_RUN_STATUSES.includes(status);
+  return TERMINAL_RUN_STATUSES.some((terminal) => terminal === status);
 }
 
-export type LogLevel = "info" | "run" | "pass" | "fail" | "warn" | "error";
+export const LOG_LEVELS = [
+  "info",
+  "run",
+  "pass",
+  "fail",
+  "warn",
+  "error",
+] as const;
+
+export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export interface StageLogEntry {
   ts: string;
@@ -59,10 +75,14 @@ export const STAGE_OUTCOMES = {
 
 export type StageOutcome = (typeof STAGE_OUTCOMES)[keyof typeof STAGE_OUTCOMES];
 
-export type MessageRole = "user" | "agent";
+export const MESSAGE_ROLES = ["user", "agent"] as const;
+
+export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
 /** Absent means ordinary chat; a question parks the run until an answer arrives. */
-export type MessageKind = "question" | "answer";
+export const MESSAGE_KINDS = ["question", "answer"] as const;
+
+export type MessageKind = (typeof MESSAGE_KINDS)[number];
 
 export interface RunMessage {
   id: string;
@@ -211,22 +231,7 @@ export function toRunSummary(run: RunState): RunSummary {
   };
 }
 
-export type RunEventType =
-  | "run.started"
-  | "run.completed"
-  | "stage.started"
-  | "stage.log"
-  | "stage.completed"
-  | "stage.failed"
-  | "stage.awaiting"
-  | "stage.approved"
-  | "stage.skipped"
-  | "stage.asking"
-  | "stage.answered"
-  | "stage.usage"
-  | "run.message";
-
-export const RUN_EVENT_TYPES: RunEventType[] = [
+export const RUN_EVENT_TYPES = [
   "run.started",
   "run.completed",
   "stage.started",
@@ -240,7 +245,9 @@ export const RUN_EVENT_TYPES: RunEventType[] = [
   "stage.answered",
   "stage.usage",
   "run.message",
-];
+] as const;
+
+export type RunEventType = (typeof RUN_EVENT_TYPES)[number];
 
 export interface RunEvent {
   ts: string;

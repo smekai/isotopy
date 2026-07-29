@@ -19,5 +19,11 @@ export function makePersistedRun(id: string, status: RunStatus): PersistedRun {
 }
 
 export function makeRunEvent(runId: string): RunEvent {
-  return { ts: "2026-07-23T00:00:00.000Z", type: "run.started", runId };
+  return {
+    ts: "2026-07-23T00:00:00.000Z",
+    type: "run.started",
+    runId,
+    status: "running",
+    message: "Run started",
+  };
 }

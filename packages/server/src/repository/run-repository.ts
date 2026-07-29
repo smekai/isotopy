@@ -1,44 +1,19 @@
-import type { EnginePermissionMode, RunEvent, RunState } from "@adhd/core";
+import type { RunEvent } from "@adhd/core";
 import { ActiveRunsTable } from "../db/active-runs-table.ts";
 import { Database } from "../db/database.ts";
 import { EventsTable } from "../db/events-table.ts";
 import { RunsTable } from "../db/runs-table.ts";
+import {
+  parsePersistedRun,
+  parsePersistedRunEvent,
+} from "../domain/run-persistence.ts";
+import type { PersistedRun } from "../domain/run-persistence.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils.ts";
 import { persistHandoff } from "./handoff.ts";
 
-export interface PersistedRun {
-  version: 1;
-  run: RunState;
-  permissionMode?: EnginePermissionMode;
-  openWorkflowRunId?: string;
-}
-
-export function isPersistedRun(value: unknown): value is PersistedRun {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as PersistedRun).run === "object" &&
-    (value as PersistedRun).run !== null &&
-    typeof (value as PersistedRun).run.id === "string"
-  );
-}
-
-function backfillMessages(persisted: PersistedRun): PersistedRun {
-  const messages: unknown = persisted.run.messages;
-  return Array.isArray(messages)
-    ? persisted
-    : { ...persisted, run: { ...persisted.run, messages: [] } };
-}
-
-export function parsePersistedRun(text: string): PersistedRun | undefined {
-  try {
-    const value: unknown = JSON.parse(text);
-    return isPersistedRun(value) ? backfillMessages(value) : undefined;
-  } catch {
-    return undefined;
-  }
-}
+export type { PersistedRun } from "../domain/run-persistence.ts";
 
 export class RunRepository {
   private readonly db: Database;
@@ -65,11 +40,14 @@ export class RunRepository {
   async loadEvents(runId: string): Promise<RunEvent[]> {
     const rows = await this.events.allForRun(runId);
     return rows.flatMap((data) => {
-      try {
-        return [JSON.parse(data) as RunEvent];
-      } catch {
-        return [];
+      const parsed = parsePersistedRunEvent(data);
+      if (parsed.ok) {
+        return [parsed.value];
       }
+      console.warn(
+        `Skipping malformed event row for run ${runId}: ${formatValidationIssues(parsed.issues)}`,
+      );
+      return [];
     });
   }
 
@@ -100,11 +78,13 @@ export class RunRepository {
   }
 
   private parseRunData(data: string): PersistedRun[] {
-    const run = parsePersistedRun(data);
-    if (run) {
-      return [run];
+    const parsed = parsePersistedRun(data);
+    if (parsed.ok) {
+      return [parsed.value];
     }
-    console.warn("Skipping malformed run row in the run database");
+    console.warn(
+      `Skipping malformed run row in the run database: ${formatValidationIssues(parsed.issues)}`,
+    );
     return [];
   }
 

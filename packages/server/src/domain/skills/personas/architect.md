@@ -86,8 +86,12 @@ runtime.
 Avoid `unknown` and `as unknown as` in business logic — a double-cast defeats the
 type system rather than using it. Reach for a library's own typed return values
 and narrow them (`typeof`, a type guard) instead of re-casting. Confine `unknown`
-to a single named boundary — a type guard or a `parseX` helper that validates
-untyped input — and hand typed values to everything downstream.
+to a focused boundary codec backed by a runtime schema. Reject a malformed
+record as a whole with path-aware issues; do not recover a plausible partial
+object by dropping bad fields. The codec hands typed values to everything
+downstream. ADHD-owned formats are strict about unknown fields. External
+protocols may preserve unknown fields and event types, but every field ADHD
+consumes is validated before it leaves the codec.
 
 ### A8 — Evidence lives in Markdown, not code comments
 

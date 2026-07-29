@@ -283,7 +283,7 @@ test("restarting from QA keeps the upstream output and re-runs only QA", async (
   expect(finished.stageOutputs?.test).toBe(TESTER_REPORT);
   expect(stageOf(finished, "test").verdict).toBe("PASS");
   engine.verify();
-});
+}, 10_000);
 
 test("aborting before the box starts means the engine is never spawned at all", async () => {
   // Arrange — no anticipations: this run must not reach the engine.

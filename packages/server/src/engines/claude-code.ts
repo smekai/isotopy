@@ -2,9 +2,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineStatus, StageUsage } from "@adhd/core";
+import type { EngineStatus } from "@adhd/core";
+import { parseClaudeProtocolLine } from "./claude-protocol.ts";
 import { firstLine, truncate } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
+import {
+  applyProtocolUpdate,
+  protocolProblemMessage,
+} from "./protocol-validation.ts";
+import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import type {
   EngineAdapter,
@@ -127,79 +133,6 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
   return env;
 }
 
-function toolUseSummary(name: string, input: Record<string, unknown>): string {
-  const detail = input.file_path ?? input.command ?? input.pattern ?? input.path ?? "";
-  return truncate(`▶ ${name} ${String(detail)}`);
-}
-
-interface ClaudeStreamEvent {
-  type?: string;
-  subtype?: string;
-  session_id?: string;
-  model?: string;
-  tools?: unknown[];
-  result?: string;
-  is_error?: boolean;
-  total_cost_usd?: number;
-  duration_ms?: number;
-  num_turns?: number;
-  message?: {
-    content?: Array<{
-      type?: string;
-      text?: string;
-      name?: string;
-      input?: Record<string, unknown>;
-      is_error?: boolean;
-      content?: unknown;
-    }>;
-  };
-}
-
-function handleClaudeEvent(
-  event: ClaudeStreamEvent,
-  onLog: EngineRunContext["onLog"],
-): ClaudeStreamEvent | undefined {
-  if (event.type === "system" && event.subtype === "init") {
-    const tools = Array.isArray(event.tools) ? `${event.tools.length} tools` : "";
-    onLog("run", truncate(`Claude Code online · ${event.model ?? "default model"} · ${tools}`));
-    return undefined;
-  }
-  if (event.type === "assistant") {
-    for (const item of event.message?.content ?? []) {
-      if (item.type === "text" && item.text) {
-        onLog("info", truncate(item.text));
-      } else if (item.type === "tool_use" && item.name) {
-        onLog("run", toolUseSummary(item.name, item.input ?? {}));
-      }
-    }
-    return undefined;
-  }
-  if (event.type === "user") {
-    for (const item of event.message?.content ?? []) {
-      if (item.type === "tool_result" && item.is_error) {
-        onLog("warn", truncate(`Tool error: ${JSON.stringify(item.content)}`));
-      }
-    }
-    return undefined;
-  }
-  if (event.type === "result") {
-    return event;
-  }
-  return undefined;
-}
-
-function usageFrom(event: ClaudeStreamEvent | undefined): StageUsage | undefined {
-  if (!event) {
-    return undefined;
-  }
-  const usage: StageUsage = {
-    costUsd: event.total_cost_usd,
-    durationMs: event.duration_ms,
-    turns: event.num_turns,
-  };
-  return Object.keys(usage).length > 0 ? usage : undefined;
-}
-
 export const claudeCodeAdapter: EngineAdapter = {
   id: "claude-code",
 
@@ -263,8 +196,10 @@ export const claudeCodeAdapter: EngineAdapter = {
         : ["--dangerously-skip-permissions"]),
     ];
 
-    let finalEvent: ClaudeStreamEvent | undefined;
-    let sessionId: string | undefined = ctx.resumeSessionId;
+    const capture: EngineProtocolUpdate = {
+      sessionId: ctx.resumeSessionId,
+      logs: [],
+    };
     const result = await runSubprocess({
       command: binary,
       args,
@@ -281,34 +216,31 @@ export const claudeCodeAdapter: EngineAdapter = {
         if (!trimmed) {
           return;
         }
-        try {
-          const event = JSON.parse(trimmed) as ClaudeStreamEvent;
-          if (event.session_id) {
-            sessionId = event.session_id;
-          }
-          const captured = handleClaudeEvent(event, ctx.onLog);
-          if (captured) {
-            finalEvent = captured;
-          }
-        } catch {}
+        const parsed = parseClaudeProtocolLine(trimmed);
+        if (!parsed.ok) {
+          ctx.onLog("warn", protocolProblemMessage(parsed.problem));
+          return;
+        }
+        applyProtocolUpdate(capture, parsed.event, ctx.onLog);
       },
     });
 
-    const success = result.success && finalEvent?.subtype === "success" && !finalEvent.is_error;
+    const success = result.success && capture.terminal === "success";
     let errorMessage: string | undefined;
     if (!success) {
       if (result.timedOut) {
         errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
       } else if (result.aborted) {
         errorMessage = "Aborted";
-      } else if (result.exitCode === null && !finalEvent) {
+      } else if (result.exitCode === null && capture.terminal === undefined) {
         errorMessage = result.errorMessage ?? "Failed to start Claude Code";
         ctx.onLog("fail", errorMessage);
       } else {
         const stderr = result.stderrTail.join(" ").trim();
         const raw =
-          finalEvent && (finalEvent.subtype !== "success" || finalEvent.is_error)
-            ? (finalEvent.result ?? `Claude Code ended with ${finalEvent.subtype}`)
+          capture.terminal === "failure"
+            ? (capture.error ??
+              `Claude Code ended with ${capture.terminalLabel ?? "an error"}`)
             : `Claude Code exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
@@ -322,11 +254,11 @@ export const claudeCodeAdapter: EngineAdapter = {
 
     return {
       success,
-      result: finalEvent?.result,
-      sessionId,
+      result: capture.output,
+      sessionId: capture.sessionId,
       exitCode: result.exitCode,
       errorMessage,
-      usage: usageFrom(finalEvent),
+      usage: capture.usage,
     };
   },
 };

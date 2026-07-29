@@ -1,16 +1,19 @@
 import { Hono } from "hono";
-import type {
-  CreateMilestoneFeatureInput,
-  CreateMilestoneInput,
-  MilestoneProposal,
-  ReviseMilestonePlanInput,
-  StartMilestonePlanningInput,
-  UpdateMilestoneFeatureInput,
-  UpdateMilestoneInput,
-} from "@adhd/core";
+import {
+  createMilestoneSchema,
+  createMilestoneFeatureSchema,
+  milestoneProposalUpdateSchema,
+  reviseMilestonePlanSchema,
+  startMilestonePlanningSchema,
+  startNextMilestoneRunSchema,
+  updateMilestoneFeatureSchema,
+  updateMilestoneSchema,
+} from "../domain/request-schemas.ts";
+import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
 import { projectScope } from "./project-scope.ts";
+import { parseRequestBody } from "./request-body.ts";
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Milestone operation failed";
@@ -25,9 +28,11 @@ export function createMilestoneRoutes(
       c.json(orchestrator.listMilestones(projectScope(registry, c).id)),
     )
     .post("/plan", async (c) => {
-      const body = await c.req
-        .json<StartMilestonePlanningInput>()
-        .catch((): StartMilestonePlanningInput => ({ goal: "" }));
+      const parsed = await parseRequestBody(c.req, startMilestonePlanningSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      const body = parsed.value;
       try {
         return c.json(
           await orchestrator.startMilestonePlanning(
@@ -53,12 +58,13 @@ export function createMilestoneRoutes(
         : c.json(milestone);
     })
     .post("/", async (c) => {
-      const body = await c.req
-        .json<CreateMilestoneInput>()
-        .catch(() => ({ name: "" }));
+      const parsed = await parseRequestBody(c.req, createMilestoneSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
       try {
         return c.json(
-          await orchestrator.createMilestone(projectScope(registry, c), body),
+          await orchestrator.createMilestone(projectScope(registry, c), parsed.value),
           201,
         );
       } catch (error) {
@@ -66,13 +72,16 @@ export function createMilestoneRoutes(
       }
     })
     .patch("/:id", async (c) => {
-      const body = await c.req.json<UpdateMilestoneInput>().catch(() => ({}));
+      const parsed = await parseRequestBody(c.req, updateMilestoneSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
       try {
         return c.json(
           await orchestrator.updateMilestone(
             projectScope(registry, c),
             c.req.param("id"),
-            body,
+            parsed.value,
           ),
         );
       } catch (error) {
@@ -80,9 +89,11 @@ export function createMilestoneRoutes(
       }
     })
     .post("/:id/revise", async (c) => {
-      const body = await c.req
-        .json<ReviseMilestonePlanInput>()
-        .catch((): ReviseMilestonePlanInput => ({ feedback: "" }));
+      const parsed = await parseRequestBody(c.req, reviseMilestonePlanSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      const body = parsed.value;
       try {
         return c.json(
           await orchestrator.reviseMilestonePlan(
@@ -102,15 +113,16 @@ export function createMilestoneRoutes(
       }
     })
     .patch("/:id/proposal", async (c) => {
-      const body = await c.req
-        .json<Omit<MilestoneProposal, "revision" | "createdAt">>()
-        .catch(() => ({ name: "", goal: "", features: [] }));
+      const parsed = await parseRequestBody(c.req, milestoneProposalUpdateSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
       try {
         return c.json(
           await orchestrator.updateMilestoneProposal(
             projectScope(registry, c),
             c.req.param("id"),
-            body,
+            parsed.value,
           ),
         );
       } catch (error) {
@@ -130,15 +142,16 @@ export function createMilestoneRoutes(
       }
     })
     .post("/:id/features", async (c) => {
-      const body = await c.req
-        .json<CreateMilestoneFeatureInput>()
-        .catch(() => ({ title: "" }));
+      const parsed = await parseRequestBody(c.req, createMilestoneFeatureSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
       try {
         return c.json(
           await orchestrator.addMilestoneFeature(
             projectScope(registry, c),
             c.req.param("id"),
-            body,
+            parsed.value,
           ),
           201,
         );
@@ -147,16 +160,17 @@ export function createMilestoneRoutes(
       }
     })
     .patch("/:id/features/:featureId", async (c) => {
-      const body = await c.req
-        .json<UpdateMilestoneFeatureInput>()
-        .catch(() => ({}));
+      const parsed = await parseRequestBody(c.req, updateMilestoneFeatureSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
       try {
         return c.json(
           await orchestrator.updateMilestoneFeature(
             projectScope(registry, c),
             c.req.param("id"),
             c.req.param("featureId"),
-            body,
+            parsed.value,
           ),
         );
       } catch (error) {
@@ -164,15 +178,16 @@ export function createMilestoneRoutes(
       }
     })
     .post("/:id/start-next", async (c) => {
-      const body = await c.req
-        .json<{ engine?: string; model?: string; permissionMode?: string }>()
-        .catch(() => ({}));
+      const parsed = await parseRequestBody(c.req, startNextMilestoneRunSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
       try {
         return c.json(
           await orchestrator.startNextMilestoneRun(
             projectScope(registry, c),
             c.req.param("id"),
-            body,
+            parsed.value,
           ),
           201,
         );

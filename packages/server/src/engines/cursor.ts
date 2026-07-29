@@ -4,9 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
 import type { EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
+import { parseCursorProtocolLine } from "./cursor-protocol.ts";
 import { firstLine, truncate } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
+import {
+  applyProtocolUpdate,
+  protocolProblemMessage,
+} from "./protocol-validation.ts";
+import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
@@ -160,60 +166,6 @@ function buildArgs(ctx: EngineRunContext, promptViaArg: boolean): string[] {
     ...extra,
     ...(promptViaArg ? [ctx.prompt] : []),
   ];
-}
-
-interface CursorStreamEvent {
-  type?: string;
-  subtype?: string;
-  model?: string;
-  result?: string;
-  is_error?: boolean;
-  duration_ms?: number;
-  message?: {
-    content?: Array<{
-      type?: string;
-      text?: string;
-    }>;
-  };
-  tool_call?: Record<string, unknown>;
-}
-
-function toolCallSummary(toolCall: Record<string, unknown>): string {
-  const name = Object.keys(toolCall)[0] ?? "tool";
-  const inner = toolCall[name];
-  const args =
-    inner && typeof inner === "object"
-      ? (((inner as Record<string, unknown>).args as Record<string, unknown> | undefined) ??
-        (inner as Record<string, unknown>))
-      : {};
-  const detail = args.path ?? args.file_path ?? args.command ?? args.pattern ?? args.query ?? "";
-  return truncate(`▶ ${name} ${String(detail)}`);
-}
-
-function handleCursorEvent(
-  event: CursorStreamEvent,
-  onLog: EngineRunContext["onLog"],
-): CursorStreamEvent | undefined {
-  if (event.type === "system" && event.subtype === "init") {
-    onLog("run", truncate(`Cursor agent online · ${event.model ?? "default model"}`));
-    return undefined;
-  }
-  if (event.type === "assistant") {
-    for (const item of event.message?.content ?? []) {
-      if (item.type === "text" && item.text) {
-        onLog("info", truncate(item.text));
-      }
-    }
-    return undefined;
-  }
-  if (event.type === "tool_call" && event.subtype === "started" && event.tool_call) {
-    onLog("run", toolCallSummary(event.tool_call));
-    return undefined;
-  }
-  if (event.type === "result") {
-    return event;
-  }
-  return undefined;
 }
 
 function errorText(error: unknown): string {
@@ -385,7 +337,7 @@ export const cursorAdapter: EngineAdapter = {
       ctx.onLog("warn", "Prompt near the command-line length limit — set ADHD_CURSOR_PROMPT_VIA=stdin");
     }
 
-    let finalEvent: CursorStreamEvent | undefined;
+    const capture: EngineProtocolUpdate = { logs: [] };
     const result = await runSubprocess({
       command: binary,
       args: buildArgs(runCtx, promptViaArg),
@@ -402,32 +354,31 @@ export const cursorAdapter: EngineAdapter = {
         if (!trimmed) {
           return;
         }
-        try {
-          const captured = handleCursorEvent(JSON.parse(trimmed) as CursorStreamEvent, ctx.onLog);
-          if (captured) {
-            finalEvent = captured;
-          }
-        } catch {
+        const parsed = parseCursorProtocolLine(trimmed);
+        if (!parsed.ok) {
+          ctx.onLog("warn", protocolProblemMessage(parsed.problem));
           return;
         }
+        applyProtocolUpdate(capture, parsed.event, ctx.onLog);
       },
     });
 
-    const success = result.success && finalEvent?.type === "result" && !finalEvent.is_error;
+    const success = result.success && capture.terminal === "success";
     let errorMessage: string | undefined;
     if (!success) {
       if (result.timedOut) {
         errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
       } else if (result.aborted) {
         errorMessage = "Aborted";
-      } else if (result.exitCode === null && !finalEvent) {
+      } else if (result.exitCode === null && capture.terminal === undefined) {
         errorMessage = result.errorMessage ?? "Failed to start Cursor CLI";
         ctx.onLog("fail", errorMessage);
       } else {
         const stderr = result.stderrTail.join(" ").trim();
         const raw =
-          finalEvent && finalEvent.is_error
-            ? (finalEvent.result ?? `Cursor ended with ${finalEvent.subtype}`)
+          capture.terminal === "failure"
+            ? (capture.error ??
+              `Cursor ended with ${capture.terminalLabel ?? "an error"}`)
             : `Cursor exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
@@ -441,10 +392,14 @@ export const cursorAdapter: EngineAdapter = {
 
     return {
       success,
-      result: finalEvent?.result,
+      result: capture.output,
       exitCode: result.exitCode,
       errorMessage,
-      usage: { durationMs: finalEvent?.duration_ms ?? result.durationMs, turns: 1 },
+      usage: {
+        ...capture.usage,
+        durationMs: capture.usage?.durationMs ?? result.durationMs,
+        turns: 1,
+      },
     };
   },
 };

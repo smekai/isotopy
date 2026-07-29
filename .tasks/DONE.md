@@ -1,5 +1,19 @@
 # Done
 
+## TASK-098: Standardize strict runtime schemas at every untrusted boundary
+**Priority:** P0 | **Tags:** core, server, testing
+**Updated:** 2026-07-29 18:33
+
+Replace recurrent hand-written Record<string, unknown>, stringOf/findingsOf-style mappings with a shared runtime-schema approach at HTTP, engine, database, settings, and persisted-file boundaries. Domain and service layers must receive validated, strongly typed values only. Reject malformed nested data with precise errors instead of silently dropping fields, and document where validation ownership lives.
+
+Cross-platform: n/a — pure TypeScript validation and architecture.
+
+### Plan
+
+Delivered strict, path-aware schemas for HTTP/configuration inputs, persisted runs/events, and Claude/Codex/Cursor JSONL. Pre-1.0 persisted shapes are rejected rather than migrated; all engine codecs normalize into one shared protocol update consumed by thin adapters. Added lint enforcement and architecture/versioning guidance. Verified lint, typecheck, 287 tests, build, skill drift, and 31 Playwright scenarios on Windows; macOS verification is delegated to CI.
+
+---
+
 ## TASK-100: Extract server Markdown into a pure domain layer
 **Priority:** P1 | **Tags:** server, testing, adapters
 **Updated:** 2026-07-29 13:19
