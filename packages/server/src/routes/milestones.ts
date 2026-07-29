@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
+  MilestoneProposal,
+  ReviseMilestonePlanInput,
+  StartMilestonePlanningInput,
   UpdateMilestoneFeatureInput,
   UpdateMilestoneInput,
 } from "@adhd/core";
@@ -21,6 +24,27 @@ export function createMilestoneRoutes(
     .get("/", (c) =>
       c.json(orchestrator.listMilestones(projectScope(registry, c).id)),
     )
+    .post("/plan", async (c) => {
+      const body = await c.req
+        .json<StartMilestonePlanningInput>()
+        .catch((): StartMilestonePlanningInput => ({ goal: "" }));
+      try {
+        return c.json(
+          await orchestrator.startMilestonePlanning(
+            projectScope(registry, c),
+            body.goal,
+            {
+              engine: body.engine,
+              model: body.model,
+              permissionMode: body.permissionMode,
+            },
+          ),
+          201,
+        );
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
     .get("/:id", (c) => {
       const project = projectScope(registry, c);
       const milestone = orchestrator.getMilestone(c.req.param("id"));
@@ -49,6 +73,56 @@ export function createMilestoneRoutes(
             projectScope(registry, c),
             c.req.param("id"),
             body,
+          ),
+        );
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
+    .post("/:id/revise", async (c) => {
+      const body = await c.req
+        .json<ReviseMilestonePlanInput>()
+        .catch((): ReviseMilestonePlanInput => ({ feedback: "" }));
+      try {
+        return c.json(
+          await orchestrator.reviseMilestonePlan(
+            projectScope(registry, c),
+            c.req.param("id"),
+            body.feedback,
+            {
+              engine: body.engine,
+              model: body.model,
+              permissionMode: body.permissionMode,
+            },
+          ),
+          201,
+        );
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
+    .patch("/:id/proposal", async (c) => {
+      const body = await c.req
+        .json<Omit<MilestoneProposal, "revision" | "createdAt">>()
+        .catch(() => ({ name: "", goal: "", features: [] }));
+      try {
+        return c.json(
+          await orchestrator.updateMilestoneProposal(
+            projectScope(registry, c),
+            c.req.param("id"),
+            body,
+          ),
+        );
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
+    .post("/:id/approve", async (c) => {
+      try {
+        return c.json(
+          await orchestrator.approveMilestonePlan(
+            projectScope(registry, c),
+            c.req.param("id"),
           ),
         );
       } catch (error) {

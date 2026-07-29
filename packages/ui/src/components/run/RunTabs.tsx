@@ -1,17 +1,19 @@
 import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { FileText, MessageSquare, Terminal } from "lucide-react";
+import { FileText, Flag, MessageSquare, Terminal } from "lucide-react";
 import type { RunState } from "@adhd/core";
 import type { Dir } from "../../theme";
+import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, SANS, SPACE, WEIGHT } from "../../theme";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ChatPanel } from "./ChatPanel";
 import { LogsPanel } from "./LogsPanel";
+import { MilestonePlanPanel } from "./MilestonePlanPanel";
 import { PANEL } from "./run-styles";
 
-export type RunTab = "chat" | "logs" | "artifacts";
+export type RunTab = "chat" | "plan" | "logs" | "artifacts";
 
-const TABS: { id: RunTab; label: string; icon: ReactNode }[] = [
+const STANDARD_TABS: { id: RunTab; label: string; icon: ReactNode }[] = [
   { id: "chat", label: "Chat", icon: <MessageSquare size={ICON.sm} /> },
   { id: "logs", label: "Logs", icon: <Terminal size={ICON.sm} /> },
   { id: "artifacts", label: "Artifacts", icon: <FileText size={ICON.sm} /> },
@@ -66,7 +68,9 @@ export interface RunTabsProps {
   focusedStageId: string | null;
   sending: boolean;
   d: Dir;
+  settings?: SettingsController;
   onSend: (text: string) => void;
+  onRunStarted?: (runId: string) => void;
   onClearFocus: () => void;
 }
 
@@ -75,17 +79,29 @@ export function RunTabs({
   focusedStageId,
   sending,
   d,
+  settings,
   onSend,
+  onRunStarted,
   onClearFocus,
 }: RunTabsProps) {
-  const [tab, setTab] = useState<RunTab>("chat");
+  const planning = run.pipelineId === "milestone-planning";
+  const tabs = planning
+    ? [
+        STANDARD_TABS[0]!,
+        { id: "plan" as const, label: "Plan", icon: <Flag size={ICON.sm} /> },
+        ...STANDARD_TABS.slice(1),
+      ]
+    : STANDARD_TABS;
+  const [tab, setTab] = useState<RunTab>(
+    planning && run.status === "completed" ? "plan" : "chat",
+  );
   const focusedStage = run.stages.find((stage) => stage.id === focusedStageId);
   const filtered = tab !== "chat" && focusedStage !== undefined;
 
   return (
     <div style={PANEL}>
       <div style={tabsRow(d)} role="tablist" aria-label="Run views">
-        {TABS.map((entry) => (
+        {tabs.map((entry) => (
           <button
             key={entry.id}
             role="tab"
@@ -105,6 +121,14 @@ export function RunTabs({
       </div>
 
       {tab === "chat" && <ChatPanel run={run} d={d} sending={sending} onSend={onSend} />}
+      {tab === "plan" && planning && settings && onRunStarted && (
+        <MilestonePlanPanel
+          run={run}
+          d={d}
+          settings={settings}
+          onRunStarted={onRunStarted}
+        />
+      )}
       {tab === "logs" && (
         <LogsPanel run={run} focusedStageId={focusedStageId} d={d} />
       )}

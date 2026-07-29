@@ -3,7 +3,14 @@ import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
 import type { RunSummary } from "@adhd/core";
 import { modelForEngine } from "@adhd/core";
-import { abortRun, approveGate, postRunMessage, restartRun, startRun } from "./api";
+import {
+  abortRun,
+  approveGate,
+  postRunMessage,
+  restartRun,
+  startMilestonePlanning,
+  startRun,
+} from "./api";
 import { EmptyState } from "./components/EmptyState";
 import { PipelineRow } from "./components/PipelineRow";
 import { ProjectDrawer } from "./components/ProjectDrawer";
@@ -185,6 +192,27 @@ export function App() {
     }
   }
 
+  async function handlePlanMilestone(goal: string) {
+    setError(null);
+    setStarting(true);
+    try {
+      const { engine, permissionMode } = settings.preferences;
+      const created = await startMilestonePlanning({
+        goal,
+        engine,
+        model: modelForEngine(settings.preferences, engine),
+        permissionMode,
+      });
+      attachRun(created.id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start milestone planning",
+      );
+    } finally {
+      setStarting(false);
+    }
+  }
+
   async function handleSend(text: string) {
     if (!activeRunId) {
       return;
@@ -304,6 +332,7 @@ export function App() {
               onOpenProject={() => setShowProject(true)}
               initialTask={prefill?.task}
               onStart={(task, pipelineId) => void handleStart(task, pipelineId)}
+              onPlanMilestone={(goal) => void handlePlanMilestone(goal)}
               starting={starting}
             />
           ) : run ? (
@@ -321,7 +350,9 @@ export function App() {
                 focusedStageId={focusedId}
                 sending={sending}
                 d={d}
+                settings={settings}
                 onSend={(text) => void handleSend(text)}
+                onRunStarted={attachRun}
                 onClearFocus={() => setFocusedId(null)}
               />
             </>

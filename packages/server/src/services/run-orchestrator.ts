@@ -8,6 +8,7 @@ import type {
   MessageRole,
   Milestone,
   MilestoneFeature,
+  MilestoneProposal,
   PipelineDefinition,
   RunEvent,
   RunMessage,
@@ -44,6 +45,7 @@ import type { PersistedRun } from "../repository/run-repository.ts";
 import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
 import { formatHandoff } from "../domain/stage-context.ts";
+import { parseMilestonePlan } from "../domain/milestone-plan.ts";
 import { nowIso } from "../utils.ts";
 import { WorkflowRuntimeRegistry } from "../workflow/workflow-runtime.ts";
 import type {
@@ -52,6 +54,10 @@ import type {
   RunProjection,
   WorkflowDeps,
 } from "../workflow/types.ts";
+import {
+  approveMilestoneTasks,
+  taskBoardPlanningContext,
+} from "./task-board-adapter.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
 
@@ -227,7 +233,7 @@ export class RunOrchestrator implements RunProjection {
   }
 
   listPipelines(): PipelineDefinition[] {
-    return DEMO_PIPELINES;
+    return DEMO_PIPELINES.filter((pipeline) => pipeline.internal !== true);
   }
 
   getPipeline(pipelineId: string): PipelineDefinition | undefined {
@@ -282,6 +288,121 @@ export class RunOrchestrator implements RunProjection {
     this.milestones.set(milestone.id, milestone);
     await this.persistMilestone(milestone);
     return structuredClone(milestone);
+  }
+
+  async startMilestonePlanning(
+    projectPath: ProjectPath,
+    goalInput: string,
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
+  ): Promise<RunState> {
+    const goal = goalInput.trim();
+    if (!goal) {
+      throw new Error("Milestone goal is required");
+    }
+    const milestone = await this.createMilestone(projectPath, {
+      name: "Draft milestone",
+      goal,
+      status: "draft",
+    });
+    return this.startPlanningTurn(projectPath, milestone.id, goal, options);
+  }
+
+  async reviseMilestonePlan(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    feedbackInput: string,
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
+  ): Promise<RunState> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "draft") {
+      throw new Error("Only draft milestones can be revised");
+    }
+    const feedback = feedbackInput.trim();
+    if (!feedback) {
+      throw new Error("Revision feedback is required");
+    }
+    const task = [
+      `Original milestone goal:\n${milestone.goal ?? milestone.name}`,
+      milestone.proposal
+        ? `Current proposal:\n${JSON.stringify(milestone.proposal, null, 2)}`
+        : undefined,
+      `User revision request:\n${feedback}`,
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join("\n\n");
+    return this.startPlanningTurn(projectPath, milestone.id, task, options);
+  }
+
+  async updateMilestoneProposal(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    proposalInput: Omit<MilestoneProposal, "revision" | "createdAt">,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "draft") {
+      throw new Error("Only draft milestone proposals can be edited");
+    }
+    const parsed = parseMilestonePlan(
+      `\`\`\`adhd-milestone-plan\n${JSON.stringify(proposalInput)}\n\`\`\``,
+      (milestone.proposal?.revision ?? 0) + 1,
+      nowIso(),
+    );
+    if (!parsed.proposal) {
+      throw new Error(parsed.errors.join("; "));
+    }
+    milestone.proposal = parsed.proposal;
+    milestone.name = parsed.proposal.name;
+    milestone.goal = parsed.proposal.goal;
+    delete milestone.approvalError;
+    milestone.updatedAt = nowIso();
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async approveMilestonePlan(
+    projectPath: ProjectPath,
+    milestoneId: string,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "draft") {
+      throw new Error("Only draft milestones can be approved");
+    }
+    if (!milestone.proposal) {
+      throw new Error("Milestone has no valid proposal");
+    }
+    try {
+      const links = await approveMilestoneTasks(
+        projectPath,
+        milestone,
+        milestone.proposal,
+      );
+      const now = nowIso();
+      milestone.features = milestone.proposal.features.map((feature) => ({
+        id: feature.id,
+        title: feature.title,
+        description: feature.description,
+        acceptanceCriteria: [...feature.acceptanceCriteria],
+        status: "ready",
+        taskIds: links.featureTaskIds[feature.id] ?? [],
+        runIds: [],
+        findings: [],
+        createdAt: now,
+        updatedAt: now,
+      }));
+      milestone.name = milestone.proposal.name;
+      milestone.goal = milestone.proposal.goal;
+      milestone.status = "active";
+      milestone.updatedAt = now;
+      delete milestone.approvalError;
+      await this.persistMilestone(milestone);
+      return structuredClone(milestone);
+    } catch (error) {
+      milestone.approvalError =
+        error instanceof Error ? error.message : "Milestone approval failed";
+      milestone.updatedAt = nowIso();
+      await this.persistMilestone(milestone);
+      throw error;
+    }
   }
 
   async updateMilestone(
@@ -470,7 +591,14 @@ export class RunOrchestrator implements RunProjection {
       featureId,
       sourceTaskIds,
     } = options;
-    if ((milestoneId === undefined) !== (featureId === undefined)) {
+    const planningRun =
+      pipeline.id === "milestone-planning" &&
+      milestoneId !== undefined &&
+      featureId === undefined;
+    if (
+      !planningRun &&
+      (milestoneId === undefined) !== (featureId === undefined)
+    ) {
       throw new Error("milestoneId and featureId must be provided together");
     }
     const linkedMilestone =
@@ -535,6 +663,11 @@ export class RunOrchestrator implements RunProjection {
     }
 
     this.runs.set(runId, run);
+    if (planningRun && linkedMilestone) {
+      linkedMilestone.planningRunIds.push(runId);
+      linkedMilestone.updatedAt = nowIso();
+      await this.persistMilestone(linkedMilestone);
+    }
     if (linkedMilestone && linkedFeature) {
       linkedFeature.status = "in_progress";
       linkedFeature.runIds.push(runId);
@@ -924,6 +1057,30 @@ export class RunOrchestrator implements RunProjection {
     }
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
     run.result = output;
+    if (
+      run.pipelineId === "milestone-planning" &&
+      stageDef.id === "milestone-plan" &&
+      run.milestoneId
+    ) {
+      const milestone = this.milestones.get(run.milestoneId);
+      if (milestone) {
+        const parsed = parseMilestonePlan(
+          output,
+          (milestone.proposal?.revision ?? 0) + 1,
+          nowIso(),
+        );
+        if (parsed.proposal) {
+          milestone.proposal = parsed.proposal;
+          milestone.name = parsed.proposal.name;
+          milestone.goal = parsed.proposal.goal;
+          delete milestone.approvalError;
+        } else {
+          milestone.approvalError = parsed.errors.join("; ");
+        }
+        milestone.updatedAt = nowIso();
+        void this.persistMilestone(milestone);
+      }
+    }
     void this.repositoryForRun(runId).writeHandoff(
       runId,
       stageDef.id,
@@ -1082,6 +1239,41 @@ export class RunOrchestrator implements RunProjection {
     const repository = new MilestoneRepository(projectPath);
     this.milestoneRepositories.set(projectPath.id, repository);
     return repository;
+  }
+
+  private async startPlanningTurn(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    userContext: string,
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
+  ): Promise<RunState> {
+    const boardContext = await taskBoardPlanningContext(projectPath);
+    const priorKnowledge = [...this.milestones.values()]
+      .filter(
+        (milestone) =>
+          milestone.projectId === projectPath.id &&
+          milestone.id !== milestoneId &&
+          (milestone.features.some((feature) => feature.findings.length > 0) ||
+            milestone.status === "completed"),
+      )
+      .map((milestone) => {
+        const findings = milestone.features.flatMap((feature) =>
+          feature.findings.map((finding) => finding.title),
+        );
+        return `- ${milestone.name}${findings.length > 0 ? `: ${findings.join("; ")}` : ""}`;
+      });
+    const task = [
+      userContext,
+      boardContext,
+      priorKnowledge.length > 0
+        ? `Prior milestone knowledge:\n${priorKnowledge.join("\n")}`
+        : "No prior milestone closeout knowledge is available.",
+    ].join("\n\n");
+    return this.startRun(projectPath, "milestone-planning", {
+      ...options,
+      task,
+      milestoneId,
+    });
   }
 
   private requireMilestone(projectId: string, milestoneId: string): Milestone {

@@ -87,6 +87,20 @@ export interface CreateMilestoneInput {
   features?: CreateMilestoneFeatureInput[];
 }
 
+export interface StartMilestonePlanningInput {
+  goal: string;
+  engine?: string;
+  model?: string;
+  permissionMode?: string;
+}
+
+export interface ReviseMilestonePlanInput {
+  feedback: string;
+  engine?: string;
+  model?: string;
+  permissionMode?: string;
+}
+
 export interface UpdateMilestoneInput {
   name?: string;
   goal?: string | null;

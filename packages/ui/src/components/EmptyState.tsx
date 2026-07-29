@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderOpen, Play } from "lucide-react";
+import { Flag, FolderOpen, Play } from "lucide-react";
 import {
   DEMO_PIPELINES,
   ENGINES,
@@ -198,6 +198,7 @@ export interface EmptyStateProps {
   settings: SettingsController;
   onOpenProject: () => void;
   onStart: (task: string, pipelineId: string) => void;
+  onPlanMilestone: (goal: string) => void;
   starting?: boolean;
   initialTask?: string | undefined;
 }
@@ -209,6 +210,7 @@ export function EmptyState({
   settings,
   onOpenProject,
   onStart,
+  onPlanMilestone,
   starting = false,
   initialTask = "",
 }: EmptyStateProps) {
@@ -287,6 +289,27 @@ export function EmptyState({
             <Play size={ICON.md} /> {starting ? "Starting..." : "Start run"}
           </button>
         </div>
+        <button
+          type="button"
+          data-testid="plan-milestone"
+          disabled={!canStart}
+          onClick={() => canStart && onPlanMilestone(input.trim())}
+          style={{
+            alignSelf: "center",
+            border: 0,
+            background: "transparent",
+            color: canStart ? d.accent : d.textMuted,
+            fontFamily: SANS,
+            fontSize: FONT.md,
+            fontWeight: WEIGHT.semibold,
+            cursor: canStart ? "pointer" : "default",
+            display: "flex",
+            gap: SPACE.sm,
+            alignItems: "center",
+          }}
+        >
+          <Flag size={ICON.sm} /> Plan this as a milestone first
+        </button>
 
         {usesEngine && (
           <button onClick={onOpenProject} data-testid="workspace-chip" style={workspaceChipStyle(d)}>
