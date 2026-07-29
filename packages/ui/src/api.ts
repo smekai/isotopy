@@ -1,6 +1,7 @@
 import type {
   Milestone,
   MilestoneProposal,
+  ProjectAutomationConfig,
   EngineModelList,
   EngineStatus,
   Project,
@@ -82,6 +83,20 @@ export function removeProject(projectId: string): Promise<ProjectsView> {
 
 export function fetchSettings(): Promise<SettingsView> {
   return requestJson<SettingsView>("/settings");
+}
+
+export function fetchAutomationConfig(): Promise<ProjectAutomationConfig> {
+  return requestJson<ProjectAutomationConfig>("/automation");
+}
+
+export function updateAutomationConfig(
+  config: ProjectAutomationConfig,
+): Promise<ProjectAutomationConfig> {
+  return requestJson<ProjectAutomationConfig>("/automation", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
 }
 
 export function updatePreferences(
