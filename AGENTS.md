@@ -112,7 +112,7 @@ All workspace packages (root + `packages/*`) share one version, bumped together.
 - **Minor** (0.x.0): start a new explicitly planned feature or milestone series.
 - **Major** (1.0.0): when everything planned for the milestone set is done and the product is ready.
 
-Current: 0.8.4.
+Current: 0.8.5.
 
 ## Runtime validation boundaries
 

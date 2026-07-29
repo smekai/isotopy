@@ -1,5 +1,19 @@
 # Done
 
+## TASK-099: Make SQLite timestamps database-managed
+**Priority:** P1 | **Tags:** server, infra, testing
+**Updated:** 2026-07-29 18:56
+
+Standardize persisted SQLite records with `created_at` and `updated_at` columns. Set both timestamps on insert through SQLite defaults, and make `updated_at` advance automatically on updates using supported SQLite schema behavior (evaluate an `AFTER UPDATE` trigger because SQLite has no MySQL-style column-level `ON UPDATE` clause). Migrate existing tables and rows safely, remove redundant application-supplied update timestamps, and keep one documented UTC timestamp format.
+
+Add tests for insert defaults, automatic update behavior, migration/restart compatibility, and unchanged timestamps on reads. The schema and trigger behavior must work consistently on Windows and macOS; validate Windows directly and macOS through CI.
+
+### Plan
+
+Delivered SQLite-managed `created_at` and `updated_at` for mutable run and milestone projections. UTC ISO defaults handle inserts, `AFTER UPDATE` triggers advance updates, and repositories no longer supply audit timestamps. Known legacy tables rebuild transactionally with rows preserved and prior `updated_at` backfilled into both columns. Added low-level and repository restart/migration coverage plus architecture documentation; set a 15-second Node integration-test budget after hosted Windows exposed the former 5-second default as too low. Verified lint, typecheck, build, 291 tests, and skill drift on Windows; macOS tests pass in CI.
+
+---
+
 ## TASK-098: Standardize strict runtime schemas at every untrusted boundary
 **Priority:** P0 | **Tags:** core, server, testing
 **Updated:** 2026-07-29 18:33

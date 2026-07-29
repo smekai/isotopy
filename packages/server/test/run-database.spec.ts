@@ -63,3 +63,49 @@ test("a concurrent reader sees rows the writer has committed (WAL)", async () =>
 
   expect(seen).toEqual(["r1", "r2"]);
 });
+
+test("a legacy run row migrates and remains writable across repository restarts", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const legacy = new DatabaseSync(dbPath());
+  legacy.exec(`
+CREATE TABLE runs (
+  run_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);`);
+  legacy
+    .prepare("INSERT INTO runs(run_id, data, updated_at) VALUES(?, ?, ?)")
+    .run(
+      "legacy",
+      JSON.stringify(makePersistedRun("legacy", "running")),
+      "2026-07-01T10:20:30.456Z",
+    );
+  legacy.close();
+
+  await withRepository(async (repository) => {
+    const loaded = await repository.loadAll();
+    expect(loaded).toEqual([makePersistedRun("legacy", "running")]);
+    await repository.writeState(
+      "legacy",
+      makePersistedRun("legacy", "completed"),
+    );
+  });
+
+  const reader = new DatabaseSync(dbPath(), { readOnly: true });
+  const timestamps = reader
+    .prepare(
+      "SELECT created_at, updated_at FROM runs WHERE run_id = 'legacy'",
+    )
+    .get();
+  reader.close();
+  expect(timestamps?.created_at).toBe("2026-07-01T10:20:30.456Z");
+  expect(timestamps?.updated_at).toMatch(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+  );
+  expect(timestamps?.updated_at).not.toBe(timestamps?.created_at);
+
+  await withRepository(async (repository) => {
+    const reloaded = await repository.loadAll();
+    expect(reloaded).toEqual([makePersistedRun("legacy", "completed")]);
+  });
+});
