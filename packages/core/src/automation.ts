@@ -49,6 +49,30 @@ export interface ProjectAutomationConfig {
   production: DeploymentAutomation | null;
 }
 
+export const DEPLOYMENT_ENVIRONMENTS = ["preview", "production"] as const;
+export const DEPLOYMENT_VERDICTS = ["pass", "fail"] as const;
+export const HEALTH_CHECK_STATUSES = ["passed", "failed", "skipped"] as const;
+
+export type DeploymentEnvironment = (typeof DEPLOYMENT_ENVIRONMENTS)[number];
+export type DeploymentVerdict = (typeof DEPLOYMENT_VERDICTS)[number];
+export type HealthCheckStatus = (typeof HEALTH_CHECK_STATUSES)[number];
+
+export interface DeploymentResult {
+  environment: DeploymentEnvironment;
+  provider: DeploymentProvider;
+  verdict: DeploymentVerdict;
+  command: PlatformCommand;
+  cwd: string;
+  exitCode: number | null;
+  durationMs: number;
+  url: string | null;
+  healthUrl: string | null;
+  healthStatus: HealthCheckStatus;
+  failureMessage: string | null;
+  startedAt: string;
+  finishedAt: string;
+}
+
 export const EMPTY_AUTOMATION_CONFIG: ProjectAutomationConfig = {
   version: AUTOMATION_CONFIG_VERSION,
   validation: [],
