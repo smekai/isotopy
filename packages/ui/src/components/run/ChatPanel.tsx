@@ -177,7 +177,7 @@ function closedHint(d: Dir): CSSProperties {
 
 interface TranscriptRowProps {
   item: ConversationItem;
-  spend?: string | undefined;
+  spend: string | undefined;
   d: Dir;
 }
 

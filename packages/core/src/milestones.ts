@@ -26,7 +26,7 @@ export interface MilestoneFinding {
   title: string;
   severity: "blocking" | "non_blocking";
   sourceRunId: string;
-  evidence?: string | undefined;
+  evidence?: string;
 }
 
 export interface MilestoneTaskDraft {
@@ -35,7 +35,7 @@ export interface MilestoneTaskDraft {
   description: string;
   priority: TaskPriority;
   tags: string[];
-  createdTaskId?: string | undefined;
+  createdTaskId?: string;
 }
 
 export interface MilestoneFeatureProposal {
@@ -58,7 +58,7 @@ export interface MilestoneProposal {
 export interface MilestoneFeature {
   id: string;
   title: string;
-  description?: string | undefined;
+  description?: string;
   acceptanceCriteria: string[];
   status: MilestoneFeatureStatus;
   taskIds: string[];
@@ -66,23 +66,23 @@ export interface MilestoneFeature {
   findings: MilestoneFinding[];
   createdAt: string;
   updatedAt: string;
-  completedAt?: string | undefined;
+  completedAt?: string;
 }
 
 export interface Milestone {
   id: string;
   projectId: string;
   name: string;
-  goal?: string | undefined;
+  goal?: string;
   status: MilestoneStatus;
   autoRunNext: boolean;
   features: MilestoneFeature[];
   planningRunIds: string[];
-  proposal?: MilestoneProposal | undefined;
-  approvalError?: string | undefined;
+  proposal?: MilestoneProposal;
+  approvalError?: string;
   createdAt: string;
   updatedAt: string;
-  completedAt?: string | undefined;
+  completedAt?: string;
 }
 
 export interface CreateMilestoneFeatureInput {

@@ -68,25 +68,25 @@ export interface RunMessage {
   id: string;
   ts: string;
   role: MessageRole;
-  stageId?: string | undefined;
-  kind?: MessageKind | undefined;
+  stageId?: string;
+  kind?: MessageKind;
   text: string;
 }
 
 /** What one engine turn spent. Engines report different halves of this. */
 export interface StageUsage {
-  costUsd?: number | undefined;
-  tokensIn?: number | undefined;
-  tokensOut?: number | undefined;
-  cachedTokensIn?: number | undefined;
-  durationMs?: number | undefined;
-  turns?: number | undefined;
+  costUsd?: number;
+  tokensIn?: number;
+  tokensOut?: number;
+  cachedTokensIn?: number;
+  durationMs?: number;
+  turns?: number;
 }
 
 export interface StageState {
   id: string;
   label: string;
-  skill?: string | undefined;
+  skill?: string;
   verdict?: StageVerdict;
   status: StageStatus;
   usage?: StageUsage;
@@ -99,23 +99,23 @@ export interface RunState {
   id: string;
   number: number;
   projectId: string;
-  milestoneId?: string | undefined;
-  featureId?: string | undefined;
-  sourceTaskIds?: string[] | undefined;
+  milestoneId?: string;
+  featureId?: string;
+  sourceTaskIds?: string[];
   closeout?: RunCloseoutRecord;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
-  task?: string | undefined;
-  engine?: EngineId | undefined;
-  model?: string | undefined;
+  task?: string;
+  engine?: EngineId;
+  model?: string;
   result?: string;
   stageOutputs?: Record<string, string>;
-  workspacePath?: string | undefined;
+  workspacePath?: string;
   stages: StageState[];
   messages: RunMessage[];
   createdAt: string;
-  completedAt?: string | undefined;
+  completedAt?: string;
 }
 
 export interface RunSummaryStage {
@@ -128,16 +128,16 @@ export interface RunSummary {
   id: string;
   number: number;
   projectId: string;
-  milestoneId?: string | undefined;
-  featureId?: string | undefined;
+  milestoneId?: string;
+  featureId?: string;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
-  task?: string | undefined;
-  engine?: EngineId | undefined;
-  model?: string | undefined;
+  task?: string;
+  engine?: EngineId;
+  model?: string;
   createdAt: string;
-  completedAt?: string | undefined;
+  completedAt?: string;
   stages: RunSummaryStage[];
 }
 
@@ -189,26 +189,27 @@ export function formatUsage(usage: StageUsage): string | undefined {
 export const RUN_SUMMARY_EVENT = "run.summary";
 
 export function toRunSummary(run: RunState): RunSummary {
-  return {
+  const summary: RunSummary = {
     id: run.id,
     number: run.number,
     projectId: run.projectId,
-    milestoneId: run.milestoneId,
-    featureId: run.featureId,
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     status: run.status,
-    task: run.task,
-    engine: run.engine,
-    model: run.model,
     createdAt: run.createdAt,
-    completedAt: run.completedAt,
     stages: run.stages.map((stage) => ({
       id: stage.id,
       label: stage.label,
       status: stage.status,
     })),
   };
+  if (run.milestoneId !== undefined) summary.milestoneId = run.milestoneId;
+  if (run.featureId !== undefined) summary.featureId = run.featureId;
+  if (run.task !== undefined) summary.task = run.task;
+  if (run.engine !== undefined) summary.engine = run.engine;
+  if (run.model !== undefined) summary.model = run.model;
+  if (run.completedAt !== undefined) summary.completedAt = run.completedAt;
+  return summary;
 }
 
 export type RunEventType =
@@ -246,11 +247,11 @@ export interface RunEvent {
   ts: string;
   type: RunEventType;
   runId: string;
-  stageId?: string | undefined;
+  stageId?: string;
   message?: string;
   status?: StageStatus | RunStatus;
   level?: LogLevel;
-  result?: string | undefined;
+  result?: string;
   chatMessage?: RunMessage;
   usage?: StageUsage;
 }
@@ -260,10 +261,10 @@ export interface NewRunInput {
   number: number;
   projectId: string;
   pipeline: PipelineDefinition;
-  task?: string | undefined;
-  milestoneId?: string | undefined;
-  featureId?: string | undefined;
-  sourceTaskIds?: string[] | undefined;
+  task?: string;
+  milestoneId?: string;
+  featureId?: string;
+  sourceTaskIds?: string[];
 }
 
 export function createInitialRunState({
@@ -276,26 +277,30 @@ export function createInitialRunState({
   featureId,
   sourceTaskIds,
 }: NewRunInput): RunState {
-  return {
+  const state: RunState = {
     id: runId,
     number,
     projectId,
-    milestoneId,
-    featureId,
-    sourceTaskIds,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",
-    task,
     stageOutputs: {},
     messages: [],
     createdAt: new Date().toISOString(),
-    stages: flattenPipelineStages(pipeline).map((stage) => ({
-      id: stage.id,
-      label: stage.label,
-      skill: stage.skill,
-      status: "pending",
-      logs: [],
-    })),
+    stages: flattenPipelineStages(pipeline).map((stage) => {
+      const state: StageState = {
+        id: stage.id,
+        label: stage.label,
+        status: "pending",
+        logs: [],
+      };
+      if (stage.skill !== undefined) state.skill = stage.skill;
+      return state;
+    }),
   };
+  if (milestoneId !== undefined) state.milestoneId = milestoneId;
+  if (featureId !== undefined) state.featureId = featureId;
+  if (sourceTaskIds !== undefined) state.sourceTaskIds = sourceTaskIds;
+  if (task !== undefined) state.task = task;
+  return state;
 }

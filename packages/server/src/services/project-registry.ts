@@ -91,7 +91,7 @@ export class ProjectRegistry {
     return this.all().find((project) => project.id === projectId);
   }
 
-  resolve(projectId?: string | undefined): ProjectPath {
+  resolve(projectId?: string): ProjectPath {
     const requested = projectId ? this.find(projectId) : undefined;
     const project = requested ?? this.find(this.activeId()) ?? homeProject();
     return projectPaths(project);

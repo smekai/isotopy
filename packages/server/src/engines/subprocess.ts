@@ -12,7 +12,7 @@ export interface SubprocessSpec {
   args?: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
-  input?: string | undefined;
+  input?: string;
   timeoutMs: number;
   signal?: AbortSignal;
   shell?: boolean;
@@ -28,7 +28,7 @@ export interface SubprocessResult {
   stdout: string;
   stderrTail: string[];
   durationMs: number;
-  errorMessage?: string | undefined;
+  errorMessage?: string;
 }
 
 export function killProcessTree(child: ChildProcess): void {
@@ -220,7 +220,7 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
           errorMessage = `Process exited with code ${code}${tail ? ` — ${tail}` : ""}`;
         }
       }
-      finish({
+      const result: SubprocessResult = {
         success,
         exitCode: code,
         termSignal: termSignal ?? null,
@@ -229,8 +229,9 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
         stdout,
         stderrTail,
         durationMs: Date.now() - startedAt,
-        errorMessage,
-      });
+      };
+      if (errorMessage !== undefined) result.errorMessage = errorMessage;
+      finish(result);
     });
 
     child.stdin?.on("error", () => {});

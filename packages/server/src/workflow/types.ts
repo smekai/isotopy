@@ -16,14 +16,14 @@ export interface PipelineWorkflowInput {
   runId: string;
   projectId: string;
   pipeline: PipelineDefinition;
-  task?: string | undefined;
-  engine?: EngineId | undefined;
-  model?: string | undefined;
+  task: string | undefined;
+  engine: EngineId | undefined;
+  model: string | undefined;
   permissionMode: EnginePermissionMode;
-  workspacePath?: string | undefined;
-  seededOutputs?: Record<string, string> | undefined;
-  seededOutcomes?: Record<string, StageOutcome> | undefined;
-  startStageId?: string | undefined;
+  workspacePath: string | undefined;
+  seededOutputs: Record<string, string> | undefined;
+  seededOutcomes: Record<string, StageOutcome> | undefined;
+  startStageId: string | undefined;
   startedMessage: string;
 }
 
@@ -33,10 +33,10 @@ export type RunCompletionStatus = "completed" | "needs_attention" | "failed";
 
 export interface StageResult {
   outcome: StageOutcome;
-  output?: string | undefined;
-  verdict?: StageVerdict | undefined;
-  question?: string | undefined;
-  sessionId?: string | undefined;
+  output?: string;
+  verdict?: StageVerdict;
+  question?: string;
+  sessionId?: string;
   startedAt: string;
   completedAt: string;
 }
@@ -44,7 +44,7 @@ export interface StageResult {
 export interface StageTurn {
   /** 0 is the stage's opening turn; later turns resume the CLI session. */
   index: number;
-  resumeSessionId?: string | undefined;
+  resumeSessionId?: string;
   answer?: string;
 }
 

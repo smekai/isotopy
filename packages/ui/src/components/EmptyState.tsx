@@ -200,7 +200,7 @@ export interface EmptyStateProps {
   onStart: (task: string, pipelineId: string) => void;
   onPlanMilestone: (goal: string) => void;
   starting?: boolean;
-  initialTask?: string | undefined;
+  initialTask: string | undefined;
 }
 
 export function EmptyState({

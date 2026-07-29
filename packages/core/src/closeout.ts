@@ -4,7 +4,7 @@ export interface CloseoutFinding {
   id: string;
   title: string;
   severity: "blocking" | "non_blocking";
-  evidence?: string | undefined;
+  evidence?: string;
 }
 
 export interface FollowUpTaskDraft {
@@ -30,7 +30,7 @@ export interface ProductManagerCloseout {
   completedTaskIds: string[];
   unresolvedTaskIds: string[];
   cleanup: CleanupCandidate[];
-  nextRecommendation?: string | undefined;
+  nextRecommendation?: string;
 }
 
 export interface CreatedTaskReference {

@@ -11,6 +11,7 @@ import type {
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
 import { projectScope } from "./project-scope.ts";
+import { runOptionsFrom } from "./run-options.ts";
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Milestone operation failed";
@@ -33,11 +34,7 @@ export function createMilestoneRoutes(
           await orchestrator.startMilestonePlanning(
             projectScope(registry, c),
             body.goal,
-            {
-              engine: body.engine,
-              model: body.model,
-              permissionMode: body.permissionMode,
-            },
+            runOptionsFrom(body),
           ),
           201,
         );
@@ -89,11 +86,7 @@ export function createMilestoneRoutes(
             projectScope(registry, c),
             c.req.param("id"),
             body.feedback,
-            {
-              engine: body.engine,
-              model: body.model,
-              permissionMode: body.permissionMode,
-            },
+            runOptionsFrom(body),
           ),
           201,
         );

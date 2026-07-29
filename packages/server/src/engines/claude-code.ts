@@ -192,11 +192,10 @@ function usageFrom(event: ClaudeStreamEvent | undefined): StageUsage | undefined
   if (!event) {
     return undefined;
   }
-  const usage: StageUsage = {
-    costUsd: event.total_cost_usd,
-    durationMs: event.duration_ms,
-    turns: event.num_turns,
-  };
+  const usage: StageUsage = {};
+  if (event.total_cost_usd !== undefined) usage.costUsd = event.total_cost_usd;
+  if (event.duration_ms !== undefined) usage.durationMs = event.duration_ms;
+  if (event.num_turns !== undefined) usage.turns = event.num_turns;
   return Object.keys(usage).length > 0 ? usage : undefined;
 }
 
@@ -320,13 +319,15 @@ export const claudeCodeAdapter: EngineAdapter = {
       }
     }
 
-    return {
+    const engineResult: EngineRunResult = {
       success,
-      result: finalEvent?.result,
-      sessionId,
       exitCode: result.exitCode,
-      errorMessage,
-      usage: usageFrom(finalEvent),
     };
+    if (finalEvent?.result !== undefined) engineResult.result = finalEvent.result;
+    if (sessionId !== undefined) engineResult.sessionId = sessionId;
+    if (errorMessage !== undefined) engineResult.errorMessage = errorMessage;
+    const usage = usageFrom(finalEvent);
+    if (usage !== undefined) engineResult.usage = usage;
+    return engineResult;
   },
 };

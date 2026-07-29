@@ -750,13 +750,11 @@ the UI). `@types/node` was bumped to v26 to match.
 **Context:** both flags were parked in `architecture.md` as "once the codebase is
 ready." Rule A7 pushes for them.
 
-**Decision:** both are on in `tsconfig.base.json`. The two idioms adopted for the
-fallout: **widen** an option/result bag field to `?: T | undefined` where
-`undefined` is a legitimate in-memory value (the engine adapter interfaces), and
-**omit** the key with a conditional spread — or reset with `delete` — where it
-should simply be absent from persisted state (run/stage state). Explicit
-`= undefined` assignment is now a type error, which is the point: persisted JSON
-no longer carries `"model": undefined` noise.
+**Decision:** both are on in `tsconfig.base.json`. A genuinely optional key uses
+`field?: T`; a fixed-shape internal record uses `field: T | undefined`.
+Constructors omit optional keys or reset them with `delete`. This prevents
+persisted state from confusing an absent value with an explicitly undefined
+property.
 
 ## 2026-07-22 — SetupModal inline-style cleanup deferred
 
@@ -798,8 +796,9 @@ milestone-summary boundaries. Invalid nested data is rejected with a path-aware
 error before it enters service or domain logic. Runtime value lists such as task
 priorities are exported `as const` and also define their TypeScript unions.
 
-This supersedes the conditional-spread construction idiom from the
-`exactOptionalPropertyTypes` decision above. Optional lifecycle values may be
-assigned directly as `undefined`; `JSON.stringify` still omits those keys.
-Conditional spreads remain appropriate only when they express real conditional
-composition rather than optional-property plumbing.
+This refines the `exactOptionalPropertyTypes` decision above. `field?: T` means
+the key is genuinely omitted; a fixed-shape internal record uses
+`field: T | undefined` when the key is always present. Combining an optional
+marker with an explicit `undefined` union is prohibited. Constructors add truly
+optional properties only when a value exists, without conditional object-spread
+expressions.

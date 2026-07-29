@@ -83,11 +83,14 @@ async function runStageTurns(
       return STAGE_OUTCOMES.FAILED;
     }
 
-    turn = {
+    const nextTurn: StageTurn = {
       index: turn.index + 1,
-      resumeSessionId: result.sessionId,
       answer: signal.data.text,
     };
+    if (result.sessionId !== undefined) {
+      nextTurn.resumeSessionId = result.sessionId;
+    }
+    turn = nextTurn;
   }
 }
 

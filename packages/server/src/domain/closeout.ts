@@ -1,5 +1,6 @@
 import {
   TASK_PRIORITIES,
+  type CloseoutFinding,
   type ProductManagerCloseout,
 } from "@adhd/core";
 import { z } from "zod";
@@ -79,7 +80,6 @@ function emptyCloseout(summary: string): ProductManagerCloseout {
     completedTaskIds: [],
     unresolvedTaskIds: [],
     cleanup: [],
-    nextRecommendation: undefined,
   };
 }
 
@@ -119,11 +119,31 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
     };
   }
 
+  const findings = parsed.data.findings.map((finding) => {
+    const result: CloseoutFinding = {
+      id: finding.id,
+      title: finding.title,
+      severity: finding.severity,
+    };
+    if (finding.evidence !== undefined) result.evidence = finding.evidence;
+    return result;
+  });
+  const report: ProductManagerCloseout = {
+    summary: parsed.data.summary,
+    deliveredScope: parsed.data.deliveredScope,
+    decisions: parsed.data.decisions,
+    knowledge: parsed.data.knowledge,
+    findings,
+    tasks: parsed.data.tasks,
+    completedTaskIds: parsed.data.completedTaskIds,
+    unresolvedTaskIds: parsed.data.unresolvedTaskIds,
+    cleanup: parsed.data.cleanup,
+  };
+  if (parsed.data.nextRecommendation !== undefined) {
+    report.nextRecommendation = parsed.data.nextRecommendation;
+  }
   return {
-    report: {
-      ...parsed.data,
-      nextRecommendation: parsed.data.nextRecommendation,
-    },
+    report,
     validationErrors: [],
   };
 }

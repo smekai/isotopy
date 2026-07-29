@@ -82,10 +82,10 @@ export function parseStageQuestion(output: string | undefined): string | undefin
 
 export interface EngineStageOutcome {
   outcome: Exclude<StageOutcome, typeof STAGE_OUTCOMES.CANCELLED>;
-  output?: string | undefined;
-  verdict?: StageVerdict | undefined;
-  question?: string | undefined;
-  failureMessage?: string | undefined;
+  output?: string;
+  verdict?: StageVerdict;
+  question?: string;
+  failureMessage?: string;
 }
 
 export interface InterpretOptions {
@@ -94,56 +94,81 @@ export interface InterpretOptions {
   canAsk: boolean;
 }
 
+function engineStageOutcome(
+  outcome: EngineStageOutcome["outcome"],
+  output: string | undefined,
+  verdict: StageVerdict | undefined,
+  question: string | undefined,
+  failureMessage: string | undefined,
+): EngineStageOutcome {
+  const result: EngineStageOutcome = { outcome };
+  if (output !== undefined) result.output = output;
+  if (verdict !== undefined) result.verdict = verdict;
+  if (question !== undefined) result.question = question;
+  if (failureMessage !== undefined) result.failureMessage = failureMessage;
+  return result;
+}
+
 export function interpretEngineResult(
   result: EngineRunResult,
   { profession, canAsk }: InterpretOptions,
 ): EngineStageOutcome {
   if (!result.success) {
-    return {
-      outcome: STAGE_OUTCOMES.FAILED,
-      failureMessage: result.errorMessage ?? `${profession} failed`,
-    };
+    return engineStageOutcome(
+      STAGE_OUTCOMES.FAILED,
+      undefined,
+      undefined,
+      undefined,
+      result.errorMessage ?? `${profession} failed`,
+    );
   }
   const output =
     result.result !== undefined && result.result.trim() !== "" ? result.result : undefined;
 
   const question = canAsk ? parseStageQuestion(result.result) : undefined;
   if (question !== undefined) {
-    return {
-      outcome: STAGE_OUTCOMES.ASKING,
+    return engineStageOutcome(
+      STAGE_OUTCOMES.ASKING,
       output,
+      undefined,
       question,
-    };
+      undefined,
+    );
   }
 
   const verdict = parseStageVerdict(result.result);
   if (verdict === STAGE_VERDICTS.FAIL) {
-    return {
-      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+    return engineStageOutcome(
+      STAGE_OUTCOMES.NEEDS_ATTENTION,
       output,
       verdict,
-      failureMessage: `${profession} reported VERDICT: FAIL`,
-    };
+      undefined,
+      `${profession} reported VERDICT: FAIL`,
+    );
   }
   if (verdict === STAGE_VERDICTS.SKIP) {
-    return {
-      outcome: STAGE_OUTCOMES.SKIPPED,
+    return engineStageOutcome(
+      STAGE_OUTCOMES.SKIPPED,
       output,
       verdict,
-    };
+      undefined,
+      undefined,
+    );
   }
-  return {
-    outcome: STAGE_OUTCOMES.PASSED,
+  return engineStageOutcome(
+    STAGE_OUTCOMES.PASSED,
     output,
     verdict,
-  };
+    undefined,
+    undefined,
+  );
 }
 
 export interface HandoffMeta {
   stageLabel: string;
   profession: string;
   engine: string;
-  model?: string | undefined;
+  model?: string;
   completedAt: string;
 }
 

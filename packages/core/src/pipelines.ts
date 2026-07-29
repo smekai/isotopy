@@ -3,7 +3,7 @@ export interface StageDefinition {
   label: string;
   gateAfter?: boolean;
   interactive?: boolean;
-  skill?: string | undefined;
+  skill?: string;
   stepTask?: string;
   executionPolicy?: StageExecutionPolicy;
 }

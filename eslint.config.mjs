@@ -30,6 +30,19 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "no-empty": ["error", { allowEmptyCatch: true }],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TSPropertySignature[optional=true] TSUndefinedKeyword",
+          message:
+            "Use field?: T for an omitted key or field: T | undefined for a fixed-shape key.",
+        },
+        {
+          selector: "Identifier[optional=true] TSUndefinedKeyword",
+          message:
+            "Do not combine an optional parameter marker with an explicit undefined union.",
+        },
+      ],
       eqeqeq: ["error", "smart"],
     },
   },
