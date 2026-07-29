@@ -167,9 +167,10 @@ of the source. When you strip or avoid a comment, that is where its content goes
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
   by the UI too, so nothing platform- or server-specific goes there).
-  Server-only pure logic lives in `packages/server/src/domain/` — e.g.
-  `domain/stage-context.ts` (prompt building, handoff formatting, verdict
-  parsing). `packages/server/src/services/` keeps only I/O and lifecycle.
+  Server-only pure logic lives in `packages/server/src/domain/`. Markdown
+  parsing and rendering is grouped by format in `domain/markdown/`; services
+  pass it typed values and keep only I/O and lifecycle. Repositories persist
+  already-rendered content and know nothing about Markdown semantics.
 
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
   `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
@@ -311,7 +312,7 @@ Core stays dependency-free and side-effect-free: types, constants, and pure func
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/services/` | I/O and lifecycle (run orchestrator, persistence, skill loading); no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: `stage-context.ts` (prompt/handoff/verdict), `skills/personas/*.md` + `skills/step-tasks/*.md` (bundled prompts), `skills/compose.ts` (persona layering). No I/O — the thin-service/fat-domain split (A3) |
+| `src/domain/` | Server-only **pure** logic: runtime validation and verdict rules, `markdown/` (focused prompt, artifact, skill, and task-board codecs), plus `skills/personas/*.md` and `skills/step-tasks/*.md` (bundled prompts). No I/O — the thin-service/fat-domain split (A3) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |
 | `src/utils.ts` | Pure, context-free helpers (no I/O, no internal imports) |
@@ -343,11 +344,11 @@ Assessment of the two-box flow against the conventions above, with the refactors
 | Finding | Resolution |
 | --- | --- |
 | `executeEngineStage` inlined persona resolution + prompt building, mixing lifecycle with input assembly | Extracted `resolveStageInputs()`; the method is now stage lifecycle only |
-| `stage-prompt.ts` had grown to hold both prompt building *and* handoff formatting | Renamed to `stage-context.ts` — it owns cross-box context in both directions |
+| `stage-context.ts` mixed Markdown rendering with verdict and question rules | Moved prompt and handoff rendering to `domain/markdown/stage.ts`; `stage-context.ts` now owns only stage-result interpretation |
 | `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
 | `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
 
-Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults (pure data) sit in `domain/skills/` apart from the I/O in `skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
+Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
 
 **Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunOrchestrator` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs (simulate vs. engine). Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunOrchestrator` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
 

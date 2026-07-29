@@ -6,6 +6,27 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-29 — Markdown formats are pure domain codecs (TASK-100)
+
+**Context:** closeout and TaskPlanner services built Markdown inline while also
+reading files, mutating boards, cleaning temporary paths, and sequencing run
+work. Prompt and skill composition were pure but split across unrelated domain
+locations. Formatting rules, line endings, and TaskPlanner grammar therefore
+had no single testable boundary.
+
+**Decision:** focused codecs under `domain/markdown/` own server-side Markdown
+parsing and rendering. They receive timestamps and typed values, normalize
+ADHD-owned documents to LF, and preserve an existing TaskPlanner file's LF or
+CRLF style when editing it. Structural labels are single-line; free-form bodies
+keep their Markdown. Services own I/O and orchestration, and repositories store
+already-rendered content without understanding its format.
+
+**Rejected:** a repository-level formatter, because persistence should not own
+presentation semantics; and one universal Markdown builder, because task-board
+grammar, agent prompts, and closeout artifacts change for different reasons.
+
+---
+
 ## 2026-07-29 — Optional and `undefined` represent the same domain state
 
 **Context:** `exactOptionalPropertyTypes` forced callers and constructors to

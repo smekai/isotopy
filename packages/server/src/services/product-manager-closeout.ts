@@ -8,6 +8,13 @@ import type {
   RunState,
 } from "@adhd/core";
 import { parseProductManagerCloseout } from "../domain/closeout.ts";
+import {
+  renderCancelledCleanupReport,
+  renderCleanupReport,
+  renderCloseout,
+  renderMilestoneSummary,
+} from "../domain/markdown/closeout.ts";
+import { renderPriorMilestoneCloseouts } from "../domain/markdown/planning.ts";
 import { parseMilestoneSummary } from "../domain/milestone-summary.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -16,38 +23,6 @@ import {
   createFollowUpTasks,
   transitionTasks,
 } from "./task-board-adapter.ts";
-
-function closeoutMarkdown(report: ProductManagerCloseout): string {
-  const section = (title: string, items: string[]): string[] =>
-    items.length > 0
-      ? [`## ${title}`, "", ...items.map((item) => `- ${item}`), ""]
-      : [];
-  return [
-    "# Product Manager closeout",
-    "",
-    report.summary,
-    "",
-    ...section("Delivered scope", report.deliveredScope),
-    ...section("Completed source tasks", report.completedTaskIds),
-    ...section("Unresolved source tasks", report.unresolvedTaskIds),
-    ...section("Decisions", report.decisions),
-    ...section("Knowledge", report.knowledge),
-    ...(report.findings.length > 0
-      ? [
-          "## Findings",
-          "",
-          ...report.findings.map(
-            (finding) =>
-              `- **${finding.severity === "blocking" ? "Blocking" : "Non-blocking"} · ${finding.title}**${finding.evidence ? ` — ${finding.evidence}` : ""}`,
-          ),
-          "",
-        ]
-      : []),
-    ...(report.nextRecommendation
-      ? ["## Next recommendation", "", report.nextRecommendation, ""]
-      : []),
-  ].join("\n");
-}
 
 function validateSourceTaskOutcome(
   run: RunState,
@@ -123,16 +98,6 @@ async function persistRunCloseout(
 ): Promise<void> {
   const closeoutDir = path.join(runsDir(projectPath), run.id, "closeout");
   await mkdir(closeoutDir, { recursive: true });
-  const cleanupLines = [
-    "# Cleanup report",
-    "",
-    ...record.cleanup.removed.map((entry) => `- Removed \`${entry}\``),
-    ...record.cleanup.rejected.map((entry) => `- Rejected \`${entry}\``),
-    ...(record.cleanup.removed.length + record.cleanup.rejected.length === 0
-      ? ["No cleanup paths were requested."]
-      : []),
-    "",
-  ];
   await Promise.all([
     writeFile(
       path.join(closeoutDir, "closeout.json"),
@@ -140,11 +105,11 @@ async function persistRunCloseout(
     ),
     writeFile(
       path.join(closeoutDir, "closeout.md"),
-      closeoutMarkdown(record.report),
+      renderCloseout(record.report),
     ),
     writeFile(
       path.join(closeoutDir, "cleanup-report.md"),
-      cleanupLines.join("\n"),
+      renderCleanupReport(record.cleanup),
     ),
   ]);
 
@@ -163,7 +128,7 @@ async function persistRunCloseout(
       ),
       writeFile(
         path.join(milestoneRunsDir, `${run.id}.md`),
-        closeoutMarkdown(record.report),
+        renderCloseout(record.report),
       ),
     ]);
   }
@@ -233,7 +198,7 @@ export async function cleanupCancelledRun(
   await mkdir(closeoutDir, { recursive: true });
   await writeFile(
     path.join(closeoutDir, "cleanup-report.md"),
-    "# Cleanup report\n\nRemoved the run-owned temporary directory after cancellation. No closeout agent was started.\n",
+    renderCancelledCleanupReport(),
   );
 }
 
@@ -274,27 +239,15 @@ export async function persistMilestoneSummary(
     ),
     writeFile(
       path.join(dir, "summary.md"),
-      [
-        `# ${milestone.name} — milestone summary`,
-        "",
-        milestone.goal ?? "",
-        "",
-        `Runs: ${linked.length}`,
-        `Features: ${milestone.features.length}`,
-        "",
-        "## Decisions",
-        "",
-        ...summary.decisions.map((item) => `- ${item}`),
-        "",
-        "## Knowledge",
-        "",
-        ...summary.knowledge.map((item) => `- ${item}`),
-        "",
-        "## Open problems",
-        "",
-        ...summary.openProblems.map((item) => `- ${item.title} (run ${item.sourceRunId})`),
-        "",
-      ].join("\n"),
+      renderMilestoneSummary({
+        name: milestone.name,
+        goal: milestone.goal,
+        runCount: linked.length,
+        featureCount: milestone.features.length,
+        decisions: summary.decisions,
+        knowledge: summary.knowledge,
+        openProblems: summary.openProblems,
+      }),
     ),
   ]);
 }
@@ -319,16 +272,5 @@ export async function milestoneCloseoutContext(
   const valid = summaries.filter(
     (summary): summary is NonNullable<typeof summary> => summary !== undefined,
   );
-  if (valid.length === 0) {
-    return "No prior milestone closeout knowledge is available.";
-  }
-  return [
-    "Prior milestone closeouts:",
-    ...valid.flatMap((summary) => [
-      `- ${summary.name}`,
-      ...summary.decisions.map((item) => `  - Decision: ${item}`),
-      ...summary.knowledge.map((item) => `  - Knowledge: ${item}`),
-      ...summary.problems.map((item) => `  - Open problem: ${item}`),
-    ]),
-  ].join("\n");
+  return renderPriorMilestoneCloseouts(valid);
 }

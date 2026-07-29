@@ -139,9 +139,10 @@ of the source. When you strip or avoid a comment, that is where its content goes
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
   by the UI too, so nothing platform- or server-specific goes there).
-  Server-only pure logic lives in `packages/server/src/domain/` — e.g.
-  `domain/stage-context.ts` (prompt building, handoff formatting, verdict
-  parsing). `packages/server/src/services/` keeps only I/O and lifecycle.
+  Server-only pure logic lives in `packages/server/src/domain/`. Markdown
+  parsing and rendering is grouped by format in `domain/markdown/`; services
+  pass it typed values and keep only I/O and lifecycle. Repositories persist
+  already-rendered content and know nothing about Markdown semantics.
 
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
   `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).

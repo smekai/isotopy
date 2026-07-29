@@ -44,8 +44,12 @@ import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
 import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
-import { formatHandoff } from "../domain/stage-context.ts";
+import { formatHandoff } from "../domain/markdown/stage.ts";
 import { parseMilestonePlan } from "../domain/milestone-plan.ts";
+import {
+  renderMilestonePlanningContext,
+  renderMilestoneRevisionContext,
+} from "../domain/markdown/planning.ts";
 import { nowIso } from "../utils.ts";
 import { WorkflowRuntimeRegistry } from "../workflow/workflow-runtime.ts";
 import type {
@@ -328,15 +332,11 @@ export class RunOrchestrator implements RunProjection {
     if (!feedback) {
       throw new Error("Revision feedback is required");
     }
-    const task = [
-      `Original milestone goal:\n${milestone.goal ?? milestone.name}`,
-      milestone.proposal
-        ? `Current proposal:\n${JSON.stringify(milestone.proposal, null, 2)}`
-        : undefined,
-      `User revision request:\n${feedback}`,
-    ]
-      .filter((value): value is string => value !== undefined)
-      .join("\n\n");
+    const task = renderMilestoneRevisionContext(
+      milestone.goal ?? milestone.name,
+      milestone.proposal,
+      feedback,
+    );
     return this.startPlanningTurn(projectPath, milestone.id, task, options);
   }
 
@@ -1294,22 +1294,18 @@ export class RunOrchestrator implements RunProjection {
           (milestone.features.some((feature) => feature.findings.length > 0) ||
             milestone.status === "completed"),
       )
-      .map((milestone) => {
-        const findings = milestone.features.flatMap((feature) =>
+      .map((milestone) => ({
+        name: milestone.name,
+        findings: milestone.features.flatMap((feature) =>
           feature.findings.map((finding) => finding.title),
-        );
-        return `- ${milestone.name}${findings.length > 0 ? `: ${findings.join("; ")}` : ""}`;
-      });
-    const task = [
+        ),
+      }));
+    const task = renderMilestonePlanningContext(
       userContext,
       boardContext,
       storedCloseoutContext,
-      priorKnowledge.length > 0
-        ? `Prior milestone knowledge:\n${priorKnowledge.join("\n")}`
-        : undefined,
-    ]
-      .filter((value): value is string => value !== undefined)
-      .join("\n\n");
+      priorKnowledge,
+    );
     return this.startRun(projectPath, "milestone-planning", {
       ...options,
       task,
