@@ -1,4 +1,5 @@
 import type { EngineId } from "./engines.ts";
+import type { RunCloseoutRecord } from "./closeout.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { flattenPipelineStages } from "./pipelines.ts";
 
@@ -101,6 +102,7 @@ export interface RunState {
   milestoneId?: string;
   featureId?: string;
   sourceTaskIds?: string[];
+  closeout?: RunCloseoutRecord;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;

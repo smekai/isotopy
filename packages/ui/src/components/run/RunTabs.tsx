@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { FileText, Flag, MessageSquare, Terminal } from "lucide-react";
 import type { RunState } from "@adhd/core";
@@ -95,6 +95,11 @@ export function RunTabs({
   const [tab, setTab] = useState<RunTab>(
     planning && run.status === "completed" ? "plan" : "chat",
   );
+  useEffect(() => {
+    if (planning && run.status === "completed") {
+      setTab("plan");
+    }
+  }, [planning, run.id, run.status]);
   const focusedStage = run.stages.find((stage) => stage.id === focusedStageId);
   const filtered = tab !== "chat" && focusedStage !== undefined;
 

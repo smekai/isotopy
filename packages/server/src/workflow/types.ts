@@ -63,7 +63,11 @@ export interface RunProjection {
   stageFailed(runId: string, stageId: string, message: string): void;
   setVerdict(runId: string, stageId: string, verdict: StageVerdict): void;
   stageUsage(runId: string, stageId: string, usage: StageUsage): void;
-  captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void;
+  captureStageOutput(
+    runId: string,
+    stageDef: StageDefinition,
+    output: string,
+  ): Promise<void>;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
   runCompleted(runId: string, status: RunCompletionStatus): void;
 }

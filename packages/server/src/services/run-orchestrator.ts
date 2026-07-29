@@ -57,7 +57,14 @@ import type {
 import {
   approveMilestoneTasks,
   taskBoardPlanningContext,
+  transitionTasks,
 } from "./task-board-adapter.ts";
+import {
+  applyProductManagerCloseout,
+  cleanupCancelledRun,
+  milestoneCloseoutContext,
+  persistMilestoneSummary,
+} from "./product-manager-closeout.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
 
@@ -515,6 +522,11 @@ export class RunOrchestrator implements RunProjection {
     milestone.completedAt = now;
     milestone.updatedAt = now;
     await this.persistMilestone(milestone);
+    await persistMilestoneSummary(
+      projectPath,
+      milestone,
+      [...this.runs.values()],
+    );
     return structuredClone(milestone);
   }
 
@@ -696,6 +708,16 @@ export class RunOrchestrator implements RunProjection {
     }
 
     this.gateApproved(runId, stageId);
+    if (stageId === "intake" && run.sourceTaskIds?.length) {
+      void transitionTasks(
+        this.registry.resolve(run.projectId),
+        run.sourceTaskIds,
+        "In Progress",
+        run.id,
+      ).catch((error: unknown) =>
+        console.warn(`Failed to move source tasks for run ${runId}:`, error),
+      );
+    }
     void this.runtimes.forProject(run.projectId).approveGate(runId, stageId);
     return structuredClone(run);
   }
@@ -716,7 +738,13 @@ export class RunOrchestrator implements RunProjection {
       void this.runtimes.forProject(run.projectId).cancel(openWorkflowRunId).catch(() => {});
     }
     this.markCancelled(runId);
-    void this.settleCompletedRun(run);
+    void this.settleCompletedRun(run)
+      .then(() =>
+        cleanupCancelledRun(this.registry.resolve(run.projectId), run.id),
+      )
+      .catch((error: unknown) =>
+        console.warn(`Failed to clean cancelled run ${run.id}:`, error),
+      );
     return structuredClone(run);
   }
 
@@ -1050,7 +1078,11 @@ export class RunOrchestrator implements RunProjection {
     this.schedulePersist(runId, false);
   }
 
-  captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void {
+  async captureStageOutput(
+    runId: string,
+    stageDef: StageDefinition,
+    output: string,
+  ): Promise<void> {
     const run = this.live(runId);
     if (!run || output.trim() === "") {
       return;
@@ -1078,10 +1110,10 @@ export class RunOrchestrator implements RunProjection {
           milestone.approvalError = parsed.errors.join("; ");
         }
         milestone.updatedAt = nowIso();
-        void this.persistMilestone(milestone);
+        await this.persistMilestone(milestone);
       }
     }
-    void this.repositoryForRun(runId).writeHandoff(
+    await this.repositoryForRun(runId).writeHandoff(
       runId,
       stageDef.id,
       formatHandoff(
@@ -1095,6 +1127,13 @@ export class RunOrchestrator implements RunProjection {
         output,
       ),
     );
+    if (run.pipelineId === "full-delivery" && stageDef.id === "closeout") {
+      run.closeout = await applyProductManagerCloseout(
+        this.registry.resolve(run.projectId),
+        run,
+        output,
+      );
+    }
     this.schedulePersist(runId, true);
   }
 
@@ -1248,6 +1287,7 @@ export class RunOrchestrator implements RunProjection {
     options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
   ): Promise<RunState> {
     const boardContext = await taskBoardPlanningContext(projectPath);
+    const storedCloseoutContext = await milestoneCloseoutContext(projectPath);
     const priorKnowledge = [...this.milestones.values()]
       .filter(
         (milestone) =>
@@ -1265,10 +1305,13 @@ export class RunOrchestrator implements RunProjection {
     const task = [
       userContext,
       boardContext,
+      storedCloseoutContext,
       priorKnowledge.length > 0
         ? `Prior milestone knowledge:\n${priorKnowledge.join("\n")}`
-        : "No prior milestone closeout knowledge is available.",
-    ].join("\n\n");
+        : undefined,
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join("\n\n");
     return this.startRun(projectPath, "milestone-planning", {
       ...options,
       task,
@@ -1356,6 +1399,12 @@ export class RunOrchestrator implements RunProjection {
       const now = nowIso();
       feature.status =
         run.status === "completed" ? "completed" : "needs_attention";
+      if (run.closeout) {
+        feature.findings = run.closeout.report.findings.map((finding) => ({
+          ...finding,
+          sourceRunId: run.id,
+        }));
+      }
       feature.updatedAt = now;
       if (feature.status === "completed") {
         feature.completedAt = now;

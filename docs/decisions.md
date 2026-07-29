@@ -6,6 +6,30 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-29 — Milestones begin as an approved Product Manager proposal (TASK-088, TASK-091, TASK-096)
+
+**Context:** a user can describe an outcome more easily than a complete delivery
+backlog. Creating tasks during an unfinished conversation would turn guesses
+into durable project work, while making each task a separate milestone feature
+would prevent one coherent delivery run from grouping related changes and bugs.
+
+**Decision:** milestone planning is a dedicated Product Manager conversation.
+Its validated proposal is persisted as a draft, can be revised through chat or
+edited directly, and creates or links tasks only after explicit approval. One
+feature is one Full Delivery run and may group several tasks. Existing
+TaskPlanner work is reused; missing work is created idempotently through an
+ADHD-owned adapter, with `.adhd/tasks` as the fallback.
+
+Product Manager also owns structured closeout. Only explicitly completed source
+tasks move to Done, unresolved work is preserved, and cleanup is restricted to
+the run-owned temporary root.
+
+**Deferred:** changing TaskPlanner first. The Markdown integration stays behind
+an adapter so a future official transactional API can replace it without
+changing milestone behavior.
+
+---
+
 ## 2026-07-28 — Full Delivery uses reusable personas and explicit stage policy (TASK-089, TASK-090)
 
 **Context:** the comprehensive preset needs conditional design and deployment,

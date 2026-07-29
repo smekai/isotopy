@@ -10,6 +10,7 @@ const API_PROXY_PATHS = [
   "/pipelines",
   "/projects",
   "/runs",
+  "/milestones",
   "/health",
   "/settings",
   "/engines",

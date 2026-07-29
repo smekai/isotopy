@@ -2,9 +2,12 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
+  CreatedTaskReference,
+  FollowUpTaskDraft,
   Milestone,
   MilestoneProposal,
   MilestoneTaskDraft,
+  RunState,
 } from "@adhd/core";
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils.ts";
@@ -105,6 +108,15 @@ async function boardFor(projectPath: ProjectPath, create: boolean): Promise<Boar
       config: await readConfig(taskPlannerConfig),
     };
   }
+  const builtInConfig = path.join(projectPath.dataDir, "tasks", "config.json");
+  if (await readText(builtInConfig)) {
+    return {
+      backend: "adhd",
+      dir: path.dirname(builtInConfig),
+      configPath: builtInConfig,
+      config: await readConfig(builtInConfig),
+    };
+  }
   return create ? builtInBoard(projectPath) : undefined;
 }
 
@@ -121,10 +133,28 @@ async function stateTexts(board: Board): Promise<Map<string, string>> {
   return result;
 }
 
-function idsIn(text: string): string[] {
-  return [...text.matchAll(/^##\s+([A-Za-z]+-\d+):\s+(.+)$/gm)].map(
-    (match) => `${match[1]}: ${match[2]}`,
-  );
+function taskSummariesIn(text: string): string[] {
+  return text.split(/(?=^##\s+)/m).flatMap((section) => {
+    const heading = /^##\s+([A-Za-z]+-\d+):\s+(.+)$/m.exec(section);
+    if (!heading?.[1] || !heading[2]) return [];
+    const description = section
+      .split(/\r?\n/)
+      .slice(1)
+      .filter(
+        (line) =>
+          line.trim() &&
+          !line.startsWith("**") &&
+          !line.startsWith("### ") &&
+          line.trim() !== "---" &&
+          !line.startsWith("- ["),
+      )
+      .join(" ")
+      .trim()
+      .slice(0, 320);
+    return [
+      `${heading[1]}: ${heading[2].trim()}${description ? ` — ${description}` : ""}`,
+    ];
+  });
 }
 
 export async function taskBoardPlanningContext(
@@ -136,7 +166,7 @@ export async function taskBoardPlanningContext(
   }
   const texts = await stateTexts(board);
   const lines = [...texts.entries()].flatMap(([state, content]) => {
-    const tasks = idsIn(content);
+    const tasks = taskSummariesIn(content);
     return tasks.length > 0
       ? [`${state}:`, ...tasks.map((task) => `- ${task}`)]
       : [];
@@ -302,4 +332,198 @@ export async function approveMilestoneTasks(
     `${JSON.stringify(board.config, null, 2)}\n`,
   );
   return { backend: board.backend, featureTaskIds };
+}
+
+function findingFingerprint(run: RunState, findingId: string): string {
+  return createHash("sha256")
+    .update(
+      [
+        run.milestoneId ?? "no-milestone",
+        run.featureId ?? "no-feature",
+        run.id,
+        findingId,
+      ].join(":"),
+    )
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function followUpSection(
+  board: Board,
+  id: string,
+  task: FollowUpTaskDraft,
+  sourceMarker: string,
+  run: RunState,
+): string {
+  const allowed = new Set(board.config.tags ?? []);
+  const tags = task.tags.filter(
+    (tag) => allowed.size === 0 || allowed.has(tag),
+  );
+  const metadata =
+    tags.length > 0
+      ? `**Priority:** ${task.priority} | **Tags:** ${tags.join(", ")}`
+      : `**Priority:** ${task.priority}`;
+  const source = [
+    run.milestoneId ? `milestone ${run.milestoneId}` : undefined,
+    run.featureId ? `feature ${run.featureId}` : undefined,
+    `run ${run.id}`,
+    `finding ${task.findingId}`,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+  return [
+    `## ${id}: ${task.title}`,
+    metadata,
+    `**Updated:** ${nowIso().slice(0, 16).replace("T", " ")}`,
+    "",
+    task.description,
+    "",
+    `**ADHD source:** ${source}`,
+    sourceMarker,
+    "",
+    "---",
+    "",
+  ].join("\n");
+}
+
+export async function createFollowUpTasks(
+  projectPath: ProjectPath,
+  run: RunState,
+  tasks: FollowUpTaskDraft[],
+): Promise<CreatedTaskReference[]> {
+  if (tasks.length === 0) return [];
+  const board = await boardFor(projectPath, true);
+  if (!board) throw new Error("Task board is unavailable");
+  const texts = await stateTexts(board);
+  const backlog = backlogState(board);
+  let backlogText =
+    texts.get(backlog.name) ??
+    (await readText(path.join(board.dir, backlog.fileName))) ??
+    "# Backlog\n";
+  let allText = [...texts.values()].join("\n");
+  let next = nextNumber(board, allText);
+  const created: CreatedTaskReference[] = [];
+
+  for (const task of tasks) {
+    const sourceMarker = `<!-- ADHD-FINDING:${findingFingerprint(run, task.findingId)} -->`;
+    const existingId = existingIdForMarker(allText, sourceMarker);
+    if (existingId) {
+      continue;
+    }
+    const id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
+    const section = followUpSection(
+      board,
+      id,
+      task,
+      sourceMarker,
+      run,
+    );
+    backlogText = insertAtBoardPosition(
+      backlogText,
+      section,
+      board.config.insertPosition,
+    );
+    allText += `\n${section}`;
+    created.push({ id, title: task.title, backend: board.backend });
+    next += 1;
+  }
+  if (created.length === 0) return [];
+  await writeFile(path.join(board.dir, backlog.fileName), backlogText);
+  board.config.nextId = next;
+  await writeFile(
+    board.configPath,
+    `${JSON.stringify(board.config, null, 2)}\n`,
+  );
+  return created;
+}
+
+function stateFor(board: Board, name: string): StateConfig | undefined {
+  return board.config.states.find(
+    (state) => state.name.toLowerCase() === name.toLowerCase(),
+  );
+}
+
+function takeTaskSection(
+  text: string,
+  id: string,
+): { text: string; section?: string } {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const expression = new RegExp(
+    `(?:^|\\n)(##\\s+${escaped}:.*?\\n---\\s*)(?=\\n|$)`,
+    "s",
+  );
+  const match = expression.exec(text);
+  if (!match?.[1]) return { text };
+  return {
+    text: `${text.slice(0, match.index)}${text.slice(match.index + match[0].length)}`.replace(
+      /\n{3,}/g,
+      "\n\n",
+    ),
+    section: `${match[1].trim()}\n`,
+  };
+}
+
+async function appendWorkLog(
+  board: Board,
+  runId: string,
+  ids: string[],
+): Promise<void> {
+  const target = path.join(board.dir, "WORK_LOG.md");
+  const current = await readText(target);
+  if (!current) return;
+  const entries = ids
+    .map(
+      (id) =>
+        `## ${id} — ${nowIso().slice(0, 10)}\n**What:** Completed by Full Delivery run ${runId}.\n**Outcome:** Evidence and follow-ups are recorded in the Product Manager closeout.\n\n---\n`,
+    )
+    .join("\n");
+  const lineEnd = current.indexOf("\n");
+  await writeFile(
+    target,
+    lineEnd === -1
+      ? `${current}\n\n${entries}`
+      : `${current.slice(0, lineEnd + 1)}\n${entries}\n${current.slice(lineEnd + 1)}`,
+  );
+}
+
+export async function transitionTasks(
+  projectPath: ProjectPath,
+  ids: string[],
+  targetStateName: "In Progress" | "Done",
+  runId: string,
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const board = await boardFor(projectPath, false);
+  if (!board) return [];
+  const targetState = stateFor(board, targetStateName);
+  if (!targetState) return [];
+  const targetPath = path.join(board.dir, targetState.fileName);
+  let destination =
+    (await readText(targetPath)) ?? `# ${targetStateName}\n`;
+  const moved: string[] = [];
+
+  for (const id of [...new Set(ids)]) {
+    if (destination.includes(`## ${id}:`)) continue;
+    let section: string | undefined;
+    for (const state of board.config.states) {
+      if (state.fileName === targetState.fileName) continue;
+      const sourcePath = path.join(board.dir, state.fileName);
+      const current = await readText(sourcePath);
+      if (!current) continue;
+      const taken = takeTaskSection(current, id);
+      if (!taken.section) continue;
+      await writeFile(sourcePath, taken.text);
+      section = taken.section;
+      break;
+    }
+    if (!section) continue;
+    destination = insertAtBoardPosition(destination, `${section}\n`, "top");
+    moved.push(id);
+  }
+  if (moved.length === 0) return [];
+  await writeFile(targetPath, destination);
+  if (targetStateName === "Done") {
+    await appendWorkLog(board, runId, moved);
+  }
+  return moved;
 }

@@ -273,6 +273,49 @@ export function MilestonePlanPanel({
                   rows={3}
                   style={field(d)}
                 />
+                <select
+                  aria-label={`Task ${taskIndex + 1} priority`}
+                  value={task.priority}
+                  onChange={(event) =>
+                    updateFeature(feature.id, (current) => ({
+                      ...current,
+                      taskDrafts: current.taskDrafts.map((entry) =>
+                        entry.id === task.id
+                          ? {
+                              ...entry,
+                              priority: event.target.value as typeof task.priority,
+                            }
+                          : entry,
+                      ),
+                    }))
+                  }
+                  style={field(d)}
+                >
+                  {["P0", "P1", "P2", "P3", "P4"].map((priority) => (
+                    <option key={priority} value={priority}>{priority}</option>
+                  ))}
+                </select>
+                <input
+                  aria-label={`Task ${taskIndex + 1} tags`}
+                  value={task.tags.join(", ")}
+                  onChange={(event) =>
+                    updateFeature(feature.id, (current) => ({
+                      ...current,
+                      taskDrafts: current.taskDrafts.map((entry) =>
+                        entry.id === task.id
+                          ? {
+                              ...entry,
+                              tags: event.target.value
+                                .split(",")
+                                .map((value) => value.trim())
+                                .filter(Boolean),
+                            }
+                          : entry,
+                      ),
+                    }))
+                  }
+                  style={field(d)}
+                />
               </div>
             ))}
           </section>
@@ -280,7 +323,7 @@ export function MilestonePlanPanel({
         {error && <div style={{ color: "#DC2626" }}>{error}</div>}
         <div style={{ display: "flex", gap: SPACE.md }}>
           <button
-            disabled={busy}
+            disabled={busy || milestone?.status === "active"}
             onClick={() => void act(async () => void (await save()))}
             style={button(d)}
           >
@@ -288,7 +331,7 @@ export function MilestonePlanPanel({
           </button>
           <button
             data-testid="approve-milestone-plan"
-            disabled={busy}
+            disabled={busy || milestone?.status === "active"}
             onClick={() =>
               void act(async () => {
                 await save();

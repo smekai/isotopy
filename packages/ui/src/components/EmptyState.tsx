@@ -223,11 +223,13 @@ export function EmptyState({
   const stages = selectedPipeline ? flattenPipelineStages(selectedPipeline) : [];
   const engine = ENGINES[settings.preferences.engine];
 
-  const pipelineOptions: PipelineOption[] = DEMO_PIPELINES.map((pipeline) => ({
-    id: pipeline.id,
-    label: pipeline.name,
-    description: `${pipeline.description} — ${engine.label}`,
-  }));
+  const pipelineOptions: PipelineOption[] = DEMO_PIPELINES
+    .filter((pipeline) => pipeline.internal !== true)
+    .map((pipeline) => ({
+      id: pipeline.id,
+      label: pipeline.name,
+      description: `${pipeline.description} — ${engine.label}`,
+    }));
 
   const copy = PIPELINE_COPY[pipelineId] ?? DEFAULT_PIPELINE_COPY;
 

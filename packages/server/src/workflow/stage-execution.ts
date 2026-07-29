@@ -157,7 +157,7 @@ export async function runStageWork(
   }
 
   if (decision.output !== undefined) {
-    projection.captureStageOutput(runId, stageDef, decision.output);
+    await projection.captureStageOutput(runId, stageDef, decision.output);
   }
   if (decision.verdict !== undefined) {
     projection.setVerdict(runId, stageDef.id, decision.verdict);
