@@ -80,8 +80,9 @@ describe("composeSkill", () => {
 
 describe("loadSkill", () => {
   test("falls back to the bundled default and writes nothing to disk", async () => {
+    const bundled = await loadBundledPersona("developer");
     expect(await loadSkill(project, "developer")).toBe(
-      (await loadBundledPersona("developer"))?.trim(),
+      bundled?.replace(/\r\n/g, "\n").trim(),
     );
     expect(await readdir(home)).toEqual([]);
     expect(await readdir(userHome)).toEqual([]);
