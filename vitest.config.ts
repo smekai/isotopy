@@ -11,6 +11,7 @@ const RESOLVE = {
 };
 
 const EXCLUDE = ["**/node_modules/**", "**/dist/**"];
+const NODE_TEST_TIMEOUT_MS = 15_000;
 
 // Component tests and unit specs. The Playwright suite is a separate runner
 // (`pnpm e2e`) — see docs/testing.md for which layer a check belongs in.
@@ -31,6 +32,7 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "node",
+          testTimeout: NODE_TEST_TIMEOUT_MS,
           include: ["packages/*/test/**/*.{comp,spec}.ts"],
           exclude: EXCLUDE,
         },

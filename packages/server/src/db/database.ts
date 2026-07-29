@@ -5,14 +5,21 @@ import type { ProjectPath } from "../paths.ts";
 
 const BUSY_TIMEOUT_MS = 5000;
 
+type Migration = (connection: SqliteConnection) => void;
+
+interface Registration {
+  schema: string;
+  migrate?: Migration;
+}
+
 export class Database {
   private ready?: Promise<SqliteConnection>;
-  private readonly schemas: string[] = [];
+  private readonly registrations: Registration[] = [];
 
   constructor(private readonly path: ProjectPath) {}
 
-  register(schema: string): void {
-    this.schemas.push(schema);
+  register(schema: string, migrate?: Migration): void {
+    this.registrations.push({ schema, migrate });
   }
 
   describe(): string {
@@ -38,8 +45,10 @@ export class Database {
     const db = new DatabaseSync(this.describe());
     db.exec("PRAGMA journal_mode=WAL");
     db.exec(`PRAGMA busy_timeout=${BUSY_TIMEOUT_MS}`);
-    for (const schema of this.schemas) {
-      db.exec(schema);
+    for (const registration of this.registrations) {
+      db.exec(registration.schema);
+      registration.migrate?.(db);
+      db.exec(registration.schema);
     }
     return db;
   }

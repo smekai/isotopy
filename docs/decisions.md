@@ -6,6 +6,27 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-29 — SQLite owns projection audit timestamps (TASK-099)
+
+**Context:** mutable `runs` and `milestones` rows received `updated_at` from
+TypeScript on every upsert and had no `created_at`. That made the repository
+responsible for database bookkeeping and allowed writers to disagree about
+timestamp format or forget the update entirely.
+
+**Decision:** SQLite supplies `created_at` and `updated_at` with
+`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`, which matches JavaScript's
+millisecond UTC ISO format. An `AFTER UPDATE` trigger advances `updated_at`;
+upserts now write only identifiers and data. Known legacy table schemas are
+rebuilt in one transaction, preserving rows and using the previous
+`updated_at` as both initial audit timestamps.
+
+Append-only `events` do not need mutable audit timestamps, and
+`active_runs.started_at` remains a domain value describing run admission rather
+than row creation. This database-schema migration is intentionally separate
+from persisted JSON compatibility: pre-1.0 JSON shapes remain strict.
+
+---
+
 ## 2026-07-29 — Runtime schemas own every untrusted server boundary (TASK-098)
 
 **Context:** HTTP routes asserted generic request bodies, persisted runs trusted

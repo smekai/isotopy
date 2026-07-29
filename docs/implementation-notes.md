@@ -352,6 +352,11 @@ install on the target platform; see
   clears the memoised handle; the next operation transparently re-opens.
 - **WAL mode plus `PRAGMA busy_timeout` (5 s)** let a concurrent reader coexist with
   the single writer rather than erroring on a lock.
+- **SQLite owns audit timestamps for mutable projections.** `runs` and
+  `milestones` default both `created_at` and `updated_at` to millisecond UTC ISO
+  text, and table triggers advance `updated_at` on update. Repositories never
+  supply those values. The known legacy schemas are rebuilt transactionally;
+  their previous `updated_at` initializes both columns.
 - **A corrupt or unopenable DB degrades to an empty load with a warning**, so a bad
   DB can't stop the server from booting. A failed open clears the memoised handle so
   a later call can retry. JSON parsing of a stored snapshot is confined to
