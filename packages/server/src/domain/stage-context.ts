@@ -83,9 +83,9 @@ export function parseStageQuestion(output: string | undefined): string | undefin
 export interface EngineStageOutcome {
   outcome: Exclude<StageOutcome, typeof STAGE_OUTCOMES.CANCELLED>;
   output?: string | undefined;
-  verdict?: StageVerdict;
-  question?: string;
-  failureMessage?: string;
+  verdict?: StageVerdict | undefined;
+  question?: string | undefined;
+  failureMessage?: string | undefined;
 }
 
 export interface InterpretOptions {
@@ -135,7 +135,7 @@ export function interpretEngineResult(
   return {
     outcome: STAGE_OUTCOMES.PASSED,
     output,
-    ...(verdict !== undefined ? { verdict } : {}),
+    verdict,
   };
 }
 

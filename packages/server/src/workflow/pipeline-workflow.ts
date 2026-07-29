@@ -85,7 +85,7 @@ async function runStageTurns(
 
     turn = {
       index: turn.index + 1,
-      ...(result.sessionId !== undefined ? { resumeSessionId: result.sessionId } : {}),
+      resumeSessionId: result.sessionId,
       answer: signal.data.text,
     };
   }

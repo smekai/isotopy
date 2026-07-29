@@ -120,15 +120,15 @@ export interface RunOrchestratorDependencies {
 
 interface InputExtras {
   startedMessage: string;
-  seededOutputs?: Record<string, string>;
-  seededOutcomes?: Record<string, StageOutcome>;
-  startStageId?: string;
+  seededOutputs?: Record<string, string> | undefined;
+  seededOutcomes?: Record<string, StageOutcome> | undefined;
+  startStageId?: string | undefined;
 }
 
 interface MessageDraft {
   role: MessageRole;
-  stageId?: string;
-  kind?: MessageKind;
+  stageId?: string | undefined;
+  kind?: MessageKind | undefined;
   text: string;
 }
 
@@ -282,7 +282,7 @@ export class RunOrchestrator implements RunProjection {
       id: randomUUID().slice(0, 8),
       projectId: projectPath.id,
       name,
-      ...(input.goal?.trim() ? { goal: input.goal.trim() } : {}),
+      goal: input.goal?.trim() || undefined,
       status: input.status ?? "active",
       autoRunNext: input.autoRunNext ?? false,
       features: (input.features ?? []).map((feature) =>
@@ -777,8 +777,8 @@ export class RunOrchestrator implements RunProjection {
       id: randomUUID().slice(0, 8),
       ts: nowIso(),
       role: draft.role,
-      ...(draft.stageId !== undefined ? { stageId: draft.stageId } : {}),
-      ...(draft.kind !== undefined ? { kind: draft.kind } : {}),
+      stageId: draft.stageId,
+      kind: draft.kind,
       text: draft.text,
     };
     run.messages.push(message);
@@ -786,7 +786,7 @@ export class RunOrchestrator implements RunProjection {
       ts: message.ts,
       type: "run.message",
       runId: run.id,
-      ...(message.stageId !== undefined ? { stageId: message.stageId } : {}),
+      stageId: message.stageId,
       chatMessage: message,
     });
     return message;
@@ -879,17 +879,15 @@ export class RunOrchestrator implements RunProjection {
       runId: run.id,
       projectId: run.projectId,
       pipeline,
-      ...(run.task !== undefined ? { task: run.task } : {}),
-      ...(run.engine !== undefined ? { engine: run.engine } : {}),
-      ...(run.model !== undefined ? { model: run.model } : {}),
+      task: run.task,
+      engine: run.engine,
+      model: run.model,
       permissionMode: this.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
-      ...(run.workspacePath !== undefined ? { workspacePath: run.workspacePath } : {}),
+      workspacePath: run.workspacePath,
       startedMessage: extras.startedMessage,
-      ...(extras.seededOutputs !== undefined ? { seededOutputs: extras.seededOutputs } : {}),
-      ...(extras.seededOutcomes !== undefined
-        ? { seededOutcomes: extras.seededOutcomes }
-        : {}),
-      ...(extras.startStageId !== undefined ? { startStageId: extras.startStageId } : {}),
+      seededOutputs: extras.seededOutputs,
+      seededOutcomes: extras.seededOutcomes,
+      startStageId: extras.startStageId,
     };
   }
 
@@ -1160,7 +1158,7 @@ export class RunOrchestrator implements RunProjection {
       runId,
       status,
       message: completionMessage(status),
-      ...(run.result !== undefined ? { result: run.result } : {}),
+      result: run.result,
     });
     void this.settleCompletedRun(run);
   }
@@ -1351,9 +1349,7 @@ export class RunOrchestrator implements RunProjection {
     return {
       id: randomUUID().slice(0, 8),
       title,
-      ...(input.description?.trim()
-        ? { description: input.description.trim() }
-        : {}),
+      description: input.description?.trim() || undefined,
       acceptanceCriteria: this.cleanStrings(input.acceptanceCriteria ?? []),
       status: "ready",
       taskIds: this.cleanStrings(input.taskIds ?? []),

@@ -16,9 +16,9 @@ export type TranscriptItem =
       kind: "agent";
       key: string;
       ts: string;
-      stageId?: string;
+      stageId?: string | undefined;
       text: string;
-      question?: boolean;
+      question?: boolean | undefined;
     }
   | { kind: "tool"; key: string; ts: string; stageId: string; text: string; failed: boolean }
   | { kind: "notice"; key: string; ts: string; stageId: string; text: string; level: LogLevel }
@@ -96,8 +96,8 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
               kind: "agent",
               key: `msg:${message.id}`,
               ts: message.ts,
-              ...(message.stageId !== undefined ? { stageId: message.stageId } : {}),
-              ...(message.kind === "question" ? { question: true } : {}),
+              stageId: message.stageId,
+              question: message.kind === "question" || undefined,
               text: message.text,
             },
     });

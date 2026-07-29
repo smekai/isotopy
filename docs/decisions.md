@@ -785,3 +785,21 @@ the theme it *offers*, not the theme in use — and six muted descriptions to on
 `mutedCaption(d)`. Booleans that a builder branches on are named at the top of the
 component (`engineMissing`, `keyReady`, `creditsNoteShown`) rather than inlined as
 expressions at the call site.
+
+## 2026-07-29 — Validate untrusted data once, at the boundary
+
+**Context:** milestone planning and closeout initially converted unknown JSON
+through nested `recordOf`, `stringsOf`, and `findingsOf` helpers. Invalid nested
+entries could be silently removed, leaving service code with a plausible but
+incorrect partial result.
+
+**Decision:** use strict runtime schemas at AI-output, persisted milestone, and
+milestone-summary boundaries. Invalid nested data is rejected with a path-aware
+error before it enters service or domain logic. Runtime value lists such as task
+priorities are exported `as const` and also define their TypeScript unions.
+
+This supersedes the conditional-spread construction idiom from the
+`exactOptionalPropertyTypes` decision above. Optional lifecycle values may be
+assigned directly as `undefined`; `JSON.stringify` still omits those keys.
+Conditional spreads remain appropriate only when they express real conditional
+composition rather than optional-property plumbing.

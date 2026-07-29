@@ -174,8 +174,8 @@ function usageFrom(codex: CodexUsage | undefined, durationMs: number): StageUsag
     return undefined;
   }
   return {
-    ...(codex.input_tokens !== undefined ? { tokensIn: codex.input_tokens } : {}),
-    ...(codex.output_tokens !== undefined ? { tokensOut: codex.output_tokens } : {}),
+    tokensIn: codex.input_tokens,
+    tokensOut: codex.output_tokens,
     ...(codex.cached_input_tokens !== undefined
       ? { cachedTokensIn: codex.cached_input_tokens }
       : {}),

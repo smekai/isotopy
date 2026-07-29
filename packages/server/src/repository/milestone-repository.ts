@@ -1,20 +1,8 @@
 import type { Milestone } from "@adhd/core";
 import { Database } from "../db/database.ts";
 import { MilestonesTable } from "../db/milestones-table.ts";
+import { parsePersistedMilestone } from "../domain/milestone.ts";
 import type { ProjectPath } from "../paths.ts";
-
-function parseMilestone(data: string): Milestone | undefined {
-  try {
-    const value = JSON.parse(data) as Partial<Milestone>;
-    return typeof value.id === "string" &&
-      typeof value.projectId === "string" &&
-      Array.isArray(value.features)
-      ? (value as Milestone)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export class MilestoneRepository {
   private readonly db: Database;
@@ -32,7 +20,7 @@ export class MilestoneRepository {
   async loadAll(): Promise<Milestone[]> {
     const rows = await this.milestones.all();
     return rows.flatMap((data) => {
-      const milestone = parseMilestone(data);
+      const milestone = parsePersistedMilestone(data);
       if (milestone) {
         return [milestone];
       }

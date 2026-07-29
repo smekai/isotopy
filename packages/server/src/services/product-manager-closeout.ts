@@ -8,6 +8,7 @@ import type {
   RunState,
 } from "@adhd/core";
 import { parseProductManagerCloseout } from "../domain/closeout.ts";
+import { parseMilestoneSummary } from "../domain/milestone-summary.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils.ts";
@@ -312,39 +313,7 @@ export async function milestoneCloseoutContext(
           "utf8",
         ).catch(() => undefined);
         if (!content) return undefined;
-        try {
-          const value = JSON.parse(content) as {
-            name?: unknown;
-            decisions?: unknown;
-            knowledge?: unknown;
-            openProblems?: unknown;
-          };
-          const strings = (input: unknown): string[] =>
-            Array.isArray(input)
-              ? input.flatMap((item) =>
-                  typeof item === "string" && item.trim() ? [item.trim()] : [],
-                )
-              : [];
-          const problems = Array.isArray(value.openProblems)
-            ? value.openProblems.flatMap((item) => {
-                const title =
-                  typeof item === "object" &&
-                  item !== null &&
-                  typeof (item as { title?: unknown }).title === "string"
-                    ? (item as { title: string }).title.trim()
-                    : "";
-                return title ? [title] : [];
-              })
-            : [];
-          return {
-            name: typeof value.name === "string" ? value.name : entry.name,
-            decisions: strings(value.decisions),
-            knowledge: strings(value.knowledge),
-            problems,
-          };
-        } catch {
-          return undefined;
-        }
+        return parseMilestoneSummary(content);
       }),
   );
   const valid = summaries.filter(

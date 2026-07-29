@@ -59,6 +59,32 @@ describe("parseMilestonePlan", () => {
     );
 
     expect(parsed.proposal).toBeUndefined();
-    expect(parsed.errors).toHaveLength(1);
+    expect(parsed.errors.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("rejects malformed nested task data instead of dropping it", () => {
+    const invalid = {
+      ...VALID_PLAN,
+      features: [
+        {
+          ...VALID_PLAN.features[0]!,
+          taskDrafts: [
+            {
+              ...VALID_PLAN.features[0]!.taskDrafts[0]!,
+              priority: "urgent",
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsed = parseMilestonePlan(
+      `\`\`\`adhd-milestone-plan\n${JSON.stringify(invalid)}\n\`\`\``,
+      1,
+      "2026-07-29T00:00:00.000Z",
+    );
+
+    expect(parsed.proposal).toBeUndefined();
+    expect(parsed.errors.join("\n")).toContain("priority");
   });
 });
