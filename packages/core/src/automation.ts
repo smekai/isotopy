@@ -73,6 +73,22 @@ export interface DeploymentResult {
   finishedAt: string;
 }
 
+export interface ReleaseManifest {
+  summary: string;
+  changes: string[];
+  changelogFragment: string;
+  checklist: string[];
+  compatibilityNotes: string[];
+  deploymentInputs: string[];
+  rollbackNotes: string[];
+}
+
+export interface RunReleaseRecord {
+  manifest: ReleaseManifest;
+  validationErrors: string[];
+  completedAt: string;
+}
+
 export const EMPTY_AUTOMATION_CONFIG: ProjectAutomationConfig = {
   version: AUTOMATION_CONFIG_VERSION,
   validation: [],

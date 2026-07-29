@@ -1,7 +1,10 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   approveIntake,
   createTestApp,
+  put,
   post,
   stageOf,
   startRun,
@@ -19,6 +22,21 @@ const PLAN = "Approved milestone progress scope";
 const IMPLEMENTATION = "Implemented milestone progress";
 const REVIEW_PASS = "No blocking findings\n\nVERDICT: PASS";
 const QA_PASS = "All required checks pass\n\nVERDICT: PASS";
+const RELEASE_PASS = `Release checklist ready
+
+\`\`\`adhd-release
+{
+  "summary": "Milestone progress is ready for preview",
+  "changes": ["Added milestone progress"],
+  "changelogFragment": "Add milestone progress.",
+  "checklist": ["QA passed"],
+  "compatibilityNotes": [],
+  "deploymentInputs": [],
+  "rollbackNotes": ["Revert the feature commit"]
+}
+\`\`\`
+
+VERDICT: PASS`;
 const CLOSEOUT = "Captured decisions and follow-up work\n\nVERDICT: PASS";
 
 let ctx: TestApp;
@@ -69,14 +87,7 @@ function anticipateDeliveryAndCloseout(): void {
       persona: /# Role: Release Manager/,
       prompt: /# Assignment: Prepare the feature release/,
     })
-    .reports("Release checklist ready\n\nVERDICT: PASS");
-  ctx.engine
-    .anticipate({
-      as: "SRE",
-      persona: /# Role: Site Reliability Engineer/,
-      prompt: /# Assignment: Deploy the preview environment/,
-    })
-    .reports("No preview target\n\nVERDICT: SKIP");
+    .reports(RELEASE_PASS);
   ctx.engine
     .anticipate({
       as: "Product Manager closeout",
@@ -118,7 +129,92 @@ test("the revised persona team completes one Full Delivery run", async () => {
     "skipped",
     "passed",
   ]);
-  expect(ctx.engine.callAt(8).cwd).toBe(ctx.engine.callAt(0).cwd);
+  expect(ctx.engine.callAt(7).cwd).toBe(ctx.engine.callAt(0).cwd);
+  ctx.engine.verify();
+});
+
+test("a configured preview target runs after a valid release handoff", async () => {
+  // Arrange
+  anticipatePlanningAndImplementation();
+  ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
+  anticipateDeliveryAndCloseout();
+  await put(ctx.app, "/automation", {
+    version: 1,
+    validation: [],
+    ui: null,
+    preview: {
+      provider: "custom",
+      command: {
+        executable: process.execPath,
+        args: ["-e", "console.log('preview deployed')"],
+        cwd: null,
+        timeoutMs: 10_000,
+        windows: null,
+        posix: null,
+      },
+      url: null,
+      healthUrl: null,
+      healthTimeoutMs: 1_000,
+      healthIntervalMs: 100,
+      rollbackNotes: "No external state was created.",
+    },
+    production: null,
+  });
+
+  // Act
+  const run = await startRun(ctx.app, PIPELINE);
+  await approveIntake(ctx.app, run.id);
+  const finished = await waitForRunStatus(ctx.app, run.id, "completed");
+
+  // Assert
+  expect(stageOf(finished, "deploy")).toMatchObject({
+    status: "passed",
+    verdict: "PASS",
+  });
+  expect(finished.deployment).toMatchObject({
+    environment: "preview",
+    verdict: "pass",
+    healthStatus: "skipped",
+  });
+  const runDirectory = path.join(ctx.home, "runs", run.id);
+  await expect(
+    readFile(path.join(runDirectory, "release", "release.json"), "utf8"),
+  ).resolves.toContain('"changelogFragment": "Add milestone progress."');
+  await expect(
+    readFile(path.join(runDirectory, "deploy", "deployment.json"), "utf8"),
+  ).resolves.toContain('"verdict": "pass"');
+  await expect(
+    readFile(path.join(runDirectory, "deploy", "deploy.log"), "utf8"),
+  ).resolves.toContain("[stdout] preview deployed");
+  ctx.engine.verify();
+});
+
+test("an invalid release handoff blocks deployment and reaches closeout", async () => {
+  // Arrange
+  anticipatePlanningAndImplementation();
+  ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
+  ctx.engine
+    .anticipate({ as: "Release Manager" })
+    .reports("Checklist in prose only\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "Product Manager closeout" }).reports(CLOSEOUT);
+
+  // Act
+  const run = await startRun(ctx.app, PIPELINE);
+  await approveIntake(ctx.app, run.id);
+  const finished = await waitForRunStatus(ctx.app, run.id, "needs_attention");
+
+  // Assert
+  expect(stageOf(finished, "release")).toMatchObject({
+    status: "failed",
+    verdict: "FAIL",
+  });
+  expect(stageOf(finished, "deploy").status).toBe("skipped");
+  expect(stageOf(finished, "closeout").status).toBe("passed");
+  expect(finished.release?.validationErrors).toContain(
+    "Missing fenced adhd-release JSON block",
+  );
   ctx.engine.verify();
 });
 

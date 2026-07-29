@@ -9,7 +9,7 @@ import { SettingsStore } from "./services/settings-store.ts";
 const registry = new ProjectRegistry();
 const automation = new AutomationConfigStore();
 const settings = new SettingsStore();
-const orchestrator = new RunOrchestrator({ registry, settings });
+const orchestrator = new RunOrchestrator({ automation, registry, settings });
 
 await orchestrator.init();
 

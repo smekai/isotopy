@@ -1,6 +1,7 @@
 import type {
   EngineId,
   EnginePermissionMode,
+  DeploymentResult,
   LogLevel,
   PipelineDefinition,
   RunState,
@@ -10,6 +11,8 @@ import type {
   StageVerdict,
 } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
+import type { AutomationConfigStore } from "../services/automation-config-store.ts";
+import type { DeploymentRunner } from "../services/deployment-runner.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 
 export interface PipelineWorkflowInput {
@@ -67,12 +70,20 @@ export interface RunProjection {
     runId: string,
     stageDef: StageDefinition,
     output: string,
+  ): Promise<string[]>;
+  captureDeployment(
+    runId: string,
+    stageDef: StageDefinition,
+    result: DeploymentResult,
+    logLines: string[],
   ): Promise<void>;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
   runCompleted(runId: string, status: RunCompletionStatus): void;
 }
 
 export interface WorkflowDeps {
+  automation: AutomationConfigStore;
+  deployment: DeploymentRunner;
   projection: RunProjection;
   registry: ProjectRegistry;
   settings: SettingsStore;

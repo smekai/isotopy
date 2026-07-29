@@ -61,7 +61,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const registry = new ProjectRegistry();
   const automation = new AutomationConfigStore();
   const settings = new SettingsStore();
-  const orchestrator = new RunOrchestrator({ registry, settings });
+  const orchestrator = new RunOrchestrator({ automation, registry, settings });
   const app = createApp({ automation, orchestrator, registry, settings });
 
   return {
@@ -99,7 +99,7 @@ export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrches
   const registry = new ProjectRegistry();
   const automation = new AutomationConfigStore();
   const settings = new SettingsStore();
-  const orchestrator = new RunOrchestrator({ registry, settings });
+  const orchestrator = new RunOrchestrator({ automation, registry, settings });
   await orchestrator.init();
   return {
     app: createApp({ automation, orchestrator, registry, settings }),

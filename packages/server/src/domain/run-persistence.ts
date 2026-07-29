@@ -1,5 +1,9 @@
 import {
   ENGINE_IDS,
+  DEPLOYMENT_ENVIRONMENTS,
+  DEPLOYMENT_PROVIDERS,
+  DEPLOYMENT_VERDICTS,
+  HEALTH_CHECK_STATUSES,
   LOG_LEVELS,
   MESSAGE_KINDS,
   MESSAGE_ROLES,
@@ -16,6 +20,7 @@ import type {
 } from "@adhd/core";
 import { z } from "zod";
 import { productManagerCloseoutSchema } from "./closeout.ts";
+import { releaseManifestSchema } from "./release.ts";
 import { parseJson } from "./validation.ts";
 import type { ValidationResult } from "./validation.ts";
 
@@ -29,6 +34,39 @@ export interface PersistedRun {
 const text = z.string().min(1);
 const strings = z.array(text);
 const timestamp = text;
+
+const platformCommandSchema = z
+  .object({
+    executable: text,
+    args: z.array(z.string()),
+  })
+  .strict();
+
+const releaseRecordSchema = z
+  .object({
+    manifest: releaseManifestSchema,
+    validationErrors: z.array(z.string()),
+    completedAt: timestamp,
+  })
+  .strict();
+
+const deploymentResultSchema = z
+  .object({
+    environment: z.enum(DEPLOYMENT_ENVIRONMENTS),
+    provider: z.enum(DEPLOYMENT_PROVIDERS),
+    verdict: z.enum(DEPLOYMENT_VERDICTS),
+    command: platformCommandSchema,
+    cwd: text,
+    exitCode: z.number().int().nullable(),
+    durationMs: z.number().nonnegative(),
+    url: z.url().nullable(),
+    healthUrl: z.url().nullable(),
+    healthStatus: z.enum(HEALTH_CHECK_STATUSES),
+    failureMessage: z.string().nullable(),
+    startedAt: timestamp,
+    finishedAt: timestamp,
+  })
+  .strict();
 
 const usageSchema = z
   .object({
@@ -106,6 +144,8 @@ const runStateSchema = z
     featureId: text.optional(),
     sourceTaskIds: strings.optional(),
     closeout: closeoutRecordSchema.optional(),
+    release: releaseRecordSchema.optional(),
+    deployment: deploymentResultSchema.optional(),
     pipelineId: text,
     pipelineName: text,
     status: z.enum(RUN_STATUSES),

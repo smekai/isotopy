@@ -19,6 +19,7 @@ import type {
   StageState,
   StageUsage,
   StageVerdict,
+  DeploymentResult,
   UpdateMilestoneFeatureInput,
   UpdateMilestoneInput,
 } from "@adhd/core";
@@ -44,6 +45,8 @@ import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
 import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
+import { AutomationConfigStore } from "./automation-config-store.ts";
+import { DeploymentRunner } from "./deployment-runner.ts";
 import { formatHandoff } from "../domain/markdown/stage.ts";
 import { parseMilestonePlan } from "../domain/milestone-plan.ts";
 import {
@@ -69,6 +72,12 @@ import {
   milestoneCloseoutContext,
   persistMilestoneSummary,
 } from "./product-manager-closeout.ts";
+import { parseReleaseManifest } from "../domain/release.ts";
+import {
+  persistDeploymentArtifacts,
+  persistReleaseArtifacts,
+} from "./release-artifacts.ts";
+import { renderDeploymentResult } from "../domain/markdown/release.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
 
@@ -118,6 +127,8 @@ export interface StartRunOptions {
 }
 
 export interface RunOrchestratorDependencies {
+  automation?: AutomationConfigStore;
+  deploymentRunner?: DeploymentRunner;
   registry: ProjectRegistry;
   settings?: SettingsStore;
 }
@@ -152,12 +163,23 @@ export class RunOrchestrator implements RunProjection {
   private readonly openWorkflowRunIds = new Map<string, string>();
   private readonly registry: ProjectRegistry;
   private readonly settings: SettingsStore;
+  private readonly automation: AutomationConfigStore;
+  private readonly deploymentRunner: DeploymentRunner;
   private readonly runtimes: WorkflowRuntimeRegistry;
 
-  constructor({ registry, settings }: RunOrchestratorDependencies) {
+  constructor({
+    automation,
+    deploymentRunner,
+    registry,
+    settings,
+  }: RunOrchestratorDependencies) {
     this.registry = registry;
     this.settings = settings ?? new SettingsStore();
+    this.automation = automation ?? new AutomationConfigStore();
+    this.deploymentRunner = deploymentRunner ?? new DeploymentRunner();
     const deps: WorkflowDeps = {
+      automation: this.automation,
+      deployment: this.deploymentRunner,
       projection: this,
       registry: this.registry,
       settings: this.settings,
@@ -1080,10 +1102,10 @@ export class RunOrchestrator implements RunProjection {
     runId: string,
     stageDef: StageDefinition,
     output: string,
-  ): Promise<void> {
+  ): Promise<string[]> {
     const run = this.live(runId);
     if (!run || output.trim() === "") {
-      return;
+      return [];
     }
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
     run.result = output;
@@ -1132,7 +1154,47 @@ export class RunOrchestrator implements RunProjection {
         output,
       );
     }
+    let validationErrors: string[] = [];
+    if (run.pipelineId === "full-delivery" && stageDef.id === "release") {
+      const parsed = parseReleaseManifest(output);
+      validationErrors = parsed.validationErrors;
+      run.release = {
+        manifest: parsed.manifest,
+        validationErrors,
+        completedAt: nowIso(),
+      };
+      await persistReleaseArtifacts(
+        this.registry.resolve(run.projectId),
+        run.id,
+        run.release,
+      );
+    }
     this.schedulePersist(runId, true);
+    return validationErrors;
+  }
+
+  async captureDeployment(
+    runId: string,
+    stageDef: StageDefinition,
+    result: DeploymentResult,
+    logLines: string[],
+  ): Promise<void> {
+    const run = this.live(runId);
+    if (!run) {
+      return;
+    }
+    run.deployment = result;
+    await this.captureStageOutput(
+      runId,
+      stageDef,
+      renderDeploymentResult(result),
+    );
+    await persistDeploymentArtifacts(
+      this.registry.resolve(run.projectId),
+      runId,
+      result,
+      logLines,
+    );
   }
 
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void {

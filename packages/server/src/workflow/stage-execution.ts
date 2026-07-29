@@ -50,6 +50,113 @@ function engineLabel(run: RunState): string {
   return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
 }
 
+async function runPreviewDeployment(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+  startedAt: string,
+): Promise<StageResult> {
+  const { projection } = deps;
+  projection.stageStarted(run.id, stageDef.id);
+  projection.log(run.id, stageDef.id, "run", "SRE preview automation online");
+
+  let target;
+  try {
+    target = (await deps.automation.get(deps.registry.resolve(run.projectId))).preview;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not read deployment configuration";
+    projection.stageFailed(run.id, stageDef.id, message);
+    return {
+      outcome: STAGE_OUTCOMES.FAILED,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
+
+  if (target === null) {
+    projection.log(
+      run.id,
+      stageDef.id,
+      "warn",
+      "No preview deployment target is configured",
+    );
+    projection.setVerdict(run.id, stageDef.id, STAGE_VERDICTS.SKIP);
+    projection.stageSkipped(run.id, stageDef.id);
+    return {
+      outcome: STAGE_OUTCOMES.SKIPPED,
+      verdict: STAGE_VERDICTS.SKIP,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
+
+  const controller = deps.beginEngineStage(run.id);
+  const logLines: string[] = [];
+  try {
+    const result = await deps.deployment.run({
+      project: deps.registry.resolve(run.projectId),
+      environment: "preview",
+      target,
+      signal: controller.signal,
+      onLine: (stream, line) => {
+        logLines.push(`[${stream}] ${line}`);
+        projection.log(
+          run.id,
+          stageDef.id,
+          stream === "stderr" ? "warn" : "info",
+          line,
+        );
+      },
+    });
+    if (deps.isCancelled(run.id)) {
+      return {
+        outcome: STAGE_OUTCOMES.CANCELLED,
+        startedAt,
+        completedAt: nowIso(),
+      };
+    }
+
+    await projection.captureDeployment(run.id, stageDef, result, logLines);
+    const verdict =
+      result.verdict === "pass" ? STAGE_VERDICTS.PASS : STAGE_VERDICTS.FAIL;
+    projection.setVerdict(run.id, stageDef.id, verdict);
+    if (result.verdict === "pass") {
+      projection.log(run.id, stageDef.id, "pass", "Preview deployment verified");
+      projection.stagePassed(run.id, stageDef.id);
+      return {
+        outcome: STAGE_OUTCOMES.PASSED,
+        verdict,
+        startedAt,
+        completedAt: nowIso(),
+      };
+    }
+
+    projection.stageFailed(
+      run.id,
+      stageDef.id,
+      result.failureMessage ?? "Preview deployment failed",
+    );
+    return {
+      outcome: STAGE_OUTCOMES.FAILED,
+      verdict,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Preview deployment failed";
+    projection.stageFailed(run.id, stageDef.id, message);
+    return {
+      outcome: STAGE_OUTCOMES.FAILED,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  } finally {
+    deps.endEngineStage(run.id);
+  }
+}
+
 export async function runStageWork(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,
@@ -62,6 +169,13 @@ export async function runStageWork(
   const run = projection.getRun(runId);
   if (!run || !run.engine) {
     return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
+  }
+  if (
+    input.pipeline.id === "full-delivery" &&
+    stageDef.id === "deploy" &&
+    turn.index === 0
+  ) {
+    return runPreviewDeployment(deps, run, stageDef, startedAt);
   }
   const profession = agentForStage(stageDef.id).profession;
   const resuming = turn.resumeSessionId !== undefined;
@@ -157,8 +271,28 @@ export async function runStageWork(
     };
   }
 
+  let validationErrors: string[] = [];
   if (decision.output !== undefined) {
-    await projection.captureStageOutput(runId, stageDef, decision.output);
+    validationErrors = await projection.captureStageOutput(
+      runId,
+      stageDef,
+      decision.output,
+    );
+  }
+  if (validationErrors.length > 0) {
+    validationErrors.forEach((message) =>
+      projection.log(runId, stageDef.id, "fail", message),
+    );
+    projection.setVerdict(runId, stageDef.id, STAGE_VERDICTS.FAIL);
+    projection.stageFailed(runId, stageDef.id, "Release handoff is invalid");
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      output: decision.output,
+      verdict: STAGE_VERDICTS.FAIL,
+      sessionId: outcome.sessionId,
+      startedAt,
+      completedAt: nowIso(),
+    };
   }
   if (decision.verdict !== undefined) {
     projection.setVerdict(runId, stageDef.id, decision.verdict);
