@@ -54,3 +54,7 @@ pure logic/UI`.
 - The untested platform degrades gracefully with an *accurate*
   message.
 - The task/PR notes which platform was actually tested.
+- Every implementation commit increments the shared workspace patch version
+  from its parent. Update the root package, every `packages/*` package, and the
+  `Current` value in `AGENTS.md` together; allocate the full sequence when
+  planning a multi-commit PR.

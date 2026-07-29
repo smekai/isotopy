@@ -116,12 +116,11 @@ const runStateSchema = z
     stageOutputs: z.record(z.string(), z.string()).optional(),
     workspacePath: text.optional(),
     stages: z.array(stageSchema),
-    messages: z.array(runMessageSchema).optional(),
+    messages: z.array(runMessageSchema),
     createdAt: timestamp,
     completedAt: timestamp.optional(),
   })
-  .strict()
-  .transform((run): RunState => ({ ...run, messages: run.messages ?? [] }));
+  .strict();
 
 const persistedRunSchema: z.ZodType<PersistedRun> = z
   .object({

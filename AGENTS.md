@@ -106,11 +106,13 @@ Rules for new tasks:
 
 All workspace packages (root + `packages/*`) share one version, bumped together.
 
-- **Minor** (0.x.0): bump with every more-or-less big new feature (e.g. a new engine adapter, a new pipeline).
-- **Patch** (0.0.x): fixes and small tweaks between features.
+- **Every commit:** increment the patch component from its parent and update the
+  root plus every `packages/*` package together. A three-commit PR starting at
+  `0.8.0` must therefore contain `0.8.1`, `0.8.2`, and `0.8.3`.
+- **Minor** (0.x.0): start a new explicitly planned feature or milestone series.
 - **Major** (1.0.0): when everything planned for the milestone set is done and the product is ready.
 
-Current: 0.8.2.
+Current: 0.8.3.
 
 ## Runtime validation boundaries
 

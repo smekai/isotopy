@@ -81,13 +81,15 @@ test("an empty message is rejected before anything is recorded", async () => {
   await engine.waitForCall(1);
 
   // Act
-  const { status, body } = await post<{ error: string }>(app, `/runs/${run.id}/messages`, {
-    text: "   ",
-  });
+  const { status, body } = await post<{
+    error: string;
+    issues: { path: (string | number)[] }[];
+  }>(app, `/runs/${run.id}/messages`, { text: "   " });
 
   // Assert
   expect(status).toBe(400);
-  expect(body.error).toBe("text is required");
+  expect(body.error).toBe("Invalid request");
+  expect(body.issues[0]?.path).toEqual(["text"]);
   const { body: reread } = await get<RunState>(app, `/runs/${run.id}`);
   expect(reread.messages).toEqual([]);
 });

@@ -34,6 +34,26 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/server/src/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[typeArguments][callee.property.name='json']",
+          message:
+            "Validate request bodies with parseRequestBody and a runtime schema.",
+        },
+        {
+          selector:
+            "TSAsExpression > CallExpression[callee.object.name='JSON'][callee.property.name='parse']",
+          message:
+            "Validate parsed JSON at its boundary instead of casting it.",
+        },
+      ],
+    },
+  },
+  {
     files: ["packages/ui/**/*.{ts,tsx}"],
     languageOptions: {
       globals: { ...globals.browser },

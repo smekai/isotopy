@@ -19,7 +19,7 @@ describe("persisted run schema", () => {
     });
   });
 
-  test("applies only the documented missing-messages migration", () => {
+  test("rejects records from an older shape instead of migrating them", () => {
     const persisted = makePersistedRun("legacy", "completed");
     const legacy = {
       ...persisted,
@@ -32,8 +32,8 @@ describe("persisted run schema", () => {
     const parsed = parsePersistedRun(json(legacy));
 
     expect(parsed).toMatchObject({
-      ok: true,
-      value: { run: { id: "legacy", messages: [] } },
+      ok: false,
+      issues: [{ path: ["run", "messages"] }],
     });
   });
 

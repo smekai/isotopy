@@ -108,8 +108,12 @@ runtime.
 Avoid `unknown` and `as unknown as` in business logic — a double-cast defeats the
 type system rather than using it. Reach for a library's own typed return values
 and narrow them (`typeof`, a type guard) instead of re-casting. Confine `unknown`
-to a single named boundary — a type guard or a `parseX` helper that validates
-untyped input — and hand typed values to everything downstream.
+to a focused boundary codec backed by a runtime schema. Reject a malformed
+record as a whole with path-aware issues; do not recover a plausible partial
+object by dropping bad fields. The codec hands typed values to everything
+downstream. ADHD-owned formats are strict about unknown fields. External
+protocols may preserve unknown fields and event types, but every field ADHD
+consumes is validated before it leaves the codec.
 
 ### A8 — Evidence lives in Markdown, not code comments
 
@@ -193,11 +197,13 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
   `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or
   `undefined`; both mean "not supplied". Reserve `null` for an explicit cleared
-  or removed value. No `unknown` /
-  `as unknown as` in business logic — `repository/run-repository.ts` confines it to
-  one `parsePersistedRun` guard, and `db/runs-table.ts` narrows `node:sqlite`'s own
-  `Record<string, SQLOutputValue>` rows instead of casting. Relative imports use
-  `.ts` extensions (like `@adhd/core`); `rewriteRelativeImportExtensions` rewrites
+  or removed value. Runtime schemas own untrusted HTTP, persisted JSON,
+  settings, project-registry, TaskPlanner, and engine-protocol input. Routes and
+  adapters receive only parsed values; services and repositories do not rebuild
+  types through hand-written record traversal. ADHD-owned records reject
+  unknown fields. TaskPlanner and engine codecs permit unrelated external
+  fields while validating every consumed field. Relative imports use `.ts`
+  extensions (like `@adhd/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 
 **Verify a change** (from the repo root, shell-neutral):

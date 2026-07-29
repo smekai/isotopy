@@ -6,6 +6,35 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-29 — Runtime schemas own every untrusted server boundary (TASK-098)
+
+**Context:** HTTP routes asserted generic request bodies, persisted runs trusted
+an object after checking only `run.id`, and the three engine adapters cast JSONL
+before traversing vendor records. Settings and project files also accepted valid
+fragments from malformed records. Those patterns let invalid nested values
+reach services as apparently typed data.
+
+**Decision:** focused Zod codecs now own HTTP, settings, project-registry,
+TaskPlanner config, persisted run/event, and engine JSONL boundaries. An
+ADHD-owned record validates completely or is rejected with path-aware issues;
+pre-1.0 persisted shapes are not migrated. External TaskPlanner and engine
+formats may add unrelated fields or event types, but every field ADHD consumes
+is validated. Engine codecs emit one shared normalized update shape so adapters
+never traverse unknown vendor objects.
+Malformed nonterminal engine lines are logged and skipped; a run still requires
+a valid terminal event to succeed.
+
+**Enforcement:** ESLint rejects typed `c.req.json<T>()` calls and casts directly
+around `JSON.parse` in server source. Domain constants define runtime value
+lists and their TypeScript unions together.
+
+**Rejected:** partial recovery from malformed owned files, because it hides the
+failing path and can produce a plausible but incorrect configuration; and one
+universal schema module, because HTTP, persistence, TaskPlanner, and each vendor
+protocol change independently.
+
+---
+
 ## 2026-07-29 — Markdown formats are pure domain codecs (TASK-100)
 
 **Context:** closeout and TaskPlanner services built Markdown inline while also

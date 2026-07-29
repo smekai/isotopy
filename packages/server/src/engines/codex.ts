@@ -3,10 +3,16 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { CODEX_MODEL_OPTIONS } from "@adhd/core";
-import type { EngineModelList, EngineStatus, StageUsage } from "@adhd/core";
+import type { EngineModelList, EngineStatus } from "@adhd/core";
+import { parseCodexProtocolLine } from "./codex-protocol.ts";
 import { firstLine, truncate } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
+import {
+  applyProtocolUpdate,
+  protocolProblemMessage,
+} from "./protocol-validation.ts";
+import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
@@ -133,132 +139,6 @@ function buildResumeArgs(ctx: EngineRunContext, sessionId: string): string[] {
     ...(ctx.model ? ["--model", ctx.model] : []),
     "-",
   ];
-}
-
-interface CodexUsage {
-  input_tokens?: number;
-  cached_input_tokens?: number;
-  output_tokens?: number;
-}
-
-interface CodexItem {
-  type?: string;
-  text?: string;
-  command?: string | string[];
-  status?: string;
-  name?: string;
-  query?: string;
-  message?: string;
-  changes?: unknown;
-}
-
-interface CodexEvent {
-  type?: string;
-  thread_id?: string;
-  usage?: CodexUsage;
-  item?: CodexItem;
-  error?: { message?: string } | string;
-  message?: string;
-}
-
-interface CodexCapture {
-  lastMessage?: string;
-  threadId?: string;
-  usage?: CodexUsage;
-  turnCompleted: boolean;
-  errorMessage?: string;
-}
-
-function usageFrom(codex: CodexUsage | undefined, durationMs: number): StageUsage | undefined {
-  if (!codex) {
-    return undefined;
-  }
-  return {
-    tokensIn: codex.input_tokens,
-    tokensOut: codex.output_tokens,
-    ...(codex.cached_input_tokens !== undefined
-      ? { cachedTokensIn: codex.cached_input_tokens }
-      : {}),
-    durationMs,
-    turns: 1,
-  };
-}
-
-function errorMessageOf(error: CodexEvent["error"]): string | undefined {
-  if (!error) {
-    return undefined;
-  }
-  return typeof error === "string" ? error : error.message;
-}
-
-function commandText(command: CodexItem["command"]): string {
-  return Array.isArray(command) ? command.join(" ") : String(command ?? "");
-}
-
-function logItemStart(item: CodexItem, onLog: EngineRunContext["onLog"]): void {
-  switch (item.type) {
-    case "command_execution":
-      onLog("run", truncate(`▶ ${commandText(item.command)}`));
-      break;
-    case "file_change":
-      onLog("run", truncate("✎ file change"));
-      break;
-    case "mcp_tool_call":
-      onLog("run", truncate(`▶ ${item.name ?? "mcp tool"}`));
-      break;
-    case "web_search":
-      onLog("run", truncate(`🔍 ${item.query ?? "web search"}`));
-      break;
-    default:
-      break;
-  }
-}
-
-function handleCodexEvent(
-  event: CodexEvent,
-  onLog: EngineRunContext["onLog"],
-  capture: CodexCapture,
-): void {
-  const item = event.item;
-  if (event.thread_id) {
-    capture.threadId = event.thread_id;
-  }
-  switch (event.type) {
-    case "thread.started":
-      onLog("info", "Codex agent online");
-      break;
-    case "item.started":
-      if (item) {
-        logItemStart(item, onLog);
-      }
-      break;
-    case "item.completed":
-      if (item?.type === "agent_message" && item.text) {
-        capture.lastMessage = item.text;
-        onLog("info", truncate(item.text));
-      } else if (item?.type === "error") {
-        const message = item.message ?? "Codex reported an error";
-        capture.errorMessage ??= message;
-        onLog("warn", truncate(message));
-      }
-      break;
-    case "turn.completed":
-      capture.turnCompleted = true;
-      capture.usage = event.usage;
-      onLog("run", "turn complete");
-      break;
-    case "turn.failed":
-      capture.errorMessage ??= errorMessageOf(event.error) ?? "Codex turn failed";
-      break;
-    case "error": {
-      const message = errorMessageOf(event.error) ?? event.message ?? "Codex error";
-      capture.errorMessage ??= message;
-      onLog("warn", truncate(message));
-      break;
-    }
-    default:
-      break;
-  }
 }
 
 function errorText(error: unknown): string {
@@ -394,7 +274,10 @@ export const codexAdapter: EngineAdapter = {
 
     const runCtx = withPersonaPrompt(ctx);
 
-    const capture: CodexCapture = { turnCompleted: false, threadId: ctx.resumeSessionId };
+    const capture: EngineProtocolUpdate = {
+      sessionId: ctx.resumeSessionId,
+      logs: [],
+    };
     const result = await runSubprocess({
       command: binary,
       args: buildArgs(runCtx),
@@ -411,28 +294,36 @@ export const codexAdapter: EngineAdapter = {
         if (!trimmed) {
           return;
         }
-        try {
-          handleCodexEvent(JSON.parse(trimmed) as CodexEvent, ctx.onLog, capture);
-        } catch {
+        const parsed = parseCodexProtocolLine(trimmed);
+        if (!parsed.ok) {
+          ctx.onLog("warn", protocolProblemMessage(parsed.problem));
           return;
         }
+        applyProtocolUpdate(capture, parsed.event, ctx.onLog);
       },
     });
 
-    const success = result.success && capture.turnCompleted && !capture.errorMessage;
+    const success =
+      result.success &&
+      capture.terminal === "success" &&
+      capture.error === undefined;
     let errorMessage: string | undefined;
     if (!success) {
       if (result.timedOut) {
         errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
       } else if (result.aborted) {
         errorMessage = "Aborted";
-      } else if (result.exitCode === null && !capture.turnCompleted && !capture.errorMessage) {
+      } else if (
+        result.exitCode === null &&
+        capture.terminal === undefined &&
+        capture.error === undefined
+      ) {
         errorMessage = result.errorMessage ?? "Failed to start Codex CLI";
         ctx.onLog("fail", errorMessage);
       } else {
         const stderr = result.stderrTail.join(" ").trim();
         const raw =
-          capture.errorMessage ??
+          capture.error ??
           `Codex exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
         const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
         if (mapped) {
@@ -446,11 +337,13 @@ export const codexAdapter: EngineAdapter = {
 
     return {
       success,
-      result: capture.lastMessage,
-      sessionId: capture.threadId,
+      result: capture.output,
+      sessionId: capture.sessionId,
       exitCode: result.exitCode,
       errorMessage,
-      usage: usageFrom(capture.usage, result.durationMs),
+      usage: capture.usage
+        ? { ...capture.usage, durationMs: result.durationMs, turns: 1 }
+        : undefined,
     };
   },
 };
