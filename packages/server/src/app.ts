@@ -12,11 +12,13 @@ import { createRunRoutes } from "./routes/runs.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
 import type { ProjectRegistry } from "./services/project-registry.ts";
 import type { AutomationConfigStore } from "./services/automation-config-store.ts";
+import type { DeploymentRunner } from "./services/deployment-runner.ts";
 import type { RunOrchestrator } from "./services/run-orchestrator.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
 
 export interface AppDependencies {
   automation: AutomationConfigStore;
+  deployment: DeploymentRunner;
   orchestrator: RunOrchestrator;
   registry: ProjectRegistry;
   settings: SettingsStore;
@@ -24,6 +26,7 @@ export interface AppDependencies {
 
 export function createApp({
   automation,
+  deployment,
   orchestrator,
   registry,
   settings,
@@ -38,7 +41,10 @@ export function createApp({
   );
 
   app.route("/health", healthRoutes);
-  app.route("/automation", createAutomationRoutes(registry, automation));
+  app.route(
+    "/automation",
+    createAutomationRoutes(registry, automation, deployment),
+  );
   app.route("/projects", createProjectRoutes(registry));
   app.route("/pipelines", createPipelineRoutes(orchestrator));
   app.route("/milestones", createMilestoneRoutes(orchestrator, registry));

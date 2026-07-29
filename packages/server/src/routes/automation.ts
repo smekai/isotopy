@@ -1,9 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
-import { automationConfigSchema } from "../domain/automation-config.ts";
+import {
+  automationConfigSchema,
+  productionDeploymentRequestSchema,
+} from "../domain/automation-config.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { InvalidAutomationConfigError } from "../services/automation-config-store.ts";
 import type { AutomationConfigStore } from "../services/automation-config-store.ts";
+import type { DeploymentRunner } from "../services/deployment-runner.ts";
+import { persistProjectDeploymentArtifacts } from "../services/release-artifacts.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
 
@@ -17,6 +23,7 @@ function invalidConfig(error: unknown) {
 export function createAutomationRoutes(
   registry: ProjectRegistry,
   automation: AutomationConfigStore,
+  deployment: DeploymentRunner,
 ): Hono {
   return new Hono()
     .get("/", async (c) => {
@@ -36,5 +43,37 @@ export function createAutomationRoutes(
       } catch (error) {
         return c.json(invalidConfig(error), 400);
       }
+    })
+    .post("/deploy/production", async (c) => {
+      const parsed = await parseRequestBody(
+        c.req,
+        productionDeploymentRequestSchema,
+      );
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+
+      const project = projectScope(registry, c);
+      let target;
+      try {
+        target = (await automation.get(project)).production;
+      } catch (error) {
+        return c.json(invalidConfig(error), 422);
+      }
+      if (target === null) {
+        return c.json({ error: "No production deployment target is configured" }, 409);
+      }
+
+      const id = randomUUID();
+      const logLines: string[] = [];
+      const result = await deployment.run({
+        project,
+        environment: "production",
+        target,
+        signal: c.req.raw.signal,
+        onLine: (stream, line) => logLines.push(`[${stream}] ${line}`),
+      });
+      await persistProjectDeploymentArtifacts(project, id, result, logLines);
+      return c.json({ id, result }, result.verdict === "pass" ? 200 : 502);
     });
 }

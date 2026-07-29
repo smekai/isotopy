@@ -2,13 +2,18 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
+  type DeploymentRecord,
   EMPTY_AUTOMATION_CONFIG,
 } from "@adhd/core";
-import type { ProjectAutomationConfig } from "@adhd/core";
+import type {
+  DeploymentAutomation,
+  ProjectAutomationConfig,
+} from "@adhd/core";
 import {
   addTestProject,
   createTestApp,
   get,
+  post,
   put,
   restartApp,
 } from "./support/harness.ts";
@@ -24,7 +29,7 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-function command(executable = "pnpm"): ProjectAutomationConfig["preview"] {
+function command(executable = "pnpm"): DeploymentAutomation {
   return {
     provider: "custom",
     command: {
@@ -168,4 +173,58 @@ test("a malformed owned file is rejected instead of partially recovered", async 
   // Assert
   expect(status).toBe(422);
   expect(body.error).toBe("Invalid request");
+});
+
+test("production deployment rejects anything except explicit confirmation", async () => {
+  // Act
+  const { status } = await post(ctx.app, "/automation/deploy/production", {
+    confirmation: "yes",
+  });
+
+  // Assert
+  expect(status).toBe(400);
+});
+
+test("an explicitly confirmed production deployment runs separately and retains evidence", async () => {
+  // Arrange
+  const input = config();
+  input.preview = null;
+  input.production = {
+    ...command(process.execPath),
+    command: {
+      executable: process.execPath,
+      args: ["-e", "console.log('production deployed')"],
+      cwd: null,
+      timeoutMs: 10_000,
+      windows: null,
+      posix: null,
+    },
+    url: null,
+    healthUrl: null,
+  };
+  await put(ctx.app, "/automation", input);
+
+  // Act
+  const { status, body } = await post<DeploymentRecord>(
+    ctx.app,
+    "/automation/deploy/production",
+    { confirmation: "DEPLOY PRODUCTION" },
+  );
+
+  // Assert
+  expect(status).toBe(200);
+  expect(body.result).toMatchObject({
+    environment: "production",
+    verdict: "pass",
+    healthStatus: "skipped",
+  });
+  await expect(
+    readFile(
+      path.join(ctx.home, "deployments", body.id, "deployment.json"),
+      "utf8",
+    ),
+  ).resolves.toContain('"environment": "production"');
+  await expect(
+    readFile(path.join(ctx.home, "deployments", body.id, "deploy.log"), "utf8"),
+  ).resolves.toContain("[stdout] production deployed");
 });

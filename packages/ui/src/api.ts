@@ -1,6 +1,7 @@
 import type {
   Milestone,
   MilestoneProposal,
+  DeploymentRecord,
   ProjectAutomationConfig,
   EngineModelList,
   EngineStatus,
@@ -96,6 +97,12 @@ export function updateAutomationConfig(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
+  });
+}
+
+export function deployProduction(): Promise<DeploymentRecord> {
+  return postJson<DeploymentRecord>("/automation/deploy/production", {
+    confirmation: "DEPLOY PRODUCTION",
   });
 }
 

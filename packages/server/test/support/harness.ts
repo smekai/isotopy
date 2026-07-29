@@ -12,6 +12,7 @@ import { RUN_SUMMARY_EVENT } from "@adhd/core";
 import type { EngineId, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
+import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
@@ -25,6 +26,7 @@ const POLL_INTERVAL_MS = 10;
 export interface TestApp {
   app: Hono;
   automation: AutomationConfigStore;
+  deployment: DeploymentRunner;
   orchestrator: RunOrchestrator;
   registry: ProjectRegistry;
   settings: SettingsStore;
@@ -60,13 +62,26 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
   const registry = new ProjectRegistry();
   const automation = new AutomationConfigStore();
+  const deployment = new DeploymentRunner();
   const settings = new SettingsStore();
-  const orchestrator = new RunOrchestrator({ automation, registry, settings });
-  const app = createApp({ automation, orchestrator, registry, settings });
+  const orchestrator = new RunOrchestrator({
+    automation,
+    deploymentRunner: deployment,
+    registry,
+    settings,
+  });
+  const app = createApp({
+    automation,
+    deployment,
+    orchestrator,
+    registry,
+    settings,
+  });
 
   return {
     app,
     automation,
+    deployment,
     orchestrator,
     registry,
     settings,
@@ -98,11 +113,23 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrchestrator }> {
   const registry = new ProjectRegistry();
   const automation = new AutomationConfigStore();
+  const deployment = new DeploymentRunner();
   const settings = new SettingsStore();
-  const orchestrator = new RunOrchestrator({ automation, registry, settings });
+  const orchestrator = new RunOrchestrator({
+    automation,
+    deploymentRunner: deployment,
+    registry,
+    settings,
+  });
   await orchestrator.init();
   return {
-    app: createApp({ automation, orchestrator, registry, settings }),
+    app: createApp({
+      automation,
+      deployment,
+      orchestrator,
+      registry,
+      settings,
+    }),
     orchestrator,
   };
 }

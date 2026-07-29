@@ -6,6 +6,7 @@ import type {
 } from "@adhd/core";
 import { Check, Server } from "lucide-react";
 import {
+  deployProduction,
   fetchAutomationConfig,
   updateAutomationConfig,
 } from "../../api";
@@ -110,6 +111,7 @@ export function DeploySection({ d }: DeploySectionProps) {
   const [environment, setEnvironment] = useState<Environment>("preview");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [deploymentStatus, setDeploymentStatus] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -168,6 +170,31 @@ export function DeploySection({ d }: DeploySectionProps) {
       setSaved(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save deployment setup");
+    }
+  }
+
+  async function runProductionDeployment() {
+    if (
+      !window.confirm(
+        "Deploy the configured target to production now? This action can change live systems.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setDeploymentStatus("Deploying production…");
+    try {
+      const stored = await updateAutomationConfig(currentConfig);
+      setConfig(stored);
+      const deployment = await deployProduction();
+      setDeploymentStatus(
+        deployment.result.url === null
+          ? "Production deployment passed."
+          : `Production deployment passed: ${deployment.result.url}`,
+      );
+    } catch (reason) {
+      setDeploymentStatus(null);
+      setError(reason instanceof Error ? reason.message : "Production deployment failed");
     }
   }
 
@@ -319,7 +346,18 @@ export function DeploySection({ d }: DeploySectionProps) {
       <button onClick={() => void save()} style={saveButton(d)}>
         Save deployment setup
       </button>
+      {environment === "production" && target !== null && (
+        <button
+          onClick={() => void runProductionDeployment()}
+          style={{ ...saveButton(d), background: ERROR_RED, marginLeft: SPACE.md }}
+        >
+          Deploy production…
+        </button>
+      )}
       {saved && <div style={statusStyle(OK_GREEN)}>Deployment setup saved.</div>}
+      {deploymentStatus !== null && (
+        <div style={statusStyle(OK_GREEN)}>{deploymentStatus}</div>
+      )}
       {error !== null && <div style={statusStyle(ERROR_RED)}>{error}</div>}
     </div>
   );

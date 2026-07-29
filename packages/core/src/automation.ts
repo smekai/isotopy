@@ -1,4 +1,5 @@
 export const AUTOMATION_CONFIG_VERSION = 1 as const;
+export const PRODUCTION_DEPLOYMENT_CONFIRMATION = "DEPLOY PRODUCTION" as const;
 export const DEPLOYMENT_PROVIDERS = [
   "custom",
   "vercel",
@@ -71,6 +72,11 @@ export interface DeploymentResult {
   failureMessage: string | null;
   startedAt: string;
   finishedAt: string;
+}
+
+export interface DeploymentRecord {
+  id: string;
+  result: DeploymentResult;
 }
 
 export interface ReleaseManifest {

@@ -2,6 +2,7 @@ import path from "node:path";
 import {
   AUTOMATION_CONFIG_VERSION,
   DEPLOYMENT_PROVIDERS,
+  PRODUCTION_DEPLOYMENT_CONFIRMATION,
 } from "@adhd/core";
 import type {
   AutomationCommand,
@@ -103,3 +104,9 @@ export const automationConfigSchema: z.ZodType<ProjectAutomationConfig> = z
       ids.add(id);
     });
   });
+
+export const productionDeploymentRequestSchema = z
+  .object({
+    confirmation: z.literal(PRODUCTION_DEPLOYMENT_CONFIRMATION),
+  })
+  .strict();

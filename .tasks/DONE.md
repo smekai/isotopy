@@ -1,5 +1,19 @@
 # Done
 
+## TASK-092: Release management and preview deployment automation
+**Priority:** P1 | **Tags:** server, adapters, setup, infra, milestone-d
+**Updated:** 2026-07-29 19:11
+
+Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
+
+Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
+
+### Plan
+
+Delivered strict project-local automation configuration, functional Setup deployment cards, platform-aware subprocess execution, health verification, structured Release Manager handoffs, retained release/deployment evidence, automatic preview deployment after quality passes, and a separate explicitly confirmed production action. Verified the portable command boundary and real Node subprocess behavior on Windows; macOS coverage remains delegated to the prepared CI workflow.
+
+---
+
 ## TASK-099: Make SQLite timestamps database-managed
 **Priority:** P1 | **Tags:** server, infra, testing
 **Updated:** 2026-07-29 18:56

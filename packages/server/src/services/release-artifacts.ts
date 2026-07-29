@@ -53,3 +53,27 @@ export async function persistDeploymentArtifacts(
     ),
   ]);
 }
+
+export async function persistProjectDeploymentArtifacts(
+  project: ProjectPath,
+  deploymentId: string,
+  deployment: DeploymentResult,
+  logLines: string[],
+): Promise<void> {
+  const directory = path.join(project.dataDir, "deployments", deploymentId);
+  await mkdir(directory, { recursive: true });
+  await Promise.all([
+    writeFile(
+      path.join(directory, "deployment.json"),
+      `${JSON.stringify(deployment, null, 2)}\n`,
+    ),
+    writeFile(
+      path.join(directory, "deployment.md"),
+      renderDeploymentResult(deployment),
+    ),
+    writeFile(
+      path.join(directory, "deploy.log"),
+      logLines.length === 0 ? "" : `${logLines.join("\n")}\n`,
+    ),
+  ]);
+}

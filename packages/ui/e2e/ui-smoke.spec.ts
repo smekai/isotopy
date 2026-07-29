@@ -202,3 +202,40 @@ test("the run rail is always present and offers a new run", async ({ page }) => 
     page.getByText("No runs yet.").or(page.getByTestId("run-card").first()),
   ).toBeVisible();
 });
+
+test("Setup stores preview commands as executable and argument arrays", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup" }).click();
+  await page.getByRole("button", { name: "Deploy Target" }).click();
+
+  await page.getByText("Custom command").click();
+  await page.getByLabel("Deploy executable").fill("node");
+  await page
+    .getByLabel("Deploy arguments")
+    .fill("scripts/preview.mjs\n--json");
+  await page
+    .getByLabel("Deployment URL")
+    .fill("https://preview.example.test");
+  await page.getByRole("button", { name: "Save deployment setup" }).click();
+  await expect(page.getByText("Deployment setup saved.")).toBeVisible();
+
+  const response = await page.request.get("/automation");
+  expect(response.ok()).toBe(true);
+  expect(await response.json()).toMatchObject({
+    preview: {
+      provider: "custom",
+      command: {
+        executable: "node",
+        args: ["scripts/preview.mjs", "--json"],
+      },
+      url: "https://preview.example.test",
+    },
+    production: null,
+  });
+
+  await page.getByRole("button", { name: "Production" }).click();
+  await page.getByText("Custom command").click();
+  await expect(
+    page.getByRole("button", { name: "Deploy production…" }),
+  ).toBeVisible();
+});

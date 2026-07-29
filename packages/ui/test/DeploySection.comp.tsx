@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { EMPTY_AUTOMATION_CONFIG } from "@adhd/core";
 import type { ProjectAutomationConfig } from "@adhd/core";
 import {
+  deployProduction,
   fetchAutomationConfig,
   updateAutomationConfig,
 } from "../src/api";
@@ -14,6 +15,7 @@ import {
 import { DIRS } from "../src/theme";
 
 vi.mock("../src/api", () => ({
+  deployProduction: vi.fn(),
   fetchAutomationConfig: vi.fn(),
   updateAutomationConfig: vi.fn(),
 }));
@@ -112,4 +114,52 @@ test("production is configured independently and remains explicitly gated", asyn
   expect(
     screen.getByText(/Production always needs separate human approval/),
   ).toBeTruthy();
+});
+
+test("production deployment requires a separate confirmation", async () => {
+  // Arrange
+  const initial = loadedConfig();
+  initial.production = deploymentPreset("custom");
+  vi.mocked(fetchAutomationConfig).mockResolvedValue(initial);
+  vi.mocked(updateAutomationConfig).mockImplementation(async (value) => value);
+  vi.mocked(deployProduction).mockResolvedValue({
+    id: "deployment-1",
+    result: {
+      environment: "production",
+      provider: "custom",
+      verdict: "pass",
+      command: { executable: "node", args: ["scripts/deploy.mjs"] },
+      cwd: "/project",
+      exitCode: 0,
+      durationMs: 100,
+      url: "https://production.example.test",
+      healthUrl: null,
+      healthStatus: "skipped",
+      failureMessage: null,
+      startedAt: "2026-07-29T00:00:00.000Z",
+      finishedAt: "2026-07-29T00:00:00.100Z",
+    },
+  });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  render(<DeploySection d={DIRS.indigo} />);
+  await screen.findByText("Custom command");
+  fireEvent.click(screen.getByText("Production"));
+
+  // Act — first decline, then explicitly approve.
+  fireEvent.click(screen.getByText("Deploy production…"));
+  expect(deployProduction).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true);
+  fireEvent.click(screen.getByText("Deploy production…"));
+
+  // Assert
+  await waitFor(() => expect(deployProduction).toHaveBeenCalledOnce());
+  expect(updateAutomationConfig).toHaveBeenCalledBefore(
+    vi.mocked(deployProduction),
+  );
+  expect(
+    await screen.findByText(
+      "Production deployment passed: https://production.example.test",
+    ),
+  ).toBeTruthy();
+  confirm.mockRestore();
 });
