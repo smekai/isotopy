@@ -5,6 +5,7 @@ import { engineRoutes } from "./routes/engines.ts";
 import { fsRoutes } from "./routes/fs.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { createPipelineRoutes } from "./routes/pipelines.ts";
+import { createMilestoneRoutes } from "./routes/milestones.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
 import { createRunRoutes } from "./routes/runs.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
@@ -31,6 +32,7 @@ export function createApp({ orchestrator, registry, settings }: AppDependencies)
   app.route("/health", healthRoutes);
   app.route("/projects", createProjectRoutes(registry));
   app.route("/pipelines", createPipelineRoutes(orchestrator));
+  app.route("/milestones", createMilestoneRoutes(orchestrator, registry));
   app.route("/engines", engineRoutes);
   app.route("/settings", createSettingsRoutes(registry, settings));
   app.route("/runs", createRunRoutes(orchestrator, registry));

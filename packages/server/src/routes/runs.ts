@@ -57,6 +57,9 @@ export function createRunRoutes(
           engine?: string;
           model?: string;
           permissionMode?: string;
+          milestoneId?: string;
+          featureId?: string;
+          sourceTaskIds?: string[];
         }>()
         .catch(() => ({}) as Record<string, never>);
       const pipelineId = body.pipelineId ?? DEFAULT_PIPELINE_ID;
@@ -67,6 +70,9 @@ export function createRunRoutes(
           engine: body.engine,
           model: body.model,
           permissionMode: body.permissionMode,
+          milestoneId: body.milestoneId,
+          featureId: body.featureId,
+          sourceTaskIds: body.sourceTaskIds,
         });
         return c.json(run, 201);
       } catch (error) {

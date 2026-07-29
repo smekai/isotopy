@@ -1,5 +1,15 @@
 # Backlog
 
+## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
+**Priority:** P2 | **Tags:** core, server, ui, engine
+**Updated:** 2026-07-29 08:56
+
+Use an initialization/planning step to analyze an approved feature and select the required personas and developer specializations from the available catalog, for example adding a Product Designer for UI work or a mobile developer specialization for a mobile feature. Persist the generated workflow, explain its composition, preserve required quality and closeout policies, and require human approval before execution.
+
+Cross-platform: workflow composition is pure logic/UI; any selected persona tools must declare Windows and macOS support or degrade with an accurate SKIP reason.
+
+---
+
 ## TASK-095: Post-MVP — agent-native browser testing for QA
 **Priority:** P3 | **Tags:** testing, adapters, engine, milestone-d
 **Updated:** 2026-07-28 22:11
@@ -37,26 +47,6 @@ Cross-platform: browser UI; validate Chromium on Windows and macOS CI where avai
 Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
 
 Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
-
----
-
-## TASK-091: Product Manager closeout, task writers, and safe cleanup
-**Priority:** P0 | **Tags:** server, infra, testing, milestone-d
-**Updated:** 2026-07-28 13:23
-
-Run the Product Manager again in closeout mode with the same delivery context. Validate and persist closeout JSON/Markdown plus milestone decisions, knowledge, problems, and cleanup reports. Create idempotent follow-up tasks through TaskPlanner or the built-in writer, link their source, transition selected tasks, and remove only allow-listed run-owned temporary resources.
-
-Cross-platform: use Node path/OS helpers and existing process-tree termination on Windows and POSIX.
-
----
-
-## TASK-088: Milestone domain, persistence, APIs, and autorun
-**Priority:** P0 | **Tags:** core, server, ui, milestone-d
-**Updated:** 2026-07-28 13:22
-
-Add persisted Milestone and MilestoneFeature models, run/task links, progress and statuses; milestone CRUD/start-next/finalize APIs; and server-side Auto-run next. Autorun preserves the Product Manager approval gate and stops on runtime failure, cancellation, unanswered interaction, or an empty backlog.
-
-Cross-platform: pure domain/API/UI with SQLite persistence.
 
 ---
 

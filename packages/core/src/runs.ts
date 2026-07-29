@@ -98,6 +98,9 @@ export interface RunState {
   id: string;
   number: number;
   projectId: string;
+  milestoneId?: string;
+  featureId?: string;
+  sourceTaskIds?: string[];
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
@@ -123,6 +126,8 @@ export interface RunSummary {
   id: string;
   number: number;
   projectId: string;
+  milestoneId?: string;
+  featureId?: string;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
@@ -186,6 +191,8 @@ export function toRunSummary(run: RunState): RunSummary {
     id: run.id,
     number: run.number,
     projectId: run.projectId,
+    ...(run.milestoneId !== undefined ? { milestoneId: run.milestoneId } : {}),
+    ...(run.featureId !== undefined ? { featureId: run.featureId } : {}),
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     status: run.status,
@@ -252,6 +259,9 @@ export interface NewRunInput {
   projectId: string;
   pipeline: PipelineDefinition;
   task?: string | undefined;
+  milestoneId?: string | undefined;
+  featureId?: string | undefined;
+  sourceTaskIds?: string[] | undefined;
 }
 
 export function createInitialRunState({
@@ -260,11 +270,17 @@ export function createInitialRunState({
   projectId,
   pipeline,
   task,
+  milestoneId,
+  featureId,
+  sourceTaskIds,
 }: NewRunInput): RunState {
   return {
     id: runId,
     number,
     projectId,
+    ...(milestoneId !== undefined ? { milestoneId } : {}),
+    ...(featureId !== undefined ? { featureId } : {}),
+    ...(sourceTaskIds !== undefined ? { sourceTaskIds } : {}),
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",
