@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type {
+  CreateMilestoneFeatureInput,
+  CreateMilestoneInput,
   EnginePermissionMode,
   LogLevel,
   MessageKind,
   MessageRole,
+  Milestone,
+  MilestoneFeature,
+  MilestoneProposal,
   PipelineDefinition,
   RunEvent,
   RunMessage,
@@ -14,6 +19,8 @@ import type {
   StageState,
   StageUsage,
   StageVerdict,
+  UpdateMilestoneFeatureInput,
+  UpdateMilestoneInput,
 } from "@adhd/core";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -23,6 +30,7 @@ import {
   agentForStage,
   createInitialRunState,
   isTerminalRunStatus,
+  nextMilestoneFeature,
   STAGE_OUTCOMES,
   pipelineUsesEngine,
   toRunSummary,
@@ -34,8 +42,10 @@ import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
+import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
 import { formatHandoff } from "../domain/stage-context.ts";
+import { parseMilestonePlan } from "../domain/milestone-plan.ts";
 import { nowIso } from "../utils.ts";
 import { WorkflowRuntimeRegistry } from "../workflow/workflow-runtime.ts";
 import type {
@@ -44,6 +54,17 @@ import type {
   RunProjection,
   WorkflowDeps,
 } from "../workflow/types.ts";
+import {
+  approveMilestoneTasks,
+  taskBoardPlanningContext,
+  transitionTasks,
+} from "./task-board-adapter.ts";
+import {
+  applyProductManagerCloseout,
+  cleanupCancelledRun,
+  milestoneCloseoutContext,
+  persistMilestoneSummary,
+} from "./product-manager-closeout.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
 
@@ -83,10 +104,13 @@ type RunListener = (event: RunEvent) => void;
 type RunSummaryListener = (summary: RunSummary) => void;
 
 export interface StartRunOptions {
-  task?: string | undefined;
-  engine?: string | undefined;
-  model?: string | undefined;
-  permissionMode?: string | undefined;
+  task?: string;
+  engine?: string;
+  model?: string;
+  permissionMode?: string;
+  milestoneId?: string;
+  featureId?: string;
+  sourceTaskIds?: string[];
 }
 
 export interface RunOrchestratorDependencies {
@@ -117,6 +141,9 @@ export class RunOrchestrator implements RunProjection {
   private readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
   private readonly persistTimers = new Map<string, NodeJS.Timeout>();
   private readonly repositories = new Map<string, RunRepository>();
+  private readonly milestoneRepositories = new Map<string, MilestoneRepository>();
+  private readonly milestones = new Map<string, Milestone>();
+  private readonly completingMilestoneRuns = new Set<string>();
   private readonly nextRunNumbers = new Map<string, number>();
   private readonly openWorkflowRunIds = new Map<string, string>();
   private readonly registry: ProjectRegistry;
@@ -154,9 +181,18 @@ export class RunOrchestrator implements RunProjection {
     await Promise.all(
       [...this.repositories.values()].map((repository) => repository.settle()),
     );
+    await Promise.all(
+      [...this.milestoneRepositories.values()].map((repository) =>
+        repository.settle(),
+      ),
+    );
   }
 
   private async loadProject(projectPath: ProjectPath): Promise<void> {
+    for (const milestone of await this.milestoneRepositoryFor(projectPath).loadAll()) {
+      milestone.projectId = projectPath.id;
+      this.milestones.set(milestone.id, milestone);
+    }
     const loaded = await this.repositoryFor(projectPath).loadAll();
     let maxNumber = this.nextRunNumbers.get(projectPath.id) ?? 1;
     for (const persisted of loaded) {
@@ -200,10 +236,11 @@ export class RunOrchestrator implements RunProjection {
       this.runCompleted(run.id, "completed");
     }
     await this.repositoryForRun(run.id).releaseRun(run.id);
+    await this.completeMilestoneRun(run);
   }
 
   listPipelines(): PipelineDefinition[] {
-    return DEMO_PIPELINES;
+    return DEMO_PIPELINES.filter((pipeline) => pipeline.internal !== true);
   }
 
   getPipeline(pipelineId: string): PipelineDefinition | undefined {
@@ -218,6 +255,321 @@ export class RunOrchestrator implements RunProjection {
 
   getRun(runId: string): RunState | undefined {
     return this.runs.get(runId);
+  }
+
+  listMilestones(projectId: string): Milestone[] {
+    return [...this.milestones.values()]
+      .filter((milestone) => milestone.projectId === projectId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((milestone) => structuredClone(milestone));
+  }
+
+  getMilestone(milestoneId: string): Milestone | undefined {
+    const milestone = this.milestones.get(milestoneId);
+    return milestone ? structuredClone(milestone) : undefined;
+  }
+
+  async createMilestone(
+    projectPath: ProjectPath,
+    input: CreateMilestoneInput,
+  ): Promise<Milestone> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Milestone name is required");
+    }
+    const now = nowIso();
+    const milestone: Milestone = {
+      id: randomUUID().slice(0, 8),
+      projectId: projectPath.id,
+      name,
+      goal: input.goal?.trim() || undefined,
+      status: input.status ?? "active",
+      autoRunNext: input.autoRunNext ?? false,
+      features: (input.features ?? []).map((feature) =>
+        this.newMilestoneFeature(feature, now),
+      ),
+      planningRunIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.milestones.set(milestone.id, milestone);
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async startMilestonePlanning(
+    projectPath: ProjectPath,
+    goalInput: string,
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
+  ): Promise<RunState> {
+    const goal = goalInput.trim();
+    if (!goal) {
+      throw new Error("Milestone goal is required");
+    }
+    const milestone = await this.createMilestone(projectPath, {
+      name: "Draft milestone",
+      goal,
+      status: "draft",
+    });
+    return this.startPlanningTurn(projectPath, milestone.id, goal, options);
+  }
+
+  async reviseMilestonePlan(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    feedbackInput: string,
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
+  ): Promise<RunState> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "draft") {
+      throw new Error("Only draft milestones can be revised");
+    }
+    const feedback = feedbackInput.trim();
+    if (!feedback) {
+      throw new Error("Revision feedback is required");
+    }
+    const task = [
+      `Original milestone goal:\n${milestone.goal ?? milestone.name}`,
+      milestone.proposal
+        ? `Current proposal:\n${JSON.stringify(milestone.proposal, null, 2)}`
+        : undefined,
+      `User revision request:\n${feedback}`,
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join("\n\n");
+    return this.startPlanningTurn(projectPath, milestone.id, task, options);
+  }
+
+  async updateMilestoneProposal(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    proposalInput: Omit<MilestoneProposal, "revision" | "createdAt">,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "draft") {
+      throw new Error("Only draft milestone proposals can be edited");
+    }
+    const parsed = parseMilestonePlan(
+      `\`\`\`adhd-milestone-plan\n${JSON.stringify(proposalInput)}\n\`\`\``,
+      (milestone.proposal?.revision ?? 0) + 1,
+      nowIso(),
+    );
+    if (!parsed.proposal) {
+      throw new Error(parsed.errors.join("; "));
+    }
+    milestone.proposal = parsed.proposal;
+    milestone.name = parsed.proposal.name;
+    milestone.goal = parsed.proposal.goal;
+    delete milestone.approvalError;
+    milestone.updatedAt = nowIso();
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async approveMilestonePlan(
+    projectPath: ProjectPath,
+    milestoneId: string,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "draft") {
+      throw new Error("Only draft milestones can be approved");
+    }
+    if (!milestone.proposal) {
+      throw new Error("Milestone has no valid proposal");
+    }
+    try {
+      const links = await approveMilestoneTasks(
+        projectPath,
+        milestone,
+        milestone.proposal,
+      );
+      const now = nowIso();
+      milestone.features = milestone.proposal.features.map((feature) => ({
+        id: feature.id,
+        title: feature.title,
+        description: feature.description,
+        acceptanceCriteria: [...feature.acceptanceCriteria],
+        status: "ready",
+        taskIds: links.featureTaskIds[feature.id] ?? [],
+        runIds: [],
+        findings: [],
+        createdAt: now,
+        updatedAt: now,
+      }));
+      milestone.name = milestone.proposal.name;
+      milestone.goal = milestone.proposal.goal;
+      milestone.status = "active";
+      milestone.updatedAt = now;
+      delete milestone.approvalError;
+      await this.persistMilestone(milestone);
+      return structuredClone(milestone);
+    } catch (error) {
+      milestone.approvalError =
+        error instanceof Error ? error.message : "Milestone approval failed";
+      milestone.updatedAt = nowIso();
+      await this.persistMilestone(milestone);
+      throw error;
+    }
+  }
+
+  async updateMilestone(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    input: UpdateMilestoneInput,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) {
+        throw new Error("Milestone name cannot be empty");
+      }
+      milestone.name = name;
+    }
+    if (input.goal !== undefined) {
+      if (input.goal === null || input.goal.trim() === "") {
+        delete milestone.goal;
+      } else {
+        milestone.goal = input.goal.trim();
+      }
+    }
+    if (input.autoRunNext !== undefined) {
+      milestone.autoRunNext = input.autoRunNext;
+    }
+    if (input.status !== undefined) {
+      milestone.status = input.status;
+      if (input.status === "completed") {
+        milestone.completedAt = nowIso();
+      } else {
+        delete milestone.completedAt;
+      }
+    }
+    milestone.updatedAt = nowIso();
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async addMilestoneFeature(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    input: CreateMilestoneFeatureInput,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    const now = nowIso();
+    milestone.features.push(this.newMilestoneFeature(input, now));
+    milestone.updatedAt = now;
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async updateMilestoneFeature(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    featureId: string,
+    input: UpdateMilestoneFeatureInput,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    const feature = this.requireMilestoneFeature(milestone, featureId);
+    if (input.title !== undefined) {
+      const title = input.title.trim();
+      if (!title) {
+        throw new Error("Feature title cannot be empty");
+      }
+      feature.title = title;
+    }
+    if (input.description !== undefined) {
+      if (input.description === null || input.description.trim() === "") {
+        delete feature.description;
+      } else {
+        feature.description = input.description.trim();
+      }
+    }
+    if (input.acceptanceCriteria !== undefined) {
+      feature.acceptanceCriteria = this.cleanStrings(input.acceptanceCriteria);
+    }
+    if (input.taskIds !== undefined) {
+      feature.taskIds = this.cleanStrings(input.taskIds);
+    }
+    if (input.status !== undefined) {
+      feature.status = input.status;
+      if (input.status === "completed") {
+        feature.completedAt = nowIso();
+      } else {
+        delete feature.completedAt;
+      }
+    }
+    const now = nowIso();
+    feature.updatedAt = now;
+    milestone.updatedAt = now;
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async finalizeMilestone(
+    projectPath: ProjectPath,
+    milestoneId: string,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    const unfinished = milestone.features.filter(
+      (feature) => feature.status !== "completed",
+    );
+    if (unfinished.length > 0) {
+      throw new Error(
+        `Milestone has ${unfinished.length} unfinished feature${unfinished.length === 1 ? "" : "s"}`,
+      );
+    }
+    const now = nowIso();
+    milestone.status = "completed";
+    milestone.completedAt = now;
+    milestone.updatedAt = now;
+    await this.persistMilestone(milestone);
+    await persistMilestoneSummary(
+      projectPath,
+      milestone,
+      [...this.runs.values()],
+    );
+    return structuredClone(milestone);
+  }
+
+  async startNextMilestoneRun(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    options: Omit<
+      StartRunOptions,
+      "task" | "milestoneId" | "featureId" | "sourceTaskIds"
+    > = {},
+  ): Promise<RunState> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    if (milestone.status !== "active") {
+      throw new Error(`Milestone is ${milestone.status}`);
+    }
+    if (milestone.features.some((feature) => feature.status === "in_progress")) {
+      throw new Error("Milestone already has a feature run in progress");
+    }
+    const feature = nextMilestoneFeature(milestone);
+    if (!feature) {
+      throw new Error("Milestone has no ready feature");
+    }
+    const task = [
+      `Milestone: ${milestone.name}`,
+      milestone.goal ? `Milestone goal: ${milestone.goal}` : undefined,
+      `Feature: ${feature.title}`,
+      feature.description,
+      feature.acceptanceCriteria.length > 0
+        ? `Acceptance criteria:\n${feature.acceptanceCriteria.map((item) => `- ${item}`).join("\n")}`
+        : undefined,
+      feature.taskIds.length > 0
+        ? `Source tasks: ${feature.taskIds.join(", ")}`
+        : undefined,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n\n");
+    return this.startRun(projectPath, "full-delivery", {
+      ...options,
+      task,
+      milestoneId: milestone.id,
+      featureId: feature.id,
+      sourceTaskIds: feature.taskIds,
+    });
   }
 
   subscribe(runId: string, listener: RunListener): () => void {
@@ -242,7 +594,36 @@ export class RunOrchestrator implements RunProjection {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
 
-    const { task, engine, model, permissionMode } = options;
+    const {
+      task,
+      engine,
+      model,
+      permissionMode,
+      milestoneId,
+      featureId,
+      sourceTaskIds,
+    } = options;
+    const planningRun =
+      pipeline.id === "milestone-planning" &&
+      milestoneId !== undefined &&
+      featureId === undefined;
+    if (
+      !planningRun &&
+      (milestoneId === undefined) !== (featureId === undefined)
+    ) {
+      throw new Error("milestoneId and featureId must be provided together");
+    }
+    const linkedMilestone =
+      milestoneId !== undefined
+        ? this.requireMilestone(projectPath.id, milestoneId)
+        : undefined;
+    const linkedFeature =
+      linkedMilestone && featureId !== undefined
+        ? this.requireMilestoneFeature(linkedMilestone, featureId)
+        : undefined;
+    if (linkedFeature && linkedFeature.status !== "ready") {
+      throw new Error(`Feature is ${linkedFeature.status}`);
+    }
 
     const usesEngine = pipelineUsesEngine(pipeline);
     if (usesEngine) {
@@ -274,6 +655,9 @@ export class RunOrchestrator implements RunProjection {
       projectId: projectPath.id,
       pipeline,
       task,
+      milestoneId,
+      featureId,
+      sourceTaskIds,
     });
 
     if (usesEngine) {
@@ -291,6 +675,18 @@ export class RunOrchestrator implements RunProjection {
     }
 
     this.runs.set(runId, run);
+    if (planningRun && linkedMilestone) {
+      linkedMilestone.planningRunIds.push(runId);
+      linkedMilestone.updatedAt = nowIso();
+      await this.persistMilestone(linkedMilestone);
+    }
+    if (linkedMilestone && linkedFeature) {
+      linkedFeature.status = "in_progress";
+      linkedFeature.runIds.push(runId);
+      linkedFeature.updatedAt = nowIso();
+      linkedMilestone.updatedAt = linkedFeature.updatedAt;
+      await this.persistMilestone(linkedMilestone);
+    }
     await this.flushPersist(runId);
 
     await this.launch(projectPath, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
@@ -312,6 +708,16 @@ export class RunOrchestrator implements RunProjection {
     }
 
     this.gateApproved(runId, stageId);
+    if (stageId === "intake" && run.sourceTaskIds?.length) {
+      void transitionTasks(
+        this.registry.resolve(run.projectId),
+        run.sourceTaskIds,
+        "In Progress",
+        run.id,
+      ).catch((error: unknown) =>
+        console.warn(`Failed to move source tasks for run ${runId}:`, error),
+      );
+    }
     void this.runtimes.forProject(run.projectId).approveGate(runId, stageId);
     return structuredClone(run);
   }
@@ -332,7 +738,13 @@ export class RunOrchestrator implements RunProjection {
       void this.runtimes.forProject(run.projectId).cancel(openWorkflowRunId).catch(() => {});
     }
     this.markCancelled(runId);
-    void this.repositoryForRun(runId).releaseRun(runId);
+    void this.settleCompletedRun(run)
+      .then(() =>
+        cleanupCancelledRun(this.registry.resolve(run.projectId), run.id),
+      )
+      .catch((error: unknown) =>
+        console.warn(`Failed to clean cancelled run ${run.id}:`, error),
+      );
     return structuredClone(run);
   }
 
@@ -365,8 +777,8 @@ export class RunOrchestrator implements RunProjection {
       id: randomUUID().slice(0, 8),
       ts: nowIso(),
       role: draft.role,
-      ...(draft.stageId !== undefined ? { stageId: draft.stageId } : {}),
-      ...(draft.kind !== undefined ? { kind: draft.kind } : {}),
+      stageId: draft.stageId,
+      kind: draft.kind,
       text: draft.text,
     };
     run.messages.push(message);
@@ -374,7 +786,7 @@ export class RunOrchestrator implements RunProjection {
       ts: message.ts,
       type: "run.message",
       runId: run.id,
-      ...(message.stageId !== undefined ? { stageId: message.stageId } : {}),
+      stageId: message.stageId,
       chatMessage: message,
     });
     return message;
@@ -467,17 +879,15 @@ export class RunOrchestrator implements RunProjection {
       runId: run.id,
       projectId: run.projectId,
       pipeline,
-      ...(run.task !== undefined ? { task: run.task } : {}),
-      ...(run.engine !== undefined ? { engine: run.engine } : {}),
-      ...(run.model !== undefined ? { model: run.model } : {}),
+      task: run.task,
+      engine: run.engine,
+      model: run.model,
       permissionMode: this.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
-      ...(run.workspacePath !== undefined ? { workspacePath: run.workspacePath } : {}),
+      workspacePath: run.workspacePath,
       startedMessage: extras.startedMessage,
-      ...(extras.seededOutputs !== undefined ? { seededOutputs: extras.seededOutputs } : {}),
-      ...(extras.seededOutcomes !== undefined
-        ? { seededOutcomes: extras.seededOutcomes }
-        : {}),
-      ...(extras.startStageId !== undefined ? { startStageId: extras.startStageId } : {}),
+      seededOutputs: extras.seededOutputs,
+      seededOutcomes: extras.seededOutcomes,
+      startStageId: extras.startStageId,
     };
   }
 
@@ -666,14 +1076,42 @@ export class RunOrchestrator implements RunProjection {
     this.schedulePersist(runId, false);
   }
 
-  captureStageOutput(runId: string, stageDef: StageDefinition, output: string): void {
+  async captureStageOutput(
+    runId: string,
+    stageDef: StageDefinition,
+    output: string,
+  ): Promise<void> {
     const run = this.live(runId);
     if (!run || output.trim() === "") {
       return;
     }
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
     run.result = output;
-    void this.repositoryForRun(runId).writeHandoff(
+    if (
+      run.pipelineId === "milestone-planning" &&
+      stageDef.id === "milestone-plan" &&
+      run.milestoneId
+    ) {
+      const milestone = this.milestones.get(run.milestoneId);
+      if (milestone) {
+        const parsed = parseMilestonePlan(
+          output,
+          (milestone.proposal?.revision ?? 0) + 1,
+          nowIso(),
+        );
+        if (parsed.proposal) {
+          milestone.proposal = parsed.proposal;
+          milestone.name = parsed.proposal.name;
+          milestone.goal = parsed.proposal.goal;
+          delete milestone.approvalError;
+        } else {
+          milestone.approvalError = parsed.errors.join("; ");
+        }
+        milestone.updatedAt = nowIso();
+        await this.persistMilestone(milestone);
+      }
+    }
+    await this.repositoryForRun(runId).writeHandoff(
       runId,
       stageDef.id,
       formatHandoff(
@@ -687,6 +1125,13 @@ export class RunOrchestrator implements RunProjection {
         output,
       ),
     );
+    if (run.pipelineId === "full-delivery" && stageDef.id === "closeout") {
+      run.closeout = await applyProductManagerCloseout(
+        this.registry.resolve(run.projectId),
+        run,
+        output,
+      );
+    }
     this.schedulePersist(runId, true);
   }
 
@@ -713,9 +1158,9 @@ export class RunOrchestrator implements RunProjection {
       runId,
       status,
       message: completionMessage(status),
-      ...(run.result !== undefined ? { result: run.result } : {}),
+      result: run.result,
     });
-    void this.repositoryForRun(runId).releaseRun(runId);
+    void this.settleCompletedRun(run);
   }
 
   private markCancelled(runId: string): void {
@@ -767,7 +1212,7 @@ export class RunOrchestrator implements RunProjection {
       status: "failed",
       message: "Interrupted by server restart",
     });
-    void this.repositoryForRun(runId).releaseRun(runId);
+    void this.settleCompletedRun(run);
   }
 
   private beginEngineStage(runId: string): AbortController {
@@ -819,6 +1264,172 @@ export class RunOrchestrator implements RunProjection {
       return;
     }
     this.projectListeners.emit(run.projectId, toRunSummary(run));
+  }
+
+  private milestoneRepositoryFor(
+    projectPath: ProjectPath,
+  ): MilestoneRepository {
+    const existing = this.milestoneRepositories.get(projectPath.id);
+    if (existing) {
+      return existing;
+    }
+    const repository = new MilestoneRepository(projectPath);
+    this.milestoneRepositories.set(projectPath.id, repository);
+    return repository;
+  }
+
+  private async startPlanningTurn(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    userContext: string,
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
+  ): Promise<RunState> {
+    const boardContext = await taskBoardPlanningContext(projectPath);
+    const storedCloseoutContext = await milestoneCloseoutContext(projectPath);
+    const priorKnowledge = [...this.milestones.values()]
+      .filter(
+        (milestone) =>
+          milestone.projectId === projectPath.id &&
+          milestone.id !== milestoneId &&
+          (milestone.features.some((feature) => feature.findings.length > 0) ||
+            milestone.status === "completed"),
+      )
+      .map((milestone) => {
+        const findings = milestone.features.flatMap((feature) =>
+          feature.findings.map((finding) => finding.title),
+        );
+        return `- ${milestone.name}${findings.length > 0 ? `: ${findings.join("; ")}` : ""}`;
+      });
+    const task = [
+      userContext,
+      boardContext,
+      storedCloseoutContext,
+      priorKnowledge.length > 0
+        ? `Prior milestone knowledge:\n${priorKnowledge.join("\n")}`
+        : undefined,
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join("\n\n");
+    return this.startRun(projectPath, "milestone-planning", {
+      ...options,
+      task,
+      milestoneId,
+    });
+  }
+
+  private requireMilestone(projectId: string, milestoneId: string): Milestone {
+    const milestone = this.milestones.get(milestoneId);
+    if (!milestone || milestone.projectId !== projectId) {
+      throw new Error(`Milestone not found: ${milestoneId}`);
+    }
+    return milestone;
+  }
+
+  private requireMilestoneFeature(
+    milestone: Milestone,
+    featureId: string,
+  ): MilestoneFeature {
+    const feature = milestone.features.find(
+      (candidate) => candidate.id === featureId,
+    );
+    if (!feature) {
+      throw new Error(`Feature not found: ${featureId}`);
+    }
+    return feature;
+  }
+
+  private newMilestoneFeature(
+    input: CreateMilestoneFeatureInput,
+    now: string,
+  ): MilestoneFeature {
+    const title = input.title.trim();
+    if (!title) {
+      throw new Error("Feature title is required");
+    }
+    return {
+      id: randomUUID().slice(0, 8),
+      title,
+      description: input.description?.trim() || undefined,
+      acceptanceCriteria: this.cleanStrings(input.acceptanceCriteria ?? []),
+      status: "ready",
+      taskIds: this.cleanStrings(input.taskIds ?? []),
+      runIds: [],
+      findings: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  private cleanStrings(values: string[]): string[] {
+    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  }
+
+  private persistMilestone(milestone: Milestone): Promise<void> {
+    return this.milestoneRepositoryFor(
+      this.registry.resolve(milestone.projectId),
+    ).write(milestone);
+  }
+
+  private async settleCompletedRun(run: RunState): Promise<void> {
+    await this.repositoryForRun(run.id).releaseRun(run.id);
+    await this.completeMilestoneRun(run);
+  }
+
+  private async completeMilestoneRun(run: RunState): Promise<void> {
+    if (
+      !run.milestoneId ||
+      !run.featureId ||
+      this.completingMilestoneRuns.has(run.id)
+    ) {
+      return;
+    }
+    this.completingMilestoneRuns.add(run.id);
+    try {
+      const milestone = this.milestones.get(run.milestoneId);
+      const feature = milestone?.features.find(
+        (candidate) => candidate.id === run.featureId,
+      );
+      if (!milestone || !feature) {
+        return;
+      }
+      const now = nowIso();
+      feature.status =
+        run.status === "completed" ? "completed" : "needs_attention";
+      if (run.closeout) {
+        feature.findings = run.closeout.report.findings.map((finding) => ({
+          ...finding,
+          sourceRunId: run.id,
+        }));
+      }
+      feature.updatedAt = now;
+      if (feature.status === "completed") {
+        feature.completedAt = now;
+      } else {
+        delete feature.completedAt;
+      }
+      milestone.updatedAt = now;
+      await this.persistMilestone(milestone);
+
+      if (
+        !milestone.autoRunNext ||
+        milestone.status !== "active" ||
+        (run.status !== "completed" && run.status !== "needs_attention") ||
+        !nextMilestoneFeature(milestone)
+      ) {
+        return;
+      }
+      await this.startNextMilestoneRun(
+        this.registry.resolve(run.projectId),
+        milestone.id,
+        {
+          engine: run.engine,
+          model: run.model,
+          permissionMode: this.enginePermissionModes.get(run.id),
+        },
+      );
+    } finally {
+      this.completingMilestoneRuns.delete(run.id);
+    }
   }
 
   private repositoryFor(projectPath: ProjectPath): RunRepository {

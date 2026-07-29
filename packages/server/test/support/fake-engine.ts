@@ -89,21 +89,30 @@ export class FakeEngine implements EngineAdapter {
     };
     return {
       reports: (result, usage) =>
-        push(() => Promise.resolve({ success: true, exitCode: 0, result, usage })),
+        push(() => {
+          const response: EngineRunResult = {
+            success: true,
+            exitCode: 0,
+            result,
+          };
+          if (usage !== undefined) response.usage = usage;
+          return Promise.resolve(response);
+        }),
       fails: (errorMessage) =>
         push(() => Promise.resolve({ success: false, exitCode: 1, errorMessage })),
       asks: (question, sessionId, usage) =>
-        push(() =>
-          Promise.resolve({
+        push(() => {
+          const response: EngineRunResult = {
             success: true,
             exitCode: 0,
             result: `Working on it.
 
 QUESTION: ${question}`,
             sessionId,
-            usage,
-          }),
-        ),
+          };
+          if (usage !== undefined) response.usage = usage;
+          return Promise.resolve(response);
+        }),
       hangsUntilAborted: () =>
         push(
           (ctx) =>

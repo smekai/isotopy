@@ -1,4 +1,5 @@
 import type { EngineId } from "./engines.ts";
+import type { RunCloseoutRecord } from "./closeout.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { flattenPipelineStages } from "./pipelines.ts";
 
@@ -98,6 +99,10 @@ export interface RunState {
   id: string;
   number: number;
   projectId: string;
+  milestoneId?: string;
+  featureId?: string;
+  sourceTaskIds?: string[];
+  closeout?: RunCloseoutRecord;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
@@ -123,6 +128,8 @@ export interface RunSummary {
   id: string;
   number: number;
   projectId: string;
+  milestoneId?: string;
+  featureId?: string;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
@@ -186,14 +193,16 @@ export function toRunSummary(run: RunState): RunSummary {
     id: run.id,
     number: run.number,
     projectId: run.projectId,
+    milestoneId: run.milestoneId,
+    featureId: run.featureId,
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     status: run.status,
-    ...(run.task !== undefined ? { task: run.task } : {}),
-    ...(run.engine !== undefined ? { engine: run.engine } : {}),
-    ...(run.model !== undefined ? { model: run.model } : {}),
+    task: run.task,
+    engine: run.engine,
+    model: run.model,
     createdAt: run.createdAt,
-    ...(run.completedAt !== undefined ? { completedAt: run.completedAt } : {}),
+    completedAt: run.completedAt,
     stages: run.stages.map((stage) => ({
       id: stage.id,
       label: stage.label,
@@ -251,7 +260,10 @@ export interface NewRunInput {
   number: number;
   projectId: string;
   pipeline: PipelineDefinition;
-  task?: string | undefined;
+  task?: string;
+  milestoneId?: string;
+  featureId?: string;
+  sourceTaskIds?: string[];
 }
 
 export function createInitialRunState({
@@ -260,22 +272,28 @@ export function createInitialRunState({
   projectId,
   pipeline,
   task,
+  milestoneId,
+  featureId,
+  sourceTaskIds,
 }: NewRunInput): RunState {
   return {
     id: runId,
     number,
     projectId,
+    milestoneId,
+    featureId,
+    sourceTaskIds,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     status: "pending",
-    ...(task !== undefined ? { task } : {}),
+    task,
     stageOutputs: {},
     messages: [],
     createdAt: new Date().toISOString(),
     stages: flattenPipelineStages(pipeline).map((stage) => ({
       id: stage.id,
       label: stage.label,
-      ...(stage.skill !== undefined ? { skill: stage.skill } : {}),
+      skill: stage.skill,
       status: "pending",
       logs: [],
     })),

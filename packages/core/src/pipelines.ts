@@ -26,6 +26,7 @@ export interface PipelineDefinition {
   id: string;
   name: string;
   description: string;
+  internal?: boolean;
   groups: PipelineGroup[];
 }
 
@@ -150,10 +151,32 @@ export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
   ],
 };
 
+export const MILESTONE_PLANNING_PIPELINE: PipelineDefinition = {
+  id: "milestone-planning",
+  name: "Milestone planning",
+  description:
+    "A dedicated Product Manager conversation that produces an approved milestone plan.",
+  internal: true,
+  groups: [
+    {
+      stages: [
+        {
+          id: "milestone-plan",
+          label: "Product Manager",
+          skill: "project-manager",
+          stepTask: "plan-milestone",
+          interactive: true,
+        },
+      ],
+    },
+  ],
+};
+
 export const DEMO_PIPELINES: PipelineDefinition[] = [
   FULL_DELIVERY_PIPELINE,
   PM_DEV_TEST_PIPELINE,
   SOLO_PIPELINE,
+  MILESTONE_PLANNING_PIPELINE,
 ];
 
 export const RETIRED_PIPELINE_IDS: string[] = ["one-box", "dev-test", "gated-dev-test"];

@@ -161,10 +161,10 @@ of the source. When you strip or avoid a comment, that is where its content goes
   interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
   into named constants and builders.
 
-- **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict`,
-  `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Reset an optional
-  field with `delete obj.field`, not `= undefined`; omit an absent key with a
-  conditional spread rather than writing `undefined` into it. No `unknown` /
+- **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
+  `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or
+  `undefined`; both mean "not supplied". Reserve `null` for an explicit cleared
+  or removed value. No `unknown` /
   `as unknown as` in business logic — `repository/run-repository.ts` confines it to
   one `parsePersistedRun` guard, and `db/runs-table.ts` narrows `node:sqlite`'s own
   `Record<string, SQLOutputValue>` rows instead of casting. Relative imports use

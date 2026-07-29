@@ -1,0 +1,98 @@
+import { afterEach, beforeEach, expect, test } from "vitest";
+import type { Milestone, RunState } from "@adhd/core";
+import {
+  createTestApp,
+  get,
+  post,
+  restartApp,
+  waitForStageStatus,
+} from "./support/harness.ts";
+import type { TestApp } from "./support/harness.ts";
+
+let ctx: TestApp;
+
+beforeEach(async () => {
+  ctx = await createTestApp();
+});
+
+afterEach(async () => {
+  await ctx.dispose();
+});
+
+test("a milestone and its feature metadata survive a server restart", async () => {
+  const { status, body: created } = await post<Milestone>(
+    ctx.app,
+    "/milestones",
+    {
+      name: "Milestone D",
+      goal: "Ship milestone planning",
+      autoRunNext: true,
+      features: [
+        {
+          title: "Persistence",
+          acceptanceCriteria: ["Survives restart"],
+          taskIds: ["TASK-088"],
+        },
+      ],
+    },
+  );
+
+  expect(status).toBe(201);
+  expect(created.features[0]).toMatchObject({
+    title: "Persistence",
+    acceptanceCriteria: ["Survives restart"],
+    taskIds: ["TASK-088"],
+    status: "ready",
+  });
+
+  await ctx.orchestrator.shutdown();
+  const restarted = await restartApp();
+  const { body: loaded } = await get<Milestone>(
+    restarted.app,
+    `/milestones/${created.id}`,
+  );
+
+  expect(loaded).toEqual(created);
+  await restarted.orchestrator.shutdown();
+});
+
+test("starting the next feature links one Full Delivery run", async () => {
+  const { body: milestone } = await post<Milestone>(ctx.app, "/milestones", {
+    name: "Delivery",
+    features: [{ title: "First feature", taskIds: ["TASK-088"] }],
+  });
+  ctx.engine.anticipate({ as: "Product Manager" }).reports("Ready to build");
+
+  const { status, body: run } = await post<RunState>(
+    ctx.app,
+    `/milestones/${milestone.id}/start-next`,
+    { engine: "claude-code" },
+  );
+
+  expect(status).toBe(201);
+  expect(run).toMatchObject({
+    milestoneId: milestone.id,
+    featureId: milestone.features[0]?.id,
+    sourceTaskIds: ["TASK-088"],
+    pipelineId: "full-delivery",
+  });
+  await waitForStageStatus(ctx.app, run.id, "intake", "awaiting");
+  const { body: linked } = await get<Milestone>(
+    ctx.app,
+    `/milestones/${milestone.id}`,
+  );
+  expect(linked.features[0]).toMatchObject({
+    status: "in_progress",
+    runIds: [run.id],
+  });
+
+  const duplicate = await post<{ error: string }>(
+    ctx.app,
+    `/milestones/${milestone.id}/start-next`,
+    {},
+  );
+  expect(duplicate.status).toBe(400);
+  expect(duplicate.body.error).toContain("in progress");
+  ctx.orchestrator.abortRun(run.id);
+  ctx.engine.verify();
+});

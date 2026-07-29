@@ -12,7 +12,7 @@ import {
 export interface ProjectsController {
   projects: Project[];
   activeId: string;
-  active: Project | undefined;
+  active?: Project;
   ready: boolean;
   error: string | null;
   select(projectId: string): Promise<void>;

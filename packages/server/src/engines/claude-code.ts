@@ -193,9 +193,9 @@ function usageFrom(event: ClaudeStreamEvent | undefined): StageUsage | undefined
     return undefined;
   }
   const usage: StageUsage = {
-    ...(event.total_cost_usd !== undefined ? { costUsd: event.total_cost_usd } : {}),
-    ...(event.duration_ms !== undefined ? { durationMs: event.duration_ms } : {}),
-    ...(event.num_turns !== undefined ? { turns: event.num_turns } : {}),
+    costUsd: event.total_cost_usd,
+    durationMs: event.duration_ms,
+    turns: event.num_turns,
   };
   return Object.keys(usage).length > 0 ? usage : undefined;
 }

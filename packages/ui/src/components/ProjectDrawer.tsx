@@ -119,7 +119,7 @@ function Field({ d, label, value, mono = false }: FieldProps) {
 export interface ProjectDrawerProps {
   d: Dir;
   projectId: string;
-  project: Project | undefined;
+  project?: Project;
   settings: SettingsController;
   run: RunState | null;
   onOpenSetup: (section: SetupSection) => void;

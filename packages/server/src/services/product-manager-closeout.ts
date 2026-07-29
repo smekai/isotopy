@@ -1,0 +1,334 @@
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import type {
+  CleanupResult,
+  Milestone,
+  ProductManagerCloseout,
+  RunCloseoutRecord,
+  RunState,
+} from "@adhd/core";
+import { parseProductManagerCloseout } from "../domain/closeout.ts";
+import { parseMilestoneSummary } from "../domain/milestone-summary.ts";
+import { runsDir } from "../paths.ts";
+import type { ProjectPath } from "../paths.ts";
+import { nowIso } from "../utils.ts";
+import {
+  createFollowUpTasks,
+  transitionTasks,
+} from "./task-board-adapter.ts";
+
+function closeoutMarkdown(report: ProductManagerCloseout): string {
+  const section = (title: string, items: string[]): string[] =>
+    items.length > 0
+      ? [`## ${title}`, "", ...items.map((item) => `- ${item}`), ""]
+      : [];
+  return [
+    "# Product Manager closeout",
+    "",
+    report.summary,
+    "",
+    ...section("Delivered scope", report.deliveredScope),
+    ...section("Completed source tasks", report.completedTaskIds),
+    ...section("Unresolved source tasks", report.unresolvedTaskIds),
+    ...section("Decisions", report.decisions),
+    ...section("Knowledge", report.knowledge),
+    ...(report.findings.length > 0
+      ? [
+          "## Findings",
+          "",
+          ...report.findings.map(
+            (finding) =>
+              `- **${finding.severity === "blocking" ? "Blocking" : "Non-blocking"} · ${finding.title}**${finding.evidence ? ` — ${finding.evidence}` : ""}`,
+          ),
+          "",
+        ]
+      : []),
+    ...(report.nextRecommendation
+      ? ["## Next recommendation", "", report.nextRecommendation, ""]
+      : []),
+  ].join("\n");
+}
+
+function validateSourceTaskOutcome(
+  run: RunState,
+  report: ProductManagerCloseout,
+): string[] {
+  const sourceIds = new Set(run.sourceTaskIds ?? []);
+  const reportedIds = [
+    ...report.completedTaskIds,
+    ...report.unresolvedTaskIds,
+  ];
+  const unknown = reportedIds.filter((id) => !sourceIds.has(id));
+  const completed = report.completedTaskIds.filter((id) => sourceIds.has(id));
+  const unresolved = report.unresolvedTaskIds.filter((id) => sourceIds.has(id));
+  const overlap = completed.filter((id) => unresolved.includes(id));
+  const declared = new Set([...completed, ...unresolved]);
+  const omitted = [...sourceIds].filter((id) => !declared.has(id));
+  report.completedTaskIds = completed.filter((id) => !overlap.includes(id));
+  report.unresolvedTaskIds = [
+    ...new Set([...unresolved, ...overlap, ...omitted]),
+  ];
+  const errors: string[] = [];
+  if (overlap.length > 0) {
+    errors.push(
+      `Tasks cannot be both completed and unresolved: ${overlap.join(", ")}`,
+    );
+  }
+  if (unknown.length > 0) {
+    errors.push(`Closeout referenced unknown source tasks: ${unknown.join(", ")}`);
+  }
+  if (omitted.length > 0) {
+    errors.push(
+      `Unclassified source tasks were preserved as unresolved: ${omitted.join(", ")}`,
+    );
+  }
+  return errors;
+}
+
+async function cleanupRunTemp(
+  projectPath: ProjectPath,
+  runId: string,
+  report: ProductManagerCloseout,
+): Promise<CleanupResult> {
+  const tempRoot = path.resolve(runsDir(projectPath), runId, "tmp");
+  const removed: string[] = [];
+  const rejected: string[] = [];
+  for (const candidate of report.cleanup) {
+    const relative = candidate.relativePath;
+    const allowed =
+      relative === "." ||
+      (!path.isAbsolute(relative) &&
+        relative !== "" &&
+        relative !== ".." &&
+        path.basename(relative) === relative);
+    if (!allowed) {
+      rejected.push(relative);
+      continue;
+    }
+    const target = relative === "." ? tempRoot : path.join(tempRoot, relative);
+    if (target !== tempRoot && !target.startsWith(`${tempRoot}${path.sep}`)) {
+      rejected.push(relative);
+      continue;
+    }
+    await rm(target, { recursive: true, force: true, maxRetries: 3 });
+    removed.push(relative);
+  }
+  return { removed, rejected };
+}
+
+async function persistRunCloseout(
+  projectPath: ProjectPath,
+  run: RunState,
+  record: RunCloseoutRecord,
+): Promise<void> {
+  const closeoutDir = path.join(runsDir(projectPath), run.id, "closeout");
+  await mkdir(closeoutDir, { recursive: true });
+  const cleanupLines = [
+    "# Cleanup report",
+    "",
+    ...record.cleanup.removed.map((entry) => `- Removed \`${entry}\``),
+    ...record.cleanup.rejected.map((entry) => `- Rejected \`${entry}\``),
+    ...(record.cleanup.removed.length + record.cleanup.rejected.length === 0
+      ? ["No cleanup paths were requested."]
+      : []),
+    "",
+  ];
+  await Promise.all([
+    writeFile(
+      path.join(closeoutDir, "closeout.json"),
+      `${JSON.stringify(record, null, 2)}\n`,
+    ),
+    writeFile(
+      path.join(closeoutDir, "closeout.md"),
+      closeoutMarkdown(record.report),
+    ),
+    writeFile(
+      path.join(closeoutDir, "cleanup-report.md"),
+      cleanupLines.join("\n"),
+    ),
+  ]);
+
+  if (run.milestoneId) {
+    const milestoneRunsDir = path.join(
+      projectPath.dataDir,
+      "milestones",
+      run.milestoneId,
+      "runs",
+    );
+    await mkdir(milestoneRunsDir, { recursive: true });
+    await Promise.all([
+      writeFile(
+        path.join(milestoneRunsDir, `${run.id}.json`),
+        `${JSON.stringify(record, null, 2)}\n`,
+      ),
+      writeFile(
+        path.join(milestoneRunsDir, `${run.id}.md`),
+        closeoutMarkdown(record.report),
+      ),
+    ]);
+  }
+}
+
+export async function applyProductManagerCloseout(
+  projectPath: ProjectPath,
+  run: RunState,
+  output: string,
+): Promise<RunCloseoutRecord> {
+  const parsed = parseProductManagerCloseout(output);
+  const validationErrors = [
+    ...parsed.validationErrors,
+    ...validateSourceTaskOutcome(run, parsed.report),
+  ];
+  const createdTasks = await createFollowUpTasks(
+    projectPath,
+    run,
+    parsed.report.tasks,
+  ).catch((error: unknown) => {
+    validationErrors.push(
+      `Task creation failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
+  });
+  await transitionTasks(
+    projectPath,
+    parsed.report.completedTaskIds,
+    "Done",
+    run.id,
+  ).catch((error: unknown) => {
+    validationErrors.push(
+      `Task transition failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  });
+  const cleanup = await cleanupRunTemp(
+    projectPath,
+    run.id,
+    parsed.report,
+  ).catch((error: unknown) => {
+    validationErrors.push(
+      `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return {
+      removed: [],
+      rejected: parsed.report.cleanup.map((item) => item.relativePath),
+    };
+  });
+  const record: RunCloseoutRecord = {
+    report: parsed.report,
+    createdTasks,
+    cleanup,
+    validationErrors,
+    completedAt: nowIso(),
+  };
+  await persistRunCloseout(projectPath, run, record);
+  return record;
+}
+
+export async function cleanupCancelledRun(
+  projectPath: ProjectPath,
+  runId: string,
+): Promise<void> {
+  const tempRoot = path.join(runsDir(projectPath), runId, "tmp");
+  await rm(tempRoot, { recursive: true, force: true, maxRetries: 3 });
+  const closeoutDir = path.join(runsDir(projectPath), runId, "closeout");
+  await mkdir(closeoutDir, { recursive: true });
+  await writeFile(
+    path.join(closeoutDir, "cleanup-report.md"),
+    "# Cleanup report\n\nRemoved the run-owned temporary directory after cancellation. No closeout agent was started.\n",
+  );
+}
+
+export async function persistMilestoneSummary(
+  projectPath: ProjectPath,
+  milestone: Milestone,
+  runs: RunState[],
+): Promise<void> {
+  const linked = runs.filter((run) => run.milestoneId === milestone.id);
+  const records = linked.flatMap((run) =>
+    run.closeout ? [{ run, closeout: run.closeout }] : [],
+  );
+  const unique = (values: string[]) => [...new Set(values)];
+  const summary = {
+    milestoneId: milestone.id,
+    name: milestone.name,
+    goal: milestone.goal,
+    completedAt: milestone.completedAt,
+    decisions: unique(records.flatMap(({ closeout }) => closeout.report.decisions)),
+    knowledge: unique(records.flatMap(({ closeout }) => closeout.report.knowledge)),
+    openProblems: records.flatMap(({ run, closeout }) =>
+      closeout.report.findings.map((finding) => ({
+        ...finding,
+        sourceRunId: run.id,
+      })),
+    ),
+    cleanup: {
+      removed: unique(records.flatMap(({ closeout }) => closeout.cleanup.removed)),
+      rejected: unique(records.flatMap(({ closeout }) => closeout.cleanup.rejected)),
+    },
+  };
+  const dir = path.join(projectPath.dataDir, "milestones", milestone.id);
+  await mkdir(dir, { recursive: true });
+  await Promise.all([
+    writeFile(
+      path.join(dir, "summary.json"),
+      `${JSON.stringify(summary, null, 2)}\n`,
+    ),
+    writeFile(
+      path.join(dir, "summary.md"),
+      [
+        `# ${milestone.name} — milestone summary`,
+        "",
+        milestone.goal ?? "",
+        "",
+        `Runs: ${linked.length}`,
+        `Features: ${milestone.features.length}`,
+        "",
+        "## Decisions",
+        "",
+        ...summary.decisions.map((item) => `- ${item}`),
+        "",
+        "## Knowledge",
+        "",
+        ...summary.knowledge.map((item) => `- ${item}`),
+        "",
+        "## Open problems",
+        "",
+        ...summary.openProblems.map((item) => `- ${item.title} (run ${item.sourceRunId})`),
+        "",
+      ].join("\n"),
+    ),
+  ]);
+}
+
+export async function milestoneCloseoutContext(
+  projectPath: ProjectPath,
+): Promise<string> {
+  const root = path.join(projectPath.dataDir, "milestones");
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const summaries = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        const content = await readFile(
+          path.join(root, entry.name, "summary.json"),
+          "utf8",
+        ).catch(() => undefined);
+        if (!content) return undefined;
+        return parseMilestoneSummary(content);
+      }),
+  );
+  const valid = summaries.filter(
+    (summary): summary is NonNullable<typeof summary> => summary !== undefined,
+  );
+  if (valid.length === 0) {
+    return "No prior milestone closeout knowledge is available.";
+  }
+  return [
+    "Prior milestone closeouts:",
+    ...valid.flatMap((summary) => [
+      `- ${summary.name}`,
+      ...summary.decisions.map((item) => `  - Decision: ${item}`),
+      ...summary.knowledge.map((item) => `  - Knowledge: ${item}`),
+      ...summary.problems.map((item) => `  - Open problem: ${item}`),
+    ]),
+  ].join("\n");
+}

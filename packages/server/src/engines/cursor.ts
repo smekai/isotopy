@@ -327,7 +327,11 @@ export const cursorAdapter: EngineAdapter = {
     });
     if (result.success) {
       cachedBinary = undefined;
-      return { ok: true, output: firstLine(result.stdout), message: "Cursor CLI installed. Run `agent login` next." };
+      return {
+        ok: true,
+        output: firstLine(result.stdout),
+        message: "Cursor CLI installed. Run `agent login` next.",
+      };
     }
     const reason = result.timedOut
       ? "Installer timed out after 180s"
@@ -349,7 +353,11 @@ export const cursorAdapter: EngineAdapter = {
       timeoutMs: 300_000,
     });
     if (result.success) {
-      return { ok: true, output: firstLine(result.stdout), message: "Logged in to Cursor." };
+      return {
+        ok: true,
+        output: firstLine(result.stdout),
+        message: "Logged in to Cursor.",
+      };
     }
     const reason = result.timedOut
       ? "Login timed out — finish the browser sign-in, then Re-check."

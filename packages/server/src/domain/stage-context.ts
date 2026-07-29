@@ -82,7 +82,7 @@ export function parseStageQuestion(output: string | undefined): string | undefin
 
 export interface EngineStageOutcome {
   outcome: Exclude<StageOutcome, typeof STAGE_OUTCOMES.CANCELLED>;
-  output?: string | undefined;
+  output?: string;
   verdict?: StageVerdict;
   question?: string;
   failureMessage?: string;
@@ -135,7 +135,7 @@ export function interpretEngineResult(
   return {
     outcome: STAGE_OUTCOMES.PASSED,
     output,
-    ...(verdict !== undefined ? { verdict } : {}),
+    verdict,
   };
 }
 
@@ -143,7 +143,7 @@ export interface HandoffMeta {
   stageLabel: string;
   profession: string;
   engine: string;
-  model?: string | undefined;
+  model?: string;
   completedAt: string;
 }
 

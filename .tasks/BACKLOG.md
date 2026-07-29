@@ -1,5 +1,35 @@
 # Backlog
 
+## TASK-099: Make SQLite timestamps database-managed
+**Priority:** P1 | **Tags:** server, infra, testing
+**Updated:** 2026-07-29 12:35
+
+Standardize persisted SQLite records with `created_at` and `updated_at` columns. Set both timestamps on insert through SQLite defaults, and make `updated_at` advance automatically on updates using supported SQLite schema behavior (evaluate an `AFTER UPDATE` trigger because SQLite has no MySQL-style column-level `ON UPDATE` clause). Migrate existing tables and rows safely, remove redundant application-supplied update timestamps, and keep one documented UTC timestamp format.
+
+Add tests for insert defaults, automatic update behavior, migration/restart compatibility, and unchanged timestamps on reads. The schema and trigger behavior must work consistently on Windows and macOS; validate Windows directly and macOS through CI.
+
+---
+
+## TASK-098: Standardize strict runtime schemas at every untrusted boundary
+**Priority:** P0 | **Tags:** core, server, testing
+**Updated:** 2026-07-29 09:59
+
+Replace recurrent hand-written Record<string, unknown>, stringOf/findingsOf-style mappings with a shared runtime-schema approach at HTTP, engine, database, settings, and persisted-file boundaries. Domain and service layers must receive validated, strongly typed values only. Reject malformed nested data with precise errors instead of silently dropping fields, and document where validation ownership lives.
+
+Cross-platform: n/a — pure TypeScript validation and architecture.
+
+---
+
+## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
+**Priority:** P2 | **Tags:** core, server, ui, engine
+**Updated:** 2026-07-29 08:56
+
+Use an initialization/planning step to analyze an approved feature and select the required personas and developer specializations from the available catalog, for example adding a Product Designer for UI work or a mobile developer specialization for a mobile feature. Persist the generated workflow, explain its composition, preserve required quality and closeout policies, and require human approval before execution.
+
+Cross-platform: workflow composition is pure logic/UI; any selected persona tools must declare Windows and macOS support or degrade with an accurate SKIP reason.
+
+---
+
 ## TASK-095: Post-MVP — agent-native browser testing for QA
 **Priority:** P3 | **Tags:** testing, adapters, engine, milestone-d
 **Updated:** 2026-07-28 22:11
@@ -37,26 +67,6 @@ Cross-platform: browser UI; validate Chromium on Windows and macOS CI where avai
 Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
 
 Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
-
----
-
-## TASK-091: Product Manager closeout, task writers, and safe cleanup
-**Priority:** P0 | **Tags:** server, infra, testing, milestone-d
-**Updated:** 2026-07-28 13:23
-
-Run the Product Manager again in closeout mode with the same delivery context. Validate and persist closeout JSON/Markdown plus milestone decisions, knowledge, problems, and cleanup reports. Create idempotent follow-up tasks through TaskPlanner or the built-in writer, link their source, transition selected tasks, and remove only allow-listed run-owned temporary resources.
-
-Cross-platform: use Node path/OS helpers and existing process-tree termination on Windows and POSIX.
-
----
-
-## TASK-088: Milestone domain, persistence, APIs, and autorun
-**Priority:** P0 | **Tags:** core, server, ui, milestone-d
-**Updated:** 2026-07-28 13:22
-
-Add persisted Milestone and MilestoneFeature models, run/task links, progress and statuses; milestone CRUD/start-next/finalize APIs; and server-side Auto-run next. Autorun preserves the Product Manager approval gate and stops on runtime failure, cancellation, unanswered interaction, or an empty backlog.
-
-Cross-platform: pure domain/API/UI with SQLite persistence.
 
 ---
 

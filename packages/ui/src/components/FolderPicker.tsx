@@ -148,21 +148,24 @@ function selectButton(atRoots: boolean, d: Dir): CSSProperties {
 
 export interface FolderPickerProps {
   d: Dir;
-  initialPath?: string | undefined;
+  initialPath?: string;
   onSelect: (path: string) => void;
   onClose: () => void;
 }
 
 interface ListTarget {
-  path?: string | undefined;
-  entry?: string | undefined;
+  path?: string;
+  entry?: string;
 }
 
 export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPickerProps) {
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [target, setTarget] = useState<ListTarget>({ path: initialPath });
+  const [target, setTarget] = useState<ListTarget>({
+    path: initialPath,
+    entry: undefined,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -204,7 +207,11 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
   const currentPath = listing?.path ?? "";
 
   function open(entry: string) {
-    setTarget(atRoots ? { path: entry } : { path: currentPath, entry });
+    setTarget(
+      atRoots
+        ? { path: entry, entry: undefined }
+        : { path: currentPath, entry },
+    );
   }
 
   return (
@@ -225,7 +232,12 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
 
         <div style={breadcrumbRow(d)}>
           <button
-            onClick={() => setTarget({ path: listing?.parent ?? undefined })}
+            onClick={() =>
+              setTarget({
+                path: listing?.parent ?? undefined,
+                entry: undefined,
+              })
+            }
             disabled={atRoots}
             title={atRoots ? "Already at the top" : "Up one level"}
             style={upButton(atRoots, d)}

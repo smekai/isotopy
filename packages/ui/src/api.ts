@@ -1,4 +1,6 @@
 import type {
+  Milestone,
+  MilestoneProposal,
   EngineModelList,
   EngineStatus,
   Project,
@@ -47,6 +49,14 @@ function postJson<T>(path: string, body?: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+function patchJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 
@@ -140,6 +150,34 @@ export interface StartRunOptions {
 
 export function startRun(options: StartRunOptions = {}): Promise<RunState> {
   return postJson<RunState>("/runs", { pipelineId: DEFAULT_PIPELINE_ID, ...options });
+}
+
+export function startMilestonePlanning(
+  options: Omit<StartRunOptions, "pipelineId" | "task"> & { goal: string },
+): Promise<RunState> {
+  return postJson<RunState>("/milestones/plan", options);
+}
+
+export function fetchMilestone(milestoneId: string): Promise<Milestone> {
+  return requestJson<Milestone>(`/milestones/${milestoneId}`);
+}
+
+export function updateMilestoneProposal(
+  milestoneId: string,
+  proposal: Omit<MilestoneProposal, "revision" | "createdAt">,
+): Promise<Milestone> {
+  return patchJson<Milestone>(`/milestones/${milestoneId}/proposal`, proposal);
+}
+
+export function reviseMilestonePlan(
+  milestoneId: string,
+  options: Omit<StartRunOptions, "pipelineId" | "task"> & { feedback: string },
+): Promise<RunState> {
+  return postJson<RunState>(`/milestones/${milestoneId}/revise`, options);
+}
+
+export function approveMilestonePlan(milestoneId: string): Promise<Milestone> {
+  return postJson<Milestone>(`/milestones/${milestoneId}/approve`);
 }
 
 export interface DirectoryListing {

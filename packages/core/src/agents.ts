@@ -7,6 +7,11 @@ export interface AgentDefinition {
 export const AGENTS: Record<string, AgentDefinition> = {
   solo: { stageId: "solo", profession: "Agent", glyph: "✦" },
   intake: { stageId: "intake", profession: "Product Manager", glyph: "◈" },
+  "milestone-plan": {
+    stageId: "milestone-plan",
+    profession: "Product Manager",
+    glyph: "◈",
+  },
   "product-design": {
     stageId: "product-design",
     profession: "Product Designer",

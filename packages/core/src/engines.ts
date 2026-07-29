@@ -220,10 +220,10 @@ export interface EngineStatus {
   engine: EngineId;
   installed: boolean;
   path?: string;
-  version?: string | undefined;
+  version?: string;
   source?: "env" | "path" | "ide-extension" | "install-dir";
   message?: string;
-  loggedIn?: boolean | undefined;
+  loggedIn?: boolean;
   installCommand?: string;
   docsUrl?: string;
 }

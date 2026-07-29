@@ -6,6 +6,46 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-29 — Optional and `undefined` represent the same domain state
+
+**Context:** `exactOptionalPropertyTypes` forced callers and constructors to
+distinguish a missing property from a property whose value is `undefined`. ADHD
+does not assign different domain meaning to those two JavaScript shapes, so the
+flag produced required `T | undefined` fields and conditional object assembly
+without protecting a real invariant.
+
+**Decision:** remove `exactOptionalPropertyTypes`. A value that may be absent is
+written as `field?: T`; callers may omit it or supply `undefined`. `null` is
+reserved for contracts that need an explicit cleared or removed state. Runtime
+schemas still validate untrusted input at the boundary, and
+`noUncheckedIndexedAccess` remains enabled.
+
+---
+
+## 2026-07-29 — Milestones begin as an approved Product Manager proposal (TASK-088, TASK-091, TASK-096)
+
+**Context:** a user can describe an outcome more easily than a complete delivery
+backlog. Creating tasks during an unfinished conversation would turn guesses
+into durable project work, while making each task a separate milestone feature
+would prevent one coherent delivery run from grouping related changes and bugs.
+
+**Decision:** milestone planning is a dedicated Product Manager conversation.
+Its validated proposal is persisted as a draft, can be revised through chat or
+edited directly, and creates or links tasks only after explicit approval. One
+feature is one Full Delivery run and may group several tasks. Existing
+TaskPlanner work is reused; missing work is created idempotently through an
+ADHD-owned adapter, with `.adhd/tasks` as the fallback.
+
+Product Manager also owns structured closeout. Only explicitly completed source
+tasks move to Done, unresolved work is preserved, and cleanup is restricted to
+the run-owned temporary root.
+
+**Deferred:** changing TaskPlanner first. The Markdown integration stays behind
+an adapter so a future official transactional API can replace it without
+changing milestone behavior.
+
+---
+
 ## 2026-07-28 — Full Delivery uses reusable personas and explicit stage policy (TASK-089, TASK-090)
 
 **Context:** the comprehensive preset needs conditional design and deployment,
@@ -723,16 +763,17 @@ the UI). `@types/node` was bumped to v26 to match.
 
 ## 2026-07-22 — Adopted `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
 
+> `exactOptionalPropertyTypes` was removed on 2026-07-29; the
+> `noUncheckedIndexedAccess` part of this decision remains active.
+
 **Context:** both flags were parked in `architecture.md` as "once the codebase is
 ready." Rule A7 pushes for them.
 
-**Decision:** both are on in `tsconfig.base.json`. The two idioms adopted for the
-fallout: **widen** an option/result bag field to `?: T | undefined` where
-`undefined` is a legitimate in-memory value (the engine adapter interfaces), and
-**omit** the key with a conditional spread — or reset with `delete` — where it
-should simply be absent from persisted state (run/stage state). Explicit
-`= undefined` assignment is now a type error, which is the point: persisted JSON
-no longer carries `"model": undefined` noise.
+**Decision:** both are on in `tsconfig.base.json`. A genuinely optional key uses
+`field?: T`; a fixed-shape internal record uses `field: T | undefined`.
+Constructors omit optional keys or reset them with `delete`. This prevents
+persisted state from confusing an absent value with an explicitly undefined
+property.
 
 ## 2026-07-22 — SetupModal inline-style cleanup deferred
 
@@ -761,3 +802,20 @@ the theme it *offers*, not the theme in use — and six muted descriptions to on
 `mutedCaption(d)`. Booleans that a builder branches on are named at the top of the
 component (`engineMissing`, `keyReady`, `creditsNoteShown`) rather than inlined as
 expressions at the call site.
+
+## 2026-07-29 — Validate untrusted data once, at the boundary
+
+**Context:** milestone planning and closeout initially converted unknown JSON
+through nested `recordOf`, `stringsOf`, and `findingsOf` helpers. Invalid nested
+entries could be silently removed, leaving service code with a plausible but
+incorrect partial result.
+
+**Decision:** use strict runtime schemas at AI-output, persisted milestone, and
+milestone-summary boundaries. Invalid nested data is rejected with a path-aware
+error before it enters service or domain logic. Runtime value lists such as task
+priorities are exported `as const` and also define their TypeScript unions.
+
+TypeScript types remain strict after boundary validation. The optional-property
+convention described here was superseded on 2026-07-29: absence and `undefined`
+now intentionally represent the same domain state, while `null` represents an
+explicit clear where supported.

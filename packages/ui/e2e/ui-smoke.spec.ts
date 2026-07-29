@@ -27,6 +27,7 @@ test("empty state shows the pipeline dropdown and a disabled start button", asyn
 
   await page.getByPlaceholder("Describe the task...").fill("smoke");
   await expect(page.getByRole("button", { name: /Start run/ })).toBeEnabled();
+  await expect(page.getByTestId("plan-milestone")).toBeEnabled();
 });
 
 test("Full Delivery previews the revised persona team", async ({ page }) => {

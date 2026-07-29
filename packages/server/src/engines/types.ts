@@ -16,12 +16,12 @@ export interface EngineRunContext {
   runId: string;
   prompt: string;
   cwd: string;
-  model?: string | undefined;
-  appendSystemPrompt?: string | undefined;
+  model?: string;
+  appendSystemPrompt?: string;
   permissionMode: EnginePermissionMode;
-  connection?: EngineConnection | undefined;
+  connection: EngineConnection;
   /** Continue this CLI session instead of starting a new one. */
-  resumeSessionId?: string | undefined;
+  resumeSessionId?: string;
   timeoutMs: number;
   signal: AbortSignal;
   onLog: (level: LogLevel, message: string) => void;
@@ -29,18 +29,18 @@ export interface EngineRunContext {
 
 export interface EngineRunResult {
   success: boolean;
-  result?: string | undefined;
+  result?: string;
   /** Feed back as `resumeSessionId` to continue this conversation. */
-  sessionId?: string | undefined;
+  sessionId?: string;
   exitCode: number | null;
-  errorMessage?: string | undefined;
-  usage?: StageUsage | undefined;
+  errorMessage?: string;
+  usage?: StageUsage;
 }
 
 export interface EngineActionResult {
   ok: boolean;
-  output?: string | undefined;
-  message?: string | undefined;
+  output?: string;
+  message?: string;
 }
 
 export interface EngineAdapter {

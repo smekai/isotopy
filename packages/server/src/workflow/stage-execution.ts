@@ -150,14 +150,14 @@ export async function runStageWork(
     return {
       outcome: STAGE_OUTCOMES.ASKING,
       question: decision.question,
-      ...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
+      sessionId: outcome.sessionId,
       startedAt,
       completedAt: nowIso(),
     };
   }
 
   if (decision.output !== undefined) {
-    projection.captureStageOutput(runId, stageDef, decision.output);
+    await projection.captureStageOutput(runId, stageDef, decision.output);
   }
   if (decision.verdict !== undefined) {
     projection.setVerdict(runId, stageDef.id, decision.verdict);
@@ -187,8 +187,8 @@ export async function runStageWork(
         ? STAGE_OUTCOMES.PASSED
         : decision.outcome,
     output: decision.output,
-    ...(decision.verdict !== undefined ? { verdict: decision.verdict } : {}),
-    ...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
+    verdict: decision.verdict,
+    sessionId: outcome.sessionId,
     startedAt,
     completedAt: nowIso(),
   };

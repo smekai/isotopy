@@ -110,4 +110,16 @@ All workspace packages (root + `packages/*`) share one version, bumped together.
 - **Patch** (0.0.x): fixes and small tweaks between features.
 - **Major** (1.0.0): when everything planned for the milestone set is done and the product is ready.
 
-Current: 0.6.14.
+Current: 0.8.0.
+
+## Runtime validation boundaries
+
+- Parse untrusted HTTP, engine, database, settings, and file data once at its
+  boundary with a strict runtime schema.
+- Domain and service code receives validated types; do not repeat
+  `Record<string, unknown>` traversal or silently filter malformed nested data.
+- Derive runtime value lists and TypeScript unions from one exported `as const`
+  tuple.
+- Use `field?: T` when a property may be absent or `undefined`; those states have
+  the same meaning in ADHD contracts. Use `null` only when the contract needs an
+  explicit cleared or removed value.

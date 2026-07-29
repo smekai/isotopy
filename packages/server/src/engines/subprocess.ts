@@ -12,7 +12,7 @@ export interface SubprocessSpec {
   args?: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
-  input?: string | undefined;
+  input?: string;
   timeoutMs: number;
   signal?: AbortSignal;
   shell?: boolean;
@@ -28,7 +28,7 @@ export interface SubprocessResult {
   stdout: string;
   stderrTail: string[];
   durationMs: number;
-  errorMessage?: string | undefined;
+  errorMessage?: string;
 }
 
 export function killProcessTree(child: ChildProcess): void {
