@@ -115,18 +115,6 @@ You've hit your session limit · resets 4:30pm (Europe/Tallinn)
 
 ---
 
-## TASK-051: QA Engineer application lifecycle and Playwright evidence
-**Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-d
-**Updated:** 2026-07-28 22:11
-
-Expand the existing QA Engineer instead of adding a Manual Tester persona. For interactive UI work, QA starts the configured application, decides whether durable E2E coverage is needed, authors and runs Playwright scenarios headlessly, performs limited exploratory checks where stable assertions are unsuitable, and preserves specs, screenshots, and traces as artifacts.
-
-Always tear down browser and server processes started by the run. A QA failure continues to Product Manager closeout while blocking release and deploy work. Agent-native browser adapters are deferred to post-MVP TASK-095.
-
-Cross-platform: use typed automation commands and `runSubprocess`; browser cache and temporary roots use Node OS/path helpers; verify process-tree teardown on Windows and macOS/POSIX.
-
----
-
 ## TASK-036: Spike — sandcastle as the implement-stage harness/sandbox layer
 **Priority:** P2 | **Tags:** adapters, engine, milestone-c
 **Updated:** 2026-07-16 00:00

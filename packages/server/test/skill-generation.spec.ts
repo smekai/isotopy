@@ -46,4 +46,15 @@ describe("skill generation", () => {
       ).toBeTruthy();
     }
   });
+
+  test("QA stays an ordinary Playwright-only workflow step", async () => {
+    const persona = await loadBundledPersona("tester");
+    const assignment = await loadBundledStepTask("verify-feature");
+
+    expect(persona).toContain("ordinary agent-backed workflow step");
+    expect(persona).toContain("Use Playwright for interactive UI verification");
+    expect(persona).toContain("Do not use or depend on an agent-native browser");
+    expect(assignment).toContain("For UI work, use Playwright only");
+    expect(assignment).not.toContain("adhd-qa-result");
+  });
 });
