@@ -1,5 +1,23 @@
 # Done
 
+## TASK-051: QA Engineer application lifecycle and Playwright evidence
+**Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-d
+**Updated:** 2026-07-30 11:31
+
+Keep QA as the same ordinary agent-backed workflow step as Product Manager, Developer, and the other personas. Do not add QA-specific runtime parsing, persistence, APIs, artifact handling, or project automation configuration.
+
+For interactive UI work, QA uses Playwright only in the MVP. It inspects the repository, uses its existing scripts and Playwright configuration, decides whether durable E2E coverage is needed, authors and runs scenarios headlessly, and reports commands, results, screenshots, traces, and coverage gaps in its normal stage handoff.
+
+Always tear down browser and application processes started by QA. A QA failure continues to Product Manager closeout while blocking release and deploy work through the existing stage verdict semantics. Agent-native browser support remains deferred to post-MVP TASK-095.
+
+Cross-platform: prefer repository-owned commands and Playwright `webServer`; avoid shell-only command assumptions; keep generated tests portable across Windows and macOS; report any platform-only checks that were not run.
+
+### Plan
+
+Kept QA as an ordinary agent-backed stage and limited MVP browser verification to Playwright. Updated the QA persona, verification assignment, and repository QA skill to discover existing project commands, use Playwright headlessly, report evidence in the normal handoff, and clean up started processes. Explicitly deferred agent-native browser support to TASK-095 and added a prompt-contract test. No QA-specific runtime, parser, persistence, API, artifact UI, or automation configuration was introduced. Verified lint, typecheck, production build, skill drift, and 292 tests on Windows.
+
+---
+
 ## TASK-099: Make SQLite timestamps database-managed
 **Priority:** P1 | **Tags:** server, infra, testing
 **Updated:** 2026-07-29 18:56
