@@ -43,6 +43,13 @@ function renderMilestones(refreshKey = "") {
   );
 }
 
+function renderForProject(projectId: string) {
+  return renderHook(
+    ({ project }: { project: string }) => useMilestones(project, true, ""),
+    { initialProps: { project: projectId } },
+  );
+}
+
 test("loads the project's milestones and reports ready", async () => {
   const { result } = renderMilestones();
 
@@ -122,6 +129,51 @@ test("starting the next feature returns the run and reloads the milestone", asyn
   await waitFor(() =>
     expect(result.current.milestones[0]?.features[0]?.status).toBe("in_progress"),
   );
+});
+
+test("switching project drops the previous project's milestones before the new fetch lands", async () => {
+  const other = milestone([feature("f9", "ready")], { id: "m2", name: "Other project" });
+  const { rerender, result } = renderForProject("home");
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  expect(result.current.milestones).toEqual([READY]);
+
+  const second = deferred<typeof other[]>();
+  listed.mockReturnValue(second.promise);
+  rerender({ project: "other-project" });
+
+  // Stale milestones from the old project must not linger in the rail.
+  await waitFor(() => expect(result.current.milestones).toEqual([]));
+  expect(result.current.ready).toBe(false);
+
+  second.resolve([other]);
+  await waitFor(() => expect(result.current.milestones).toEqual([other]));
+});
+
+test("a refresh of the same project never blanks the rail it already filled", async () => {
+  const { rerender, result } = renderMilestones("r1:running");
+  await waitFor(() => expect(result.current.ready).toBe(true));
+
+  const slow = deferred<Milestone[]>();
+  listed.mockReturnValue(slow.promise);
+  rerender({ key: "r1:completed" });
+
+  expect(result.current.milestones).toEqual([READY]);
+  expect(result.current.ready).toBe(true);
+  slow.resolve([READY]);
+});
+
+test("a start still returns its run when the follow-up reload fails", async () => {
+  started.mockResolvedValue({ id: "run-a" } as never);
+  const { result } = renderMilestones();
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  listed.mockRejectedValue(new Error("Could not reach the server"));
+
+  // The run exists on the server; a refresh failure must not hide it from the
+  // caller, or the UI would never navigate to a run that is already going.
+  const run = await result.current.startNext(MILESTONE_ID, {});
+
+  expect(run?.id).toBe("run-a");
+  await waitFor(() => expect(result.current.error).toBe("Could not reach the server"));
 });
 
 test("a rejected start surfaces the server's reason and returns nothing to navigate to", async () => {

@@ -237,6 +237,22 @@ carry a `milestoneId`, sorted, so it changes exactly when a refetch would see
 something new and stays stable under a rail reorder. **Rule:** do not add a third SSE
 channel for milestones without first showing that this derivation misses an update.
 
+Refetching on a key rather than on the project alone has three consequences, all
+load-bearing and all found in review:
+
+- A **project switch** must clear `milestones`/`ready` first, or the rail shows the
+  previous project's milestones while the new fetch is in flight — which is why
+  `useMilestones` tracks `loadedProject`. A **refresh of the same project** must *not*
+  clear them, or the rail blanks on every run status change. This is the one place
+  `useMilestones` deviates from `useRunList`, which resets unconditionally because its
+  effect has no refresh key.
+- `reload()` **never throws.** It reports a refresh failure through `error`, so a
+  `startNext` whose run *was* created successfully still returns that run for `App` to
+  navigate to. A throwing reload would report a start failure for a run that is
+  already going, and strand the user on the dashboard.
+- Mutations clear `error` **up front**, never after their reload — otherwise a
+  successful start would wipe the refresh error the reload just recorded.
+
 The seven things that are load-bearing:
 
 1. **Nothing project-scoped loads until `projects.ready`.** `useRunList` is inert

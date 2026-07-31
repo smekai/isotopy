@@ -149,7 +149,6 @@ export function milestoneProgress(milestone: Milestone): MilestoneProgress {
   };
 }
 
-/** Mirrors the guards `RunOrchestrator.startNextMilestoneRun` throws on. */
 export function canStartNextFeature(milestone: Milestone): boolean {
   return (
     milestone.status === "active" &&

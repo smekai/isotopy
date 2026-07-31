@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Milestone, RunState } from "@adhd/core";
 import {
   fetchMilestones,
@@ -35,10 +35,22 @@ export function useMilestones(
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadedProject = useRef<string | null>(null);
+
+  function forgetPreviousProject() {
+    setMilestones([]);
+    setReady(false);
+    setError(null);
+  }
 
   useEffect(() => {
     if (!enabled) {
       return;
+    }
+    const switchedProject = loadedProject.current !== projectId;
+    if (switchedProject) {
+      loadedProject.current = projectId;
+      forgetPreviousProject();
     }
     let cancelled = false;
     void fetchMilestones()
@@ -71,7 +83,11 @@ export function useMilestones(
   }, []);
 
   const reload = useCallback(async () => {
-    setMilestones(await fetchMilestones());
+    try {
+      setMilestones(await fetchMilestones());
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to refresh milestones"));
+    }
   }, []);
 
   const showAutoRunNextBeforeItIsSaved = useCallback(
@@ -92,8 +108,8 @@ export function useMilestones(
       try {
         replace(await updateMilestone(milestoneId, { autoRunNext }));
       } catch (reason) {
-        setError(messageOf(reason, "Failed to update the milestone"));
         await reload();
+        setError(messageOf(reason, "Failed to update the milestone"));
       }
     },
     [replace, reload, showAutoRunNextBeforeItIsSaved],
@@ -101,10 +117,10 @@ export function useMilestones(
 
   const startNext = useCallback(
     async (milestoneId: string, options: StartNextOptions) => {
+      setError(null);
       try {
         const run = await startNextMilestoneRun(milestoneId, options);
         await reload();
-        setError(null);
         return run;
       } catch (reason) {
         setError(messageOf(reason, "Failed to start the next feature"));

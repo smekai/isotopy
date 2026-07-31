@@ -539,7 +539,7 @@ is what lets a run be traced back to the feature it was started for.
 
 | Layer | Where |
 | --- | --- |
-| Models and pure predicates | `@adhd/core` `milestones.ts` |
+| Models and pure predicates | `@adhd/core` `milestones.ts` — `canStartNextFeature` mirrors the guards `RunOrchestrator.startNextMilestoneRun` throws on, so the UI can disable the control instead of letting the request be rejected. Change one, change both. |
 | Persistence | `server/src/repository/milestone-repository.ts` over `db/milestones-table.ts` |
 | API | `server/src/routes/milestones.ts` — plan, revise, approve, CRUD, start-next, finalize |
 | Lifecycle | `RunOrchestrator` — the single writer, as it is for runs |
