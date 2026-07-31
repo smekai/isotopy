@@ -52,7 +52,26 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 ## Status
 
-Planning complete. Conversational pipeline workspace UI (from the design reference in `design/`) implemented on the mock orchestrator: a team of profession-named agents (Project Manager → SRE), human gates with approval, abort/restart, run history, and theme selection under Setup → Appearance. Runs and history are in-memory (reset with the server).
+**Milestone D — the Full Delivery loop — is shipped at 0.8.7.**
+
+A run is driven by real coding agents (Claude Code, Codex, Cursor) through a durable
+OpenWorkflow runtime backed by SQLite, so a run survives a server restart and resumes
+without re-running completed stages. Three pipelines ship: **Single agent**,
+**Product Manager + Developer + QA**, and **Full Delivery** — Product Manager gate →
+Product Designer → Software Architect → Developer → independent review → QA Engineer →
+Release Manager → SRE → Product Manager closeout.
+
+**Milestones** group the runs that deliver one body of work. A Product Manager
+conversation plans a milestone, you edit and approve the proposal, and its features
+become a queue: start the next feature yourself, or turn on **Auto-run next feature**
+and let the server chain them. The dashboard at `#/milestones/:id` shows feature
+progress, each feature's run history, and the blocking findings that closeout
+recorded. A quality stage that finds a blocking problem does not kill the run — it
+marks it **needs attention**, and the pipeline still closes out and writes follow-up
+tasks to your backlog.
+
+**Not yet automated:** release and deploy. The `release` and `deploy` stages exist and
+report `VERDICT: SKIP` until project deployment automation lands (TASK-092).
 
 ## Prerequisites
 

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import type { StageStatus } from "@adhd/core";
 import { agentForStage } from "@adhd/core";
+import type { StagePresentation } from "../run-utils";
 import type { Dir } from "../theme";
 import { EASE, FONT, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, focusRing, sLabel, specColor, statusClr } from "../theme";
 
@@ -137,7 +137,7 @@ function statusLabel(st: StatusColor): CSSProperties {
 export interface StageNodeProps {
   stageId: string;
   label: string;
-  status: StageStatus;
+  status: StagePresentation;
   d: Dir;
   focused: boolean;
   onClick: () => void;

@@ -1,4 +1,5 @@
-import type { LogLevel, RunStatus, StageStatus } from "@adhd/core";
+import type { LogLevel, RunStatus } from "@adhd/core";
+import type { StagePresentation } from "./run-utils";
 
 export const SPACE = {
   xxs: 2,
@@ -177,23 +178,31 @@ export const GOLD_SOFT = "rgba(217,119,6,0.12)";
 /** A question waiting on the user. Distinct from GOLD, which is gates only. */
 export const ASK_VIOLET = "#7C3AED";
 
-export const STATUS_COLORS: Record<StageStatus, { text: string; bg: string; dot: string }> = {
+export interface StatusColor {
+  text: string;
+  bg: string;
+  dot: string;
+}
+
+export const STATUS_COLORS: Record<StagePresentation, StatusColor> = {
   running:  { text: "#6366F1", bg: "rgba(99,102,241,0.10)",  dot: "#6366F1" },
   passed:   { text: "#059669", bg: "rgba(5,150,105,0.10)",   dot: "#059669" },
   failed:   { text: "#DC2626", bg: "rgba(220,38,38,0.10)",   dot: "#DC2626" },
+  needs_attention: { text: "#D97706", bg: "rgba(217,119,6,0.10)", dot: "#D97706" },
   awaiting: { text: "#D97706", bg: "rgba(217,119,6,0.10)",   dot: "#D97706" },
   asking:   { text: "#7C3AED", bg: "rgba(124,58,237,0.10)",  dot: "#7C3AED" },
   skipped:  { text: "#9CA3AF", bg: "rgba(156,163,175,0.10)", dot: "#9CA3AF" },
   pending:  { text: "#C0C0D8", bg: "rgba(192,192,216,0.10)", dot: "#D4D4E8" },
 };
 
-export function statusClr(s: StageStatus): { text: string; bg: string; dot: string } {
+export function statusClr(s: StagePresentation): StatusColor {
   return STATUS_COLORS[s] ?? STATUS_COLORS.pending;
 }
 
-export function sLabel(s: StageStatus): string {
+export function sLabel(s: StagePresentation): string {
   return {
     running: "RUNNING", passed: "PASSED", failed: "FAILED",
+    needs_attention: "NEEDS ATTENTION",
     awaiting: "AWAITING", asking: "ASKING", skipped: "SKIPPED", pending: "PENDING",
   }[s];
 }

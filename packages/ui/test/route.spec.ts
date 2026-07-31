@@ -2,7 +2,13 @@
 // must degrade to home rather than producing a run id the server never had.
 // Round-tripping matters because run ids reach the URL verbatim.
 import { describe, expect, test } from "vitest";
-import { HOME_ROUTE, parseRoute, routeHash, runRoute } from "../src/route";
+import {
+  HOME_ROUTE,
+  milestoneRoute,
+  parseRoute,
+  routeHash,
+  runRoute,
+} from "../src/route";
 
 describe("parseRoute", () => {
   test("an empty hash is home", () => {
@@ -25,6 +31,17 @@ describe("parseRoute", () => {
   test("a percent-encoded run id is decoded", () => {
     expect(parseRoute("#/runs/a%2Fb")).toEqual({ kind: "run", runId: "a/b" });
   });
+
+  test("a milestone hash carries the milestone id", () => {
+    expect(parseRoute("#/milestones/m1")).toEqual({
+      kind: "milestone",
+      milestoneId: "m1",
+    });
+  });
+
+  test("an empty milestone id falls back to home", () => {
+    expect(parseRoute("#/milestones/")).toEqual(HOME_ROUTE);
+  });
 });
 
 describe("routeHash", () => {
@@ -32,5 +49,14 @@ describe("routeHash", () => {
     // The id reaches the URL verbatim, so encode and decode have to agree.
     const route = runRoute("a/b");
     expect(parseRoute(routeHash(route))).toEqual(route);
+  });
+
+  test("a milestone id needing escapes round-trips through the hash", () => {
+    const route = milestoneRoute("a/b");
+    expect(parseRoute(routeHash(route))).toEqual(route);
+  });
+
+  test("home has no run or milestone segment", () => {
+    expect(routeHash(HOME_ROUTE)).toBe("#/");
   });
 });

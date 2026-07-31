@@ -302,8 +302,11 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 | File | Contents |
 | --- | --- |
 | `agents.ts` | Agent professions per stage |
+| `closeout.ts` | The Product Manager closeout record — findings, follow-up task drafts, cleanup result |
 | `engines.ts` | Engine/harness definitions, connection modes, model options |
+| `milestones.ts` | Milestone and feature models, the plan proposal, and pure predicates (`nextMilestoneFeature`, `milestoneProgress`, `canStartNextFeature`, `canFinalizeMilestone`, `milestoneFindings`) |
 | `pipelines.ts` | Pipeline/stage definitions and pure helpers |
+| `projects.ts` | Project model and the home-project constant |
 | `runs.ts` | Run/stage state models, run events, status constants |
 | `settings.ts` | UI-safe settings view models, project preferences and their defaults |
 
@@ -526,6 +529,37 @@ User-toggleable dark mode with system preference detection.
 ```
 
 When a run completes or fails, TaskManager can update task status (configurable; default: manual).
+
+### 2b. Milestones — grouping feature runs
+
+A **milestone** groups the runs that deliver one body of work. The structure is
+three levels: a milestone owns ordered **features**, and each feature owns the
+**runs** that attempted it. `RunState` carries `milestoneId` and `featureId`, which
+is what lets a run be traced back to the feature it was started for.
+
+| Layer | Where |
+| --- | --- |
+| Models and pure predicates | `@adhd/core` `milestones.ts` — `canStartNextFeature` mirrors the guards `RunOrchestrator.startNextMilestoneRun` throws on, so the UI can disable the control instead of letting the request be rejected. Change one, change both. |
+| Persistence | `server/src/repository/milestone-repository.ts` over `db/milestones-table.ts` |
+| API | `server/src/routes/milestones.ts` — plan, revise, approve, CRUD, start-next, finalize |
+| Lifecycle | `RunOrchestrator` — the single writer, as it is for runs |
+| UI | `#/milestones/:id` → `MilestoneDashboard`, fed by `useMilestones` |
+
+**A milestone is planned before it is executed.** A dedicated `milestone-planning`
+pipeline runs a Product Manager conversation that emits an editable
+`MilestoneProposal`; nothing is created until the user approves it, at which point
+`approveMilestonePlan` writes the follow-up tasks through the TaskWriter seam and
+turns the proposal's features into real ones.
+
+**Autorun is server-side, and deliberately so.** `Milestone.autoRunNext` is persisted
+state, not a browser toggle: when a feature run reaches `completed` or
+`needs_attention`, `completeMilestoneRun` records its closeout findings on the feature
+and starts the next `ready` one. A closed tab must not stop the chain, and two open
+tabs must not start it twice.
+
+**A feature ends `needs_attention`, not `failed`, when quality found something.** The
+run continues to closeout either way, so the feature keeps the findings that blocked
+it and `finalizeMilestone` refuses while any feature is unfinished.
 
 ### 3. Workflow state
 

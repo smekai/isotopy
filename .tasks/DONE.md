@@ -1,5 +1,53 @@
 # Done
 
+## TASK-087: Epic — Milestone D: Full Delivery Loop
+**Priority:** P0 | **Tags:** core, server, ui, engine, infra, testing, milestone-d
+**Updated:** 2026-07-31 12:10
+
+Ship and dogfood the reusable Full Delivery milestone workflow, then close the milestone.
+
+### Done — closed at 0.8.7 on 2026-07-31
+
+**Shipped:** TASK-088 (milestone domain, persistence, APIs, autorun), TASK-089 (quality semantics and durable closeout), TASK-090 (Full Delivery pipeline and persona team), TASK-091 (Product Manager closeout, task writers, safe cleanup), TASK-096 (conversational milestone planning), TASK-051 (QA application lifecycle and Playwright evidence), TASK-093 (milestone dashboard, autorun controls, delivery artifacts).
+
+**Deferred, not delivered — say so plainly:**
+
+- **TASK-092** — release management and preview deployment automation. Cut from the MVP under the standing "no automation for now" call; PR #13 was closed unmerged. The `release` and `deploy` stages remain in the pipeline and report `VERDICT: SKIP` when nothing is configured, so the seam degrades honestly. This is also why TASK-093 presents neither deploy URLs nor QA screenshot/trace evidence. Rationale in `docs/decisions.md` 2026-07-31.
+- **TASK-095** (agent-native browser testing) and **TASK-097** (dynamic workflow composition) were always post-MVP and stay in BACKLOG.
+- **TASK-094's live dogfood half has not been run.** The deterministic gates are green at 0.8.7, but the disposable sample-app run and the real ADHD feature run still need real engine spend. TASK-094 stays in IN_PROGRESS until they pass — this epic is closed on shipped capability, not on dogfooding evidence.
+
+TASK-061, TASK-069 and TASK-036 are independent future work and were not touched.
+
+---
+
+## TASK-093: Milestone dashboard, autorun controls, and delivery artifacts
+**Priority:** P1 | **Tags:** ui, core, testing, milestone-d
+**Updated:** 2026-07-31 12:10
+
+Add the main-screen milestone view with feature progress, run history, findings, and Auto-run next feature. Render skipped and needs-attention states, created-task links, and closeout documents in Artifacts.
+
+### Done
+
+Every server capability already existed, so this added **no endpoints** — it is UI plus pure predicates.
+
+- **Core** — `canStartNextFeature`, `canFinalizeMilestone`, `milestoneFindings` and a named `MilestoneProgress` in `milestones.ts`. `canStartNextFeature` deliberately mirrors the guards `RunOrchestrator.startNextMilestoneRun` throws on, so the button is dead rather than the request rejected.
+- **Route** — `Route` gained `{ kind: "milestone" }` at `#/milestones/:id`, a sibling of `#/runs/:id`. The boot auto-attach now bails on any non-home route, so it can no longer yank a user off a milestone onto a running run.
+- **Rail** — a MILESTONES group above Runs, hidden entirely when the project has none, so an unchanged project sees an unchanged rail.
+- **Dashboard** — `MilestoneDashboard` + `MilestoneFeatureCard`: progress bar, Auto-run next feature, Start next feature, Finalize milestone, and per-feature acceptance criteria, task ids, run history and findings.
+- **`useMilestones`** — milestones have no SSE channel, so the hook refetches on `milestoneRefreshKey(runs)`, derived from the summary stream the rail already consumes. Autorun uses the repo's optimistic-write / server-authoritative-read pattern.
+- **Needs-attention rendering** — `stagePresentation` maps a `failed` stage carrying `VERDICT: FAIL` to amber NEEDS ATTENTION, leaving a verdict-less failure red. A blocking review no longer looks like a crash.
+- **Closeout in Artifacts** — a third `CloseoutPanel` view, shown only when `run.closeout` exists: summary, delivered scope, decisions, knowledge, findings, **created-task links**, completed/unresolved source tasks, cleanup, and validation errors.
+
+**Scope cut, with reason:** QA screenshots/traces and preview-deployment results were dropped — both are produced by TASK-092's automation, which is deferred, so there was nothing truthful to render.
+
+**A real defect the tests caught:** the autorun checkbox was a controlled input awaiting a round trip, so it visibly refused to move. The free-tier e2e failed on it; the fix is the optimistic-write pattern, now pinned by two component tests as well.
+
+**Tests:** +36 — `packages/core/test/milestones.spec.ts`, `MilestoneDashboard.comp.tsx`, `useMilestones.comp.tsx`, `CloseoutPanel.comp.tsx`, extensions to `route.spec.ts` / `run-list.spec.ts` / `run-utils.spec.ts`, and a free-tier `e2e/milestone-dashboard.spec.ts` that seeds a milestone through the API (no engine, no run).
+
+**Docs:** `architecture.md`, `architecture-ui.md`, `e2e-test-plan.md`, and two `decisions.md` entries.
+
+---
+
 ## TASK-051: QA Engineer application lifecycle and Playwright evidence
 **Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-d
 **Updated:** 2026-07-30 11:31

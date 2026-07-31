@@ -28,7 +28,7 @@ by accident and nobody defends them past their usefulness.
 
 | Absent | Why it is fine today | What would change it |
 | --- | --- | --- |
-| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied — see [`decisions.md`](./decisions.md) 2026-07-27. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. One `#/runs/:id` does not. |
+| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied — see [`decisions.md`](./decisions.md) 2026-07-27. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. TASK-093 added `#/milestones/:id` as a *sibling* of `#/runs/:id` — two flat patterns over one union, still not nesting. |
 | **State library** | State is either server state (three hooks) or one screen's view state. | State shared between siblings that are not both children of `App`. |
 | **CSS framework** | Theme switching is runtime, driven by a JS token object. | See §7 — the token gap is the real problem, not the absence of Tailwind. |
 | **Data-fetching library** | Every read is one call and one owner; SSE carries updates, so there is no cache to invalidate. | Refetch-on-focus, retries, or two components needing the same request. |
@@ -38,10 +38,10 @@ by accident and nobody defends them past their usefulness.
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
-on ports, and proxies `/pipelines /projects /runs /health /settings /engines /fs` to
-the server. **That proxy list must stay in sync with the routes mounted in
-`packages/server/src/app.ts`** — a new server route is invisible to the dev UI until
-it is added there.
+on ports, and proxies `/pipelines /projects /runs /milestones /health /settings
+/engines /fs` to the server. **That proxy list must stay in sync with the routes
+mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
+dev UI until it is added there.
 
 ---
 
@@ -55,18 +55,18 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`main.tsx`](../packages/ui/src/main.tsx) | Bootstrap: `createRoot` + `StrictMode` + `ThemeProvider`. Nothing else ever goes here. |
 | [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run rail, run view vs. composer, every overlay. See §6 for what it may own. |
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
-| [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union. Unit-tested. |
-| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`. Unit-tested. |
+| [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union of home, `#/runs/:id` and `#/milestones/:id`. Unit-tested. |
+| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`. Unit-tested. |
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
 | [`index.css`](../packages/ui/src/index.css) | The only stylesheet: reset, body font, `@keyframes adhd-*`, scrollbar. |
-| [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`). Unit-tested. |
+| [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`, `stagePresentation`). Unit-tested. |
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
-| `components/` | 13 flat component files, plus two feature folders — `setup/` and `run/`. §3. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
+| `components/` | 15 flat component files, plus two feature folders — `setup/` and `run/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
 
@@ -111,7 +111,8 @@ them without exception.
 The split as it stands:
 
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
-  `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`.
+  `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`,
+  `MilestoneDashboard`, `MilestoneFeatureCard`, and inside `run/` — `CloseoutPanel`.
 - **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `VoiceControls`,
   and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state, no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
@@ -226,6 +227,31 @@ non-log event, and stays open for the life of the page. The rail reads the secon
 the run view reads the first. Never widen the summary channel into a second copy of
 `RunState` — the reason it exists is that logs must not ride it
 ([`decisions.md`](./decisions.md) 2026-07-27).
+
+**Milestones have no channel of their own, and do not need one.** Every server-side
+milestone mutation — a feature reaching `completed` or `needs_attention`, autorun
+chaining the next run — is a side effect of a milestone run reaching a terminal
+status, which the summary channel already carries. `useMilestones` therefore refetches
+on `milestoneRefreshKey(runs)`: a string built from the id and status of the runs that
+carry a `milestoneId`, sorted, so it changes exactly when a refetch would see
+something new and stays stable under a rail reorder. **Rule:** do not add a third SSE
+channel for milestones without first showing that this derivation misses an update.
+
+Refetching on a key rather than on the project alone has three consequences, all
+load-bearing and all found in review:
+
+- A **project switch** must clear `milestones`/`ready` first, or the rail shows the
+  previous project's milestones while the new fetch is in flight — which is why
+  `useMilestones` tracks `loadedProject`. A **refresh of the same project** must *not*
+  clear them, or the rail blanks on every run status change. This is the one place
+  `useMilestones` deviates from `useRunList`, which resets unconditionally because its
+  effect has no refresh key.
+- `reload()` **never throws.** It reports a refresh failure through `error`, so a
+  `startNext` whose run *was* created successfully still returns that run for `App` to
+  navigate to. A throwing reload would report a start failure for a run that is
+  already going, and strand the user on the dashboard.
+- Mutations clear `error` **up front**, never after their reload — otherwise a
+  successful start would wipe the refresh error the reload just recorded.
 
 The seven things that are load-bearing:
 
@@ -391,7 +417,7 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
 | Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events`, `route`, `run-list`, `transcript` |
-| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList` |
+| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList`, `useMilestones`, `RunTabs`, `MilestoneDashboard`, `MilestonePlanPanel`, `CloseoutPanel` |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
 The root [`vitest.config.ts`](../vitest.config.ts) declares two projects: **`node`**
@@ -427,8 +453,17 @@ list card. The current roster:
 `project-drawer` · `project-root` · `run-status` · `run-cost` ·
 `run-tab-<chat|logs|artifacts>` · `stage-node-<stageId>` · `stage-profession` ·
 `stage-persona` · `stage-verdict` · `stage-scroll` · `artifact-preview` ·
-`artifact-view-<view>` · `artifact-files` · `run-card` · `run-resume` ·
-`run-restart` · `run-rerun` · `chat-thread` · `chat-composer` · `chat-question`
+`artifact-view-<workflow|closeout|files>` · `artifact-files` · `run-card` ·
+`run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer` ·
+`chat-question` · `plan-milestone` · `milestone-plan-editor` ·
+`approve-milestone-plan` · `milestone-card` · `milestone-dashboard` ·
+`milestone-progress` · `milestone-autorun` · `milestone-start-next` ·
+`milestone-finalize` · `milestone-feature` · `milestone-feature-run` ·
+`closeout-panel` · `closeout-created-task` · `closeout-validation-errors`
+
+`milestone-card` and `milestone-feature` also carry `data-milestone-id` /
+`data-feature-id`, which is what the e2e suite locates on: the e2e home is durable,
+so seeded milestones survive between runs and a name filter can match two.
 
 ---
 

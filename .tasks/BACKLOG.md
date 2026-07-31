@@ -20,43 +20,15 @@ Cross-platform: support Windows and macOS capability detection and degrade to Pl
 
 ---
 
-## TASK-094: Dogfood Full Delivery and close Milestone D at 0.8.0
-**Priority:** P1 | **Tags:** testing, infra, milestone-d
-**Updated:** 2026-07-28 13:23
-
-Run deterministic suites, a disposable sample-app Full Delivery run, and one real ADHD feature through the TaskPlanner backend. Verify carry-forward, QA evidence, preview deployment, closeout tasks, cleanup, and milestone finalization; then update documentation and bump all workspace packages together to 0.8.0.
-
-Cross-platform: test Windows directly, use macOS CI where available, and record remaining manual-only checks accurately.
-
----
-
-## TASK-093: Milestone dashboard, autorun controls, and delivery artifacts
-**Priority:** P1 | **Tags:** ui, core, testing, milestone-d
-**Updated:** 2026-07-28 13:23
-
-Add the main-screen milestone view with feature progress, run history, findings, and Auto-run next feature. Render the Full Delivery pipeline, skipped and needs-attention states, created-task links, closeout documents, QA screenshots/traces, and preview deployment results in Artifacts.
-
-Cross-platform: browser UI; validate Chromium on Windows and macOS CI where available.
-
----
-
-## TASK-092: Release management and preview deployment automation
-**Priority:** P1 | **Tags:** server, adapters, setup, infra, milestone-d
-**Updated:** 2026-07-28 13:23
+## TASK-092: Post-MVP — release management and preview deployment automation
+**Priority:** P2 | **Tags:** server, adapters, setup, infra, milestone-d
+**Updated:** 2026-07-30 00:00
 
 Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
 
+**Deliberately outside the Milestone D MVP.** The Full Delivery pipeline already carries the `release` and `deploy` stages, and their step-tasks end with `VERDICT: SKIP` when no target is configured — so the seam exists and degrades honestly without this task. Deferring it is also why TASK-093 presents neither deploy URLs nor QA screenshot/trace evidence.
+
 Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
-
----
-
-## TASK-087: Epic — Milestone D: Full Delivery Loop
-**Priority:** P0 | **Tags:** core, server, ui, engine, infra, testing, milestone-d
-**Updated:** 2026-07-28 13:23
-
-Ship and dogfood the reusable Full Delivery milestone workflow, then close version 0.8.0. Child tasks are TASK-088 through TASK-094 plus the revised TASK-051 QA browser lifecycle; TASK-095 is explicitly post-MVP.
-
-Cross-platform: all process, browser, path, command, and cleanup behaviour must support Windows and macOS.
 
 ---
 

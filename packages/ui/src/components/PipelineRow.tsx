@@ -1,6 +1,7 @@
 import type { RunState } from "@adhd/core";
 import { findPipeline, flattenPipelineStages } from "@adhd/core";
 import type { CSSProperties } from "react";
+import { stagePresentation } from "../run-utils";
 import type { Dir } from "../theme";
 import { GOLD, RADIUS, SPACE } from "../theme";
 import { GateMarker } from "./GateMarker";
@@ -56,7 +57,7 @@ export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: Pipel
             <StageNode
               stageId={stage.id}
               label={stage.label}
-              status={stage.status}
+              status={stagePresentation(stage)}
               d={d}
               focused={focusedId === stage.id}
               onClick={() => onNodeClick(stage.id)}

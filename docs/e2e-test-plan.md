@@ -13,7 +13,7 @@ still costs **zero tokens**.
 
 | Tier | Cost | What it proves | Where |
 | --- | --- | --- | --- |
-| Free | none | Composer, Setup, persistence, and that run state reaches the status bar / stage focus / live log | `e2e/ui-smoke.spec.ts`, `e2e/run-lifecycle.spec.ts`, first test of `e2e/dev-test-flow.spec.ts` |
+| Free | none | Composer, Setup, persistence, the milestone dashboard, and that run state reaches the status bar / stage focus / live log | `e2e/ui-smoke.spec.ts`, `e2e/run-lifecycle.spec.ts`, `e2e/milestone-dashboard.spec.ts`, first test of `e2e/dev-test-flow.spec.ts` |
 | Seeded | none | Per-stage rendering of a two-box run, from a fabricated `RunState` served by route interception | `e2e/dev-test-flow.spec.ts` |
 | Live | ≈ $0.01 | Canary that the real CLI still integrates | `e2e/live-dev-test.spec.ts` (opt-in) |
 
@@ -83,6 +83,17 @@ on Windows and macOS.
 7. **`pm-dev-test` picker** — selectable, composer copy names all three boxes,
    ghost pipeline previews Product Manager, Developer, and QA Engineer, and the
    choice survives a reload.
+8. **Milestone dashboard** (`milestone-dashboard.spec.ts`) — the milestone is
+   seeded by `POST /milestones` rather than planned by an agent, so no engine
+   runs and no run is started. Four tests: the milestone reaches the rail with
+   its progress count and opens its dashboard at `#/milestones/:id`; the autorun
+   toggle survives a reload because it is server state; Finalize stays disabled
+   while a feature is unfinished; and "New run" from a milestone route still
+   reaches the untouched composer.
+
+   *The e2e home is durable, so seeded milestones accumulate between runs.
+   Locate them on `data-milestone-id` from the POST response — a name filter can
+   match an earlier run's milestone.*
 
 ## Seeded tier
 

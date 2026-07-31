@@ -4,7 +4,12 @@
 import { describe, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunStatus, RunSummary } from "@adhd/core";
-import { mergeSummaries, mergeSummary } from "../src/run-list";
+import {
+  mergeSummaries,
+  mergeSummary,
+  milestoneRefreshKey,
+  runsForFeature,
+} from "../src/run-list";
 
 function summary(id: string, status: RunStatus, number = 1): RunSummary {
   return {
@@ -17,6 +22,14 @@ function summary(id: string, status: RunStatus, number = 1): RunSummary {
     createdAt: "2026-07-27T10:00:00.000Z",
     stages: [],
   };
+}
+
+function featureRun(
+  id: string,
+  status: RunStatus,
+  featureId: string,
+): RunSummary {
+  return { ...summary(id, status), milestoneId: "m1", featureId };
 }
 
 describe("mergeSummary", () => {
@@ -51,4 +64,36 @@ describe("mergeSummaries", () => {
     expect(merged[0]?.status).toBe("completed");
   });
 
+});
+
+describe("runsForFeature", () => {
+  test("keeps only the runs linked to that feature", () => {
+    const runs = [
+      featureRun("a", "completed", "f1"),
+      featureRun("b", "running", "f2"),
+      summary("c", "completed"),
+    ];
+    expect(runsForFeature(runs, "f1").map((run) => run.id)).toEqual(["a"]);
+  });
+});
+
+describe("milestoneRefreshKey", () => {
+  test("changes when a milestone run changes status", () => {
+    const before = milestoneRefreshKey([featureRun("a", "running", "f1")]);
+    const after = milestoneRefreshKey([featureRun("a", "completed", "f1")]);
+    expect(after).not.toBe(before);
+  });
+
+  test("ignores runs that belong to no milestone", () => {
+    const key = milestoneRefreshKey([featureRun("a", "running", "f1")]);
+    expect(
+      milestoneRefreshKey([featureRun("a", "running", "f1"), summary("c", "failed")]),
+    ).toBe(key);
+  });
+
+  test("is stable under rail reordering, so a prepend alone does not refetch", () => {
+    const a = featureRun("a", "completed", "f1");
+    const b = featureRun("b", "running", "f2");
+    expect(milestoneRefreshKey([a, b])).toBe(milestoneRefreshKey([b, a]));
+  });
 });

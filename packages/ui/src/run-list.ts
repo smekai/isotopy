@@ -18,3 +18,15 @@ export function mergeSummaries(runs: RunSummary[], updates: RunSummary[]): RunSu
 export function firstActiveRunId(runs: RunSummary[]): string | null {
   return runs.find((run) => !isTerminalRunStatus(run.status))?.id ?? null;
 }
+
+export function runsForFeature(runs: RunSummary[], featureId: string): RunSummary[] {
+  return runs.filter((run) => run.featureId === featureId);
+}
+
+export function milestoneRefreshKey(runs: RunSummary[]): string {
+  return runs
+    .filter((run) => run.milestoneId !== undefined)
+    .map((run) => `${run.id}:${run.status}`)
+    .sort()
+    .join("|");
+}

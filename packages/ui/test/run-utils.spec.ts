@@ -4,7 +4,12 @@
 import { describe, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@adhd/core";
 import type { RunState, StageState, StageStatus } from "@adhd/core";
-import { childPath, isScratchWorkspace, resumeStageId } from "../src/run-utils";
+import {
+  childPath,
+  isScratchWorkspace,
+  resumeStageId,
+  stagePresentation,
+} from "../src/run-utils";
 
 function stage(id: string, status: StageStatus): StageState {
   return { id, label: id, status, logs: [] };
@@ -66,6 +71,28 @@ describe("isScratchWorkspace", () => {
     expect(isScratchWorkspace("/home/me/projects/my-app")).toBe(false);
   });
 
+});
+
+describe("stagePresentation", () => {
+  test("a quality stage that reported FAIL reads as needs attention, not failure", () => {
+    expect(stagePresentation({ status: "failed", verdict: "FAIL" })).toBe(
+      "needs_attention",
+    );
+  });
+
+  test("a stage that failed without a verdict stays a failure", () => {
+    expect(stagePresentation({ status: "failed" })).toBe("failed");
+  });
+
+  test("a SKIP verdict keeps the skipped status it was recorded with", () => {
+    expect(stagePresentation({ status: "skipped", verdict: "SKIP" })).toBe("skipped");
+  });
+
+  test("every other status passes through untouched", () => {
+    expect(stagePresentation({ status: "passed", verdict: "PASS" })).toBe("passed");
+    expect(stagePresentation({ status: "running" })).toBe("running");
+    expect(stagePresentation({ status: "awaiting" })).toBe("awaiting");
+  });
 });
 
 describe("childPath", () => {
