@@ -6,6 +6,44 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-31 — What the Milestone D dogfood proved, and what it did not (TASK-094)
+
+**Context:** Milestone D was closed on a live Full Delivery run against a disposable
+sample app rather than on tests alone — 3 runs, ~$6, Claude Code + sonnet, Windows.
+Recording the outcome matters because the gaps are as load-bearing as the passes.
+
+**Proven live:** milestone planning and approval, task writing through the built-in
+backend, the dashboard, server-side autorun chaining, the PM gate, conditional `SKIP`,
+a genuine quality `FAIL` with release/deploy suppression and closeout still running,
+needs-attention rendering, and finalize with a written summary.
+
+**Durable resume, proven properly on the third attempt.** The first two attempts
+verified nothing — the run had already reached a terminal state before the server was
+killed, so there was no interruption to recover from. Only a *timed* kill (server
+stopped at a known instant with a stage mid-flight) tests anything. It passed:
+completed stages kept their original timestamps and were not re-run, the interrupted
+stage restarted, and the pipeline finished. **A restart test that does not confirm the
+run was non-terminal at the moment of the kill is not a test.**
+
+**Not proven:** the TaskPlanner-backend dogfood was deliberately skipped, so that path
+rests on `task-writer` component tests. macOS remains CI-only.
+
+**The most valuable output was a defect the tests could not have found.** The closeout
+agent writes `"severity": "non-blocking"`; the schema demands `"non_blocking"`; the
+whole record is then rejected, discarding every finding and follow-up task. It
+reproduced 3 runs out of 3, and the component tests all passed throughout because they
+supply valid fixtures. The prompt in `closeout-feature.md` shows only one of the two
+enum values, so the model infers the other by English convention. Filed as TASK-101,
+alongside TASK-102 (no UI path to resolve a needs-attention feature, which makes a
+milestone containing one unfinalizable from the dashboard) and TASK-103.
+
+**The lesson worth keeping:** where an LLM fills a typed contract, a fixture-based test
+proves the parser and nothing about what the model actually emits. Schema-shaped
+prompts need an example of **every** enum value, and a validation failure on expensive
+agent output needs a retry that feeds the errors back.
+
+---
+
 ## 2026-07-31 — Milestone D ships without release and deploy automation (TASK-093, TASK-092)
 
 **Context:** TASK-093 was written to render preview deployment URLs and QA

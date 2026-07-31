@@ -1,5 +1,37 @@
 # Done
 
+## TASK-094: Dogfood Full Delivery and close Milestone D at 0.8.7
+**Priority:** P1 | **Tags:** testing, infra, milestone-d
+**Updated:** 2026-07-31 20:10
+
+Run the deterministic suites and a live Full Delivery dogfood, then close Milestone D.
+
+### Done — 2026-07-31
+
+**Deterministic:** all six gates green at 0.8.7 — lint, typecheck, build, 340 tests, e2e 35 passed / 1 skipped, `gen:skills --check`. Docs updated across `architecture.md`, `architecture-ui.md`, `decisions.md`, `e2e-test-plan.md` and `README.md`.
+
+**Live dogfood** — a real Full Delivery milestone on a disposable sample app (`c:\tmp\adhd-sample-app`, Node built-ins only), Claude Code + sonnet, 3 runs, ~$6, Windows.
+
+Verified end to end:
+
+- **Planning → approval → tasks.** The Product Manager produced a 2-feature proposal with 7 acceptance criteria each, and added cross-platform criteria unprompted. Approval wrote `TASK-001`/`TASK-002` through the built-in `.adhd/tasks` backend.
+- **Dashboard against real data** — rail entry with progress, feature cards, criteria, task chips, run history.
+- **Autorun** — the toggle persisted server-side across a reload, and after feature 1 ended `needs_attention` the next feature **started on its own**.
+- **The PM gate** parked the run and released it on approval.
+- **Conditional stages** — `architecture` returned `VERDICT: SKIP` on a trivial feature; `deploy` skipped on both runs with no automation configured, as TASK-092's deferral intends.
+- **A genuine quality FAIL.** QA drove Playwright against the running app and found two real defects (an unscoped CSS rule inflating the checkbox hit area, and focus lost on re-enable). Release and deploy were suppressed, closeout still ran, and the run ended `needs_attention` — the TASK-089 semantics, on real evidence.
+- **Needs-attention rendering** — `stagePresentation` showed the failed quality stage as amber NEEDS ATTENTION rather than red FAILED, in the pipeline row and the logs.
+- **Durable resume — passed on a controlled kill.** The server was killed at 16:31:08 UTC with `implementation` mid-flight and restarted 37s later. `intake` and `product-design` kept their original timestamps and were **not** re-run; `implementation` restarted and the pipeline ran through to completion with no interrupt markers. Two earlier attempts did not test anything — the run had already gone terminal both times — and that is why the third was timed deliberately.
+- **Finalize** — correctly refused at 1/2 in both the UI and the API (`400 Milestone has 1 unfinished feature`), enabled at 2/2, and wrote `summary.json` + `summary.md`.
+
+**Defects found, filed, not fixed here:** TASK-101 (a `non-blocking` hyphen discards every closeout finding — reproduced 3/3 runs), TASK-102 (no UI path to resolve a needs-attention feature, so the dogfood had to PATCH the API by hand to finalize), TASK-103 (stale `run-app` skill).
+
+**A live sighting of TASK-061:** a Claude subscription session limit killed `architecture` and `closeout` four seconds apart, logging `resets 4:10pm (Europe/Tallinn)` and then discarding it. Exactly the failure that task was written to fix.
+
+**Not done, deliberately:** the second dogfood — one real ADHD feature through the TaskPlanner backend — was **not run**. The TaskPlanner path is covered by `task-writer` component tests only; it has never been exercised live. macOS is CI-only; every live check above is Windows.
+
+---
+
 ## TASK-087: Epic — Milestone D: Full Delivery Loop
 **Priority:** P0 | **Tags:** core, server, ui, engine, infra, testing, milestone-d
 **Updated:** 2026-07-31 12:10
@@ -14,7 +46,7 @@ Ship and dogfood the reusable Full Delivery milestone workflow, then close the m
 
 - **TASK-092** — release management and preview deployment automation. Cut from the MVP under the standing "no automation for now" call; PR #13 was closed unmerged. The `release` and `deploy` stages remain in the pipeline and report `VERDICT: SKIP` when nothing is configured, so the seam degrades honestly. This is also why TASK-093 presents neither deploy URLs nor QA screenshot/trace evidence. Rationale in `docs/decisions.md` 2026-07-31.
 - **TASK-095** (agent-native browser testing) and **TASK-097** (dynamic workflow composition) were always post-MVP and stay in BACKLOG.
-- **TASK-094's live dogfood half has not been run.** The deterministic gates are green at 0.8.7, but the disposable sample-app run and the real ADHD feature run still need real engine spend. TASK-094 stays in IN_PROGRESS until they pass — this epic is closed on shipped capability, not on dogfooding evidence.
+- **TASK-094's live dogfood ran on 2026-07-31 and passed** (see its DONE entry). A real Full Delivery milestone on a disposable sample app proved planning, approval, task writing, the dashboard, autorun chaining, the PM gate, conditional `SKIP`, a genuine quality `FAIL` with release/deploy suppression, needs-attention rendering, durable resume across a real process kill, and finalize with a written summary. **Its second half — one real ADHD feature through the TaskPlanner backend — was deliberately not run**, so that path rests on component tests alone. The dogfood also surfaced TASK-101, TASK-102 and TASK-103, none of which block the milestone.
 
 TASK-061, TASK-069 and TASK-036 are independent future work and were not touched.
 
