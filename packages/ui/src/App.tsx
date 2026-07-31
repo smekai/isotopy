@@ -12,6 +12,7 @@ import {
   startRun,
 } from "./api";
 import { EmptyState } from "./components/EmptyState";
+import { MilestoneDashboard } from "./components/MilestoneDashboard";
 import { PipelineRow } from "./components/PipelineRow";
 import { ProjectDrawer } from "./components/ProjectDrawer";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
@@ -23,13 +24,20 @@ import type { SetupSection } from "./components/setup/SetupModal";
 import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
+import { useMilestones } from "./hooks/useMilestones";
 import { useProjects } from "./hooks/useProjects";
 import { useRoute } from "./hooks/useRoute";
 import { useRunEvents } from "./hooks/useRunEvents";
 import { useRunList } from "./hooks/useRunList";
 import { useSettings } from "./hooks/useSettings";
-import { HOME_ROUTE, routeRunId, runRoute } from "./route";
-import { firstActiveRunId } from "./run-list";
+import {
+  HOME_ROUTE,
+  milestoneRoute,
+  routeMilestoneId,
+  routeRunId,
+  runRoute,
+} from "./route";
+import { firstActiveRunId, milestoneRefreshKey } from "./run-list";
 import type { Dir } from "./theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "./theme";
 import { useTheme } from "./ThemeContext";
@@ -126,6 +134,11 @@ export function App() {
   const settings = useSettings(projectId);
   const { route, navigate, replace } = useRoute();
   const runs = useRunList(projectId, projects.ready);
+  const milestones = useMilestones(
+    projectId,
+    projects.ready,
+    milestoneRefreshKey(runs.runs),
+  );
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -138,6 +151,10 @@ export function App() {
   const [prefill, setPrefill] = useState<{ key: string; task: string } | null>(null);
 
   const activeRunId = routeRunId(route);
+  const activeMilestoneId = routeMilestoneId(route);
+  const activeMilestone = activeMilestoneId
+    ? milestones.find(activeMilestoneId)
+    : undefined;
   const { run, error: runError } = useRunEvents(activeRunId, resubKey);
 
   useEffect(() => {
@@ -145,7 +162,7 @@ export function App() {
       return;
     }
     attachedProject.current = projectId;
-    if (routeRunId(route) !== null) {
+    if (route.kind !== "home") {
       return;
     }
     const active = firstActiveRunId(runs.runs);
@@ -163,6 +180,28 @@ export function App() {
   function openComposer() {
     navigate(HOME_ROUTE);
     setFocusedId(null);
+  }
+
+  function openMilestone(milestoneId: string) {
+    navigate(milestoneRoute(milestoneId));
+    setFocusedId(null);
+  }
+
+  async function handleStartNextFeature(milestoneId: string) {
+    setStarting(true);
+    try {
+      const { engine, permissionMode } = settings.preferences;
+      const created = await milestones.startNext(milestoneId, {
+        engine,
+        model: modelForEngine(settings.preferences, engine),
+        permissionMode,
+      });
+      if (created) {
+        attachRun(created.id);
+      }
+    } finally {
+      setStarting(false);
+    }
   }
 
   function handleSelectProject(id: string) {
@@ -272,8 +311,14 @@ export function App() {
   }
 
   const awaitingStage = run?.stages.find((stage) => stage.status === "awaiting");
-  const showEmpty = runs.ready && activeRunId === null;
-  const banner = error ?? runError ?? projects.error ?? settings.error ?? runs.error;
+  const showEmpty = runs.ready && route.kind === "home";
+  const banner =
+    error ??
+    runError ??
+    projects.error ??
+    settings.error ??
+    runs.error ??
+    milestones.error;
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
@@ -312,11 +357,14 @@ export function App() {
         <RunRail
           d={d}
           runs={runs.runs}
+          milestones={milestones.milestones}
           ready={runs.ready}
           selectedRunId={activeRunId}
-          composing={activeRunId === null}
+          selectedMilestoneId={activeMilestoneId}
+          composing={route.kind === "home"}
           onNewRun={openComposer}
           onOpen={attachRun}
+          onOpenMilestone={openMilestone}
           onRestart={(runId, stageId) => void handleRestart(runId, stageId)}
           onRerun={handleRerun}
         />
@@ -334,6 +382,19 @@ export function App() {
               onStart={(task, pipelineId) => void handleStart(task, pipelineId)}
               onPlanMilestone={(goal) => void handlePlanMilestone(goal)}
               starting={starting}
+            />
+          ) : activeMilestone ? (
+            <MilestoneDashboard
+              milestone={activeMilestone}
+              runs={runs.runs}
+              busy={starting}
+              d={d}
+              onToggleAutoRun={(autoRunNext) =>
+                void milestones.setAutoRunNext(activeMilestone.id, autoRunNext)
+              }
+              onStartNext={() => void handleStartNextFeature(activeMilestone.id)}
+              onFinalize={() => void milestones.finalize(activeMilestone.id)}
+              onOpenRun={attachRun}
             />
           ) : run ? (
             <>

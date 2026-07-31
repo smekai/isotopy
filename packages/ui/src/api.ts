@@ -11,6 +11,7 @@ import type {
   RunState,
   RunSummary,
   SettingsView,
+  UpdateMilestoneInput,
 } from "@adhd/core";
 import {
   DEFAULT_PIPELINE_ID,
@@ -158,8 +159,30 @@ export function startMilestonePlanning(
   return postJson<RunState>("/milestones/plan", options);
 }
 
+export function fetchMilestones(): Promise<Milestone[]> {
+  return requestJson<Milestone[]>("/milestones");
+}
+
 export function fetchMilestone(milestoneId: string): Promise<Milestone> {
   return requestJson<Milestone>(`/milestones/${milestoneId}`);
+}
+
+export function updateMilestone(
+  milestoneId: string,
+  update: UpdateMilestoneInput,
+): Promise<Milestone> {
+  return patchJson<Milestone>(`/milestones/${milestoneId}`, update);
+}
+
+export function startNextMilestoneRun(
+  milestoneId: string,
+  options: Omit<StartRunOptions, "pipelineId" | "task"> = {},
+): Promise<RunState> {
+  return postJson<RunState>(`/milestones/${milestoneId}/start-next`, options);
+}
+
+export function finalizeMilestone(milestoneId: string): Promise<Milestone> {
+  return postJson<Milestone>(`/milestones/${milestoneId}/finalize`);
 }
 
 export function updateMilestoneProposal(

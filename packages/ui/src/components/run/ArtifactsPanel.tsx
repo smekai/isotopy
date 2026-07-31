@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { FileText, FolderOpen } from "lucide-react";
+import { ClipboardCheck, FileText, FolderOpen } from "lucide-react";
 import { agentForStage } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { fetchRunFileContent, fetchRunFiles } from "../../api";
 import type { WorkspaceFile, WorkspaceFileContent } from "../../api";
+import { CloseoutPanel } from "./CloseoutPanel";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
@@ -22,7 +23,13 @@ import {
   sidebar,
 } from "./run-styles";
 
-type ArtifactView = "workflow" | "files";
+type ArtifactView = "workflow" | "closeout" | "files";
+
+const VIEW_LABEL: Record<ArtifactView, string> = {
+  workflow: "Handoffs",
+  closeout: "Closeout",
+  files: "Solution folder",
+};
 
 const HANDOFF_SIDEBAR_WIDTH = 200;
 const FILE_SIDEBAR_WIDTH = 220;
@@ -223,39 +230,52 @@ export interface ArtifactsPanelProps {
   d: Dir;
 }
 
+function viewIcon(view: ArtifactView) {
+  if (view === "workflow") return <FileText size={ICON.sm} />;
+  if (view === "closeout") return <ClipboardCheck size={ICON.sm} />;
+  return <FolderOpen size={ICON.sm} />;
+}
+
 export function ArtifactsPanel({ run, focusedStageId, d }: ArtifactsPanelProps) {
   const [view, setView] = useState<ArtifactView>("workflow");
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const handoffs = handoffsOf(run);
-  const canBrowseFiles = run.workspacePath != null;
+  const views: ArtifactView[] = [
+    "workflow",
+    ...(run.closeout ? (["closeout"] as const) : []),
+    ...(run.workspacePath != null ? (["files"] as const) : []),
+  ];
+  const active = views.includes(view) ? view : "workflow";
 
   return (
     <div style={PANEL}>
-      {canBrowseFiles && (
+      {views.length > 1 && (
         <div style={viewToggleRow(d)}>
-          {(["workflow", "files"] as ArtifactView[]).map((option) => (
+          {views.map((option) => (
             <button
               key={option}
               onClick={() => setView(option)}
               data-testid={`artifact-view-${option}`}
-              style={viewToggle(view === option, d)}
+              style={viewToggle(active === option, d)}
             >
-              {option === "workflow" ? <FileText size={ICON.sm} /> : <FolderOpen size={ICON.sm} />}
-              {option === "workflow" ? "Handoffs" : "Solution folder"}
+              {viewIcon(option)}
+              {VIEW_LABEL[option]}
             </button>
           ))}
         </div>
       )}
 
-      {view === "workflow" || !canBrowseFiles ? (
+      {active === "closeout" && run.closeout ? (
+        <CloseoutPanel closeout={run.closeout} d={d} />
+      ) : active === "files" ? (
+        <WorkspaceBrowser runId={run.id} runStatus={run.status} d={d} />
+      ) : (
         <HandoffList
           handoffs={handoffs}
           selectedId={selectedStageId ?? focusedStageId}
           onSelect={setSelectedStageId}
           d={d}
         />
-      ) : (
-        <WorkspaceBrowser runId={run.id} runStatus={run.status} d={d} />
       )}
     </div>
   );

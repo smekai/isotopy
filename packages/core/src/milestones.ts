@@ -135,14 +135,40 @@ export function nextMilestoneFeature(
   return milestone.features.find((feature) => feature.status === "ready");
 }
 
-export function milestoneProgress(milestone: Milestone): {
+export interface MilestoneProgress {
   completed: number;
   total: number;
-} {
+}
+
+export function milestoneProgress(milestone: Milestone): MilestoneProgress {
   return {
     completed: milestone.features.filter(
       (feature) => feature.status === "completed",
     ).length,
     total: milestone.features.length,
   };
+}
+
+/** Mirrors the guards `RunOrchestrator.startNextMilestoneRun` throws on. */
+export function canStartNextFeature(milestone: Milestone): boolean {
+  return (
+    milestone.status === "active" &&
+    !milestone.features.some((feature) => feature.status === "in_progress") &&
+    nextMilestoneFeature(milestone) !== undefined
+  );
+}
+
+export function canFinalizeMilestone(milestone: Milestone): boolean {
+  return (
+    milestone.status === "active" &&
+    milestone.features.every((feature) => feature.status === "completed")
+  );
+}
+
+export function milestoneFindings(milestone: Milestone): MilestoneFinding[] {
+  const findings = milestone.features.flatMap((feature) => feature.findings);
+  return [
+    ...findings.filter((finding) => finding.severity === "blocking"),
+    ...findings.filter((finding) => finding.severity !== "blocking"),
+  ];
 }

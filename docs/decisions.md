@@ -6,6 +6,48 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-07-31 — Milestone D ships without release and deploy automation (TASK-093, TASK-092)
+
+**Context:** TASK-093 was written to render preview deployment URLs and QA
+screenshots and traces in Artifacts. Both are produced by TASK-092's typed
+project automation configuration, and TASK-092 was closed unmerged (PR #13)
+under a standing "no automation for now" call.
+
+**Decision:** Milestone D closes without release and deploy automation, and
+TASK-093's Artifacts scope was cut to the closeout record — the one delivery
+artifact the run actually produces today. Rendering a deploy URL section that is
+always empty, or an evidence gallery for files no configured stage writes, would
+have been a UI that promises a capability the product does not have.
+
+The `release` and `deploy` stages stay in the Full Delivery pipeline: their
+step-tasks end with `VERDICT: SKIP` when no target is configured, so the seam
+degrades honestly and TASK-092 remains a real, unfinished follow-up rather than
+a rewrite. **Rejected:** removing the two stages until automation lands, which
+would have made TASK-092 a pipeline change instead of a configuration one.
+
+---
+
+## 2026-07-31 — A quality FAIL presents as needs-attention, not as failure (TASK-093)
+
+**Context:** a quality-policy stage that reports `VERDICT: FAIL` is recorded with
+stage status `failed` so the run ends `needs_attention`, but the pipeline
+deliberately continues past it to closeout. The UI painted that stage the same
+red as a crashed one, so a review that found a blocking problem was
+indistinguishable from an engine that died.
+
+**Decision:** the UI derives a presentation from the stage rather than reading
+its status directly — `stagePresentation` in `run-utils.ts` maps
+`failed` + `verdict: FAIL` to an amber `NEEDS ATTENTION`, and leaves a `failed`
+stage with no verdict red. The derivation is presentational and pure, so it
+lives in the UI beside the other run helpers and is unit-tested there.
+
+**Rejected:** adding `needs_attention` to `StageStatus` in `@adhd/core`. The
+persisted status is what the durable workflow branches on, and widening it would
+have forced every runtime consumer to handle a case that only exists so a colour
+can differ.
+
+---
+
 ## 2026-07-29 — SQLite owns projection audit timestamps (TASK-099)
 
 **Context:** mutable `runs` and `milestones` rows received `updated_at` from

@@ -1,8 +1,19 @@
-import type { StageStatus } from "@adhd/core";
+import { STAGE_VERDICTS } from "@adhd/core";
+import type { StageState, StageStatus } from "@adhd/core";
 
 export interface StageProgress {
   id: string;
   status: StageStatus;
+}
+
+export type StagePresentation = StageStatus | "needs_attention";
+
+export function stagePresentation(
+  stage: Pick<StageState, "status" | "verdict">,
+): StagePresentation {
+  return stage.status === "failed" && stage.verdict === STAGE_VERDICTS.FAIL
+    ? "needs_attention"
+    : stage.status;
 }
 
 export interface RunProgress {

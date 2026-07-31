@@ -1,11 +1,13 @@
 import type { CSSProperties } from "react";
-import { Plus } from "lucide-react";
-import type { RunSummary } from "@adhd/core";
+import { Flag, Plus } from "lucide-react";
+import type { Milestone, RunSummary } from "@adhd/core";
+import { milestoneProgress } from "@adhd/core";
 import { RunCard } from "./RunCard";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
 
 const RAIL_WIDTH = 280;
+const MILESTONE_LIST_MAX_HEIGHT = 200;
 
 function rail(d: Dir): CSSProperties {
   return {
@@ -78,14 +80,107 @@ function placeholder(d: Dir): CSSProperties {
   };
 }
 
+const MILESTONE_LIST: CSSProperties = {
+  listStyle: "none",
+  margin: 0,
+  padding: `0 ${SPACE.md}px`,
+  display: "flex",
+  flexDirection: "column",
+  gap: SPACE.xxs,
+  maxHeight: MILESTONE_LIST_MAX_HEIGHT,
+  overflowY: "auto",
+  flexShrink: 0,
+};
+
+function milestoneButton(selected: boolean, d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.sm,
+    width: "100%",
+    textAlign: "left",
+    background: selected ? d.surface : "transparent",
+    border: `1px solid ${selected ? d.borderStrong : "transparent"}`,
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.md}px ${SPACE.lg}px`,
+    cursor: "pointer",
+    fontFamily: SANS,
+    color: selected ? d.text : d.textMid,
+  };
+}
+
+const MILESTONE_NAME: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: FONT.md,
+  fontWeight: WEIGHT.semibold,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  color: "inherit",
+};
+
+const MILESTONE_ICON: CSSProperties = { flexShrink: 0 };
+
+function milestoneCount(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontSize: FONT.xs, flexShrink: 0 };
+}
+
+interface MilestoneListProps {
+  milestones: Milestone[];
+  selectedMilestoneId: string | null;
+  onOpenMilestone: (milestoneId: string) => void;
+  d: Dir;
+}
+
+function MilestoneList({
+  milestones,
+  selectedMilestoneId,
+  onOpenMilestone,
+  d,
+}: MilestoneListProps) {
+  return (
+    <>
+      <div style={sectionLabel(d)}>Milestones</div>
+      <ul style={MILESTONE_LIST}>
+        {milestones.map((milestone) => {
+          const { completed, total } = milestoneProgress(milestone);
+          const selected = milestone.id === selectedMilestoneId;
+          return (
+            <li key={milestone.id}>
+              <button
+                type="button"
+                onClick={() => onOpenMilestone(milestone.id)}
+                aria-current={selected ? "true" : undefined}
+                data-testid="milestone-card"
+                data-milestone-id={milestone.id}
+                style={milestoneButton(selected, d)}
+              >
+                <Flag size={ICON.sm} style={MILESTONE_ICON} />
+                <span style={MILESTONE_NAME}>{milestone.name}</span>
+                <span style={milestoneCount(d)}>
+                  {completed}/{total}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
 export interface RunRailProps {
   d: Dir;
   runs: RunSummary[];
+  milestones: Milestone[];
   ready: boolean;
   selectedRunId: string | null;
+  selectedMilestoneId: string | null;
   composing: boolean;
   onNewRun: () => void;
   onOpen: (runId: string) => void;
+  onOpenMilestone: (milestoneId: string) => void;
   onRestart: (runId: string, stageId: string) => void;
   onRerun: (run: RunSummary) => void;
 }
@@ -93,11 +188,14 @@ export interface RunRailProps {
 export function RunRail({
   d,
   runs,
+  milestones,
   ready,
   selectedRunId,
+  selectedMilestoneId,
   composing,
   onNewRun,
   onOpen,
+  onOpenMilestone,
   onRestart,
   onRerun,
 }: RunRailProps) {
@@ -108,6 +206,15 @@ export function RunRail({
           <Plus size={ICON.md} /> New run
         </button>
       </div>
+
+      {milestones.length > 0 && (
+        <MilestoneList
+          milestones={milestones}
+          selectedMilestoneId={selectedMilestoneId}
+          onOpenMilestone={onOpenMilestone}
+          d={d}
+        />
+      )}
 
       <div style={sectionLabel(d)}>Runs</div>
 

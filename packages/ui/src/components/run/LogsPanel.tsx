@@ -6,6 +6,8 @@ import { useFollowScroll } from "../../hooks/useFollowScroll";
 import type { Dir } from "../../theme";
 import { EASE, FONT, ICON, MONO, MOTION, SPACE, WEIGHT, logLevelColor, sLabel, statusClr } from "../../theme";
 import { StatusIcon } from "../StatusIcon";
+import { stagePresentation } from "../../run-utils";
+import type { StagePresentation } from "../../run-utils";
 import {
   PANEL,
   SCROLL_BODY,
@@ -65,7 +67,7 @@ function caret(d: Dir): CSSProperties {
   };
 }
 
-function statusText(status: StageState["status"]): CSSProperties {
+function statusText(status: StagePresentation): CSSProperties {
   return {
     color: statusClr(status).text,
     fontFamily: MONO,
@@ -79,6 +81,7 @@ function statusText(status: StageState["status"]): CSSProperties {
 
 function StageLog({ stage, d }: { stage: StageState; d: Dir }) {
   const agent = agentForStage(stage.id);
+  const presentation = stagePresentation(stage);
   const spend = stage.usage ? formatUsage(stage.usage) : undefined;
   const level = (entry: LogLevel) => logLevelColor(entry, d);
 
@@ -105,9 +108,9 @@ function StageLog({ stage, d }: { stage: StageState; d: Dir }) {
             {stage.verdict}
           </span>
         )}
-        <span style={statusText(stage.status)}>
-          <StatusIcon s={stage.status} size={ICON.sm} />
-          {sLabel(stage.status)}
+        <span style={statusText(presentation)}>
+          <StatusIcon s={presentation} size={ICON.sm} />
+          {sLabel(presentation)}
         </span>
         {spend && <span style={stageSpendText(d)}>{spend}</span>}
         <span style={stageRule(d)} />
