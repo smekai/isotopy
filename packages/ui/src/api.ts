@@ -3,6 +3,7 @@ import type {
   MilestoneProposal,
   EngineModelList,
   EngineStatus,
+  LimitResolution,
   Project,
   ProjectPreferencesUpdate,
   ProjectsView,
@@ -262,6 +263,14 @@ export function postRunMessage(runId: string, text: string): Promise<RunMessage>
 
 export function approveGate(runId: string, stageId: string): Promise<RunState> {
   return postJson<RunState>(`/runs/${runId}/gates/${stageId}/approve`);
+}
+
+export function resolveLimit(
+  runId: string,
+  stageId: string,
+  resolution: LimitResolution,
+): Promise<RunState> {
+  return postJson<RunState>(`/runs/${runId}/limit/${stageId}/resolve`, resolution);
 }
 
 export function abortRun(runId: string): Promise<RunState> {

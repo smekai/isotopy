@@ -11,6 +11,7 @@ import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
   EngineId,
+  LimitResolution,
   MilestoneProposal,
   ProjectPreferencesUpdate,
   ReviseMilestonePlanInput,
@@ -74,6 +75,18 @@ export const startRunSchema = z
 
 export const postRunMessageSchema = z.object({ text }).strict();
 export const restartRunSchema = z.object({ stageId: text }).strict();
+
+export const resolveLimitSchema: z.ZodType<LimitResolution> = z.discriminatedUnion("choice", [
+  z.object({ choice: z.literal("retry-now") }).strict(),
+  z.object({ choice: z.literal("switch-model"), model: text }).strict(),
+  z
+    .object({
+      choice: z.literal("switch-engine"),
+      engine: engineIdSchema,
+      model: z.string().optional(),
+    })
+    .strict(),
+]);
 
 export const createMilestoneFeatureSchema: z.ZodType<CreateMilestoneFeatureInput> = z
   .object({

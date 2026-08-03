@@ -152,6 +152,46 @@ CI wiring is still on the "adopt next" list in
 [`architecture.md`](./architecture.md). The Vitest suite is CI-ready today: no
 credentials, no engine, no browser.
 
+## Forcing a plan limit by hand
+
+A limit is the one behaviour you cannot wait for on demand, so every adapter
+takes a binary override — `ADHD_CLAUDE_PATH`, `ADHD_CODEX_PATH`,
+`ADHD_CURSOR_PATH`. Point one at a stub that prints a limit line to **stderr**
+and exits non-zero, and the real adapter, the real subprocess harness and the
+real detection patterns all run. No code change, no test hook.
+
+macOS / Linux:
+
+```bash
+cat > /tmp/fake-claude <<'EOF'
+#!/bin/sh
+echo "You've hit your session limit · resets 4:30pm (Europe/Tallinn)" >&2
+exit 1
+EOF
+chmod +x /tmp/fake-claude
+ADHD_CLAUDE_PATH=/tmp/fake-claude pnpm dev
+```
+
+Windows (PowerShell) — it must be `.cmd` or `.bat`, which is what
+`commandNeedsWindowsShell` looks for:
+
+```powershell
+@'
+@echo off
+echo You've hit your session limit - resets 4:30pm (Europe/Tallinn) 1>&2
+exit /b 1
+'@ | Out-File -Encoding ascii $env:TEMP\fake-claude.cmd
+$env:ADHD_CLAUDE_PATH = "$env:TEMP\fake-claude.cmd"; pnpm dev
+```
+
+Start any run: the stage goes `blocked`, the popup names the reset in your own
+timezone and counts down, and the rail shows `BLOCKED`. Kill the server with the
+run parked and `pnpm dev` again — it comes back still parked. To watch it resume
+on its own instead of waiting until 4:30pm, use a short delay the parser
+understands: `try again in 20 seconds`.
+
+`engine-limit-adapters.comp.ts` automates exactly this for all three engines.
+
 ## Cross-platform notes
 
 - Temp roots come from `os.tmpdir()` + `mkdtemp`, never a hardcoded `/tmp`.

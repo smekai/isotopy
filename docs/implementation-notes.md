@@ -123,6 +123,59 @@ actionable guidance while the raw error stays visible in the log.
 
 ---
 
+## Engines — plan limits and reset parsing (`domain/engine-limit.ts`)
+
+A limit is detected separately from `ERROR_HINTS`, because it is not a failure to
+explain but a wait to schedule (see [`decisions.md`](./decisions.md)). One
+`LIMIT_PATTERNS` table keyed by `EngineId` holds what a *time-based* limit looks
+like per CLI. Running out of prepaid credit stays in `ERROR_HINTS` and still fails
+the run: `insufficient_quota`, `credit balance is too low` and `quota exceeded`
+never clear on a timer.
+
+**The reset time is stored as a duration from detection, never as a wall clock.**
+The CLI prints its own local time plus a named zone — `resets 4:30pm
+(Europe/Tallinn)` — and the server may sit in a different zone, on a different DST
+rule, on either OS. So `clockResetMs` asks ICU what time it is *in the zone the CLI
+named*:
+
+```ts
+new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" })
+  .formatToParts(now)
+```
+
+and subtracts, modulo 1440 minutes. Three things fall out of that shape for free:
+DST is ICU's problem rather than ours; a reset earlier in the day than *now* rolls
+to tomorrow instead of going negative; and Windows and macOS agree, because Node
+ships full ICU on both. `hourCycle: "h23"` rather than `hour12: false` is
+deliberate — the latter renders midnight as `24` under some locales.
+
+An unrecognised zone name makes `Intl` throw, and the catch falls back to this
+machine's clock rather than giving up on an otherwise parseable time. A phrase like
+`try again in 2h 15m` is already a duration and is preferred over clock parsing when
+both are present. The result is clamped to 24h so a bad parse cannot park a run for
+a decade, and `limitWaitMs` falls back to `DEFAULT_LIMIT_WAIT_MS` (30 minutes) when
+nothing parsed or the stored instant is already past.
+
+**Step names carry the attempt (`stepName` in `pipeline-workflow.ts`).** A stage
+that limits and retries runs its turn step more than once, and OpenWorkflow
+memoizes a step by name — reusing the name would replay the *limited* result
+forever. Attempt 0 keeps the original `${stageId}:turn:${n}` spelling on purpose:
+a run parked across an upgrade must find its completed stages in history rather
+than re-run and re-pay for them.
+
+`EngineRunResult.limit` rides on a result whose `success` is `false`, because the
+process really did fail — the presence of `limit` is what reclassifies it from a
+death into a wait. `withStderr` (`engines/log-text.ts`) exists because each
+adapter already folds stderr into the message it builds; appending it again
+repeated the CLI line verbatim in the popup.
+
+Only after parsing is the duration turned into an absolute UTC instant
+(`resetAt`) — that is what survives a restart and what the browser renders in the
+reader's own timezone. Server-side log lines name a duration (`waiting 3h 38m`) and
+never a clock time, because the server does not know the reader's zone.
+
+---
+
 ## Run orchestration (`services/run-orchestrator.ts`)
 
 `RunOrchestrator` owns run lifecycle — it starts pipelines, streams stage events
@@ -230,6 +283,22 @@ switcher shows a placeholder name for that first tick, which is why an
 assertion on it has to wait for the list rather than reading the trigger
 immediately. Preferences are keyed `adhd.<projectId>.<name>` so two projects
 can hold different pipelines, models and permission modes at once.
+
+**Limit notifications (`ui/src/hooks/useLimitNotification.ts`).** Permission is
+requested at the moment the *first* limit lands, never on load — asking a user
+who has not yet seen a reason is how a browser gets told "never" for the origin.
+Two browser facts shape the rest. **Chrome** resolves `requestPermission()`
+without a user gesture, so the ask can ride the event; **Safari** rejects it
+outside one, which is why the modal also renders an "Enable notifications"
+button — the click is the gesture Safari wants. Both grant over
+`http://localhost`, because localhost is a secure context, so no HTTPS dev
+certificate is needed on either OS. `document.title` is set regardless, so a
+background tab says something even where notifications are denied. There is no
+native notifier binary and no Electron dependency on either platform.
+
+`formatResetAt` renders the reset in the *reader's* timezone from the UTC
+instant the server stored — the server never formats a clock time, because it
+does not know where the reader is.
 
 **Inline markdown renderer (`ui/src/inline-md.tsx`).** `INLINE_TOKEN` is one
 alternation with one branch per inline style, tried left-to-right at each

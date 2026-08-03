@@ -1,6 +1,8 @@
 import type {
   EngineId,
+  EngineLimit,
   EnginePermissionMode,
+  LimitChoice,
   LogLevel,
   PipelineDefinition,
   RunState,
@@ -36,6 +38,7 @@ export interface StageResult {
   output?: string;
   verdict?: StageVerdict;
   question?: string;
+  limit?: EngineLimit;
   sessionId?: string;
   startedAt: string;
   completedAt: string;
@@ -57,6 +60,8 @@ export interface RunProjection {
   stageAwaiting(runId: string, stageId: string): void;
   stageAsking(runId: string, stageId: string, question: string): void;
   stageAnswered(runId: string, stageId: string): void;
+  stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void;
+  limitResolved(runId: string, stageId: string, choice?: LimitChoice): void;
   gateApproved(runId: string, stageId: string): void;
   stagePassed(runId: string, stageId: string): void;
   stageSkipped(runId: string, stageId: string): void;

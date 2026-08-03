@@ -3,9 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { CODEX_MODEL_OPTIONS } from "@adhd/core";
-import type { EngineModelList, EngineStatus } from "@adhd/core";
+import type { EngineLimit, EngineModelList, EngineStatus } from "@adhd/core";
+import { detectEngineLimit } from "../domain/engine-limit.ts";
 import { parseCodexProtocolLine } from "./codex-protocol.ts";
-import { firstLine, truncate } from "./log-text.ts";
+import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
 import {
@@ -86,9 +87,9 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
     message: "Invalid OpenAI API key — update it in Setup → Connection.",
   },
   {
-    pattern: /insufficient_quota|quota exceeded|rate limit|billing|exceeded your current quota/i,
+    pattern: /insufficient_quota|quota exceeded|billing|exceeded your current quota/i,
     message:
-      "OpenAI quota or rate limit reached — check your plan, or switch connection mode in Setup → Connection.",
+      "OpenAI quota exhausted — check your plan and billing, or switch connection mode in Setup → Connection.",
   },
   {
     pattern: /model.*(?:not|un)available|unknown model|model_not_found|does not exist|no access to (?:the )?model/i,
@@ -308,6 +309,7 @@ export const codexAdapter: EngineAdapter = {
       capture.terminal === "success" &&
       capture.error === undefined;
     let errorMessage: string | undefined;
+    let limit: EngineLimit | undefined;
     if (!success) {
       if (result.timedOut) {
         errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
@@ -325,13 +327,13 @@ export const codexAdapter: EngineAdapter = {
         const raw =
           capture.error ??
           `Codex exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
-        const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
-        if (mapped) {
+        const detail = withStderr(raw, stderr);
+        limit = detectEngineLimit("codex", truncate(detail));
+        const mapped = mapKnownError(detail);
+        if (mapped ?? limit) {
           ctx.onLog("warn", truncate(raw));
-          errorMessage = mapped;
-        } else {
-          errorMessage = truncate(raw);
         }
+        errorMessage = mapped ?? truncate(raw);
       }
     }
 
@@ -341,6 +343,7 @@ export const codexAdapter: EngineAdapter = {
       sessionId: capture.sessionId,
       exitCode: result.exitCode,
       errorMessage,
+      limit,
       usage: capture.usage
         ? { ...capture.usage, durationMs: result.durationMs, turns: 1 }
         : undefined,

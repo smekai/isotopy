@@ -83,6 +83,18 @@ const closeoutRecordSchema = z
   })
   .strict();
 
+const runLimitSchema = z
+  .object({
+    stageId: text,
+    engine: z.enum(ENGINE_IDS),
+    model: z.string().optional(),
+    raw: z.string(),
+    resetAt: timestamp.optional(),
+    detectedAt: timestamp,
+    attempt: z.number().int().positive(),
+  })
+  .strict();
+
 const stageSchema = z
   .object({
     id: text,
@@ -112,6 +124,7 @@ const runStateSchema = z
     task: z.string().optional(),
     engine: z.enum(ENGINE_IDS).optional(),
     model: z.string().optional(),
+    limit: runLimitSchema.optional(),
     result: z.string().optional(),
     stageOutputs: z.record(z.string(), z.string()).optional(),
     workspacePath: text.optional(),
@@ -225,6 +238,23 @@ const runEventSchema: z.ZodType<RunEvent> = z.discriminatedUnion("type", [
     .object({
       ...stageEventBase,
       type: z.literal("stage.answered"),
+      status: z.literal("running"),
+      message: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      ...stageEventBase,
+      type: z.literal("stage.blocked"),
+      status: z.literal("blocked"),
+      message: z.string(),
+      limit: runLimitSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...stageEventBase,
+      type: z.literal("stage.unblocked"),
       status: z.literal("running"),
       message: z.string(),
     })

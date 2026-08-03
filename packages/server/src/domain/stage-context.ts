@@ -1,5 +1,5 @@
 import { STAGE_OUTCOMES, STAGE_VERDICTS } from "@adhd/core";
-import type { StageOutcome, StageVerdict } from "@adhd/core";
+import type { EngineLimit, StageOutcome, StageVerdict } from "@adhd/core";
 import type { EngineRunResult } from "../engines/types.ts";
 
 const VERDICT_LINE = new RegExp(
@@ -44,6 +44,7 @@ export interface EngineStageOutcome {
   verdict?: StageVerdict;
   question?: string;
   failureMessage?: string;
+  limit?: EngineLimit;
 }
 
 export interface InterpretOptions {
@@ -56,6 +57,9 @@ export function interpretEngineResult(
   result: EngineRunResult,
   { profession, canAsk }: InterpretOptions,
 ): EngineStageOutcome {
+  if (result.limit) {
+    return { outcome: STAGE_OUTCOMES.LIMITED, limit: result.limit };
+  }
   if (!result.success) {
     return {
       outcome: STAGE_OUTCOMES.FAILED,

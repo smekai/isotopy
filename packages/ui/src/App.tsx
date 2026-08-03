@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
-import type { RunSummary } from "@adhd/core";
+import type { LimitResolution, RunSummary } from "@adhd/core";
 import { modelForEngine } from "@adhd/core";
 import {
   abortRun,
   approveGate,
   postRunMessage,
+  resolveLimit,
   restartRun,
   startMilestonePlanning,
   startRun,
 } from "./api";
 import { EmptyState } from "./components/EmptyState";
+import { LimitModal } from "./components/LimitModal";
 import { MilestoneDashboard } from "./components/MilestoneDashboard";
 import { PipelineRow } from "./components/PipelineRow";
 import { ProjectDrawer } from "./components/ProjectDrawer";
@@ -149,6 +151,7 @@ export function App() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ key: string; task: string } | null>(null);
+  const [dismissedLimit, setDismissedLimit] = useState<string | null>(null);
 
   const activeRunId = routeRunId(route);
   const activeMilestoneId = routeMilestoneId(route);
@@ -276,6 +279,18 @@ export function App() {
     } catch {}
   }
 
+  async function handleResolveLimit(stageId: string, resolution: LimitResolution) {
+    if (!activeRunId) {
+      return;
+    }
+    setError(null);
+    try {
+      await resolveLimit(activeRunId, stageId, resolution);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resume the run");
+    }
+  }
+
   async function handleAbort() {
     if (!activeRunId) {
       return;
@@ -311,6 +326,10 @@ export function App() {
   }
 
   const awaitingStage = run?.stages.find((stage) => stage.status === "awaiting");
+  const activeLimit =
+    run?.status === "blocked" && run.limit && run.limit.detectedAt !== dismissedLimit
+      ? run.limit
+      : undefined;
   const showEmpty = runs.ready && route.kind === "home";
   const banner =
     error ??
@@ -447,6 +466,17 @@ export function App() {
             setSetupSection(section);
           }}
           onClose={() => setShowProject(false)}
+        />
+      )}
+      {run && activeLimit && (
+        <LimitModal
+          d={d}
+          run={run}
+          limit={activeLimit}
+          onResolve={(resolution) => void handleResolveLimit(activeLimit.stageId, resolution)}
+          onAbort={() => void handleAbort()}
+          onOpenConnection={() => setSetupSection("harness")}
+          onDismiss={() => setDismissedLimit(activeLimit.detectedAt)}
         />
       )}
       {setupSection && (

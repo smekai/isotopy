@@ -126,3 +126,32 @@ number in this file drifts on the very next commit, which is why one is no longe
 - Use `field?: T` when a property may be absent or `undefined`; those states have
   the same meaning in ADHD contracts. Use `null` only when the contract needs an
   explicit cleared or removed value.
+
+## Comments — default to zero
+
+Code says *what*. Markdown says *why*. A comment is a smell, not a courtesy.
+
+Before writing one, **rename** until it is redundant. If a name cannot carry it,
+the explanation goes to [`docs/implementation-notes.md`](docs/implementation-notes.md)
+(how something works, platform and CLI quirks) or
+[`docs/decisions.md`](docs/decisions.md) (a dated entry: context, decision,
+rejected alternative). It does not go in the source.
+
+Only two kinds survive review under `src/`:
+
+- a **one-line** pointer at genuinely intricate *local* logic — a subtle regex, a
+  protocol quirk, a platform workaround on the very next line;
+- anything under `packages/*/test/`, which may explain itself freely.
+
+Do **not** write:
+
+- `/** … */` on an interface field, a type, or an exported function. A doc comment
+  that restates the signature is noise — and "the surrounding code already has
+  some" is not a reason to add more.
+- a comment that introduces a block (`// build the prompt`, `// then park the
+  stage`). Extract a named function instead.
+- a comment that argues for a design. That is a `docs/decisions.md` entry.
+- a header paragraph summarising a `src/` file. That is `docs/architecture.md`.
+
+Deleting a comment without relocating what it knew is data loss: move it first,
+then delete it.

@@ -86,6 +86,18 @@ export function applyEvent(run: RunState, event: RunEvent): RunState {
     next.status = "running";
   }
 
+  if (event.type === "stage.blocked" && event.limit) {
+    stage.status = "blocked";
+    next.status = "blocked";
+    next.limit = event.limit;
+  }
+
+  if (event.type === "stage.unblocked") {
+    stage.status = "running";
+    next.status = "running";
+    delete next.limit;
+  }
+
   if (event.type === "stage.approved") {
     stage.status = "passed";
     stage.completedAt = event.ts;

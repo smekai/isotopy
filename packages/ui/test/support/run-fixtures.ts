@@ -3,6 +3,7 @@ import type {
   MessageRole,
   RunEvent,
   RunEventType,
+  RunLimit,
   RunMessage,
   RunState,
   RunStatus,
@@ -44,6 +45,19 @@ export function message(
 
 export function event(type: RunEventType, extra: Partial<RunEvent> = {}): RunEvent {
   return { ts: EVENT_TS, type, runId: RUN_ID, ...extra };
+}
+
+export function limit(overrides: Partial<RunLimit> = {}): RunLimit {
+  return {
+    stageId: "design",
+    engine: "claude-code",
+    model: "opus",
+    raw: "You've hit your session limit · resets 4:30pm (Europe/Tallinn)",
+    resetAt: "2026-07-21T13:30:00.000Z",
+    detectedAt: EVENT_TS,
+    attempt: 1,
+    ...overrides,
+  };
 }
 
 export function stageOf(state: RunState | null, stageId: string): StageState {

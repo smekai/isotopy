@@ -10,6 +10,7 @@ export const STAGE_STATUSES = [
   "failed",
   "awaiting",
   "asking",
+  "blocked",
   "skipped",
 ] as const;
 
@@ -20,6 +21,7 @@ export const RUN_STATUSES = [
   "running",
   "awaiting",
   "asking",
+  "blocked",
   "completed",
   "needs_attention",
   "failed",
@@ -71,6 +73,7 @@ export const STAGE_OUTCOMES = {
   SKIPPED: "skipped",
   CANCELLED: "cancelled",
   ASKING: "asking",
+  LIMITED: "limited",
 } as const;
 
 export type StageOutcome = (typeof STAGE_OUTCOMES)[keyof typeof STAGE_OUTCOMES];
@@ -103,6 +106,32 @@ export interface StageUsage {
   turns?: number;
 }
 
+export interface EngineLimit {
+  raw: string;
+  resetAt?: string;
+}
+
+export interface RunLimit extends EngineLimit {
+  stageId: string;
+  engine: EngineId;
+  model?: string;
+  detectedAt: string;
+  attempt: number;
+}
+
+export const DEFAULT_LIMIT_WAIT_MS = 30 * 60_000;
+
+export const MAX_LIMIT_WAIT_MS = 24 * 60 * 60_000;
+
+export const LIMIT_CHOICES = ["retry-now", "switch-model", "switch-engine"] as const;
+
+export type LimitChoice = (typeof LIMIT_CHOICES)[number];
+
+export type LimitResolution =
+  | { choice: "retry-now" }
+  | { choice: "switch-model"; model: string }
+  | { choice: "switch-engine"; engine: EngineId; model?: string };
+
 export interface StageState {
   id: string;
   label: string;
@@ -129,6 +158,7 @@ export interface RunState {
   task?: string;
   engine?: EngineId;
   model?: string;
+  limit?: RunLimit;
   result?: string;
   stageOutputs?: Record<string, string>;
   workspacePath?: string;
@@ -156,6 +186,7 @@ export interface RunSummary {
   task?: string;
   engine?: EngineId;
   model?: string;
+  limit?: RunLimit;
   createdAt: string;
   completedAt?: string;
   stages: RunSummaryStage[];
@@ -221,6 +252,7 @@ export function toRunSummary(run: RunState): RunSummary {
     task: run.task,
     engine: run.engine,
     model: run.model,
+    limit: run.limit,
     createdAt: run.createdAt,
     completedAt: run.completedAt,
     stages: run.stages.map((stage) => ({
@@ -243,6 +275,8 @@ export const RUN_EVENT_TYPES = [
   "stage.skipped",
   "stage.asking",
   "stage.answered",
+  "stage.blocked",
+  "stage.unblocked",
   "stage.usage",
   "run.message",
 ] as const;
@@ -260,6 +294,7 @@ export interface RunEvent {
   result?: string;
   chatMessage?: RunMessage;
   usage?: StageUsage;
+  limit?: RunLimit;
 }
 
 export interface NewRunInput {

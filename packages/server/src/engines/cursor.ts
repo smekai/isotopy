@@ -3,9 +3,10 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
-import type { EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
+import type { EngineLimit, EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
+import { detectEngineLimit } from "../domain/engine-limit.ts";
 import { parseCursorProtocolLine } from "./cursor-protocol.ts";
-import { firstLine, truncate } from "./log-text.ts";
+import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
 import {
@@ -129,9 +130,9 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
       "Model not available on your Cursor plan — switch the model (try Auto) in Setup → AI Harness.",
   },
   {
-    pattern: /usage limit|rate limit|quota exceeded/i,
+    pattern: /quota exceeded/i,
     message:
-      "Cursor usage limit reached — wait for the reset, or switch connection mode in Setup → Connection.",
+      "Cursor quota exhausted — check your plan, or switch connection mode in Setup → Connection.",
   },
   {
     pattern: /unknown (?:option|argument)|unrecognized (?:option|argument)/i,
@@ -365,6 +366,7 @@ export const cursorAdapter: EngineAdapter = {
 
     const success = result.success && capture.terminal === "success";
     let errorMessage: string | undefined;
+    let limit: EngineLimit | undefined;
     if (!success) {
       if (result.timedOut) {
         errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
@@ -380,13 +382,13 @@ export const cursorAdapter: EngineAdapter = {
             ? (capture.error ??
               `Cursor ended with ${capture.terminalLabel ?? "an error"}`)
             : `Cursor exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
-        const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
-        if (mapped) {
+        const detail = withStderr(raw, stderr);
+        limit = detectEngineLimit("cursor", truncate(detail));
+        const mapped = mapKnownError(detail);
+        if (mapped ?? limit) {
           ctx.onLog("warn", truncate(raw));
-          errorMessage = mapped;
-        } else {
-          errorMessage = truncate(raw);
         }
+        errorMessage = mapped ?? truncate(raw);
       }
     }
 
@@ -395,6 +397,7 @@ export const cursorAdapter: EngineAdapter = {
       result: capture.output,
       exitCode: result.exitCode,
       errorMessage,
+      limit,
       usage: {
         ...capture.usage,
         durationMs: capture.usage?.durationMs ?? result.durationMs,

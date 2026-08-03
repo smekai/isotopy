@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
+  EngineLimit,
   EnginePermissionMode,
+  LimitChoice,
+  LimitResolution,
   LogLevel,
   MessageKind,
   MessageRole,
@@ -45,6 +48,12 @@ import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
 import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
+import { LIMIT_ERRORS, LIMIT_LOG } from "../domain/limit-copy.ts";
+import {
+  formatLimitWait,
+  limitWaitMs,
+  selectionAfterLimit,
+} from "../domain/engine-limit.ts";
 import { formatHandoff } from "../domain/markdown/stage.ts";
 import { parseMilestonePlan } from "../domain/milestone-plan.ts";
 import {
@@ -1005,6 +1014,87 @@ export class RunOrchestrator implements RunProjection {
     });
   }
 
+  stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage || !run.engine) {
+      return;
+    }
+    const ts = nowIso();
+    stage.status = "blocked";
+    run.status = "blocked";
+    run.limit = {
+      stageId,
+      engine: run.engine,
+      model: run.model,
+      raw: limit.raw,
+      resetAt: limit.resetAt,
+      detectedAt: ts,
+      attempt,
+    };
+    const profession = agentForStage(stageId).profession;
+    const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
+    this.log(runId, stageId, "warn", message);
+    this.emit({
+      ts,
+      type: "stage.blocked",
+      runId,
+      stageId,
+      status: "blocked",
+      message,
+      limit: run.limit,
+    });
+  }
+
+  limitResolved(runId: string, stageId: string, choice?: LimitChoice): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage || stage.status !== "blocked") {
+      return;
+    }
+    stage.status = "running";
+    run.status = "running";
+    delete run.limit;
+    const profession = agentForStage(stageId).profession;
+    const message = LIMIT_LOG.resuming(profession, choice);
+    this.log(runId, stageId, "run", message);
+    this.emit({
+      ts: nowIso(),
+      type: "stage.unblocked",
+      runId,
+      stageId,
+      status: "running",
+      message,
+    });
+  }
+
+  resolveLimit(runId: string, stageId: string, resolution: LimitResolution): RunState {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stage = this.requireStage(runId, stageId);
+    if (stage.status !== "blocked") {
+      throw new Error(LIMIT_ERRORS.notBlocked(stageId));
+    }
+    const openWorkflowRunId = this.openWorkflowRunIds.get(runId);
+    if (!openWorkflowRunId) {
+      throw new Error(LIMIT_ERRORS.noDurableRun(runId));
+    }
+
+    const selection = selectionAfterLimit({ engine: run.engine, model: run.model }, resolution);
+    run.engine = selection.engine;
+    if (selection.model === undefined) {
+      delete run.model;
+    } else {
+      run.model = selection.model;
+    }
+    this.limitResolved(runId, stageId, resolution.choice);
+    void this.flushPersist(runId);
+    void this.runtimes.forProject(run.projectId).resolveLimit(runId, stageId, resolution.choice);
+    return structuredClone(run);
+  }
+
   gateApproved(runId: string, stageId: string): void {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
@@ -1195,12 +1285,14 @@ export class RunOrchestrator implements RunProjection {
         stage.status === "pending" ||
         stage.status === "running" ||
         stage.status === "awaiting" ||
-        stage.status === "asking"
+        stage.status === "asking" ||
+        stage.status === "blocked"
       ) {
         stage.status = "skipped";
         this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId: stage.id, status: "skipped" });
       }
     }
+    delete run.limit;
     run.status = "cancelled";
     run.completedAt = nowIso();
     this.emit({
@@ -1219,12 +1311,18 @@ export class RunOrchestrator implements RunProjection {
     }
     const ts = nowIso();
     for (const stage of run.stages) {
-      if (stage.status === "running" || stage.status === "awaiting" || stage.status === "asking") {
+      if (
+        stage.status === "running" ||
+        stage.status === "awaiting" ||
+        stage.status === "asking" ||
+        stage.status === "blocked"
+      ) {
         stage.status = "failed";
         stage.completedAt = ts;
         stage.logs.push({ ts, level: "fail", message: "✗ Interrupted by server restart" });
       }
     }
+    delete run.limit;
     run.status = "failed";
     run.completedAt = ts;
     this.emit({
