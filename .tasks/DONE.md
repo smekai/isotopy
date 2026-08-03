@@ -1,5 +1,32 @@
 # Done
 
+## TASK-061: Limit is over — pause the run on a plan limit instead of failing it
+**Priority:** P2 | **Tags:** engine, server, ui | **Assignee:** Fedor
+**Updated:** 2026-08-03 16:50
+
+A subscription/plan limit used to kill the run: all three adapters pattern-matched it into a friendlier string that still reached `stageFailed`, and the reset time the CLI printed was logged and discarded. Recovery meant a human pressing Restart, which re-ran the whole stage.
+
+**Done — a limit is now a wait, not a failure.** Adapters return a typed `limit` on `EngineRunResult`; `STAGE_OUTCOMES.LIMITED` carries it through `interpretEngineResult`; the workflow parks the stage on a durable `limit:<runId>:<stageId>` signal whose timeout is the time to the reset. Timeout fired = the reset passed, signal fired = the user chose. The park is OpenWorkflow's, so it survives a hard process kill — the "durable sleep (TASK-061)" case that runtime was chosen for.
+
+**Reset parsing is a duration, never a wall clock.** The CLI prints its own local time plus a named zone (`resets 4:30pm (Europe/Tallinn)`). `domain/engine-limit.ts` asks ICU what time it is *in that zone* via `Intl.DateTimeFormat`, subtracts modulo 1440 minutes, and only then turns the duration into an absolute UTC instant. DST is ICU's problem, a reset earlier than now rolls to tomorrow, and Windows and macOS agree. Unknown zone → server clock; unparseable → a 30-minute fallback; everything clamped to 24h. Server logs name a duration (`waiting 3h 38m`); only the browser renders a clock time, in the reader's own zone.
+
+**Decisions taken with Fedor:**
+- **`blocked` is its own status** in `StageStatus` and `RunStatus`, never `awaiting` — one "Approve Gate" button must not mean two things. Non-terminal, so the SSE stream stays open across a multi-hour wait.
+- **No retry budget.** A stage parks as often as it takes; only abort ends it. A budget would fail an overnight run for spanning two reset windows — exactly the case this exists for. The attempt count is shown in the popup instead, so a mis-detection is visible.
+- **A parked run keeps its project's admission slot.** Admission is per project and a limit is account-wide, so a second run would hit the same wall; releasing invents a failure mode where re-admission is refused after a four-hour wait.
+- **Connection switching goes through settings**, not the resolve endpoint — the connection is already read from `SettingsStore` on every turn, so the modal writes settings then resolves `retry-now`.
+- **Running out of prepaid credit is deliberately not a limit** and still fails the run: waiting never clears it. `insufficient_quota`, `credit balance is too low` and `quota exceeded` stayed in each adapter's `ERROR_HINTS`.
+
+**Mid-run switching needed no relaunch.** `stage-execution.ts` already re-reads `run.engine`, `run.model` and the connection from live `RunState` on every turn, so `POST /runs/:id/limit/:stageId/resolve` mutates the run and signals — finished stages are never re-run. Step names carry the attempt number, with attempt 0 byte-identical to the old names so a run parked across the upgrade does not re-run and re-pay for completed stages.
+
+**UI — the app's first modal over a live run.** `LimitModal` states which harness hit the wall, the raw CLI line, the reset in local time, a ticking countdown, and each way out with its cost consequence. It meets the overlay rule `SetupModal` predates (`role="dialog"`, `aria-modal`, Escape, focus moved in and restored). Notification permission is requested at the moment of the first limit, never on load; Safari rejects that outside a user gesture, so the modal also offers an "Enable notifications" button. Models that bill usage credits are filtered out of the escape list — `Sonnet · 1M context` costs more, not less.
+
+**Verified:** `lint`, `typecheck`, `test` (397 across 52 files), `build`, and `e2e` (42) all green. New coverage: `engine-limit.spec.ts` (21 parsing/selection cases including two zones that disagree with the runner's), `limit-pause.comp.ts` (parks instead of failing, still parked after a hard restart, resumes on its own when the timer expires, model switch without re-running finished stages, abort frees the project), `LimitModal.comp.tsx`, `limit.spec.ts`, and `run-limit.spec.ts` (seeded Playwright, zero tokens). Screenshotted in the running app.
+
+**Not done:** the real sleep/wake check on both OSes, and the Chrome/Safari permission check over `http://localhost`, still need a human at a laptop — reasoned through and written up in `implementation-notes.md`, not observed.
+
+---
+
 ## TASK-106: Consolidate the decision log
 **Priority:** P2
 **Tags:** infra

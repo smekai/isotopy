@@ -146,6 +146,15 @@ export async function runStageWork(
     canAsk: canAsk(stageDef, run.engine, turn.index),
   });
 
+  if (decision.outcome === STAGE_OUTCOMES.LIMITED && decision.limit !== undefined) {
+    return {
+      outcome: STAGE_OUTCOMES.LIMITED,
+      limit: decision.limit,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
+
   if (decision.outcome === STAGE_OUTCOMES.ASKING && decision.question !== undefined) {
     projection.stageAsking(runId, stageDef.id, decision.question);
     return {

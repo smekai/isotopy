@@ -2,9 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineStatus } from "@adhd/core";
+import type { EngineLimit, EngineStatus } from "@adhd/core";
+import { detectEngineLimit } from "../domain/engine-limit.ts";
 import { parseClaudeProtocolLine } from "./claude-protocol.ts";
-import { firstLine, truncate } from "./log-text.ts";
+import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import {
   applyProtocolUpdate,
@@ -111,11 +112,6 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
     pattern: /credit balance is too low/i,
     message:
       "API credit balance too low — top up or switch to subscription mode in Setup → Connection.",
-  },
-  {
-    pattern: /session limit/i,
-    message:
-      "Claude subscription session limit reached — wait for the reset time shown in the log, or switch to an API key in Setup → Connection.",
   },
 ];
 
@@ -227,6 +223,7 @@ export const claudeCodeAdapter: EngineAdapter = {
 
     const success = result.success && capture.terminal === "success";
     let errorMessage: string | undefined;
+    let limit: EngineLimit | undefined;
     if (!success) {
       if (result.timedOut) {
         errorMessage = `Timed out after ${Math.round(ctx.timeoutMs / 1000)}s`;
@@ -242,13 +239,13 @@ export const claudeCodeAdapter: EngineAdapter = {
             ? (capture.error ??
               `Claude Code ended with ${capture.terminalLabel ?? "an error"}`)
             : `Claude Code exited with code ${result.exitCode}${stderr ? ` — ${stderr}` : ""}`;
-        const mapped = mapKnownError(stderr ? `${raw}\n${stderr}` : raw);
-        if (mapped) {
+        const detail = withStderr(raw, stderr);
+        limit = detectEngineLimit("claude-code", truncate(detail));
+        const mapped = mapKnownError(detail);
+        if (mapped ?? limit) {
           ctx.onLog("warn", truncate(raw));
-          errorMessage = mapped;
-        } else {
-          errorMessage = truncate(raw);
         }
+        errorMessage = mapped ?? truncate(raw);
       }
     }
 
@@ -258,6 +255,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       sessionId: capture.sessionId,
       exitCode: result.exitCode,
       errorMessage,
+      limit,
       usage: capture.usage,
     };
   },

@@ -1,5 +1,6 @@
 import type {
   EngineId,
+  EngineLimit,
   EngineModelList,
   EnginePermissionMode,
   EngineStatus,
@@ -34,6 +35,7 @@ export interface EngineRunResult {
   sessionId?: string;
   exitCode: number | null;
   errorMessage?: string;
+  limit?: EngineLimit;
   usage?: StageUsage;
 }
 

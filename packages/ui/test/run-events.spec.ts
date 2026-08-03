@@ -5,7 +5,7 @@
 // that the snapshot may already contain.
 import { describe, expect, test } from "vitest";
 import { applyEvent } from "../src/run-events";
-import { event, message, run, stage, stageOf } from "./support/run-fixtures";
+import { event, limit, message, run, stage, stageOf } from "./support/run-fixtures";
 
 describe("applyEvent", () => {
   test("run.started puts the run back into running and clears the completion time", () => {
@@ -145,6 +145,29 @@ describe("applyEvent", () => {
 
     expect(stageOf(after, "design").status).toBe("awaiting");
     expect(after.status).toBe("awaiting");
+  });
+
+  test("stage.blocked parks the run and carries the limit the popup renders", () => {
+    const detected = limit();
+
+    const after = applyEvent(
+      run([stage("design", "running")]),
+      event("stage.blocked", { stageId: "design", limit: detected }),
+    );
+
+    expect(stageOf(after, "design").status).toBe("blocked");
+    expect(after.status).toBe("blocked");
+    expect(after.limit).toEqual(detected);
+  });
+
+  test("stage.unblocked resumes the run and clears the limit so the popup closes", () => {
+    const before = { ...run([stage("design", "blocked")], "blocked"), limit: limit() };
+
+    const after = applyEvent(before, event("stage.unblocked", { stageId: "design" }));
+
+    expect(stageOf(after, "design").status).toBe("running");
+    expect(after.status).toBe("running");
+    expect(after.limit).toBeUndefined();
   });
 
   test("stage.approved passes the gated stage and resumes the run", () => {

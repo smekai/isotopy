@@ -204,7 +204,9 @@ export function TeamController({
             <RotateCcw size={ICON.sm} /> Resume from {resumeLabel}
           </button>
         )}
-        {(run?.status === "running" || run?.status === "awaiting") && (
+        {(run?.status === "running" ||
+          run?.status === "awaiting" ||
+          run?.status === "blocked") && (
           <button onClick={onAbort} style={abortButton(d)}>
             <Square size={ICON.sm} /> Abort
           </button>

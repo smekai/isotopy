@@ -2,9 +2,15 @@ import path from "node:path";
 import { OpenWorkflow } from "openworkflow";
 import type { Worker, Workflow } from "openworkflow";
 import { BackendSqlite } from "openworkflow/sqlite";
+import type { LimitChoice } from "@adhd/core";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
-import { answerSignal, createPipelineWorkflow, gateSignal } from "./pipeline-workflow.ts";
+import {
+  answerSignal,
+  createPipelineWorkflow,
+  gateSignal,
+  limitSignal,
+} from "./pipeline-workflow.ts";
 import type { PipelineWorkflowResult } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
@@ -60,6 +66,11 @@ export class WorkflowRuntime {
   async answerQuestion(runId: string, stageId: string, text: string): Promise<void> {
     const { client } = this.ensure();
     await client.sendSignal({ signal: answerSignal(runId, stageId), data: { text } });
+  }
+
+  async resolveLimit(runId: string, stageId: string, choice: LimitChoice): Promise<void> {
+    const { client } = this.ensure();
+    await client.sendSignal({ signal: limitSignal(runId, stageId), data: { choice } });
   }
 
   async cancel(openWorkflowRunId: string): Promise<void> {

@@ -216,9 +216,13 @@ the stage resumes its CLI session with that text as the prompt (TASK-079). If no
 the message is stored and shown, and nothing reads it — that is still true for
 ordinary mid-run steering.
 
-**`asking` is not `awaiting`.** `awaiting` is a human *gate* (gold, "Approve");
-`asking` is a human *answer* (violet, the composer). They are separate statuses so
-neither control has to mean two things.
+**`asking` is not `awaiting`, and neither is `blocked`.** `awaiting` is a human
+*gate* (gold, "Approve"); `asking` is a human *answer* (violet, the composer);
+`blocked` is a *clock* — a plan limit the run is waiting out (cyan, `LimitModal`).
+All three are separate statuses so no control has to mean two things, and `blocked`
+is the only one the run leaves without a human (TASK-061). None of them is terminal,
+so `/runs/:id/events` stays open and `useRunEvents` keeps listening across a wait
+that may run for hours.
 
 **There are two independent SSE channels**, and they answer different questions.
 `/runs/:id/events` carries one run in full detail and closes when that run ends;
@@ -401,7 +405,9 @@ The baseline that already exists, and is the pattern to copy:
 
 **Rule** for new overlays: `role="dialog"` + `aria-modal="true"`, Escape to close,
 focus moved in on open and restored on close, and no focusable content behind the
-overlay. `SetupModal` meets none of this today (Known gaps). The run list is no
+overlay. `SetupModal` meets none of this today (Known gaps); `LimitModal` — the
+first overlay written over a live run — meets all of it but the last, and is the
+shape to copy. The run list is no
 longer an overlay at all — TASK-077 made it a persistent `<nav aria-label="Runs">`
 of real `<button>`s, with `aria-current` marking the open run.
 

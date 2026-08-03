@@ -6,10 +6,13 @@ import {
   agentForStage,
 } from "@adhd/core";
 import type {
+  EngineLimit,
+  LimitChoice,
   PipelineGroup,
   StageDefinition,
   StageExecutionPolicy,
 } from "@adhd/core";
+import { limitWaitMs } from "../domain/engine-limit.ts";
 import { runStageWork } from "./stage-execution.ts";
 import type {
   PipelineWorkflowInput,
@@ -39,16 +42,32 @@ export function answerSignal(runId: string, stageId: string): string {
   return `answer:${runId}:${stageId}`;
 }
 
+export function limitSignal(runId: string, stageId: string): string {
+  return `limit:${runId}:${stageId}`;
+}
+
 export interface AnswerSignalPayload {
   text: string;
+}
+
+export interface LimitSignalPayload {
+  choice: LimitChoice;
 }
 
 interface StepApiLike {
   run<Output>(config: { name: string }, fn: () => Promise<Output> | Output): Promise<Output>;
   waitForSignal<Output>(options: {
     signal: string;
-    timeout?: string;
+    timeout?: string | number;
   }): Promise<{ data: Output } | null>;
+}
+
+type StageTurnsResult =
+  | { outcome: Exclude<StageOutcome, typeof STAGE_OUTCOMES.LIMITED> }
+  | { outcome: typeof STAGE_OUTCOMES.LIMITED; limit: EngineLimit };
+
+function stepName(stageId: string, attempt: number, suffix: string): string {
+  return attempt === 0 ? `${stageId}:${suffix}` : `${stageId}:attempt:${attempt}:${suffix}`;
 }
 
 async function runStageTurns(
@@ -56,16 +75,23 @@ async function runStageTurns(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,
   stageDef: StageDefinition,
-): Promise<StageOutcome> {
+  attempt: number,
+): Promise<StageTurnsResult> {
   const { runId } = input;
   let turn: StageTurn = { index: 0 };
 
   for (;;) {
-    const result = await step.run({ name: `${stageDef.id}:turn:${turn.index}` }, () =>
-      runStageWork(deps, input, stageDef, turn),
+    const result = await step.run(
+      { name: stepName(stageDef.id, attempt, `turn:${turn.index}`) },
+      () => runStageWork(deps, input, stageDef, turn),
     );
+    if (result.outcome === STAGE_OUTCOMES.LIMITED) {
+      return result.limit
+        ? { outcome: STAGE_OUTCOMES.LIMITED, limit: result.limit }
+        : { outcome: STAGE_OUTCOMES.FAILED };
+    }
     if (result.outcome !== STAGE_OUTCOMES.ASKING) {
-      return result.outcome;
+      return { outcome: result.outcome };
     }
 
     const signal = await step.waitForSignal<AnswerSignalPayload>({
@@ -73,14 +99,14 @@ async function runStageTurns(
       timeout: ANSWER_TIMEOUT,
     });
     if (deps.isCancelled(runId)) {
-      return STAGE_OUTCOMES.CANCELLED;
+      return { outcome: STAGE_OUTCOMES.CANCELLED };
     }
     if (signal === null) {
-      await step.run({ name: `${stageDef.id}:answer:timeout:${turn.index}` }, () => {
+      await step.run({ name: stepName(stageDef.id, attempt, `answer:timeout:${turn.index}`) }, () => {
         deps.projection.stageFailed(runId, stageDef.id, "Nobody answered the question");
         return null;
       });
-      return STAGE_OUTCOMES.FAILED;
+      return { outcome: STAGE_OUTCOMES.FAILED };
     }
 
     const nextTurn: StageTurn = {
@@ -94,6 +120,53 @@ async function runStageTurns(
   }
 }
 
+async function waitOutLimit(
+  step: StepApiLike,
+  deps: WorkflowDeps,
+  input: PipelineWorkflowInput,
+  stageDef: StageDefinition,
+  attempt: number,
+  limit: EngineLimit,
+): Promise<boolean> {
+  const { runId } = input;
+  await step.run({ name: stepName(stageDef.id, attempt, "limit") }, () => {
+    deps.projection.stageBlocked(runId, stageDef.id, limit, attempt + 1);
+    return null;
+  });
+
+  const signal = await step.waitForSignal<LimitSignalPayload>({
+    signal: limitSignal(runId, stageDef.id),
+    timeout: limitWaitMs(limit),
+  });
+  if (deps.isCancelled(runId)) {
+    return false;
+  }
+
+  await step.run({ name: stepName(stageDef.id, attempt, "limit:resume") }, () => {
+    deps.projection.limitResolved(runId, stageDef.id, signal?.data.choice);
+    return null;
+  });
+  return true;
+}
+
+async function runStageToOutcome(
+  step: StepApiLike,
+  deps: WorkflowDeps,
+  input: PipelineWorkflowInput,
+  stageDef: StageDefinition,
+): Promise<StageOutcome> {
+  for (let attempt = 0; ; attempt += 1) {
+    const result = await runStageTurns(step, deps, input, stageDef, attempt);
+    if (result.outcome !== STAGE_OUTCOMES.LIMITED || result.limit === undefined) {
+      return result.outcome;
+    }
+    const resumed = await waitOutLimit(step, deps, input, stageDef, attempt, result.limit);
+    if (!resumed) {
+      return STAGE_OUTCOMES.CANCELLED;
+    }
+  }
+}
+
 async function runOneStage(
   step: StepApiLike,
   deps: WorkflowDeps,
@@ -101,7 +174,7 @@ async function runOneStage(
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
   const { runId } = input;
-  const outcome = await runStageTurns(step, deps, input, stageDef);
+  const outcome = await runStageToOutcome(step, deps, input, stageDef);
   if (outcome !== STAGE_OUTCOMES.PASSED) {
     return outcome;
   }

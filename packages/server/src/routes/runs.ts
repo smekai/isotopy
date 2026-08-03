@@ -6,6 +6,7 @@ import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
 import {
   postRunMessageSchema,
+  resolveLimitSchema,
   restartRunSchema,
   startRunSchema,
 } from "../domain/request-schemas.ts";
@@ -91,6 +92,24 @@ export function createRunRoutes(
         return c.json(orchestrator.approveGate(runId, stageId));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to approve gate";
+        return c.json({ error: message }, 409);
+      }
+    })
+
+    .post("/:id/limit/:stageId/resolve", async (c) => {
+      const runId = c.req.param("id");
+      const stageId = c.req.param("stageId");
+      if (!orchestrator.getRun(runId)) {
+        return c.json({ error: "Run not found" }, 404);
+      }
+      const parsed = await parseRequestBody(c.req, resolveLimitSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      try {
+        return c.json(orchestrator.resolveLimit(runId, stageId, parsed.value));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to resume the run";
         return c.json({ error: message }, 409);
       }
     })

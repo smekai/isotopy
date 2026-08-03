@@ -8,6 +8,7 @@
 // which is what keeps a component test from ever spawning a real CLI.
 import { expect } from "vitest";
 import type { EngineId, StageUsage } from "@adhd/core";
+import { detectEngineLimit } from "../../src/domain/engine-limit.ts";
 import type {
   EngineAdapter,
   EngineRunContext,
@@ -46,6 +47,8 @@ export interface AnticipationOutcome {
   reports(result: string, usage?: StageUsage): FakeEngine;
   /** The engine itself fails (non-zero exit, crash, timeout). */
   fails(errorMessage: string): FakeEngine;
+  /** The plan limit is reached. `raw` is the CLI line the reset time is parsed from. */
+  hitsLimit(raw: string): FakeEngine;
   /** Blocks until the run is aborted — the vehicle for abort tests. */
   hangsUntilAborted(): FakeEngine;
   /**
@@ -100,6 +103,15 @@ export class FakeEngine implements EngineAdapter {
         }),
       fails: (errorMessage) =>
         push(() => Promise.resolve({ success: false, exitCode: 1, errorMessage })),
+      hitsLimit: (raw) =>
+        push(() =>
+          Promise.resolve({
+            success: false,
+            exitCode: 1,
+            errorMessage: raw,
+            limit: detectEngineLimit(this.id, raw),
+          }),
+        ),
       asks: (question, sessionId, usage) =>
         push(() => {
           const response: EngineRunResult = {

@@ -178,6 +178,8 @@ export const GOLD_SOFT = "rgba(217,119,6,0.12)";
 /** A question waiting on the user. Distinct from GOLD, which is gates only. */
 export const ASK_VIOLET = "#7C3AED";
 
+export const LIMIT_CYAN = "#0891B2";
+
 export interface StatusColor {
   text: string;
   bg: string;
@@ -191,6 +193,7 @@ export const STATUS_COLORS: Record<StagePresentation, StatusColor> = {
   needs_attention: { text: "#D97706", bg: "rgba(217,119,6,0.10)", dot: "#D97706" },
   awaiting: { text: "#D97706", bg: "rgba(217,119,6,0.10)",   dot: "#D97706" },
   asking:   { text: "#7C3AED", bg: "rgba(124,58,237,0.10)",  dot: "#7C3AED" },
+  blocked:  { text: "#0891B2", bg: "rgba(8,145,178,0.10)",   dot: "#0891B2" },
   skipped:  { text: "#9CA3AF", bg: "rgba(156,163,175,0.10)", dot: "#9CA3AF" },
   pending:  { text: "#C0C0D8", bg: "rgba(192,192,216,0.10)", dot: "#D4D4E8" },
 };
@@ -203,7 +206,8 @@ export function sLabel(s: StagePresentation): string {
   return {
     running: "RUNNING", passed: "PASSED", failed: "FAILED",
     needs_attention: "NEEDS ATTENTION",
-    awaiting: "AWAITING", asking: "ASKING", skipped: "SKIPPED", pending: "PENDING",
+    awaiting: "AWAITING", asking: "ASKING", blocked: "BLOCKED",
+    skipped: "SKIPPED", pending: "PENDING",
   }[s];
 }
 
@@ -212,6 +216,7 @@ export const RUN_PILL: Record<RunStatus, { text: string; bg: string }> = {
   running:   { text: "#6366F1", bg: "rgba(99,102,241,0.10)" },
   awaiting:  { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
   asking:    { text: "#7C3AED", bg: "rgba(124,58,237,0.10)" },
+  blocked:   { text: "#0891B2", bg: "rgba(8,145,178,0.10)" },
   completed: { text: "#059669", bg: "rgba(5,150,105,0.10)" },
   needs_attention: { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
   failed:    { text: "#DC2626", bg: "rgba(220,38,38,0.10)" },
@@ -246,6 +251,7 @@ export function runDot(status: RunStatus, d: Dir): string {
   if (status === "running" || status === "pending") return d.accent;
   if (status === "awaiting") return GOLD;
   if (status === "asking") return ASK_VIOLET;
+  if (status === "blocked") return LIMIT_CYAN;
   if (status === "needs_attention") return WARN_AMBER;
   if (status === "failed") return "#DC2626";
   if (status === "cancelled") return "#9CA3AF";

@@ -56,41 +56,6 @@ The standing second choice from [`docs/workflow-runtime-options.md`](../docs/wor
 
 ---
 
-## TASK-061: Limit is over — pause the run on a plan limit instead of failing it
-**Priority:** P2 | **Tags:** engine, server, ui | **Assignee:** Fedor
-**Updated:** 2026-07-26 00:00
-
-When a harness reports a subscription/plan limit, the run should **wait for the reset by default** rather than die — and tell the user it is waiting, with a popup (and an OS notification, since the point of a limit wait is that nobody is watching) offering *all* the options: keep waiting, switch to a cheaper or free model, switch harness or connection mode, change plan, or cancel the run. Must work for every harness on both macOS and Windows. The trigger, verbatim from the log:
-
-```
-You've hit your session limit · resets 4:30pm (Europe/Tallinn)
-14:52:00 ✗ Claude subscription session limit reached — wait for the reset time shown in the log, or switch to an API key in Setup → Connection.
-```
-
-**Today (re-checked 2026-07-26) a limit is a hard failure with a friendlier string.** All three adapters pattern-match it into a static hint — [claude-code.ts:110](../packages/server/src/engines/claude-code.ts#L110), [codex.ts:83](../packages/server/src/engines/codex.ts#L83), [cursor.ts:126](../packages/server/src/engines/cursor.ts#L126) — which flows through `interpretEngineResult` → `stageFailed` → run `failed`. Recovery is manual `restartRun(runId, stageId)`, which needs the user present and re-runs the whole stage. **The reset time is thrown away:** the adapter logs the raw line as `warn` and replaces the message with the hint, so nothing downstream knows *when* to retry. And the UI has no popup, toast or notification machinery at all — the only modal is `SetupModal`, and the only user-facing pause is the gate (`GateMarker`, `TeamController`) driven by `stage.status === "awaiting"`.
-
-**What changed under this task since it was written (2026-07-21):**
-- **TASK-068 landed the durable OpenWorkflow runtime on `main`.** [pipeline-workflow.ts:63](../packages/server/src/workflow/pipeline-workflow.ts#L63) already parks a run on `step.waitForSignal` for 3650d and survives a hard process kill. That is the mechanism for "wait for the reset" — a *durable* pause, not a `setTimeout`, which matters because a multi-hour wait will outlive the server process. `docs/workflow-runtime-options.md` names this exact "durable sleep (TASK-061)" shape as one of the reasons the runtime was chosen.
-- **TASK-065 moved engine/model/permission mode server-side** (`PUT /settings/preferences`), so "switch to a cheaper model" is now a server-side edit. But a run snapshots `engine`/`model` onto `RunState` at start and `buildInput()` reads that snapshot — **mid-run switching needs the run's own engine/model to become mutable**, then the parked stage relaunched with the new value.
-
-**Scope:**
-1. **Detect, don't just label.** Promote the limit patterns in the three adapters to a typed outcome on `EngineRunResult` (e.g. `limit: { resetAt?, raw }`) — a limit is its own result, not a failure with nicer prose. Parse the reset time where the CLI prints one; when it can't be parsed, fall back to a fixed retry interval rather than guessing.
-2. **A state of its own.** `RunStatus`/`StageStatus` need `blocked` distinct from `awaiting`: reusing the gate state would let "Approve Gate" mean two different things. Add the matching `RunEventType` so the SSE stream carries it, and handle it in `markCancelled`/`markInterrupted`.
-3. **Durable wait in the workflow.** On a limit outcome, `runOneStage` parks on a `limit:<runId>:<stageId>` signal with `timeout` = time-to-reset, then re-runs the same stage. Timeout fired = the reset passed; signal fired = the user chose something. Decide the retry budget (two limits in a row → fail?) — `STAGE_RETRY` is `maximumAttempts: 1` today.
-4. **The options are signals.** One endpoint (`POST /runs/:id/limit/:stageId/resolve`) carrying the choice: `retry-now`, `switch-model`, `switch-engine`/`switch-connection`, or `abort` (existing `abortRun`). Everything but abort resumes the *same* stage with the changed setting, persisted — no re-running finished stages.
-5. **UI.** The popup is the app's first modal-over-a-run: which limit, reset time in local time, remaining countdown, and each option with its cost consequence ("Haiku is included in your plan"). Plus a browser `Notification` when the tab isn't focused; request permission at the moment of the first limit, never on load.
-6. **Docs:** decision-log entry for pause-not-fail and for how the reset time is parsed.
-
-**Cross-platform (Windows + macOS):**
-- **Reset parsing is timezone-shaped** — the CLI prints local wall-clock plus a named zone (`4:30pm (Europe/Tallinn)`). Derive a *duration from now* rather than storing an absolute local time; never assume server and CLI agree on timezone, and don't hand-roll DST.
-- **Notifications:** browser `Notification` API on both OSes — no native notifier binary, no Electron dependency. Confirm permission actually grants over `http://localhost` in Chrome *and* Safari.
-- **A multi-hour wait meets laptop sleep** (Windows sleep, macOS App Nap both suspend timers). Lease-based recovery in the durable runtime is what should cover it — verify a limit-parked run resumes after a real sleep/wake on both OSes, not just after a clean restart.
-- **Project admission:** `admitRun` allows one active run per project, so a limit-parked run holds the slot for hours. Decide whether pausing should release it — that decision is the same on both platforms but has to be made.
-
-**Verify:** force a limit (adapter test hook is fine) → run parks with the popup showing the reset time; kill the server and restart → still parked, then resumes on its own; choosing "switch to Haiku" resumes that stage on the new model without re-running completed stages.
-
----
-
 ## TASK-036: Spike — sandcastle as the implement-stage harness/sandbox layer
 **Priority:** P2 | **Tags:** adapters, engine, milestone-c
 **Updated:** 2026-07-16 00:00

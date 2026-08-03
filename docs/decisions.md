@@ -15,6 +15,47 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-03 — A plan limit is a wait, not a failure
+
+**Context:** every harness eventually says "you've hit your session limit · resets
+4:30pm". ADHD treated that as a dead run: three adapters pattern-matched it into a
+friendlier string that still flowed to `stageFailed`, the reset time was logged and
+discarded, and recovery meant a human being present to press Restart — which re-ran the
+whole stage. The one thing the machine knew (*when* it could continue) was the one thing
+it threw away.
+
+**Decision:** a limit is its own outcome. Adapters return `limit` on `EngineRunResult`
+instead of prose, `STAGE_OUTCOMES.LIMITED` carries it through `interpretEngineResult`,
+and the workflow parks the stage on a durable `limit:<runId>:<stageId>` signal whose
+timeout is the time to the reset. Timeout fired means the reset passed; a signal means
+the user chose. The run survives a hard process kill parked, because OpenWorkflow stores
+the wake time in SQLite rather than in a timer — the "durable sleep (TASK-061)" case
+[`workflow-runtime-options.md`](./workflow-runtime-options.md) picked that runtime for.
+Three consequences worth defending:
+
+- **`blocked` is its own status**, in both `StageStatus` and `RunStatus`, never
+  `awaiting`. Reusing the gate state would make one "Approve Gate" button mean two
+  incompatible things, and the same mistake `asking` was split out to avoid.
+- **No retry budget.** A stage parks as many times as it takes. A budget would fail an
+  overnight run at 3am for the crime of spanning two reset windows, which is exactly the
+  case this exists for. The attempt count is shown in the popup instead, so a
+  mis-detected limit is visible rather than silent.
+- **A parked run keeps its project's admission slot.** Admission is per project, and a
+  limit is account-wide: a second run would hit the same wall immediately. Releasing and
+  re-admitting also invents a failure mode where re-admission is refused after a
+  four-hour wait and the run dies having waited for nothing.
+
+Running out of prepaid credit is deliberately *not* a limit and still fails the run —
+waiting never clears it. Switching connection mode is likewise not a resolve choice: the
+connection is read from `SettingsStore` on every turn, so the modal writes settings and
+then resumes with `retry-now`.
+
+**Rejected:** `step.sleep` for the wait. It wakes on time but cannot be interrupted, and
+half the point is that the user may switch to a cheaper model rather than wait. A signal
+with a timeout is both.
+
+---
+
 ## 2026-08-03 — Strict for what ADHD writes, salvaging for what an agent writes
 
 **Context:** rule **A7** says a codec rejects a malformed record whole rather than
