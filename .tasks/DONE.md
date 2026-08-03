@@ -1,5 +1,80 @@
 # Done
 
+## TASK-106: Consolidate the decision log
+**Priority:** P2
+**Tags:** infra
+**Updated:** 2026-08-03 15:50
+
+`docs/decisions.md` was 1013 lines across 35 entries and is loaded as context constantly.
+
+**Done — 802 lines, 31 entries, strictly newest-first.** The header now states the ordering rule *and* the merge rule, so the next superseded pair collapses instead of accumulating.
+
+**Four superseded pairs merged into their survivor,** which is where most of the confusion lived — each was previously two entries a reader had to reconcile:
+
+- `exactOptionalPropertyTypes` adopted (07-22) → removed (07-29). The adoption entry told you to use `delete` and avoid `= undefined`; the removal entry said the opposite. One entry now, stating the flag is off and `noUncheckedIndexedAccess` stays on.
+- Personas as a generated TS module (07-22) → Markdown as runtime assets (07-28). The earlier entry's *rejection* of runtime Markdown reading is kept, with why it no longer applies.
+- SetupModal style cleanup deferred (07-22) → styles named in-file (07-26). The deferral's reasoning survives as why it was a separate task.
+- "Validate untrusted data once, at the boundary" (07-29) folded into "Runtime schemas own every untrusted boundary" — the same decision written twice, with a trailing paragraph that contradicted the optional-property entry.
+
+**Ordering fixed.** The file claimed newest-first and was not: a 07-28 entry sat between 07-22 entries, and 07-26 / 07-29 entries were stranded at the bottom. Separators were also missing between roughly a third of the entries; there are now 31 for 31.
+
+**Compressed, not deleted.** The long TASK-072/073/077/078/079/080/082/083 entries lost verification statistics, test-count deltas, file-line counts and bug narration that were changelog rather than decision. Every rationale existing nowhere else was kept and spot-checked — the `codex exec resume` sandbox quirk, Cursor's unverified `conversational: false`, `MAX_QUESTION_TURNS`, `EventSource` not setting headers, the `--disable-warning=ExperimentalWarning` start script, sakura's `borderStrong` behaviour change, `.gitignore` written with `wx`, and the TS 7 lint-gate crash. The TASK-072 snap table was dropped: it is data now living in `theme.ts`, and its rationale ("extraction not redesign, every snap ≤2px") is retained.
+
+Also corrected the stale "simulate vs. engine" description of `stage-execution.ts` in the OpenWorkflow entry, matching the same fix in `architecture.md` under TASK-104.
+
+---
+
+## TASK-104: README and docs coherence after Milestone D
+**Priority:** P2
+**Tags:** infra, setup
+**Updated:** 2026-08-03 15:40
+
+**Done:**
+
+- `README.md` no longer reads as if 0.8.7 were the current release — "Milestone D shipped at 0.8.7" is stated as history, with the current version pointed at `package.json`. The Status section gained the TASK-102 accept-findings control.
+- `README.md`'s document table called `architecture.md` the "Aiki runtime"; it is OpenWorkflow. The separate Aiki mention in the competitor list is correct and was left alone.
+- `AGENTS.md` carried `Current: 0.8.6` against a real 0.8.9. Replaced with a pointer to `package.json` rather than a fresh number — a hand-copied version in a file the versioning rule bumps *every commit* is a drift generator, so the fix is to stop keeping one.
+
+**Two more found while sweeping, both in the hand-written `validate-code` skill** (only `architect/SKILL.md` is generated, so this one drifts silently):
+
+- A4 still said `RunOrchestrator.executeStage()` is the workflow seam — the framing `workflow-runtime-options.md` §4 exists specifically to correct. Now points at `pipeline-workflow.ts` / `stage-execution.ts`.
+- A7 said `exactOptionalPropertyTypes` is on "and stays on", and told reviewers to avoid `= undefined`. It was removed on 2026-07-29 for the opposite reason: ADHD treats absent and `undefined` as the same state. A reviewer following the skill would have rejected correct code.
+
+Also dropped the stale "simulate vs. engine" description of `stage-execution.ts` from `architecture.md` — there is no simulate path, which is the same claim that made the `run-app` skill wrong in TASK-103. That text is inside a `gen:` block, so `pnpm gen:skills` was re-run and `architect/SKILL.md` is regenerated in this commit. `pnpm gen:skills --check` is clean.
+
+---
+
+## TASK-103: The run-app skill describes a version of the app that no longer exists
+**Priority:** P3 | **Tags:** infra, setup
+**Updated:** 2026-08-03 15:30
+
+`.claude/skills/run-app` listed retired pipeline ids as the smoke-check output and a `data-testid` roster predating the run tabs and the milestone dashboard. It cost real time during the TASK-094 dogfood.
+
+**Done:** pipeline ids corrected to `full-delivery` / `pm-dev-test` / `solo`, with the note that `milestone-planning` is `internal` and deliberately absent from `GET /pipelines`. Added the milestone endpoint roster (plan, revise, proposal, approve, start-next, accept, finalize, autorun), the `/milestones` proxy prefix, `PUT /settings/preferences`, the gate/answer/restart endpoints, and the e2e ports and temp `ADHD_USER_HOME`. Dropdown labels corrected to the pipelines' real names, and the run tabs and milestone route added to the selector notes.
+
+**Two corrections beyond the filed scope, both wrong-in-a-way-that-costs-time:** the skill claimed `sequential` mock runs were unaffected by the sandbox gotcha — there is no mock pipeline at all any more, so *every* run spends tokens and `pnpm test` is the engine-free path. And a subscription session limit is documented as a hard failure pointing at TASK-061, so a future run does not read it as a new bug.
+
+**Scope call on "generate it from the docs":** not done, deliberately. The drift-prone part was the duplicated `data-testid` roster, and that is now a pointer to [`architecture-ui.md`](../docs/architecture-ui.md) §9 rather than a copy. The rest of the skill is operational knowledge — ports, the sandbox exit code, the `--bare` auth gotcha — that exists in no doc, so generating it would mean inventing a source of truth to generate from.
+
+---
+
+## TASK-105: A schema slip must not discard the whole closeout record
+**Priority:** P1
+**Tags:** server, testing
+**Updated:** 2026-08-03 15:20
+
+The gap TASK-101 deliberately left open: `severity` was normalized, but every *other* schema failure still answered with `emptyCloseout(...)`, so one bad follow-up task priority — or one key the agent invented — discarded the summary, delivered scope, decisions, knowledge, findings and task drafts of a run that cost real money.
+
+**Done:** `parseProductManagerCloseout` now salvages the agent-authored block field by field and, inside arrays, element by element. A field that fails drops to its empty value, a malformed array element drops alone, an unrecognised key is reported rather than fatal, and every discarded piece is named with its path in `validationErrors` — the channel `CloseoutPanel` already renders. A follow-up task whose finding did not survive is dropped too, naming both.
+
+The strict `productManagerCloseoutSchema` is unchanged and still governs the persisted `closeout.json` through `run-persistence.ts`, which is ADHD-owned and stays strict under **A7**. A round-trip test holds the invariant that a salvaged report still satisfies the strict schema, so nothing lands on disk that cannot be read back.
+
+**Decision (docs/decisions.md, 2026-08-03):** salvage rather than the scoped retry the TASK-101 entry priced — a retry costs a second Product Manager call on every slip and still answers a second failure with nothing. One shape, two codecs: strict where ADHD wrote the record, salvaging where an agent wrote it.
+
+Covered by five new codec tests (partial-parse survival, unrecognised key, orphaned follow-up task, strict-schema round trip, non-object block). Gates green: lint, typecheck, 351 tests.
+
+---
+
 ## TASK-101: One hyphen in a closeout severity discards every finding
 **Priority:** P1 | **Tags:** server, engine, testing
 **Updated:** 2026-08-03 10:55

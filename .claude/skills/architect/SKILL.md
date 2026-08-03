@@ -151,8 +151,8 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
   `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
   `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop) and
-  `workflow/stage-execution.ts` is the durable *step* (how one stage runs —
-  simulate vs. engine). Durability owns start/queueing, the loop, gates, durable
+  `workflow/stage-execution.ts` is the durable *step* — the one place that decides
+  how a stage runs. Durability owns start/queueing, the loop, gates, durable
   timers, retries, recovery and cancellation state — *not* one method. The old
   claim that a durable executor "replaces `executeStage()` alone" was wrong and
   is corrected here.

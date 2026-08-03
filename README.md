@@ -37,7 +37,7 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 |----------|-------------|
 | [product-brief.md](docs/product-brief.md) | Positioning, app-builder gap, target user, workflow, differentiation |
 | [mvp-scope.md](docs/mvp-scope.md) | Smallest useful MVP: stages, built-in tasks, Playwright E2E, deploy adapters, dashboard |
-| [architecture.md](docs/architecture.md) | Local architecture: TypeScript/Hono/React, Aiki runtime, tasks, worktrees, adapters |
+| [architecture.md](docs/architecture.md) | Local architecture: TypeScript/Hono/React, OpenWorkflow runtime, tasks, worktrees, adapters |
 | [architecture-ui.md](docs/architecture-ui.md) | The frontend tier in full: module map, network seam, run data flow, state ownership, design tokens, testing |
 | [competitor-matrix.md](docs/competitor-matrix.md) | What existing tools miss and why none fully owns ongoing local development |
 | [technology-comparison.md](docs/technology-comparison.md) | TypeScript vs Python vs Rust vs Go: UI, workflow, speed, AI integration, RPC |
@@ -52,7 +52,9 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 ## Status
 
-**Milestone D — the Full Delivery loop — is shipped at 0.8.7.**
+**Milestone D — the Full Delivery loop — shipped at 0.8.7**, and was closed on a live
+dogfood against a real project. The current version is in
+[`package.json`](package.json); this section describes capability, not a release.
 
 A run is driven by real coding agents (Claude Code, Codex, Cursor) through a durable
 OpenWorkflow runtime backed by SQLite, so a run survives a server restart and resumes
@@ -68,7 +70,9 @@ and let the server chain them. The dashboard at `#/milestones/:id` shows feature
 progress, each feature's run history, and the blocking findings that closeout
 recorded. A quality stage that finds a blocking problem does not kill the run — it
 marks it **needs attention**, and the pipeline still closes out and writes follow-up
-tasks to your backlog.
+tasks to your backlog. A feature left needing attention is resolved from the dashboard
+with **Accept findings & complete**, which records who accepted it over which open
+findings rather than silently flipping a status.
 
 **Not yet automated:** release and deploy. The `release` and `deploy` stages exist and
 report `VERDICT: SKIP` until project deployment automation lands (TASK-092).

@@ -179,8 +179,8 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
   `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
   `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop) and
-  `workflow/stage-execution.ts` is the durable *step* (how one stage runs —
-  simulate vs. engine). Durability owns start/queueing, the loop, gates, durable
+  `workflow/stage-execution.ts` is the durable *step* — the one place that decides
+  how a stage runs. Durability owns start/queueing, the loop, gates, durable
   timers, retries, recovery and cancellation state — *not* one method. The old
   claim that a durable executor "replaces `executeStage()` alone" was wrong and
   is corrected here.
@@ -359,7 +359,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 
 Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
 
-**Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunOrchestrator` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs (simulate vs. engine). Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunOrchestrator` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
+**Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunOrchestrator` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunOrchestrator` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
 
 **Known gap (not code):** persona adherence is model-dependent. On `haiku` the Tester verified with inline `node -e` checks rather than writing a test file, and ignored an instruction placed *after* the closing "Do not restate this prompt" line. Put must-follow output rules before that line.
 
