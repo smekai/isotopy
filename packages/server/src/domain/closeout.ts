@@ -1,5 +1,8 @@
 import {
+  CLOSEOUT_SHAPE,
+  FINDING_SEVERITIES,
   TASK_PRIORITIES,
+  refineDeclaredFindings,
   type CloseoutFinding,
   type FollowUpTaskDraft,
   type ProductManagerCloseout,
@@ -8,12 +11,14 @@ import { z } from "zod";
 
 const CLOSEOUT_BLOCK = /```adhd-closeout\s*([\s\S]*?)```/i;
 const closeoutRecordSchema = z.record(z.string(), z.unknown());
+
+// Everything below normalizes what an agent wrote. Core's shape is the contract
+// for what ADHD persists, so it stays transform-free; padding, duplicates and
+// severity prose are cleaned up here, on the way in, and never on the way out.
 const requiredText = z.string().trim().min(1);
 const uniqueStrings = z
   .array(requiredText)
   .transform((items) => [...new Set(items)]);
-
-const FINDING_SEVERITIES = ["blocking", "non_blocking"] as const;
 
 const severityFromAgentProse = z
   .string()
@@ -46,34 +51,22 @@ const cleanupCandidateSchema = z
   })
   .strict();
 
-const closeoutShape = {
-  summary: requiredText,
-  deliveredScope: uniqueStrings,
-  decisions: uniqueStrings,
-  knowledge: uniqueStrings,
-  findings: z.array(findingSchema),
-  tasks: z.array(followUpTaskSchema),
-  completedTaskIds: uniqueStrings,
-  unresolvedTaskIds: uniqueStrings,
-  cleanup: z.array(cleanupCandidateSchema),
-  nextRecommendation: requiredText.optional(),
-};
-
-export const productManagerCloseoutSchema = z
-  .object(closeoutShape)
+const agentCloseoutSchema = z
+  .object({
+    ...CLOSEOUT_SHAPE,
+    summary: requiredText,
+    deliveredScope: uniqueStrings,
+    decisions: uniqueStrings,
+    knowledge: uniqueStrings,
+    findings: z.array(findingSchema),
+    tasks: z.array(followUpTaskSchema),
+    completedTaskIds: uniqueStrings,
+    unresolvedTaskIds: uniqueStrings,
+    cleanup: z.array(cleanupCandidateSchema),
+    nextRecommendation: requiredText.optional(),
+  })
   .strict()
-  .superRefine((closeout, context) => {
-    const findingIds = new Set(closeout.findings.map((finding) => finding.id));
-    closeout.tasks.forEach((task, index) => {
-      if (!findingIds.has(task.findingId)) {
-        context.addIssue({
-          code: "custom",
-          path: ["tasks", index, "findingId"],
-          message: "Follow-up task must reference a declared finding",
-        });
-      }
-    });
-  });
+  .superRefine(refineDeclaredFindings);
 
 export interface ParsedCloseout {
   report: ProductManagerCloseout;
@@ -139,7 +132,7 @@ function salvageStrings(input: unknown, field: string, errors: string[]): string
 
 function unrecognisedKeyErrors(record: Record<string, unknown>): string[] {
   return Object.keys(record)
-    .filter((key) => !Object.hasOwn(closeoutShape, key))
+    .filter((key) => !Object.hasOwn(CLOSEOUT_SHAPE, key))
     .map((key) => `${key}: Unrecognized key`);
 }
 
@@ -229,7 +222,7 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
     };
   }
 
-  const parsed = productManagerCloseoutSchema.safeParse(input);
+  const parsed = agentCloseoutSchema.safeParse(input);
   if (parsed.success) {
     return {
       report: {

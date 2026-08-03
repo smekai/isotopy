@@ -21,10 +21,14 @@ export const TASK_PRIORITIES = ["P0", "P1", "P2", "P3", "P4"] as const;
 
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
+export const FINDING_SEVERITIES = ["blocking", "non_blocking"] as const;
+
+export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
+
 export interface MilestoneFinding {
   id: string;
   title: string;
-  severity: "blocking" | "non_blocking";
+  severity: FindingSeverity;
   sourceRunId: string;
   evidence?: string;
 }

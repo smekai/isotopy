@@ -103,6 +103,14 @@ schema.
 **Rejected:** retrying the agent on a schema failure. It costs a second call every time,
 and still answers a second failure with nothing.
 
+**Amended 2026-08-03:** two codecs never meant two definitions. The shape now lives once
+in `@adhd/core` as `CLOSEOUT_SHAPE`, transform-free, and the agent boundary overrides
+only the fields whose input contract differs — trimming, deduping, severity prose. This
+closed a real defect the duplication had hidden: the persisted-run codec was importing
+the *agent-lenient* closeout schema, so ADHD's own records were being validated against
+rules written for an LLM, silently accepting and rewriting `"Non-Blocking"` on the way
+out of SQLite.
+
 ---
 
 ## 2026-07-31 — A blocking quality finding is not a crash

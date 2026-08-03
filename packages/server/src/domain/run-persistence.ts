@@ -7,6 +7,7 @@ import {
   STAGE_VERDICTS,
   TERMINAL_RUN_STATUSES,
   requiredText,
+  runCloseoutRecordSchema,
   requiredTexts,
   runLimitSchema,
   runMessageSchema,
@@ -20,7 +21,7 @@ import type {
   RunState,
 } from "@adhd/core";
 import { z } from "zod";
-import { productManagerCloseoutSchema } from "./closeout.ts";
+
 import { parseJson } from "./validation.ts";
 import type { ValidationResult } from "./validation.ts";
 
@@ -33,29 +34,6 @@ export interface PersistedRun {
 
 const text = requiredText;
 const strings = requiredTexts;
-
-const closeoutRecordSchema = z
-  .object({
-    report: productManagerCloseoutSchema,
-    createdTasks: z.array(
-      z
-        .object({
-          id: text,
-          title: text,
-          backend: z.enum(["taskplanner", "adhd"]),
-        })
-        .strict(),
-    ),
-    cleanup: z
-      .object({
-        removed: strings,
-        rejected: strings,
-      })
-      .strict(),
-    validationErrors: z.array(z.string()),
-    completedAt: timestamp,
-  })
-  .strict();
 
 const stageSchema = z
   .object({
@@ -79,7 +57,7 @@ const runStateSchema = z
     milestoneId: text.optional(),
     featureId: text.optional(),
     sourceTaskIds: strings.optional(),
-    closeout: closeoutRecordSchema.optional(),
+    closeout: runCloseoutRecordSchema.optional(),
     pipelineId: text,
     pipelineName: text,
     status: z.enum(RUN_STATUSES),
