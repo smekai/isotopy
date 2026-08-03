@@ -3,6 +3,7 @@ import type { Milestone, RunState } from "@adhd/core";
 import {
   createTestApp,
   get,
+  patch,
   post,
   restartApp,
   waitForStageStatus,
@@ -53,6 +54,42 @@ test("a milestone and its feature metadata survive a server restart", async () =
   );
 
   expect(loaded).toEqual(created);
+  await restarted.orchestrator.shutdown();
+});
+
+test("accepting a needs-attention feature completes it with an audit stamp that survives restart", async () => {
+  const { body: created } = await post<Milestone>(ctx.app, "/milestones", {
+    name: "Delivery",
+    features: [{ title: "Reviewed feature" }],
+  });
+  const featureId = created.features[0]?.id ?? "";
+  await patch(ctx.app, `/milestones/${created.id}/features/${featureId}`, {
+    status: "needs_attention",
+  });
+
+  const { status, body: accepted } = await post<Milestone>(
+    ctx.app,
+    `/milestones/${created.id}/features/${featureId}/accept`,
+  );
+
+  expect(status).toBe(200);
+  expect(accepted.features[0]?.status).toBe("completed");
+  expect(accepted.features[0]?.acceptedAt).toBeTypeOf("string");
+
+  const repeated = await post<{ error: string }>(
+    ctx.app,
+    `/milestones/${created.id}/features/${featureId}/accept`,
+  );
+  expect(repeated.status).toBe(400);
+  expect(repeated.body.error).toContain("needing attention");
+
+  await ctx.orchestrator.shutdown();
+  const restarted = await restartApp();
+  const { body: loaded } = await get<Milestone>(
+    restarted.app,
+    `/milestones/${created.id}`,
+  );
+  expect(loaded.features[0]?.acceptedAt).toBe(accepted.features[0]?.acceptedAt);
   await restarted.orchestrator.shutdown();
 });
 

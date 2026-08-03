@@ -64,6 +64,7 @@ const featureSchema = z
     createdAt: requiredText,
     updatedAt: requiredText,
     completedAt: requiredText.optional(),
+    acceptedAt: requiredText.optional(),
   })
   .strict();
 

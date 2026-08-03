@@ -459,7 +459,8 @@ list card. The current roster:
 `approve-milestone-plan` · `milestone-card` · `milestone-dashboard` ·
 `milestone-progress` · `milestone-autorun` · `milestone-start-next` ·
 `milestone-finalize` · `milestone-feature` · `milestone-feature-run` ·
-`closeout-panel` · `closeout-created-task` · `closeout-validation-errors`
+`milestone-feature-accept` · `closeout-panel` · `closeout-created-task` ·
+`closeout-validation-errors`
 
 `milestone-card` and `milestone-feature` also carry `data-milestone-id` /
 `data-feature-id`, which is what the e2e suite locates on: the e2e home is durable,

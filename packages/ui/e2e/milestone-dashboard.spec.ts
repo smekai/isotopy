@@ -1,9 +1,3 @@
-// Free tier of docs/e2e-test-plan.md: the milestone dashboard against a real
-// server, with the milestone seeded through the API rather than planned by an
-// agent — no engine spend, no run started. What only a browser can prove is
-// that the rail entry, the hash route and the server-persisted autorun toggle
-// line up, which the component suite mocks away.
-//
 // The e2e home is deliberately durable (settings persistence is itself under
 // test), so seeded milestones survive between runs. Every locator here is keyed
 // on the id the server just minted, never on a name that an earlier run may
@@ -78,6 +72,27 @@ test("Finalize stays disabled while features are unfinished", async ({ page }) =
 
   await expect(page.getByTestId("milestone-finalize")).toBeDisabled();
   await expect(page.getByTestId("milestone-start-next")).toBeEnabled();
+});
+
+test("accepting the needs-attention feature is what unblocks Finalize", async ({ page }) => {
+  const milestone = await seedMilestone(page.request);
+  for (const feature of milestone.features) {
+    await page.request.patch(`/milestones/${milestone.id}/features/${feature.id}`, {
+      data: { status: feature === milestone.features[0] ? "needs_attention" : "completed" },
+    });
+  }
+
+  await page.goto(`/#/milestones/${milestone.id}`);
+  await expect(page.getByTestId("milestone-finalize")).toBeDisabled();
+
+  await page.getByTestId("milestone-feature-accept").click();
+
+  await expect(page.getByTestId("milestone-feature-accept")).toHaveCount(0);
+  await expect(page.getByTestId("milestone-progress")).toHaveText("2/2 features");
+  await expect(page.getByTestId("milestone-finalize")).toBeEnabled();
+
+  await page.reload();
+  await expect(page.getByText(/^Accepted /)).toBeVisible();
 });
 
 test("the milestone route is a sibling of home, so the composer is untouched", async ({

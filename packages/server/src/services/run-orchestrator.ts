@@ -28,6 +28,7 @@ import {
   ENGINES,
   addUsage,
   agentForStage,
+  canAcceptMilestoneFeature,
   createInitialRunState,
   isTerminalRunStatus,
   nextMilestoneFeature,
@@ -495,9 +496,30 @@ export class RunOrchestrator implements RunProjection {
         feature.completedAt = nowIso();
       } else {
         delete feature.completedAt;
+        delete feature.acceptedAt;
       }
     }
     const now = nowIso();
+    feature.updatedAt = now;
+    milestone.updatedAt = now;
+    await this.persistMilestone(milestone);
+    return structuredClone(milestone);
+  }
+
+  async acceptMilestoneFeature(
+    projectPath: ProjectPath,
+    milestoneId: string,
+    featureId: string,
+  ): Promise<Milestone> {
+    const milestone = this.requireMilestone(projectPath.id, milestoneId);
+    const feature = this.requireMilestoneFeature(milestone, featureId);
+    if (!canAcceptMilestoneFeature(feature)) {
+      throw new Error("Only a feature needing attention can be accepted");
+    }
+    const now = nowIso();
+    feature.status = "completed";
+    feature.acceptedAt = now;
+    feature.completedAt = now;
     feature.updatedAt = now;
     milestone.updatedAt = now;
     await this.persistMilestone(milestone);

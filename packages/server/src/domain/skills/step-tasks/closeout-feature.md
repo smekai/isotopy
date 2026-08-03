@@ -22,6 +22,12 @@ which platform was tested and any Windows/macOS gap. Return exactly one
       "title": "Unresolved problem",
       "severity": "blocking",
       "evidence": "Where it was observed"
+    },
+    {
+      "id": "another-finding-key",
+      "title": "Problem that does not hold the feature back",
+      "severity": "non_blocking",
+      "evidence": "Where it was observed"
     }
   ],
   "tasks": [
@@ -45,6 +51,7 @@ which platform was tested and any Windows/macOS gap. Return exactly one
 }
 ```
 
+`severity` is exactly `blocking` or `non_blocking` — those two spellings only.
 Only list source tasks actually completed by this run in `completedTaskIds`;
 everything selected but unfinished belongs in `unresolvedTaskIds`. Cleanup paths
 are relative to this run's temporary directory and must be `.` or one immediate

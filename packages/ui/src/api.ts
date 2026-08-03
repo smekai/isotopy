@@ -181,6 +181,15 @@ export function startNextMilestoneRun(
   return postJson<RunState>(`/milestones/${milestoneId}/start-next`, options);
 }
 
+export function acceptMilestoneFeature(
+  milestoneId: string,
+  featureId: string,
+): Promise<Milestone> {
+  return postJson<Milestone>(
+    `/milestones/${milestoneId}/features/${featureId}/accept`,
+  );
+}
+
 export function finalizeMilestone(milestoneId: string): Promise<Milestone> {
   return postJson<Milestone>(`/milestones/${milestoneId}/finalize`);
 }

@@ -6,6 +6,47 @@ a decision, its context, and the alternative rejected; it is not a changelog.
 
 ---
 
+## 2026-08-03 — Agent-authored closeout is an external protocol, so severity is normalized (TASK-101)
+
+**Context:** rule **A7** says a codec rejects a malformed record whole rather than
+repairing fields — but it draws that line around *ADHD-owned* formats. The
+`adhd-closeout` block is written by an LLM to a schema it was shown in prose, which
+puts it on the same side of the line as the TaskPlanner and engine protocols.
+
+**Decision:** `severity` is parsed through a normalizing step that trims, lowercases,
+and folds hyphens and spaces to underscores before the enum, so the `non-blocking` the
+model reliably writes lands as `non_blocking`. Every other field stays strict, and an
+unrecognised severity (`critical`, `maybe`) still rejects the whole record. The prompt
+example now shows both enum values, so the normalization is a safety net rather than
+the mechanism.
+
+**Rejected:** keeping the enum strict and adding one closeout retry that feeds
+`validationErrors` back to the agent. A retry costs a second Product Manager call on
+every schema slip and would not have prevented this one — the model had no way to know
+the other spelling. It stays worth doing for *other* schema failures, where the
+all-or-nothing `emptyCloseout` fallback still silently discards an expensive run's
+structured output; that gap is deliberately left open.
+
+---
+
+## 2026-08-03 — Completing a needs-attention feature is an acceptance, not a status edit (TASK-102)
+
+**Context:** `canFinalizeMilestone` requires every feature to be `completed`, so one
+feature left `needs_attention` made a milestone unfinalizable from the dashboard.
+
+**Decision:** the dashboard control is `POST /milestones/:id/features/:featureId/accept`,
+a distinct domain action guarded by `canAcceptMilestoneFeature`, and it stamps
+`acceptedAt` on the feature. A finalized milestone can therefore be read back to
+distinguish features a run completed from features a human accepted over open findings.
+Blocking findings do not prevent acceptance — the alternative strands a milestone on a
+false-positive finding with no way out, which is the bug being fixed.
+
+**Rejected:** exposing the existing `PATCH …/features/:featureId` as a status dropdown.
+It is a smaller change and the endpoint already worked, but it leaves no record that a
+feature was force-completed, which is the whole point of the control.
+
+---
+
 ## 2026-07-31 — What the Milestone D dogfood proved, and what it did not (TASK-094)
 
 **Context:** Milestone D was closed on a live Full Delivery run against a disposable

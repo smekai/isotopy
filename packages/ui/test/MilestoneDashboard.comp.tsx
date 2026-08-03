@@ -1,7 +1,3 @@
-// Component test: the dashboard's job is to make the milestone's state
-// actionable, and every one of those decisions is a render-time derivation —
-// which button is live, which run history belongs to which feature, whether a
-// blocking finding is visible at all. None of it is observable without markup.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Milestone, RunSummary } from "@adhd/core";
@@ -16,6 +12,7 @@ interface Handlers {
   onStartNext: ReturnType<typeof vi.fn>;
   onFinalize: ReturnType<typeof vi.fn>;
   onOpenRun: ReturnType<typeof vi.fn>;
+  onAcceptFeature: ReturnType<typeof vi.fn>;
 }
 
 function renderDashboard(
@@ -28,6 +25,7 @@ function renderDashboard(
     onStartNext: vi.fn(),
     onFinalize: vi.fn(),
     onOpenRun: vi.fn(),
+    onAcceptFeature: vi.fn(),
   };
   render(
     <MilestoneDashboard milestone={value} runs={runs} busy={busy} d={d} {...handlers} />,
@@ -127,6 +125,40 @@ test("a blocking finding is shown with its severity and its evidence", () => {
   expect(screen.getByText("BLOCKING")).toBeDefined();
   expect(screen.getByText(/Retry loses the draft/)).toBeDefined();
   expect(screen.getByText("run #3 log")).toBeDefined();
+});
+
+test("only a needs-attention feature offers acceptance, and it reports its own id", () => {
+  const handlers = renderDashboard(
+    milestone([
+      feature("f1", "completed"),
+      feature("f2", "ready"),
+      feature("f3", "in_progress"),
+      feature("f4", "needs_attention"),
+    ]),
+  );
+
+  const accepts = screen.getAllByTestId("milestone-feature-accept");
+  expect(accepts).toHaveLength(1);
+
+  fireEvent.click(accepts[0]!);
+  expect(handlers.onAcceptFeature).toHaveBeenCalledWith("f4");
+});
+
+test("an accepted feature is marked as accepted rather than passing", () => {
+  renderDashboard(
+    milestone([
+      feature("f1", "completed", { acceptedAt: "2026-08-03T09:00:00.000Z" }),
+    ]),
+  );
+
+  expect(screen.getByText(/Accepted/)).toBeDefined();
+  expect(screen.queryAllByTestId("milestone-feature-accept")).toHaveLength(0);
+});
+
+test("a busy milestone cannot accept a feature either", () => {
+  renderDashboard(milestone([feature("f1", "needs_attention")]), [], true);
+
+  expect(control("milestone-feature-accept").disabled).toBe(true);
 });
 
 test("an unapproved milestone says so instead of rendering an empty feature list", () => {

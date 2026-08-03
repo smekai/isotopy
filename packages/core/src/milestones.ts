@@ -67,6 +67,7 @@ export interface MilestoneFeature {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  acceptedAt?: string;
 }
 
 export interface Milestone {
@@ -155,6 +156,10 @@ export function canStartNextFeature(milestone: Milestone): boolean {
     !milestone.features.some((feature) => feature.status === "in_progress") &&
     nextMilestoneFeature(milestone) !== undefined
   );
+}
+
+export function canAcceptMilestoneFeature(feature: MilestoneFeature): boolean {
+  return feature.status === "needs_attention";
 }
 
 export function canFinalizeMilestone(milestone: Milestone): boolean {

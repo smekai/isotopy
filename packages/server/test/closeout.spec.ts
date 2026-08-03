@@ -35,6 +35,31 @@ describe("parseProductManagerCloseout", () => {
     ]);
   });
 
+  it("accepts the hyphenated severity an agent writes and keeps the whole report", () => {
+    const input = {
+      ...VALID_CLOSEOUT,
+      findings: [{ ...VALID_CLOSEOUT.findings[0], severity: "Non-Blocking" }],
+      tasks: [
+        {
+          findingId: "finding",
+          title: "Follow-up",
+          description: "Fix the finding",
+          priority: "P1",
+          tags: ["server"],
+        },
+      ],
+    };
+
+    const parsed = parseProductManagerCloseout(
+      `\`\`\`adhd-closeout\n${JSON.stringify(input)}\n\`\`\``,
+    );
+
+    expect(parsed.validationErrors).toEqual([]);
+    expect(parsed.report.findings[0]?.severity).toBe("non_blocking");
+    expect(parsed.report.tasks).toHaveLength(1);
+    expect(parsed.report.summary).toBe("Delivered the feature.");
+  });
+
   it("rejects a malformed nested finding instead of silently removing it", () => {
     const input = {
       ...VALID_CLOSEOUT,

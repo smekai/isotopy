@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Milestone, RunState } from "@adhd/core";
 import {
+  acceptMilestoneFeature,
   fetchMilestones,
   finalizeMilestone,
   startNextMilestoneRun,
@@ -20,6 +21,7 @@ export interface MilestonesController {
     milestoneId: string,
     options: StartNextOptions,
   ): Promise<RunState | undefined>;
+  acceptFeature(milestoneId: string, featureId: string): Promise<void>;
   finalize(milestoneId: string): Promise<void>;
 }
 
@@ -130,6 +132,17 @@ export function useMilestones(
     [reload],
   );
 
+  const acceptFeature = useCallback(
+    async (milestoneId: string, featureId: string) => {
+      try {
+        replace(await acceptMilestoneFeature(milestoneId, featureId));
+      } catch (reason) {
+        setError(messageOf(reason, "Failed to accept the feature"));
+      }
+    },
+    [replace],
+  );
+
   const finalize = useCallback(
     async (milestoneId: string) => {
       try {
@@ -147,5 +160,14 @@ export function useMilestones(
     [milestones],
   );
 
-  return { milestones, ready, error, find, setAutoRunNext, startNext, finalize };
+  return {
+    milestones,
+    ready,
+    error,
+    find,
+    setAutoRunNext,
+    startNext,
+    acceptFeature,
+    finalize,
+  };
 }
