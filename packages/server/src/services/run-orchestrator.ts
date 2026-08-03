@@ -11,7 +11,7 @@ import type {
   MessageRole,
   Milestone,
   MilestoneFeature,
-  MilestoneProposal,
+  MilestonePlan,
   PipelineDefinition,
   RunEvent,
   RunMessage,
@@ -37,9 +37,11 @@ import {
   nextMilestoneFeature,
   STAGE_OUTCOMES,
   pipelineUsesEngine,
+  toMilestoneProposal,
   toRunSummary,
 } from "@adhd/core";
 import { ListenerRegistry } from "./listener-registry.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -55,7 +57,7 @@ import {
   selectionAfterLimit,
 } from "../domain/engine-limit.ts";
 import { formatHandoff } from "../domain/markdown/stage.ts";
-import { parseMilestonePlan } from "../domain/milestone-plan.ts";
+import { extractMilestonePlan } from "../domain/milestone-plan.ts";
 import {
   renderMilestonePlanningContext,
   renderMilestoneRevisionContext,
@@ -353,23 +355,19 @@ export class RunOrchestrator implements RunProjection {
   async updateMilestoneProposal(
     projectPath: ProjectPath,
     milestoneId: string,
-    proposalInput: Omit<MilestoneProposal, "revision" | "createdAt">,
+    plan: MilestonePlan,
   ): Promise<Milestone> {
     const milestone = this.requireMilestone(projectPath.id, milestoneId);
     if (milestone.status !== "draft") {
       throw new Error("Only draft milestone proposals can be edited");
     }
-    const parsed = parseMilestonePlan(
-      `\`\`\`adhd-milestone-plan\n${JSON.stringify(proposalInput)}\n\`\`\``,
+    milestone.proposal = toMilestoneProposal(
+      plan,
       (milestone.proposal?.revision ?? 0) + 1,
       nowIso(),
     );
-    if (!parsed.proposal) {
-      throw new Error(parsed.errors.join("; "));
-    }
-    milestone.proposal = parsed.proposal;
-    milestone.name = parsed.proposal.name;
-    milestone.goal = parsed.proposal.goal;
+    milestone.name = plan.name;
+    milestone.goal = plan.goal;
     delete milestone.approvalError;
     milestone.updatedAt = nowIso();
     await this.persistMilestone(milestone);
@@ -1206,18 +1204,18 @@ export class RunOrchestrator implements RunProjection {
     ) {
       const milestone = this.milestones.get(run.milestoneId);
       if (milestone) {
-        const parsed = parseMilestonePlan(
-          output,
-          (milestone.proposal?.revision ?? 0) + 1,
-          nowIso(),
-        );
-        if (parsed.proposal) {
-          milestone.proposal = parsed.proposal;
-          milestone.name = parsed.proposal.name;
-          milestone.goal = parsed.proposal.goal;
+        const parsed = extractMilestonePlan(output);
+        if (parsed.ok) {
+          milestone.proposal = toMilestoneProposal(
+            parsed.value,
+            (milestone.proposal?.revision ?? 0) + 1,
+            nowIso(),
+          );
+          milestone.name = parsed.value.name;
+          milestone.goal = parsed.value.goal;
           delete milestone.approvalError;
         } else {
-          milestone.approvalError = parsed.errors.join("; ");
+          milestone.approvalError = formatValidationIssues(parsed.issues);
         }
         milestone.updatedAt = nowIso();
         await this.persistMilestone(milestone);

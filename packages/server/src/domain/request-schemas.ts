@@ -4,7 +4,6 @@ import {
   MILESTONE_FEATURE_STATUSES,
   MILESTONE_STATUSES,
   PERMISSION_MODE_IDS,
-  TASK_PRIORITIES,
   findPipeline,
 } from "@adhd/core";
 import type {
@@ -12,7 +11,6 @@ import type {
   CreateMilestoneInput,
   EngineId,
   LimitResolution,
-  MilestoneProposal,
   ProjectPreferencesUpdate,
   ReviseMilestonePlanInput,
   StartMilestonePlanningInput,
@@ -141,38 +139,6 @@ export const reviseMilestonePlanSchema: z.ZodType<ReviseMilestonePlanInput> = z
     engine: optionalText,
     model: z.string().optional(),
     permissionMode: optionalText,
-  })
-  .strict();
-
-const milestoneTaskDraftSchema = z
-  .object({
-    id: text,
-    title: text,
-    description: text,
-    priority: z.enum(TASK_PRIORITIES),
-    tags: strings,
-    createdTaskId: optionalText,
-  })
-  .strict();
-
-const milestoneFeatureProposalSchema = z
-  .object({
-    id: text,
-    title: text,
-    description: text,
-    acceptanceCriteria: strings,
-    existingTaskIds: strings,
-    taskDrafts: z.array(milestoneTaskDraftSchema),
-  })
-  .strict();
-
-export const milestoneProposalUpdateSchema: z.ZodType<
-  Omit<MilestoneProposal, "revision" | "createdAt">
-> = z
-  .object({
-    name: text,
-    goal: text,
-    features: z.array(milestoneFeatureProposalSchema),
   })
   .strict();
 

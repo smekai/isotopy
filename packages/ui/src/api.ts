@@ -1,6 +1,6 @@
 import type {
   Milestone,
-  MilestoneProposal,
+  MilestonePlan,
   EngineModelList,
   EngineStatus,
   LimitResolution,
@@ -197,9 +197,9 @@ export function finalizeMilestone(milestoneId: string): Promise<Milestone> {
 
 export function updateMilestoneProposal(
   milestoneId: string,
-  proposal: Omit<MilestoneProposal, "revision" | "createdAt">,
+  plan: MilestonePlan,
 ): Promise<Milestone> {
-  return patchJson<Milestone>(`/milestones/${milestoneId}/proposal`, proposal);
+  return patchJson<Milestone>(`/milestones/${milestoneId}/proposal`, plan);
 }
 
 export function reviseMilestonePlan(

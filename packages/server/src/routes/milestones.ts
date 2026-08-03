@@ -1,8 +1,8 @@
+import { milestonePlanSchema } from "@adhd/core";
 import { Hono } from "hono";
 import {
   createMilestoneSchema,
   createMilestoneFeatureSchema,
-  milestoneProposalUpdateSchema,
   reviseMilestonePlanSchema,
   startMilestonePlanningSchema,
   startNextMilestoneRunSchema,
@@ -113,7 +113,7 @@ export function createMilestoneRoutes(
       }
     })
     .patch("/:id/proposal", async (c) => {
-      const parsed = await parseRequestBody(c.req, milestoneProposalUpdateSchema);
+      const parsed = await parseRequestBody(c.req, milestonePlanSchema);
       if (!parsed.ok) {
         return c.json(invalidRequest(parsed.issues), 400);
       }
