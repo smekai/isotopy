@@ -28,7 +28,7 @@ by accident and nobody defends them past their usefulness.
 
 | Absent | Why it is fine today | What would change it |
 | --- | --- | --- |
-| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied — see [`decisions.md`](./decisions.md) 2026-07-27. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. TASK-093 added `#/milestones/:id` as a *sibling* of `#/runs/:id` — two flat patterns over one union, still not nesting. |
+| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied, so a browser navigation to `/runs/<id>` would be answered with run JSON instead of the app. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. TASK-093 added `#/milestones/:id` as a *sibling* of `#/runs/:id` — two flat patterns over one union, still not nesting. |
 | **State library** | State is either server state (three hooks) or one screen's view state. | State shared between siblings that are not both children of `App`. |
 | **CSS framework** | Theme switching is runtime, driven by a JS token object. | See §7 — the token gap is the real problem, not the absence of Tailwind. |
 | **Data-fetching library** | Every read is one call and one owner; SSE carries updates, so there is no cache to invalidate. | Refetch-on-focus, retries, or two components needing the same request. |
@@ -96,9 +96,9 @@ them without exception.
    theme- or state-dependent ones become small builders
    (`function panelStyle(d: Dir): CSSProperties`).
    [`EngineStatusCard.tsx`](../packages/ui/src/components/setup/EngineStatusCard.tsx) is
-   the reference. They live **in-file**: [`decisions.md`](./decisions.md) 2026-07-26
-   ruled that A6 asks for *names*, not for a particular file, and that a sibling
-   `*.styles.ts` would split one component's markup from its presentation. The one
+   the reference. They live **in-file**: A6 asks for *names*, not for a particular
+   file, and a sibling `*.styles.ts` would split one component's markup from its
+   presentation. The one
    exception is a *shared* vocabulary inside a feature folder — builders two or more
    siblings use, which would otherwise be copied (`setup/setup-styles.ts`,
    `run/run-styles.ts`).
@@ -225,8 +225,7 @@ neither control has to mean two things.
 `/runs/events` carries a compact `RunSummary` for *every* run in the project on each
 non-log event, and stays open for the life of the page. The rail reads the second,
 the run view reads the first. Never widen the summary channel into a second copy of
-`RunState` — the reason it exists is that logs must not ride it
-([`decisions.md`](./decisions.md) 2026-07-27).
+`RunState` — the reason it exists is that logs must not ride it.
 
 **Milestones have no channel of their own, and do not need one.** Every server-side
 milestone mutation — a feature reaching `completed` or `needs_attention`, autorun
@@ -349,8 +348,10 @@ The palette is selected in Setup → Appearance and persisted by `ThemeContext` 
 
 Beside the palettes, `theme.ts` exports the scales every component styles against
 (TASK-072). They were **extracted** from what the components already used, not
-designed — see [`decisions.md`](decisions.md) 2026-07-27 for the values that were
-snapped together and why.
+designed: values were measured from the components, then near-duplicates were snapped
+to one step each, every snap ≤2px. `SPACE`/`RADIUS` keep `md` and `lg` 2px apart
+deliberately — chip radius and control radius are two roles, and merging them would be
+a redesign.
 
 | Scale | Steps | Used for |
 | --- | --- | --- |

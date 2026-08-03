@@ -133,6 +133,10 @@ function salvageItems<T>(
   });
 }
 
+function salvageStrings(input: unknown, field: string, errors: string[]): string[] {
+  return [...new Set(salvageItems(requiredText, input, field, errors))];
+}
+
 function unrecognisedKeyErrors(record: Record<string, unknown>): string[] {
   return Object.keys(record)
     .filter((key) => !Object.hasOwn(closeoutShape, key))
@@ -176,29 +180,19 @@ function salvageCloseout(
         fallbackSummary,
         errors,
       ),
-      deliveredScope: salvageValue(
-        uniqueStrings,
-        record.deliveredScope,
-        "deliveredScope",
-        [],
-        errors,
-      ),
-      decisions: salvageValue(uniqueStrings, record.decisions, "decisions", [], errors),
-      knowledge: salvageValue(uniqueStrings, record.knowledge, "knowledge", [], errors),
+      deliveredScope: salvageStrings(record.deliveredScope, "deliveredScope", errors),
+      decisions: salvageStrings(record.decisions, "decisions", errors),
+      knowledge: salvageStrings(record.knowledge, "knowledge", errors),
       findings,
       tasks,
-      completedTaskIds: salvageValue(
-        uniqueStrings,
+      completedTaskIds: salvageStrings(
         record.completedTaskIds,
         "completedTaskIds",
-        [],
         errors,
       ),
-      unresolvedTaskIds: salvageValue(
-        uniqueStrings,
+      unresolvedTaskIds: salvageStrings(
         record.unresolvedTaskIds,
         "unresolvedTaskIds",
-        [],
         errors,
       ),
       cleanup: salvageItems(cleanupCandidateSchema, record.cleanup, "cleanup", errors),

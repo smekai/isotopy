@@ -7,20 +7,19 @@
 
 `docs/decisions.md` was 1013 lines across 35 entries and is loaded as context constantly.
 
-**Done — 802 lines, 31 entries, strictly newest-first.** The header now states the ordering rule *and* the merge rule, so the next superseded pair collapses instead of accumulating.
+**Done — 323 lines, 16 entries.** The file is now **high-level direction only**: an entry earns its place if getting it wrong later would be expensive — where data lives, what owns a boundary, what the runtime is, what the product refuses to do. The header states that bar, the newest-first rule, the merge rule, and where the other three kinds of writing go instead (`implementation-notes.md` for *how* and for quirks, `architecture*.md` for structure, `DONE.md` for what a task did).
 
-**Four superseded pairs merged into their survivor,** which is where most of the confusion lived — each was previously two entries a reader had to reconcile:
+**Small decisions dropped, not summarized:** SetupModal style placement, the Setup feature folder, the UI scale extraction, SQLite audit-timestamp triggers, the two-preset revision, and the TypeScript pin. Each was an application of an existing rule or an operational detail, and each already had — or has now been given — a home in a doc that is read at the moment it matters rather than loaded as blanket context.
 
-- `exactOptionalPropertyTypes` adopted (07-22) → removed (07-29). The adoption entry told you to use `delete` and avoid `= undefined`; the removal entry said the opposite. One entry now, stating the flag is off and `noUncheckedIndexedAccess` stays on.
-- Personas as a generated TS module (07-22) → Markdown as runtime assets (07-28). The earlier entry's *rejection* of runtime Markdown reading is kept, with why it no longer applies.
-- SetupModal style cleanup deferred (07-22) → styles named in-file (07-26). The deferral's reasoning survives as why it was a separate task.
-- "Validate untrusted data once, at the boundary" (07-29) folded into "Runtime schemas own every untrusted boundary" — the same decision written twice, with a trailing paragraph that contradicted the optional-property entry.
+**Four superseded pairs merged into their survivor** before the cut, which is where most of the confusion lived — `exactOptionalPropertyTypes` adopted then removed (the two entries gave opposite instructions), personas-as-generated-module then Markdown assets, SetupModal deferred then done, and "validate untrusted data once" written twice under two titles.
 
-**Ordering fixed.** The file claimed newest-first and was not: a 07-28 entry sat between 07-22 entries, and 07-26 / 07-29 entries were stranded at the bottom. Separators were also missing between roughly a third of the entries; there are now 31 for 31.
+**Related decisions merged by subject** rather than left as one entry per task: the chat projection, the derived transcript and engine usage became "the run view is derived from the log"; the project folder, project data, preferences and credentials became "a project owns its folder, its data, and its settings"; the quality-FAIL presentation and feature acceptance became "a blocking quality finding is not a crash".
 
-**Compressed, not deleted.** The long TASK-072/073/077/078/079/080/082/083 entries lost verification statistics, test-count deltas, file-line counts and bug narration that were changelog rather than decision. Every rationale existing nowhere else was kept and spot-checked — the `codex exec resume` sandbox quirk, Cursor's unverified `conversational: false`, `MAX_QUESTION_TURNS`, `EventSource` not setting headers, the `--disable-warning=ExperimentalWarning` start script, sakura's `borderStrong` behaviour change, `.gitignore` written with `wx`, and the TS 7 lint-gate crash. The TASK-072 snap table was dropped: it is data now living in `theme.ts`, and its rationale ("extraction not redesign, every snap ≤2px") is retained.
+**Nothing load-bearing was deleted without a home.** Two facts existed nowhere else and were moved to `implementation-notes.md` first: the TypeScript 6.0.3 pin with the `typescript-eslint` peer-range crash that forces it, and `codex exec resume` rejecting `--sandbox`. The rest were already recorded elsewhere and verified so — the `ExperimentalWarning` launch flag and `EventSource` header limitation in `implementation-notes.md`, Cursor's unverified `conversational: false` and `borderStrong` in `architecture-ui.md`.
 
-Also corrected the stale "simulate vs. engine" description of `stage-execution.ts` in the OpenWorkflow entry, matching the same fix in `architecture.md` under TASK-104.
+**Four cross-references orphaned by the merges were repaired,** not left dangling: three in `architecture-ui.md` (SetupModal styles, the summary channel, the scale snapping) and one in `implementation-notes.md` (a 07-22 date that is now 07-23). In each case the reasoning was inlined where it was already being explained, so the pointer was removable rather than needing a replacement target. Older `DONE.md` entries still cite removed decision dates and were **left alone** — they are a record of what was true when written, and the repo rule is not to edit tasks you are not working on.
+
+Also corrected the stale "simulate vs. engine" description of `stage-execution.ts`, matching the same fix in `architecture.md` under TASK-104, and removed a duplicated `.env`-loader bullet found in `implementation-notes.md` while relocating.
 
 ---
 
@@ -71,7 +70,9 @@ The strict `productManagerCloseoutSchema` is unchanged and still governs the per
 
 **Decision (docs/decisions.md, 2026-08-03):** salvage rather than the scoped retry the TASK-101 entry priced — a retry costs a second Product Manager call on every slip and still answers a second failure with nothing. One shape, two codecs: strict where ADHD wrote the record, salvaging where an agent wrote it.
 
-Covered by five new codec tests (partial-parse survival, unrecognised key, orphaned follow-up task, strict-schema round trip, non-object block). Gates green: lint, typecheck, 351 tests.
+**Caught in PR review (Copilot, PR #17):** the first cut salvaged arrays of *objects* element-wise but still ran the five string arrays (`deliveredScope`, `decisions`, `knowledge`, `completedTaskIds`, `unresolvedTaskIds`) through an all-or-nothing `uniqueStrings`, so one bad element discarded the whole array — the exact behaviour the task exists to remove, left in half the fields. Fixed with a `salvageStrings` helper (element-wise, then dedupe); the strict schema keeps `uniqueStrings`.
+
+Covered by **three** codec tests, not one per branch: a whole-closeout parse including the hyphenated severity, one salvage case exercising every field kind at once (string array, object array, unknown key, orphaned task, strict-schema round trip), and the block-level fallbacks. An earlier eight-test version asserted the same parser from eight angles and still missed the string-array bug — coverage per behaviour, not per assertion.
 
 ---
 
@@ -115,7 +116,7 @@ only on a needs-attention feature and an "Accepted …" line once stamped. Cover
 component test, a server component test through a restart, and an e2e that walks
 accept → progress → Finalize enabled in a real browser.
 
-**Decision (docs/decisions.md, 2026-08-03):** acceptance is a distinct domain action
+**Decision (docs/decisions.md, 2026-07-31 — "A blocking quality finding is not a crash"):** acceptance is a distinct domain action
 with an audit trail, not a status dropdown over the existing PATCH. Blocking findings do
 not prevent acceptance — that restriction strands a milestone on a false positive, which
 is the bug being fixed.
