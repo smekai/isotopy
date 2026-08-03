@@ -10,11 +10,18 @@ const uniqueStrings = z
   .array(requiredText)
   .transform((items) => [...new Set(items)]);
 
+const FINDING_SEVERITIES = ["blocking", "non_blocking"] as const;
+
+const severityFromAgentProse = z
+  .string()
+  .transform((value) => value.trim().toLowerCase().replace(/[\s-]+/g, "_"))
+  .pipe(z.enum(FINDING_SEVERITIES));
+
 const findingSchema = z
   .object({
     id: requiredText,
     title: requiredText,
-    severity: z.enum(["blocking", "non_blocking"]),
+    severity: severityFromAgentProse,
     evidence: requiredText.optional(),
   })
   .strict();

@@ -158,6 +158,7 @@ export interface MilestoneDashboardProps {
   onStartNext: () => void;
   onFinalize: () => void;
   onOpenRun: (runId: string) => void;
+  onAcceptFeature: (featureId: string) => void;
 }
 
 export function MilestoneDashboard({
@@ -169,6 +170,7 @@ export function MilestoneDashboard({
   onStartNext,
   onFinalize,
   onOpenRun,
+  onAcceptFeature,
 }: MilestoneDashboardProps) {
   const { completed, total } = milestoneProgress(milestone);
   const canStart = !busy && canStartNextFeature(milestone);
@@ -234,8 +236,10 @@ export function MilestoneDashboard({
                 key={feature.id}
                 feature={feature}
                 runs={runs}
+                busy={busy}
                 d={d}
                 onOpenRun={onOpenRun}
+                onAccept={onAcceptFeature}
               />
             ))}
           </ul>

@@ -395,6 +395,9 @@ export function App() {
               onStartNext={() => void handleStartNextFeature(activeMilestone.id)}
               onFinalize={() => void milestones.finalize(activeMilestone.id)}
               onOpenRun={attachRun}
+              onAcceptFeature={(featureId) =>
+                void milestones.acceptFeature(activeMilestone.id, featureId)
+              }
             />
           ) : run ? (
             <>

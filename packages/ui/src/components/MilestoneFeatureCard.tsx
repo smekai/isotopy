@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
+import { canAcceptMilestoneFeature } from "@adhd/core";
 import type {
   MilestoneFeature,
   MilestoneFeatureStatus,
   MilestoneFinding,
   RunSummary,
 } from "@adhd/core";
+import { formatDateTime } from "../format";
 import { runsForFeature } from "../run-list";
 import type { Dir } from "../theme";
 import {
@@ -165,6 +167,25 @@ function evidenceText(d: Dir): CSSProperties {
   return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.sm };
 }
 
+function acceptButton(d: Dir): CSSProperties {
+  return {
+    alignSelf: "flex-start",
+    border: `1px solid ${d.borderStrong}`,
+    borderRadius: RADIUS.md,
+    background: d.surface2,
+    padding: `${SPACE.xs}px ${SPACE.lg}px`,
+    cursor: "pointer",
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.semibold,
+    color: d.text,
+  };
+}
+
+function acceptedStamp(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.sm };
+}
+
 const FINDING_LIST: CSSProperties = {
   listStyle: "none",
   margin: 0,
@@ -195,15 +216,19 @@ function FindingItem({ finding, d }: FindingItemProps) {
 export interface MilestoneFeatureCardProps {
   feature: MilestoneFeature;
   runs: RunSummary[];
+  busy: boolean;
   d: Dir;
   onOpenRun: (runId: string) => void;
+  onAccept: (featureId: string) => void;
 }
 
 export function MilestoneFeatureCard({
   feature,
   runs,
+  busy,
   d,
   onOpenRun,
+  onAccept,
 }: MilestoneFeatureCardProps) {
   const history = runsForFeature(runs, feature.id);
 
@@ -271,6 +296,25 @@ export function MilestoneFeatureCard({
             ))}
           </ul>
         </>
+      )}
+
+      {canAcceptMilestoneFeature(feature) && (
+        <button
+          type="button"
+          data-testid="milestone-feature-accept"
+          disabled={busy}
+          onClick={() => onAccept(feature.id)}
+          style={acceptButton(d)}
+        >
+          Accept findings &amp; complete
+        </button>
+      )}
+
+      {feature.acceptedAt && (
+        <div style={acceptedStamp(d)}>
+          Accepted {formatDateTime(feature.acceptedAt)} — completed by hand, not
+          by a passing run.
+        </div>
       )}
     </li>
   );

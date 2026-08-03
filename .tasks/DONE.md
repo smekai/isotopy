@@ -1,5 +1,52 @@
 # Done
 
+## TASK-101: One hyphen in a closeout severity discards every finding
+**Priority:** P1 | **Tags:** server, engine, testing
+**Updated:** 2026-08-03 10:55
+
+The closeout agent wrote `"severity": "non-blocking"` where the schema demanded
+`"non_blocking"`, and `parseProductManagerCloseout` answered any schema failure with
+`emptyCloseout(...)` — discarding every finding, follow-up task draft and task
+classification. Reproduced 3 runs out of 3 in the TASK-094 dogfood.
+
+**Done:** `severity` now parses through a normalizing step (trim, lowercase, `-`/space →
+`_`) before the enum, so the spelling the model reliably writes lands correctly; every
+other field stays strict and an unrecognised severity still rejects the record whole.
+The step-task example shows both enum values and names them in prose. Covered by unit
+tests on the codec and a `product-manager-closeout` test asserting the hyphenated
+severity still produces follow-up tasks in the backlog.
+
+**Decision (docs/decisions.md, 2026-08-03):** the `adhd-closeout` block is
+agent-authored, so it sits on the external-protocol side of rule A7 rather than the
+ADHD-owned side. The scoped closeout *retry* was deliberately not built — it would not
+have prevented this defect and costs a second PM call on every slip. The all-or-nothing
+`emptyCloseout` fallback for *other* schema failures remains an open gap.
+
+---
+
+## TASK-102: A needs-attention feature can never be resolved from the dashboard
+**Priority:** P1 | **Tags:** ui, core, milestone-d
+**Updated:** 2026-08-03 10:55
+
+A feature left `needs_attention` blocked `canFinalizeMilestone` forever, and the
+dashboard rendered that status with no control to change it — the TASK-094 dogfood had
+to PATCH the feature by hand to finish the milestone.
+
+**Done:** `POST /milestones/:id/features/:featureId/accept`, guarded by the new
+`canAcceptMilestoneFeature` predicate in core, completes the feature and stamps
+`acceptedAt` so a finalized milestone distinguishes what a run completed from what a
+human accepted over open findings. The card shows an "Accept findings & complete" button
+only on a needs-attention feature and an "Accepted …" line once stamped. Covered by a
+component test, a server component test through a restart, and an e2e that walks
+accept → progress → Finalize enabled in a real browser.
+
+**Decision (docs/decisions.md, 2026-08-03):** acceptance is a distinct domain action
+with an audit trail, not a status dropdown over the existing PATCH. Blocking findings do
+not prevent acceptance — that restriction strands a milestone on a false positive, which
+is the bug being fixed.
+
+---
+
 ## TASK-094: Dogfood Full Delivery and close Milestone D at 0.8.7
 **Priority:** P1 | **Tags:** testing, infra, milestone-d
 **Updated:** 2026-07-31 20:10

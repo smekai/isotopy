@@ -1,39 +1,5 @@
 # Backlog
 
-## TASK-101: One hyphen in a closeout severity discards every finding
-**Priority:** P1 | **Tags:** server, engine, testing
-**Updated:** 2026-07-31 20:00
-
-Found by the TASK-094 dogfood, and reproduced **3 runs out of 3**. The Product Manager closeout agent writes `"severity": "non-blocking"`; the schema in [`domain/closeout.ts`](../packages/server/src/domain/closeout.ts) accepts only `"non_blocking"`. On any schema failure `parseProductManagerCloseout` returns `emptyCloseout(output.trim())`, so a single hyphen discards **every finding, every follow-up task draft, and the completed/unresolved task classification**, and drops the raw markdown into `summary`.
-
-Consequences observed live: `createdTasks: []` on all three runs, the sample project's `BACKLOG.md` left empty, features shown as `needs_attention` with **zero findings** on the milestone dashboard, and a finalized milestone summary with no Decisions, Knowledge or Open problems — because every closeout record that would have supplied them was rejected.
-
-**Root cause is the prompt, not the model.** [`step-tasks/closeout-feature.md`](../packages/server/src/domain/skills/step-tasks/closeout-feature.md) shows `"severity": "blocking"` in its JSON example and never shows the other value, so the model supplies the English-conventional `non-blocking` every time.
-
-**Scope:**
-- Show both enum values explicitly in the closeout step-task example.
-- Decide whether the codec should normalise `non-blocking` → `non_blocking`. Rule **A7** says reject an ADHD-owned record whole rather than repair fields — but the closeout block is produced by an LLM, not by ADHD, so this may belong on the "external protocol" side of that line. Record the decision either way.
-- Give the closeout stage **one** retry that feeds `validationErrors` back to the agent. Today an expensive run silently loses its structured output with no second chance.
-- Add a component test covering a closeout whose findings carry a wrong-but-plausible severity.
-
-Cross-platform: n/a — pure parsing and prompt text.
-
----
-
-## TASK-102: A needs-attention feature can never be resolved from the dashboard
-**Priority:** P1 | **Tags:** ui, core, milestone-d
-**Updated:** 2026-07-31 20:00
-
-Found by the TASK-094 dogfood. `canFinalizeMilestone` requires every feature to be `completed`, and a feature whose run ended `needs_attention` stays that way until something sets it otherwise. The milestone dashboard renders that status but offers **no control to change it**, so a milestone containing one such feature can never be finalized from the UI at all — the dogfood had to `PATCH /milestones/:id/features/:featureId` by hand to finish.
-
-The server already supports it (`updateMilestoneFeature` accepts `status`); only the UI affordance is missing.
-
-**Scope:** decide what the control means before building it — "accept these findings and mark the feature done" is a real product decision with an audit trail, not a checkbox. Consider whether accepting should record who accepted and when, and whether a feature with *blocking* findings should be acceptable at all or require a re-run first.
-
-Cross-platform: n/a — browser UI.
-
----
-
 ## TASK-103: The run-app skill describes a version of the app that no longer exists
 **Priority:** P3 | **Tags:** infra, setup
 **Updated:** 2026-07-31 20:00

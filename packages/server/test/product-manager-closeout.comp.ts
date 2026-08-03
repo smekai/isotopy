@@ -137,6 +137,51 @@ describe("Product Manager closeout", () => {
       ),
     ).toContain("# Product Manager closeout");
   });
+
+  it("keeps findings and follow-up tasks when the agent writes a hyphenated severity", async () => {
+    const { project, run } = await fixture();
+    const report = {
+      summary: "Delivered the work with one cosmetic gap.",
+      deliveredScope: ["TASK-001"],
+      decisions: [],
+      knowledge: [],
+      findings: [
+        {
+          id: "cosmetic-gap",
+          title: "Spacing is off on the dashboard",
+          severity: "non-blocking",
+          evidence: "Milestone dashboard",
+        },
+      ],
+      tasks: [
+        {
+          findingId: "cosmetic-gap",
+          title: "Fix the dashboard spacing",
+          description: "Align the feature cards.",
+          priority: "P3",
+          tags: ["server"],
+        },
+      ],
+      completedTaskIds: ["TASK-001", "TASK-002"],
+      unresolvedTaskIds: [],
+      cleanup: [],
+    };
+
+    const record = await applyProductManagerCloseout(
+      project,
+      run,
+      `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: PASS`,
+    );
+
+    expect(record.validationErrors).toEqual([]);
+    expect(record.report.findings).toMatchObject([{ severity: "non_blocking" }]);
+    expect(record.createdTasks).toMatchObject([
+      { id: "TASK-003", backend: "taskplanner" },
+    ]);
+    expect(
+      await readFile(path.join(rootOf(project), ".tasks", "BACKLOG.md"), "utf8"),
+    ).toContain("Fix the dashboard spacing");
+  });
 });
 
 function rootOf(project: ProjectPath): string {

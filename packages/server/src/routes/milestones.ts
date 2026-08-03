@@ -177,6 +177,19 @@ export function createMilestoneRoutes(
         return c.json({ error: messageOf(error) }, 400);
       }
     })
+    .post("/:id/features/:featureId/accept", async (c) => {
+      try {
+        return c.json(
+          await orchestrator.acceptMilestoneFeature(
+            projectScope(registry, c),
+            c.req.param("id"),
+            c.req.param("featureId"),
+          ),
+        );
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
     .post("/:id/start-next", async (c) => {
       const parsed = await parseRequestBody(c.req, startNextMilestoneRunSchema);
       if (!parsed.ok) {

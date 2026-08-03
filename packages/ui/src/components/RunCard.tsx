@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { PlayCircle, Repeat, RotateCcw } from "lucide-react";
 import type { RunSummary } from "@adhd/core";
+import { formatDateTime } from "../format";
 import { firstStageId, resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";
 import {
@@ -20,15 +21,6 @@ import {
 
 const DOT_SIZE = 7;
 const TASK_LINES = 2;
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function shell(selected: boolean, d: Dir): CSSProperties {
   return {
@@ -178,7 +170,7 @@ export function RunCard({ run, selected, d, onOpen, onRestart, onRerun }: RunCar
           <span style={dot(runDot(run.status, d))} />
           <span style={numberText(d)}>#{run.number}</span>
           <span style={statusText(pill)}>{runStatusLabel(run.status)}</span>
-          <span style={dateText(d)}>{formatDate(run.createdAt)}</span>
+          <span style={dateText(d)}>{formatDateTime(run.createdAt)}</span>
         </span>
         <span style={taskText(selected, d)}>{run.task ?? "Untitled run"}</span>
         <span style={pipelineText(d)}>{run.pipelineName}</span>

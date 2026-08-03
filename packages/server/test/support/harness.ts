@@ -1,7 +1,3 @@
-// Component-test harness: a real Hono app over a real orchestrator, with the
-// two external dependencies substituted — the engine adapter and the `.adhd`
-// data root.
-//
 // AAAAA forbids branching or inline logic in a test body, so every loop, poll
 // and retry in a component test lives here instead.
 import { mkdtemp, rm } from "node:fs/promises";
@@ -17,7 +13,6 @@ import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
 import { FakeEngine } from "./fake-engine.ts";
 
-/** How long a `waitFor*` helper keeps polling before failing the test. */
 const WAIT_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 10;
 
@@ -26,7 +21,6 @@ export interface TestApp {
   orchestrator: RunOrchestrator;
   registry: ProjectRegistry;
   settings: SettingsStore;
-  /** The substituted adapter. Script it in the Anticipate block. */
   engine: FakeEngine;
   /** Temp `ADHD_HOME` for this test — the home project's data root. */
   home: string;
@@ -36,16 +30,9 @@ export interface TestApp {
 }
 
 export interface TestAppOptions {
-  /** Engine the fake adapter stands in for. Defaults to claude-code. */
   engineId?: EngineId;
 }
 
-/**
- * Build an isolated app. Every test gets a fresh orchestrator (so run numbers
- * and in-memory state never leak) and fresh data roots — both the home
- * project's `.adhd` and the user-level registry — so nothing touches the
- * developer's real files.
- */
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
   const engineId = options.engineId ?? "claude-code";
   const home = await mkdtemp(path.join(os.tmpdir(), "adhd-comp-"));
@@ -90,7 +77,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   };
 }
 
-/** A second orchestrator over the same data roots — a server restart. */
 export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrchestrator }> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
@@ -99,7 +85,6 @@ export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrches
   return { app: createApp({ orchestrator, registry, settings }), orchestrator };
 }
 
-/** Register a temp directory as a project and return it with its API header. */
 export async function addTestProject(
   registry: ProjectRegistry,
   label: string,
@@ -109,12 +94,10 @@ export async function addTestProject(
   return { id: project.id, root, headers: { "X-ADHD-Project": project.id } };
 }
 
-/** Extra request headers — in practice `X-ADHD-Project` to target a project. */
 export type TestHeaders = Record<string, string>;
 
 const JSON_HEADERS: TestHeaders = { "Content-Type": "application/json" };
 
-/** POST JSON and return the parsed body plus status. */
 export async function post<T>(
   app: Hono,
   route: string,
@@ -129,7 +112,6 @@ export async function post<T>(
   return { status: response.status, body: (await response.json()) as T };
 }
 
-/** PUT JSON and return the parsed body plus status. */
 export async function put<T>(
   app: Hono,
   route: string,
@@ -144,7 +126,20 @@ export async function put<T>(
   return { status: response.status, body: (await response.json()) as T };
 }
 
-/** GET JSON and return the parsed body plus status. */
+export async function patch<T>(
+  app: Hono,
+  route: string,
+  body: unknown,
+  headers: TestHeaders = {},
+): Promise<{ status: number; body: T }> {
+  const response = await app.request(route, {
+    method: "PATCH",
+    headers: { ...JSON_HEADERS, ...headers },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as T };
+}
+
 export async function get<T>(
   app: Hono,
   route: string,
@@ -154,7 +149,6 @@ export async function get<T>(
   return { status: response.status, body: (await response.json()) as T };
 }
 
-/** DELETE and return the parsed body plus status. */
 export async function del<T>(
   app: Hono,
   route: string,
@@ -164,7 +158,6 @@ export async function del<T>(
   return { status: response.status, body: (await response.json()) as T };
 }
 
-/** Start a run through the API and return its created state. */
 export async function startRun(
   app: Hono,
   body: Record<string, unknown>,
@@ -177,7 +170,6 @@ export async function startRun(
   return run;
 }
 
-/** Current server-side state of a run. */
 export async function getRun(app: Hono, runId: string): Promise<RunState> {
   const { body } = await get<RunState>(app, `/runs/${runId}`);
   return body;
@@ -211,7 +203,6 @@ export async function waitForRun(
   return last;
 }
 
-/** Wait for the run itself to reach a status. */
 export function waitForRunStatus(
   app: Hono,
   runId: string,
@@ -220,7 +211,6 @@ export function waitForRunStatus(
   return waitForRun(app, runId, (run) => run.status === status, `run status "${status}"`);
 }
 
-/** Wait for one stage to reach a status — e.g. the box that must run first. */
 export function waitForStageStatus(
   app: Hono,
   runId: string,
@@ -241,7 +231,6 @@ export interface SseEvent {
 }
 
 export interface SseCollector {
-  /** Poll until the collected events satisfy `predicate`, then return them. */
   waitFor(
     predicate: (events: SseEvent[]) => boolean,
     description: string,
@@ -262,7 +251,6 @@ function parseSseFrame(frame: string): SseEvent {
   return { event, data: data.join("\n") };
 }
 
-/** Open an SSE route and collect its frames in the background. */
 export async function openSse(
   app: Hono,
   route: string,
@@ -314,7 +302,6 @@ export async function openSse(
   };
 }
 
-/** The `run.summary` payloads out of a collected project stream. */
 export function summariesOf(events: SseEvent[]): RunSummary[] {
   return events
     .filter((event) => event.event === RUN_SUMMARY_EVENT)
@@ -334,7 +321,6 @@ export async function approveIntake(app: Hono, runId: string): Promise<void> {
   }
 }
 
-/** The stage entry from a run, for assertions. */
 export function stageOf(run: RunState, stageId: string) {
   const stage = run.stages.find((item) => item.id === stageId);
   if (!stage) {
