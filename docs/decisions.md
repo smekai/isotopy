@@ -1,1013 +1,323 @@
 # Decision Log
 
-Short, dated entries recording *why* a non-obvious choice was made — the home for
-rationale that rule **A8** keeps out of code comments. Newest first. An entry is
-a decision, its context, and the alternative rejected; it is not a changelog.
+**High-level direction only.** An entry earns its place here if getting it wrong
+later would be expensive — where data lives, what owns a boundary, what the
+runtime is, what the product refuses to do. Newest first.
+
+This is not a changelog and not a notebook. Three things belong elsewhere:
+
+- *How* something works, and platform or CLI quirks → [`implementation-notes.md`](./implementation-notes.md)
+- Structure and conventions of a tier → [`architecture.md`](./architecture.md), [`architecture-ui.md`](./architecture-ui.md)
+- What a task did → its entry in `.tasks/DONE.md`
+
+When a later decision supersedes an earlier one, they are **merged into the
+survivor** rather than left as a pair to reconcile.
 
 ---
 
-## 2026-08-03 — Agent-authored closeout is an external protocol, so severity is normalized (TASK-101)
+## 2026-08-03 — Strict for what ADHD writes, salvaging for what an agent writes
 
 **Context:** rule **A7** says a codec rejects a malformed record whole rather than
-repairing fields — but it draws that line around *ADHD-owned* formats. The
-`adhd-closeout` block is written by an LLM to a schema it was shown in prose, which
-puts it on the same side of the line as the TaskPlanner and engine protocols.
+repairing fields. Applied to LLM output that rule destroyed real work: the closeout
+agent writes `"non-blocking"` where the enum demands `non_blocking`, and *any* schema
+slip discarded an entire run's findings, task drafts and classification.
 
-**Decision:** `severity` is parsed through a normalizing step that trims, lowercases,
-and folds hyphens and spaces to underscores before the enum, so the `non-blocking` the
-model reliably writes lands as `non_blocking`. Every other field stays strict, and an
-unrecognised severity (`critical`, `maybe`) still rejects the whole record. The prompt
-example now shows both enum values, so the normalization is a safety net rather than
-the mechanism.
+**Decision:** the boundary, not the shape, decides the strictness. An ADHD-owned record
+— persisted JSON, settings, the project registry — validates completely or is rejected
+with path-aware issues. An **agent-authored or vendor protocol** is salvaged: known
+spellings are normalized, a failing field or array element is dropped alone, unknown
+keys are reported rather than fatal, and everything discarded is named in
+`validationErrors` for the UI to show. The same shape can therefore have two codecs —
+the closeout block is salvaged on the way in and strict on the way to disk, with a
+round-trip test holding the invariant that salvage output still satisfies the strict
+schema.
 
-**Rejected:** keeping the enum strict and adding one closeout retry that feeds
-`validationErrors` back to the agent. A retry costs a second Product Manager call on
-every schema slip and would not have prevented this one — the model had no way to know
-the other spelling. It stays worth doing for *other* schema failures, where the
-all-or-nothing `emptyCloseout` fallback still silently discards an expensive run's
-structured output; that gap is deliberately left open.
-
----
-
-## 2026-08-03 — Completing a needs-attention feature is an acceptance, not a status edit (TASK-102)
-
-**Context:** `canFinalizeMilestone` requires every feature to be `completed`, so one
-feature left `needs_attention` made a milestone unfinalizable from the dashboard.
-
-**Decision:** the dashboard control is `POST /milestones/:id/features/:featureId/accept`,
-a distinct domain action guarded by `canAcceptMilestoneFeature`, and it stamps
-`acceptedAt` on the feature. A finalized milestone can therefore be read back to
-distinguish features a run completed from features a human accepted over open findings.
-Blocking findings do not prevent acceptance — the alternative strands a milestone on a
-false-positive finding with no way out, which is the bug being fixed.
-
-**Rejected:** exposing the existing `PATCH …/features/:featureId` as a status dropdown.
-It is a smaller change and the endpoint already worked, but it leaves no record that a
-feature was force-completed, which is the whole point of the control.
+**Rejected:** retrying the agent on a schema failure. It costs a second call every time,
+and still answers a second failure with nothing.
 
 ---
 
-## 2026-07-31 — What the Milestone D dogfood proved, and what it did not (TASK-094)
+## 2026-07-31 — A blocking quality finding is not a crash
 
-**Context:** Milestone D was closed on a live Full Delivery run against a disposable
-sample app rather than on tests alone — 3 runs, ~$6, Claude Code + sonnet, Windows.
-Recording the outcome matters because the gaps are as load-bearing as the passes.
+**Context:** a quality stage reporting `VERDICT: FAIL` is recorded as a `failed` stage so
+the run ends `needs_attention`, but the pipeline deliberately continues to closeout. A
+review that found a real problem looked identical to an engine that died.
 
-**Proven live:** milestone planning and approval, task writing through the built-in
-backend, the dashboard, server-side autorun chaining, the PM gate, conditional `SKIP`,
-a genuine quality `FAIL` with release/deploy suppression and closeout still running,
-needs-attention rendering, and finalize with a written summary.
+**Decision:** `needs_attention` is a first-class outcome, distinct from failure, all the
+way to the UI — the pipeline continues, closeout still runs and still writes follow-up
+tasks, release and deploy are suppressed, and the stage renders amber rather than red.
+Resolving one is an explicit **acceptance** (`POST /milestones/:id/features/:id/accept`)
+that stamps who accepted it over which open findings, not a status edit — so a finalized
+milestone can be read back to distinguish what a run completed from what a human waved
+through. Blocking findings do not block acceptance; the alternative strands a milestone
+on a false positive with no way out.
 
-**Durable resume, proven properly on the third attempt.** The first two attempts
-verified nothing — the run had already reached a terminal state before the server was
-killed, so there was no interruption to recover from. Only a *timed* kill (server
-stopped at a known instant with a stage mid-flight) tests anything. It passed:
-completed stages kept their original timestamps and were not re-run, the interrupted
-stage restarted, and the pipeline finished. **A restart test that does not confirm the
-run was non-terminal at the moment of the kill is not a test.**
-
-**Not proven:** the TaskPlanner-backend dogfood was deliberately skipped, so that path
-rests on `task-writer` component tests. macOS remains CI-only.
-
-**The most valuable output was a defect the tests could not have found.** The closeout
-agent writes `"severity": "non-blocking"`; the schema demands `"non_blocking"`; the
-whole record is then rejected, discarding every finding and follow-up task. It
-reproduced 3 runs out of 3, and the component tests all passed throughout because they
-supply valid fixtures. The prompt in `closeout-feature.md` shows only one of the two
-enum values, so the model infers the other by English convention. Filed as TASK-101,
-alongside TASK-102 (no UI path to resolve a needs-attention feature, which makes a
-milestone containing one unfinalizable from the dashboard) and TASK-103.
-
-**The lesson worth keeping:** where an LLM fills a typed contract, a fixture-based test
-proves the parser and nothing about what the model actually emits. Schema-shaped
-prompts need an example of **every** enum value, and a validation failure on expensive
-agent output needs a retry that feeds the errors back.
+**Rejected:** widening `StageStatus` in `@adhd/core` so the colour could differ. The
+persisted status is what the durable workflow branches on, and every runtime consumer
+would have to handle a case that exists only for presentation.
 
 ---
 
-## 2026-07-31 — Milestone D ships without release and deploy automation (TASK-093, TASK-092)
+## 2026-07-31 — Ship the seam, not the automation (TASK-092)
 
-**Context:** TASK-093 was written to render preview deployment URLs and QA
-screenshots and traces in Artifacts. Both are produced by TASK-092's typed
-project automation configuration, and TASK-092 was closed unmerged (PR #13)
-under a standing "no automation for now" call.
+**Context:** Full Delivery carries `release` and `deploy` stages, but project deployment
+automation was cut from Milestone D.
 
-**Decision:** Milestone D closes without release and deploy automation, and
-TASK-093's Artifacts scope was cut to the closeout record — the one delivery
-artifact the run actually produces today. Rendering a deploy URL section that is
-always empty, or an evidence gallery for files no configured stage writes, would
-have been a UI that promises a capability the product does not have.
+**Decision:** the stages stay and report `VERDICT: SKIP` when nothing is configured, so
+the pipeline degrades honestly and the missing piece is a configuration follow-up rather
+than a pipeline rewrite. Nothing in the UI renders a capability the product does not
+have — no deploy-URL panel that is always empty, no evidence gallery for files no stage
+writes.
 
-The `release` and `deploy` stages stay in the Full Delivery pipeline: their
-step-tasks end with `VERDICT: SKIP` when no target is configured, so the seam
-degrades honestly and TASK-092 remains a real, unfinished follow-up rather than
-a rewrite. **Rejected:** removing the two stages until automation lands, which
-would have made TASK-092 a pipeline change instead of a configuration one.
+**Rejected:** removing the two stages until automation lands.
 
 ---
 
-## 2026-07-31 — A quality FAIL presents as needs-attention, not as failure (TASK-093)
+## 2026-07-31 — Two testing rules the dogfood paid for
 
-**Context:** a quality-policy stage that reports `VERDICT: FAIL` is recorded with
-stage status `failed` so the run ends `needs_attention`, but the pipeline
-deliberately continues past it to closeout. The UI painted that stage the same
-red as a crashed one, so a review that found a blocking problem was
-indistinguishable from an engine that died.
+**Context:** Milestone D was closed on a live Full Delivery run rather than on tests
+alone, and the run found what the suite could not.
 
-**Decision:** the UI derives a presentation from the stage rather than reading
-its status directly — `stagePresentation` in `run-utils.ts` maps
-`failed` + `verdict: FAIL` to an amber `NEEDS ATTENTION`, and leaves a `failed`
-stage with no verdict red. The derivation is presentational and pure, so it
-lives in the UI beside the other run helpers and is unit-tested there.
+**A restart test that does not confirm the run was non-terminal at the moment of the kill
+is not a test.** Two durable-resume attempts verified nothing — the run had already
+finished before the server was killed. Only a *timed* kill, with a stage mid-flight,
+proves anything.
 
-**Rejected:** adding `needs_attention` to `StageStatus` in `@adhd/core`. The
-persisted status is what the durable workflow branches on, and widening it would
-have forced every runtime consumer to handle a case that only exists so a colour
-can differ.
+**Where an LLM fills a typed contract, a fixture-based test proves the parser and nothing
+about what the model emits.** Every component test passed while the closeout defect
+reproduced on 3 runs out of 3, because the fixtures were valid by construction.
+Schema-shaped prompts need an example of *every* enum value.
 
 ---
 
-## 2026-07-29 — SQLite owns projection audit timestamps (TASK-099)
+## 2026-07-29 — Runtime schemas own every untrusted boundary
 
-**Context:** mutable `runs` and `milestones` rows received `updated_at` from
-TypeScript on every upsert and had no `created_at`. That made the repository
-responsible for database bookkeeping and allowed writers to disagree about
-timestamp format or forget the update entirely.
+**Context:** routes asserted generic request bodies, persisted runs were trusted after a
+single id check, adapters cast vendor JSONL before traversing it, and nested helpers
+silently dropped invalid entries — so service code received plausible but incorrect data.
 
-**Decision:** SQLite supplies `created_at` and `updated_at` with
-`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`, which matches JavaScript's
-millisecond UTC ISO format. An `AFTER UPDATE` trigger advances `updated_at`;
-upserts now write only identifiers and data. Known legacy table schemas are
-rebuilt in one transaction, preserving rows and using the previous
-`updated_at` as both initial audit timestamps.
+**Decision:** focused Zod codecs own every untrusted boundary — HTTP, settings, project
+registry, TaskPlanner config, persisted records, AI output and engine JSONL. Domain and
+service code receives validated types and never re-traverses `Record<string, unknown>`.
+Engine codecs emit one shared normalized update shape so adapters never touch vendor
+objects. Runtime value lists are exported `as const` and define their TypeScript unions.
+ESLint enforces the boundary by rejecting typed `c.req.json<T>()` and casts around
+`JSON.parse` in server source.
 
-Append-only `events` do not need mutable audit timestamps, and
-`active_runs.started_at` remains a domain value describing run admission rather
-than row creation. This database-schema migration is intentionally separate
-from persisted JSON compatibility: pre-1.0 JSON shapes remain strict.
+**Rejected:** one universal schema module — HTTP, persistence, TaskPlanner and each
+vendor protocol change independently.
 
 ---
 
-## 2026-07-29 — Runtime schemas own every untrusted server boundary (TASK-098)
+## 2026-07-29 — Absent and `undefined` are the same domain state
 
-**Context:** HTTP routes asserted generic request bodies, persisted runs trusted
-an object after checking only `run.id`, and the three engine adapters cast JSONL
-before traversing vendor records. Settings and project files also accepted valid
-fragments from malformed records. Those patterns let invalid nested values
-reach services as apparently typed data.
+**Context:** `exactOptionalPropertyTypes` forced callers to distinguish a missing property
+from a property explicitly set to `undefined`. ADHD gives those no different meaning, so
+the flag produced `T | undefined` fields and conditional assembly protecting no invariant.
 
-**Decision:** focused Zod codecs now own HTTP, settings, project-registry,
-TaskPlanner config, persisted run/event, and engine JSONL boundaries. An
-ADHD-owned record validates completely or is rejected with path-aware issues;
-pre-1.0 persisted shapes are not migrated. External TaskPlanner and engine
-formats may add unrelated fields or event types, but every field ADHD consumes
-is validated. Engine codecs emit one shared normalized update shape so adapters
-never traverse unknown vendor objects.
-Malformed nonterminal engine lines are logged and skipped; a run still requires
-a valid terminal event to succeed.
-
-**Enforcement:** ESLint rejects typed `c.req.json<T>()` calls and casts directly
-around `JSON.parse` in server source. Domain constants define runtime value
-lists and their TypeScript unions together.
-
-**Rejected:** partial recovery from malformed owned files, because it hides the
-failing path and can produce a plausible but incorrect configuration; and one
-universal schema module, because HTTP, persistence, TaskPlanner, and each vendor
-protocol change independently.
+**Decision:** the flag is **off**. A value that may be absent is `field?: T`; callers may
+omit it or pass `undefined`. `null` is reserved for an explicit cleared state.
+`noUncheckedIndexedAccess` stays **on**.
 
 ---
 
-## 2026-07-29 — Markdown formats are pure domain codecs (TASK-100)
+## 2026-07-29 — Pure logic lives in a domain layer, grouped by what it parses
 
-**Context:** closeout and TaskPlanner services built Markdown inline while also
-reading files, mutating boards, cleaning temporary paths, and sequencing run
-work. Prompt and skill composition were pure but split across unrelated domain
-locations. Formatting rules, line endings, and TaskPlanner grammar therefore
-had no single testable boundary.
+**Context:** rule A3 wants pure logic out of services. `@adhd/core` looked like the home,
+and Markdown building was happening inline inside services that were also doing I/O.
 
-**Decision:** focused codecs under `domain/markdown/` own server-side Markdown
-parsing and rendering. They receive timestamps and typed values, normalize
-ADHD-owned documents to LF, and preserve an existing TaskPlanner file's LF or
-CRLF style when editing it. Structural labels are single-line; free-form bodies
-keep their Markdown. Services own I/O and orchestration, and repositories store
-already-rendered content without understanding its format.
+**Decision:** `@adhd/core` stays the *shared* contract imported by the browser UI —
+prompt builders and persona text have no business in the client bundle — so server-only
+pure logic lives in `packages/server/src/domain/`, with Markdown parsing and rendering
+grouped by format under `domain/markdown/`. Services own I/O and orchestration;
+repositories store already-rendered content and know nothing about its format.
 
-**Rejected:** a repository-level formatter, because persistence should not own
-presentation semantics; and one universal Markdown builder, because task-board
-grammar, agent prompts, and closeout artifacts change for different reasons.
+**Rejected:** one universal Markdown builder — task-board grammar, agent prompts and
+closeout artifacts change for different reasons.
 
 ---
 
-## 2026-07-29 — Optional and `undefined` represent the same domain state
+## 2026-07-29 — Milestones begin as an approved Product Manager proposal
 
-**Context:** `exactOptionalPropertyTypes` forced callers and constructors to
-distinguish a missing property from a property whose value is `undefined`. ADHD
-does not assign different domain meaning to those two JavaScript shapes, so the
-flag produced required `T | undefined` fields and conditional object assembly
-without protecting a real invariant.
+**Context:** a user can describe an outcome more easily than a delivery backlog. Creating
+tasks during an unfinished conversation would turn guesses into durable project work.
 
-**Decision:** remove `exactOptionalPropertyTypes`. A value that may be absent is
-written as `field?: T`; callers may omit it or supply `undefined`. `null` is
-reserved for contracts that need an explicit cleared or removed state. Runtime
-schemas still validate untrusted input at the boundary, and
-`noUncheckedIndexedAccess` remains enabled.
+**Decision:** milestone planning is a dedicated Product Manager conversation whose
+validated proposal is persisted as a draft, revisable by chat or direct edit, and creates
+or links tasks **only after explicit approval**. One feature is one Full Delivery run and
+may group several tasks. Existing TaskPlanner work is reused; missing work is created
+idempotently through an ADHD-owned adapter, with `.adhd/tasks` as the fallback. Product
+Manager also owns closeout: only explicitly completed source tasks move to Done,
+unresolved work is preserved, and cleanup is confined to the run-owned temporary root.
 
----
-
-## 2026-07-29 — Milestones begin as an approved Product Manager proposal (TASK-088, TASK-091, TASK-096)
-
-**Context:** a user can describe an outcome more easily than a complete delivery
-backlog. Creating tasks during an unfinished conversation would turn guesses
-into durable project work, while making each task a separate milestone feature
-would prevent one coherent delivery run from grouping related changes and bugs.
-
-**Decision:** milestone planning is a dedicated Product Manager conversation.
-Its validated proposal is persisted as a draft, can be revised through chat or
-edited directly, and creates or links tasks only after explicit approval. One
-feature is one Full Delivery run and may group several tasks. Existing
-TaskPlanner work is reused; missing work is created idempotently through an
-ADHD-owned adapter, with `.adhd/tasks` as the fallback.
-
-Product Manager also owns structured closeout. Only explicitly completed source
-tasks move to Done, unresolved work is preserved, and cleanup is restricted to
-the run-owned temporary root.
-
-**Deferred:** changing TaskPlanner first. The Markdown integration stays behind
-an adapter so a future official transactional API can replace it without
-changing milestone behavior.
+**Deferred:** changing TaskPlanner itself. The Markdown integration stays behind an
+adapter so an official transactional API can replace it later without changing milestone
+behaviour.
 
 ---
 
-## 2026-07-28 — Full Delivery uses reusable personas and explicit stage policy (TASK-089, TASK-090)
+## 2026-07-28 — Personas are identities; step tasks are assignments
 
-**Context:** the comprehensive preset needs conditional design and deployment,
-continued QA after a blocking review, suppression of unsafe release work, and a
-closeout even after engine failure. The same human role also performs more than
-one assignment: Product Manager plans and closes; Software Architect designs
-and independently reviews; QA owns automated, E2E, and exploratory checks.
+**Context:** the Full Delivery preset needs conditional design and deployment, continued
+QA after a blocking review, suppressed release work, and a closeout even after engine
+failure. One human role also performs more than one assignment — Product Manager plans
+and closes; Software Architect designs and independently reviews.
 
-**Decision:** personas remain stable identities while step-task Markdown defines
-each assignment. Full Delivery therefore reuses Product Manager and Software
-Architect instead of introducing Code Reviewer, Manual Tester, Project Steward,
-or Engineering Manager personas.
-
-Workflow control is declared through `executionPolicy`: quality work may
-continue after `VERDICT: FAIL`, delivery work is suppressed by any blocker, and
-closeout is the only paid stage allowed after an engine/runtime failure.
-Cancellation starts no closeout agent. Restart carries prior stage outcomes in
-addition to handoff text, preserving blockers across a downstream retry.
-
-**Rejected:** hardcoding stage IDs in the workflow loop. That would couple
-control semantics to today’s labels and make a custom or renamed pipeline
-silently unsafe.
+**Decision:** personas are stable identities while step-task Markdown defines each
+assignment, so Full Delivery reuses Product Manager and Software Architect instead of
+inventing Code Reviewer or Engineering Manager personas. Workflow control is **declared**
+through `executionPolicy` — quality work may continue after `VERDICT: FAIL`, delivery work
+is suppressed by any blocker, closeout is the only paid stage allowed after a runtime
+failure — never by hardcoding stage ids, which would couple control semantics to today's
+labels and make a renamed pipeline silently unsafe.
 
 ---
 
-## 2026-07-28 — The chat is a projection of the log (TASK-082)
+## 2026-07-28 — Persona and prompt text is Markdown, and ships as an asset
 
-**Context:** the agent-window epic made the chat the run's whole body, and
-`buildTranscript` maps *every* stage log line into it. So the conversation
-carried `⎿ Read(auth.ts)`, `Tool error: …` and `Developer online · Claude Code ·
-haiku` alongside what the agent actually said, while Logs and Artifacts were
-reachable only inside `StageFocusPanel` — a second pane below the chat that
-opened when a stage node was clicked, with the workspace file browser three
-clicks deep.
+**Context:** persona text began as TypeScript template literals, which diff badly and let
+a stray backtick break the build. The first fix generated one TS module, which still
+duplicated every persona inside a literal.
 
-**Decision:** one derived ordering, three tabs over it. `buildTranscript(run)` is
-unchanged and feeds Logs; `conversationOnly(items)` feeds Chat. The chat is never
-a second source — that is what keeps a line from existing in one view and not the
-other for reasons nobody can reconstruct.
+**Decision:** the source of persona and step-task text is Markdown on disk, read directly
+at runtime; the build copies it into `dist` with a platform-neutral script. The Architect
+persona and its Claude Code skill are the one generated pair, emitted from named `gen:`
+blocks in [`architecture.md`](./architecture.md), with `pnpm gen:skills --check` failing
+the build on drift. Adding a persona is dropping in a file.
 
-**The filter is structural, not textual.** It drops `kind: "tool"` and nothing
-else. Matching prose (`startsWith("cost ")`, `/online ·/`) was the obvious
-alternative and is the one that rots: it silently stops working the day an
-adapter rewords a string. TASK-083 went first precisely so the chatter would
-already *be* tool-level, which made this filter one predicate.
-
-**`conversationOnly` returns a narrowed type**, `Exclude<TranscriptItem, { kind:
-"tool" }>`, so `ChatPanel` cannot be handed a tool row at all. The compiler found
-this: with a plain `TranscriptItem[]` return, the row component still had to
-handle a case that could never arrive.
-
-**The stage header keeps its place in the thread.** Who is working, how their
-stage ended, and what it cost are not machinery — they are the three things a
-person watching a run actually wants, and they already had a home in the divider
-row. Cost arrives there via `formatUsage(stage.usage)`; the run total sits in the
-status bar, visible from every tab.
-
-**A stage-node click filters instead of opening a pane.** The pipeline row reports
-what was clicked (`focusedId` in `App`); `RunTabs` decides that this means
-"narrow Logs and Artifacts to that stage". It deliberately does **not** switch
-tabs — a component reports what happened, the parent decides what it means, and
-yanking someone out of the chat mid-read is the opposite of that.
-
-**No Reasoning tab.** It rendered `mock-content.ts` — hardcoded OAuth-demo text,
-shown regardless of what the run did. There is no server-side reasoning source,
-so the honest options were an always-empty tab or no tab; a tab that promises
-something the system never captures is worse than its absence. The file is
-deleted, which closes TASK-075.
-
-## 2026-07-28 — Engine usage is data, not prose (TASK-083)
-
-**Context:** a run could not say what it cost. `claude-code.ts` read
-`total_cost_usd` off the CLI's result event, formatted `cost $0.0123 · 3 turns ·
-41s` into an `info` log line, and dropped the number; `codex.ts` did the same
-with token counts. Because `info` logs render as agent prose in the chat, the
-figure was simultaneously *unavailable as data* and *noise in the conversation*.
-
-**Decision:** an adapter that knows a number hands it up the seam. The three
-loose fields on `EngineRunResult` (`costUsd`, `durationMs`, `numTurns`) collapse
-to one named `StageUsage` imported from core, and the log lines that formatted
-them are deleted.
-
-**The run total is derived, not stored.** `runUsage(run)` sums the stages. A
-stored `RunState.costUsd` would be a second source of truth that drifts the
-moment a stage is restarted — and `restartRun` deliberately leaves `stage.usage`
-alone while clearing `verdict`, `logs` and the timestamps, because money spent on
-a failed attempt was still spent.
-
-**Accumulation happens on the server; the event carries the total.**
-`stageUsage()` folds each turn into `stage.usage` with `addUsage`, then emits the
-*accumulated* figure rather than the delta. A stage runs several times across a
-question loop, so an assignment would report only the last turn — but the event
-must also survive `replayEvents`, and a delta applied twice would double-count.
-Accumulate once, at the single writer; the reducer assigns.
-
-**`formatUsage` is the one place the engines' differences are expressed.** Claude
-Code reports dollars, Codex reports only tokens, Cursor reports neither. Every
-alternative — a price table per model, or a UI that branches on engine id — either
-invents numbers or spreads that knowledge across call sites. Dollars where an
-engine gives them, tokens where it only counts those, nothing where it says
-nothing, and nothing is not an error state.
-
-**Engine chatter demoted to `run` level.** `Claude Code online · …`,
-`${profession} online · …` and Cursor's `done in Ns` were `info`, which is the
-level the transcript maps to agent prose. They are tool-level noise and now say
-so, which lets TASK-082 filter the chat structurally instead of matching strings.
-
-**Not asserted from documentation.** Claude's result event is documented to carry
-a token `usage` block, but only `total_cost_usd` / `duration_ms` / `num_turns` are
-proven by the code that already read them, so only those are mapped. Adding
-speculative fields would have bought nothing — `formatUsage` prefers dollars
-anyway — at the cost of an untested path.
-
-## 2026-07-27 — Two presets, a Project Manager, and fewer prose assertions (TASK-080)
-
-**Context:** three presets shipped (`one-box`, `dev-test`, `gated-dev-test`), all of
-them variations on "Developer, maybe a Tester". The roster in `agents.ts` named six
-professions that had never had a persona. The picker described the *mechanism*
-rather than the job.
-
-**Decision — exactly two presets.** `pm-dev-test` (Project Manager → gate →
-Developer → Tester) and `solo` (one all-purpose box). The Project Manager reuses the
-existing `intake` stage, so this promoted a roster entry rather than inventing one.
-`solo` needed a new `AGENTS` entry: `agentForStage` silently degrades an unknown id
-to `{ profession: stageId }`, which would have printed raw ids in the log.
-
-**The gate moved onto the Project Manager's handoff.** Retiring `gated-dev-test`
-would have orphaned the approval gate — the only preset exercising it — and
-`GatesSection` derives its display from `DEMO_PIPELINES` + `gateAfter`. Approving a
-*recommendation* before any code is written is also the better shape for a tool whose
-name ends in "Human Directed". Reversible if it proves to be friction.
-
-**Retired ids are refused, not aliased.** `getPipeline` reads `DEMO_PIPELINES`, so a
-run stored against `dev-test` cannot restart. `restartRun` now checks up front and
-fails with *"This run used the "dev-test" pipeline, which no longer exists — start a
-new run instead"* rather than throwing `Unknown pipeline`. Legacy `localStorage`
-preferences naming a retired id are likewise dropped rather than adopted — migrating
-a preference the picker cannot display would be worse than ignoring it. Pre-1.0 with
-no external users, so refusing accurately is enough; an alias map can come later if
-anyone actually has runs worth restarting.
-
-**A generator bug this surfaced.** `scripts/generate-skills.mjs` emitted unquoted
-object keys, so `project-manager` — the first kebab-case persona id — produced a
-syntactically invalid `defaults.generated.ts`. Keys are `JSON.stringify`d now.
-
-**`skill-generation.spec.ts` lost four of its six tests.** They asserted on English
-prose, not behaviour: that every persona's last word is `prompt.`, that the architect
-persona contains the substrings `A1`…`A9`, that it contains `VERDICT: PASS`, and a
-verbatim-bundling check already covered byte-for-byte by `gen:skills --check`. The
-first of those actually *failed* on a perfectly good new persona, which is the
-clearest possible evidence it was testing the wrong thing. What remains is the drift
-check and one rewritten test that now derives the skill ids from `DEMO_PIPELINES` —
-a stage naming a missing persona runs with no persona and only logs a warning, so
-nothing else would catch that typo.
-
-**`dev-test-pipeline.comp.ts` became `pm-dev-test-pipeline.comp.ts`.** The flow
-contract should test the flow that ships. The eleven cases — ordering, shared
-workspace, per-box persona, handoff quoting, `VERDICT: FAIL`, abort, restart-from-
-stage — all survived; each gained a Project Manager anticipation and one
-`approveIntake()` call, which is now a harness helper rather than eleven copies.
-
-## 2026-07-27 — An agent that asks parks on its own status, and resumes its session (TASK-079)
-
-**Context:** the whole point of a chat is that the agent can answer back. Every
-adapter was one-shot — prompt in, `stdin.end()`, process exits — and no session id
-was captured anywhere (`codex.ts` declared `thread_id` and never read it). Two
-mechanisms were possible: re-run the stage with the question and answer folded into
-a fresh prompt, or resume the CLI session.
-
-**Decision: resume the session.** `EngineRunContext` gained `resumeSessionId` and
-`EngineRunResult` gained `sessionId`; one `run()` method, not a second `resume()` —
-the *flag* declares the capability and the *context* drives the behaviour, matching
-how `model` and `permissionMode` already work. Re-running was rejected because a
-Project Manager's investigation is the expensive part: paying for it twice per
-clarifying question, and losing the model's working context each time, makes the
-feature not worth having.
-
-**Verified against the installed CLIs, not the docs.** `claude -r <id>` and
-`codex exec resume <SESSION_ID> [PROMPT]` both exist and both accept the flags the
-adapters already pass — with one exception worth recording: **`codex exec resume`
-does not accept `--sandbox`**, only `--dangerously-bypass-approvals-and-sandbox`.
-So a resumed Codex turn under `acceptEdits` runs on Codex's own default sandbox
-rather than `workspace-write`. **Cursor is `conversational: false`** — the CLI is
-not installed here and the session-id emission could not be confirmed, and a flag
-asserted from documentation alone is exactly the silent failure this task set out
-to avoid. Flip it when someone with `cursor-agent` verifies it.
-
-**`asking` is its own status, not `awaiting`.** TASK-061 already argued this for
-`blocked`: reusing the gate state would make "Approve" mean two different things.
-`asking` is violet in `theme.ts` — GOLD stays reserved for human gates.
-
-**The question contract mirrors the verdict contract.** `parseStageQuestion` is
-`parseStageVerdict` with a different keyword: last-line-first, CRLF-tolerant,
-markdown-emphasis-tolerant. A persona that already knows `VERDICT: PASS|FAIL` needs
-no new mental model, and the parser's failure modes are ones we have already tested.
-
-**Only an interactive stage on a conversational engine may ask.** Three conditions
-in one predicate — `stageDef.interactive`, `isConversational(engine)`, and a turn
-budget (`MAX_QUESTION_TURNS = 6`). The turn budget matters because a persona that
-always ends with a question would otherwise loop forever, and each loop is a
-durable park. A Developer that happens to print `QUESTION:` is not interactive, so
-its output passes straight through.
-
-**A turn is a durable step.** `runStageTurns` names each `stageId:turn:N`, so
-OpenWorkflow replays completed turns rather than re-running them, and the park uses
-the signal channel's payload — typed as `{ data: Output } | null` all along, never
-used until now.
-
-**`admitRun` still holds the project slot while parked.** A question can wait for
-hours, exactly like a gate, and a gate already behaves this way. Releasing the slot
-would let a second run start and write to the same workspace; that is a worse
-failure than making the user answer or abort.
-
-## 2026-07-27 — The transcript is derived; only the user's turns are stored (TASK-078)
-
-**Context:** the run view became a conversation. The obvious implementation is a
-`messages` table the agents write to as they speak — and it would have duplicated
-everything the system already records. All three adapters call `onLog(level, text)`
-where `info` is assistant prose, `run` is a tool-use summary and `warn` is a tool
-error; the chat/tool distinction already exists in the data, flattened into
-`LogLevel`.
-
-**Decision:** the thread is a **derived view**. `buildTranscript(run)` maps stage
-logs onto agent prose, tool rows and notices, and merges in `run.messages` — which
-holds **only what the user typed**. One writer, one ordering, and no way for the
-transcript to disagree with the log. The mapping is a `switch` over `LogLevel`
-closed by exhaustiveness, so a new level is a compile error rather than a silently
-mis-rendered line. Rejected: a `messages` array the projection also appends agent
-text to — two copies of the same sentences, and a reconciliation problem the first
-time an adapter changes what it logs.
-
-**Ordering is timestamp-first with a collection sequence breaking ties.** Logs
-inside a stage already carry increasing timestamps and stages run in order, so the
-timestamp alone is nearly sufficient; the sequence number exists because a fast
-stage can emit several entries inside the same millisecond, and a stable thread
-matters more than which of them is "really" first.
-
-**`RunMessage` has no `kind` field yet.** The plan called for
-`"text" | "question" | "answer"`, but nothing can produce a question until the
-engines can be resumed (TASK-079). Union members no code can construct are
-speculative generality; 079 adds `kind` when it has something to put in it.
-
-**The endpoint records on a live run rather than refusing.** The task text said
-`POST /runs/:id/messages` should 409 "when nothing is waiting for input", which
-today means *always* — a composer whose every send fails is precisely the
-`SteerChat` mock this work deleted. So: 404 unknown run, 409 on a **terminal** run,
-accept otherwise. **Nothing consumes the message until TASK-079** — that is stated
-in `architecture-ui.md` rather than concealed behind a control that looks wired.
-
-**A real ordering bug fell out of testing this.** `GET /runs/:id/events` replayed
-stored events and *then* subscribed — with an `await` in between, so anything
-emitted during the replay was lost. It now subscribes first, buffers, replays, and
-flushes the buffer. Duplicates across the seam are safe: `applyEvent` dedupes logs
-by `ts`+`message` and messages by `id`. This is the mirror of the ordering
-`useRunEvents` has always had on the client.
-
-## 2026-07-27 — The run rail routes on the hash, and rides a summary channel (TASK-077)
-
-**Context:** the run list moved from an overlay (`HistoryDrawer`, one `fetchRuns()`
-on mount, no selection state) to a persistent left rail. That trips two absences
-`architecture-ui.md` §1 records as deliberate — the router, and the fact that no
-transport pushes run-*list* changes. §1 requires an entry naming the row it
-invalidates, so this is it: the **Router** row falls, on the trigger it predicted
-("the need to deep-link a run").
-
-**Decision — a hand-rolled hash router, not `react-router`.** The dependency table
-is four entries and adding a fifth needs to earn it; one route pattern (`#/runs/:id`)
-does not. `route.ts` is a pure `parseRoute`/`routeHash` pair over a two-member
-discriminated union with a unit spec, and `useRoute` is a `hashchange` listener.
-Back/forward work because the hash *is* history.
-
-**Why the hash and not a real path.** `/runs` is the API's. The UI and server share
-an origin, and `packages/ui/vite.config.ts` proxies `/runs` to the server — so a
-browser navigation to `/runs/ab12cd34` would be proxied and answered with run JSON
-instead of the app. A path router would need a dev-proxy bypass *and* an SPA
-fallback wherever the built UI is served. The hash is invisible to both and costs
-nothing. Revisit if the API ever moves under a prefix (`/api/*`).
-
-**Decision — the rail's transport carries `RunSummary`, not `RunState`.** A new
-project-scoped SSE channel (`GET /runs/events`) emits a compact summary on every
-non-log event. Summaries exist because `RunState` carries `stages[].logs`, which is
-almost all of its bytes and grows for the life of a run; re-sending it on every
-status transition to paint a status dot would be absurd. `toRunSummary` lives in
-`@adhd/core` so both sides reference one declaration. The channel deliberately
-skips `stage.log` — a log never changes what the rail draws.
-
-**The project arrives as a query parameter, not the `X-ADHD-Project` header.**
-`EventSource` cannot set headers. `projectScope` now falls back to `?project=`;
-the header stays the rule for every other call.
-
-**The snapshot still comes from `GET /runs`.** The stream carries changes only, so
-`useRunList` fetches the snapshot and replays anything that arrived in the gap —
-the same subscribe-then-fetch ordering `useRunEvents` uses (§5), for the same
-reason. A snapshot event on the channel would have duplicated an endpoint that
-already exists and works under route interception in the e2e suite.
-
-## 2026-07-27 — Setup is a folder of sections over a shared style module (TASK-073)
-
-**Context:** `SetupModal.tsx` was 1002 lines owning four unrelated settings
-surfaces. The obvious split is one component per `SetupSection`, but that
-immediately collides with the 2026-07-26 entry below: if styles stay in a
-component's own file, where do the builders that *four* sections share go?
-
-**Decision:** `components/setup/` — the first feature folder, taken under the
-`architecture-ui.md` §2 rule (a feature that owns four or more files no other
-feature imports). Section-specific builders moved with their markup, exactly as
-the 2026-07-26 entry requires; the ~13 names used by two or more sections
-(`optionCard`, `radioDot`, `optionLabel`, `sectionTitle`, `mutedCaption`, …) went
-to `setup/setup-styles.ts`. That is **not** the sibling `SetupModal.styles.ts`
-rejected before: this module is a vocabulary shared across sibling components —
-`theme.ts` scoped to one surface — not one component's presentation exiled from
-its own markup. The alternative, copying `optionCard` into four files, trades an
-A6 violation for a worse one.
-
-**The harness section split again, one level down.** `HarnessSection` alone would
-have been ~570 lines and still the largest file in `packages/ui`. Its three
-stateful blocks each own state *and* server calls, which is the same axis the
-task split on: `EngineStatusCard` (`fetchEngineStatus` / `installEngine` /
-`loginEngine`), `EngineConnection` (`updateConnection`, the API-key form),
-`EngineModelPicker` (`fetchEngineModels`, custom ID). Nothing lands over ~300
-lines.
-
-**Two couplings survived the split as explicit props.** A successful install or
-login must refresh the *model* list too — the CLI's roster is only readable once
-it exists — so the `statusNonce` counter became a `refreshKey` owned by
-`HarnessSection` and passed to both children. And `customModelDraft`, which the
-old component reset from inside `selectEngine`, is now an effect on the `model`
-prop; the reset happens on engine switch and on selection exactly as before,
-without a callback threaded back up.
-
-**No behaviour changed.** Each section mounts only while selected, which deletes
-the four `if (sec !== "harness") return;` guards from the effects — the old deps
-already included `sec`, so the fetch timing is identical.
-
-## 2026-07-27 — The UI scales are extracted, not designed (TASK-072)
-
-**Context:** `theme.ts` tokenised colour only. Spacing, radii, type, icon sizes,
-z-index and motion were inline literals across all 17 components — 19 distinct
-padding/gap values, 13 radii, 11 font sizes, 7 icon sizes. `borderRadius: 10` next to
-`borderRadius: 9` carried no information about whether the difference was deliberate,
-so a restyle meant editing every component by hand.
-
-**Decision:** the scales are an **extraction of current usage**, not a redesign.
-Values were derived by measuring the components, then near-duplicates were **snapped
-to one step each** and the snaps recorded here. Every snap is ≤2px:
-
-| Dimension | Snapped |
-| --- | --- |
-| space | 1→2, 3→4, 5→6, 7→8, 9→10, 11→12, 14→16, 18→20, 28→24 |
-| radius | 1→2, 3→4, 6→8, 9→10, 14→12 |
-| font | 11.5→12, 15→14, 18→16 |
-| icon | 11→12, 13→14, 15→16 |
-| transition | 0.18s and 0.22s → `MOTION.base` (0.2s) |
-| animation | `GateMarker`'s `adhd-pulse 1.4s` → `MOTION.pulse` (1.2s), matching the three other pulse sites |
-
-**`md` and `lg` stay 2px apart** in both `SPACE` (8/10) and `RADIUS` (8/10). Merging
-them would have been the tightest scale, but the two values are two *roles* — 8 is the
-chip/small-card radius (12 sites), 10 the control radius (16 sites) — and collapsing
-them would have been a redesign, which this task explicitly is not.
-
-**Naming runs `xxs…xxxl` then `x4l`/`x5l`.** Tailwind's `2xl`/`3xl` is the familiar
-convention but is not dot-accessible in TS; the chosen names stay monotonic and
-readable at every step.
-
-**Elevation nests, the rest are flat.** Shadows are palette-tinted, so `d.shadow` /
-`shadowSm` / `shadowLg` became `d.elevation.{sm,md,lg}` on `Dir` rather than a shared
-scale. Only the two *untinted* shadows — the `StageFocusPanel` and `TeamController`
-top edges — moved to a shared `ELEVATION`.
-
-**`theme.ts` owns motion; `index.css` keeps only `@keyframes`.** The two utility
-classes (`.animate-spin`, `.animate-pulse`) carried durations that no TS file could
-see, so they were deleted and their four call sites now use the inline `animation`
-shorthand the other components already used. Rejected: mirroring the literals in both
-files (nothing enforces agreement), and exporting `"var(--adhd-fast)"` strings from
-`theme.ts` (one source, but token values become opaque in TS and depend on the
-stylesheet loading).
-
-**`borderStrong` replaces string surgery.** `App.tsx` built the dot-grid with
-`d.border.replace("0.12", "0.20")`, which silently no-ops for `sakura` (border alpha
-`0.14`). Each palette now carries `borderStrong` explicitly — indigo `0.20`, forest
-`0.20`, sakura `0.22` (its base border is already `0.14` because pink reads lighter).
-**Behaviour change:** sakura's dot grid was being drawn at the plain border alpha and
-is now visibly stronger, as the other two palettes always were.
-
-**One-off dimensions stay local.** The 50px top bar, the drawer widths (320/360), the
-dialog widths (560/700) and the focus-panel sidebars got named constants in their own
-component files, following the existing `PANEL_WIDTH` in `ProjectDrawer`. A shared
-token used at exactly one call site is worse than the literal it replaces — the task
-asked for scales, not a dictionary. Style builders likewise stayed in-file (**A6**,
-consistent with the 2026-07-26 entry below).
-
-**Verification:** lint, typecheck, 173 unit/component tests and build are green; the
-app was driven headless across all three palettes with before/after screenshots of
-every surface. Pixel diffs are 0.3–4.6% — the expected 1–2px reflow — except the log
-tab at 6.8%, where every row shifts 1px from `marginBottom: 5→6`. The one failing e2e
-spec (`project-drawer`, expecting a "Pipeline Stages" heading that does not exist)
-fails identically on the unmodified baseline and is unrelated.
+**Rejected:** a documented "edit both copies" rule — zero enforcement, drifts silently.
 
 ---
 
-## 2026-07-24 — OpenWorkflow is the durable workflow runtime (TASK-068)
+## 2026-07-28 — The run view is derived from the log, never a second source
 
-**Context:** `RunOrchestrator` was an in-memory `Map` firing `void simulateRun(...)`;
-gates were heap promises, recovery marked interrupted runs failed, and retries and
-durable timers did not exist (six of eleven capabilities absent or non-durable). The
-runtime survey ([`workflow-runtime-options.md`](workflow-runtime-options.md)) chose
-**OpenWorkflow** — Apache-2.0, `node:sqlite`, no server — and TASK-067 had already
-landed the SQLite substrate.
+**Context:** the obvious way to build a conversation is a `messages` table the agents
+write to as they speak — which would duplicate what adapters already report through
+`onLog(level, text)`, where the prose/tool distinction already exists.
 
-**Decision:** the durable runtime is OpenWorkflow, embedded **in-process** in the
-single runner (its `Worker` starts programmatically; there is no daemon and no CLI).
-`RunOrchestrator` *is* the durable workflow: `workflow/pipeline-workflow.ts` is the
-run loop, `workflow/stage-execution.ts` is the durable step (simulate vs. engine),
-and durability owns start/queueing, the loop, gates (`waitForSignal`/`sendSignal`),
-durable timers, retries (`RetryPolicy`), recovery and cancellation. This corrects the
-standing claim (now in `architecture.md` and `implementation-notes.md`) that a durable
-runtime replaces `executeStage()` alone — the seam is the class, not one method (doc §4).
+**Decision:** one derived ordering feeds every view. `buildTranscript(run)` maps stage
+logs onto agent prose, tool rows and notices and merges in `run.messages`, which holds
+**only what the user typed**. Chat is that same ordering filtered **structurally** — on
+`kind: "tool"`, never on matching prose, because prose matching rots the day an adapter
+rewords a string. One writer, one ordering, and no way for two views to disagree.
 
-**Storage & single-writer rule.** OpenWorkflow's tables share the **one**
-`.adhd/runs.db` (two `node:sqlite` connections — its `BackendSqlite` plus our
-`Database`) and are the source of truth for execution state. The `RunState` snapshot
-and `events` table are a rebuildable read model with exactly one writer — the
-workflow drives it; the API only reads it (cancellation aside). History travels with
-the project folder like `.git`.
+**Numbers travel as data, not prose.** An adapter that knows a cost or token count hands
+it up the seam as `StageUsage` rather than formatting it into a log line. Run totals are
+derived by summing stages, never stored — a stored total drifts the moment a stage is
+restarted, and money spent on a failed attempt was still spent. `formatUsage` is the one
+place the engines' differences are expressed: dollars where an engine reports them,
+tokens where it only counts those, nothing where it reports nothing, and nothing is not
+an error state.
 
-**ADHD-owned on top.** Semantic restart from a chosen stage (S2/G1) is a fresh run
-seeded with retained prior-stage outputs; one-active-run-per-project (S5/G2) is a
-project-keyed `active_runs` admission guard enforced below the API; immediate
-subprocess-tree kill on cancel (G4) stays in `runSubprocess` (`cancelWorkflowRun`
-only marks durable state); declared parallel branches (G5) fan out via
-`Promise.allSettled` over durable steps. Determinism cost: `loadSkill`, `nowIso`,
-`randomUUID` and the engine call moved inside steps.
-
-**Alternative rejected:** Aiki (Postgres-only today; would need us to write its
-SQLite backend *and* fork-from-step) stays the recorded second choice. Retries are
-wired but default to `maximumAttempts: 1` to preserve today's fail-fast behaviour.
-**Behaviour change:** the API can no longer start a second concurrent run in one
-project (previously reachable) — it now returns 400.
-
-**Cross-platform:** durable execution and `node:sqlite` are OS-independent; the only
-platform-sensitive surface (subprocess-tree kill) is unchanged. Tested on Windows;
-macOS reasoned through, **untested on macOS**.
+**Rejected:** a `messages` array the projection also appends agent text to — two copies of
+the same sentences and a reconciliation problem the first time an adapter changes what it
+logs.
 
 ---
 
-## 2026-07-23 — SQLite is the sole run store, in a `repository/` module
+## 2026-07-27 — An agent that asks resumes its session
 
-**Context:** TASK-067 first landed `SqliteRunStore` behind the existing seam with
-the flat-file JSON store kept as the default and an `ADHD_RUN_STORE=json|sqlite`
-selector. On review the owner asked to go further: run state is a handful of rows
-per run, `node:sqlite` installs cleanly (unlike `better-sqlite3`), and carrying two
-storage formats plus a selector is complexity with no live consumer.
+**Context:** every adapter was one-shot, so an agent could not ask a clarifying question.
+Two mechanisms were possible: re-run the stage with the question and answer folded into a
+fresh prompt, or resume the CLI session.
 
-**Decision:** SQLite is the **only** run store. `JsonRunStore` and the flat-file
-`state.json` / `events.jsonl` format are retired. **No migration path is kept** — the
-project has no active users, so the flat-file format is simply dropped rather than
-importing old data. The persistence code is layered **services → repository → db**:
-a single concrete `RunRepository` class (`src/repository/`) coordinates a `Database`
-connection + `RunsTable` / `EventsTable` (`src/db/`) and an on-disk handoff writer.
-No interface, no factory, no `index.ts` barrel — one concrete class over a
-data-access layer, folders named for the layer (`repository`, `db`) not the backend.
-Relative imports use `.ts` extensions (matching `@adhd/core`;
-`rewriteRelativeImportExtensions` rewrites them to `.js` on build).
+**Decision:** resume the session. `EngineRunContext` carries `resumeSessionId` and the
+result carries `sessionId` — one `run()` method, not a second `resume()`; the *flag*
+declares the capability and the *context* drives the behaviour. Re-running was rejected
+because the investigation is the expensive part: paying for it twice per question, and
+losing the model's working context each time, makes the feature not worth having.
 
-**Consequence — the ExperimentalWarning.** With SQLite the only store, `node:sqlite`
-loads on every startup, so its `ExperimentalWarning` is no longer contained to an
-opt-in path. A warning listener does not suppress the default printer, so the
-shipped `start` script uses `node --disable-warning=ExperimentalWarning`. Rejected:
-`--no-warnings` (blanket-silences everything) and leaving it to print on every boot
-(reads as unpolished for a shipped product).
+**Asking is its own run state,** not the gate state — reusing `awaiting` would make
+"Approve" mean two different things. A parked run keeps its project slot, exactly as a
+gate does; releasing it would let a second run write to the same workspace.
 
-**Rejected alternative:** keeping JSON as the default with the two-backend selector
-(the original TASK-067 shape). It hedged against a `node:sqlite` problem that
-measurement (M1/M2 in `workflow-storage-options.md`) had already ruled out, at the
-cost of two code paths and a config surface no one selected.
+**Capabilities are verified against the installed CLI, never asserted from
+documentation** — a flag claimed from docs alone fails silently at runtime. Unverified
+capabilities stay off and are recorded as a known gap.
 
 ---
 
-## 2026-07-23 — Project preferences are project state, not browser state
+## 2026-07-24 — OpenWorkflow is the durable workflow runtime
 
-**Context:** engine, model, permission mode, pipeline and disabled stages were
-keyed `adhd.<projectId>.<name>` in `localStorage`. They read as project settings
-in the UI — the Setup modal is titled with the project's name — but they lived in
-one browser. Opening the app in a second browser, or clearing site data, silently
-reverted a project to defaults while its folder, skills and credentials, all
-server-side, stayed put.
+**Context:** runs were an in-memory map with heap-promise gates; recovery marked
+interrupted runs failed, and retries and durable timers did not exist. The runtime survey
+([`workflow-runtime-options.md`](./workflow-runtime-options.md)) chose **OpenWorkflow** —
+Apache-2.0, `node:sqlite`, no server process.
 
-**Decision:** the non-secret preferences move into the per-project section of
-`~/.adhd/settings.json`, beside the engine connection, and are read and written
-through `/settings` and `PUT /settings/preferences`. Secrets do not move: an API
-key is still write-only and never leaves the server.
+**Decision:** the durable runtime is OpenWorkflow, embedded **in-process**; there is no
+daemon and no CLI. **The seam is the workflow, not one method** — `pipeline-workflow.ts`
+is the run loop and `stage-execution.ts` the durable step, and durability owns the whole
+lifecycle: start and queueing, gates, durable timers, retries, recovery, cancellation.
+The older claim that a durable runtime replaces `executeStage()` alone is wrong and
+under-budgets any migration.
 
-**Stored as a partial, resolved in three layers.** A project's block holds only
-the fields that project actually set; a read resolves built-in defaults ←
-`defaults.preferences` ← `projects.<id>.preferences`, exactly as `engines`
-already did. Storing the fully resolved set was rejected because it would freeze
-a project against any future change to `defaults` the moment it touched one
-field.
+**Single-writer rule.** OpenWorkflow's tables are the source of truth for execution
+state; the `RunState` snapshot and event log are a rebuildable read model with exactly
+one writer — the workflow drives it, the API only reads it.
 
-**Validation splits by direction.** A read is tolerant — `settings.json` is
-hand-editable and predates the preference block, so
-`normalizeProjectPreferences` falls back field by field and migrates legacy model
-ids (that migration used to run in the browser; it now runs once, server-side,
-for every client). A write is the API contract — `parsePreferencesUpdate` returns
-400 for an unknown engine, permission mode or pipeline rather than storing it.
+**ADHD owns the semantics on top:** restart-from-a-stage is a fresh run seeded with
+retained prior outputs, one-active-run-per-project is an admission guard below the API,
+and subprocess-tree kill on cancel stays ours. **Behaviour change:** a second concurrent
+run in one project now returns 400.
 
-**Legacy `localStorage` values are adopted once, then deleted.** `legacy-prefs.ts`
-reads the old keys on a project's first load, PUTs them, and clears them.
-Ignoring them was the simpler option and was rejected: it would have silently
-reset every existing installation's engine and model. The module is self-contained
-so it can be deleted once no installation predates this change.
-
-**Consequence:** the e2e suite now mutates durable server state, which a fresh
-browser context used to discard for free. Playwright therefore runs against its
-own `ADHD_USER_HOME`/`ADHD_HOME` on its own ports (`reuseExistingServer: false`,
-since isolation is only real on a server the config started), and every spec
-resets preferences in `beforeEach` — without that, a pipeline chosen in
-`dev-test-flow.spec.ts` leaked into the run `run-lifecycle.spec.ts` started.
+**Rejected:** Aiki — Postgres-only, so it would need us to write its SQLite backend *and*
+fork-from-step — remains the recorded second choice.
 
 ---
 
-## 2026-07-23 — The project owns the folder; a run cannot choose its own
+## 2026-07-23 — SQLite is the sole run store, behind a layered repository
 
-**Context:** after projects landed, two folders competed. The composer still
-carried a "Working directory" field (persisted per project, sent as
-`workspaceDir` on `POST /runs`), while the project itself already had a root. A
-run listed under project `my-app` could execute the agent anywhere, and the
-precedence between the two was invisible in the UI. The API also accepted an
-arbitrary absolute path from the browser as the directory an autonomous agent
-would run in.
+**Context:** a flat-file JSON store shipped first, with SQLite behind a selector. Run
+state is a handful of rows, `node:sqlite` installs cleanly, and two storage formats plus
+a selector is complexity with no live consumer.
 
-**Decision:** the working directory is **derived from the project, never sent**.
-`resolveWorkspace(paths, runId)` returns the project root; `workspaceDir` is gone
-from `StartRunOptions`, the `POST /runs` body and the UI. A project's root is
-fixed when it is registered — there is no route or control that changes it, and
-the answer to "I want to work elsewhere" is to add another project. The composer
-states the folder as read-only context instead of offering a picker.
+**Decision:** SQLite is the **only** run store, with **no migration path** — pre-1.0 with
+no active users, so the old format is dropped rather than imported. Persistence is
+layered **services → repository → db**: one concrete `RunRepository` over a `Database`
+and its tables. No interface, no factory, no barrel `index.ts`; folders are named for the
+layer, never the backend.
 
-**The home project keeps a scratch workspace per run.** Home has no code of its
-own, so `~/.adhd/home/runs/<id>/workspace` is created per run. This preserves the
-zero-setup path (try the app before registering anything) and gives the live e2e
-canary a folder it cannot damage — the alternative, refusing engine runs without
-a project, was rejected as a worse first five minutes. Home therefore still obeys
-"one project, one folder"; its folder is just `~/.adhd/home`.
-
-**Consequence:** `ensureProjectDataDir` now also runs at run start, so the
-self-ignoring `.adhd/.gitignore` exists even for projects registered before it
-was introduced — an agent writing into a real repository must not leave run
-artifacts in `git status`. Rerunning an old run no longer restores a directory;
-it restores the pipeline and engine only. Runs recorded before this change keep
-whatever `workspacePath` they had, which is why the UI still labels a scratch
-workspace as such.
-
-**Rejected:** validating a client-supplied `workspaceDir` against the project
-root. It keeps the field, the second source of truth, and the UI ambiguity — for
-a knob no one asked for once a project *is* a folder.
+**Rejected:** keeping the two-backend selector. It hedged against a `node:sqlite` problem
+measurement had already ruled out, at the cost of two code paths nobody selected.
 
 ---
 
-## 2026-07-22 — A project owns its `.adhd/`; the home project is not the repo
+## 2026-07-23 — A project owns its folder, its data, and its settings
 
-**Context:** every path the server wrote was anchored to `REPO_ROOT` — the ADHD
-source checkout. A run against `C:/Dev/my-app` wrote its state, events, handoffs
-and scratch workspace into `C:/Dev/smekai/adhd/.adhd/`, so a user's project
-history lived inside the tool and every project shared one history, one settings
-file and one set of personas.
+**Context:** every path the server wrote was anchored to the ADHD source checkout, so a
+user's project history lived inside the tool and every project shared one history and one
+settings file. Separately, a run could be pointed at any directory the browser named.
 
-**Decision:** a project is a directory that owns its own `.adhd/`, like `.git`.
-`paths.ts` exports a `ProjectPaths` value (`id`, `root`, `dataDir`) that is
-passed to the run store, the skills loader and workspace resolution; the
-`REPO_ROOT` constant survives only for loading the tool's own `.env`. A
-user-level registry at `~/.adhd/projects.json` lists known projects and names the
-active one; requests may override it per call with an `X-ADHD-Project` header.
+**Decision:** a project is a directory that owns its own `.adhd/`, like `.git`, so history
+travels with the code it belongs to. Storage takes a `ProjectPaths` value; a user-level
+registry lists known projects and names the active one. The working directory is
+**derived from the project and never sent by the client** — the answer to "I want to work
+elsewhere" is to add another project. The fallback for "no project selected" is a home
+project under `~/.adhd/home`, *not* the repo, which keeps the zero-setup path without
+recreating the bug.
 
-The fallback for "no project selected" is a **home project whose data lives in
-`~/.adhd/home`**, *not* `REPO_ROOT`. The task originally specified the repo as
-the fallback, which would have reproduced the bug being fixed for every
-unconfigured run. `ADHD_HOME` still overrides the home project's data directory,
-which is what gives component tests an isolated root.
+**Non-secret preferences are project state, not browser state** — engine, model,
+permission mode and pipeline live in the per-project section of user-level settings, so a
+second browser or cleared site data no longer silently reverts a project. **Secrets are
+user-level and write-only:** API keys live in `~/.adhd/settings.json` (mode `0600`) as
+`defaults` plus per-project overrides, and never leave the server. Each created `.adhd/`
+ships a self-ignoring `.gitignore` so run artifacts never appear in a user's
+`git status`.
 
-**Consequence:** the ~75 runs already in the repo's `.adhd/runs/` are no longer
-listed anywhere — accepted deliberately with the owner rather than writing
-migration code, since `RunState.projectId` is now required and those runs belong
-to no project. The files were left on disk, not deleted.
+**Rejected:** one global store filtered by a project column — it leaves history inside
+the tool, so uninstalling or re-cloning loses or duplicates it. And validating a
+client-supplied working directory against the project root: it keeps the second source of
+truth for a knob nobody asked for.
 
-**Rejected:** keeping one global store and filtering by a project column. It
-leaves history inside the tool, so uninstalling ADHD or cloning the repo
-elsewhere loses or duplicates a user's run history.
-
-## 2026-07-22 — Credentials are user-level, layered defaults over per-project
-
-**Context:** engine API keys were written to `<repo>/.adhd/settings.json`. Moving
-settings into each project's `.adhd/` would have put secrets inside the user's
-git working tree.
-
-**Decision:** engine connection settings live in `~/.adhd/settings.json` (mode
-`0600`), shaped as `defaults` plus a `projects` map keyed by project id. A
-project inherits the user-level default until it overrides an engine, so a newly
-added project runs immediately instead of demanding a re-entered key. An
-inherited entry is **copied** before being edited — aliasing it wrote a
-project's key back into `defaults` and leaked it to every other project, which
-is what `projects.comp.ts` now guards.
-
-Each created `<project>/.adhd/` also ships a self-ignoring `.gitignore` (`*`),
-written with `wx` so a user who deletes it to commit their history keeps it
-deleted.
+---
 
 ## 2026-07-22 — Skills are layered, never seeded to disk
 
-**Context:** `loadSkill` used to write the bundled persona to
-`.adhd/skills/<id>.md` on first read. During the TASK-053 follow-up those files
-silently shadowed the improved bundled constants and had to be regenerated by
+**Context:** the loader used to write the bundled persona into the project on first read.
+Those copies then silently shadowed improved bundled text and had to be regenerated by
 hand.
 
-**Decision:** resolution is bundled default → user-level override
-(`~/.adhd/skills/<id>.md`) → project addendum
-(`<project>/.adhd/skills/<id>.project.md`, appended). A full project replacement
-(`<id>.md`) stays supported for power users, but the addendum is the default
-path, and **nothing is written to disk on read**. Composition is a pure function
-(`domain/skills/compose.ts`); the service only reads files.
-
-**Consequence:** the seeding assertion was inverted — `skills.spec.ts` now proves
-`loadSkill` leaves both data roots empty.
-
-## 2026-07-22 — All personas are markdown, bundled through one generated module
-
-> Superseded on 2026-07-28 by *Persona Markdown ships as runtime assets* below.
-
-**Context:** persona text lived in two shapes. `developer` and `tester` were
-hand-written template literals inside `domain/skills/defaults.ts`; `architect`
-was a separate generated module, `architect.generated.ts`, because it is composed
-from `architecture.md`. Nothing but history explained why one persona sat
-apart from the others, and prose escaped inside a TS template literal diffs
-badly and invites a stray backtick to break the build.
-
-**Decision:** persona *sources* are markdown —
-`domain/skills/personas/<id>.md` for hand-written ones, the `gen:` blocks of
-`architecture.md` for the Architect — and
-[`scripts/generate-skills.mjs`](../scripts/generate-skills.mjs) emits a single
-`defaults.generated.ts` exporting `DEFAULT_SKILLS`, plus the Claude Code
-`SKILL.md`. Adding a persona is now dropping in a markdown file and running
-`pnpm gen:skills`; `skill-generation.spec.ts` fails the build on drift.
-
-**Rejected:** *reading the markdown at runtime.* The server builds with plain
-`tsc`, which does not copy `.md` into `dist/`, so it would need a bespoke copy
-step and would move the shipped source of truth outside the bundle — a packaging
-failure would then surface as a persona-less run rather than a build error.
-
-**Rejected:** *generating into the hand-written `defaults.ts`.* Partially
-rewriting a file that also holds hand-authored content is exactly the fragility
-the generator exists to avoid.
-
-## 2026-07-28 — Persona Markdown ships as runtime assets
-
-**Context:** `defaults.generated.ts` still duplicated every Markdown persona
-inside a TypeScript template literal. That made persona-only reviews look much
-larger than their authored change and blurred the distinction between source
-and transport.
-
-**Decision:** the server reads bundled personas and step tasks directly from
-Markdown. The server build copies `domain/skills/personas/` and
-`domain/skills/step-tasks/` into the matching `dist` path using a
-platform-neutral Node script. `generate-skills.mjs` now generates only the two
-Architect Markdown consumers from `architecture.md`.
-
-**Consequence:** `defaults.generated.ts` and its exported maps no longer exist.
-Missing or unsafe prompt ids resolve to no prompt, while build, drift, and
-pipeline-reference checks guard the packaged assets.
-
-## 2026-07-22 — Architect standard: one source, two generated consumers
-
-> Output paths superseded the same day — see *All personas are markdown* above.
-> The decision below still holds; only the emitted files were renamed.
-
-**Context:** the Architect standard must exist as both a Claude Code skill
-(`.claude/skills/architect/SKILL.md`) and an ADHD persona constant. Keeping two
-hand-written copies in sync fails the first time someone edits one.
-
-**Decision:** a single canonical source, [`architecture.md`](./architecture.md),
-with named `gen:` blocks; the generator emits both consumers, and a drift test
-fails the build (`pnpm gen:skills --check`).
-
-**Rejected:** a documented "edit both files" rule — zero enforcement, drifts
-silently. The shared *rules* are generated into both; the skill and persona
-framing differ deliberately (one addresses this repo, the other runs in a
-stranger's), so the two outputs are assembled from different block sets rather
-than being byte-identical.
-
-## 2026-07-22 — Server pure logic goes to `packages/server/src/domain/`, not `@adhd/core`
-
-**Context:** rule A3 wants pure domain logic out of the service layer. The
-candidates (`stage-context.ts` prompt/handoff/verdict logic, the bundled skill
-defaults) are pure, so `@adhd/core` looked like a home.
-
-**Decision:** they moved to a new `packages/server/src/domain/` folder.
-`@adhd/core` stays the *shared* contract imported by the browser UI; prompt
-builders and persona text have no business in the client bundle. A server-only
-domain layer is the right seam.
-
-## 2026-07-22 — TypeScript pinned to 6.0.3, not 7.x
-
-**Context:** rule A7 asks to run the latest TypeScript. Latest at the time was
-**7.0.2**.
-
-**Decision:** pinned to **6.0.3**. TypeScript 7 crashes the lint gate:
-`typescript-eslint@8.65` declares a peer range of `>=4.8.4 <6.1.0`, and its
-`typescript-estree` throws `TypeError: Cannot read properties of undefined
-(reading 'Cjs')` under TS 7. 6.0.3 is the newest release the whole toolchain
-(lint + typecheck + build) is green on. Revisit when typescript-eslint ships a
-TS 7 peer range.
-
-**Consequence:** TS 6 dropped automatic `@types` inclusion, so each project now
-declares `"types"` explicitly (`["node"]` for the server, `["vite/client"]` for
-the UI). `@types/node` was bumped to v26 to match.
-
-## 2026-07-22 — Adopted `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
-
-> `exactOptionalPropertyTypes` was removed on 2026-07-29; the
-> `noUncheckedIndexedAccess` part of this decision remains active.
-
-**Context:** both flags were parked in `architecture.md` as "once the codebase is
-ready." Rule A7 pushes for them.
-
-**Decision:** both are on in `tsconfig.base.json`. A genuinely optional key uses
-`field?: T`; a fixed-shape internal record uses `field: T | undefined`.
-Constructors omit optional keys or reset them with `delete`. This prevents
-persisted state from confusing an absent value with an explicitly undefined
-property.
-
-## 2026-07-22 — SetupModal inline-style cleanup deferred
-
-**Context:** rule A6 bans large inline `style={{…}}` blocks. `StageFocusPanel.tsx`
-was cleaned to named constants/builders as the reference case. `SetupModal.tsx`
-has ~108 inline styles.
-
-**Decision:** deferred to a follow-up task. Extracting ~108 style objects is a
-large, visually risky diff with no unit coverage; folding it into the standards
-task would bury the standard under churn. All components did get named `XProps`
-types (low risk, mechanical); only `StageFocusPanel` got the style extraction.
-
-## 2026-07-26 — SetupModal styles named in-file, not in a sibling module
-
-**Context:** TASK-063 lifted the 100 inline `style={{…}}` objects out of
-`SetupModal.tsx`. At that volume a separate `SetupModal.styles.ts` is tempting.
-
-**Decision:** the named constants and builders live in the component file, above
-the props type, exactly as `StageFocusPanel.tsx` does it. A6 asks for *names*, not
-for a particular file; a sibling styles module would split one component's markup
-from its presentation across two files and make the pattern inconsistent with the
-reference case. Repetition drove the naming: the five option-card call sites
-collapse to one `optionCard(selected, d, accent = d)` builder — where the
-`accent` parameter exists because the Appearance section colours each card from
-the theme it *offers*, not the theme in use — and six muted descriptions to one
-`mutedCaption(d)`. Booleans that a builder branches on are named at the top of the
-component (`engineMissing`, `keyReady`, `creditsNoteShown`) rather than inlined as
-expressions at the call site.
-
-## 2026-07-29 — Validate untrusted data once, at the boundary
-
-**Context:** milestone planning and closeout initially converted unknown JSON
-through nested `recordOf`, `stringsOf`, and `findingsOf` helpers. Invalid nested
-entries could be silently removed, leaving service code with a plausible but
-incorrect partial result.
-
-**Decision:** use strict runtime schemas at AI-output, persisted milestone, and
-milestone-summary boundaries. Invalid nested data is rejected with a path-aware
-error before it enters service or domain logic. Runtime value lists such as task
-priorities are exported `as const` and also define their TypeScript unions.
-
-TypeScript types remain strict after boundary validation. The optional-property
-convention described here was superseded on 2026-07-29: absence and `undefined`
-now intentionally represent the same domain state, while `null` represents an
-explicit clear where supported.
+**Decision:** resolution is bundled default → user-level override → project addendum, and
+**nothing is written to disk on read**. Composition is a pure function; the service only
+reads. A full project replacement stays available for power users, but appending an
+addendum is the default path.

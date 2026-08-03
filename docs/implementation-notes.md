@@ -104,7 +104,9 @@ the workspace; escalation is denied, not queued); otherwise
 `-` to sidestep the Windows arg-length limit. The CLI has no `models` subcommand,
 so `listModels` reads the top-level `model = "…"` key from `~/.codex/config.toml`
 (matched before the first `[section]` so a nested profile key isn't mistaken for
-the global default).
+the global default). **`codex exec resume` does not accept `--sandbox`** — only
+`--dangerously-bypass-approvals-and-sandbox` — so a resumed turn under
+`acceptEdits` runs on Codex's own default sandbox rather than `workspace-write`.
 
 **Auth probes (detect).** Cursor `status` and Codex `login status` are best-effort:
 Cursor's exits 0 either way so the answer is in the text; Codex's exit code is the
@@ -197,7 +199,7 @@ the workspace is the source of truth, the reports only add what a box *said*.
 - **Data paths are a value, not a constant.** Every storage call takes a
   `ProjectPaths` (`id`, `root`, `dataDir`): a project's data lives in
   `<root>/.adhd/`, so history sits beside the code it belongs to instead of
-  inside the ADHD checkout. See [`decisions.md`](./decisions.md) (2026-07-22).
+  inside the ADHD checkout. See [`decisions.md`](./decisions.md) (2026-07-23).
 - **`homeProjectPaths()` and `userAdhdDir()` are functions, not constants.** A
   constant would freeze `ADHD_HOME` / `ADHD_USER_HOME` at import time; as
   functions, a test can point both roots at temp directories regardless of module
@@ -206,9 +208,16 @@ the workspace is the source of truth, the reports only add what a box *said*.
 - **The `.env` loader fills gaps only.** Values already in `process.env` win, so
   `PORT=1234 pnpm dev` still overrides the file. Every config value has an env
   override and a sensible default; nothing is hardcoded.
-- **The `.env` loader fills gaps only.** Values already in `process.env` win, so
-  `PORT=1234 pnpm dev` still overrides the file. Every config value has an env
-  override and a sensible default; nothing is hardcoded.
+
+## Toolchain pins
+
+- **TypeScript is pinned to 6.0.3, not 7.x.** TypeScript 7 crashes the lint gate:
+  `typescript-eslint@8.65` declares a peer range of `>=4.8.4 <6.1.0`, and its
+  `typescript-estree` throws `TypeError: Cannot read properties of undefined
+  (reading 'Cjs')` under TS 7. 6.0.3 is the newest release lint, typecheck and
+  build are all green on. Revisit when typescript-eslint ships a TS 7 peer range.
+- **TS 6 dropped automatic `@types` inclusion,** so each project declares `"types"`
+  explicitly — `["node"]` for the server, `["vite/client"]` for the UI.
 
 ## UI
 

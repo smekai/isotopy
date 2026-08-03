@@ -103,9 +103,13 @@ that grew a pure helper should have handed it to `domain/`.
 
 ### A4 — The workflow seam
 
-`RunOrchestrator.executeStage()` is the single decision point for how a unit of
-long work runs. If your change spread `await` chains for long-running work across
-a service instead of going through that seam, pull it back.
+The durable runtime is OpenWorkflow, in `packages/server/src/workflow/`.
+`pipeline-workflow.ts` is the workflow body (the run loop); `stage-execution.ts` is
+the durable *step* — the single decision point for how one stage runs. The seam is
+the workflow, **not** one orchestrator method: the older
+"`RunOrchestrator.executeStage()` is the seam" framing is wrong and is corrected in
+`docs/workflow-runtime-options.md` §4. If your change spread `await` chains for
+long-running work across a service instead of going through the workflow, pull it back.
 
 ### A5 — Classes where there is state or a lifecycle
 
@@ -126,9 +130,10 @@ functions.
 
 - Discriminated unions over stringly-typed state; exhaustive `switch` closed with
   a `never` assertion so a new case is a compile error.
-- `strict`, `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are on
-  and stay on. Reset an optional field with `delete obj.field`, not `= undefined`;
-  omit an absent key with a conditional spread.
+- `strict` and `noUncheckedIndexedAccess` are on in `tsconfig.base.json` and stay
+  on. `exactOptionalPropertyTypes` is deliberately **off** — ADHD treats an absent
+  property and `undefined` as the same state, so `field?: T` covers both and
+  `= undefined` is fine (`docs/decisions.md`, 2026-07-29).
 - A `as` cast that papers over a real gap is a failure, not a fix. Casting to
   silence the compiler is the single most common way this pass gets faked.
 

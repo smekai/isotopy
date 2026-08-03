@@ -1,17 +1,5 @@
 # Backlog
 
-## TASK-103: The run-app skill describes a version of the app that no longer exists
-**Priority:** P3 | **Tags:** infra, setup
-**Updated:** 2026-07-31 20:00
-
-`.claude/skills/run-app` lists retired pipeline ids (`one-box`, `dev-test`, `sequential`) as the smoke-check output, and a `data-testid` roster predating the run tabs and the milestone dashboard. It cost real time during the TASK-094 dogfood.
-
-**Scope:** refresh the pipeline ids to `full-delivery` / `pm-dev-test` / `solo` / `milestone-planning`, point the testid roster at [`architecture-ui.md`](../docs/architecture-ui.md) §9 rather than duplicating it, and add the milestone endpoints. Consider whether the skill should be generated from the docs so it cannot drift again.
-
-Cross-platform: n/a — documentation.
-
----
-
 ## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
 **Priority:** P2 | **Tags:** core, server, ui, engine
 **Updated:** 2026-07-29 08:56
@@ -24,7 +12,9 @@ Cross-platform: workflow composition is pure logic/UI; any selected persona tool
 
 ## TASK-095: Post-MVP — agent-native browser testing for QA
 **Priority:** P3 | **Tags:** testing, adapters, engine, milestone-d
-**Updated:** 2026-07-28 22:11
+**Updated:** 2026-08-03 15:11
+
+**Stays parked (re-confirmed 2026-08-03):** TASK-051 closed by deliberately keeping QA on Playwright only for the MVP and deferring agent-native browser support here. This is a new capability seam, not cleanup, so it does not ride along with the Milestone D close-out.
 
 Add a vendor-neutral testing seam for browser-control capabilities exposed by Codex, Cursor, Claude, or another active harness. QA may use an available native browser first for exploratory and visual checks, then promote stable behaviour into repository-owned Playwright tests. When no compatible capability exists, Playwright remains the complete fallback and CI authority.
 
@@ -45,8 +35,10 @@ Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Window
 ---
 
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
-**Priority:** P2 | **Tags:** server, engine, infra
-**Updated:** 2026-07-23 13:00
+**Priority:** P3 | **Tags:** server, engine, infra
+**Updated:** 2026-08-03 15:11
+
+**Deprioritized to P3 on 2026-08-03:** OpenWorkflow landed under TASK-068 and then survived a real mid-flight process kill in the TASK-094 dogfood, resuming without re-running completed stages. The comparison this spike was written to force has largely been answered by that evidence, so it is no longer worth a branch's cost.
 
 The standing second choice from [`docs/workflow-runtime-options.md`](../docs/workflow-runtime-options.md) §9 is **Aiki** — TypeScript, Apache-2.0, and the only candidate ADHD has a contributor on, so its gaps are ours to close. It is not the recommendation only because it requires **PostgreSQL 14+ today** (SQLite is "coming soon", i.e. we'd write it) and documents no fork-from-step (S2). This task builds the same durable runtime as TASK-068 but on Aiki, **on a separate branch**, to compare the two against ADHD's real shape before committing.
 

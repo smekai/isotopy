@@ -1,5 +1,81 @@
 # Done
 
+## TASK-106: Consolidate the decision log
+**Priority:** P2
+**Tags:** infra
+**Updated:** 2026-08-03 15:50
+
+`docs/decisions.md` was 1013 lines across 35 entries and is loaded as context constantly.
+
+**Done — 323 lines, 16 entries.** The file is now **high-level direction only**: an entry earns its place if getting it wrong later would be expensive — where data lives, what owns a boundary, what the runtime is, what the product refuses to do. The header states that bar, the newest-first rule, the merge rule, and where the other three kinds of writing go instead (`implementation-notes.md` for *how* and for quirks, `architecture*.md` for structure, `DONE.md` for what a task did).
+
+**Small decisions dropped, not summarized:** SetupModal style placement, the Setup feature folder, the UI scale extraction, SQLite audit-timestamp triggers, the two-preset revision, and the TypeScript pin. Each was an application of an existing rule or an operational detail, and each already had — or has now been given — a home in a doc that is read at the moment it matters rather than loaded as blanket context.
+
+**Four superseded pairs merged into their survivor** before the cut, which is where most of the confusion lived — `exactOptionalPropertyTypes` adopted then removed (the two entries gave opposite instructions), personas-as-generated-module then Markdown assets, SetupModal deferred then done, and "validate untrusted data once" written twice under two titles.
+
+**Related decisions merged by subject** rather than left as one entry per task: the chat projection, the derived transcript and engine usage became "the run view is derived from the log"; the project folder, project data, preferences and credentials became "a project owns its folder, its data, and its settings"; the quality-FAIL presentation and feature acceptance became "a blocking quality finding is not a crash".
+
+**Nothing load-bearing was deleted without a home.** Two facts existed nowhere else and were moved to `implementation-notes.md` first: the TypeScript 6.0.3 pin with the `typescript-eslint` peer-range crash that forces it, and `codex exec resume` rejecting `--sandbox`. The rest were already recorded elsewhere and verified so — the `ExperimentalWarning` launch flag and `EventSource` header limitation in `implementation-notes.md`, Cursor's unverified `conversational: false` and `borderStrong` in `architecture-ui.md`.
+
+**Four cross-references orphaned by the merges were repaired,** not left dangling: three in `architecture-ui.md` (SetupModal styles, the summary channel, the scale snapping) and one in `implementation-notes.md` (a 07-22 date that is now 07-23). In each case the reasoning was inlined where it was already being explained, so the pointer was removable rather than needing a replacement target. Older `DONE.md` entries still cite removed decision dates and were **left alone** — they are a record of what was true when written, and the repo rule is not to edit tasks you are not working on.
+
+Also corrected the stale "simulate vs. engine" description of `stage-execution.ts`, matching the same fix in `architecture.md` under TASK-104, and removed a duplicated `.env`-loader bullet found in `implementation-notes.md` while relocating.
+
+---
+
+## TASK-104: README and docs coherence after Milestone D
+**Priority:** P2
+**Tags:** infra, setup
+**Updated:** 2026-08-03 15:40
+
+**Done:**
+
+- `README.md` no longer reads as if 0.8.7 were the current release — "Milestone D shipped at 0.8.7" is stated as history, with the current version pointed at `package.json`. The Status section gained the TASK-102 accept-findings control.
+- `README.md`'s document table called `architecture.md` the "Aiki runtime"; it is OpenWorkflow. The separate Aiki mention in the competitor list is correct and was left alone.
+- `AGENTS.md` carried `Current: 0.8.6` against a real 0.8.9. Replaced with a pointer to `package.json` rather than a fresh number — a hand-copied version in a file the versioning rule bumps *every commit* is a drift generator, so the fix is to stop keeping one.
+
+**Two more found while sweeping, both in the hand-written `validate-code` skill** (only `architect/SKILL.md` is generated, so this one drifts silently):
+
+- A4 still said `RunOrchestrator.executeStage()` is the workflow seam — the framing `workflow-runtime-options.md` §4 exists specifically to correct. Now points at `pipeline-workflow.ts` / `stage-execution.ts`.
+- A7 said `exactOptionalPropertyTypes` is on "and stays on", and told reviewers to avoid `= undefined`. It was removed on 2026-07-29 for the opposite reason: ADHD treats absent and `undefined` as the same state. A reviewer following the skill would have rejected correct code.
+
+Also dropped the stale "simulate vs. engine" description of `stage-execution.ts` from `architecture.md` — there is no simulate path, which is the same claim that made the `run-app` skill wrong in TASK-103. That text is inside a `gen:` block, so `pnpm gen:skills` was re-run and `architect/SKILL.md` is regenerated in this commit. `pnpm gen:skills --check` is clean.
+
+---
+
+## TASK-103: The run-app skill describes a version of the app that no longer exists
+**Priority:** P3 | **Tags:** infra, setup
+**Updated:** 2026-08-03 15:30
+
+`.claude/skills/run-app` listed retired pipeline ids as the smoke-check output and a `data-testid` roster predating the run tabs and the milestone dashboard. It cost real time during the TASK-094 dogfood.
+
+**Done:** pipeline ids corrected to `full-delivery` / `pm-dev-test` / `solo`, with the note that `milestone-planning` is `internal` and deliberately absent from `GET /pipelines`. Added the milestone endpoint roster (plan, revise, proposal, approve, start-next, accept, finalize, autorun), the `/milestones` proxy prefix, `PUT /settings/preferences`, the gate/answer/restart endpoints, and the e2e ports and temp `ADHD_USER_HOME`. Dropdown labels corrected to the pipelines' real names, and the run tabs and milestone route added to the selector notes.
+
+**Two corrections beyond the filed scope, both wrong-in-a-way-that-costs-time:** the skill claimed `sequential` mock runs were unaffected by the sandbox gotcha — there is no mock pipeline at all any more, so *every* run spends tokens and `pnpm test` is the engine-free path. And a subscription session limit is documented as a hard failure pointing at TASK-061, so a future run does not read it as a new bug.
+
+**Scope call on "generate it from the docs":** not done, deliberately. The drift-prone part was the duplicated `data-testid` roster, and that is now a pointer to [`architecture-ui.md`](../docs/architecture-ui.md) §9 rather than a copy. The rest of the skill is operational knowledge — ports, the sandbox exit code, the `--bare` auth gotcha — that exists in no doc, so generating it would mean inventing a source of truth to generate from.
+
+---
+
+## TASK-105: A schema slip must not discard the whole closeout record
+**Priority:** P1
+**Tags:** server, testing
+**Updated:** 2026-08-03 15:20
+
+The gap TASK-101 deliberately left open: `severity` was normalized, but every *other* schema failure still answered with `emptyCloseout(...)`, so one bad follow-up task priority — or one key the agent invented — discarded the summary, delivered scope, decisions, knowledge, findings and task drafts of a run that cost real money.
+
+**Done:** `parseProductManagerCloseout` now salvages the agent-authored block field by field and, inside arrays, element by element. A field that fails drops to its empty value, a malformed array element drops alone, an unrecognised key is reported rather than fatal, and every discarded piece is named with its path in `validationErrors` — the channel `CloseoutPanel` already renders. A follow-up task whose finding did not survive is dropped too, naming both.
+
+The strict `productManagerCloseoutSchema` is unchanged and still governs the persisted `closeout.json` through `run-persistence.ts`, which is ADHD-owned and stays strict under **A7**. A round-trip test holds the invariant that a salvaged report still satisfies the strict schema, so nothing lands on disk that cannot be read back.
+
+**Decision (docs/decisions.md, 2026-08-03):** salvage rather than the scoped retry the TASK-101 entry priced — a retry costs a second Product Manager call on every slip and still answers a second failure with nothing. One shape, two codecs: strict where ADHD wrote the record, salvaging where an agent wrote it.
+
+**Caught in PR review (Copilot, PR #17):** the first cut salvaged arrays of *objects* element-wise but still ran the five string arrays (`deliveredScope`, `decisions`, `knowledge`, `completedTaskIds`, `unresolvedTaskIds`) through an all-or-nothing `uniqueStrings`, so one bad element discarded the whole array — the exact behaviour the task exists to remove, left in half the fields. Fixed with a `salvageStrings` helper (element-wise, then dedupe); the strict schema keeps `uniqueStrings`.
+
+Covered by **three** codec tests, not one per branch: a whole-closeout parse including the hyphenated severity, one salvage case exercising every field kind at once (string array, object array, unknown key, orphaned task, strict-schema round trip), and the block-level fallbacks. An earlier eight-test version asserted the same parser from eight angles and still missed the string-array bug — coverage per behaviour, not per assertion.
+
+---
+
 ## TASK-101: One hyphen in a closeout severity discards every finding
 **Priority:** P1 | **Tags:** server, engine, testing
 **Updated:** 2026-08-03 10:55
@@ -40,7 +116,7 @@ only on a needs-attention feature and an "Accepted …" line once stamped. Cover
 component test, a server component test through a restart, and an e2e that walks
 accept → progress → Finalize enabled in a real browser.
 
-**Decision (docs/decisions.md, 2026-08-03):** acceptance is a distinct domain action
+**Decision (docs/decisions.md, 2026-07-31 — "A blocking quality finding is not a crash"):** acceptance is a distinct domain action
 with an audit trail, not a status dropdown over the existing PATCH. Blocking findings do
 not prevent acceptance — that restriction strands a milestone on a false positive, which
 is the bug being fixed.
