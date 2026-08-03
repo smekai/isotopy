@@ -1,13 +1,18 @@
 import {
   ENGINE_IDS,
   LOG_LEVELS,
-  MESSAGE_KINDS,
-  MESSAGE_ROLES,
   PERMISSION_MODE_IDS,
   RUN_STATUSES,
   STAGE_STATUSES,
   STAGE_VERDICTS,
   TERMINAL_RUN_STATUSES,
+  requiredText,
+  requiredTexts,
+  runLimitSchema,
+  runMessageSchema,
+  stageLogEntrySchema,
+  stageUsageSchema,
+  timestamp,
 } from "@adhd/core";
 import type {
   EnginePermissionMode,
@@ -26,39 +31,8 @@ export interface PersistedRun {
   openWorkflowRunId?: string;
 }
 
-const text = z.string().min(1);
-const strings = z.array(text);
-const timestamp = text;
-
-const usageSchema = z
-  .object({
-    costUsd: z.number().nonnegative().optional(),
-    tokensIn: z.number().int().nonnegative().optional(),
-    tokensOut: z.number().int().nonnegative().optional(),
-    cachedTokensIn: z.number().int().nonnegative().optional(),
-    durationMs: z.number().nonnegative().optional(),
-    turns: z.number().int().nonnegative().optional(),
-  })
-  .strict();
-
-const logEntrySchema = z
-  .object({
-    ts: timestamp,
-    level: z.enum(LOG_LEVELS),
-    message: z.string(),
-  })
-  .strict();
-
-const runMessageSchema = z
-  .object({
-    id: text,
-    ts: timestamp,
-    role: z.enum(MESSAGE_ROLES),
-    stageId: text.optional(),
-    kind: z.enum(MESSAGE_KINDS).optional(),
-    text: z.string(),
-  })
-  .strict();
+const text = requiredText;
+const strings = requiredTexts;
 
 const closeoutRecordSchema = z
   .object({
@@ -83,18 +57,6 @@ const closeoutRecordSchema = z
   })
   .strict();
 
-const runLimitSchema = z
-  .object({
-    stageId: text,
-    engine: z.enum(ENGINE_IDS),
-    model: z.string().optional(),
-    raw: z.string(),
-    resetAt: timestamp.optional(),
-    detectedAt: timestamp,
-    attempt: z.number().int().positive(),
-  })
-  .strict();
-
 const stageSchema = z
   .object({
     id: text,
@@ -102,8 +64,8 @@ const stageSchema = z
     skill: text.optional(),
     verdict: z.enum(STAGE_VERDICTS).optional(),
     status: z.enum(STAGE_STATUSES),
-    usage: usageSchema.optional(),
-    logs: z.array(logEntrySchema),
+    usage: stageUsageSchema.optional(),
+    logs: z.array(stageLogEntrySchema),
     startedAt: timestamp.optional(),
     completedAt: timestamp.optional(),
   })
@@ -263,7 +225,7 @@ const runEventSchema: z.ZodType<RunEvent> = z.discriminatedUnion("type", [
     .object({
       ...stageEventBase,
       type: z.literal("stage.usage"),
-      usage: usageSchema,
+      usage: stageUsageSchema,
     })
     .strict(),
   z

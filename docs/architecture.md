@@ -310,7 +310,12 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 | `runs.ts` | Run/stage state models, run events, status constants |
 | `settings.ts` | UI-safe settings view models, project preferences and their defaults |
 
-Core stays dependency-free and side-effect-free: types, constants, and pure functions only.
+| `schema.ts` | Shared zod primitives every shape is built from |
+
+Core carries exactly one runtime dependency — zod — because a shape and its codec
+are one definition, not two that drift. It stays side-effect-free and
+platform-neutral: schemas, the types inferred from them, constants, and pure
+functions only.
 
 ### `packages/server` — HTTP API
 

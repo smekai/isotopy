@@ -1,7 +1,10 @@
+import { z } from "zod";
+import { ENGINE_IDS } from "./engines.ts";
 import type { EngineId } from "./engines.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { flattenPipelineStages } from "./pipelines.ts";
+import { requiredText, timestamp } from "./schema.ts";
 
 export const STAGE_STATUSES = [
   "pending",
@@ -52,11 +55,15 @@ export const LOG_LEVELS = [
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-export interface StageLogEntry {
-  ts: string;
-  level: LogLevel;
-  message: string;
-}
+export const stageLogEntrySchema = z
+  .object({
+    ts: timestamp,
+    level: z.enum(LOG_LEVELS),
+    message: z.string(),
+  })
+  .strict();
+
+export type StageLogEntry = z.infer<typeof stageLogEntrySchema>;
 
 export const STAGE_VERDICTS = {
   PASS: "PASS",
@@ -87,37 +94,54 @@ export const MESSAGE_KINDS = ["question", "answer"] as const;
 
 export type MessageKind = (typeof MESSAGE_KINDS)[number];
 
-export interface RunMessage {
-  id: string;
-  ts: string;
-  role: MessageRole;
-  stageId?: string;
-  kind?: MessageKind;
-  text: string;
-}
+export const runMessageSchema = z
+  .object({
+    id: requiredText,
+    ts: timestamp,
+    role: z.enum(MESSAGE_ROLES),
+    stageId: requiredText.optional(),
+    kind: z.enum(MESSAGE_KINDS).optional(),
+    text: z.string(),
+  })
+  .strict();
+
+export type RunMessage = z.infer<typeof runMessageSchema>;
 
 /** What one engine turn spent. Engines report different halves of this. */
-export interface StageUsage {
-  costUsd?: number;
-  tokensIn?: number;
-  tokensOut?: number;
-  cachedTokensIn?: number;
-  durationMs?: number;
-  turns?: number;
-}
+export const stageUsageSchema = z
+  .object({
+    costUsd: z.number().nonnegative().optional(),
+    tokensIn: z.number().int().nonnegative().optional(),
+    tokensOut: z.number().int().nonnegative().optional(),
+    cachedTokensIn: z.number().int().nonnegative().optional(),
+    durationMs: z.number().nonnegative().optional(),
+    turns: z.number().int().nonnegative().optional(),
+  })
+  .strict();
 
-export interface EngineLimit {
-  raw: string;
-  resetAt?: string;
-}
+export type StageUsage = z.infer<typeof stageUsageSchema>;
 
-export interface RunLimit extends EngineLimit {
-  stageId: string;
-  engine: EngineId;
-  model?: string;
-  detectedAt: string;
-  attempt: number;
-}
+const engineLimitShape = {
+  raw: z.string(),
+  resetAt: timestamp.optional(),
+};
+
+export const engineLimitSchema = z.object(engineLimitShape).strict();
+
+export type EngineLimit = z.infer<typeof engineLimitSchema>;
+
+export const runLimitSchema = z
+  .object({
+    ...engineLimitShape,
+    stageId: requiredText,
+    engine: z.enum(ENGINE_IDS),
+    model: z.string().optional(),
+    detectedAt: timestamp,
+    attempt: z.number().int().positive(),
+  })
+  .strict();
+
+export type RunLimit = z.infer<typeof runLimitSchema>;
 
 export const DEFAULT_LIMIT_WAIT_MS = 30 * 60_000;
 

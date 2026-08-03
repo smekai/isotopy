@@ -15,6 +15,33 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-03 — A shape and its codec are one definition
+
+**Context:** `RunEvent` was declared in core as a flat interface with nine
+optional fields while `run-persistence.ts` modelled the same event as a strict
+15-arm discriminated union. Both were correct in isolation; neither could see the
+other. The emitter and the UI therefore guarded against states the schema already
+proved impossible, and closeout and the milestone proposal had each accumulated
+three definitions of one shape.
+
+**Decision:** zod is a dependency of `@adhd/core`. A shape is defined once, as a
+schema, and its TypeScript type is `z.infer` of that schema. This extends the
+rule already in force for runtime value lists — exported `as const`, defining
+their unions — from lists to shapes.
+
+**Rejected:** keeping schemas server-side and annotating them `z.ZodType<T>`
+against a hand-written type. That annotation is checked covariantly on the output
+type, so a union missing an arm still satisfies it — which is precisely how
+`RunEvent` drifted. It cannot catch the failure it appears to guard.
+
+**Consequence:** core shapes must stay transform-free, because `z.infer` yields
+the *output* type and a transform makes the derived type dishonest about what the
+schema accepts. Normalisation that belongs to an agent boundary — deduping string
+arrays, rewriting severity prose — stays in the server, which is the same line
+drawn under "Strict for what ADHD writes, salvaging for what an agent writes".
+
+---
+
 ## 2026-08-03 — A plan limit is a wait, not a failure
 
 **Context:** every harness eventually says "you've hit your session limit · resets
