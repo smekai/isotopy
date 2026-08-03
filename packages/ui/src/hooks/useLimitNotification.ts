@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RunLimit } from "@adhd/core";
-import { formatResetAt, limitHeadline } from "../limit";
-
-const BASE_TITLE = "ADHD";
+import { formatResetAt } from "../limit";
+import { APP_TITLE, LIMIT_COPY } from "../limit-copy";
 
 export type NotificationAccess = "unsupported" | "default" | "granted" | "denied";
 
@@ -16,10 +15,9 @@ function currentAccess(): NotificationAccess {
 }
 
 function notifyLimit(limit: RunLimit): void {
-  const reset = formatResetAt(limit.resetAt);
-  const body = reset === undefined ? "Waiting for the reset." : `Waiting until ${reset}.`;
+  const body = LIMIT_COPY.notificationBody(formatResetAt(limit.resetAt));
   try {
-    new Notification(limitHeadline(limit), { body, tag: `adhd-limit-${limit.stageId}` });
+    new Notification(LIMIT_COPY.headline(limit), { body, tag: `adhd-limit-${limit.stageId}` });
   } catch {}
 }
 
@@ -37,10 +35,10 @@ export function useLimitNotification(limit: RunLimit | undefined): LimitNotifica
 
   useEffect(() => {
     if (!limit) {
-      document.title = BASE_TITLE;
+      document.title = APP_TITLE;
       return;
     }
-    document.title = `⏸ Limit — ${BASE_TITLE}`;
+    document.title = LIMIT_COPY.notificationTitle;
     if (currentAccess() === "default") {
       request();
       return;

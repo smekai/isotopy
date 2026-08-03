@@ -119,6 +119,10 @@ export interface RunLimit extends EngineLimit {
   attempt: number;
 }
 
+export const DEFAULT_LIMIT_WAIT_MS = 30 * 60_000;
+
+export const MAX_LIMIT_WAIT_MS = 24 * 60 * 60_000;
+
 export const LIMIT_CHOICES = ["retry-now", "switch-model", "switch-engine"] as const;
 
 export type LimitChoice = (typeof LIMIT_CHOICES)[number];

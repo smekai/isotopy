@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { DEFAULT_LIMIT_WAIT_MS } from "@adhd/core";
 import {
-  DEFAULT_LIMIT_WAIT_MS,
   detectEngineLimit,
   formatLimitWait,
   limitWaitMs,
@@ -58,6 +58,12 @@ describe("parseLimitResetMs", () => {
 
   test("a nonsense clock is rejected rather than clamped into a plausible wait", () => {
     expect(parseLimitResetMs("resets 99:99pm (Europe/Tallinn)", NOON_UTC)).toBeUndefined();
+  });
+
+  test("a reset inside the current minute waits a minute, not the 30-minute fallback", () => {
+    // 15:00 in Tallinn is exactly NOON_UTC, so the delta is zero minutes. The reset
+    // is seconds away — falling back to 30m, or reading it as tomorrow, both lie.
+    expect(parseLimitResetMs("resets 3:00pm (Europe/Tallinn)", NOON_UTC)).toBe(MINUTE);
   });
 });
 

@@ -48,6 +48,7 @@ import { RunRepository } from "../repository/run-repository.ts";
 import type { PersistedRun } from "../repository/run-repository.ts";
 import { MilestoneRepository } from "../repository/milestone-repository.ts";
 import { SettingsStore } from "./settings-store.ts";
+import { LIMIT_ERRORS, LIMIT_LOG } from "../domain/limit-copy.ts";
 import {
   formatLimitWait,
   limitWaitMs,
@@ -82,12 +83,6 @@ import {
 const PERSIST_DEBOUNCE_MS = 150;
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
-
-const LIMIT_CHOICE_REASONS: Record<LimitChoice, string> = {
-  "retry-now": "you asked to retry now",
-  "switch-model": "you switched the model",
-  "switch-engine": "you switched the harness",
-};
 
 function outcomeForRestart(stage: StageState): StageOutcome {
   if (stage.status === "failed") {
@@ -1038,7 +1033,7 @@ export class RunOrchestrator implements RunProjection {
       attempt,
     };
     const profession = agentForStage(stageId).profession;
-    const message = `${profession} hit a plan limit — waiting ${formatLimitWait(limitWaitMs(limit))} for the reset`;
+    const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
     this.log(runId, stageId, "warn", message);
     this.emit({
       ts,
@@ -1061,8 +1056,7 @@ export class RunOrchestrator implements RunProjection {
     run.status = "running";
     delete run.limit;
     const profession = agentForStage(stageId).profession;
-    const reason = choice === undefined ? "the plan limit reset" : LIMIT_CHOICE_REASONS[choice];
-    const message = `${profession} is resuming — ${reason}`;
+    const message = LIMIT_LOG.resuming(profession, choice);
     this.log(runId, stageId, "run", message);
     this.emit({
       ts: nowIso(),
@@ -1081,11 +1075,11 @@ export class RunOrchestrator implements RunProjection {
     }
     const stage = this.requireStage(runId, stageId);
     if (stage.status !== "blocked") {
-      throw new Error(`Stage ${stageId} is not waiting on a plan limit`);
+      throw new Error(LIMIT_ERRORS.notBlocked(stageId));
     }
     const openWorkflowRunId = this.openWorkflowRunIds.get(runId);
     if (!openWorkflowRunId) {
-      throw new Error(`Run ${runId} has no durable run to resume`);
+      throw new Error(LIMIT_ERRORS.noDurableRun(runId));
     }
 
     const selection = selectionAfterLimit({ engine: run.engine, model: run.model }, resolution);

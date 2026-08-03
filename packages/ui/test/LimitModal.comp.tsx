@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { LimitResolution } from "@adhd/core";
 import { LimitModal } from "../src/components/LimitModal";
+import { LIMIT_COPY } from "../src/limit-copy";
 import { DIRS } from "../src/theme";
 import { limit, run, stage } from "./support/run-fixtures";
 
@@ -54,7 +55,7 @@ test("a limit with no parsed reset time says so instead of showing a blank count
   show(handlers(), { resetAt: undefined });
 
   expect(screen.queryByTestId("limit-countdown")).toBeNull();
-  expect(screen.getByText(/no reset time/i)).toBeTruthy();
+  expect(screen.getByText(LIMIT_COPY.noResetTime)).toBeTruthy();
 });
 
 test("the raw harness line is shown so the parsed reset can be checked against it", () => {
@@ -98,7 +99,7 @@ test("retry now resolves without changing any setting", () => {
   const spies = handlers();
   show(spies);
 
-  fireEvent.click(screen.getByText("Retry now"));
+  fireEvent.click(screen.getByText(LIMIT_COPY.retryNow));
 
   expect(spies.onResolve).toHaveBeenCalledWith({ choice: "retry-now" });
 });
@@ -107,7 +108,7 @@ test("keeping the wait dismisses the popup without resolving the run", () => {
   const spies = handlers();
   show(spies);
 
-  fireEvent.click(screen.getByText("Keep waiting"));
+  fireEvent.click(screen.getByText(LIMIT_COPY.keepWaiting));
 
   expect(spies.onDismiss).toHaveBeenCalled();
   expect(spies.onResolve).not.toHaveBeenCalled();
@@ -132,5 +133,5 @@ test("the dialog announces itself as modal so a screen reader traps into it", ()
 test("a browser without the Notification API hides the enable-notifications offer", () => {
   show(handlers());
 
-  expect(screen.queryByText(/enable notifications/i)).toBeNull();
+  expect(screen.queryByText(LIMIT_COPY.enableNotifications)).toBeNull();
 });

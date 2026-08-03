@@ -1,4 +1,3 @@
-import { ENGINES } from "@adhd/core";
 import type { RunLimit } from "@adhd/core";
 
 const MS_PER_SECOND = 1000;
@@ -23,13 +22,6 @@ export function formatResetAt(resetAt: string | undefined): string | undefined {
     return undefined;
   }
   return reset.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
-
-export function limitHeadline(limit: RunLimit): string {
-  const engine = ENGINES[limit.engine].label;
-  return limit.attempt > 1
-    ? `${engine} hit its plan limit again (${limit.attempt} times on this step)`
-    : `${engine} hit its plan limit`;
 }
 
 export function remainingMs(limit: RunLimit, now: number): number | undefined {

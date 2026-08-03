@@ -1,7 +1,8 @@
 // Unit spec: the countdown and the reset label are the only things telling an
 // unattended user when the run comes back, and a wrong one reads as "stuck".
 import { describe, expect, test } from "vitest";
-import { formatCountdown, formatResetAt, limitHeadline, remainingMs } from "../src/limit";
+import { formatCountdown, formatResetAt, remainingMs } from "../src/limit";
+import { LIMIT_COPY } from "../src/limit-copy";
 import { limit } from "./support/run-fixtures";
 
 const SECOND = 1000;
@@ -49,13 +50,13 @@ describe("remainingMs", () => {
   });
 });
 
-describe("limitHeadline", () => {
+describe("LIMIT_COPY.headline", () => {
   test("names the harness that hit the wall", () => {
-    expect(limitHeadline(limit())).toBe("Claude Code hit its plan limit");
+    expect(LIMIT_COPY.headline(limit())).toBe("Claude Code hit its plan limit");
   });
 
   test("a repeat limit says so, so a mis-detection is visible rather than silent", () => {
-    expect(limitHeadline(limit({ attempt: 3 }))).toBe(
+    expect(LIMIT_COPY.headline(limit({ attempt: 3 }))).toBe(
       "Claude Code hit its plan limit again (3 times on this step)",
     );
   });

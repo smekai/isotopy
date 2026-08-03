@@ -179,6 +179,7 @@ export const GOLD_SOFT = "rgba(217,119,6,0.12)";
 export const ASK_VIOLET = "#7C3AED";
 
 export const LIMIT_CYAN = "#0891B2";
+export const LIMIT_CYAN_SOFT = "rgba(8,145,178,0.10)";
 
 export interface StatusColor {
   text: string;
@@ -193,7 +194,7 @@ export const STATUS_COLORS: Record<StagePresentation, StatusColor> = {
   needs_attention: { text: "#D97706", bg: "rgba(217,119,6,0.10)", dot: "#D97706" },
   awaiting: { text: "#D97706", bg: "rgba(217,119,6,0.10)",   dot: "#D97706" },
   asking:   { text: "#7C3AED", bg: "rgba(124,58,237,0.10)",  dot: "#7C3AED" },
-  blocked:  { text: "#0891B2", bg: "rgba(8,145,178,0.10)",   dot: "#0891B2" },
+  blocked:  { text: LIMIT_CYAN, bg: LIMIT_CYAN_SOFT, dot: LIMIT_CYAN },
   skipped:  { text: "#9CA3AF", bg: "rgba(156,163,175,0.10)", dot: "#9CA3AF" },
   pending:  { text: "#C0C0D8", bg: "rgba(192,192,216,0.10)", dot: "#D4D4E8" },
 };
@@ -216,7 +217,7 @@ export const RUN_PILL: Record<RunStatus, { text: string; bg: string }> = {
   running:   { text: "#6366F1", bg: "rgba(99,102,241,0.10)" },
   awaiting:  { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
   asking:    { text: "#7C3AED", bg: "rgba(124,58,237,0.10)" },
-  blocked:   { text: "#0891B2", bg: "rgba(8,145,178,0.10)" },
+  blocked:   { text: LIMIT_CYAN, bg: LIMIT_CYAN_SOFT },
   completed: { text: "#059669", bg: "rgba(5,150,105,0.10)" },
   needs_attention: { text: "#D97706", bg: "rgba(217,119,6,0.10)" },
   failed:    { text: "#DC2626", bg: "rgba(220,38,38,0.10)" },

@@ -5,11 +5,13 @@ import { ENGINES, modelOptionsFor } from "@adhd/core";
 import type { EngineId, LimitResolution, RunLimit, RunState } from "@adhd/core";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";
-import { formatCountdown, formatResetAt, limitHeadline, remainingMs } from "../limit";
+import { formatCountdown, formatResetAt, remainingMs } from "../limit";
+import { LIMIT_COPY } from "../limit-copy";
 import {
   FONT,
   ICON,
   LIMIT_CYAN,
+  LIMIT_CYAN_SOFT,
   MONO,
   RADIUS,
   SANS,
@@ -22,9 +24,7 @@ import { WHITE, mutedCaption, optionLabel } from "./setup/setup-styles";
 
 const SCRIM = "rgba(30,27,75,0.20)";
 const DIALOG_WIDTH = 560;
-const LIMIT_SOFT = "rgba(8,145,178,0.10)";
 const MODEL_CHIP_WIDTH = 140;
-const NO_RESET_COPY = "The harness printed no reset time — retrying in 30 minutes.";
 
 const BACKDROP: CSSProperties = {
   position: "fixed",
@@ -71,7 +71,7 @@ function header(d: Dir): CSSProperties {
     gap: SPACE.xl,
     padding: `${SPACE.x4l}px ${SPACE.x4l}px ${SPACE.xxl}px`,
     borderBottom: `1px solid ${d.border}`,
-    background: LIMIT_SOFT,
+    background: LIMIT_CYAN_SOFT,
   };
 }
 
@@ -128,7 +128,7 @@ function chip(d: Dir, tone: "neutral" | "accent" | "danger" = "neutral"): CSSPro
     padding: `${SPACE.md}px ${SPACE.xl}px`,
     border: `1px solid ${tone === "neutral" ? d.border : color}`,
     borderRadius: RADIUS.pill,
-    background: tone === "accent" ? LIMIT_SOFT : "transparent",
+    background: tone === "accent" ? LIMIT_CYAN_SOFT : "transparent",
     color,
     fontFamily: SANS,
     fontSize: FONT.md,
@@ -215,7 +215,7 @@ export function LimitModal({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={limitHeadline(limit)}
+        aria-label={LIMIT_COPY.headline(limit)}
         tabIndex={-1}
         data-testid="limit-modal"
         onClick={(event) => event.stopPropagation()}
@@ -223,12 +223,12 @@ export function LimitModal({
       >
         <div style={header(d)}>
           <div>
-            <div style={title(d)}>{limitHeadline(limit)}</div>
+            <div style={title(d)}>{LIMIT_COPY.headline(limit)}</div>
             <div style={mutedCaption(d)}>
-              {stageLabel} is paused — the run resumes on its own, nothing is lost.
+              {LIMIT_COPY.subtitle(stageLabel)}
             </div>
           </div>
-          <button onClick={onDismiss} aria-label="Keep waiting" style={closeButton(d)}>
+          <button onClick={onDismiss} aria-label={LIMIT_COPY.keepWaiting} style={closeButton(d)}>
             <X size={ICON.md} />
           </button>
         </div>
@@ -236,13 +236,13 @@ export function LimitModal({
         <div style={BODY}>
           <div>
             {remaining === undefined ? (
-              <div style={mutedCaption(d)}>{NO_RESET_COPY}</div>
+              <div style={mutedCaption(d)}>{LIMIT_COPY.noResetTime}</div>
             ) : (
               <div style={ROW}>
                 <span data-testid="limit-countdown" style={countdown()}>
                   {formatCountdown(remaining)}
                 </span>
-                <span style={mutedCaption(d)}>until it resets at {resetLabel}</span>
+                <span style={mutedCaption(d)}>{LIMIT_COPY.countdownSuffix(resetLabel ?? "")}</span>
               </div>
             )}
           </div>
@@ -250,7 +250,7 @@ export function LimitModal({
           <div style={rawLine(d)}>{limit.raw}</div>
 
           <div>
-            <div style={groupLabel(d)}>SWITCH THE MODEL — RESUMES THIS STEP, KEEPS FINISHED WORK</div>
+            <div style={groupLabel(d)}>{LIMIT_COPY.switchModelHeading}</div>
             <div style={CHOICE_GRID}>
               {modelOptionsFor(limit.engine)
                 .filter(
@@ -273,7 +273,7 @@ export function LimitModal({
           </div>
 
           <div>
-            <div style={groupLabel(d)}>SWITCH THE HARNESS — A DIFFERENT PLAN, A DIFFERENT LIMIT</div>
+            <div style={groupLabel(d)}>{LIMIT_COPY.switchHarnessHeading}</div>
             <div style={CHOICE_GRID}>
               {otherEngines(limit.engine).map((engineId) => (
                 <button
@@ -285,30 +285,30 @@ export function LimitModal({
                 </button>
               ))}
               <button onClick={onOpenConnection} style={chip(d)}>
-                <Plug size={ICON.sm} /> Connection & API key
+                <Plug size={ICON.sm} /> {LIMIT_COPY.connection}
               </button>
             </div>
           </div>
 
           <div>
-            <div style={groupLabel(d)}>OR</div>
+            <div style={groupLabel(d)}>{LIMIT_COPY.otherHeading}</div>
             <div style={CHOICE_GRID}>
               <button
                 onClick={() => onResolve({ choice: "retry-now" })}
                 style={chip(d, "accent")}
               >
-                <RotateCcw size={ICON.sm} /> Retry now
+                <RotateCcw size={ICON.sm} /> {LIMIT_COPY.retryNow}
               </button>
               <button onClick={onDismiss} style={chip(d)}>
-                <Play size={ICON.sm} /> Keep waiting
+                <Play size={ICON.sm} /> {LIMIT_COPY.keepWaiting}
               </button>
               {notification.access !== "granted" && notification.access !== "unsupported" && (
                 <button onClick={notification.request} style={chip(d)}>
-                  <BellRing size={ICON.sm} /> Enable notifications
+                  <BellRing size={ICON.sm} /> {LIMIT_COPY.enableNotifications}
                 </button>
               )}
               <button onClick={onAbort} style={chip(d, "danger")}>
-                <Square size={ICON.sm} /> Abort the run
+                <Square size={ICON.sm} /> {LIMIT_COPY.abort}
               </button>
             </div>
           </div>

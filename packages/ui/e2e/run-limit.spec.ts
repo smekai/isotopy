@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request } from "@playwright/test";
-import type { RunState } from "@adhd/core";
+import type { RunLimit, RunState } from "@adhd/core";
+import { LIMIT_COPY } from "../src/limit-copy";
 import { resetPreferences } from "./support/preferences";
 
 // The plan-limit popup, without burning a real subscription limit to see it.
@@ -33,6 +34,16 @@ function resetTwoHoursFromNow(): string {
   return new Date(Date.now() + TWO_HOURS_MS).toISOString();
 }
 
+const LIMIT: RunLimit = {
+  stageId: "implementation",
+  engine: "claude-code",
+  model: "opus",
+  raw: RAW_LIMIT,
+  resetAt: resetTwoHoursFromNow(),
+  detectedAt: DETECTED_AT,
+  attempt: 1,
+};
+
 const BLOCKED_RUN: RunState = {
   id: RUN_ID,
   number: 9201,
@@ -46,15 +57,7 @@ const BLOCKED_RUN: RunState = {
   workspacePath: "/seeded/workspace",
   messages: [],
   createdAt: STARTED_AT,
-  limit: {
-    stageId: "implementation",
-    engine: "claude-code",
-    model: "opus",
-    raw: RAW_LIMIT,
-    resetAt: resetTwoHoursFromNow(),
-    detectedAt: DETECTED_AT,
-    attempt: 1,
-  },
+  limit: LIMIT,
   stages: [
     {
       id: "intake",
@@ -115,7 +118,7 @@ test("a parked run announces the limit over the run, with the raw line behind it
   await openBlockedRun(page);
 
   const modal = page.getByTestId("limit-modal");
-  await expect(modal).toContainText("Claude Code hit its plan limit");
+  await expect(modal).toContainText(LIMIT_COPY.headline(LIMIT));
   // The raw CLI line stays visible so the parsed reset can be checked against it.
   await expect(modal).toContainText("resets 4:30pm (Europe/Tallinn)");
 });

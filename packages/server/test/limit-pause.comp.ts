@@ -11,6 +11,7 @@ import {
   waitForStageStatus,
 } from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
+import { LIMIT_ERRORS } from "../src/domain/limit-copy.ts";
 
 const TASK = "add a greet function";
 const PM_REPORT = "Build a greet function. Done when it prints a greeting.";
@@ -180,6 +181,6 @@ describe("plan limit", () => {
 
     // Assert
     expect(refused.status).toBe(409);
-    expect(refused.body.error).toMatch(/not waiting on a plan limit/i);
+    expect(refused.body.error).toBe(LIMIT_ERRORS.notBlocked("solo"));
   });
 });

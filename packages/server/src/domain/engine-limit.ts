@@ -1,13 +1,10 @@
+import { DEFAULT_LIMIT_WAIT_MS, MAX_LIMIT_WAIT_MS } from "@adhd/core";
 import type { EngineId, EngineLimit, LimitResolution } from "@adhd/core";
 
 export interface RunEngineSelection {
   engine?: EngineId;
   model?: string;
 }
-
-export const DEFAULT_LIMIT_WAIT_MS = 30 * 60_000;
-
-const MAX_LIMIT_WAIT_MS = 24 * 60 * 60_000;
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -107,7 +104,8 @@ function clockResetMs(raw: string, now: Date): number | undefined {
   if (target === undefined) {
     return undefined;
   }
-  return minutesUntil(target, minutesOfDayIn(now, zone?.trim())) * MS_PER_MINUTE;
+  const minutes = minutesUntil(target, minutesOfDayIn(now, zone?.trim()));
+  return Math.max(minutes, 1) * MS_PER_MINUTE;
 }
 
 export function parseLimitResetMs(raw: string, now: Date = new Date()): number | undefined {
