@@ -39,13 +39,10 @@ function closeout(overrides: Partial<RunCloseoutRecord> = {}): RunCloseoutRecord
   };
 }
 
-function completedRun(record?: RunCloseoutRecord): RunState {
+function completedRun(overrides: Partial<RunState> = {}): RunState {
   const state = run([stage("implementation", "passed"), stage("closeout", "passed")], "completed");
   state.stageOutputs = { implementation: "DEV HANDOFF" };
-  if (record) {
-    state.closeout = record;
-  }
-  return state;
+  return { ...state, ...overrides };
 }
 
 afterEach(() => {
@@ -54,6 +51,7 @@ afterEach(() => {
 });
 
 test("created tasks show their id, title and which backend wrote them", () => {
+  // Act
   render(
     <CloseoutPanel
       closeout={closeout({
@@ -66,6 +64,7 @@ test("created tasks show their id, title and which backend wrote them", () => {
     />,
   );
 
+  // Assert
   const chips = screen.getAllByTestId("closeout-created-task");
   expect(chips).toHaveLength(2);
   expect(chips[0]?.textContent).toContain("TASK-101");
@@ -75,6 +74,7 @@ test("created tasks show their id, title and which backend wrote them", () => {
 });
 
 test("a blocking finding is labelled as such and keeps its evidence", () => {
+  // Act
   render(
     <CloseoutPanel
       closeout={closeout({
@@ -95,12 +95,14 @@ test("a blocking finding is labelled as such and keeps its evidence", () => {
     />,
   );
 
+  // Assert
   expect(screen.getByText("BLOCKING")).toBeDefined();
   expect(screen.getByText("NON-BLOCKING")).toBeDefined();
   expect(screen.getByText(/started feature 3 after feature 2 failed/)).toBeDefined();
 });
 
 test("a rejected cleanup path is shown, not silently dropped", () => {
+  // Act
   render(
     <CloseoutPanel
       closeout={closeout({
@@ -110,11 +112,13 @@ test("a rejected cleanup path is shown, not silently dropped", () => {
     />,
   );
 
+  // Assert
   expect(screen.getByText(/Removed \.adhd\/runs\/r1\/tmp/)).toBeDefined();
   expect(screen.getByText(/Rejected \.\.\/\.\.\/etc\/hosts/)).toBeDefined();
 });
 
 test("validation errors are surfaced rather than hidden behind a valid-looking report", () => {
+  // Act
   render(
     <CloseoutPanel
       closeout={closeout({
@@ -124,14 +128,17 @@ test("validation errors are surfaced rather than hidden behind a valid-looking r
     />,
   );
 
+  // Assert
   expect(screen.getByTestId("closeout-validation-errors").textContent).toContain(
     "TASK-999",
   );
 });
 
 test("empty sections are omitted entirely, so nothing reads as an empty promise", () => {
+  // Act
   render(<CloseoutPanel closeout={closeout()} d={d} />);
 
+  // Assert
   expect(screen.queryByText("Findings")).toBeNull();
   expect(screen.queryByText("Created tasks")).toBeNull();
   expect(screen.queryByText("Cleanup")).toBeNull();
@@ -139,16 +146,28 @@ test("empty sections are omitted entirely, so nothing reads as an empty promise"
   expect(screen.getByText("Completed source tasks")).toBeDefined();
 });
 
-test("Artifacts offers the Closeout view only for a run that produced one", () => {
+test("Artifacts hides the Closeout view for a run that never produced one", () => {
+  // Act
   render(<ArtifactsPanel run={completedRun()} focusedStageId={null} d={d} />);
-  expect(screen.queryByTestId("artifact-view-closeout")).toBeNull();
 
-  cleanup();
+  // Assert
+  expect(screen.queryByTestId("artifact-view-closeout")).toBeNull();
+});
+
+test("opening the Closeout view from Artifacts shows the report", () => {
+  // Arrange
   render(
-    <ArtifactsPanel run={completedRun(closeout())} focusedStageId={null} d={d} />,
+    <ArtifactsPanel
+      run={completedRun({ closeout: closeout() })}
+      focusedStageId={null}
+      d={d}
+    />,
   );
 
+  // Act
   fireEvent.click(screen.getByTestId("artifact-view-closeout"));
+
+  // Assert
   expect(screen.getByTestId("closeout-panel").textContent).toContain(
     "Shipped the milestone dashboard.",
   );

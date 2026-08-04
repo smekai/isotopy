@@ -1,18 +1,13 @@
-# Testing
+---
+name: write-tests
+description: How a test in this repo must be written — the AAAAA phases, one action per test, no logic in a test body, generators over flag-driven factories, and which layer a check belongs in. Load before adding or restructuring any test.
+---
 
-How this repo is tested, and — more usefully — **how a test here must be written**.
+# Writing a test in this repo
 
-> Parts of this file are the source for generated artifacts: the `write-tests`
-> Claude Code skill and the shipped QA Engineer persona
-> (`packages/server/src/domain/skills/personas/tester.md`). Edit the `gen:`
-> blocks below and run `pnpm gen:skills`. A drift check fails CI otherwise.
->
-> Four blocks — `testing-shared`, `testing-skill`, `tester-persona-head`,
-> `tester-persona-tail` — delimited by `<!-- gen:NAME:start -->` /
-> `<!-- gen:NAME:end -->`. `testing-shared` is reused **verbatim** by the persona,
-> which runs inside arbitrary repositories: nothing ADHD-specific may enter it.
+> Generated from `docs/testing.md`. Do not edit here — edit the
+> source and run `pnpm gen:skills`.
 
-<!-- gen:testing-shared:start -->
 ## Writing a test: AAAAA
 
 Per [the AAAAA article](https://medium.com/bolt-labs/aaaaa-testing-96583245ae24),
@@ -127,9 +122,7 @@ change drags it along, and that a red suite stops meaning something is broken.
 
 Deleting a test is therefore a legitimate outcome of writing one. Weakening an
 assertion to make a suite pass is not.
-<!-- gen:testing-shared:end -->
 
-<!-- gen:testing-skill:start -->
 ## Applying this in the ADHD repo
 
 ### The layers
@@ -262,159 +255,3 @@ pnpm test          # component tests + specs (fast, free, no CLI needed)
 pnpm test:watch    # same, in watch mode
 pnpm e2e           # Playwright, free + seeded tiers
 ```
-<!-- gen:testing-skill:end -->
-
-## Merge protection
-
-`main` is protected: a change reaches it through a pull request that cannot merge
-until CI is green. The ruleset lives on GitHub, not in this repo — configured at
-**Settings → Rules → Rulesets → New branch ruleset**:
-
-| Setting | Value |
-| --- | --- |
-| Target / enforcement | `main`, Active |
-| Require a pull request before merging | ☑ — 0 required approvals (solo repo) |
-| Require status checks to pass | ☑ — the four below |
-| Require branches to be up to date | ☐ — see below |
-| Block force pushes | ☑ |
-| Bypass list | `Repository admin` |
-
-The required checks must be named exactly as the workflow renders them. A name
-that matches no job is silently never required, which looks identical to a
-working gate until something red merges:
-
-- `checks`
-- `e2e`
-- `windows-latest core checks`
-- `macos-latest core checks`
-
-The last two come from the `cross-platform` matrix job's
-`name: ${{ matrix.os }} core checks`, not from the job id.
-
-"Require branches to be up to date" stays **off** deliberately: with four jobs
-and a single maintainer it forces a rebase-and-rerun cycle on every merge for no
-real safety gain. Admin bypass stays **on** so a docs typo or a CI fix is not
-gated behind its own broken CI. See
-[`decisions.md`](./decisions.md), 2026-08-04.
-
-## Why the live test still exists
-
-It no longer proves the boxes chain — `pm-dev-test-pipeline.comp.ts` does that
-for free, including that each prompt quotes every upstream report and that all
-three boxes share one workspace. The live test now answers only the question
-a mock cannot: *does the real CLI still work?* — found on PATH, authenticated,
-honouring `--model`, emitting parseable output, writing files where expected.
-
-## Forcing a plan limit by hand
-
-A limit is the one behaviour you cannot wait for on demand, so every adapter
-takes a binary override — `ADHD_CLAUDE_PATH`, `ADHD_CODEX_PATH`,
-`ADHD_CURSOR_PATH`. Point one at a stub that prints a limit line to **stderr**
-and exits non-zero, and the real adapter, the real subprocess harness and the
-real detection patterns all run. No code change, no test hook.
-
-macOS / Linux:
-
-```bash
-cat > /tmp/fake-claude <<'EOF'
-#!/bin/sh
-echo "You've hit your session limit · resets 4:30pm (Europe/Tallinn)" >&2
-exit 1
-EOF
-chmod +x /tmp/fake-claude
-ADHD_CLAUDE_PATH=/tmp/fake-claude pnpm dev
-```
-
-Windows (PowerShell) — it must be `.cmd` or `.bat`, which is what
-`commandNeedsWindowsShell` looks for:
-
-```powershell
-@'
-@echo off
-echo You've hit your session limit - resets 4:30pm (Europe/Tallinn) 1>&2
-exit /b 1
-'@ | Out-File -Encoding ascii $env:TEMP\fake-claude.cmd
-$env:ADHD_CLAUDE_PATH = "$env:TEMP\fake-claude.cmd"; pnpm dev
-```
-
-Start any run: the stage goes `blocked`, the popup names the reset in your own
-timezone and counts down, and the rail shows `BLOCKED`. Kill the server with the
-run parked and `pnpm dev` again — it comes back still parked. To watch it resume
-on its own instead of waiting until 4:30pm, use a short delay the parser
-understands: `try again in 20 seconds`.
-
-`engine-limit-adapters.comp.ts` automates exactly this for all three engines.
-
-## Cross-platform notes
-
-- Temp roots come from `os.tmpdir()` + `mkdtemp`, never a hardcoded `/tmp`.
-- `dispose()` shuts the orchestrator down (cancelling in-flight runs and
-  draining queued writes) **before** deleting the temp directory. On Windows a
-  rename still in flight makes `fs.rm` throw `EBUSY`; the delete also retries and
-  tolerates failure, since a stray temp directory is untidy, not a test failure.
-- The component suite never reaches `engines/subprocess.ts`, so it has no
-  platform-specific behaviour to diverge on.
-
-## The QA Engineer persona
-
-The blocks below are the shipped persona's own prose, wrapped around the shared
-standard above by `pnpm gen:skills`. They are not documentation of this repo —
-they are the prompt an ADHD QA step runs with, in whatever repository it lands.
-
-<!-- gen:tester-persona-head:start -->
-# Role: QA Engineer
-
-You are a comprehensive quality engineer responsible for automated and
-interactive product verification. Choose the smallest reliable mix of checks
-that proves the assigned requirements and exposes meaningful regression risk.
-
-## Persona and assignment
-
-You are an ordinary agent-backed workflow step, like Product Manager,
-Developer, and the other personas. This file defines your stable identity and
-working principles. The workflow step supplies the current task, upstream
-handoffs, required evidence, and verdict rules.
-
-Automated QA, Playwright end-to-end testing, and focused exploratory testing
-are capabilities of this one persona. They are not separate agents.
-
-## Responsibilities
-
-- Review requirements, design or architecture handoffs, and the implementation
-  diff.
-- Inspect the repository and run its relevant build, lint, typecheck, and test
-  scripts.
-- Decide whether unit, integration, or end-to-end coverage is needed for the
-  changed behaviour.
-- Add durable automated tests when they protect required behaviour or a useful
-  regression boundary.
-- Use Playwright for interactive UI verification in the MVP. Prefer the
-  repository's existing Playwright configuration and run browser checks
-  headlessly.
-- Perform focused exploratory checks through Playwright when a stable automated
-  assertion cannot adequately express the risk.
-- Report actual commands, results, screenshots, traces, coverage gaps, and
-  relevant platform limitations in the normal stage handoff.
-- Always terminate application and browser processes you started after
-  retaining required evidence.
-<!-- gen:tester-persona-head:end -->
-
-<!-- gen:tester-persona-tail:start -->
-Follow the repository's own testing conventions where they exist and are
-stricter than the above. Where they do not exist, the standard above is the
-default you write to.
-
-## Boundaries
-
-- Do not use or depend on an agent-native browser in the MVP; that work is
-  deferred to TASK-095.
-- Do not hide a product defect by weakening expectations or tests.
-- Do not silently rewrite production behaviour; report implementation defects
-  for the Developer.
-- Do not claim a check ran when it was only inspected or inferred.
-- Never delete permanent tests, user work, retained evidence, or historical run
-  records during cleanup.
-
-Be skeptical, reproducible, and clear about verified facts versus remaining
-risk.
-<!-- gen:tester-persona-tail:end -->

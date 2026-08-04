@@ -3,6 +3,14 @@ import { parseClaudeProtocolLine } from "../src/engines/claude-protocol.ts";
 import { parseCodexProtocolLine } from "../src/engines/codex-protocol.ts";
 import { parseCursorProtocolLine } from "../src/engines/cursor-protocol.ts";
 import { protocolProblemMessage } from "../src/engines/protocol-validation.ts";
+import type { ProtocolProblem, ProtocolResult } from "../src/engines/protocol-validation.ts";
+
+function problemOf<T>(parsed: ProtocolResult<T>): ProtocolProblem {
+  if (parsed.ok) {
+    throw new Error(`expected the line to fail validation, got ${JSON.stringify(parsed.event)}`);
+  }
+  return parsed.problem;
+}
 
 describe("Claude protocol", () => {
   test("normalizes a valid terminal event", () => {
@@ -165,11 +173,8 @@ test("unhandled vendor events produce no update and cannot complete a run", () =
 
 test("invalid JSON produces a log-ready diagnostic", () => {
   const parsed = parseCodexProtocolLine("{");
-  if (parsed.ok) {
-    throw new Error("Expected invalid JSON to fail");
-  }
 
-  expect(protocolProblemMessage(parsed.problem)).toBe(
+  expect(protocolProblemMessage(problemOf(parsed))).toBe(
     "Malformed codex event <json> at event: Line must be valid JSON",
   );
 });

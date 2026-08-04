@@ -15,6 +15,49 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-04 — The testing standard is generated, and enforced by lint
+
+**Context:** AAAAA was described in `docs/testing.md` but practised in 10 of ~60 test
+files. A standard that lives only in a doc no agent reliably opens is a suggestion, and
+the doc had drifted to carry two of the article's rules rather than its actual thesis —
+that logic belongs in the application, not the test.
+
+**Decision:** the transferable half of the standard is a `gen:` block in
+[`testing.md`](./testing.md), emitted into both the `write-tests` Claude Code skill and
+the shipped QA Engineer persona — the same generator, and the same drift check in CI,
+that Architect already uses. The split is strict: `testing-shared` ships into arbitrary
+repositories, so `FakeEngine`, `harness.ts` and `ADHD_HOME` stay in `testing-skill`.
+
+**"No logic in a test body" is an ESLint rule**, not a review note: `if`/`for`/`while`/
+`try` inside a `test()` or `it()` callback is an error under `packages/*/test/**` and
+`packages/ui/e2e/**`, with `**/support/**` exempt because that is where the loops belong.
+Writing it as a lint rule found two violations in `e2e/` that a manual sweep had missed.
+
+**Rejected:** hand-writing the skill beside the doc — two copies of a standard drift, and
+the shipped persona (which said nothing about *how* to write a test) is exactly the second
+consumer that makes generation worth its machinery.
+
+---
+
+## 2026-08-04 — `main` merges only on green CI, with admin bypass
+
+**Context:** nothing stopped a red branch reaching `main`; CI reported, but did not gate.
+
+**Decision:** a GitHub ruleset requires a pull request and four passing checks (`checks`,
+`e2e`, `windows-latest core checks`, `macos-latest core checks`) before merge. The
+settings are recorded in [`testing.md`](./testing.md#merge-protection) because they live
+on GitHub, not in this repo, and an unrecorded server-side setting is one nobody can
+review or restore.
+
+**Repository admin keeps bypass.** A hard gate with no escape hatch puts a CI fix behind
+its own broken CI. "Require branches to be up to date" stays off: with four jobs and a
+single maintainer it forces a rebase-and-rerun on every merge for no real safety gain.
+
+**Rejected:** requiring status checks without requiring a PR — it gates nothing that a
+direct push does not simply skip.
+
+---
+
 ## 2026-08-03 — Machinery is declared, not inferred from a log level
 
 **Context:** the transcript decided a line was a tool call by testing

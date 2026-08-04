@@ -2,6 +2,9 @@
 // and a user who does not know it stopped. Every button here spends money or
 // changes which harness the rest of the run uses, so a mis-wired payload is not
 // a cosmetic bug — it silently resumes on the wrong model.
+//
+// Anticipate is the handler bag: the component's whole outward effect is which
+// callback it invokes with what, so the spies are the assertion, declared up front.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { LimitResolution } from "@adhd/core";
@@ -46,92 +49,120 @@ afterEach(() => {
 });
 
 test("the countdown says how long is left, not just that something is wrong", () => {
+  // Act
   show(handlers());
 
+  // Assert
   expect(screen.getByTestId("limit-countdown").textContent).toBe("1h 30m 00s");
 });
 
 test("a limit with no parsed reset time says so instead of showing a blank countdown", () => {
+  // Act
   show(handlers(), { resetAt: undefined });
 
+  // Assert
   expect(screen.queryByTestId("limit-countdown")).toBeNull();
   expect(screen.getByText(LIMIT_COPY.noResetTime)).toBeTruthy();
 });
 
 test("the raw harness line is shown so the parsed reset can be checked against it", () => {
+  // Act
   show(handlers(), { raw: "You've hit your session limit · resets 4:30pm (Europe/Tallinn)" });
 
+  // Assert
   expect(screen.getByText(/resets 4:30pm \(Europe\/Tallinn\)/)).toBeTruthy();
 });
 
 test("picking a cheaper model resolves with that model id", () => {
+  // Arrange
   const spies = handlers();
   show(spies);
 
+  // Act
   fireEvent.click(screen.getByText("Haiku"));
 
+  // Assert
   expect(spies.onResolve).toHaveBeenCalledWith({ choice: "switch-model", model: "haiku" });
 });
 
 test("the model already in use is not offered as a way out of its own limit", () => {
+  // Act
   show(handlers(), { model: "opus" });
 
+  // Assert
   expect(screen.queryByText("Opus")).toBeNull();
 });
 
 test("a model that bills usage credits is not offered as an escape from a plan limit", () => {
+  // Act
   show(handlers());
 
-  // Sonnet · 1M context costs more, not less — it cannot resolve a plan limit.
+  // Assert — Sonnet · 1M context costs more, not less; it cannot resolve a plan limit.
   expect(screen.queryByText(/1M context/)).toBeNull();
 });
 
 test("switching harness names the engine and leaves the model to the new harness", () => {
+  // Arrange
   const spies = handlers();
   show(spies);
 
+  // Act
   fireEvent.click(screen.getByText("Codex"));
 
+  // Assert
   expect(spies.onResolve).toHaveBeenCalledWith({ choice: "switch-engine", engine: "codex" });
 });
 
 test("retry now resolves without changing any setting", () => {
+  // Arrange
   const spies = handlers();
   show(spies);
 
+  // Act
   fireEvent.click(screen.getByText(LIMIT_COPY.retryNow));
 
+  // Assert
   expect(spies.onResolve).toHaveBeenCalledWith({ choice: "retry-now" });
 });
 
 test("keeping the wait dismisses the popup without resolving the run", () => {
+  // Arrange
   const spies = handlers();
   show(spies);
 
+  // Act
   fireEvent.click(screen.getByText(LIMIT_COPY.keepWaiting));
 
+  // Assert
   expect(spies.onDismiss).toHaveBeenCalled();
   expect(spies.onResolve).not.toHaveBeenCalled();
 });
 
 test("Escape dismisses rather than resolving, so the run keeps waiting", () => {
+  // Arrange
   const spies = handlers();
   show(spies);
 
+  // Act
   fireEvent.keyDown(document, { key: "Escape" });
 
+  // Assert
   expect(spies.onDismiss).toHaveBeenCalled();
   expect(spies.onResolve).not.toHaveBeenCalled();
 });
 
 test("the dialog announces itself as modal so a screen reader traps into it", () => {
+  // Act
   show(handlers());
 
+  // Assert
   expect(screen.getByTestId("limit-modal").getAttribute("aria-modal")).toBe("true");
 });
 
 test("a browser without the Notification API hides the enable-notifications offer", () => {
+  // Act
   show(handlers());
 
+  // Assert
   expect(screen.queryByText(LIMIT_COPY.enableNotifications)).toBeNull();
 });

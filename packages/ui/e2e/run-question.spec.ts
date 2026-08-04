@@ -112,11 +112,14 @@ async function openAskingRun(page: Page): Promise<void> {
 }
 
 test("a parked question reads as a question, not as ordinary narration", async ({ page }) => {
+  // Anticipate — every endpoint the page will reach, fulfilled from the fixture.
   await seedAskingRun(page);
+
+  // Act
   await openAskingRun(page);
 
-  // The question is its own block, so it cannot be mistaken for the narration
-  // above it — that distinction is the whole reason `kind: "question"` exists.
+  // Assert — the question is its own block, so it cannot be mistaken for the
+  // narration above it; that distinction is why `kind: "question"` exists.
   const question = page.getByTestId("chat-question");
   await expect(question).toHaveText(QUESTION);
 
@@ -129,11 +132,14 @@ test("a parked question reads as a question, not as ordinary narration", async (
 });
 
 test("the composer asks for an answer and already has focus", async ({ page }) => {
+  // Anticipate
   await seedAskingRun(page);
+
+  // Act
   await openAskingRun(page);
 
-  // A parked run is waiting on this one control, so it takes focus itself —
-  // the user should be able to type the answer without reaching for the mouse.
+  // Assert — a parked run is waiting on this one control, so it takes focus
+  // itself; the user should be able to answer without reaching for the mouse.
   const composer = page.getByTestId("chat-composer");
   await expect(composer).toHaveAttribute("placeholder", "Answer the question…");
   await expect(composer).toBeFocused();
@@ -142,17 +148,21 @@ test("the composer asks for an answer and already has focus", async ({ page }) =
 test("the rail shows the run as ASKING so a parked run is visible from anywhere", async ({
   page,
 }) => {
+  // Anticipate
   await seedAskingRun(page);
+
+  // Act
   await openAskingRun(page);
 
-  // The point of the rail is that a run parked on a question is discoverable
-  // without opening it — the user is not watching this tab.
+  // Assert — the point of the rail is that a run parked on a question is
+  // discoverable without opening it; the user is not watching this tab.
   await expect(
     page.getByTestId("run-card").filter({ hasText: "seeded parked question" }),
   ).toContainText("ASKING");
 });
 
 test("the typed answer is posted to the run's message endpoint", async ({ page }) => {
+  // Anticipate — the seeded run, plus a recording route for the answer itself.
   await seedAskingRun(page);
 
   const posted: Request[] = [];
@@ -167,11 +177,14 @@ test("the typed answer is posted to the run's message endpoint", async ({ page }
     },
   );
 
+  // Arrange
   await openAskingRun(page);
   await page.getByTestId("chat-composer").fill(ANSWER);
+
+  // Act
   await page.keyboard.press("Enter");
 
-  // Enter sends; the server is what turns this into the resume signal.
+  // Assert — Enter sends; the server turns this into the resume signal.
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0]?.method()).toBe("POST");
   expect(posted[0]?.postDataJSON()).toEqual({ text: ANSWER });

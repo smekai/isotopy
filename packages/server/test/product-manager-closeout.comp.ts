@@ -1,7 +1,7 @@
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, expect, test } from "vitest";
 import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@adhd/core";
 import type { ProjectPath } from "../src/paths.ts";
 import { applyProductManagerCloseout } from "../src/services/product-manager-closeout.ts";
@@ -62,10 +62,9 @@ afterEach(async () => {
   );
 });
 
-describe("Product Manager closeout", () => {
-  it("moves only completed work, deduplicates follow-ups, and bounds cleanup", async () => {
-    const { project, run } = await fixture();
-    const report = {
+/** A report that delivers TASK-001, leaves TASK-002 open, and asks for two cleanups. */
+function partialDeliveryReport() {
+  return {
       summary: "Delivered one task and preserved one unresolved task.",
       deliveredScope: ["TASK-001"],
       decisions: ["Keep the adapter boundary"],
@@ -100,90 +99,118 @@ describe("Product Manager closeout", () => {
         },
       ],
       nextRecommendation: "Resolve TASK-002",
-    };
-    const output = `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: FAIL`;
+  };
+}
 
-    const first = await applyProductManagerCloseout(project, run, output);
-    const second = await applyProductManagerCloseout(project, run, output);
+function closeoutOutput(report: object, verdict: "PASS" | "FAIL"): string {
+  return `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: ${verdict}`;
+}
 
-    expect(first.validationErrors).toEqual([]);
-    expect(first.createdTasks).toMatchObject([
-      { id: "TASK-003", backend: "taskplanner" },
-    ]);
-    expect(first.cleanup).toEqual({
-      removed: ["browser-profile"],
-      rejected: ["../user-work.txt"],
-    });
-    expect(second.createdTasks).toEqual([]);
-    expect(await readFile(path.join(rootOf(project), ".tasks", "DONE.md"), "utf8"))
-      .toContain("## TASK-001:");
-    expect(
-      await readFile(path.join(rootOf(project), ".tasks", "IN_PROGRESS.md"), "utf8"),
-    ).toContain("## TASK-002:");
-    const backlog = await readFile(
-      path.join(rootOf(project), ".tasks", "BACKLOG.md"),
+test("only the tasks the report calls completed move to Done", async () => {
+  // Arrange
+  const { project, run } = await fixture();
+
+  // Act
+  const record = await applyProductManagerCloseout(
+    project,
+    run,
+    closeoutOutput(partialDeliveryReport(), "FAIL"),
+  );
+
+  // Assert
+  expect(record.validationErrors).toEqual([]);
+  expect(record.createdTasks).toMatchObject([{ id: "TASK-003", backend: "taskplanner" }]);
+  expect(await readFile(path.join(project.root, ".tasks", "DONE.md"), "utf8"))
+    .toContain("## TASK-001:");
+  expect(await readFile(path.join(project.root, ".tasks", "IN_PROGRESS.md"), "utf8"))
+    .toContain("## TASK-002:");
+  expect(
+    await readFile(
+      path.join(project.dataDir, "runs", run.id, "closeout", "closeout.md"),
       "utf8",
-    );
-    expect(backlog.match(/ADHD-FINDING:/g)).toHaveLength(1);
-    await expect(
-      access(path.join(project.dataDir, "runs", run.id, "tmp", "browser-profile")),
-    ).rejects.toThrow();
-    expect(await readFile(path.join(rootOf(project), "user-work.txt"), "utf8"))
-      .toBe("preserve");
-    expect(
-      await readFile(
-        path.join(project.dataDir, "runs", run.id, "closeout", "closeout.md"),
-        "utf8",
-      ),
-    ).toContain("# Product Manager closeout");
-  });
-
-  it("keeps findings and follow-up tasks when the agent writes a hyphenated severity", async () => {
-    const { project, run } = await fixture();
-    const report = {
-      summary: "Delivered the work with one cosmetic gap.",
-      deliveredScope: ["TASK-001"],
-      decisions: [],
-      knowledge: [],
-      findings: [
-        {
-          id: "cosmetic-gap",
-          title: "Spacing is off on the dashboard",
-          severity: "non-blocking",
-          evidence: "Milestone dashboard",
-        },
-      ],
-      tasks: [
-        {
-          findingId: "cosmetic-gap",
-          title: "Fix the dashboard spacing",
-          description: "Align the feature cards.",
-          priority: "P3",
-          tags: ["server"],
-        },
-      ],
-      completedTaskIds: ["TASK-001", "TASK-002"],
-      unresolvedTaskIds: [],
-      cleanup: [],
-    };
-
-    const record = await applyProductManagerCloseout(
-      project,
-      run,
-      `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: PASS`,
-    );
-
-    expect(record.validationErrors).toEqual([]);
-    expect(record.report.findings).toMatchObject([{ severity: "non_blocking" }]);
-    expect(record.createdTasks).toMatchObject([
-      { id: "TASK-003", backend: "taskplanner" },
-    ]);
-    expect(
-      await readFile(path.join(rootOf(project), ".tasks", "BACKLOG.md"), "utf8"),
-    ).toContain("Fix the dashboard spacing");
-  });
+    ),
+  ).toContain("# Product Manager closeout");
 });
 
-function rootOf(project: ProjectPath): string {
-  return project.root;
-}
+test("cleanup deletes inside the run directory and refuses to escape it", async () => {
+  // Arrange
+  const { project, run } = await fixture();
+
+  // Act
+  const record = await applyProductManagerCloseout(
+    project,
+    run,
+    closeoutOutput(partialDeliveryReport(), "FAIL"),
+  );
+
+  // Assert — a traversal out of the run directory is rejected, not obeyed.
+  expect(record.cleanup).toEqual({
+    removed: ["browser-profile"],
+    rejected: ["../user-work.txt"],
+  });
+  await expect(
+    access(path.join(project.dataDir, "runs", run.id, "tmp", "browser-profile")),
+  ).rejects.toThrow();
+  expect(await readFile(path.join(project.root, "user-work.txt"), "utf8")).toBe("preserve");
+});
+
+test("closing the same run out twice does not file the follow-up task again", async () => {
+  // Arrange — a run already closed out once.
+  const { project, run } = await fixture();
+  const output = closeoutOutput(partialDeliveryReport(), "FAIL");
+  await applyProductManagerCloseout(project, run, output);
+
+  // Act
+  const second = await applyProductManagerCloseout(project, run, output);
+
+  // Assert
+  expect(second.createdTasks).toEqual([]);
+  const backlog = await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8");
+  expect(backlog.match(/ADHD-FINDING:/g)).toHaveLength(1);
+});
+
+test("keeps findings and follow-up tasks when the agent writes a hyphenated severity", async () => {
+  // Arrange
+  const { project, run } = await fixture();
+  const report = {
+    summary: "Delivered the work with one cosmetic gap.",
+    deliveredScope: ["TASK-001"],
+    decisions: [],
+    knowledge: [],
+    findings: [
+      {
+        id: "cosmetic-gap",
+        title: "Spacing is off on the dashboard",
+        severity: "non-blocking",
+        evidence: "Milestone dashboard",
+      },
+    ],
+    tasks: [
+      {
+        findingId: "cosmetic-gap",
+        title: "Fix the dashboard spacing",
+        description: "Align the feature cards.",
+        priority: "P3",
+        tags: ["server"],
+      },
+    ],
+    completedTaskIds: ["TASK-001", "TASK-002"],
+    unresolvedTaskIds: [],
+    cleanup: [],
+  };
+
+  // Act
+  const record = await applyProductManagerCloseout(
+    project,
+    run,
+    closeoutOutput(report, "PASS"),
+  );
+
+  // Assert — the agent boundary normalises the prose the model wrote.
+  expect(record.validationErrors).toEqual([]);
+  expect(record.report.findings).toMatchObject([{ severity: "non_blocking" }]);
+  expect(record.createdTasks).toMatchObject([{ id: "TASK-003", backend: "taskplanner" }]);
+  expect(
+    await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8"),
+  ).toContain("Fix the dashboard spacing");
+});

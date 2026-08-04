@@ -10,31 +10,56 @@ test.beforeEach(async ({ page }) => {
   await resetPreferences(page);
 });
 
-test("empty state shows the pipeline dropdown and a disabled start button", async ({ page }) => {
+const DEFAULT_PIPELINE = "Product Manager + Developer + QA";
+
+test("the empty state cannot start a run until a task is described", async ({ page }) => {
+  // Act
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Product Manager + Developer + QA" })).toBeVisible();
+
+  // Assert
+  await expect(page.getByRole("button", { name: DEFAULT_PIPELINE })).toBeVisible();
   await expect(page.getByText("What do you want to build?")).toBeVisible();
   await expect(page.getByRole("button", { name: /Start run/ })).toBeDisabled();
+});
 
-  // the dropdown opens with every pipeline and closes on Escape
-  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
+test("the pipeline dropdown offers every pipeline and closes on Escape", async ({ page }) => {
+  // Arrange
+  await page.goto("/");
+
+  // Act
+  await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
+
+  // Assert
   await expect(page.getByRole("option")).toHaveCount(3);
   await expect(page.getByRole("option", { name: /Full Delivery/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /Product Manager \+ Developer \+ QA/ })).toBeVisible();
+
   await page.keyboard.press("Escape");
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeHidden();
+});
 
+test("describing a task arms both Start run and Plan milestone", async ({ page }) => {
+  // Arrange
+  await page.goto("/");
+
+  // Act
   await page.getByPlaceholder("Describe the task...").fill("smoke");
+
+  // Assert
   await expect(page.getByRole("button", { name: /Start run/ })).toBeEnabled();
   await expect(page.getByTestId("plan-milestone")).toBeEnabled();
 });
 
 test("Full Delivery previews the revised persona team", async ({ page }) => {
+  // Arrange
   await page.goto("/");
-  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
+  await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
+
+  // Act
   await page.getByRole("option", { name: /Full Delivery/ }).click();
 
+  // Assert
   await expect(page.getByText("What should the delivery team build?")).toBeVisible();
   await expect(page.getByText("Product Manager", { exact: true })).toHaveCount(2);
   await expect(page.getByText("Product Designer", { exact: true })).toHaveCount(1);
@@ -46,10 +71,14 @@ test("Full Delivery previews the revised persona team", async ({ page }) => {
 });
 
 test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
+  // Arrange
   await page.goto("/");
-  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
+  await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
+
+  // Act
   await page.getByRole("option", { name: /Single agent/ }).click();
 
+  // Assert
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
 
@@ -60,11 +89,14 @@ test("single-agent mode shows the folder as read-only context, not an input", as
 });
 
 test("Setup → AI Harness lists engines, status, models, and permission modes", async ({ page }) => {
+  // Arrange
   await page.goto("/");
   await page.getByRole("button", { name: "Setup" }).click();
+
+  // Act
   await page.getByRole("button", { name: "AI Harness" }).click();
 
-  // All three harnesses ship now — nothing is left behind a SOON pill.
+  // Assert — all three harnesses ship now — nothing is left behind a SOON pill.
   await expect(page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ })).toBeEnabled();
   await expect(page.getByRole("button", { name: /Cursor Cursor CLI agent/ })).toBeEnabled();
   await expect(page.getByRole("button", { name: /Codex OpenAI Codex CLI/ })).toBeEnabled();
@@ -78,31 +110,38 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   const model = page.locator("select");
   await expect(model).toBeVisible();
   await expect(model).toHaveValue("sonnet");
-  for (const id of ["", "opus", "sonnet", "haiku"]) {
-    await expect(model.locator(`option[value="${id}"]`)).toHaveCount(1);
-  }
+  const offered = await model
+    .locator("option")
+    .evaluateAll<string[], HTMLOptionElement>((options) => options.map((option) => option.value));
+  expect(offered).toEqual(expect.arrayContaining(["", "opus", "sonnet", "haiku"]));
 
   await expect(page.getByRole("button", { name: /Never block \(recommended\)/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Accept edits only/ })).toBeVisible();
 });
 
 test("AI Harness lists the Claude connection modes inline", async ({ page }) => {
+  // Arrange
   await page.goto("/");
   await page.getByRole("button", { name: "Setup" }).click();
+
+  // Act
   await page.getByRole("button", { name: "AI Harness" }).click();
 
-  // Connection modes now live inside the AI Harness section (no separate tab).
+  // Assert — connection modes live inside AI Harness now, with no separate tab.
   await expect(page.getByRole("button", { name: /Claude subscription/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Anthropic API key/ })).toBeVisible();
 });
 
 test("selecting Cursor swaps the model options and connection modes", async ({ page }) => {
+  // Arrange
   await page.goto("/");
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
+
+  // Act
   await page.getByRole("button", { name: /Cursor Cursor CLI agent/ }).click();
 
-  // Cursor defaults to Auto (""), which lets the CLI pick. Its roster comes
+  // Assert — Cursor defaults to Auto (""), which lets the CLI pick. Its roster comes
   // from `agent models` when the CLI is installed, so only Auto is guaranteed.
   const model = page.locator("select");
   await expect(model).toHaveValue("");
@@ -112,12 +151,13 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
   await expect(page.getByRole("button", { name: /Cursor subscription/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Cursor API key/ })).toBeVisible();
 
-  // the engine is stored per project now; restore the default for later tests
+  // Cleanup: the engine is stored per project now, so restore the default.
   await page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ }).click();
   await expect(page.locator("select")).toHaveValue("sonnet");
 });
 
 test("pipeline, model, and permission mode persist across a reload", async ({ page }) => {
+  // Arrange — change all three, then close Setup.
   await page.goto("/");
   await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
@@ -128,9 +168,10 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   await page.getByRole("button", { name: /Accept edits only/ }).click();
   await page.getByRole("button", { name: "Close" }).click();
 
+  // Act
   await page.reload();
 
-  // pipeline + model resurface in the empty-state caption
+  // Assert — pipeline and model resurface in the empty-state caption.
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · haiku/)).toBeVisible();
 
@@ -144,31 +185,37 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
 });
 
 test("preferences survive a browser with no storage of its own", async ({ page }) => {
+  // Arrange — wiping storage is what "open it in another browser" means:
+  // nothing is carried over but the server's own state.
   await page.goto("/");
   await writePreferences(page, { pipelineId: "solo" });
-
-  // Wiping storage is what "open it in another browser" means: nothing is
-  // carried over but the server's own state.
   await page.evaluate(() => localStorage.clear());
+
+  // Act
   await page.reload();
 
+  // Assert
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
 });
 
 test("legacy full model IDs migrate to standard-context CLI aliases", async ({ page }) => {
+  // Arrange
   await page.goto("/");
   await writePreferences(page, { engineModels: { "claude-code": "claude-sonnet-4-6" } });
+
+  // Act
   await page.reload();
 
-  await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
+  // Assert
+  await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
-
   // the alias is rewritten in the active project's own stored preferences
   expect((await readPreferences(page)).engineModels["claude-code"]).toBe("sonnet");
 });
 
 test("a preference left in localStorage by an older build is adopted once", async ({ page }) => {
+  // Arrange
   await page.goto("/");
   await writePreferences(page, { pipelineId: "pm-dev-test" });
   const { activeProjectId } = (await (await page.request.get("/projects")).json()) as {
@@ -178,8 +225,10 @@ test("a preference left in localStorage by an older build is adopted once", asyn
     (id) => localStorage.setItem(`adhd.${id}.pipelineId`, "solo"),
     activeProjectId,
   );
+  // Act
   await page.reload();
 
+  // Assert
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect
     .poll(async () => (await readPreferences(page)).pipelineId)
@@ -191,8 +240,10 @@ test("a preference left in localStorage by an older build is adopted once", asyn
 });
 
 test("the run rail is always present and offers a new run", async ({ page }) => {
+  // Act
   await page.goto("/");
 
+  // Assert
   const rail = page.getByRole("navigation", { name: "Runs" });
   await expect(rail).toBeVisible();
   await expect(rail.getByRole("button", { name: "New run" })).toBeVisible();

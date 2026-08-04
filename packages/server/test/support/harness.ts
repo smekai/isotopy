@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Hono } from "hono";
 import { RUN_SUMMARY_EVENT } from "@adhd/core";
-import type { EngineId, RunState, RunSummary } from "@adhd/core";
+import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
@@ -306,6 +306,25 @@ export function summariesOf(events: SseEvent[]): RunSummary[] {
   return events
     .filter((event) => event.event === RUN_SUMMARY_EVENT)
     .map((event) => JSON.parse(event.data) as RunSummary);
+}
+
+/**
+ * The first event of a type, narrowed to its variant. Replay overlap means the
+ * stream may carry the same event twice; a test asking for one wants the first.
+ */
+export function runEventOf<T extends RunEvent["type"]>(
+  events: SseEvent[],
+  type: T,
+): Extract<RunEvent, { type: T }> {
+  const match = events
+    .filter((event) => event.event === type)
+    .map((event) => JSON.parse(event.data) as RunEvent)
+    .find((event): event is Extract<RunEvent, { type: T }> => event.type === type);
+  if (!match) {
+    const seen = events.map((event) => event.event).join(", ");
+    throw new Error(`No "${type}" event in the stream. Saw: ${seen || "nothing"}`);
+  }
+  return match;
 }
 
 /**

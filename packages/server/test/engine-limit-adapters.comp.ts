@@ -78,15 +78,19 @@ afterAll(() => {
 
 describe("every harness reports a plan limit as a limit", () => {
   test("claude-code recognises its session-limit line and parses the named zone", async () => {
+    // Act
     const result = await runAdapter("claude-code");
 
+    // Assert
     expect(result.limit?.raw).toContain("session limit");
     expect(result.limit?.resetAt).toBeDefined();
   });
 
   test("codex recognises a rate limit and parses the retry delay it prints", async () => {
+    // Act
     const result = await runAdapter("codex");
 
+    // Assert
     expect(result.limit?.raw).toContain("rate limit");
     // "try again in 45 minutes" is a duration, so it needs no timezone at all.
     const waitMs = new Date(result.limit?.resetAt ?? 0).getTime() - Date.now();
@@ -95,17 +99,22 @@ describe("every harness reports a plan limit as a limit", () => {
   });
 
   test("cursor recognises a usage limit and parses a bare 24-hour clock", async () => {
+    // Act
     const result = await runAdapter("cursor");
 
+    // Assert
     expect(result.limit?.raw).toContain("Usage limit");
     expect(result.limit?.resetAt).toBeDefined();
   });
 
   test("an ordinary crash from the same binary is still a plain failure", async () => {
+    // Arrange — same binary, same failure ladder, a line that is not a limit.
     writeStub("claude", "Error: ENOENT no such file or directory");
 
+    // Act
     const result = await runAdapter("claude-code");
 
+    // Assert
     expect(result.limit).toBeUndefined();
     expect(result.success).toBe(false);
   });

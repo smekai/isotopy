@@ -9,6 +9,13 @@ Read `docs/testing.md`, `docs/e2e-test-plan.md`, and the `run-app` skill before
 testing a UI flow. Use the lowest-cost test layer that can prove the
 requirement.
 
+**Every test you write follows the AAAAA standard** — Arrange, Anticipate, Act,
+Assert, AI. One action per test, no `if`/`for`/`try` in a test body (ESLint
+enforces this; loops and polls belong in `test/support/`), atomic anticipations
+rather than flag-driven mock factories. The full standard is in `docs/testing.md`
+and in the `write-tests` skill; load it before adding a test rather than copying
+the shape of whichever file you happened to open.
+
 ## Choose the test layer
 
 1. Use component or server tests for workflow semantics, persistence, API

@@ -1,3 +1,8 @@
+// Component test: the panel is where a generated plan stops being the model's
+// and becomes the user's. Both paths out of it spend money or mint tasks — an
+// AI revision starts a fresh planning run, approval writes the task board — so
+// what matters is that each button reaches exactly the endpoint it claims to,
+// carrying the edits currently on screen.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { defaultProjectPreferences } from "@adhd/core";
@@ -85,20 +90,30 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-test("the generated proposal is editable, approvable, and revisable", async () => {
+/** One anticipation per endpoint the panel can reach — none of them branch. */
+function anticipateLoadedProposal(): void {
   vi.mocked(fetchMilestone).mockResolvedValue(milestone);
+}
+
+function anticipateProposalSave(): void {
   vi.mocked(updateMilestoneProposal).mockImplementation(async (_id, edited) => ({
     ...milestone,
     name: edited.name,
     goal: edited.goal,
     proposal: { ...proposal, ...edited, revision: 2 },
   }));
-  vi.mocked(approveMilestonePlan).mockResolvedValue({
-    ...milestone,
-    status: "active",
-  });
+}
+
+function anticipateApproval(): void {
+  vi.mocked(approveMilestonePlan).mockResolvedValue({ ...milestone, status: "active" });
+}
+
+function anticipateRevisionRun(): void {
   vi.mocked(reviseMilestonePlan).mockResolvedValue({ ...run, id: "r2" });
-  const onRunStarted = vi.fn();
+}
+
+/** Render the panel and wait for the loaded proposal to reach the form. */
+async function renderLoadedPanel(onRunStarted = vi.fn()): Promise<{ onRunStarted: typeof onRunStarted }> {
   render(
     <MilestonePlanPanel
       run={run}
@@ -107,17 +122,41 @@ test("the generated proposal is editable, approvable, and revisable", async () =
       onRunStarted={onRunStarted}
     />,
   );
-  const name = await screen.findByLabelText("Milestone name");
-  fireEvent.change(name, { target: { value: "Edited milestone" } });
+  await screen.findByLabelText("Milestone name");
+  return { onRunStarted };
+}
 
+test("requesting an AI revision starts a new planning run and reports its id", async () => {
+  // Anticipate
+  anticipateLoadedProposal();
+  anticipateRevisionRun();
+  const { onRunStarted } = await renderLoadedPanel();
   fireEvent.change(screen.getByLabelText("Revision request"), {
     target: { value: "Split the UI task" },
   });
+
+  // Act
   fireEvent.click(screen.getByRole("button", { name: "Request AI revision" }));
+
+  // Assert
   await waitFor(() => expect(reviseMilestonePlan).toHaveBeenCalled());
   await waitFor(() => expect(onRunStarted).toHaveBeenCalledWith("r2"));
+});
 
+test("approving saves the edits made to the form before it approves", async () => {
+  // Anticipate
+  anticipateLoadedProposal();
+  anticipateProposalSave();
+  anticipateApproval();
+  await renderLoadedPanel();
+  fireEvent.change(screen.getByLabelText("Milestone name"), {
+    target: { value: "Edited milestone" },
+  });
+
+  // Act
   fireEvent.click(screen.getByTestId("approve-milestone-plan"));
+
+  // Assert — approving an unsaved edit would activate the wrong plan.
   await waitFor(() =>
     expect(updateMilestoneProposal).toHaveBeenCalledWith(
       "m1",

@@ -135,12 +135,17 @@ async function attachSeededRun(page: Page): Promise<void> {
 
 const PM_DEV_TEST = "Product Manager + Developer + QA";
 
-test("the default pipeline is selectable in the picker and previews all three boxes", async ({ page }) => {
+async function pickDefaultPipeline(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("button", { name: PM_DEV_TEST }).click();
   await page.getByRole("option", { name: new RegExp(PM_DEV_TEST.replace(/\+/g, "\\+")) }).click();
+}
 
-  // The trigger shows the chosen pipeline, and the composer copy follows.
+test("the default pipeline is selectable in the picker and previews all three boxes", async ({ page }) => {
+  // Act
+  await pickDefaultPipeline(page);
+
+  // Assert — the trigger shows the chosen pipeline, and the composer copy follows.
   await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
   await expect(page.getByText("What do you want to build?")).toBeVisible();
   await expect(
@@ -156,39 +161,69 @@ test("the default pipeline is selectable in the picker and previews all three bo
   await expect(page.getByText("Developer", { exact: true })).toHaveCount(1);
   await expect(page.getByText("QA Engineer", { exact: true })).toHaveCount(1);
 
-  // The choice survives a reload (stored server-side), like the other pipeline.
+});
+
+test("the pipeline choice is stored server-side, so it survives a reload", async ({ page }) => {
+  // Arrange
+  await pickDefaultPipeline(page);
+
+  // Act
   await page.reload();
+
+  // Assert
   await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
 });
 
 test("both boxes render as Developer and QA Engineer with their persona badges", async ({ page }) => {
+  // Anticipate
+  await seedRun(page);
+
+  // Act
+  await attachSeededRun(page);
+
+  // Assert — the status bar carries the engine this run used.
+  await expect(page.getByText("⬡ Claude Code · haiku")).toBeVisible();
+  await expect(page.getByTestId("stage-node-implementation")).toContainText("Developer");
+  await expect(page.getByTestId("stage-node-test")).toContainText("QA Engineer");
+});
+
+test("the Logs tab badges every stage, and only the verifier declares a verdict", async ({ page }) => {
+  // Anticipate
   await seedRun(page);
   await attachSeededRun(page);
 
-  // Status bar carries the engine this run used.
-  await expect(page.getByText("⬡ Claude Code · haiku")).toBeVisible();
-
-  await expect(page.getByTestId("stage-node-implementation")).toContainText("Developer");
-  await expect(page.getByTestId("stage-node-test")).toContainText("QA Engineer");
-
-  // The badges live on the Logs tab's per-stage header now that the stage panel
-  // is retired; a stage node filters that tab rather than opening a pane.
+  // Act — the badges live on the Logs tab's per-stage header now that the
+  // stage panel is retired.
   await page.getByTestId("run-tab-logs").click();
+
+  // Assert
   await expect(page.getByTestId("stage-profession")).toHaveText(["Developer", "QA Engineer"]);
   await expect(page.getByTestId("stage-persona")).toHaveText(["DEVELOPER", "TESTER"]);
-  // Only the verification box declares a verdict.
   await expect(page.getByTestId("stage-verdict")).toHaveText(["PASS"]);
+});
 
+test("clicking a stage node filters the log to that stage", async ({ page }) => {
+  // Anticipate
+  await seedRun(page);
+  await attachSeededRun(page);
+  await page.getByTestId("run-tab-logs").click();
+
+  // Act — a stage node filters the tab rather than opening a pane.
   await page.getByTestId("stage-node-implementation").click();
+
+  // Assert
   await expect(page.getByTestId("stage-profession")).toHaveText(["Developer"]);
   await expect(page.getByTestId("stage-verdict")).toHaveCount(0);
 });
 
 test("the chat carries what the boxes said, in order, and nothing else", async ({ page }) => {
+  // Anticipate
   await seedRun(page);
+
+  // Act
   await attachSeededRun(page);
 
-  // The chat is the body of a run now — no stage has to be clicked to see it.
+  // Assert — the chat is the body of a run now; no stage has to be clicked.
   const thread = page.getByTestId("chat-thread");
   await expect(thread).toContainText(DEV_PROSE);
   await expect(thread).toContainText(TESTER_PROSE);
@@ -208,10 +243,14 @@ test("the chat carries what the boxes said, in order, and nothing else", async (
 });
 
 test("the log holds the machinery the chat leaves out", async ({ page }) => {
+  // Anticipate
   await seedRun(page);
   await attachSeededRun(page);
 
+  // Act
   await page.getByTestId("run-tab-logs").click();
+
+  // Assert
   const log = page.getByTestId("stage-scroll");
   await expect(log).toContainText("Developer online · Claude Code · haiku");
   await expect(log).toContainText("Write greet.js");
@@ -219,34 +258,54 @@ test("the log holds the machinery the chat leaves out", async ({ page }) => {
 });
 
 test("the status bar totals what the run cost", async ({ page }) => {
+  // Anticipate
   await seedRun(page);
+
+  // Act
   await attachSeededRun(page);
 
-  // 0.18 + 0.07, summed across the boxes rather than stored on the run.
+  // Assert — 0.18 + 0.07, summed across the boxes rather than stored on the run.
   await expect(page.getByTestId("run-cost")).toHaveText("$0.25");
 });
 
-test("the Artifacts tab shows each box's own handoff.md", async ({ page }) => {
+test("the Artifacts tab opens on the first box's own handoff.md", async ({ page }) => {
+  // Anticipate
   await seedRun(page);
   await attachSeededRun(page);
 
-  // Regression guard for TASK-047: every stage used to show run.result, which
-  // holds only the last box's output.
+  // Act
   await page.getByTestId("run-tab-artifacts").click();
+
+  // Assert — regression guard for TASK-047: every stage used to show
+  // run.result, which holds only the last box's output.
   await expect(page.getByText("implementation/handoff.md")).toBeVisible();
   await expect(page.getByTestId("artifact-preview")).toContainText(DEV_MARKER);
   await expect(page.getByTestId("artifact-preview")).not.toContainText(TESTER_MARKER);
+});
 
+test("picking the other box's handoff swaps the preview to its output", async ({ page }) => {
+  // Anticipate
+  await seedRun(page);
+  await attachSeededRun(page);
+  await page.getByTestId("run-tab-artifacts").click();
+
+  // Act
   await page.getByText("test/handoff.md").click();
+
+  // Assert
   await expect(page.getByTestId("artifact-preview")).toContainText(TESTER_MARKER);
   await expect(page.getByTestId("artifact-preview")).not.toContainText(DEV_MARKER);
 });
 
 test("the solution folder is one click from the run, not three", async ({ page }) => {
+  // Anticipate
   await seedRun(page);
   await attachSeededRun(page);
-
   await page.getByTestId("run-tab-artifacts").click();
+
+  // Act
   await page.getByTestId("artifact-view-files").click();
+
+  // Assert
   await expect(page.getByTestId("artifact-files")).toBeVisible();
 });

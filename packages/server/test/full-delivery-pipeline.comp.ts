@@ -87,6 +87,7 @@ function anticipateDeliveryAndCloseout(): void {
 }
 
 test("the revised persona team completes one Full Delivery run", async () => {
+  // Anticipate — all nine boxes, in order, each keyed to its own persona.
   anticipatePlanningAndImplementation();
   ctx.engine
     .anticipate({
@@ -103,10 +104,12 @@ test("the revised persona team completes one Full Delivery run", async () => {
     .reports(QA_PASS);
   anticipateDeliveryAndCloseout();
 
+  // Act
   const run = await startRun(ctx.app, PIPELINE);
   await approveIntake(ctx.app, run.id);
 
-  const finished = await waitForRunStatus(ctx.app, run.id, "completed");
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id,"completed");
   expect(finished.stages.map((stage) => stage.status)).toEqual([
     "passed",
     "skipped",
@@ -123,6 +126,7 @@ test("the revised persona team completes one Full Delivery run", async () => {
 });
 
 test("a blocking architecture review continues through QA and closeout", async () => {
+  // Anticipate — review fails, and QA must still be handed that finding.
   anticipatePlanningAndImplementation();
   ctx.engine
     .anticipate({ as: "Software Architect review" })
@@ -134,10 +138,12 @@ test("a blocking architecture review continues through QA and closeout", async (
     .anticipate({ as: "Product Manager closeout", prompt: /Missing rollback boundary/ })
     .reports(CLOSEOUT);
 
+  // Act
   const run = await startRun(ctx.app, PIPELINE);
   await approveIntake(ctx.app, run.id);
 
-  const finished = await waitForRunStatus(ctx.app, run.id, "needs_attention");
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id,"needs_attention");
   expect(stageOf(finished, "review").status).toBe("failed");
   expect(stageOf(finished, "test").status).toBe("passed");
   expect(stageOf(finished, "release").status).toBe("skipped");
@@ -147,6 +153,7 @@ test("a blocking architecture review continues through QA and closeout", async (
 });
 
 test("an engine failure skips unsafe work but still runs closeout", async () => {
+  // Anticipate — QA dies at the process level rather than reporting a verdict.
   anticipatePlanningAndImplementation();
   ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
   ctx.engine.anticipate({ as: "QA Engineer" }).fails("test runner crashed");
@@ -154,10 +161,12 @@ test("an engine failure skips unsafe work but still runs closeout", async () => 
     .anticipate({ as: "Product Manager closeout" })
     .reports("Recorded the runtime failure\n\nVERDICT: PASS");
 
+  // Act
   const run = await startRun(ctx.app, PIPELINE);
   await approveIntake(ctx.app, run.id);
 
-  const finished = await waitForRunStatus(ctx.app, run.id, "failed");
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id,"failed");
   expect(stageOf(finished, "test").status).toBe("failed");
   expect(stageOf(finished, "release").status).toBe("skipped");
   expect(stageOf(finished, "deploy").status).toBe("skipped");
@@ -166,6 +175,7 @@ test("an engine failure skips unsafe work but still runs closeout", async () => 
 });
 
 test("restart keeps an earlier blocking review in the final outcome", async () => {
+  // Anticipate — two passes over QA and closeout: the failed one, then the retry.
   anticipatePlanningAndImplementation();
   ctx.engine
     .anticipate({ as: "Software Architect review" })
@@ -182,8 +192,10 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
     .anticipate({ as: "Product Manager closeout, retry" })
     .reports(CLOSEOUT);
 
+  // Act
   await post(ctx.app, `/runs/${run.id}/restart`, { stageId: "test" });
 
+  // Assert — the retry must not erase the review verdict recorded before it.
   const finished = await waitForRunStatus(ctx.app, run.id, "needs_attention");
   expect(stageOf(finished, "review").status).toBe("failed");
   expect(stageOf(finished, "review").verdict).toBe("FAIL");
@@ -194,12 +206,15 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
 });
 
 test("cancellation never starts a paid closeout stage", async () => {
+  // Anticipate — one box only; closeout reaching an engine here spends real money.
   ctx.engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
   const run = await startRun(ctx.app, PIPELINE);
   await ctx.engine.waitForCall();
 
+  // Act
   await post(ctx.app, `/runs/${run.id}/abort`);
 
+  // Assert
   const finished = await waitForRunStatus(ctx.app, run.id, "cancelled");
   expect(stageOf(finished, "closeout").status).toBe("skipped");
   ctx.engine.verify();

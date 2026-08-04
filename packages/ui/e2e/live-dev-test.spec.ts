@@ -28,15 +28,18 @@ const LIVE = process.env.ADHD_E2E_LIVE === "1";
 const TASK =
   "Create a file named hello-adhd.txt containing exactly the text: hello from the two-box run. Do nothing else.";
 
+// The one deliberate exception to one-action-per-test: every action here costs
+// real tokens and minutes, so splitting this into six tests would mean six paid
+// runs to learn the same thing. Each phase is still bannered, and the assertions
+// read in the order the run reaches them.
 test("the real Claude Code CLI still drives a two-box run end to end", async ({ page }) => {
   test.skip(!LIVE, "live tier — set ADHD_E2E_LIVE=1 to run (spends real tokens)");
   // A real two-box run is minutes, not seconds.
   test.setTimeout(10 * 60_000);
 
+  // Arrange — the run works in the active project's folder, so switch to Home
+  // first: its runs get a scratch workspace each and cannot touch real code.
   await page.goto("/");
-
-  // The run works in the active project's folder, so switch to Home first: its
-  // runs get a scratch workspace each and cannot touch real code.
   await page.getByTestId("project-switcher").click();
   await page.getByRole("option", { name: /Home/ }).click();
 
@@ -49,8 +52,11 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
   await page.getByRole("button", { name: "Developer + Tester" }).click();
   await page.getByRole("option", { name: /Developer \+ Tester/ }).click();
   await page.getByPlaceholder("Describe the task...").fill(TASK);
+
+  // Act — no Anticipate phase: the real CLI is the whole point of this tier.
   await page.getByRole("button", { name: /Start run/ }).click();
 
+  // Assert
   await expect(page.getByText("⬡ Claude Code · haiku")).toBeVisible();
   await expect(page.getByTestId("run-status")).toHaveText("RUNNING");
 

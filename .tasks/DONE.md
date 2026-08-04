@@ -1,5 +1,37 @@
 # Done
 
+## TASK-118: AAAAA testing standard — a loadable skill, a conformance sweep, a green-CI merge gate
+**Priority:** P2 | **Tags:** testing, infra
+**Updated:** 2026-08-04 16:35
+
+Made the [AAAAA approach](https://medium.com/bolt-labs/aaaaa-testing-96583245ae24) the
+enforced standard rather than a paragraph in a doc. Delivered:
+
+- **`write-tests` skill, generated.** `docs/testing.md` gained four `gen:` blocks;
+  `scripts/generate-skills.mjs` was generalised from one hardcoded source to a list of
+  `{ source, blocks, outputs }`, and now emits `.claude/skills/write-tests/SKILL.md` plus
+  the shipped QA persona `tester.md`. Architect's two outputs are byte-identical. The
+  transferable half was widened beyond phase banners to the article's actual thesis —
+  logic belongs in the application, not the test — with atomic anticipations, generators
+  over flag-driven factories, and duplication-as-a-boundary.
+- **ESLint enforcement.** `if`/`for`/`while`/`try` inside a `test()`/`it()` callback is an
+  error under `packages/*/test/**` and `packages/ui/e2e/**`, with `**/support/**` exempt.
+  It found 7 violations, two of them in `e2e/` that a manual grep had missed.
+- **Conformance sweep** across all behaviour tests: 7 server `*.comp.ts`, 9 UI
+  `*.comp.tsx`, 8 Playwright specs. Multi-action tests were split; pure `*.spec.ts` files
+  got the hard-rule fixes only. Suite went 414 → 430 tests with none lost.
+- **Merge gate** documented in `docs/testing.md` (the four required check names, admin
+  bypass, why "up to date" stays off) for the maintainer to apply in the GitHub UI.
+
+Two decision-log entries record the generation split and the branch-protection choice.
+`e2e/live-dev-test.spec.ts` is the one documented exemption from one-action-per-test —
+splitting it would buy six paid runs to learn what one already proves.
+
+Cross-platform: n/a — docs, lint config, test structure, and a Node generator that
+already normalises CRLF before comparing.
+
+---
+
 ## TASK-107: One definition per shape — RunEvent union, schema dedupe, structured tool calls
 **Priority:** P1 | **Tags:** core, server, ui, testing
 **Updated:** 2026-08-03 22:40

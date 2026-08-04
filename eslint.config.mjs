@@ -54,6 +54,22 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/*/test/**/*.{ts,tsx}", "packages/ui/e2e/**/*.ts"],
+    ignores: ["**/support/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...["IfStatement", "ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "TryStatement"].map(
+          (statement) => ({
+            selector: `CallExpression[callee.name=/^(test|it)$/] > ArrowFunctionExpression ${statement}`,
+            message:
+              "Move loops, polls and branching into test/support/ — a test body states what holds, not how to check it.",
+          }),
+        ),
+      ],
+    },
+  },
+  {
     files: ["packages/ui/**/*.{ts,tsx}"],
     languageOptions: {
       globals: { ...globals.browser },

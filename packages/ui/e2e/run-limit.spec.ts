@@ -114,9 +114,13 @@ async function openBlockedRun(page: Page): Promise<void> {
 test("a parked run announces the limit over the run, with the raw line behind it", async ({
   page,
 }) => {
+  // Anticipate — every endpoint the page reaches, fulfilled from the fixture.
   await seedBlockedRun(page);
+
+  // Act
   await openBlockedRun(page);
 
+  // Assert
   const modal = page.getByTestId("limit-modal");
   await expect(modal).toContainText(LIMIT_COPY.headline(LIMIT));
   // The raw CLI line stays visible so the parsed reset can be checked against it.
@@ -124,24 +128,33 @@ test("a parked run announces the limit over the run, with the raw line behind it
 });
 
 test("the countdown ticks down rather than showing a frozen timestamp", async ({ page }) => {
+  // Anticipate
   await seedBlockedRun(page);
+
+  // Act
   await openBlockedRun(page);
 
+  // Assert — a frozen timestamp would look identical on first render.
   const countdown = page.getByTestId("limit-countdown");
   const first = await countdown.textContent();
   await expect(countdown).not.toHaveText(first ?? "", { timeout: 5_000 });
 });
 
 test("the rail shows BLOCKED so a parked run is visible without opening it", async ({ page }) => {
+  // Anticipate
   await seedBlockedRun(page);
+
+  // Act
   await openBlockedRun(page);
 
+  // Assert
   await expect(
     page.getByTestId("run-card").filter({ hasText: "seeded plan limit" }),
   ).toContainText("BLOCKED");
 });
 
 test("choosing a cheaper model posts that model to the resolve endpoint", async ({ page }) => {
+  // Anticipate — the seeded run, plus a recording route for the resolve call.
   await seedBlockedRun(page);
 
   const posted: Request[] = [];
@@ -153,15 +166,20 @@ test("choosing a cheaper model posts that model to the resolve endpoint", async 
     },
   );
 
+  // Arrange
   await openBlockedRun(page);
+
+  // Act
   await page.getByRole("button", { name: /Haiku/ }).click();
 
+  // Assert
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0]?.method()).toBe("POST");
   expect(posted[0]?.postDataJSON()).toEqual({ choice: "switch-model", model: "haiku" });
 });
 
 test("Escape dismisses the popup and leaves the run parked, not resolved", async ({ page }) => {
+  // Anticipate — any limit call at all would be a bug, so record every one.
   await seedBlockedRun(page);
 
   const posted: Request[] = [];
@@ -173,18 +191,28 @@ test("Escape dismisses the popup and leaves the run parked, not resolved", async
     },
   );
 
+  // Arrange
   await openBlockedRun(page);
+
+  // Act
   await page.keyboard.press("Escape");
 
+  // Assert — dismissing is not resolving; the run must stay parked.
   await expect(page.getByTestId("limit-modal")).toBeHidden();
   await expect(page.getByTestId("run-status")).toHaveText("BLOCKED");
   expect(posted).toHaveLength(0);
 });
 
 test("a parked run can still be aborted from the bottom bar", async ({ page }) => {
+  // Anticipate
   await seedBlockedRun(page);
+
+  // Arrange
   await openBlockedRun(page);
+
+  // Act
   await page.keyboard.press("Escape");
 
+  // Assert
   await expect(page.getByRole("button", { name: "Abort" })).toBeVisible();
 });

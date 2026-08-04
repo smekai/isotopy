@@ -38,8 +38,12 @@ async function seedHomeRun(home: string, run: RunState): Promise<void> {
 }
 
 test("runs are restored when the server comes back", async () => {
+  // Arrange
   const { app } = ctx;
+
+  // Anticipate
   ctx.engine.anticipate().reports("done");
+
   const run = await startRun(app, {
     pipelineId: "solo",
     task: "comp survives restart",
@@ -48,8 +52,10 @@ test("runs are restored when the server comes back", async () => {
   await waitForRunStatus(app, run.id, "completed");
   await ctx.orchestrator.shutdown();
 
+  // Act
   const restarted = await restartApp();
 
+  // Assert
   const { body } = await get<RunState[]>(restarted.app, "/runs");
   expect(body).toHaveLength(1);
   const [restoredRun] = body;
@@ -60,10 +66,14 @@ test("runs are restored when the server comes back", async () => {
 });
 
 test("a needs-attention run remains terminal when the server comes back", async () => {
+  // Arrange
   const { app } = ctx;
+
+  // Anticipate — the QA Engineer exits cleanly but reports a blocking verdict.
   ctx.engine.anticipate().reports("Scope approved.");
   ctx.engine.anticipate().reports("Implemented.");
   ctx.engine.anticipate().reports("Required behaviour is broken.\n\nVERDICT: FAIL");
+
   const run = await startRun(app, {
     pipelineId: "pm-dev-test",
     task: "persist a blocking verdict",
@@ -73,8 +83,10 @@ test("a needs-attention run remains terminal when the server comes back", async 
   await waitForRunStatus(app, run.id, "needs_attention");
   await ctx.orchestrator.shutdown();
 
+  // Act
   const restarted = await restartApp();
 
+  // Assert
   const { body } = await get<RunState>(restarted.app, `/runs/${run.id}`);
   expect(body.status).toBe("needs_attention");
   expect(stageOf(body, "test").status).toBe("failed");
@@ -83,6 +95,7 @@ test("a needs-attention run remains terminal when the server comes back", async 
 });
 
 test("a run left mid-flight by a crash with no durable run is reconciled to failed", async () => {
+  // Arrange — a run frozen mid-flight, as a killed process would have left it.
   const { home } = ctx;
   const runId = "crashed1";
   await seedHomeRun(home, {
@@ -101,19 +114,29 @@ test("a run left mid-flight by a crash with no durable run is reconciled to fail
     createdAt: new Date().toISOString(),
   });
 
+  // Anticipate — none: reconciliation is bookkeeping and must never spawn an engine.
+
+  // Act
   const restarted = await restartApp();
 
+  // Assert
   const { body } = await get<RunState>(restarted.app, `/runs/${runId}`);
   expect(body.status).toBe("failed");
   expect(stageOf(body, "test").status).toBe("failed");
   expect(stageOf(body, "test").logs.at(-1)?.message).toMatch(/Interrupted by server restart/);
   expect(stageOf(body, "implementation").status).toBe("passed");
+  ctx.engine.verify();
   await restarted.orchestrator.shutdown();
 });
 
 test("run numbering continues from the highest number on disk", async () => {
+  // Arrange — one completed run on disk, then a fresh process over the same home.
   const { app } = ctx;
+
+  // Anticipate — one call per run; the queue outlives the restart.
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipate().reports("done");
+
   const first = await startRun(app, {
     pipelineId: "solo",
     task: "comp numbering",
@@ -122,16 +145,18 @@ test("run numbering continues from the highest number on disk", async () => {
   await waitForRunStatus(app, first.id, "completed");
   expect(first.number).toBe(1);
   await ctx.orchestrator.shutdown();
-
   const restarted = await restartApp();
-  ctx.engine.anticipate().reports("done");
+
+  // Act
   const second = await startRun(restarted.app, {
     pipelineId: "solo",
     task: "comp numbering after restart",
     engine: "claude-code",
   });
 
+  // Assert
   expect(second.number).toBe(2);
   await waitForRunStatus(restarted.app, second.id, "completed");
+  ctx.engine.verify();
   await restarted.orchestrator.shutdown();
 });

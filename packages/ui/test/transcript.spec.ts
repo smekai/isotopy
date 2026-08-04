@@ -11,7 +11,15 @@ import type {
   StageStatus,
 } from "@adhd/core";
 import { buildTranscript, conversationOnly } from "../src/transcript";
+import type { TranscriptItem } from "../src/transcript";
 import { message, run, stage } from "./support/run-fixtures";
+
+/** Narration the chat must drop and the log must keep. */
+const MACHINERY = ["Developer online", "Read src/auth.ts", "Tool error"];
+
+function textOf(items: TranscriptItem[]): string {
+  return items.map((item) => ("text" in item ? item.text : "")).join("\n");
+}
 
 function log(ts: string, level: LogLevel, text: string, activity?: StageActivity) {
   return { ts, level, message: text, ...(activity ? { activity } : {}) };
@@ -219,17 +227,11 @@ describe("conversationOnly", () => {
   });
 
   test("engine chatter and tool rows leave the chat but stay in the log", () => {
-    const chat = conversationOnly(buildTranscript(noisy))
-      .map((item) => ("text" in item ? item.text : ""))
-      .join("\n");
-    const logs = buildTranscript(noisy)
-      .map((item) => ("text" in item ? item.text : ""))
-      .join("\n");
+    const chat = textOf(conversationOnly(buildTranscript(noisy)));
+    const logs = textOf(buildTranscript(noisy));
 
-    for (const machinery of ["Developer online", "Read src/auth.ts", "Tool error"]) {
-      expect(chat).not.toContain(machinery);
-      expect(logs).toContain(machinery);
-    }
+    expect(MACHINERY.filter((line) => chat.includes(line))).toEqual([]);
+    expect(MACHINERY.filter((line) => logs.includes(line))).toEqual(MACHINERY);
   });
 
   test("who is working and how it ended are not machinery", () => {

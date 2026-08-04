@@ -44,7 +44,11 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-test("Product Manager questions lead to an approvable task-backed milestone", async () => {
+/**
+ * Anticipate the two-turn planning conversation and drive it to a saved draft.
+ * Both tests below need a draft; only one of them is *about* getting there.
+ */
+async function planUntilDraft(): Promise<{ run: RunState; draft: Milestone }> {
   ctx.engine
     .anticipate({
       as: "Product Manager question",
@@ -67,29 +71,39 @@ test("Product Manager questions lead to an approvable task-backed milestone", as
     "/milestones/plan",
     { goal: "Plan milestone D", engine: "claude-code" },
   );
-  expect(status).toBe(201);
+  if (status !== 201) {
+    throw new Error(`Expected 201 starting a planning run, got ${status}`);
+  }
   await waitForStageStatus(ctx.app, run.id, "milestone-plan", "asking");
-
-  await post(ctx.app, `/runs/${run.id}/messages`, {
-    text: "Yes, include the UI",
-  });
+  await post(ctx.app, `/runs/${run.id}/messages`, { text: "Yes, include the UI" });
   await waitForRunStatus(ctx.app, run.id, "completed");
 
-  const { body: draft } = await get<Milestone>(
-    ctx.app,
-    `/milestones/${run.milestoneId}`,
-  );
+  const { body: draft } = await get<Milestone>(ctx.app, `/milestones/${run.milestoneId}`);
+  return { run, draft };
+}
+
+test("answering the Product Manager's question yields a saved draft proposal", async () => {
+  // Arrange, Anticipate and Act all live in the conversation itself.
+  const { run, draft } = await planUntilDraft();
+
+  // Assert
   expect(draft).toMatchObject({
     name: "Milestone D",
     status: "draft",
     planningRunIds: [run.id],
     proposal: { revision: 1, features: [{ id: "planner" }] },
   });
+  ctx.engine.verify();
+});
 
-  const approved = await post<Milestone>(
-    ctx.app,
-    `/milestones/${draft.id}/approve`,
-  );
+test("approving a draft mints the task its feature only proposed", async () => {
+  // Arrange
+  const { draft } = await planUntilDraft();
+
+  // Act
+  const approved = await post<Milestone>(ctx.app, `/milestones/${draft.id}/approve`);
+
+  // Assert
   expect(approved.status).toBe(200);
   expect(approved.body).toMatchObject({
     status: "active",
@@ -101,16 +115,14 @@ test("Product Manager questions lead to an approvable task-backed milestone", as
       },
     ],
   });
-  const backlog = await readFile(
-    path.join(ctx.home, "tasks", "BACKLOG.md"),
-    "utf8",
-  );
+  const backlog = await readFile(path.join(ctx.home, "tasks", "BACKLOG.md"), "utf8");
   expect(backlog).toContain("## TASK-001: Build milestone planner");
   expect(backlog).toContain("ADHD-MILESTONE-TASK:");
   ctx.engine.verify();
 });
 
 test("invalid existing task links leave the proposal as a retryable draft", async () => {
+  // Arrange
   const invalidLinkPlan = {
     ...PLAN,
     features: [
@@ -121,6 +133,8 @@ test("invalid existing task links leave the proposal as a retryable draft", asyn
       },
     ],
   };
+
+  // Anticipate — a plan that reuses a task the board never had.
   ctx.engine
     .anticipate({ as: "Product Manager" })
     .reports(
@@ -131,15 +145,17 @@ test("invalid existing task links leave the proposal as a retryable draft", asyn
   });
   await waitForRunStatus(ctx.app, run.id, "completed");
 
+  // Act
   const approval = await post<{ error: string }>(
     ctx.app,
     `/milestones/${run.milestoneId}/approve`,
   );
+
+  // Assert — the draft survives so the user can fix the plan and retry.
   const { body: draft } = await get<Milestone>(
     ctx.app,
     `/milestones/${run.milestoneId}`,
   );
-
   expect(approval.status).toBe(400);
   expect(approval.body.error).toContain("TASK-404");
   expect(draft.status).toBe("draft");

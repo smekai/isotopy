@@ -3,13 +3,14 @@
 // TASK-078 records and broadcasts it — nothing consumes it until TASK-079 gives
 // an asking stage something to resume from.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunEvent, RunMessage, RunState } from "@adhd/core";
+import type { RunMessage, RunState } from "@adhd/core";
 import {
   createTestApp,
   get,
   openSse,
   post,
   restartApp,
+  runEventOf,
   startRun,
   waitForRunStatus,
 } from "./support/harness.ts";
@@ -66,13 +67,9 @@ test("a message reaches the run's event stream so an open tab sees it", async ()
 
   // Assert — the reducer dedupes by message id, so replay overlap is not a bug
   // here; what matters is that the event carries the message at all.
-  const posted = events.filter((event) => event.event === "run.message");
-  const first = JSON.parse(posted[0]?.data ?? "{}") as RunEvent;
-  if (first.type !== "run.message") {
-    throw new Error(`expected a run.message event, got ${first.type}`);
-  }
-  expect(first.chatMessage.text).toBe("keep it small");
-  expect(first.chatMessage.role).toBe("user");
+  const posted = runEventOf(events, "run.message");
+  expect(posted.chatMessage.text).toBe("keep it small");
+  expect(posted.chatMessage.role).toBe("user");
 });
 
 test("an empty message is rejected before anything is recorded", async () => {

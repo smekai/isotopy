@@ -76,8 +76,10 @@ afterEach(() => {
 });
 
 test("the run opens on the chat, which carries prose but not machinery", () => {
+  // Act
   renderTabs(runWithTwoStages());
 
+  // Assert
   const thread = screen.getByTestId("chat-thread");
   expect(within(thread).getByText(DEV_PROSE)).toBeDefined();
   expect(within(thread).queryByText(TOOL_ROW)).toBeNull();
@@ -85,68 +87,90 @@ test("the run opens on the chat, which carries prose but not machinery", () => {
 });
 
 test("the log holds exactly what the chat refuses to show", () => {
+  // Arrange
   renderTabs(runWithTwoStages());
 
+  // Act
   fireEvent.click(screen.getByTestId("run-tab-logs"));
 
+  // Assert
   const logs = screen.getByTestId("stage-scroll");
   expect(within(logs).getByText(TOOL_ROW)).toBeDefined();
   expect(within(logs).getByText(CHATTER)).toBeDefined();
   expect(within(logs).getByText(DEV_PROSE)).toBeDefined();
 });
 
-test("the log shows every stage, and one stage when a node is focused", () => {
-  const { rerender } = renderTabs(runWithTwoStages());
+test("the log shows every stage when nothing is focused", () => {
+  // Arrange
+  renderTabs(runWithTwoStages());
+
+  // Act
   fireEvent.click(screen.getByTestId("run-tab-logs"));
 
+  // Assert
   expect(screen.getAllByTestId("stage-profession").map((el) => el.textContent)).toEqual([
     "Developer",
     "QA Engineer",
   ]);
+});
 
-  rerender(
-    <RunTabs
-      run={runWithTwoStages()}
-      focusedStageId="test"
-      sending={false}
-      d={d}
-      onSend={vi.fn()}
-      onClearFocus={vi.fn()}
-    />,
-  );
+test("focusing a node narrows the log to that stage alone", () => {
+  // Arrange
+  renderTabs(runWithTwoStages(), "test");
 
+  // Act
+  fireEvent.click(screen.getByTestId("run-tab-logs"));
+
+  // Assert
   expect(screen.getAllByTestId("stage-profession").map((el) => el.textContent)).toEqual([
     "QA Engineer",
   ]);
 });
 
 test("artifacts list every stage's handoff, not just the last one's", () => {
+  // Arrange
   renderTabs(runWithTwoStages());
 
+  // Act
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));
 
+  // Assert
   expect(screen.getByText("implementation/handoff.md")).toBeDefined();
   expect(screen.getByText("test/handoff.md")).toBeDefined();
   expect(screen.getByTestId("artifact-preview").textContent).toBe("DEV HANDOFF");
+});
 
+test("picking a different handoff swaps the preview", () => {
+  // Arrange
+  renderTabs(runWithTwoStages());
+  fireEvent.click(screen.getByTestId("run-tab-artifacts"));
+
+  // Act
   fireEvent.click(screen.getByText("test/handoff.md"));
+
+  // Assert
   expect(screen.getByTestId("artifact-preview").textContent).toBe("TESTER HANDOFF");
 });
 
 test("the solution folder is one click away when the run has a workspace", () => {
-  const state = { ...runWithTwoStages(), workspacePath: "C:/work/run-1" };
-  renderTabs(state);
-
+  // Arrange
+  renderTabs({ ...runWithTwoStages(), workspacePath: "C:/work/run-1" });
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));
+
+  // Act
   fireEvent.click(screen.getByTestId("artifact-view-files"));
 
+  // Assert
   expect(screen.getByTestId("artifact-files")).toBeDefined();
 });
 
 test("a run with no workspace offers no solution folder toggle", () => {
+  // Arrange
   renderTabs(runWithTwoStages());
 
+  // Act
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));
 
+  // Assert
   expect(screen.queryByTestId("artifact-view-files")).toBeNull();
 });
