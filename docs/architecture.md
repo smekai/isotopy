@@ -718,30 +718,49 @@ sequenceDiagram
 
 ## Agent model
 
-Two agent kinds:
+**A stage is engine-backed if and only if it carries a `skill`.** There is no
+second agent kind and no separate LLM-API path: every agent is a coding CLI
+driven as a subprocess, and a stage without a `skill` is simulated. `pipelineUsesEngine`
+keys off that stage field rather than a hardcoded pipeline id, so a new
+engine-backed pipeline needs no orchestrator change to get engine validation and
+a workspace.
 
-### LLM stage agents (requirements, design, review, release, deploy)
+### Engines
 
-- Prompt templates in `.adhd/agents/<stage>.md`
-- Context injected: prior artifacts, project `AGENTS.md`, `.adhd/context/*`
-- Provider via LiteLLM or direct API (Anthropic, OpenAI, Ollama)
-- Output written to stage artifact paths; parsed for gate checks
+`ENGINE_IDS` in [`core/engines.ts`](../packages/core/src/engines.ts) is the roster —
+`claude-code`, `cursor`, `codex` — with `claude-code` the default. Each is a CLI
+spawned in the run's workspace by an adapter under `server/src/engines/`; ADHD
+does not call model APIs itself, so an engine brings **its own model selection**
+and its own auth. A `conversational` engine can resume its session, which is what
+lets an agent stop mid-stage and ask a question.
 
-### Harness agent (implementation)
+Model choice per engine is a roster snapshot trued up against the live CLI by
+`listModels()`, with **Auto** always offered so the CLI's own default can win.
+Permission modes are `skip` (default, fully autonomous) and `acceptEdits`. See
+[`implementation-notes.md`](./implementation-notes.md) for the adapter quirks and
+the legacy-alias migration.
 
-- Delegates to `HarnessAdapter`
-- Prompt built from `requirements.md` + `design.md` + implementation template
-- Does not share chain-of-thought with review agent (blind review)
+### Personas
 
-**Blind review rule:** Review agent receives task description, requirements, design summary, and `git diff` only — not implementation agent logs.
+What an agent *is* comes from a persona: Markdown on disk, layered by
+`domain/skills/compose.ts` (bundled default → user-level override → project
+override → project append). Nothing is ever seeded to disk. The persona catalog
+lives in `server/src/domain/skills/personas/`; the `architect` persona alone is
+generated from this document.
 
-### Test agent (unit + Playwright E2E)
+A stage's `stepTask` is the assignment given to that persona — identity and
+assignment are separate, so the same Developer can be pointed at different work.
 
-- Runs configured unit/integration command in worktree
-- Runs Playwright E2E (`npx playwright test` default)
-- Optionally starts dev server via `e2eStartServer` config before E2E
-- On failure: emits `e2e-report.json`, optional trace paths; triggers fix loop to implementation harness
-- Can use Playwright Test Agents (planner/generator/healer) to bootstrap specs for greenfield apps
+### Stage policy
+
+`executionPolicy` (`standard`, `quality`, `delivery`, `closeout`) decides what a
+stage's outcome does to the rest of the run, rather than branching on stage names.
+A blocking quality verdict continues through quality evidence and closeout while
+suppressing release and deploy; an engine failure suppresses everything except
+closeout.
+
+**Blind review rule:** a reviewing agent receives the task description, the
+artifacts, and `git diff` — not the implementing agent's logs.
 
 ---
 
@@ -792,7 +811,7 @@ Deploy stage runs after release gate approval. Production deploy requires explic
 
 ## Harness adapter layer
 
-For when to use Claude Code vs Cursor and stage-to-tool mapping, see [model-and-harness-strategy.md](model-and-harness-strategy.md).
+For the engine roster and how a stage picks one, see [Agent model](#agent-model) above.
 
 ```mermaid
 classDiagram
@@ -1047,12 +1066,12 @@ adhd/
 | Language | TypeScript | Single codebase for CLI, API, UI |
 | Runtime | Node.js | Mature ecosystem for subprocess, git, SSE |
 | Monorepo / package manager | pnpm workspaces | Fast, strict, good for monorepos |
-| CLI framework | Commander or CAC | Lightweight, widely used |
+| CLI framework | Not taken — the app is server + Web UI | No CLI package shipped; `pnpm dev` starts both processes |
 | API framework | Hono | Compact, typed, good SSE support |
 | UI | React + Vite | Fast dev, aligns with dashboard needs |
-| Persistence | File-based `.adhd/` | No DB for MVP; index.json + markdown for tasks |
+| Persistence | SQLite (`node:sqlite`) in `<project>/.adhd/` | Sole run store behind a layered repository; no server, no native build |
 | Desktop packaging | Defer (Tauri later) | Server + Web UI sufficient; Tauri can wrap same stack |
-| LLM abstraction | LiteLLM or Vercel AI SDK | Multi-provider, local Ollama |
+| LLM abstraction | None — engines are coding CLIs | ADHD spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
 | Worktree at run start vs impl stage | At implementation | Spec stages don't need branch |
 | Commit specs automatically | Opt-in on gate approve | Keeps git clean |
 | Workflow runtime | OpenWorkflow (`node:sqlite`, in-process) | Durable execution, gates, retries, crash recovery; embedded file DB, no server |
