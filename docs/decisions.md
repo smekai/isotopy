@@ -15,6 +15,40 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-04 — Generators and framework are shared; everything else is duplicated
+
+**Context:** the first pass at the AAAAA sweep read "don't repeat yourself" as the
+governing rule and invented a layer of small helpers — `textOf()`, `closeoutOutput()`,
+`dashboardWithTwoFeatureRuns()` — to remove duplication between tests. That is the exact
+instinct the article opens by warning against, and it produced tests a reader could not
+understand without opening three other places in the file.
+
+**Decision:** two things earn a shared home — **generators** (partial in, whole object
+out) and the **framework for external interactions** (the fake engine, fake streams, route
+seeding, app bootstrap, HTTP verbs, pollers, and drivers that walk a pipeline through the
+real system). Everything else is written inline, duplication and all.
+
+A one-line function lifted out of a test is worse than the duplication it removed. What
+makes inlining affordable is the generator: `run({ status: "blocked" })` says what it
+produces *at the call site*, so a test can be explicit without being long. That is why
+deduplicating a generator is right — four had drifted into two copies and were collapsed —
+while extracting a one-liner is not.
+
+The same rule settles render wrappers. `renderThing(x)` hides the Act behind a name; a
+props generator keeps `render()` in the test and puts the spies on the generated props.
+
+**Rejected:** a `support/domain/<Type>.ts` layer holding accessors like
+`findFirstFeatureId`. Once one-line accessors are inlined, what remained was generators —
+and `run-fixtures.ts` / `milestone-fixtures.ts` already say that. A new folder would have
+been one more layer to explain for no content.
+
+**Consequence:** twelve helpers were deleted, ten of them added by the sweep this reverses.
+`fixture()` in the closeout tests was split, because a setup that builds six unrelated
+things is a symptom of tests that are not granular about what they need, not a thing to
+tidy.
+
+---
+
 ## 2026-08-04 — The testing standard is generated, and enforced by lint
 
 **Context:** AAAAA was described in `docs/testing.md` but practised in 10 of ~60 test

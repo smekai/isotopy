@@ -94,6 +94,75 @@ instinct is what produced the example above. A test file is read far more often
 than it is edited, and reading it must not require jumping into a helper to find
 out what the setup actually did.
 
+### What earns a shared home, and what stays inline
+
+The rule that keeps the two ideas above from fighting each other:
+
+| Shared | Inline, duplication and all |
+| --- | --- |
+| **Generators** — partial in, whole object out | One-line accessors and format helpers |
+| **The framework for external interactions** — the fake engine, fake streams, route seeding, app bootstrap, HTTP verbs, pollers | Compound "arrange this exact scenario" wrappers that two tests share |
+| **Drivers that walk a pipeline** through the real system | Anything a reader must leave the test to understand |
+
+A one-line function lifted out of a test is worse than the duplication it
+removed: the reader now jumps somewhere else to learn what the test arranged,
+and a stack of those is the mocking hell above wearing a different costume.
+Generators are what make inlining affordable — `run({ status: "blocked" })` says
+what it produces at the call site. That is why deduplicating a *generator* is
+right while extracting a one-liner is not.
+
+The same rule decides render wrappers. `renderThing(x)` hides the Act; a props
+generator does not:
+
+```ts
+render(<Thing {...thingProps({ focusedId: "test" })} />);
+```
+
+Type the generator as the component's own exported props interface, so a prop
+added upstream is a compile error rather than a silently missing value. Spies
+live on the generated props, and a test that asserts on a callback names it.
+
+### Naming and placement
+
+**`anticipate*` is reserved for real anticipations** — something that declares
+what an *external* system will do. A helper that drives the real system through
+its own API is Arrange, and calling it `anticipate*` erases the distinction the
+phase exists to mark. Name that one for the state it produces.
+
+**Helpers go below the last test**, so a reader meets the tests first. This works
+because `function` declarations hoist — an arrow-function `const` would break,
+which is worth knowing before copying the pattern. Helpers that build a
+module-level constant stay with the constant they feed.
+
+### Setup that every test shares
+
+Setup identical in every test in a file belongs in `beforeEach`, not repeated as
+each test's first line. Setup specific to one test stays in its body under the
+banner. Where only *some* tests share it, group those under a `describe` with its
+own `beforeEach` rather than arranging it for tests that never asserted on it.
+
+### An elaborate fixture is a symptom
+
+If a setup helper builds six unrelated things, check whether any single test uses
+all six. Usually not — and the fix is not a tidier fixture but more granular
+tests, each arranging what it actually asserts on. A test that arranges something
+it never asserts on should lose the arrangement, not gain an assertion.
+
+### Assert, never throw
+
+A helper that throws reports as an unhandled error rather than a failed
+assertion, and `if (x) { throw }` is branching logic in the one place that exists
+to keep branching out of tests. Two jobs, two answers:
+
+```ts
+expect(status, "creating the record").toBe(201);   // a status guard
+assert(id, `order ${order.id} has no line items`); // narrowing
+```
+
+`assert` is typed `(expression, message?): asserts expression`, so it narrows the
+type as well as failing the test — which is what lets an accessor return a
+non-optional value without a cast.
+
 ### The rules
 
 - **One action per test.** The Act phase holds a single request, render or call.
@@ -107,7 +176,7 @@ out what the setup actually did.
   clear it" beats "test limit detection".
 
 Module-level helpers in a test file are not test bodies; a named builder or a
-throwing accessor is exactly where extracted logic should go. The rule bans
+narrowing accessor is exactly where extracted logic should go. The rule bans
 logic *in the body*, not in the file.
 
 ### A test must be able to fail for a real reason
@@ -139,11 +208,29 @@ indirect, and harder to diagnose when it breaks.
 
 | Layer | Files | Runner | Command | Scope |
 | --- | --- | --- | --- | --- |
-| **Component** | `packages/*/test/*.comp.ts` | Vitest (`node`) | `pnpm test` | The default. Request in → behaviour out, through the real routes, services, orchestrator and run-store. |
-| **Component (render)** | `packages/ui/test/*.comp.tsx` | Vitest (`jsdom`) | `pnpm test` | The same, for React code that must render — hooks and components, deps mocked. |
-| **Spec** | `packages/*/test/*.spec.ts` | Vitest (`node`) | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
-| **E2E** | `packages/ui/e2e/*.spec.ts` | Playwright | `pnpm e2e` | Only what needs a browser: rendering, focus, tab wiring. |
-| **Live** | `e2e/live-dev-test.spec.ts` | Playwright | `ADHD_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
+| **Component** | `packages/*/test/**/*.comp.ts` | Vitest (`node`) | `pnpm test` | The default. Request in → behaviour out, through the real routes, services, orchestrator and run-store. |
+| **Component (render)** | `packages/ui/test/**/*.comp.tsx` | Vitest (`jsdom`) | `pnpm test` | The same, for React code that must render — hooks and components, deps mocked. |
+| **Spec** | `packages/*/test/**/*.spec.ts` | Vitest (`node`) | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
+| **E2E** | `packages/ui/e2e/**/*.e2e.ts` | Playwright | `pnpm e2e` | Only what needs a browser: rendering, focus, tab wiring. |
+| **Live** | `e2e/run/live-dev-test.e2e.ts` | Playwright | `ADHD_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
+
+**`.spec.ts` means one thing: a Vitest unit spec over a pure function.** A
+browser test is `.e2e.ts` (Playwright's `testMatch`), because one extension
+meaning two things is how a browser test gets read as a unit spec.
+
+### Where a file lives
+
+Tests are grouped by subject, not left in one flat directory:
+
+```text
+packages/server/test/       milestone/  engine/  run/  support/   … rest at root
+packages/ui/test/           milestone/  run/     support/         … rest at root
+packages/ui/e2e/            milestone/  run/     support/         … rest at root
+```
+
+Everything that is not clearly one of those stays at the root until it earns a
+folder. `vitest.config.ts` and the ESLint test-body rule both glob with `**`, so
+a new folder needs no config change.
 
 **Component tests are the primary level.** They are nearly as fast as unit tests
 (the whole suite is ~9s) while exercising the code paths that actually break.
@@ -173,12 +260,12 @@ enough that a component test would not localise the failure —
 `parseStageVerdict` scanning backwards through markdown-wrapped, CRLF-terminated
 model output is the archetype. They are not a coverage exercise.
 
-Phase banners are expected in `*.comp.ts`, `*.comp.tsx` and `e2e/*.spec.ts`.
+Phase banners are expected in `*.comp.ts`, `*.comp.tsx` and `*.e2e.ts`.
 A short pure `*.spec.ts` is exempt: banners on a three-line assertion over a
 pure function are the noise the standard exists to prevent. The hard rules —
 one action, no logic in the body — apply everywhere and are enforced by ESLint.
 
-One test is exempt from one-action-per-test: `e2e/live-dev-test.spec.ts`, where
+One test is exempt from one-action-per-test: `e2e/run/live-dev-test.e2e.ts`, where
 every action spends real tokens and minutes. Splitting it would buy six paid
 runs to learn what one already proves. It still carries its banners, and the
 exemption is written at the top of the file rather than left to be inferred.
