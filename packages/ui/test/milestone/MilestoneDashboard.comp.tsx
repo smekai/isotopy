@@ -4,41 +4,30 @@
 // matters is that each one is dead when it should be, and reports the right id
 // when it fires.
 //
-// Anticipate is the handler bag returned by `renderDashboard`: the component's
-// whole outward effect is which callback it invokes with what.
+// The component's whole outward effect is which callback it invokes with what,
+// so the spies live on the generated props and a test names the one it asserts on.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import type { Milestone, RunSummary } from "@adhd/core";
 import { MilestoneDashboard } from "../../src/components/MilestoneDashboard";
+import type { MilestoneDashboardProps } from "../../src/components/MilestoneDashboard";
 import { DIRS } from "../../src/theme";
 import { feature, featureRun, finding, milestone } from "../support/milestone-fixtures";
 
-const d = DIRS.indigo;
-
-interface Handlers {
-  onToggleAutoRun: ReturnType<typeof vi.fn>;
-  onStartNext: ReturnType<typeof vi.fn>;
-  onFinalize: ReturnType<typeof vi.fn>;
-  onOpenRun: ReturnType<typeof vi.fn>;
-  onAcceptFeature: ReturnType<typeof vi.fn>;
-}
-
-function renderDashboard(
-  value: Milestone,
-  runs: RunSummary[] = [],
-  busy = false,
-): Handlers {
-  const handlers: Handlers = {
+function dashboardProps(
+  overrides: Partial<MilestoneDashboardProps> = {},
+): MilestoneDashboardProps {
+  return {
+    milestone: milestone([feature("f1", "ready")]),
+    runs: [],
+    busy: false,
+    d: DIRS.indigo,
     onToggleAutoRun: vi.fn(),
     onStartNext: vi.fn(),
     onFinalize: vi.fn(),
     onOpenRun: vi.fn(),
     onAcceptFeature: vi.fn(),
+    ...overrides,
   };
-  render(
-    <MilestoneDashboard milestone={value} runs={runs} busy={busy} d={d} {...handlers} />,
-  );
-  return handlers;
 }
 
 function control(testId: string): HTMLButtonElement | HTMLInputElement {
@@ -52,12 +41,16 @@ afterEach(() => {
 
 test("progress counts completed features against the total", () => {
   // Act
-  renderDashboard(
-    milestone([
-      feature("f1", "completed"),
-      feature("f2", "needs_attention"),
-      feature("f3", "ready"),
-    ]),
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([
+          feature("f1", "completed"),
+          feature("f2", "needs_attention"),
+          feature("f3", "ready"),
+        ]),
+      })}
+    />,
   );
 
   // Assert
@@ -66,19 +59,26 @@ test("progress counts completed features against the total", () => {
 
 test("Start next reports the request while a feature is ready", () => {
   // Arrange
-  const handlers = renderDashboard(milestone([feature("f1", "ready")]));
+  const props = dashboardProps();
+  render(<MilestoneDashboard {...props} />);
   expect(control("milestone-start-next").disabled).toBe(false);
 
   // Act
   fireEvent.click(control("milestone-start-next"));
 
   // Assert
-  expect(handlers.onStartNext).toHaveBeenCalledOnce();
+  expect(props.onStartNext).toHaveBeenCalledOnce();
 });
 
 test("Start next is dead once a feature is already running", () => {
   // Act
-  renderDashboard(milestone([feature("f1", "in_progress"), feature("f2", "ready")]));
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "in_progress"), feature("f2", "ready")]),
+      })}
+    />,
+  );
 
   // Assert — a second run on the same milestone is paid work nobody asked for.
   expect(control("milestone-start-next").disabled).toBe(true);
@@ -86,8 +86,12 @@ test("Start next is dead once a feature is already running", () => {
 
 test("Finalize stays dead while any feature is unfinished", () => {
   // Act
-  renderDashboard(
-    milestone([feature("f1", "completed"), feature("f2", "needs_attention")]),
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "completed"), feature("f2", "needs_attention")]),
+      })}
+    />,
   );
 
   // Assert
@@ -96,21 +100,22 @@ test("Finalize stays dead while any feature is unfinished", () => {
 
 test("Finalize reports the request once every feature is completed", () => {
   // Arrange
-  const handlers = renderDashboard(
-    milestone([feature("f1", "completed"), feature("f2", "completed")]),
-  );
+  const props = dashboardProps({
+    milestone: milestone([feature("f1", "completed"), feature("f2", "completed")]),
+  });
+  render(<MilestoneDashboard {...props} />);
   expect(control("milestone-finalize").disabled).toBe(false);
 
   // Act
   fireEvent.click(control("milestone-finalize"));
 
   // Assert
-  expect(handlers.onFinalize).toHaveBeenCalledOnce();
+  expect(props.onFinalize).toHaveBeenCalledOnce();
 });
 
 test("a busy milestone offers neither action, so a second run cannot be double-started", () => {
   // Act
-  renderDashboard(milestone([feature("f1", "ready")]), [], true);
+  render(<MilestoneDashboard {...dashboardProps({ busy: true })} />);
 
   // Assert
   expect(control("milestone-start-next").disabled).toBe(true);
@@ -119,23 +124,28 @@ test("a busy milestone offers neither action, so a second run cannot be double-s
 
 test("the autorun toggle reports the new value, not the old one", () => {
   // Arrange
-  const handlers = renderDashboard(milestone([feature("f1", "ready")]));
+  const props = dashboardProps();
+  render(<MilestoneDashboard {...props} />);
 
   // Act
   fireEvent.click(screen.getByTestId("milestone-autorun"));
 
   // Assert
-  expect(handlers.onToggleAutoRun).toHaveBeenCalledWith(true);
+  expect(props.onToggleAutoRun).toHaveBeenCalledWith(true);
 });
 
 test("each feature shows only its own run history", () => {
   // Act
-  renderDashboard(
-    milestone([feature("f1", "completed"), feature("f2", "ready")]),
-    [
-      featureRun("run-a", 3, "completed", "f1"),
-      featureRun("run-b", 4, "running", "f2"),
-    ],
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "completed"), feature("f2", "ready")]),
+        runs: [
+          featureRun("run-a", 3, "completed", "f1"),
+          featureRun("run-b", 4, "running", "f2"),
+        ],
+      })}
+    />,
   );
 
   // Assert — the other feature's run must not appear under this one.
@@ -147,13 +157,14 @@ test("each feature shows only its own run history", () => {
 
 test("opening a feature's run reports that run's id", () => {
   // Arrange
-  const handlers = renderDashboard(
-    milestone([feature("f1", "completed"), feature("f2", "ready")]),
-    [
+  const props = dashboardProps({
+    milestone: milestone([feature("f1", "completed"), feature("f2", "ready")]),
+    runs: [
       featureRun("run-a", 3, "completed", "f1"),
       featureRun("run-b", 4, "running", "f2"),
     ],
-  );
+  });
+  render(<MilestoneDashboard {...props} />);
   const cards = screen.getAllByTestId("milestone-feature");
   const first = within(cards[0]!).getAllByTestId("milestone-feature-run");
 
@@ -161,17 +172,21 @@ test("opening a feature's run reports that run's id", () => {
   fireEvent.click(first[0]!);
 
   // Assert
-  expect(handlers.onOpenRun).toHaveBeenCalledWith("run-a");
+  expect(props.onOpenRun).toHaveBeenCalledWith("run-a");
 });
 
 test("a blocking finding is shown with its severity and its evidence", () => {
   // Act
-  renderDashboard(
-    milestone([
-      feature("f1", "needs_attention", {
-        findings: [finding("x1", "Retry loses the draft", "blocking", "run #3 log")],
-      }),
-    ]),
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([
+          feature("f1", "needs_attention", {
+            findings: [finding("x1", "Retry loses the draft", "blocking", "run #3 log")],
+          }),
+        ]),
+      })}
+    />,
   );
 
   // Assert
@@ -182,13 +197,17 @@ test("a blocking finding is shown with its severity and its evidence", () => {
 
 test("only a needs-attention feature offers acceptance", () => {
   // Act
-  renderDashboard(
-    milestone([
-      feature("f1", "completed"),
-      feature("f2", "ready"),
-      feature("f3", "in_progress"),
-      feature("f4", "needs_attention"),
-    ]),
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([
+          feature("f1", "completed"),
+          feature("f2", "ready"),
+          feature("f3", "in_progress"),
+          feature("f4", "needs_attention"),
+        ]),
+      })}
+    />,
   );
 
   // Assert — accepting is an override of a blocking finding, not a general action.
@@ -197,28 +216,33 @@ test("only a needs-attention feature offers acceptance", () => {
 
 test("accepting a feature reports that feature's own id", () => {
   // Arrange
-  const handlers = renderDashboard(
-    milestone([
+  const props = dashboardProps({
+    milestone: milestone([
       feature("f1", "completed"),
       feature("f2", "ready"),
       feature("f3", "in_progress"),
       feature("f4", "needs_attention"),
     ]),
-  );
+  });
+  render(<MilestoneDashboard {...props} />);
 
   // Act
   fireEvent.click(screen.getAllByTestId("milestone-feature-accept")[0]!);
 
   // Assert
-  expect(handlers.onAcceptFeature).toHaveBeenCalledWith("f4");
+  expect(props.onAcceptFeature).toHaveBeenCalledWith("f4");
 });
 
 test("an accepted feature is marked as accepted rather than passing", () => {
   // Act
-  renderDashboard(
-    milestone([
-      feature("f1", "completed", { acceptedAt: "2026-08-03T09:00:00.000Z" }),
-    ]),
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([
+          feature("f1", "completed", { acceptedAt: "2026-08-03T09:00:00.000Z" }),
+        ]),
+      })}
+    />,
   );
 
   // Assert — an override must not read as a clean pass.
@@ -228,7 +252,14 @@ test("an accepted feature is marked as accepted rather than passing", () => {
 
 test("a busy milestone cannot accept a feature either", () => {
   // Act
-  renderDashboard(milestone([feature("f1", "needs_attention")]), [], true);
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "needs_attention")]),
+        busy: true,
+      })}
+    />,
+  );
 
   // Assert
   expect(control("milestone-feature-accept").disabled).toBe(true);
@@ -236,7 +267,9 @@ test("a busy milestone cannot accept a feature either", () => {
 
 test("an unapproved milestone says so instead of rendering an empty feature list", () => {
   // Act
-  renderDashboard(milestone([], { status: "draft" }));
+  render(
+    <MilestoneDashboard {...dashboardProps({ milestone: milestone([], { status: "draft" }) })} />,
+  );
 
   // Assert
   expect(screen.getByText(/no features yet/i)).toBeDefined();

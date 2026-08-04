@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, expect, test, vi } from "vitest";
 import type { RunState } from "@adhd/core";
 import { RunTabs } from "../../src/components/run/RunTabs";
+import type { RunTabsProps } from "../../src/components/run/RunTabs";
 import { DIRS } from "../../src/theme";
 import { log, run, started } from "../support/run-fixtures";
 
@@ -46,17 +47,16 @@ function runWithTwoStages(): RunState {
   return state;
 }
 
-function renderTabs(state: RunState, focusedStageId: string | null = null) {
-  return render(
-    <RunTabs
-      run={state}
-      focusedStageId={focusedStageId}
-      sending={false}
-      d={d}
-      onSend={vi.fn()}
-      onClearFocus={vi.fn()}
-    />,
-  );
+function tabsProps(overrides: Partial<RunTabsProps> = {}): RunTabsProps {
+  return {
+    run: runWithTwoStages(),
+    focusedStageId: null,
+    sending: false,
+    d,
+    onSend: vi.fn(),
+    onClearFocus: vi.fn(),
+    ...overrides,
+  };
 }
 
 afterEach(() => {
@@ -66,7 +66,7 @@ afterEach(() => {
 
 test("the run opens on the chat, which carries prose but not machinery", () => {
   // Act
-  renderTabs(runWithTwoStages());
+  render(<RunTabs {...tabsProps()} />);
 
   // Assert
   const thread = screen.getByTestId("chat-thread");
@@ -77,7 +77,7 @@ test("the run opens on the chat, which carries prose but not machinery", () => {
 
 test("the log holds exactly what the chat refuses to show", () => {
   // Arrange
-  renderTabs(runWithTwoStages());
+  render(<RunTabs {...tabsProps()} />);
 
   // Act
   fireEvent.click(screen.getByTestId("run-tab-logs"));
@@ -91,7 +91,7 @@ test("the log holds exactly what the chat refuses to show", () => {
 
 test("the log shows every stage when nothing is focused", () => {
   // Arrange
-  renderTabs(runWithTwoStages());
+  render(<RunTabs {...tabsProps()} />);
 
   // Act
   fireEvent.click(screen.getByTestId("run-tab-logs"));
@@ -105,7 +105,7 @@ test("the log shows every stage when nothing is focused", () => {
 
 test("focusing a node narrows the log to that stage alone", () => {
   // Arrange
-  renderTabs(runWithTwoStages(), "test");
+  render(<RunTabs {...tabsProps({ focusedStageId: "test" })} />);
 
   // Act
   fireEvent.click(screen.getByTestId("run-tab-logs"));
@@ -118,7 +118,7 @@ test("focusing a node narrows the log to that stage alone", () => {
 
 test("artifacts list every stage's handoff, not just the last one's", () => {
   // Arrange
-  renderTabs(runWithTwoStages());
+  render(<RunTabs {...tabsProps()} />);
 
   // Act
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));
@@ -131,7 +131,7 @@ test("artifacts list every stage's handoff, not just the last one's", () => {
 
 test("picking a different handoff swaps the preview", () => {
   // Arrange
-  renderTabs(runWithTwoStages());
+  render(<RunTabs {...tabsProps()} />);
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));
 
   // Act
@@ -143,7 +143,7 @@ test("picking a different handoff swaps the preview", () => {
 
 test("the solution folder is one click away when the run has a workspace", () => {
   // Arrange
-  renderTabs({ ...runWithTwoStages(), workspacePath: "C:/work/run-1" });
+  render(<RunTabs {...tabsProps({ run: { ...runWithTwoStages(), workspacePath: "C:/work/run-1" } })} />);
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));
 
   // Act
@@ -155,7 +155,7 @@ test("the solution folder is one click away when the run has a workspace", () =>
 
 test("a run with no workspace offers no solution folder toggle", () => {
   // Arrange
-  renderTabs(runWithTwoStages());
+  render(<RunTabs {...tabsProps()} />);
 
   // Act
   fireEvent.click(screen.getByTestId("run-tab-artifacts"));

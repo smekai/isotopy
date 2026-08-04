@@ -3,38 +3,29 @@
 // changes which harness the rest of the run uses, so a mis-wired payload is not
 // a cosmetic bug — it silently resumes on the wrong model.
 //
-// Anticipate is the handler bag: the component's whole outward effect is which
-// callback it invokes with what, so the spies are the assertion, declared up front.
+// The component's whole outward effect is which callback it invokes with what,
+// so the spies live on the generated props and a test names the one it asserts on.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { LimitResolution } from "@adhd/core";
 import { LimitModal } from "../../src/components/LimitModal";
+import type { LimitModalProps } from "../../src/components/LimitModal";
 import { LIMIT_COPY } from "../../src/limit-copy";
 import { DIRS } from "../../src/theme";
 import { limit, run, stage } from "../support/run-fixtures";
 
-const d = DIRS.indigo;
+const RAW_LINE = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 
-const BLOCKED_RUN = run([stage("design", "blocked")], "blocked");
-
-interface Handlers {
-  onResolve: (resolution: LimitResolution) => void;
-  onAbort: () => void;
-  onOpenConnection: () => void;
-  onDismiss: () => void;
-}
-
-function handlers(): Handlers {
+function limitProps(overrides: Partial<LimitModalProps> = {}): LimitModalProps {
   return {
+    d: DIRS.indigo,
+    run: run([stage("design", "blocked")], "blocked"),
+    limit: limit(),
     onResolve: vi.fn(),
     onAbort: vi.fn(),
     onOpenConnection: vi.fn(),
     onDismiss: vi.fn(),
+    ...overrides,
   };
-}
-
-function show(spies: Handlers, overrides = {}) {
-  return render(<LimitModal d={d} run={BLOCKED_RUN} limit={limit(overrides)} {...spies} />);
 }
 
 beforeEach(() => {
@@ -50,7 +41,7 @@ afterEach(() => {
 
 test("the countdown says how long is left, not just that something is wrong", () => {
   // Act
-  show(handlers());
+  render(<LimitModal {...limitProps()} />);
 
   // Assert
   expect(screen.getByTestId("limit-countdown").textContent).toBe("1h 30m 00s");
@@ -58,7 +49,7 @@ test("the countdown says how long is left, not just that something is wrong", ()
 
 test("a limit with no parsed reset time says so instead of showing a blank countdown", () => {
   // Act
-  show(handlers(), { resetAt: undefined });
+  render(<LimitModal {...limitProps({ limit: limit({ resetAt: undefined }) })} />);
 
   // Assert
   expect(screen.queryByTestId("limit-countdown")).toBeNull();
@@ -67,7 +58,7 @@ test("a limit with no parsed reset time says so instead of showing a blank count
 
 test("the raw harness line is shown so the parsed reset can be checked against it", () => {
   // Act
-  show(handlers(), { raw: "You've hit your session limit · resets 4:30pm (Europe/Tallinn)" });
+  render(<LimitModal {...limitProps({ limit: limit({ raw: RAW_LINE }) })} />);
 
   // Assert
   expect(screen.getByText(/resets 4:30pm \(Europe\/Tallinn\)/)).toBeTruthy();
@@ -75,19 +66,19 @@ test("the raw harness line is shown so the parsed reset can be checked against i
 
 test("picking a cheaper model resolves with that model id", () => {
   // Arrange
-  const spies = handlers();
-  show(spies);
+  const props = limitProps();
+  render(<LimitModal {...props} />);
 
   // Act
   fireEvent.click(screen.getByText("Haiku"));
 
   // Assert
-  expect(spies.onResolve).toHaveBeenCalledWith({ choice: "switch-model", model: "haiku" });
+  expect(props.onResolve).toHaveBeenCalledWith({ choice: "switch-model", model: "haiku" });
 });
 
 test("the model already in use is not offered as a way out of its own limit", () => {
   // Act
-  show(handlers(), { model: "opus" });
+  render(<LimitModal {...limitProps({ limit: limit({ model: "opus" }) })} />);
 
   // Assert
   expect(screen.queryByText("Opus")).toBeNull();
@@ -95,7 +86,7 @@ test("the model already in use is not offered as a way out of its own limit", ()
 
 test("a model that bills usage credits is not offered as an escape from a plan limit", () => {
   // Act
-  show(handlers());
+  render(<LimitModal {...limitProps()} />);
 
   // Assert — Sonnet · 1M context costs more, not less; it cannot resolve a plan limit.
   expect(screen.queryByText(/1M context/)).toBeNull();
@@ -103,57 +94,57 @@ test("a model that bills usage credits is not offered as an escape from a plan l
 
 test("switching harness names the engine and leaves the model to the new harness", () => {
   // Arrange
-  const spies = handlers();
-  show(spies);
+  const props = limitProps();
+  render(<LimitModal {...props} />);
 
   // Act
   fireEvent.click(screen.getByText("Codex"));
 
   // Assert
-  expect(spies.onResolve).toHaveBeenCalledWith({ choice: "switch-engine", engine: "codex" });
+  expect(props.onResolve).toHaveBeenCalledWith({ choice: "switch-engine", engine: "codex" });
 });
 
 test("retry now resolves without changing any setting", () => {
   // Arrange
-  const spies = handlers();
-  show(spies);
+  const props = limitProps();
+  render(<LimitModal {...props} />);
 
   // Act
   fireEvent.click(screen.getByText(LIMIT_COPY.retryNow));
 
   // Assert
-  expect(spies.onResolve).toHaveBeenCalledWith({ choice: "retry-now" });
+  expect(props.onResolve).toHaveBeenCalledWith({ choice: "retry-now" });
 });
 
 test("keeping the wait dismisses the popup without resolving the run", () => {
   // Arrange
-  const spies = handlers();
-  show(spies);
+  const props = limitProps();
+  render(<LimitModal {...props} />);
 
   // Act
   fireEvent.click(screen.getByText(LIMIT_COPY.keepWaiting));
 
   // Assert
-  expect(spies.onDismiss).toHaveBeenCalled();
-  expect(spies.onResolve).not.toHaveBeenCalled();
+  expect(props.onDismiss).toHaveBeenCalled();
+  expect(props.onResolve).not.toHaveBeenCalled();
 });
 
 test("Escape dismisses rather than resolving, so the run keeps waiting", () => {
   // Arrange
-  const spies = handlers();
-  show(spies);
+  const props = limitProps();
+  render(<LimitModal {...props} />);
 
   // Act
   fireEvent.keyDown(document, { key: "Escape" });
 
   // Assert
-  expect(spies.onDismiss).toHaveBeenCalled();
-  expect(spies.onResolve).not.toHaveBeenCalled();
+  expect(props.onDismiss).toHaveBeenCalled();
+  expect(props.onResolve).not.toHaveBeenCalled();
 });
 
 test("the dialog announces itself as modal so a screen reader traps into it", () => {
   // Act
-  show(handlers());
+  render(<LimitModal {...limitProps()} />);
 
   // Assert
   expect(screen.getByTestId("limit-modal").getAttribute("aria-modal")).toBe("true");
@@ -161,7 +152,7 @@ test("the dialog announces itself as modal so a screen reader traps into it", ()
 
 test("a browser without the Notification API hides the enable-notifications offer", () => {
   // Act
-  show(handlers());
+  render(<LimitModal {...limitProps()} />);
 
   // Assert
   expect(screen.queryByText(LIMIT_COPY.enableNotifications)).toBeNull();
