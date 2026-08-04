@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  engineLimitSchema,
   runLimitSchema,
   runMessageSchema,
   stageLogEntrySchema,
@@ -52,17 +51,6 @@ describe("runLimitSchema", () => {
 
   it("rejects an unknown engine", () => {
     expect(runLimitSchema.safeParse({ ...limit, engine: "gpt" }).success).toBe(false);
-  });
-});
-
-describe("engineLimitSchema", () => {
-  it("carries only what an adapter can know, without the run's framing", () => {
-    const parsed = engineLimitSchema.safeParse({
-      raw: "limit reached",
-      stageId: "developer",
-    });
-
-    expect(parsed.success).toBe(false);
   });
 });
 

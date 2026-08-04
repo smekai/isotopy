@@ -139,18 +139,19 @@ export const stageUsageSchema = z
 
 export type StageUsage = z.infer<typeof stageUsageSchema>;
 
-const engineLimitShape = {
-  raw: z.string(),
-  resetAt: timestamp.optional(),
-};
-
-export const engineLimitSchema = z.object(engineLimitShape).strict();
-
-export type EngineLimit = z.infer<typeof engineLimitSchema>;
+/**
+ * What an adapter can know on its own. Never parsed — it is produced by
+ * `detectEngineLimit` and consumed in-process, so a type is the whole contract.
+ */
+export interface EngineLimit {
+  raw: string;
+  resetAt?: string;
+}
 
 export const runLimitSchema = z
   .object({
-    ...engineLimitShape,
+    raw: z.string(),
+    resetAt: timestamp.optional(),
     stageId: requiredText,
     engine: z.enum(ENGINE_IDS),
     model: z.string().optional(),
