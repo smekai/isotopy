@@ -1,5 +1,26 @@
 # Done
 
+## TASK-107: One definition per shape — RunEvent union, schema dedupe, structured tool calls
+**Priority:** P1 | **Tags:** core, server, ui, testing
+**Updated:** 2026-08-03 22:40
+
+The schemas were strict but the types were loose, and one shape was defined up to four times. Every shape now has a single definition in `@adhd/core`, with its TypeScript type inferred from the schema.
+
+### Done
+
+zod became core's one runtime dependency. Core shapes are transform-free so `z.infer` stays honest; agent-boundary normalisation stayed in the server.
+
+- **RunEvent** is a real 15-arm discriminated union instead of a flat interface with nine optional fields. The server needed no changes — its emit sites were already correct — and the UI reducer became an exhaustive switch, shedding six guards for states the schema already proved impossible. Four specs asserting those defensive paths were deleted rather than repaired.
+- **Closeout** collapsed from three schemas to one shape. This closed a live defect: the persisted-run codec was importing the agent-lenient schema, so ADHD's own records were validated against rules written for an LLM.
+- **Milestone proposal** collapsed from three definitions to one, which made the fake-markdown-fence round trip in `updateMilestoneProposal` removable. PATCH /milestones/:id/proposal now returns a path-aware 400 and has the component tests it never had.
+- **Tool calls** carry a structured `StageActivity` instead of being flattened to a string the UI re-classified by log level. The plan-limit wait, the resume line and "no skill found" are now visible in the chat.
+
+Out of scope by decision: UI runtime SSE validation, the hand-rolled TOML and .env parsers, the regex-on-error-message routing.
+
+Shipped across 0.8.15–0.8.19. 440 tests (from 403), 42 e2e green.
+
+---
+
 ## TASK-061: Limit is over — pause the run on a plan limit instead of failing it
 **Priority:** P2 | **Tags:** engine, server, ui | **Assignee:** Fedor
 **Updated:** 2026-08-03 16:50
