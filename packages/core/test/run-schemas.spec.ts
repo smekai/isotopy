@@ -107,4 +107,41 @@ describe("stageLogEntrySchema", () => {
 
     expect(parsed.success).toBe(false);
   });
+
+  // The schema is strict, so a declared activity that it did not know about
+  // would fail every reload of the history that carries one.
+  it("round-trips a log entry carrying a declared activity", () => {
+    const entry = {
+      ts: "2026-08-03T10:00:00.000Z",
+      level: "run",
+      message: "▶ Read src/index.ts",
+      activity: { kind: "tool", name: "Read", detail: "src/index.ts" },
+    };
+
+    const parsed = stageLogEntrySchema.safeParse(entry);
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toEqual(entry);
+  });
+
+  it("still accepts a log entry written before activities existed", () => {
+    const parsed = stageLogEntrySchema.safeParse({
+      ts: "2026-08-03T10:00:00.000Z",
+      level: "run",
+      message: "▶ Read src/index.ts",
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects an activity of an unknown kind", () => {
+    const parsed = stageLogEntrySchema.safeParse({
+      ts: "2026-08-03T10:00:00.000Z",
+      level: "run",
+      message: "hi",
+      activity: { kind: "telepathy", name: "Read" },
+    });
+
+    expect(parsed.success).toBe(false);
+  });
 });

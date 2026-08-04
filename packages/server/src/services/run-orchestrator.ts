@@ -6,7 +6,6 @@ import type {
   EnginePermissionMode,
   LimitChoice,
   LimitResolution,
-  LogLevel,
   MessageKind,
   MessageRole,
   Milestone,
@@ -18,6 +17,7 @@ import type {
   RunState,
   RunSummary,
   StageDefinition,
+  StageLogDraft,
   StageOutcome,
   StageState,
   StageUsage,
@@ -947,14 +947,14 @@ export class RunOrchestrator implements RunProjection {
     this.emit({ ts: nowIso(), type: "stage.started", runId, stageId, status: "running" });
   }
 
-  log(runId: string, stageId: string, level: LogLevel, message: string): void {
+  log(runId: string, stageId: string, draft: StageLogDraft): void {
     const stage = this.findStage(runId, stageId);
     if (!stage) {
       return;
     }
     const ts = nowIso();
-    stage.logs.push({ ts, level, message });
-    this.emit({ ts, type: "stage.log", runId, stageId, message, level });
+    stage.logs.push({ ts, ...draft });
+    this.emit({ ts, type: "stage.log", runId, stageId, ...draft });
   }
 
   stageAwaiting(runId: string, stageId: string): void {
@@ -1032,7 +1032,7 @@ export class RunOrchestrator implements RunProjection {
     };
     const profession = agentForStage(stageId).profession;
     const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
-    this.log(runId, stageId, "warn", message);
+    this.log(runId, stageId, { level: "warn", message });
     this.emit({
       ts,
       type: "stage.blocked",
@@ -1055,7 +1055,7 @@ export class RunOrchestrator implements RunProjection {
     delete run.limit;
     const profession = agentForStage(stageId).profession;
     const message = LIMIT_LOG.resuming(profession, choice);
-    this.log(runId, stageId, "run", message);
+    this.log(runId, stageId, { level: "run", message });
     this.emit({
       ts: nowIso(),
       type: "stage.unblocked",
@@ -1103,7 +1103,7 @@ export class RunOrchestrator implements RunProjection {
     stage.status = "passed";
     stage.completedAt = nowIso();
     run.status = "running";
-    this.log(runId, stageId, "pass", `✓ Gate approved — ${profession} cleared to proceed`);
+    this.log(runId, stageId, { level: "pass", message: `✓ Gate approved — ${profession} cleared to proceed` });
     this.emit({
       ts: nowIso(),
       type: "stage.approved",
@@ -1165,7 +1165,7 @@ export class RunOrchestrator implements RunProjection {
     }
     stage.completedAt = nowIso();
     stage.status = "failed";
-    this.log(runId, stageId, "fail", `✗ ${message}`);
+    this.log(runId, stageId, { level: "fail", message: `✗ ${message}` });
     this.emit({ ts: nowIso(), type: "stage.failed", runId, stageId, status: "failed", message });
   }
 

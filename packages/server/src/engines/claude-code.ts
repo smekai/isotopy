@@ -168,7 +168,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       binary = resolveClaudeBinary().path;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      ctx.onLog("fail", message);
+      ctx.onLog({ level: "fail", message });
       return { success: false, exitCode: null, errorMessage: message };
     }
 
@@ -214,7 +214,7 @@ export const claudeCodeAdapter: EngineAdapter = {
         }
         const parsed = parseClaudeProtocolLine(trimmed);
         if (!parsed.ok) {
-          ctx.onLog("warn", protocolProblemMessage(parsed.problem));
+          ctx.onLog({ level: "warn", message: protocolProblemMessage(parsed.problem) });
           return;
         }
         applyProtocolUpdate(capture, parsed.event, ctx.onLog);
@@ -231,7 +231,7 @@ export const claudeCodeAdapter: EngineAdapter = {
         errorMessage = "Aborted";
       } else if (result.exitCode === null && capture.terminal === undefined) {
         errorMessage = result.errorMessage ?? "Failed to start Claude Code";
-        ctx.onLog("fail", errorMessage);
+        ctx.onLog({ level: "fail", message: errorMessage });
       } else {
         const stderr = result.stderrTail.join(" ").trim();
         const raw =
@@ -243,7 +243,7 @@ export const claudeCodeAdapter: EngineAdapter = {
         limit = detectEngineLimit("claude-code", truncate(detail));
         const mapped = mapKnownError(detail);
         if (mapped ?? limit) {
-          ctx.onLog("warn", truncate(raw));
+          ctx.onLog({ level: "warn", message: truncate(raw) });
         }
         errorMessage = mapped ?? truncate(raw);
       }

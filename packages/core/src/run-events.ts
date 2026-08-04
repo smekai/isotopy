@@ -4,6 +4,7 @@ import {
   TERMINAL_RUN_STATUSES,
   runLimitSchema,
   runMessageSchema,
+  stageActivitySchema,
   stageUsageSchema,
 } from "./runs.ts";
 import { requiredText, timestamp } from "./schema.ts";
@@ -60,6 +61,7 @@ export const stageLogEventSchema = z
     type: z.literal("stage.log"),
     level: z.enum(LOG_LEVELS),
     message: z.string(),
+    activity: stageActivitySchema.optional(),
   })
   .strict();
 

@@ -1,3 +1,4 @@
+import type { StageLogDraft } from "@adhd/core";
 import { z } from "zod";
 import { truncate } from "./log-text.ts";
 import {
@@ -6,7 +7,6 @@ import {
 } from "./protocol-validation.ts";
 import type {
   EngineProtocolUpdate,
-  ProtocolLog,
   ProtocolResult,
 } from "./protocol-validation.ts";
 
@@ -71,7 +71,7 @@ function errorMessage(
 function startedLog(
   item: z.infer<typeof itemSchema>,
 ): ProtocolResult<EngineProtocolUpdate> {
-  let log: ProtocolLog | undefined;
+  let log: StageLogDraft | undefined;
   if (item.type === "command_execution") {
     if (item.command === undefined) {
       return missingItemField(item.type, "command");
@@ -79,19 +79,35 @@ function startedLog(
     const command = Array.isArray(item.command)
       ? item.command.join(" ")
       : item.command;
-    log = { level: "run", message: truncate(`▶ ${command}`) };
+    log = {
+      level: "run",
+      message: truncate(`▶ ${command}`),
+      activity: { kind: "tool", name: "command", detail: command },
+    };
   } else if (item.type === "file_change") {
-    log = { level: "run", message: "✎ file change" };
+    log = {
+      level: "run",
+      message: "✎ file change",
+      activity: { kind: "tool", name: "file_change" },
+    };
   } else if (item.type === "mcp_tool_call") {
     if (item.name === undefined) {
       return missingItemField(item.type, "name");
     }
-    log = { level: "run", message: truncate(`▶ ${item.name}`) };
+    log = {
+      level: "run",
+      message: truncate(`▶ ${item.name}`),
+      activity: { kind: "tool", name: item.name },
+    };
   } else if (item.type === "web_search") {
     if (item.query === undefined) {
       return missingItemField(item.type, "query");
     }
-    log = { level: "run", message: truncate(`🔍 ${item.query}`) };
+    log = {
+      level: "run",
+      message: truncate(`🔍 ${item.query}`),
+      activity: { kind: "tool", name: "web_search", detail: item.query },
+    };
   }
   return { ok: true, event: { logs: log ? [log] : [] } };
 }
@@ -181,7 +197,13 @@ export function parseCodexProtocolLine(
     return {
       ok: true,
       event: {
-        logs: [{ level: "run", message: "turn complete" }],
+        logs: [
+          {
+            level: "run",
+            message: "turn complete",
+            activity: { kind: "engine", name: "codex" },
+          },
+        ],
         terminal: "success",
         usage: parsed.event.usage
           ? {

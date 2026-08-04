@@ -265,12 +265,12 @@ export const codexAdapter: EngineAdapter = {
       binary = resolveCodexBinary().path;
     } catch (error) {
       const message = errorText(error);
-      ctx.onLog("fail", message);
+      ctx.onLog({ level: "fail", message });
       return { success: false, exitCode: null, errorMessage: message };
     }
 
     if (ctx.permissionMode === "acceptEdits") {
-      ctx.onLog("info", "Codex has no accept-edits-only headless mode — running with --sandbox workspace-write");
+      ctx.onLog({ level: "info", message: "Codex has no accept-edits-only headless mode — running with --sandbox workspace-write" });
     }
 
     const runCtx = withPersonaPrompt(ctx);
@@ -297,7 +297,7 @@ export const codexAdapter: EngineAdapter = {
         }
         const parsed = parseCodexProtocolLine(trimmed);
         if (!parsed.ok) {
-          ctx.onLog("warn", protocolProblemMessage(parsed.problem));
+          ctx.onLog({ level: "warn", message: protocolProblemMessage(parsed.problem) });
           return;
         }
         applyProtocolUpdate(capture, parsed.event, ctx.onLog);
@@ -321,7 +321,7 @@ export const codexAdapter: EngineAdapter = {
         capture.error === undefined
       ) {
         errorMessage = result.errorMessage ?? "Failed to start Codex CLI";
-        ctx.onLog("fail", errorMessage);
+        ctx.onLog({ level: "fail", message: errorMessage });
       } else {
         const stderr = result.stderrTail.join(" ").trim();
         const raw =
@@ -331,7 +331,7 @@ export const codexAdapter: EngineAdapter = {
         limit = detectEngineLimit("codex", truncate(detail));
         const mapped = mapKnownError(detail);
         if (mapped ?? limit) {
-          ctx.onLog("warn", truncate(raw));
+          ctx.onLog({ level: "warn", message: truncate(raw) });
         }
         errorMessage = mapped ?? truncate(raw);
       }

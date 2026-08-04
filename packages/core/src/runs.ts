@@ -55,15 +55,33 @@ export const LOG_LEVELS = [
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+export const STAGE_ACTIVITY_KINDS = ["tool", "tool-error", "engine"] as const;
+
+export type StageActivityKind = (typeof STAGE_ACTIVITY_KINDS)[number];
+
+export const stageActivitySchema = z
+  .object({
+    kind: z.enum(STAGE_ACTIVITY_KINDS),
+    name: requiredText,
+    detail: z.string().optional(),
+  })
+  .strict();
+
+export type StageActivity = z.infer<typeof stageActivitySchema>;
+
 export const stageLogEntrySchema = z
   .object({
     ts: timestamp,
     level: z.enum(LOG_LEVELS),
     message: z.string(),
+    activity: stageActivitySchema.optional(),
   })
   .strict();
 
 export type StageLogEntry = z.infer<typeof stageLogEntrySchema>;
+
+/** A log line before the projection stamps it with the time it arrived. */
+export type StageLogDraft = Omit<StageLogEntry, "ts">;
 
 export const STAGE_VERDICTS = {
   PASS: "PASS",

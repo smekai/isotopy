@@ -1,5 +1,5 @@
 import { agentForStage } from "@adhd/core";
-import type { LogLevel, RunState, StageStatus } from "@adhd/core";
+import type { LogLevel, RunState, StageActivity, StageStatus } from "@adhd/core";
 
 export type TranscriptItem =
   | {
@@ -20,7 +20,16 @@ export type TranscriptItem =
       text: string;
       question?: boolean;
     }
-  | { kind: "tool"; key: string; ts: string; stageId: string; text: string; failed: boolean }
+  | {
+      kind: "tool";
+      key: string;
+      ts: string;
+      stageId: string;
+      text: string;
+      name: string;
+      detail?: string;
+      failed: boolean;
+    }
   | { kind: "notice"; key: string; ts: string; stageId: string; text: string; level: LogLevel }
   | { kind: "user"; key: string; ts: string; text: string };
 
@@ -34,21 +43,34 @@ interface LogSource {
   ts: string;
   level: LogLevel;
   message: string;
+  activity?: StageActivity;
   key: string;
 }
 
-function itemForLog({ stageId, ts, level, message, key }: LogSource): TranscriptItem {
-  switch (level) {
-    case "info":
-      return { kind: "agent", key, ts, stageId, text: message };
-    case "run":
-    case "warn":
-      return { kind: "tool", key, ts, stageId, text: message, failed: level === "warn" };
-    case "pass":
-    case "fail":
-    case "error":
-      return { kind: "notice", key, ts, stageId, text: message, level };
+function itemForLog({
+  stageId,
+  ts,
+  level,
+  message,
+  activity,
+  key,
+}: LogSource): TranscriptItem {
+  if (activity) {
+    return {
+      kind: "tool",
+      key,
+      ts,
+      stageId,
+      text: message,
+      name: activity.name,
+      detail: activity.detail,
+      failed: activity.kind === "tool-error",
+    };
   }
+  if (level === "info") {
+    return { kind: "agent", key, ts, stageId, text: message };
+  }
+  return { kind: "notice", key, ts, stageId, text: message, level };
 }
 
 export function buildTranscript(run: RunState): TranscriptItem[] {
@@ -80,6 +102,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
           ts: entry.ts,
           level: entry.level,
           message: entry.message,
+          activity: entry.activity,
           key: `log:${stage.id}:${index}`,
         }),
       });
