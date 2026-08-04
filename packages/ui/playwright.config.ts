@@ -16,6 +16,10 @@ const BASE_URL = process.env.ADHD_UI_URL ?? `http://localhost:${UI_PORT}`;
 // The live tier is opt-in behind ADHD_E2E_LIVE=1: see docs/e2e-test-plan.md.
 export default defineConfig({
   testDir: "./e2e",
+  // `.e2e.ts`, not `.spec.ts`: a spec in this repo is a Vitest unit spec over a
+  // pure function, and one extension meaning two things is how a browser test
+  // ends up being read as one.
+  testMatch: "**/*.e2e.ts",
   timeout: 45_000,
   // Every spec drives the same server and the same in-memory run store, so a
   // run started by one file would be visible to another. Serialize.
