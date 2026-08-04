@@ -7,16 +7,16 @@ import type { APIRequestContext } from "@playwright/test";
 import type { Milestone } from "@adhd/core";
 import { resetPreferences } from "../support/preferences";
 
-
+// Every test needs one seeded milestone, so it is created once per test rather
+// than as the first line of each.
+let milestone: Milestone;
 
 test.beforeEach(async ({ page }) => {
   await resetPreferences(page);
+  milestone = await createMilestone(page.request);
 });
 
 test("an active milestone reaches the rail with its progress count", async ({ page }) => {
-  // Arrange
-  const milestone = await createMilestone(page.request);
-
   // Act
   await page.goto("/");
 
@@ -29,7 +29,6 @@ test("an active milestone reaches the rail with its progress count", async ({ pa
 
 test("opening a rail card navigates to that milestone's dashboard", async ({ page }) => {
   // Arrange
-  const milestone = await createMilestone(page.request);
   await page.goto("/");
   const card = page.locator(`[data-milestone-id="${milestone.id}"]`);
   await card.scrollIntoViewIfNeeded();
@@ -48,7 +47,6 @@ test("opening a rail card navigates to that milestone's dashboard", async ({ pag
 
 test("the autorun toggle flips when checked", async ({ page }) => {
   // Arrange
-  const milestone = await createMilestone(page.request);
   await page.goto(`/#/milestones/${milestone.id}`);
   const toggle = page.getByTestId("milestone-autorun");
   await expect(toggle).not.toBeChecked();
@@ -62,7 +60,6 @@ test("the autorun toggle flips when checked", async ({ page }) => {
 
 test("the autorun toggle is server state, so it survives a reload", async ({ page }) => {
   // Arrange
-  const milestone = await createMilestone(page.request);
   await page.goto(`/#/milestones/${milestone.id}`);
   await page.getByTestId("milestone-autorun").check();
   await expect(page.getByTestId("milestone-autorun")).toBeChecked();
@@ -75,9 +72,6 @@ test("the autorun toggle is server state, so it survives a reload", async ({ pag
 });
 
 test("Finalize stays disabled while features are unfinished", async ({ page }) => {
-  // Arrange
-  const milestone = await createMilestone(page.request);
-
   // Act
   await page.goto(`/#/milestones/${milestone.id}`);
 
@@ -88,7 +82,6 @@ test("Finalize stays disabled while features are unfinished", async ({ page }) =
 
 test("accepting the needs-attention feature is what unblocks Finalize", async ({ page }) => {
   // Arrange
-  const milestone = await createMilestone(page.request);
   await markFirstFeatureNeedingAttention(page.request, milestone);
   await page.goto(`/#/milestones/${milestone.id}`);
   await expect(page.getByTestId("milestone-finalize")).toBeDisabled();
@@ -104,7 +97,6 @@ test("accepting the needs-attention feature is what unblocks Finalize", async ({
 
 test("an acceptance is recorded on the server, so it survives a reload", async ({ page }) => {
   // Arrange
-  const milestone = await createMilestone(page.request);
   await markFirstFeatureNeedingAttention(page.request, milestone);
   await page.goto(`/#/milestones/${milestone.id}`);
   await page.getByTestId("milestone-feature-accept").click();
@@ -121,7 +113,6 @@ test("the milestone route is a sibling of home, so the composer is untouched", a
   page,
 }) => {
   // Arrange
-  const milestone = await createMilestone(page.request);
   await page.goto(`/#/milestones/${milestone.id}`);
   await expect(page.getByTestId("milestone-dashboard")).toBeVisible();
 

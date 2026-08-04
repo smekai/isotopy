@@ -1,3 +1,7 @@
+// The Product Manager's closeout is the one stage that writes outside the run
+// directory — it moves tasks on the board and deletes files. Each test arranges
+// only the part of a project it asserts on, so nothing here sets up a task board
+// for a test about cleanup, or a browser profile for a test about the board.
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,51 +12,68 @@ import { applyProductManagerCloseout } from "../../src/services/product-manager-
 
 const roots: string[] = [];
 
-async function fixture(): Promise<{ project: ProjectPath; run: ReturnType<typeof createInitialRunState> }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "adhd-closeout-"));
-  roots.push(root);
-  const dataDir = path.join(root, ".adhd");
-  const tasksDir = path.join(root, ".tasks");
-  await mkdir(tasksDir, { recursive: true });
-  await writeFile(
-    path.join(tasksDir, "config.json"),
-    `${JSON.stringify({
-      idPrefix: "TASK",
-      nextId: 3,
-      states: [
-        { name: "Backlog", fileName: "BACKLOG.md" },
-        { name: "In Progress", fileName: "IN_PROGRESS.md" },
-        { name: "Done", fileName: "DONE.md" },
-      ],
+const BOARD_CONFIG = {
+  idPrefix: "TASK",
+  nextId: 3,
+  states: [
+    { name: "Backlog", fileName: "BACKLOG.md" },
+    { name: "In Progress", fileName: "IN_PROGRESS.md" },
+    { name: "Done", fileName: "DONE.md" },
+  ],
+  tags: ["server"],
+  insertPosition: "top",
+};
+
+const IN_PROGRESS_TASKS = [
+  "# In Progress",
+  "",
+  "## TASK-001: Delivered work",
+  "**Priority:** P0",
+  "",
+  "Done.",
+  "",
+  "---",
+  "",
+  "## TASK-002: Unresolved work",
+  "**Priority:** P1",
+  "",
+  "Still open.",
+  "",
+  "---",
+  "",
+].join("\n");
+
+/** Delivers TASK-001, leaves TASK-002 open, and asks for two cleanups. */
+const PARTIAL_DELIVERY = {
+  summary: "Delivered one task and preserved one unresolved task.",
+  deliveredScope: ["TASK-001"],
+  decisions: ["Keep the adapter boundary"],
+  knowledge: ["TaskPlanner is file-backed"],
+  findings: [
+    {
+      id: "remaining-gap",
+      title: "Unresolved work remains",
+      severity: "blocking",
+      evidence: "TASK-002",
+    },
+  ],
+  tasks: [
+    {
+      findingId: "remaining-gap",
+      title: "Resolve the remaining gap",
+      description: "Finish and verify TASK-002.",
+      priority: "P1",
       tags: ["server"],
-      insertPosition: "top",
-    }, null, 2)}\n`,
-  );
-  await writeFile(path.join(tasksDir, "BACKLOG.md"), "# Backlog\n");
-  await writeFile(
-    path.join(tasksDir, "IN_PROGRESS.md"),
-    "# In Progress\n\n## TASK-001: Delivered work\n**Priority:** P0\n\nDone.\n\n---\n\n## TASK-002: Unresolved work\n**Priority:** P1\n\nStill open.\n\n---\n",
-  );
-  await writeFile(path.join(tasksDir, "DONE.md"), "# Done\n");
-  const run = createInitialRunState({
-    runId: "run-001",
-    number: 1,
-    projectId: "project",
-    pipeline: FULL_DELIVERY_PIPELINE,
-    milestoneId: "milestone",
-    featureId: "feature",
-    sourceTaskIds: ["TASK-001", "TASK-002"],
-  });
-  await mkdir(
-    path.join(dataDir, "runs", run.id, "tmp", "browser-profile"),
-    { recursive: true },
-  );
-  await writeFile(path.join(root, "user-work.txt"), "preserve");
-  return {
-    project: { id: "project", root, dataDir },
-    run,
-  };
-}
+    },
+  ],
+  completedTaskIds: ["TASK-001"],
+  unresolvedTaskIds: ["TASK-002"],
+  cleanup: [
+    { relativePath: "browser-profile", reason: "Run-owned browser profile" },
+    { relativePath: "../user-work.txt", reason: "Must be rejected" },
+  ],
+  nextRecommendation: "Resolve TASK-002",
+};
 
 afterEach(async () => {
   await Promise.all(
@@ -62,59 +83,17 @@ afterEach(async () => {
   );
 });
 
-/** A report that delivers TASK-001, leaves TASK-002 open, and asks for two cleanups. */
-function partialDeliveryReport() {
-  return {
-      summary: "Delivered one task and preserved one unresolved task.",
-      deliveredScope: ["TASK-001"],
-      decisions: ["Keep the adapter boundary"],
-      knowledge: ["TaskPlanner is file-backed"],
-      findings: [
-        {
-          id: "remaining-gap",
-          title: "Unresolved work remains",
-          severity: "blocking",
-          evidence: "TASK-002",
-        },
-      ],
-      tasks: [
-        {
-          findingId: "remaining-gap",
-          title: "Resolve the remaining gap",
-          description: "Finish and verify TASK-002.",
-          priority: "P1",
-          tags: ["server"],
-        },
-      ],
-      completedTaskIds: ["TASK-001"],
-      unresolvedTaskIds: ["TASK-002"],
-      cleanup: [
-        {
-          relativePath: "browser-profile",
-          reason: "Run-owned browser profile",
-        },
-        {
-          relativePath: "../user-work.txt",
-          reason: "Must be rejected",
-        },
-      ],
-      nextRecommendation: "Resolve TASK-002",
-  };
-}
-
-function closeoutOutput(report: object, verdict: "PASS" | "FAIL"): string {
-  return `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: ${verdict}`;
-}
-
 test("only the tasks the report calls completed move to Done", async () => {
   // Arrange
-  const { project, run } = await fixture();
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
 
   // Act
   const record = await applyProductManagerCloseout(
     project,
     run,
-    closeoutOutput(partialDeliveryReport(), "FAIL"),
+    closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
   );
 
   // Assert
@@ -133,14 +112,20 @@ test("only the tasks the report calls completed move to Done", async () => {
 });
 
 test("cleanup deletes inside the run directory and refuses to escape it", async () => {
-  // Arrange
-  const { project, run } = await fixture();
+  // Arrange — the run's own temp dir, plus a decoy the report will try to reach.
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
+  await mkdir(path.join(project.dataDir, "runs", run.id, "tmp", "browser-profile"), {
+    recursive: true,
+  });
+  await writeFile(path.join(project.root, "user-work.txt"), "preserve");
 
   // Act
   const record = await applyProductManagerCloseout(
     project,
     run,
-    closeoutOutput(partialDeliveryReport(), "FAIL"),
+    closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
   );
 
   // Assert — a traversal out of the run directory is rejected, not obeyed.
@@ -156,8 +141,10 @@ test("cleanup deletes inside the run directory and refuses to escape it", async 
 
 test("closing the same run out twice does not file the follow-up task again", async () => {
   // Arrange — a run already closed out once.
-  const { project, run } = await fixture();
-  const output = closeoutOutput(partialDeliveryReport(), "FAIL");
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
+  const output = closeoutOutput(PARTIAL_DELIVERY, "FAIL");
   await applyProductManagerCloseout(project, run, output);
 
   // Act
@@ -171,7 +158,9 @@ test("closing the same run out twice does not file the follow-up task again", as
 
 test("keeps findings and follow-up tasks when the agent writes a hyphenated severity", async () => {
   // Arrange
-  const { project, run } = await fixture();
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
   const report = {
     summary: "Delivered the work with one cosmetic gap.",
     deliveredScope: ["TASK-001"],
@@ -200,11 +189,7 @@ test("keeps findings and follow-up tasks when the agent writes a hyphenated seve
   };
 
   // Act
-  const record = await applyProductManagerCloseout(
-    project,
-    run,
-    closeoutOutput(report, "PASS"),
-  );
+  const record = await applyProductManagerCloseout(project, run, closeoutOutput(report, "PASS"));
 
   // Assert — the agent boundary normalises the prose the model wrote.
   expect(record.validationErrors).toEqual([]);
@@ -214,3 +199,39 @@ test("keeps findings and follow-up tasks when the agent writes a hyphenated seve
     await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8"),
   ).toContain("Fix the dashboard spacing");
 });
+
+/** An empty project root, swept by the afterEach above. */
+async function makeProject(): Promise<ProjectPath> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "adhd-closeout-"));
+  roots.push(root);
+  return { id: "project", root, dataDir: path.join(root, ".adhd") };
+}
+
+/** A TaskPlanner board holding TASK-001 and TASK-002, both in progress. */
+async function writeTaskBoard(project: ProjectPath): Promise<void> {
+  const tasksDir = path.join(project.root, ".tasks");
+  await mkdir(tasksDir, { recursive: true });
+  await writeFile(
+    path.join(tasksDir, "config.json"),
+    `${JSON.stringify(BOARD_CONFIG, null, 2)}\n`,
+  );
+  await writeFile(path.join(tasksDir, "BACKLOG.md"), "# Backlog\n");
+  await writeFile(path.join(tasksDir, "IN_PROGRESS.md"), IN_PROGRESS_TASKS);
+  await writeFile(path.join(tasksDir, "DONE.md"), "# Done\n");
+}
+
+function makeCloseoutRun() {
+  return createInitialRunState({
+    runId: "run-001",
+    number: 1,
+    projectId: "project",
+    pipeline: FULL_DELIVERY_PIPELINE,
+    milestoneId: "milestone",
+    featureId: "feature",
+    sourceTaskIds: ["TASK-001", "TASK-002"],
+  });
+}
+
+function closeoutOutput(report: object, verdict: "PASS" | "FAIL"): string {
+  return `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: ${verdict}`;
+}

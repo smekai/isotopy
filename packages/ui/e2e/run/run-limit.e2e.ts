@@ -17,8 +17,12 @@ import { resetPreferences } from "../support/preferences";
 // tokens, and typed as `RunState` so a change to the run model breaks typecheck
 // rather than rotting here.
 
+// the blocked run every test here reads is anticipated once. A route a single
+// test needs is still registered in its body: Playwright matches the most
+// recently registered route first, so it wins over this one.
 test.beforeEach(async ({ page }) => {
   await resetPreferences(page);
+  await anticipateBlockedRun(page);
 });
 
 const RUN_ID = "e2elimit1";
@@ -86,14 +90,9 @@ const BLOCKED_RUN: RunState = {
   ],
 };
 
-
-
 test("a parked run announces the limit over the run, with the raw line behind it", async ({
   page,
 }) => {
-  // Anticipate — every endpoint the page reaches, fulfilled from the fixture.
-  await anticipateBlockedRun(page);
-
   // Act
   await openBlockedRun(page);
 
@@ -105,9 +104,6 @@ test("a parked run announces the limit over the run, with the raw line behind it
 });
 
 test("the countdown ticks down rather than showing a frozen timestamp", async ({ page }) => {
-  // Anticipate
-  await anticipateBlockedRun(page);
-
   // Act
   await openBlockedRun(page);
 
@@ -118,9 +114,6 @@ test("the countdown ticks down rather than showing a frozen timestamp", async ({
 });
 
 test("the rail shows BLOCKED so a parked run is visible without opening it", async ({ page }) => {
-  // Anticipate
-  await anticipateBlockedRun(page);
-
   // Act
   await openBlockedRun(page);
 
@@ -132,7 +125,6 @@ test("the rail shows BLOCKED so a parked run is visible without opening it", asy
 
 test("choosing a cheaper model posts that model to the resolve endpoint", async ({ page }) => {
   // Anticipate — the seeded run, plus a recording route for the resolve call.
-  await anticipateBlockedRun(page);
 
   const posted: Request[] = [];
   await page.route(
@@ -157,7 +149,6 @@ test("choosing a cheaper model posts that model to the resolve endpoint", async 
 
 test("Escape dismisses the popup and leaves the run parked, not resolved", async ({ page }) => {
   // Anticipate — any limit call at all would be a bug, so record every one.
-  await anticipateBlockedRun(page);
 
   const posted: Request[] = [];
   await page.route(
@@ -181,9 +172,6 @@ test("Escape dismisses the popup and leaves the run parked, not resolved", async
 });
 
 test("a parked run can still be aborted from the bottom bar", async ({ page }) => {
-  // Anticipate
-  await anticipateBlockedRun(page);
-
   // Arrange
   await openBlockedRun(page);
 

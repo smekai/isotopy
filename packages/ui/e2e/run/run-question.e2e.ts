@@ -16,8 +16,12 @@ import { resetPreferences } from "../support/preferences";
 // zero tokens, and typed as `RunState` so a change to the run model breaks
 // typecheck rather than rotting here.
 
+// the parked run every test here reads is anticipated once. A route a single
+// test needs is still registered in its body: Playwright matches the most
+// recently registered route first, so it wins over this one.
 test.beforeEach(async ({ page }) => {
   await resetPreferences(page);
+  await anticipateAskingRun(page);
 });
 
 const RUN_ID = "e2eask01";
@@ -29,12 +33,7 @@ const ANSWER = "Use the nightly snapshot.";
 const STARTED_AT = "2026-07-27T09:00:00.000Z";
 const ASKED_AT = "2026-07-27T09:00:20.000Z";
 
-
-
 test("a parked question reads as a question, not as ordinary narration", async ({ page }) => {
-  // Anticipate — every endpoint the page will reach, fulfilled from the fixture.
-  await anticipateAskingRun(page);
-
   // Act
   await openAskingRun(page);
 
@@ -52,9 +51,6 @@ test("a parked question reads as a question, not as ordinary narration", async (
 });
 
 test("the composer asks for an answer and already has focus", async ({ page }) => {
-  // Anticipate
-  await anticipateAskingRun(page);
-
   // Act
   await openAskingRun(page);
 
@@ -68,9 +64,6 @@ test("the composer asks for an answer and already has focus", async ({ page }) =
 test("the rail shows the run as ASKING so a parked run is visible from anywhere", async ({
   page,
 }) => {
-  // Anticipate
-  await anticipateAskingRun(page);
-
   // Act
   await openAskingRun(page);
 
@@ -83,7 +76,6 @@ test("the rail shows the run as ASKING so a parked run is visible from anywhere"
 
 test("the typed answer is posted to the run's message endpoint", async ({ page }) => {
   // Anticipate — the seeded run, plus a recording route for the answer itself.
-  await anticipateAskingRun(page);
 
   const posted: Request[] = [];
   await page.route(
