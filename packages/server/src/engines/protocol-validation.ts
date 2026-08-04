@@ -1,15 +1,10 @@
-import type { LogLevel, StageUsage } from "@adhd/core";
+import type { StageLogDraft, StageUsage } from "@adhd/core";
 import type { ZodType } from "zod";
 import { validationIssues } from "../domain/validation.ts";
 
-export interface ProtocolLog {
-  level: LogLevel;
-  message: string;
-}
-
 export interface EngineProtocolUpdate {
   sessionId?: string;
-  logs: ProtocolLog[];
+  logs: StageLogDraft[];
   output?: string;
   error?: string;
   terminal?: "success" | "failure";
@@ -75,10 +70,10 @@ export function protocolProblemMessage(problem: ProtocolProblem): string {
 export function applyProtocolUpdate(
   capture: EngineProtocolUpdate,
   update: EngineProtocolUpdate,
-  onLog: (level: LogLevel, message: string) => void,
+  onLog: (log: StageLogDraft) => void,
 ): void {
   for (const log of update.logs) {
-    onLog(log.level, log.message);
+    onLog(log);
   }
   capture.sessionId = update.sessionId ?? capture.sessionId;
   capture.output = update.output ?? capture.output;

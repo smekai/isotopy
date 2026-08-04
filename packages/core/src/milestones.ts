@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { requiredText, requiredTexts, timestamp } from "./schema.ts";
+
 export const MILESTONE_STATUSES = [
   "draft",
   "active",
@@ -25,113 +28,163 @@ export const FINDING_SEVERITIES = ["blocking", "non_blocking"] as const;
 
 export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
 
-export interface MilestoneFinding {
-  id: string;
-  title: string;
-  severity: FindingSeverity;
-  sourceRunId: string;
-  evidence?: string;
+export const milestoneFindingSchema = z
+  .object({
+    id: requiredText,
+    title: requiredText,
+    severity: z.enum(FINDING_SEVERITIES),
+    sourceRunId: requiredText,
+    evidence: requiredText.optional(),
+  })
+  .strict();
+
+export type MilestoneFinding = z.infer<typeof milestoneFindingSchema>;
+
+export const milestoneTaskDraftSchema = z
+  .object({
+    id: requiredText,
+    title: requiredText,
+    description: requiredText,
+    priority: z.enum(TASK_PRIORITIES),
+    tags: requiredTexts,
+    createdTaskId: requiredText.optional(),
+  })
+  .strict();
+
+export type MilestoneTaskDraft = z.infer<typeof milestoneTaskDraftSchema>;
+
+export const milestoneFeatureProposalSchema = z
+  .object({
+    id: requiredText,
+    title: requiredText,
+    description: requiredText,
+    acceptanceCriteria: requiredTexts,
+    existingTaskIds: requiredTexts,
+    taskDrafts: z.array(milestoneTaskDraftSchema),
+  })
+  .strict();
+
+export type MilestoneFeatureProposal = z.infer<
+  typeof milestoneFeatureProposalSchema
+>;
+
+export const MILESTONE_PLAN_SHAPE = {
+  name: requiredText,
+  goal: requiredText,
+  features: z.array(milestoneFeatureProposalSchema).min(1),
+};
+
+export function refineMilestonePlan(
+  plan: { features: MilestoneFeatureProposal[] },
+  context: z.core.$RefinementCtx,
+): void {
+  const featureIds = plan.features.map((feature) => feature.id);
+  if (new Set(featureIds).size !== featureIds.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["features"],
+      message: "Feature IDs must be unique",
+    });
+  }
+
+  const draftIds = plan.features.flatMap((feature) =>
+    feature.taskDrafts.map((task) => task.id),
+  );
+  if (new Set(draftIds).size !== draftIds.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["features"],
+      message: "Draft task IDs must be unique",
+    });
+  }
+
+  plan.features.forEach((feature, index) => {
+    if (feature.acceptanceCriteria.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["features", index, "acceptanceCriteria"],
+        message: "At least one acceptance criterion is required",
+      });
+    }
+    if (feature.existingTaskIds.length + feature.taskDrafts.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["features", index],
+        message: "A feature must link or draft at least one task",
+      });
+    }
+  });
 }
 
-export interface MilestoneTaskDraft {
-  id: string;
-  title: string;
-  description: string;
-  priority: TaskPriority;
-  tags: string[];
-  createdTaskId?: string;
+export const milestonePlanSchema = z
+  .object(MILESTONE_PLAN_SHAPE)
+  .strict()
+  .superRefine(refineMilestonePlan);
+
+export type MilestonePlan = z.infer<typeof milestonePlanSchema>;
+
+export const milestoneProposalSchema = z
+  .object({
+    revision: z.number().int().positive(),
+    ...MILESTONE_PLAN_SHAPE,
+    createdAt: timestamp,
+  })
+  .strict();
+
+export type MilestoneProposal = z.infer<typeof milestoneProposalSchema>;
+
+export function toMilestoneProposal(
+  plan: MilestonePlan,
+  revision: number,
+  createdAt: string,
+): MilestoneProposal {
+  return { revision, ...plan, createdAt };
 }
 
-export interface MilestoneFeatureProposal {
-  id: string;
-  title: string;
-  description: string;
-  acceptanceCriteria: string[];
-  existingTaskIds: string[];
-  taskDrafts: MilestoneTaskDraft[];
-}
+export const milestoneFeatureSchema = z
+  .object({
+    id: requiredText,
+    title: requiredText,
+    description: requiredText.optional(),
+    acceptanceCriteria: requiredTexts,
+    status: z.enum(MILESTONE_FEATURE_STATUSES),
+    taskIds: requiredTexts,
+    runIds: requiredTexts,
+    findings: z.array(milestoneFindingSchema),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    completedAt: timestamp.optional(),
+    acceptedAt: timestamp.optional(),
+  })
+  .strict();
 
-export interface MilestoneProposal {
-  revision: number;
-  name: string;
-  goal: string;
-  features: MilestoneFeatureProposal[];
-  createdAt: string;
-}
+export type MilestoneFeature = z.infer<typeof milestoneFeatureSchema>;
 
-export interface MilestoneFeature {
-  id: string;
-  title: string;
-  description?: string;
-  acceptanceCriteria: string[];
-  status: MilestoneFeatureStatus;
-  taskIds: string[];
-  runIds: string[];
-  findings: MilestoneFinding[];
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-  acceptedAt?: string;
-}
+export const milestoneSchema = z
+  .object({
+    id: requiredText,
+    projectId: requiredText,
+    name: requiredText,
+    goal: requiredText.optional(),
+    status: z.enum(MILESTONE_STATUSES),
+    autoRunNext: z.boolean(),
+    features: z.array(milestoneFeatureSchema),
+    planningRunIds: requiredTexts,
+    proposal: milestoneProposalSchema.optional(),
+    approvalError: requiredText.optional(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    completedAt: timestamp.optional(),
+  })
+  .strict();
 
-export interface Milestone {
-  id: string;
-  projectId: string;
-  name: string;
-  goal?: string;
-  status: MilestoneStatus;
-  autoRunNext: boolean;
-  features: MilestoneFeature[];
-  planningRunIds: string[];
-  proposal?: MilestoneProposal;
-  approvalError?: string;
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-}
-
-export interface CreateMilestoneFeatureInput {
-  title: string;
-  description?: string;
-  acceptanceCriteria?: string[];
-  taskIds?: string[];
-}
-
-export interface CreateMilestoneInput {
-  name: string;
-  goal?: string;
-  status?: "draft" | "active";
-  autoRunNext?: boolean;
-  features?: CreateMilestoneFeatureInput[];
-}
-
-export interface StartMilestonePlanningInput {
-  goal: string;
-  engine?: string;
-  model?: string;
-  permissionMode?: string;
-}
-
-export interface ReviseMilestonePlanInput {
-  feedback: string;
-  engine?: string;
-  model?: string;
-  permissionMode?: string;
-}
+export type Milestone = z.infer<typeof milestoneSchema>;
 
 export interface UpdateMilestoneInput {
   name?: string;
   goal?: string | null;
   status?: MilestoneStatus;
   autoRunNext?: boolean;
-}
-
-export interface UpdateMilestoneFeatureInput {
-  title?: string;
-  description?: string | null;
-  acceptanceCriteria?: string[];
-  status?: MilestoneFeatureStatus;
-  taskIds?: string[];
 }
 
 export function nextMilestoneFeature(

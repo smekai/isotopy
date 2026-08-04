@@ -76,9 +76,9 @@ const SEEDED_RUN: RunState = {
       completedAt: "2026-07-20T10:01:00.000Z",
       usage: { costUsd: 0.18, turns: 4 },
       logs: [
-        { ts: STARTED_AT, level: "run", message: "Developer online · Claude Code · haiku" },
+        { ts: STARTED_AT, level: "run", message: "Developer online · Claude Code · haiku", activity: { kind: "engine", name: "Claude Code" } },
         { ts: "2026-07-20T10:00:20.000Z", level: "info", message: DEV_PROSE },
-        { ts: "2026-07-20T10:00:30.000Z", level: "run", message: "▶ Write greet.js" },
+        { ts: "2026-07-20T10:00:30.000Z", level: "run", message: "▶ Write greet.js", activity: { kind: "tool", name: "Write greet.js" } },
         { ts: "2026-07-20T10:01:00.000Z", level: "pass", message: "✓ Developer finished — result ready" },
       ],
     },
@@ -92,7 +92,7 @@ const SEEDED_RUN: RunState = {
       completedAt: FINISHED_AT,
       usage: { costUsd: 0.07, turns: 2 },
       logs: [
-        { ts: "2026-07-20T10:01:00.000Z", level: "run", message: "QA Engineer online · Claude Code · haiku" },
+        { ts: "2026-07-20T10:01:00.000Z", level: "run", message: "QA Engineer online · Claude Code · haiku", activity: { kind: "engine", name: "Claude Code" } },
         { ts: "2026-07-20T10:01:30.000Z", level: "info", message: TESTER_PROSE },
         { ts: FINISHED_AT, level: "pass", message: "QA Engineer reported VERDICT: PASS" },
       ],

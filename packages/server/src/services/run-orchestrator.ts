@@ -1,29 +1,26 @@
 import { randomUUID } from "node:crypto";
 import type {
-  CreateMilestoneFeatureInput,
-  CreateMilestoneInput,
   EngineLimit,
   EnginePermissionMode,
   LimitChoice,
   LimitResolution,
-  LogLevel,
   MessageKind,
   MessageRole,
   Milestone,
   MilestoneFeature,
-  MilestoneProposal,
+  MilestonePlan,
+  UpdateMilestoneInput,
   PipelineDefinition,
   RunEvent,
   RunMessage,
   RunState,
   RunSummary,
   StageDefinition,
+  StageLogDraft,
   StageOutcome,
   StageState,
   StageUsage,
   StageVerdict,
-  UpdateMilestoneFeatureInput,
-  UpdateMilestoneInput,
 } from "@adhd/core";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -37,9 +34,16 @@ import {
   nextMilestoneFeature,
   STAGE_OUTCOMES,
   pipelineUsesEngine,
+  toMilestoneProposal,
   toRunSummary,
 } from "@adhd/core";
 import { ListenerRegistry } from "./listener-registry.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
+import type {
+  CreateMilestoneFeatureInput,
+  CreateMilestoneInput,
+  UpdateMilestoneFeatureInput,
+} from "../domain/request-schemas.ts";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -55,7 +59,7 @@ import {
   selectionAfterLimit,
 } from "../domain/engine-limit.ts";
 import { formatHandoff } from "../domain/markdown/stage.ts";
-import { parseMilestonePlan } from "../domain/milestone-plan.ts";
+import { extractMilestonePlan } from "../domain/milestone-plan.ts";
 import {
   renderMilestonePlanningContext,
   renderMilestoneRevisionContext,
@@ -353,23 +357,19 @@ export class RunOrchestrator implements RunProjection {
   async updateMilestoneProposal(
     projectPath: ProjectPath,
     milestoneId: string,
-    proposalInput: Omit<MilestoneProposal, "revision" | "createdAt">,
+    plan: MilestonePlan,
   ): Promise<Milestone> {
     const milestone = this.requireMilestone(projectPath.id, milestoneId);
     if (milestone.status !== "draft") {
       throw new Error("Only draft milestone proposals can be edited");
     }
-    const parsed = parseMilestonePlan(
-      `\`\`\`adhd-milestone-plan\n${JSON.stringify(proposalInput)}\n\`\`\``,
+    milestone.proposal = toMilestoneProposal(
+      plan,
       (milestone.proposal?.revision ?? 0) + 1,
       nowIso(),
     );
-    if (!parsed.proposal) {
-      throw new Error(parsed.errors.join("; "));
-    }
-    milestone.proposal = parsed.proposal;
-    milestone.name = parsed.proposal.name;
-    milestone.goal = parsed.proposal.goal;
+    milestone.name = plan.name;
+    milestone.goal = plan.goal;
     delete milestone.approvalError;
     milestone.updatedAt = nowIso();
     await this.persistMilestone(milestone);
@@ -949,14 +949,14 @@ export class RunOrchestrator implements RunProjection {
     this.emit({ ts: nowIso(), type: "stage.started", runId, stageId, status: "running" });
   }
 
-  log(runId: string, stageId: string, level: LogLevel, message: string): void {
+  log(runId: string, stageId: string, draft: StageLogDraft): void {
     const stage = this.findStage(runId, stageId);
     if (!stage) {
       return;
     }
     const ts = nowIso();
-    stage.logs.push({ ts, level, message });
-    this.emit({ ts, type: "stage.log", runId, stageId, message, level });
+    stage.logs.push({ ts, ...draft });
+    this.emit({ ts, type: "stage.log", runId, stageId, ...draft });
   }
 
   stageAwaiting(runId: string, stageId: string): void {
@@ -1034,7 +1034,7 @@ export class RunOrchestrator implements RunProjection {
     };
     const profession = agentForStage(stageId).profession;
     const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
-    this.log(runId, stageId, "warn", message);
+    this.log(runId, stageId, { level: "warn", message });
     this.emit({
       ts,
       type: "stage.blocked",
@@ -1057,7 +1057,7 @@ export class RunOrchestrator implements RunProjection {
     delete run.limit;
     const profession = agentForStage(stageId).profession;
     const message = LIMIT_LOG.resuming(profession, choice);
-    this.log(runId, stageId, "run", message);
+    this.log(runId, stageId, { level: "run", message });
     this.emit({
       ts: nowIso(),
       type: "stage.unblocked",
@@ -1105,7 +1105,7 @@ export class RunOrchestrator implements RunProjection {
     stage.status = "passed";
     stage.completedAt = nowIso();
     run.status = "running";
-    this.log(runId, stageId, "pass", `✓ Gate approved — ${profession} cleared to proceed`);
+    this.log(runId, stageId, { level: "pass", message: `✓ Gate approved — ${profession} cleared to proceed` });
     this.emit({
       ts: nowIso(),
       type: "stage.approved",
@@ -1167,7 +1167,7 @@ export class RunOrchestrator implements RunProjection {
     }
     stage.completedAt = nowIso();
     stage.status = "failed";
-    this.log(runId, stageId, "fail", `✗ ${message}`);
+    this.log(runId, stageId, { level: "fail", message: `✗ ${message}` });
     this.emit({ ts: nowIso(), type: "stage.failed", runId, stageId, status: "failed", message });
   }
 
@@ -1206,18 +1206,18 @@ export class RunOrchestrator implements RunProjection {
     ) {
       const milestone = this.milestones.get(run.milestoneId);
       if (milestone) {
-        const parsed = parseMilestonePlan(
-          output,
-          (milestone.proposal?.revision ?? 0) + 1,
-          nowIso(),
-        );
-        if (parsed.proposal) {
-          milestone.proposal = parsed.proposal;
-          milestone.name = parsed.proposal.name;
-          milestone.goal = parsed.proposal.goal;
+        const parsed = extractMilestonePlan(output);
+        if (parsed.ok) {
+          milestone.proposal = toMilestoneProposal(
+            parsed.value,
+            (milestone.proposal?.revision ?? 0) + 1,
+            nowIso(),
+          );
+          milestone.name = parsed.value.name;
+          milestone.goal = parsed.value.goal;
           delete milestone.approvalError;
         } else {
-          milestone.approvalError = parsed.errors.join("; ");
+          milestone.approvalError = formatValidationIssues(parsed.issues);
         }
         milestone.updatedAt = nowIso();
         await this.persistMilestone(milestone);

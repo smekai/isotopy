@@ -1,113 +1,121 @@
-import type { RunEvent, RunState } from "@adhd/core";
+import type { RunEvent, RunState, StageEvent } from "@adhd/core";
 
 export function applyEvent(run: RunState, event: RunEvent): RunState {
   const next = structuredClone(run);
 
-  if (event.type === "run.started") {
-    next.status = "running";
-    delete next.completedAt;
-  }
+  switch (event.type) {
+    case "run.started":
+      next.status = "running";
+      delete next.completedAt;
+      return next;
 
-  if (event.type === "run.completed") {
-    next.status =
-      event.status === "failed" ||
-      event.status === "needs_attention" ||
-      event.status === "cancelled"
-        ? event.status
-        : "completed";
-    next.completedAt = event.ts;
-    if (event.result !== undefined) {
-      next.result = event.result;
+    case "run.completed":
+      next.status = event.status;
+      next.completedAt = event.ts;
+      if (event.result !== undefined) {
+        next.result = event.result;
+      }
+      return next;
+
+    case "run.message": {
+      const message = event.chatMessage;
+      if (!next.messages.some((entry) => entry.id === message.id)) {
+        next.messages.push(message);
+      }
+      return next;
     }
-  }
 
-  if (event.type === "run.message" && event.chatMessage) {
-    const message = event.chatMessage;
-    if (!next.messages.some((entry) => entry.id === message.id)) {
-      next.messages.push(message);
-    }
-    return next;
+    default:
+      return applyStageEvent(next, event);
   }
+}
 
-  if (!event.stageId) {
-    return next;
-  }
-
+function applyStageEvent(next: RunState, event: StageEvent): RunState {
   const stage = next.stages.find((item) => item.id === event.stageId);
   if (!stage) {
     return next;
   }
 
-  if (event.type === "stage.started") {
-    stage.status = "running";
-    stage.startedAt = event.ts;
-    delete stage.completedAt;
-  }
+  switch (event.type) {
+    case "stage.started":
+      stage.status = "running";
+      stage.startedAt = event.ts;
+      delete stage.completedAt;
+      return next;
 
-  if (event.type === "stage.log" && event.message) {
-    const duplicate = stage.logs.some(
-      (entry) => entry.ts === event.ts && entry.message === event.message,
-    );
-    if (!duplicate) {
-      stage.logs.push({
-        ts: event.ts,
-        level: event.level ?? "info",
-        message: event.message,
-      });
+    // The snapshot and the live stream overlap while a reader is catching up,
+    // so the same log can arrive twice.
+    case "stage.log": {
+      const duplicate = stage.logs.some(
+        (entry) => entry.ts === event.ts && entry.message === event.message,
+      );
+      if (!duplicate) {
+        stage.logs.push({
+          ts: event.ts,
+          level: event.level,
+          message: event.message,
+        });
+      }
+      return next;
     }
-  }
 
-  if (event.type === "stage.usage" && event.usage) {
-    stage.usage = event.usage;
-  }
+    case "stage.usage":
+      stage.usage = event.usage;
+      return next;
 
-  if (event.type === "stage.completed") {
-    stage.status = "passed";
-    stage.completedAt = event.ts;
-  }
+    case "stage.completed":
+      stage.status = "passed";
+      stage.completedAt = event.ts;
+      return next;
 
-  if (event.type === "stage.failed") {
-    stage.status = "failed";
-    stage.completedAt = event.ts;
-  }
+    case "stage.failed":
+      stage.status = "failed";
+      stage.completedAt = event.ts;
+      return next;
 
-  if (event.type === "stage.awaiting") {
-    stage.status = "awaiting";
-    next.status = "awaiting";
-  }
+    case "stage.awaiting":
+      stage.status = "awaiting";
+      next.status = "awaiting";
+      return next;
 
-  if (event.type === "stage.asking") {
-    stage.status = "asking";
-    next.status = "asking";
-  }
+    case "stage.asking":
+      stage.status = "asking";
+      next.status = "asking";
+      return next;
 
-  if (event.type === "stage.answered") {
-    stage.status = "running";
-    next.status = "running";
-  }
+    case "stage.answered":
+      stage.status = "running";
+      next.status = "running";
+      return next;
 
-  if (event.type === "stage.blocked" && event.limit) {
-    stage.status = "blocked";
-    next.status = "blocked";
-    next.limit = event.limit;
-  }
+    case "stage.blocked":
+      stage.status = "blocked";
+      next.status = "blocked";
+      next.limit = event.limit;
+      return next;
 
-  if (event.type === "stage.unblocked") {
-    stage.status = "running";
-    next.status = "running";
-    delete next.limit;
-  }
+    case "stage.unblocked":
+      stage.status = "running";
+      next.status = "running";
+      delete next.limit;
+      return next;
 
-  if (event.type === "stage.approved") {
-    stage.status = "passed";
-    stage.completedAt = event.ts;
-    next.status = "running";
-  }
+    case "stage.approved":
+      stage.status = "passed";
+      stage.completedAt = event.ts;
+      next.status = "running";
+      return next;
 
-  if (event.type === "stage.skipped") {
-    stage.status = "skipped";
-    stage.completedAt = event.ts;
-  }
+    case "stage.skipped":
+      stage.status = "skipped";
+      stage.completedAt = event.ts;
+      return next;
 
-  return next;
+    default:
+      return unhandledStageEvent(event, next);
+  }
+}
+
+function unhandledStageEvent(_event: never, run: RunState): RunState {
+  return run;
 }

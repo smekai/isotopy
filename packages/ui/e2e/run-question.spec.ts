@@ -73,6 +73,7 @@ const ASKING_RUN: RunState = {
           ts: "2026-07-27T09:00:10.000Z",
           level: "run",
           message: "Read package.json",
+          activity: { kind: "tool", name: "Read", detail: "package.json" },
         },
       ],
     },

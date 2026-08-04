@@ -15,6 +15,32 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-03 — Machinery is declared, not inferred from a log level
+
+**Context:** the transcript decided a line was a tool call by testing
+`level === "run" || level === "warn"`. Three unrelated things shared that level —
+real tool calls, engine chatter like "Developer online", and the orchestrator's
+own notices — so all three were classified as machinery and hidden from the chat.
+A run parked four hours on a plan limit therefore said nothing in the
+conversation, which contradicts treating a limit as a wait rather than a failure.
+
+**Decision:** an adapter that knows a line is a tool call says so. `StageLogEntry`
+carries an optional `StageActivity` — `tool`, `tool-error`, or `engine` — with the
+tool's name and detail as data rather than only baked into the rendered message.
+The transcript reads that structure; a `run` or `warn` line with no declared
+activity is a notice and reaches the chat.
+
+This is the same rule already recorded under "the run view is derived from the
+log, never a second source": the chat/log split must be structural, never a proxy
+like a log level, *because a proxy rots the day an adapter rewords a string*.
+
+**Consequence:** the plan-limit wait, the resume line, and "no skill found" are
+now visible in the chat, which is where a reader is looking when a run goes quiet.
+The rendered message is kept alongside the structure, so persisted history stays
+readable and `LogsPanel` is unchanged.
+
+---
+
 ## 2026-08-03 — A shape and its codec are one definition
 
 **Context:** `RunEvent` was declared in core as a flat interface with nine
@@ -39,6 +65,21 @@ the *output* type and a transform makes the derived type dishonest about what th
 schema accepts. Normalisation that belongs to an agent boundary — deduping string
 arrays, rewriting severity prose — stays in the server, which is the same line
 drawn under "Strict for what ADHD writes, salvaging for what an agent writes".
+
+**Where this stops.** A schema earns its place where untrusted data crosses a
+boundary at runtime — SQLite reads, HTTP request bodies, engine JSONL, agent
+fenced blocks. Everywhere else a plain type is the whole contract, and deriving
+one from a codec that validates nothing buys no safety while costing a runtime
+object. `EngineLimit` is the worked example: produced by `detectEngineLimit` and
+consumed in-process, so it is an interface, while `RunLimit` — persisted, and
+carried on `stage.blocked` — keeps its schema.
+
+Three `z.ZodType<T>` pairs survive on purpose, all of them request-input codecs
+whose type the browser also imports: `projectPreferencesUpdateSchema` (whose
+legacy-alias transform means input and output genuinely differ),
+`engineConnectionUpdateSchema`, and `resolveLimitSchema`. Collapsing those means
+core absorbing HTTP-input shapes and their trimming, which is a different
+decision from this one and has not been taken.
 
 ---
 

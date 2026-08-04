@@ -3,7 +3,7 @@ import type {
   EngineLimit,
   EnginePermissionMode,
   LimitChoice,
-  LogLevel,
+  StageLogDraft,
   PipelineDefinition,
   RunState,
   StageDefinition,
@@ -56,7 +56,7 @@ export interface RunProjection {
   bindOpenWorkflowRun(runId: string, openWorkflowRunId: string): void;
   runStarted(runId: string, message: string): void;
   stageStarted(runId: string, stageId: string): void;
-  log(runId: string, stageId: string, level: LogLevel, message: string): void;
+  log(runId: string, stageId: string, draft: StageLogDraft): void;
   stageAwaiting(runId: string, stageId: string): void;
   stageAsking(runId: string, stageId: string, question: string): void;
   stageAnswered(runId: string, stageId: string): void;

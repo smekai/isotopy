@@ -3,12 +3,26 @@
 // the merge wrong is how a reply ends up above the question that prompted it, so
 // ordering across the two sources is what this covers.
 import { describe, expect, test } from "vitest";
-import type { LogLevel, RunState, StageState, StageStatus } from "@adhd/core";
+import type {
+  LogLevel,
+  RunState,
+  StageActivity,
+  StageState,
+  StageStatus,
+} from "@adhd/core";
 import { buildTranscript, conversationOnly } from "../src/transcript";
 import { message, run, stage } from "./support/run-fixtures";
 
-function log(ts: string, level: LogLevel, text: string) {
-  return { ts, level, message: text };
+function log(ts: string, level: LogLevel, text: string, activity?: StageActivity) {
+  return { ts, level, message: text, ...(activity ? { activity } : {}) };
+}
+
+function toolLog(ts: string, text: string, name = "Read") {
+  return log(ts, "run", text, { kind: "tool", name });
+}
+
+function toolErrorLog(ts: string, text: string, name = "Edit") {
+  return log(ts, "warn", text, { kind: "tool-error", name });
 }
 
 function started(id: string, status: StageStatus, at: string, logs: StageState["logs"]) {
@@ -35,12 +49,12 @@ describe("buildTranscript", () => {
     expect(buildTranscript(state)).toEqual([]);
   });
 
-  test("log levels split into agent prose, tool rows and notices", () => {
+  test("a declared activity makes a tool row; level only splits prose from notice", () => {
     const state = run([
       started("implementation", "running", "2026-07-27T10:00:00.000Z", [
         log("2026-07-27T10:00:01.000Z", "info", "I will add the toggle"),
-        log("2026-07-27T10:00:02.000Z", "run", "Read src/theme.ts"),
-        log("2026-07-27T10:00:03.000Z", "warn", "Edit failed"),
+        toolLog("2026-07-27T10:00:02.000Z", "Read src/theme.ts"),
+        toolErrorLog("2026-07-27T10:00:03.000Z", "Edit failed"),
         log("2026-07-27T10:00:04.000Z", "pass", "✓ Developer finished"),
       ]),
     ]);
@@ -54,11 +68,41 @@ describe("buildTranscript", () => {
     ]);
   });
 
+  test("a run-level line with no activity is a notice, not hidden machinery", () => {
+    const state = run([
+      started("implementation", "running", "2026-07-27T10:00:00.000Z", [
+        log("2026-07-27T10:00:01.000Z", "run", "Developer is resuming — the plan limit reset"),
+      ]),
+    ]);
+
+    expect(buildTranscript(state).map((item) => item.kind)).toEqual([
+      "stage",
+      "notice",
+    ]);
+  });
+
+  test("a tool row carries the tool's name rather than only its rendered line", () => {
+    const state = run([
+      started("implementation", "running", "2026-07-27T10:00:00.000Z", [
+        log("2026-07-27T10:00:01.000Z", "run", "▶ Read src/theme.ts", {
+          kind: "tool",
+          name: "Read",
+          detail: "src/theme.ts",
+        }),
+      ]),
+    ]);
+
+    const [, tool] = buildTranscript(state);
+
+    expect(tool && "name" in tool ? tool.name : "").toBe("Read");
+    expect(tool && "detail" in tool ? tool.detail : "").toBe("src/theme.ts");
+  });
+
   test("a failed tool row is marked as failed", () => {
     const state = run([
       started("implementation", "running", "2026-07-27T10:00:00.000Z", [
-        log("2026-07-27T10:00:01.000Z", "run", "Read src/theme.ts"),
-        log("2026-07-27T10:00:02.000Z", "warn", "Edit failed"),
+        toolLog("2026-07-27T10:00:01.000Z", "Read src/theme.ts"),
+        toolErrorLog("2026-07-27T10:00:02.000Z", "Edit failed"),
       ]),
     ]);
 
@@ -141,15 +185,19 @@ describe("buildTranscript", () => {
 });
 
 // Chat and Logs read one ordering; the chat is that ordering with the machinery
-// removed. The split is structural — tool calls, tool errors and engine chatter
-// all arrive as `tool` items — so nothing below matches on prose.
+// removed. The split is structural — an adapter *declares* a line as tool, tool
+// error or engine chatter, and all three become `tool` items — so nothing below
+// matches on prose, and nothing infers machinery from a log level.
 describe("conversationOnly", () => {
   const noisy = run([
     started("implementation", "passed", "2026-07-27T10:00:00.000Z", [
-      log("2026-07-27T10:00:01.000Z", "run", "Developer online · Claude Code · haiku"),
+      log("2026-07-27T10:00:01.000Z", "run", "Developer online · Claude Code · haiku", {
+        kind: "engine",
+        name: "Claude Code",
+      }),
       log("2026-07-27T10:00:02.000Z", "info", "Looking at the repository now."),
-      log("2026-07-27T10:00:03.000Z", "run", "Read src/auth.ts"),
-      log("2026-07-27T10:00:04.000Z", "warn", "Tool error: file not found"),
+      toolLog("2026-07-27T10:00:03.000Z", "Read src/auth.ts"),
+      toolErrorLog("2026-07-27T10:00:04.000Z", "Tool error: file not found"),
       log("2026-07-27T10:00:05.000Z", "pass", "✓ Developer finished"),
     ]),
   ]);

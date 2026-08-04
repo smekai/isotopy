@@ -1,6 +1,6 @@
 {
   "name": "@adhd/server",
-  "version": "0.8.16",
+  "version": "0.8.24",
   "private": true,
   "type": "module",
   "scripts": {

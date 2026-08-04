@@ -67,7 +67,13 @@ describe("Codex protocol", () => {
     expect(parsed).toEqual({
       ok: true,
       event: {
-        logs: [{ level: "run", message: "turn complete" }],
+        logs: [
+          {
+            level: "run",
+            message: "turn complete",
+            activity: { kind: "engine", name: "codex" },
+          },
+        ],
         terminal: "success",
         usage: { tokensIn: 10, cachedTokensIn: 4, tokensOut: 3 },
       },
@@ -105,7 +111,17 @@ describe("Cursor protocol", () => {
     expect(parsed).toEqual({
       ok: true,
       event: {
-        logs: [{ level: "run", message: "▶ read_file src/index.ts" }],
+        logs: [
+          {
+            level: "run",
+            message: "▶ read_file src/index.ts",
+            activity: {
+              kind: "tool",
+              name: "read_file",
+              detail: "src/index.ts",
+            },
+          },
+        ],
       },
     });
   });

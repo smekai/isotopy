@@ -4,7 +4,7 @@ import type {
   EngineModelList,
   EnginePermissionMode,
   EngineStatus,
-  LogLevel,
+  StageLogDraft,
   StageUsage,
 } from "@adhd/core";
 
@@ -25,7 +25,7 @@ export interface EngineRunContext {
   resumeSessionId?: string;
   timeoutMs: number;
   signal: AbortSignal;
-  onLog: (level: LogLevel, message: string) => void;
+  onLog: (log: StageLogDraft) => void;
 }
 
 export interface EngineRunResult {

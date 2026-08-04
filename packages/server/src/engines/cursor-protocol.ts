@@ -1,3 +1,4 @@
+import type { StageLogDraft } from "@adhd/core";
 import { z } from "zod";
 import { truncate } from "./log-text.ts";
 import {
@@ -51,7 +52,7 @@ const resultSchema = z
   .passthrough();
 const bagSchema = z.record(z.string(), z.unknown());
 
-function toolSummary(toolCall: Record<string, unknown>): string {
+function toolSummary(toolCall: Record<string, unknown>): StageLogDraft {
   const [name = "tool", inner] = Object.entries(toolCall)[0] ?? [];
   const innerBag = bagSchema.safeParse(inner);
   const nestedArgs = innerBag.success
@@ -70,7 +71,11 @@ function toolSummary(toolCall: Record<string, unknown>): string {
     args.pattern ??
     args.query ??
     "";
-  return truncate(`▶ ${name} ${String(detail)}`);
+  return {
+    level: "run",
+    message: truncate(`▶ ${name} ${String(detail)}`),
+    activity: { kind: "tool", name, detail: String(detail) },
+  };
 }
 
 export function parseCursorProtocolLine(
@@ -98,6 +103,7 @@ export function parseCursorProtocolLine(
                 message: truncate(
                   `Cursor agent online · ${parsed.event.model ?? "default model"}`,
                 ),
+                activity: { kind: "engine", name: "cursor" },
               },
             ],
           },
@@ -135,7 +141,7 @@ export function parseCursorProtocolLine(
       ? {
           ok: true,
           event: {
-            logs: [{ level: "run", message: toolSummary(parsed.event.tool_call) }],
+            logs: [toolSummary(parsed.event.tool_call)],
           },
         }
       : parsed;

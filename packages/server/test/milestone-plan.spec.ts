@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseMilestonePlan } from "../src/domain/milestone-plan.ts";
+import { extractMilestonePlan } from "../src/domain/milestone-plan.ts";
+import { formatValidationIssues } from "../src/domain/validation.ts";
 
 const VALID_PLAN = {
   name: "Milestone D",
@@ -24,67 +25,85 @@ const VALID_PLAN = {
   ],
 };
 
-describe("parseMilestonePlan", () => {
-  it("parses a complete fenced plan", () => {
-    const parsed = parseMilestonePlan(
-      `Summary\n\n\`\`\`adhd-milestone-plan\n${JSON.stringify(VALID_PLAN)}\n\`\`\``,
-      2,
-      "2026-07-29T00:00:00.000Z",
-    );
+function fenced(plan: unknown): string {
+  return `\`\`\`adhd-milestone-plan\n${JSON.stringify(plan)}\n\`\`\``;
+}
 
-    expect(parsed.errors).toEqual([]);
-    expect(parsed.proposal).toMatchObject({
-      revision: 2,
+describe("extractMilestonePlan", () => {
+  it("parses a complete fenced plan", () => {
+    const parsed = extractMilestonePlan(`Summary\n\n${fenced(VALID_PLAN)}`);
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok && parsed.value).toMatchObject({
       name: "Milestone D",
       features: [{ id: "planning" }],
     });
   });
 
-  it("rejects features without acceptance criteria or work", () => {
-    const invalid = {
-      ...VALID_PLAN,
-      features: [
-        {
-          ...VALID_PLAN.features[0],
-          acceptanceCriteria: [],
-          taskDrafts: [],
-        },
-      ],
-    };
+  it("reports a missing fenced block rather than throwing", () => {
+    const parsed = extractMilestonePlan("The plan is in my head.");
 
-    const parsed = parseMilestonePlan(
-      `\`\`\`adhd-milestone-plan\n${JSON.stringify(invalid)}\n\`\`\``,
-      1,
-      "2026-07-29T00:00:00.000Z",
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
+      "Missing fenced adhd-milestone-plan JSON block",
+    );
+  });
+
+  it("reports a block that is not valid JSON", () => {
+    const parsed = extractMilestonePlan("```adhd-milestone-plan\n{ nope }\n```");
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
+      "valid JSON",
+    );
+  });
+
+  it("rejects features without acceptance criteria or work", () => {
+    const parsed = extractMilestonePlan(
+      fenced({
+        ...VALID_PLAN,
+        features: [
+          { ...VALID_PLAN.features[0], acceptanceCriteria: [], taskDrafts: [] },
+        ],
+      }),
     );
 
-    expect(parsed.proposal).toBeUndefined();
-    expect(parsed.errors.length).toBeGreaterThanOrEqual(1);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && parsed.issues.length).toBeGreaterThanOrEqual(1);
   });
 
   it("rejects malformed nested task data instead of dropping it", () => {
-    const invalid = {
-      ...VALID_PLAN,
-      features: [
-        {
-          ...VALID_PLAN.features[0]!,
-          taskDrafts: [
-            {
-              ...VALID_PLAN.features[0]!.taskDrafts[0]!,
-              priority: "urgent",
-            },
-          ],
-        },
-      ],
-    };
-
-    const parsed = parseMilestonePlan(
-      `\`\`\`adhd-milestone-plan\n${JSON.stringify(invalid)}\n\`\`\``,
-      1,
-      "2026-07-29T00:00:00.000Z",
+    const parsed = extractMilestonePlan(
+      fenced({
+        ...VALID_PLAN,
+        features: [
+          {
+            ...VALID_PLAN.features[0]!,
+            taskDrafts: [
+              { ...VALID_PLAN.features[0]!.taskDrafts[0]!, priority: "urgent" },
+            ],
+          },
+        ],
+      }),
     );
 
-    expect(parsed.proposal).toBeUndefined();
-    expect(parsed.errors.join("\n")).toContain("priority");
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
+      "priority",
+    );
+  });
+
+  it("rejects duplicate feature ids", () => {
+    const parsed = extractMilestonePlan(
+      fenced({
+        ...VALID_PLAN,
+        features: [VALID_PLAN.features[0], VALID_PLAN.features[0]],
+      }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
+      "Feature IDs must be unique",
+    );
   });
 });

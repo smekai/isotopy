@@ -1,26 +1,15 @@
 import { z } from "zod";
 
-export interface StateConfig {
-  name: string;
-  fileName: string;
-}
-
-export interface BoardConfig {
-  idPrefix: string;
-  nextId: number;
-  states: StateConfig[];
-  tags?: string[];
-  insertPosition?: "top" | "bottom";
-}
-
 const text = z.string().trim().min(1);
 
-const stateConfigSchema: z.ZodType<StateConfig> = z
+const stateConfigSchema = z
   .object({
     name: text,
     fileName: text,
   })
   .passthrough();
+
+export type StateConfig = z.infer<typeof stateConfigSchema>;
 
 const boardConfigShape = {
   idPrefix: text,
@@ -30,11 +19,11 @@ const boardConfigShape = {
   insertPosition: z.enum(["top", "bottom"]).optional(),
 };
 
-export const boardConfigSchema: z.ZodType<BoardConfig> = z
-  .object(boardConfigShape)
-  .passthrough();
+export const boardConfigSchema = z.object(boardConfigShape).passthrough();
 
-export const ownedBoardConfigSchema: z.ZodType<BoardConfig> = z
+export type BoardConfig = z.infer<typeof boardConfigSchema>;
+
+export const ownedBoardConfigSchema = z
   .object({
     ...boardConfigShape,
     states: z

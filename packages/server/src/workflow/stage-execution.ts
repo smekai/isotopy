@@ -70,12 +70,11 @@ export async function runStageWork(
     projection.stageAnswered(runId, stageDef.id);
   } else {
     projection.stageStarted(runId, stageDef.id);
-    projection.log(
-      runId,
-      stageDef.id,
-      "run",
-      `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
-    );
+    projection.log(runId, stageDef.id, {
+      level: "run",
+      message: `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
+      activity: { kind: "engine", name: engineLabel(run) },
+    });
   }
 
   const controller = deps.beginEngineStage(runId);
@@ -83,20 +82,16 @@ export async function runStageWork(
   const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
   const stepTask = stageDef.stepTask ? await loadStepTask(stageDef.stepTask) : undefined;
   if (stageDef.skill && !persona) {
-    projection.log(
-      runId,
-      stageDef.id,
-      "warn",
-      `No skill "${stageDef.skill}" found — running without a persona`,
-    );
+    projection.log(runId, stageDef.id, {
+      level: "warn",
+      message: `No skill "${stageDef.skill}" found — running without a persona`,
+    });
   }
   if (stageDef.stepTask && !stepTask) {
-    projection.log(
-      runId,
-      stageDef.id,
-      "warn",
-      `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
-    );
+    projection.log(runId, stageDef.id, {
+      level: "warn",
+      message: `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
+    });
   }
   const prompt = resuming
     ? (turn.answer ?? "")
@@ -121,7 +116,7 @@ export async function runStageWork(
       resumeSessionId: turn.resumeSessionId,
       timeoutMs: config.engineTimeoutMs,
       signal: controller.signal,
-      onLog: (level, message) => projection.log(runId, stageDef.id, level, message),
+      onLog: (log) => projection.log(runId, stageDef.id, log),
     });
   } catch (error) {
     outcome = {
@@ -179,14 +174,14 @@ export async function runStageWork(
   ) {
     projection.stageFailed(runId, stageDef.id, decision.failureMessage ?? `${profession} failed`);
   } else if (decision.outcome === STAGE_OUTCOMES.SKIPPED) {
-    projection.log(runId, stageDef.id, "warn", `${profession} reported VERDICT: SKIP`);
+    projection.log(runId, stageDef.id, { level: "warn", message: `${profession} reported VERDICT: SKIP` });
     projection.stageSkipped(runId, stageDef.id);
   } else {
     if (decision.verdict === STAGE_VERDICTS.PASS) {
-      projection.log(runId, stageDef.id, "pass", `${profession} reported VERDICT: PASS`);
+      projection.log(runId, stageDef.id, { level: "pass", message: `${profession} reported VERDICT: PASS` });
     }
     if (!stageDef.gateAfter) {
-      projection.log(runId, stageDef.id, "pass", `✓ ${profession} finished — result ready`);
+      projection.log(runId, stageDef.id, { level: "pass", message: `✓ ${profession} finished — result ready` });
       projection.stagePassed(runId, stageDef.id);
     }
   }

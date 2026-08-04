@@ -55,15 +55,32 @@ export const LOG_LEVELS = [
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+export const STAGE_ACTIVITY_KINDS = ["tool", "tool-error", "engine"] as const;
+
+export type StageActivityKind = (typeof STAGE_ACTIVITY_KINDS)[number];
+
+export const stageActivitySchema = z
+  .object({
+    kind: z.enum(STAGE_ACTIVITY_KINDS),
+    name: requiredText,
+    detail: z.string().optional(),
+  })
+  .strict();
+
+export type StageActivity = z.infer<typeof stageActivitySchema>;
+
 export const stageLogEntrySchema = z
   .object({
     ts: timestamp,
     level: z.enum(LOG_LEVELS),
     message: z.string(),
+    activity: stageActivitySchema.optional(),
   })
   .strict();
 
 export type StageLogEntry = z.infer<typeof stageLogEntrySchema>;
+
+export type StageLogDraft = Omit<StageLogEntry, "ts">;
 
 export const STAGE_VERDICTS = {
   PASS: "PASS",
@@ -121,18 +138,15 @@ export const stageUsageSchema = z
 
 export type StageUsage = z.infer<typeof stageUsageSchema>;
 
-const engineLimitShape = {
-  raw: z.string(),
-  resetAt: timestamp.optional(),
-};
-
-export const engineLimitSchema = z.object(engineLimitShape).strict();
-
-export type EngineLimit = z.infer<typeof engineLimitSchema>;
+export interface EngineLimit {
+  raw: string;
+  resetAt?: string;
+}
 
 export const runLimitSchema = z
   .object({
-    ...engineLimitShape,
+    raw: z.string(),
+    resetAt: timestamp.optional(),
     stageId: requiredText,
     engine: z.enum(ENGINE_IDS),
     model: z.string().optional(),
@@ -285,40 +299,6 @@ export function toRunSummary(run: RunState): RunSummary {
       status: stage.status,
     })),
   };
-}
-
-export const RUN_EVENT_TYPES = [
-  "run.started",
-  "run.completed",
-  "stage.started",
-  "stage.log",
-  "stage.completed",
-  "stage.failed",
-  "stage.awaiting",
-  "stage.approved",
-  "stage.skipped",
-  "stage.asking",
-  "stage.answered",
-  "stage.blocked",
-  "stage.unblocked",
-  "stage.usage",
-  "run.message",
-] as const;
-
-export type RunEventType = (typeof RUN_EVENT_TYPES)[number];
-
-export interface RunEvent {
-  ts: string;
-  type: RunEventType;
-  runId: string;
-  stageId?: string;
-  message?: string;
-  status?: StageStatus | RunStatus;
-  level?: LogLevel;
-  result?: string;
-  chatMessage?: RunMessage;
-  usage?: StageUsage;
-  limit?: RunLimit;
 }
 
 export interface NewRunInput {

@@ -121,6 +121,13 @@ non-success subtype **or** as `is_error` on a success event — both are handled
 Known CLI failure signatures are matched by regex (`ERROR_HINTS`) and mapped to
 actionable guidance while the raw error stays visible in the log.
 
+Each adapter also declares what a line *is*, as a `StageActivity` beside the
+rendered message: Claude maps `tool_use` to `tool` and an `is_error` tool result
+to `tool-error`; Codex maps `command_execution`, `file_change`, `mcp_tool_call`
+and `web_search`; Cursor maps its `tool_call` bag. Each adapter's "online" line
+and Codex's `turn.completed` are `engine`. Anything left undeclared is a notice
+the reader sees in the chat, so a new machinery line has to opt out on purpose.
+
 ---
 
 ## Engines — plan limits and reset parsing (`domain/engine-limit.ts`)

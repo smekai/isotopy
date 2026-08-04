@@ -1,25 +1,7 @@
 import { ENGINES, ENGINE_IDS } from "@adhd/core";
-import type { EngineId, ProjectPreferencesUpdate } from "@adhd/core";
+import type { EngineId } from "@adhd/core";
 import { z } from "zod";
 import { projectPreferencesUpdateSchema } from "./request-schemas.ts";
-
-export interface EngineConnectionSettings {
-  connectionMode: string;
-  apiKey?: string;
-}
-
-export type EngineSettings = Partial<Record<EngineId, EngineConnectionSettings>>;
-
-export interface ProjectSettings {
-  engines: EngineSettings;
-  preferences?: ProjectPreferencesUpdate;
-}
-
-export interface SettingsFile {
-  version: 1;
-  defaults: ProjectSettings;
-  projects: Record<string, ProjectSettings>;
-}
 
 const connectionSchema = z
   .object({
@@ -27,6 +9,8 @@ const connectionSchema = z
     apiKey: z.string().optional(),
   })
   .strict();
+
+export type EngineConnectionSettings = z.infer<typeof connectionSchema>;
 
 const engineSettingsSchema = z
   .partialRecord(z.enum(ENGINE_IDS), connectionSchema)
@@ -47,17 +31,23 @@ const engineSettingsSchema = z
     }
   });
 
-const projectSettingsSchema: z.ZodType<ProjectSettings> = z
+export type EngineSettings = z.infer<typeof engineSettingsSchema>;
+
+const projectSettingsSchema = z
   .object({
     engines: engineSettingsSchema,
     preferences: projectPreferencesUpdateSchema.optional(),
   })
   .strict();
 
-export const settingsFileSchema: z.ZodType<SettingsFile> = z
+export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
+
+export const settingsFileSchema = z
   .object({
     version: z.literal(1),
     defaults: projectSettingsSchema,
     projects: z.record(z.string(), projectSettingsSchema),
   })
   .strict();
+
+export type SettingsFile = z.infer<typeof settingsFileSchema>;

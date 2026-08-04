@@ -1,4 +1,4 @@
-import type { StageUsage } from "@adhd/core";
+import type { StageLogDraft, StageUsage } from "@adhd/core";
 import { z } from "zod";
 import { truncate } from "./log-text.ts";
 import {
@@ -7,7 +7,6 @@ import {
 } from "./protocol-validation.ts";
 import type {
   EngineProtocolUpdate,
-  ProtocolLog,
   ProtocolResult,
 } from "./protocol-validation.ts";
 
@@ -90,7 +89,7 @@ function usageOf(result: z.infer<typeof resultSchema>): StageUsage | undefined {
 function messageLogs(
   event: z.infer<typeof messageEventSchema>,
 ): ProtocolResult<EngineProtocolUpdate> {
-  const logs: ProtocolLog[] = [];
+  const logs: StageLogDraft[] = [];
   for (const [index, item] of event.message.content.entries()) {
     if (item.type === "text") {
       if (item.text === undefined) {
@@ -117,14 +116,17 @@ function messageLogs(
           },
         };
       }
+      const detail = detailOf(item.input);
       logs.push({
         level: "run",
-        message: truncate(`▶ ${item.name} ${detailOf(item.input)}`),
+        message: truncate(`▶ ${item.name} ${detail}`),
+        activity: { kind: "tool", name: item.name, detail },
       });
     } else if (item.type === "tool_result" && item.is_error) {
       logs.push({
         level: "warn",
         message: truncate(`Tool error: ${JSON.stringify(item.content)}`),
+        activity: { kind: "tool-error", name: "tool_result" },
       });
     }
   }
@@ -165,6 +167,7 @@ export function parseClaudeProtocolLine(
                 message: truncate(
                   `Claude Code online · ${parsed.event.model ?? "default model"} · ${parsed.event.tools?.length ?? 0} tools`,
                 ),
+                activity: { kind: "engine", name: "claude-code" },
               },
             ],
           },

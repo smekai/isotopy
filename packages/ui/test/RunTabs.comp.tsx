@@ -4,7 +4,13 @@
 // to see that, because the filter and the tab switch meet in the markup.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import type { LogLevel, RunState, StageState, StageStatus } from "@adhd/core";
+import type {
+  LogLevel,
+  RunState,
+  StageActivity,
+  StageState,
+  StageStatus,
+} from "@adhd/core";
 import { RunTabs } from "../src/components/run/RunTabs";
 import { DIRS } from "../src/theme";
 import { run, stage } from "./support/run-fixtures";
@@ -16,8 +22,8 @@ vi.mock("../src/api", () => ({
 
 const d = DIRS.indigo;
 
-function log(ts: string, level: LogLevel, message: string) {
-  return { ts, level, message };
+function log(ts: string, level: LogLevel, message: string, activity?: StageActivity) {
+  return { ts, level, message, ...(activity ? { activity } : {}) };
 }
 
 function started(id: string, status: StageStatus, logs: StageState["logs"]): StageState {
@@ -32,9 +38,16 @@ function runWithTwoStages(): RunState {
   const state = run(
     [
       started("implementation", "passed", [
-        log("2026-07-27T10:00:01.000Z", "run", CHATTER),
+        log("2026-07-27T10:00:01.000Z", "run", CHATTER, {
+          kind: "engine",
+          name: "Claude Code",
+        }),
         log("2026-07-27T10:00:02.000Z", "info", DEV_PROSE),
-        log("2026-07-27T10:00:03.000Z", "run", TOOL_ROW),
+        log("2026-07-27T10:00:03.000Z", "run", TOOL_ROW, {
+          kind: "tool",
+          name: "Read",
+          detail: "src/theme.ts",
+        }),
       ]),
       started("test", "passed", [log("2026-07-27T10:01:00.000Z", "info", "Checked it.")]),
     ],
