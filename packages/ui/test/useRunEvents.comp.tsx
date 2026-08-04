@@ -44,7 +44,7 @@ test("the snapshot becomes the run", async () => {
 test("an event arriving before the snapshot is replayed onto it", async () => {
   const { result } = renderHook(() => useRunEvents(RUN_ID));
 
-  await stream.emit(event("stage.completed", { stageId: "design" }));
+  await stream.emit(event("stage.completed", { stageId: "design", status: "passed", message: "Stage passed" }));
   await stream.snapshot(run([stage("design", "running")]));
 
   expect(stageOf(result.current.run, "design").status).toBe("passed");
@@ -54,14 +54,14 @@ test("an event arriving after the snapshot is applied to it", async () => {
   const { result } = renderHook(() => useRunEvents(RUN_ID));
 
   await stream.snapshot(run([stage("design", "running")]));
-  await stream.emit(event("stage.awaiting", { stageId: "design" }));
+  await stream.emit(event("stage.awaiting", { stageId: "design", status: "awaiting", message: "Awaiting approval" }));
 
   expect(stageOf(result.current.run, "design").status).toBe("awaiting");
   expect(result.current.run?.status).toBe("awaiting");
 });
 
 test("a log the snapshot already contains is not duplicated by the replay", async () => {
-  const logged = event("stage.log", { stageId: "design", message: "building" });
+  const logged = event("stage.log", { stageId: "design", message: "building", level: "info" });
   const withLog = run([stage("design", "running")]);
   stageOf(withLog, "design").logs.push({
     ts: logged.ts,
@@ -81,7 +81,7 @@ test("run.completed closes the stream", async () => {
   renderHook(() => useRunEvents(RUN_ID));
 
   await stream.snapshot(run([stage("design", "running")]));
-  await stream.emit(event("run.completed", { status: "completed" }));
+  await stream.emit(event("run.completed", { status: "completed", message: "Run finished" }));
 
   expect(stream.unsubscribeCount()).toBe(1);
 });

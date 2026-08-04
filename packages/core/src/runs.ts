@@ -80,7 +80,6 @@ export const stageLogEntrySchema = z
 
 export type StageLogEntry = z.infer<typeof stageLogEntrySchema>;
 
-/** A log line before the projection stamps it with the time it arrived. */
 export type StageLogDraft = Omit<StageLogEntry, "ts">;
 
 export const STAGE_VERDICTS = {
@@ -139,10 +138,6 @@ export const stageUsageSchema = z
 
 export type StageUsage = z.infer<typeof stageUsageSchema>;
 
-/**
- * What an adapter can know on its own. Never parsed — it is produced by
- * `detectEngineLimit` and consumed in-process, so a type is the whole contract.
- */
 export interface EngineLimit {
   raw: string;
   resetAt?: string;

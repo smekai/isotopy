@@ -184,7 +184,6 @@ export type StageLogEvent = z.infer<typeof stageLogEventSchema>;
 export type StageBlockedEvent = z.infer<typeof stageBlockedEventSchema>;
 export type StageUsageEvent = z.infer<typeof stageUsageEventSchema>;
 
-/** Every event that names a stage — the ones the UI reducer folds into a stage. */
 export type StageEvent = Extract<RunEvent, { stageId: string }>;
 
 export const RUN_EVENT_TYPES: readonly RunEventType[] = runEventSchema.options.map(

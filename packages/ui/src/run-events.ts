@@ -111,9 +111,11 @@ function applyStageEvent(next: RunState, event: StageEvent): RunState {
       stage.completedAt = event.ts;
       return next;
 
-    default: {
-      const unhandled: never = event;
-      return unhandled;
-    }
+    default:
+      return unhandledStageEvent(event, next);
   }
+}
+
+function unhandledStageEvent(_event: never, run: RunState): RunState {
+  return run;
 }

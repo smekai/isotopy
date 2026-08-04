@@ -11,14 +11,14 @@ describe("applyEvent", () => {
   test("run.started puts the run back into running and clears the completion time", () => {
     const before = { ...run([stage("design")], "pending"), completedAt: "2026-07-21T11:00:00.000Z" };
 
-    const after = applyEvent(before, event("run.started"));
+    const after = applyEvent(before, event("run.started", { status: "running", message: "Run started" }));
 
     expect(after.status).toBe("running");
     expect(after.completedAt).toBeUndefined();
   });
 
   test("run.completed with a failed status carries that status through", () => {
-    const after = applyEvent(run([stage("design")]), event("run.completed", { status: "failed" }));
+    const after = applyEvent(run([stage("design")]), event("run.completed", { status: "failed", message: "Run finished" }));
 
     expect(after.status).toBe("failed");
   });
@@ -26,7 +26,7 @@ describe("applyEvent", () => {
   test("run.completed preserves a needs-attention status", () => {
     const after = applyEvent(
       run([stage("design")]),
-      event("run.completed", { status: "needs_attention" }),
+      event("run.completed", { status: "needs_attention", message: "Run finished" }),
     );
 
     expect(after.status).toBe("needs_attention");
@@ -35,7 +35,7 @@ describe("applyEvent", () => {
   test("run.completed with a cancelled status carries that status through", () => {
     const after = applyEvent(
       run([stage("design")]),
-      event("run.completed", { status: "cancelled" }),
+      event("run.completed", { status: "cancelled", message: "Run finished" }),
     );
 
     expect(after.status).toBe("cancelled");
@@ -44,7 +44,7 @@ describe("applyEvent", () => {
   test("run.completed stores the result when the event carries one", () => {
     const after = applyEvent(
       run([stage("design")]),
-      event("run.completed", { result: "all green" }),
+      event("run.completed", { status: "completed", message: "Run finished", result: "all green" }),
     );
 
     expect(after.result).toBe("all green");
@@ -53,7 +53,7 @@ describe("applyEvent", () => {
   test("stage.started marks the stage running and clears its completion time", () => {
     const before = run([{ ...stage("design", "failed"), completedAt: "2026-07-21T09:00:00.000Z" }]);
 
-    const after = applyEvent(before, event("stage.started", { stageId: "design" }));
+    const after = applyEvent(before, event("stage.started", { stageId: "design", status: "running" }));
 
     expect(stageOf(after, "design").status).toBe("running");
     expect(stageOf(after, "design").startedAt).toBe("2026-07-21T10:00:01.000Z");
@@ -70,7 +70,7 @@ describe("applyEvent", () => {
   });
 
   test("a log entry replayed with the same timestamp and message is not duplicated", () => {
-    const logged = event("stage.log", { stageId: "design", message: "building" });
+    const logged = event("stage.log", { stageId: "design", message: "building", level: "info" });
 
     const after = applyEvent(applyEvent(run([stage("design", "running")]), logged), logged);
 
@@ -78,10 +78,11 @@ describe("applyEvent", () => {
   });
 
   test("the same message at a different timestamp is a separate entry", () => {
-    const first = event("stage.log", { stageId: "design", message: "building" });
+    const first = event("stage.log", { stageId: "design", message: "building", level: "info" });
     const second = event("stage.log", {
       stageId: "design",
       message: "building",
+      level: "info",
       ts: "2026-07-21T10:00:02.000Z",
     });
 
@@ -93,7 +94,7 @@ describe("applyEvent", () => {
   test("stage.completed passes the stage and stamps its completion time", () => {
     const after = applyEvent(
       run([stage("design", "running")]),
-      event("stage.completed", { stageId: "design" }),
+      event("stage.completed", { stageId: "design", status: "passed", message: "Stage passed" }),
     );
 
     expect(stageOf(after, "design").status).toBe("passed");
@@ -103,7 +104,7 @@ describe("applyEvent", () => {
   test("stage.failed fails the stage but leaves the run status to the run event", () => {
     const after = applyEvent(
       run([stage("design", "running")]),
-      event("stage.failed", { stageId: "design" }),
+      event("stage.failed", { stageId: "design", status: "failed", message: "Stage failed" }),
     );
 
     expect(stageOf(after, "design").status).toBe("failed");
@@ -113,7 +114,7 @@ describe("applyEvent", () => {
   test("stage.awaiting parks the run as well as the stage", () => {
     const after = applyEvent(
       run([stage("design", "running")]),
-      event("stage.awaiting", { stageId: "design" }),
+      event("stage.awaiting", { stageId: "design", status: "awaiting", message: "Awaiting approval" }),
     );
 
     expect(stageOf(after, "design").status).toBe("awaiting");
@@ -125,7 +126,7 @@ describe("applyEvent", () => {
 
     const after = applyEvent(
       run([stage("design", "running")]),
-      event("stage.blocked", { stageId: "design", limit: detected }),
+      event("stage.blocked", { stageId: "design", status: "blocked", message: "Blocked", limit: detected }),
     );
 
     expect(stageOf(after, "design").status).toBe("blocked");
@@ -136,7 +137,7 @@ describe("applyEvent", () => {
   test("stage.unblocked resumes the run and clears the limit so the popup closes", () => {
     const before = { ...run([stage("design", "blocked")], "blocked"), limit: limit() };
 
-    const after = applyEvent(before, event("stage.unblocked", { stageId: "design" }));
+    const after = applyEvent(before, event("stage.unblocked", { stageId: "design", status: "running", message: "Resuming" }));
 
     expect(stageOf(after, "design").status).toBe("running");
     expect(after.status).toBe("running");
@@ -146,7 +147,7 @@ describe("applyEvent", () => {
   test("stage.approved passes the gated stage and resumes the run", () => {
     const after = applyEvent(
       run([stage("design", "awaiting")], "awaiting"),
-      event("stage.approved", { stageId: "design" }),
+      event("stage.approved", { stageId: "design", status: "passed", message: "Gate approved" }),
     );
 
     expect(stageOf(after, "design").status).toBe("passed");
@@ -156,7 +157,7 @@ describe("applyEvent", () => {
   test("stage.skipped marks the stage skipped", () => {
     const after = applyEvent(
       run([stage("design", "pending")]),
-      event("stage.skipped", { stageId: "design" }),
+      event("stage.skipped", { stageId: "design", status: "skipped" }),
     );
 
     expect(stageOf(after, "design").status).toBe("skipped");
@@ -185,7 +186,7 @@ describe("applyEvent", () => {
   test("an event naming a stage the run does not have changes nothing", () => {
     const before = run([stage("design", "running")]);
 
-    const after = applyEvent(before, event("stage.failed", { stageId: "deploy" }));
+    const after = applyEvent(before, event("stage.failed", { stageId: "deploy", status: "failed", message: "Stage failed" }));
 
     expect(after).toEqual(before);
   });
@@ -193,7 +194,7 @@ describe("applyEvent", () => {
   test("the run passed in is never mutated", () => {
     const before = run([stage("design", "running")]);
 
-    applyEvent(before, event("stage.completed", { stageId: "design" }));
+    applyEvent(before, event("stage.completed", { stageId: "design", status: "passed", message: "Stage passed" }));
 
     expect(before.stages[0]?.status).toBe("running");
     expect(before.stages[0]?.completedAt).toBeUndefined();

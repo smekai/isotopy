@@ -74,11 +74,6 @@ export const MILESTONE_PLAN_SHAPE = {
   features: z.array(milestoneFeatureProposalSchema).min(1),
 };
 
-/**
- * Authoring rules, deliberately bound to the plan and not to the proposal: an
- * approved proposal must stay readable back off disk without being re-judged
- * against the rules that governed writing it.
- */
 export function refineMilestonePlan(
   plan: { features: MilestoneFeatureProposal[] },
   context: z.core.$RefinementCtx,
@@ -185,11 +180,6 @@ export const milestoneSchema = z
 
 export type Milestone = z.infer<typeof milestoneSchema>;
 
-/**
- * The one milestone input the browser also sends, so it stays a shared type.
- * Its codec lives with the other request schemas; the orchestrator's signature
- * is what holds the two in step.
- */
 export interface UpdateMilestoneInput {
   name?: string;
   goal?: string | null;

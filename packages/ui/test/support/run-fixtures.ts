@@ -47,7 +47,7 @@ type EventOf<T extends RunEventType> = Extract<RunEvent, { type: T }>;
 
 export function event<T extends RunEventType>(
   type: T,
-  rest: Partial<Omit<EventOf<T>, "type">> = {},
+  rest: Omit<EventOf<T>, "type" | "ts" | "runId"> & { ts?: string; runId?: string },
 ): EventOf<T> {
   return { ts: EVENT_TS, runId: RUN_ID, ...rest, type } as EventOf<T>;
 }
