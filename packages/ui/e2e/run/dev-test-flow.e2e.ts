@@ -135,15 +135,13 @@ async function attachSeededRun(page: Page): Promise<void> {
 
 const PM_DEV_TEST = "Product Manager + Developer + QA";
 
-async function pickDefaultPipeline(page: Page): Promise<void> {
-  await page.goto("/");
-  await page.getByRole("button", { name: PM_DEV_TEST }).click();
-  await page.getByRole("option", { name: new RegExp(PM_DEV_TEST.replace(/\+/g, "\\+")) }).click();
-}
+const PM_DEV_TEST_OPTION = new RegExp(PM_DEV_TEST.replace(/\+/g, "\\+"));
 
 test("the default pipeline is selectable in the picker and previews all three boxes", async ({ page }) => {
   // Act
-  await pickDefaultPipeline(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: PM_DEV_TEST }).click();
+  await page.getByRole("option", { name: PM_DEV_TEST_OPTION }).click();
 
   // Assert — the trigger shows the chosen pipeline, and the composer copy follows.
   await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
@@ -165,7 +163,9 @@ test("the default pipeline is selectable in the picker and previews all three bo
 
 test("the pipeline choice is stored server-side, so it survives a reload", async ({ page }) => {
   // Arrange
-  await pickDefaultPipeline(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: PM_DEV_TEST }).click();
+  await page.getByRole("option", { name: PM_DEV_TEST_OPTION }).click();
 
   // Act
   await page.reload();

@@ -128,19 +128,15 @@ test("the autorun toggle reports the new value, not the old one", () => {
   expect(handlers.onToggleAutoRun).toHaveBeenCalledWith(true);
 });
 
-function dashboardWithTwoFeatureRuns(): Handlers {
-  return renderDashboard(
+test("each feature shows only its own run history", () => {
+  // Act
+  renderDashboard(
     milestone([feature("f1", "completed"), feature("f2", "ready")]),
     [
       featureRun("run-a", 3, "completed", "f1"),
       featureRun("run-b", 4, "running", "f2"),
     ],
   );
-}
-
-test("each feature shows only its own run history", () => {
-  // Act
-  dashboardWithTwoFeatureRuns();
 
   // Assert — the other feature's run must not appear under this one.
   const cards = screen.getAllByTestId("milestone-feature");
@@ -151,7 +147,13 @@ test("each feature shows only its own run history", () => {
 
 test("opening a feature's run reports that run's id", () => {
   // Arrange
-  const handlers = dashboardWithTwoFeatureRuns();
+  const handlers = renderDashboard(
+    milestone([feature("f1", "completed"), feature("f2", "ready")]),
+    [
+      featureRun("run-a", 3, "completed", "f1"),
+      featureRun("run-b", 4, "running", "f2"),
+    ],
+  );
   const cards = screen.getAllByTestId("milestone-feature");
   const first = within(cards[0]!).getAllByTestId("milestone-feature-run");
 
@@ -178,8 +180,9 @@ test("a blocking finding is shown with its severity and its evidence", () => {
   expect(screen.getByText("run #3 log")).toBeDefined();
 });
 
-function dashboardWithOneFeaturePerStatus(): Handlers {
-  return renderDashboard(
+test("only a needs-attention feature offers acceptance", () => {
+  // Act
+  renderDashboard(
     milestone([
       feature("f1", "completed"),
       feature("f2", "ready"),
@@ -187,11 +190,6 @@ function dashboardWithOneFeaturePerStatus(): Handlers {
       feature("f4", "needs_attention"),
     ]),
   );
-}
-
-test("only a needs-attention feature offers acceptance", () => {
-  // Act
-  dashboardWithOneFeaturePerStatus();
 
   // Assert — accepting is an override of a blocking finding, not a general action.
   expect(screen.getAllByTestId("milestone-feature-accept")).toHaveLength(1);
@@ -199,7 +197,14 @@ test("only a needs-attention feature offers acceptance", () => {
 
 test("accepting a feature reports that feature's own id", () => {
   // Arrange
-  const handlers = dashboardWithOneFeaturePerStatus();
+  const handlers = renderDashboard(
+    milestone([
+      feature("f1", "completed"),
+      feature("f2", "ready"),
+      feature("f3", "in_progress"),
+      feature("f4", "needs_attention"),
+    ]),
+  );
 
   // Act
   fireEvent.click(screen.getAllByTestId("milestone-feature-accept")[0]!);

@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { DEMO_PIPELINES, flattenPipelineStages } from "@adhd/core";
-import type { StageDefinition } from "@adhd/core";
 import { REPO_ROOT } from "../src/paths.ts";
 import {
   loadBundledPersona,
@@ -10,19 +9,7 @@ import {
 } from "../src/services/bundled-prompts.ts";
 
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
-
-type BundleLoader = (id: string) => Promise<string | undefined>;
-
-function referencedIds(pick: (stage: StageDefinition) => string | undefined): string[] {
-  return DEMO_PIPELINES.flatMap(flattenPipelineStages)
-    .map(pick)
-    .filter((id): id is string => id !== undefined);
-}
-
-async function idsWithNothingBundled(ids: string[], load: BundleLoader): Promise<string[]> {
-  const loaded = await Promise.all(ids.map(async (id) => [id, await load(id)] as const));
-  return loaded.filter(([, content]) => !content).map(([id]) => id);
-}
+const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
 
 describe("skill generation", () => {
   test("committed outputs are in sync with their sources (gen:skills --check)", () => {
@@ -34,21 +21,27 @@ describe("skill generation", () => {
   });
 
   test("every persona a shipped pipeline references is bundled", async () => {
-    const referenced = referencedIds((stage) => stage.skill);
+    const referenced = STAGES.map((stage) => stage.skill).filter((id) => id !== undefined);
 
-    const unbundled = await idsWithNothingBundled(referenced, loadBundledPersona);
+    const loaded = await Promise.all(referenced.map((id) => loadBundledPersona(id)));
 
     expect(referenced.length).toBeGreaterThan(0);
-    expect(unbundled, "pipeline stages naming a skill with no bundled persona").toEqual([]);
+    expect(
+      referenced.filter((_, index) => !loaded[index]),
+      "pipeline stages naming a skill with no bundled persona",
+    ).toEqual([]);
   });
 
   test("every step task a shipped pipeline references is bundled", async () => {
-    const referenced = referencedIds((stage) => stage.stepTask);
+    const referenced = STAGES.map((stage) => stage.stepTask).filter((id) => id !== undefined);
 
-    const unbundled = await idsWithNothingBundled(referenced, loadBundledStepTask);
+    const loaded = await Promise.all(referenced.map((id) => loadBundledStepTask(id)));
 
     expect(referenced.length).toBeGreaterThan(0);
-    expect(unbundled, "pipeline stages naming a step task with no bundled assignment").toEqual([]);
+    expect(
+      referenced.filter((_, index) => !loaded[index]),
+      "pipeline stages naming a step task with no bundled assignment",
+    ).toEqual([]);
   });
 
   test("QA stays an ordinary Playwright-only workflow step", async () => {

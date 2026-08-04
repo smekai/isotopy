@@ -4,16 +4,10 @@
 // to see that, because the filter and the tab switch meet in the markup.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import type {
-  LogLevel,
-  RunState,
-  StageActivity,
-  StageState,
-  StageStatus,
-} from "@adhd/core";
+import type { RunState } from "@adhd/core";
 import { RunTabs } from "../../src/components/run/RunTabs";
 import { DIRS } from "../../src/theme";
-import { run, stage } from "../support/run-fixtures";
+import { log, run, started } from "../support/run-fixtures";
 
 vi.mock("../../src/api", () => ({
   fetchRunFiles: vi.fn(() => Promise.resolve({ files: [] })),
@@ -22,14 +16,7 @@ vi.mock("../../src/api", () => ({
 
 const d = DIRS.indigo;
 
-function log(ts: string, level: LogLevel, message: string, activity?: StageActivity) {
-  return { ts, level, message, ...(activity ? { activity } : {}) };
-}
-
-function started(id: string, status: StageStatus, logs: StageState["logs"]): StageState {
-  return { ...stage(id, status), startedAt: "2026-07-27T10:00:00.000Z", logs };
-}
-
+const STARTED_AT = "2026-07-27T10:00:00.000Z";
 const DEV_PROSE = "I added the toggle.";
 const TOOL_ROW = "Read src/theme.ts";
 const CHATTER = "Developer online · Claude Code · haiku";
@@ -37,7 +24,7 @@ const CHATTER = "Developer online · Claude Code · haiku";
 function runWithTwoStages(): RunState {
   const state = run(
     [
-      started("implementation", "passed", [
+      started("implementation", "passed", STARTED_AT, [
         log("2026-07-27T10:00:01.000Z", "run", CHATTER, {
           kind: "engine",
           name: "Claude Code",
@@ -49,7 +36,9 @@ function runWithTwoStages(): RunState {
           detail: "src/theme.ts",
         }),
       ]),
-      started("test", "passed", [log("2026-07-27T10:01:00.000Z", "info", "Checked it.")]),
+      started("test", "passed", STARTED_AT, [
+        log("2026-07-27T10:01:00.000Z", "info", "Checked it."),
+      ]),
     ],
     "completed",
   );

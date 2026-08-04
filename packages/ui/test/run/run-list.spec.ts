@@ -2,54 +2,33 @@
 // arrive for a run the snapshot already holds (replace, keep position) or for one
 // it has never seen (prepend — the server sorts newest first).
 import { describe, expect, test } from "vitest";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { RunStatus, RunSummary } from "@adhd/core";
 import {
   mergeSummaries,
   mergeSummary,
   milestoneRefreshKey,
   runsForFeature,
 } from "../../src/run-list";
-
-function summary(id: string, status: RunStatus, number = 1): RunSummary {
-  return {
-    id,
-    number,
-    projectId: HOME_PROJECT_ID,
-    pipelineId: "pm-dev-test",
-    pipelineName: "Developer + Tester",
-    status,
-    createdAt: "2026-07-27T10:00:00.000Z",
-    stages: [],
-  };
-}
-
-function featureRun(
-  id: string,
-  status: RunStatus,
-  featureId: string,
-): RunSummary {
-  return { ...summary(id, status), milestoneId: "m1", featureId };
-}
+import { featureRun } from "../support/milestone-fixtures";
+import { summary } from "../support/run-fixtures";
 
 describe("mergeSummary", () => {
   test("replaces a run in place, keeping its position", () => {
     const merged = mergeSummary(
-      [summary("a", "running"), summary("b", "completed")],
-      summary("a", "completed"),
+      [summary({ id: "a", status: "running" }), summary({ id: "b", status: "completed" })],
+      summary({ id: "a", status: "completed" }),
     );
     expect(merged.map((run) => run.id)).toEqual(["a", "b"]);
     expect(merged[0]?.status).toBe("completed");
   });
 
   test("prepends a run it has not seen", () => {
-    const merged = mergeSummary([summary("a", "completed")], summary("new", "running"));
+    const merged = mergeSummary([summary({ id: "a", status: "completed" })], summary({ id: "new", status: "running" }));
     expect(merged.map((run) => run.id)).toEqual(["new", "a"]);
   });
 
   test("does not mutate the list it was given", () => {
-    const runs = [summary("a", "running")];
-    mergeSummary(runs, summary("a", "failed"));
+    const runs = [summary({ id: "a", status: "running" })];
+    mergeSummary(runs, summary({ id: "a", status: "failed" }));
     expect(runs[0]?.status).toBe("running");
   });
 });
@@ -57,8 +36,8 @@ describe("mergeSummary", () => {
 describe("mergeSummaries", () => {
   test("replays buffered summaries over a snapshot in order", () => {
     const merged = mergeSummaries(
-      [summary("a", "running")],
-      [summary("a", "awaiting"), summary("a", "completed")],
+      [summary({ id: "a", status: "running" })],
+      [summary({ id: "a", status: "awaiting" }), summary({ id: "a", status: "completed" })],
     );
     expect(merged).toHaveLength(1);
     expect(merged[0]?.status).toBe("completed");
@@ -69,9 +48,9 @@ describe("mergeSummaries", () => {
 describe("runsForFeature", () => {
   test("keeps only the runs linked to that feature", () => {
     const runs = [
-      featureRun("a", "completed", "f1"),
-      featureRun("b", "running", "f2"),
-      summary("c", "completed"),
+      featureRun("a", 1, "completed", "f1"),
+      featureRun("b", 1, "running", "f2"),
+      summary({ id: "c", status: "completed" }),
     ];
     expect(runsForFeature(runs, "f1").map((run) => run.id)).toEqual(["a"]);
   });
@@ -79,21 +58,21 @@ describe("runsForFeature", () => {
 
 describe("milestoneRefreshKey", () => {
   test("changes when a milestone run changes status", () => {
-    const before = milestoneRefreshKey([featureRun("a", "running", "f1")]);
-    const after = milestoneRefreshKey([featureRun("a", "completed", "f1")]);
+    const before = milestoneRefreshKey([featureRun("a", 1, "running", "f1")]);
+    const after = milestoneRefreshKey([featureRun("a", 1, "completed", "f1")]);
     expect(after).not.toBe(before);
   });
 
   test("ignores runs that belong to no milestone", () => {
-    const key = milestoneRefreshKey([featureRun("a", "running", "f1")]);
+    const key = milestoneRefreshKey([featureRun("a", 1, "running", "f1")]);
     expect(
-      milestoneRefreshKey([featureRun("a", "running", "f1"), summary("c", "failed")]),
+      milestoneRefreshKey([featureRun("a", 1, "running", "f1"), summary({ id: "c", status: "failed" })]),
     ).toBe(key);
   });
 
   test("is stable under rail reordering, so a prepend alone does not refetch", () => {
-    const a = featureRun("a", "completed", "f1");
-    const b = featureRun("b", "running", "f2");
+    const a = featureRun("a", 1, "completed", "f1");
+    const b = featureRun("b", 1, "running", "f2");
     expect(milestoneRefreshKey([a, b])).toBe(milestoneRefreshKey([b, a]));
   });
 });

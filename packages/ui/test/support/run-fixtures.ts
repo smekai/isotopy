@@ -1,5 +1,6 @@
-import { HOME_PROJECT_ID } from "@adhd/core";
+import { HOME_PROJECT_ID, toRunSummary } from "@adhd/core";
 import type {
+  LogLevel,
   MessageRole,
   RunEvent,
   RunEventType,
@@ -7,6 +8,8 @@ import type {
   RunMessage,
   RunState,
   RunStatus,
+  RunSummary,
+  StageActivity,
   StageState,
   StageStatus,
 } from "@adhd/core";
@@ -18,6 +21,20 @@ export const RUN_ID = "r1";
 
 export function stage(id: string, status: StageStatus = "pending"): StageState {
   return { id, label: id, status, logs: [] };
+}
+
+/** A stage that has started, so the transcript gives it a divider. */
+export function started(
+  id: string,
+  status: StageStatus,
+  at: string,
+  logs: StageState["logs"] = [],
+): StageState {
+  return { ...stage(id, status), startedAt: at, logs };
+}
+
+export function log(ts: string, level: LogLevel, text: string, activity?: StageActivity) {
+  return { ts, level, message: text, ...(activity ? { activity } : {}) };
 }
 
 export function run(stages: StageState[], status: RunStatus = "running"): RunState {
@@ -41,6 +58,10 @@ export function message(
   role: MessageRole = "user",
 ): RunMessage {
   return { id, ts, role, text };
+}
+
+export function summary(overrides: Partial<RunSummary> = {}): RunSummary {
+  return { ...toRunSummary(run([stage("design", "running")])), ...overrides };
 }
 
 type EventOf<T extends RunEventType> = Extract<RunEvent, { type: T }>;

@@ -3,27 +3,12 @@
 // the merge wrong is how a reply ends up above the question that prompted it, so
 // ordering across the two sources is what this covers.
 import { describe, expect, test } from "vitest";
-import type {
-  LogLevel,
-  RunState,
-  StageActivity,
-  StageState,
-  StageStatus,
-} from "@adhd/core";
+import type { RunState } from "@adhd/core";
 import { buildTranscript, conversationOnly } from "../../src/transcript";
-import type { TranscriptItem } from "../../src/transcript";
-import { message, run, stage } from "../support/run-fixtures";
+import { log, message, run, stage, started } from "../support/run-fixtures";
 
 /** Narration the chat must drop and the log must keep. */
 const MACHINERY = ["Developer online", "Read src/auth.ts", "Tool error"];
-
-function textOf(items: TranscriptItem[]): string {
-  return items.map((item) => ("text" in item ? item.text : "")).join("\n");
-}
-
-function log(ts: string, level: LogLevel, text: string, activity?: StageActivity) {
-  return { ts, level, message: text, ...(activity ? { activity } : {}) };
-}
 
 function toolLog(ts: string, text: string, name = "Read") {
   return log(ts, "run", text, { kind: "tool", name });
@@ -31,10 +16,6 @@ function toolLog(ts: string, text: string, name = "Read") {
 
 function toolErrorLog(ts: string, text: string, name = "Edit") {
   return log(ts, "warn", text, { kind: "tool-error", name });
-}
-
-function started(id: string, status: StageStatus, at: string, logs: StageState["logs"]) {
-  return { ...stage(id, status), startedAt: at, logs };
 }
 
 function threadOf(state: RunState) {
@@ -227,8 +208,12 @@ describe("conversationOnly", () => {
   });
 
   test("engine chatter and tool rows leave the chat but stay in the log", () => {
-    const chat = textOf(conversationOnly(buildTranscript(noisy)));
-    const logs = textOf(buildTranscript(noisy));
+    const chat = conversationOnly(buildTranscript(noisy))
+      .map((item) => ("text" in item ? item.text : ""))
+      .join("\n");
+    const logs = buildTranscript(noisy)
+      .map((item) => ("text" in item ? item.text : ""))
+      .join("\n");
 
     expect(MACHINERY.filter((line) => chat.includes(line))).toEqual([]);
     expect(MACHINERY.filter((line) => logs.includes(line))).toEqual(MACHINERY);

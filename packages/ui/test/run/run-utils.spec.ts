@@ -2,31 +2,18 @@
 // (TASK-060 shipped a Restart button that actually resumed), and the scratch
 // check has to hold on both path separators.
 import { describe, expect, test } from "vitest";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { RunState, StageState, StageStatus } from "@adhd/core";
+import type { RunState, StageState } from "@adhd/core";
 import {
   childPath,
   isScratchWorkspace,
   resumeStageId,
   stagePresentation,
 } from "../../src/run-utils";
+import { run as runFixture, stage } from "../support/run-fixtures";
 
-function stage(id: string, status: StageStatus): StageState {
-  return { id, label: id, status, logs: [] };
-}
-
+/** Every case here is about resuming, so the run is always a failed one. */
 function run(stages: StageState[]): RunState {
-  return {
-    id: "r1",
-    number: 1,
-    projectId: HOME_PROJECT_ID,
-    pipelineId: "pm-dev-test",
-    pipelineName: "Developer + Tester",
-    status: "failed",
-    stages,
-    messages: [],
-    createdAt: "2026-07-21T10:00:00.000Z",
-  };
+  return runFixture(stages, "failed");
 }
 
 describe("resumeStageId", () => {

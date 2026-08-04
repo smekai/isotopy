@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
 import { resetPreferences } from "./support/preferences";
 
 // Free tier: the switcher is driven against whatever the registry already
@@ -12,11 +11,6 @@ test.beforeEach(async ({ page }) => {
   await resetPreferences(page);
 });
 
-async function openSwitcher(page: Page): Promise<void> {
-  await page.goto("/");
-  await page.getByTestId("project-switcher").click();
-}
-
 test("the header carries a real project switcher, not the old mock", async ({ page }) => {
   // Act
   await page.goto("/");
@@ -28,7 +22,8 @@ test("the header carries a real project switcher, not the old mock", async ({ pa
 
 test("the switcher lists the home project and offers to add one", async ({ page }) => {
   // Act
-  await openSwitcher(page);
+  await page.goto("/");
+  await page.getByTestId("project-switcher").click();
 
   // Assert
   await expect(page.getByRole("option").filter({ hasText: "Home" })).toBeVisible();
@@ -38,7 +33,8 @@ test("the switcher lists the home project and offers to add one", async ({ page 
 
 test("exactly one project is marked active at a time", async ({ page }) => {
   // Act
-  await openSwitcher(page);
+  await page.goto("/");
+  await page.getByTestId("project-switcher").click();
 
   // Assert
   await expect(page.locator("[role=option][aria-selected=true]")).toHaveCount(1);
@@ -46,7 +42,8 @@ test("exactly one project is marked active at a time", async ({ page }) => {
 
 test("Escape closes the switcher", async ({ page }) => {
   // Arrange
-  await openSwitcher(page);
+  await page.goto("/");
+  await page.getByTestId("project-switcher").click();
   await expect(page.getByRole("option").first()).toBeVisible();
 
   // Act
@@ -58,7 +55,8 @@ test("Escape closes the switcher", async ({ page }) => {
 
 test("Add project opens the folder picker", async ({ page }) => {
   // Arrange
-  await openSwitcher(page);
+  await page.goto("/");
+  await page.getByTestId("project-switcher").click();
 
   // Act
   await page.getByRole("button", { name: /Add project/ }).click();
@@ -70,7 +68,8 @@ test("Add project opens the folder picker", async ({ page }) => {
 
 test("Escape closes the folder picker", async ({ page }) => {
   // Arrange
-  await openSwitcher(page);
+  await page.goto("/");
+  await page.getByTestId("project-switcher").click();
   await page.getByRole("button", { name: /Add project/ }).click();
   await expect(page.getByTestId("folder-picker")).toBeVisible();
 
@@ -84,7 +83,8 @@ test("Escape closes the folder picker", async ({ page }) => {
 test("Setup names the active project", async ({ page }) => {
   // Arrange — open the list first: the trigger shows a placeholder until
   // /projects lands, and a selected option only exists once it has.
-  await openSwitcher(page);
+  await page.goto("/");
+  await page.getByTestId("project-switcher").click();
   const active = await page.locator("[role=option][aria-selected=true]").innerText();
   await page.keyboard.press("Escape");
 

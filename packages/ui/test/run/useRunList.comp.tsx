@@ -7,12 +7,11 @@
 // which owns the deferred promises and the act() wrapping so no test body does.
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { HOME_PROJECT_ID, toRunSummary } from "@adhd/core";
-import type { RunStatus } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@adhd/core";
 import { useRunList } from "../../src/hooks/useRunList";
 import { fakeRunListStream } from "../support/fake-run-list-stream";
 import type { FakeRunListStream } from "../support/fake-run-list-stream";
-import { run, stage } from "../support/run-fixtures";
+import { run, stage, summary } from "../support/run-fixtures";
 
 vi.mock("../../src/api", () => ({
   fetchRuns: vi.fn(),
@@ -21,9 +20,6 @@ vi.mock("../../src/api", () => ({
 
 const OTHER_PROJECT = "proj-2";
 
-function summaryOf(id: string, status: RunStatus) {
-  return { ...toRunSummary(run([stage("design", "running")], status)), id };
-}
 
 let stream: FakeRunListStream;
 
@@ -63,7 +59,7 @@ test("a summary arriving before the snapshot is replayed onto it", async () => {
   const { result } = renderHook(() => useRunList(HOME_PROJECT_ID, true));
 
   // Act — the summary lands in the gap between subscribing and the snapshot.
-  await stream.push(summaryOf("r1", "completed"));
+  await stream.push(summary({ id: "r1", status: "completed" }));
   await stream.snapshot([run([stage("design", "running")], "running")]);
 
   // Assert
@@ -77,7 +73,7 @@ test("a summary arriving after the snapshot updates that run in place", async ()
   await stream.snapshot([run([stage("design", "running")], "running")]);
 
   // Act
-  await stream.push(summaryOf("r1", "awaiting"));
+  await stream.push(summary({ id: "r1", status: "awaiting" }));
 
   // Assert
   expect(result.current.runs).toHaveLength(1);
@@ -90,7 +86,7 @@ test("a run the snapshot never held is prepended", async () => {
   await stream.snapshot([run([stage("design", "passed")], "completed")]);
 
   // Act
-  await stream.push(summaryOf("fresh", "running"));
+  await stream.push(summary({ id: "fresh", status: "running" }));
 
   // Assert — the server sorts newest first, so an unseen run goes to the top.
   expect(result.current.runs.map((item) => item.id)).toEqual(["fresh", "r1"]);
