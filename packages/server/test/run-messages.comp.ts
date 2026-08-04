@@ -68,9 +68,11 @@ test("a message reaches the run's event stream so an open tab sees it", async ()
   // here; what matters is that the event carries the message at all.
   const posted = events.filter((event) => event.event === "run.message");
   const first = JSON.parse(posted[0]?.data ?? "{}") as RunEvent;
-  expect(first.type).toBe("run.message");
-  expect(first.chatMessage?.text).toBe("keep it small");
-  expect(first.chatMessage?.role).toBe("user");
+  if (first.type !== "run.message") {
+    throw new Error(`expected a run.message event, got ${first.type}`);
+  }
+  expect(first.chatMessage.text).toBe("keep it small");
+  expect(first.chatMessage.role).toBe("user");
 });
 
 test("an empty message is rejected before anything is recorded", async () => {

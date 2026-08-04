@@ -287,40 +287,6 @@ export function toRunSummary(run: RunState): RunSummary {
   };
 }
 
-export const RUN_EVENT_TYPES = [
-  "run.started",
-  "run.completed",
-  "stage.started",
-  "stage.log",
-  "stage.completed",
-  "stage.failed",
-  "stage.awaiting",
-  "stage.approved",
-  "stage.skipped",
-  "stage.asking",
-  "stage.answered",
-  "stage.blocked",
-  "stage.unblocked",
-  "stage.usage",
-  "run.message",
-] as const;
-
-export type RunEventType = (typeof RUN_EVENT_TYPES)[number];
-
-export interface RunEvent {
-  ts: string;
-  type: RunEventType;
-  runId: string;
-  stageId?: string;
-  message?: string;
-  status?: StageStatus | RunStatus;
-  level?: LogLevel;
-  result?: string;
-  chatMessage?: RunMessage;
-  usage?: StageUsage;
-  limit?: RunLimit;
-}
-
 export interface NewRunInput {
   runId: string;
   number: number;

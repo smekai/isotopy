@@ -41,13 +41,6 @@ describe("applyEvent", () => {
     expect(after.status).toBe("cancelled");
   });
 
-  test("run.completed with no status at all settles the run as completed", () => {
-    const after = applyEvent(run([stage("design")]), event("run.completed"));
-
-    expect(after.status).toBe("completed");
-    expect(after.completedAt).toBe("2026-07-21T10:00:01.000Z");
-  });
-
   test("run.completed stores the result when the event carries one", () => {
     const after = applyEvent(
       run([stage("design")]),
@@ -65,17 +58,6 @@ describe("applyEvent", () => {
     expect(stageOf(after, "design").status).toBe("running");
     expect(stageOf(after, "design").startedAt).toBe("2026-07-21T10:00:01.000Z");
     expect(stageOf(after, "design").completedAt).toBeUndefined();
-  });
-
-  test("stage.log appends the entry and defaults its level to info", () => {
-    const after = applyEvent(
-      run([stage("design", "running")]),
-      event("stage.log", { stageId: "design", message: "building" }),
-    );
-
-    expect(stageOf(after, "design").logs).toEqual([
-      { ts: "2026-07-21T10:00:01.000Z", level: "info", message: "building" },
-    ]);
   });
 
   test("stage.log keeps the level the event carries", () => {
@@ -106,15 +88,6 @@ describe("applyEvent", () => {
     const after = applyEvent(applyEvent(run([stage("design", "running")]), first), second);
 
     expect(stageOf(after, "design").logs).toHaveLength(2);
-  });
-
-  test("a stage.log with no message is ignored", () => {
-    const after = applyEvent(
-      run([stage("design", "running")]),
-      event("stage.log", { stageId: "design" }),
-    );
-
-    expect(stageOf(after, "design").logs).toEqual([]);
   });
 
   test("stage.completed passes the stage and stamps its completion time", () => {
@@ -207,14 +180,6 @@ describe("applyEvent", () => {
     const after = applyEvent(before, event("run.message", { chatMessage }));
 
     expect(after.messages).toHaveLength(1);
-  });
-
-  test("run.message with no payload is ignored rather than appending a blank", () => {
-    const before = run([stage("design", "running")]);
-
-    const after = applyEvent(before, event("run.message"));
-
-    expect(after.messages).toEqual([]);
   });
 
   test("an event naming a stage the run does not have changes nothing", () => {

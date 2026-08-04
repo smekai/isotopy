@@ -1,18 +1,17 @@
 import {
   ENGINE_IDS,
-  LOG_LEVELS,
   PERMISSION_MODE_IDS,
   RUN_STATUSES,
   STAGE_STATUSES,
   STAGE_VERDICTS,
-  TERMINAL_RUN_STATUSES,
   requiredText,
   runCloseoutRecordSchema,
+  runEventSchema,
+  stageUsageSchema,
   requiredTexts,
   runLimitSchema,
   runMessageSchema,
   stageLogEntrySchema,
-  stageUsageSchema,
   timestamp,
 } from "@adhd/core";
 import type {
@@ -83,138 +82,6 @@ const persistedRunSchema: z.ZodType<PersistedRun> = z
     openWorkflowRunId: text.optional(),
   })
   .strict();
-
-const eventBase = {
-  ts: timestamp,
-  runId: text,
-};
-const stageEventBase = {
-  ...eventBase,
-  stageId: text,
-};
-
-const runEventSchema: z.ZodType<RunEvent> = z.discriminatedUnion("type", [
-  z
-    .object({
-      ...eventBase,
-      type: z.literal("run.started"),
-      status: z.literal("running"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...eventBase,
-      type: z.literal("run.completed"),
-      status: z.enum(TERMINAL_RUN_STATUSES),
-      message: z.string(),
-      result: z.string().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.started"),
-      status: z.literal("running"),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.log"),
-      level: z.enum(LOG_LEVELS),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.completed"),
-      status: z.literal("passed"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.failed"),
-      status: z.literal("failed"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.awaiting"),
-      status: z.literal("awaiting"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.approved"),
-      status: z.literal("passed"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.skipped"),
-      status: z.literal("skipped"),
-      message: z.string().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.asking"),
-      status: z.literal("asking"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.answered"),
-      status: z.literal("running"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.blocked"),
-      status: z.literal("blocked"),
-      message: z.string(),
-      limit: runLimitSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.unblocked"),
-      status: z.literal("running"),
-      message: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...stageEventBase,
-      type: z.literal("stage.usage"),
-      usage: stageUsageSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...eventBase,
-      type: z.literal("run.message"),
-      stageId: text.optional(),
-      chatMessage: runMessageSchema,
-    })
-    .strict(),
-]);
 
 export function parsePersistedRun(
   textValue: string,

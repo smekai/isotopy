@@ -43,8 +43,13 @@ export function message(
   return { id, ts, role, text };
 }
 
-export function event(type: RunEventType, extra: Partial<RunEvent> = {}): RunEvent {
-  return { ts: EVENT_TS, type, runId: RUN_ID, ...extra };
+type EventOf<T extends RunEventType> = Extract<RunEvent, { type: T }>;
+
+export function event<T extends RunEventType>(
+  type: T,
+  rest: Partial<Omit<EventOf<T>, "type">> = {},
+): EventOf<T> {
+  return { ts: EVENT_TS, runId: RUN_ID, ...rest, type } as EventOf<T>;
 }
 
 export function limit(overrides: Partial<RunLimit> = {}): RunLimit {
