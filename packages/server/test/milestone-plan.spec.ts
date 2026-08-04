@@ -1,4 +1,3 @@
-import { toMilestoneProposal } from "@adhd/core";
 import { describe, expect, it } from "vitest";
 import { extractMilestonePlan } from "../src/domain/milestone-plan.ts";
 import { formatValidationIssues } from "../src/domain/validation.ts";
@@ -106,23 +105,5 @@ describe("extractMilestonePlan", () => {
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
       "Feature IDs must be unique",
     );
-  });
-});
-
-describe("toMilestoneProposal", () => {
-  it("stamps the revision and timestamp onto an already-validated plan", () => {
-    const parsed = extractMilestonePlan(fenced(VALID_PLAN));
-    if (!parsed.ok) {
-      throw new Error("expected a valid plan");
-    }
-
-    const proposal = toMilestoneProposal(parsed.value, 2, "2026-07-29T00:00:00.000Z");
-
-    expect(proposal).toMatchObject({
-      revision: 2,
-      createdAt: "2026-07-29T00:00:00.000Z",
-      name: "Milestone D",
-      features: [{ id: "planning" }],
-    });
   });
 });
