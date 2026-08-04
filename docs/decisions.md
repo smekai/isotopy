@@ -474,6 +474,21 @@ layer, never the backend.
 **Rejected:** keeping the two-backend selector. It hedged against a `node:sqlite` problem
 measurement had already ruled out, at the cost of two code paths nobody selected.
 
+**Also rejected, and why (TASK-066, measured on Windows 11 + Node 24, not assumed):**
+
+| Candidate | Why not |
+| --- | --- |
+| `better-sqlite3` | **Install fails outright here** — no prebuild for this Node, and the `node-gyp` fallback demands a Visual Studio C++ toolchain. This is what decided it: `node:sqlite` works where this does not. |
+| `libsql` | Turso's SQLite fork; adds a native/remote story a local single-process app does not need |
+| PGlite (Postgres in WASM) | Single user, single connection, alpha — cannot back an engine that pools connections |
+| `embedded-postgres` | Tens of MB of binaries the upstream calls "intended for testing purposes", plus a data-directory lifecycle across app upgrades |
+| A Postgres server | Disproportionate to a handful of rows per run, and pushes install/upgrade/backup onto every user — it breaks the "one install" story |
+
+The cost of `node:sqlite` is an experimental-API warning and a Node version floor.
+The storage choice also constrained the engine choice: most durable-execution
+engines are Postgres-only, so "which embedded DB" and "which workflow runtime"
+were the same question — see [workflow-runtime-options.md](./workflow-runtime-options.md).
+
 ---
 
 ## 2026-07-23 — A project owns its folder, its data, and its settings

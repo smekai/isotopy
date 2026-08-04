@@ -7,8 +7,9 @@ here. Every interface and method name proposed below is a *conceptual recommenda
 existing or committed contract.
 
 This document decides how ADHD executes long-running workflows. It also corrects a standing
-architectural claim in `architect-standards.md`, `implementation-notes.md` and `code-quality.md`
-that a durable runtime replaces `executeStage()` alone.
+architectural claim — then carried by `architect-standards.md`, `implementation-notes.md` and
+`code-quality.md`, the first and last of which are now sections of
+[`architecture.md`](architecture.md) — that a durable runtime replaces `executeStage()` alone.
 
 **Recommendation in one line:** adopt **OpenWorkflow** — TypeScript, Apache-2.0, durable execution
 on an embedded SQLite file with no server and no native dependencies — keep the workflow
@@ -28,7 +29,7 @@ concurrency (**S5**) as the two things we build or contribute upstream.
 >    and OpenWorkflow ships SQLite support *today*.
 >
 > Two facts then decided it, both **measured on Windows 11 / Node 24**, not cited — see
-> [workflow-storage-options.md](./workflow-storage-options.md):
+> [`decisions.md`](./decisions.md) (2026-07-23):
 >
 > - **DBOS TypeScript is Postgres-only.** `pg` is the sole DB driver in its `package.json`. The
 >   SQLite support widely attributed to DBOS is in its *Python* port, where it is the default.
@@ -84,9 +85,9 @@ Open work that touches this area: TASK-039 (pluggable run persistence — the `R
 after TASK-059; only a DB adapter remains), TASK-051 (Manual-Tester stage), TASK-061 (subscription
 limit reached → durable wait + user choice), TASK-065 (project preferences moved server-side).
 
-Roadmap position: [`mvp-scope.md`](mvp-scope.md) still carries the unchecked delivery item
-*"Aiki-backed durable workflow runtime (or thin fallback state machine)"*, and
-[`technical-architecture.md`](technical-architecture.md) recommends Aiki with a custom state machine
+Roadmap position: the delivery item this was waiting on was
+*"Aiki-backed durable workflow runtime (or thin fallback state machine)"*, with
+[`architecture.md`](architecture.md) recommending Aiki plus a custom state machine
 as the fallback. **This document is the research that item was waiting on**, and §9 revises that
 default.
 
@@ -126,14 +127,14 @@ Three documents currently state that a durable runtime swaps in behind one metho
 
 > `RunOrchestrator.executeStage()` in `services/run-orchestrator.ts` is the single decision point
 > for how a stage runs. A durable executor replaces that method alone — leave it intact.
-> — [`architect-standards.md`](architect-standards.md)
+> — `architect-standards.md`, now [`architecture.md` § Architect Standards](architecture.md)
 
 > **`executeStage()` is the durable-workflow seam.** … A durable-workflow runtime (Aiki …) replaces
 > this one method — the engine adapters and the surrounding stage lifecycle are untouched.
 > — [`implementation-notes.md`](implementation-notes.md)
 
 > **Deliberate seam:** … A durable-workflow executor (Aiki) replaces that method alone.
-> — [`code-quality.md`](code-quality.md)
+> — `code-quality.md`, now [`architecture.md` § Code Quality Standards](architecture.md)
 
 **This is wrong, and it under-budgets the migration.** `executeStage()` decides *how one stage is
 executed* — simulation or real engine. That is a genuine and valuable seam, and it should stay. But
@@ -178,7 +179,7 @@ listed candidate) would give the durability substrate without a server.
   at the exact moment we want them rather than at a step boundary.
 - **Against:** we write and own the hard parts. Durable timers, crash-consistent checkpointing, idempotent
   step replay and fan-in joins are individually unglamorous and collectively a real engine —
-  precisely what `technical-architecture.md` warned against building. Every bug in it is ours, and
+  precisely what [`architecture.md`](architecture.md) warned against building. Every bug in it is ours, and
   the failure modes (a wait that silently never fires, a double-executed stage after an
   ill-timed crash) are the kind that surface in front of users months later.
 - **Cost:** high but incremental and de-riskable — each capability ships independently, and S6
@@ -195,7 +196,7 @@ custom ids, and scheduled runs.
 
 - **For:** TypeScript-native with an ergonomic model, and the feature list maps well onto S1/S2 and
   onto gates. Versioning is a genuinely good fit for S4. It is the incumbent recommendation in
-  `technical-architecture.md`, so choosing it costs no narrative rewrite.
+  [`architecture.md`](architecture.md), so choosing it costs no narrative rewrite.
 - **The decisive advantage — ADHD has a contributor on the project.** Aiki's public API already
   exposes a provider seam (`server({ db: database({ provider: "pg", url }) })`) and SQLite is a
   declared roadmap item, so the missing pieces are reachable rather than hypothetical. Uniquely
@@ -280,7 +281,7 @@ state in **PostgreSQL *or* SQLite** and states that a *"database as source of tr
 separate orchestration service"* — so there is no daemon, matching **S1**.
 
 **Why it wins: it was measured doing ADHD's exact job.** Full detail in
-[workflow-storage-options.md §4](./workflow-storage-options.md); the headline results, on
+[`decisions.md`](./decisions.md) (2026-07-23); the headline results, on
 Windows 11 / Node 24:
 
 - `npm install openworkflow` → **1 package, ~2 seconds, zero dependencies**, no native module. Its
@@ -571,7 +572,7 @@ All verified 2026-07-23.
 [Restate](https://github.com/restatedev/restate) ·
 [Restate installation / supported platforms](https://docs.restate.dev/installation)
 
-**Storage** — see [workflow-storage-options.md](./workflow-storage-options.md) for the full
+**Storage** — see [`decisions.md`](./decisions.md) (2026-07-23) for the embedded-DB
 comparison and the Windows measurements · [`node:sqlite`](https://nodejs.org/api/sqlite.html) ·
 [PGlite](https://github.com/electric-sql/pglite) ·
 [embedded-postgres (npm)](https://www.npmjs.com/package/embedded-postgres) ·
@@ -585,11 +586,9 @@ comparison and the Windows measurements · [`node:sqlite`](https://nodejs.org/ap
 [Cursor Cloud Agents runtime](https://cursor.com/docs/cloud-agent/choose-runtime) ·
 [GitHub Copilot coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent)
 
-**Internal** — [`technical-architecture.md`](technical-architecture.md) ·
-[`architect-standards.md`](architect-standards.md) ·
+**Internal** — [`architecture.md`](architecture.md) ·
+[`decisions.md`](decisions.md) ·
 [`implementation-notes.md`](implementation-notes.md) ·
-[`code-quality.md`](code-quality.md) ·
 [`competitor-matrix.md`](competitor-matrix.md) ·
-[`mvp-scope.md`](mvp-scope.md) ·
 [`../.tasks/DONE.md`](../.tasks/DONE.md) ·
 [`../.tasks/BACKLOG.md`](../.tasks/BACKLOG.md)

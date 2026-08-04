@@ -31,23 +31,29 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 ## Documents
 
-### Product and architecture
+### Product
 
 | Document | Description |
-|----------|-------------|
+| --- | --- |
 | [product-brief.md](docs/product-brief.md) | Positioning, app-builder gap, target user, workflow, differentiation |
-| [mvp-scope.md](docs/mvp-scope.md) | Smallest useful MVP: stages, built-in tasks, Playwright E2E, deploy adapters, dashboard |
-| [architecture.md](docs/architecture.md) | Local architecture: TypeScript/Hono/React, OpenWorkflow runtime, tasks, worktrees, adapters |
-| [architecture-ui.md](docs/architecture-ui.md) | The frontend tier in full: module map, network seam, run data flow, state ownership, design tokens, testing |
 | [competitor-matrix.md](docs/competitor-matrix.md) | What existing tools miss and why none fully owns ongoing local development |
-| [technology-comparison.md](docs/technology-comparison.md) | TypeScript vs Python vs Rust vs Go: UI, workflow, speed, AI integration, RPC |
-| [prototype-plan.md](docs/prototype-plan.md) | Temporary prototype roadmap (UI-first demo) |
 
-### Design and agent strategy
+### Architecture and standards
 
 | Document | Description |
-|----------|-------------|
-| [model-and-harness-strategy.md](docs/model-and-harness-strategy.md) | When to use Claude Code vs Cursor, stage-to-tool mapping, BYOK models |
+| --- | --- |
+| [architecture.md](docs/architecture.md) | The code standard (A1–A9, source of the Architect skill), the package layout, and the system design |
+| [architecture-ui.md](docs/architecture-ui.md) | The frontend tier in full: module map, network seam, run data flow, state ownership, design tokens, testing |
+| [decisions.md](docs/decisions.md) | Dated decision log — context, decision, and the alternative that was rejected |
+| [implementation-notes.md](docs/implementation-notes.md) | The "why" behind non-obvious code: engine quirks, paths, persistence, personas |
+| [workflow-runtime-options.md](docs/workflow-runtime-options.md) | Durable-runtime comparison behind the OpenWorkflow choice, and the workflow seam |
+
+### Testing
+
+| Document | Description |
+| --- | --- |
+| [testing.md](docs/testing.md) | How a test here is written (AAAAA), which layer a check belongs in, merge protection |
+| [e2e-test-plan.md](docs/e2e-test-plan.md) | The browser layer: tiers, cost, and what the Playwright suite covers |
 
 
 ## Status
@@ -121,7 +127,7 @@ docs/       # planning and design documents
 
 ## Working with Claude and Cursor
 
-ADHD orchestrates a full lifecycle pipeline but **delegates implementation to your coding tools**. LLM stages (requirements, design, review, release) call API providers with your keys; the **implementation stage** runs through a harness adapter — primarily **Claude Code** or **Cursor CLI**. You can work on the ADHD repo in Cursor while Claude Code runs as the implementation harness for target projects. See [model-and-harness-strategy.md](docs/model-and-harness-strategy.md) for the full stage-to-tool mapping and configuration.
+ADHD orchestrates a full lifecycle pipeline but **delegates every stage to your coding tools**. It does not call model APIs itself: each engine-backed stage spawns a coding CLI — **Claude Code**, **Cursor**, or **Codex** — in the run's workspace, so the engine brings its own model selection and its own auth. What an agent *is* comes from a persona (Markdown you can override per user or per project); what it *does* comes from the stage's assignment. You can work on the ADHD repo in Cursor while Claude Code runs the stages for target projects. See [architecture.md](docs/architecture.md#agent-model) for the engine roster and persona layering.
 
 <!-- TASKPLANNER:ATTRIBUTION:START -->
 This project uses [TaskPlanner](https://github.com/smekai/taskplanner) for task planning.

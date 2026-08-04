@@ -1,5 +1,47 @@
 # Done
 
+## TASK-119: Prune the docs folder to what still earns its place
+**Priority:** P2 | **Tags:** infra
+**Updated:** 2026-08-04 22:10
+
+Cut `docs/` from 15 files to 9 (5469 → ~3400 lines) and corrected the stale content the
+prune exposed.
+
+**Deleted — settled research with no live reader:**
+
+- `prototype-plan.md` — self-declared temporary; milestones A–D all shipped.
+- `technology-comparison.md` — TS vs Python/Rust/Go, long since decided.
+- `spike-beads-vs-ts-backlog.md` — `bd` rejected; the verdict already lives inline in
+  `competitor-matrix.md` §2.
+- `workflow-storage-options.md` — superseded by the SQLite entry in `decisions.md`.
+- `model-and-harness-strategy.md` — its "Two agent kinds" section was a **verbatim
+  duplicate** of `architecture.md` § Agent model, and the rest (LiteLLM, `.adhd/config.yaml`,
+  harnesses marked "Planned") never shipped.
+- `mvp-scope.md` — documented an `adhd run --task` CLI that does not exist.
+
+**Preserved before deleting:** the measured embedded-DB comparison from
+`workflow-storage-options.md` (`better-sqlite3` fails to install on Windows 11 + Node 24;
+PGlite is single-connection; Postgres breaks "one install") moved into the 2026-07-23
+`decisions.md` entry as a rejected-alternatives table.
+
+**Corrected in `architecture.md`** — the § Agent model section described a product that was
+never built. Rewritten to what ships: a stage is engine-backed iff it carries a `skill`;
+engines are the `claude-code`/`cursor`/`codex` CLI roster, each bringing its own model and
+auth; personas are layered Markdown; `executionPolicy` decides outcome propagation. Three
+rows of the decisions table fixed (persistence is SQLite, not files; no CLI framework; no LLM
+abstraction layer). This matters because the file generates the Architect skill.
+
+**Link hygiene:** rewrote the README doc index (it had listed 7 docs and omitted `decisions`,
+`implementation-notes`, `testing`, `e2e-test-plan`, `workflow-runtime-options`) and the
+"Working with Claude and Cursor" section. Fixed four pre-existing broken links in
+`workflow-runtime-options.md` left over from the earlier `architecture.md` merge
+(`technical-architecture.md`, `architect-standards.md`, `code-quality.md`). Every relative
+Markdown link in `docs/`, README, AGENTS and CLAUDE now resolves.
+
+Gates: lint, typecheck, 430 tests, build all green; `gen:skills` reports no drift.
+
+---
+
 ## TASK-118: AAAAA testing standard — a loadable skill, a conformance sweep, a green-CI merge gate
 **Priority:** P2 | **Tags:** testing, infra
 **Updated:** 2026-08-04 21:30
