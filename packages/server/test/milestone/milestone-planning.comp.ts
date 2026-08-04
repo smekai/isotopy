@@ -71,9 +71,7 @@ async function planUntilDraft(): Promise<{ run: RunState; draft: Milestone }> {
     "/milestones/plan",
     { goal: "Plan milestone D", engine: "claude-code" },
   );
-  if (status !== 201) {
-    throw new Error(`Expected 201 starting a planning run, got ${status}`);
-  }
+  expect(status, "starting a planning run").toBe(201);
   await waitForStageStatus(ctx.app, run.id, "milestone-plan", "asking");
   await post(ctx.app, `/runs/${run.id}/messages`, { text: "Yes, include the UI" });
   await waitForRunStatus(ctx.app, run.id, "completed");

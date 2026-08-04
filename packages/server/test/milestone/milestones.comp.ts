@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, assert, beforeEach, expect, test } from "vitest";
 import type { Milestone, RunState } from "@adhd/core";
 import {
   createTestApp,
@@ -35,19 +35,8 @@ async function milestoneWithOneFeature(feature: object = {}): Promise<Milestone>
       },
     ],
   });
-  if (status !== 201) {
-    throw new Error(`Expected 201 creating a milestone, got ${status}`);
-  }
+  expect(status, "creating a milestone").toBe(201);
   return body;
-}
-
-/** The id of a milestone's first feature — absent means the fixture is broken. */
-function firstFeatureId(milestone: Milestone): string {
-  const id = milestone.features[0]?.id;
-  if (!id) {
-    throw new Error(`Milestone ${milestone.id} has no features`);
-  }
-  return id;
 }
 
 async function acceptedFeature(): Promise<{ milestone: Milestone; featureId: string }> {
@@ -55,7 +44,8 @@ async function acceptedFeature(): Promise<{ milestone: Milestone; featureId: str
     name: "Delivery",
     features: [{ title: "Reviewed feature" }],
   });
-  const featureId = firstFeatureId(created);
+  const featureId = created.features[0]?.id;
+  assert(featureId, `milestone ${created.id} was created with no features`);
   await patch(ctx.app, `/milestones/${created.id}/features/${featureId}`, {
     status: "needs_attention",
   });

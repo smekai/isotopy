@@ -1,3 +1,4 @@
+import { assert } from "vitest";
 import { HOME_PROJECT_ID, toRunSummary } from "@adhd/core";
 import type {
   LogLevel,
@@ -87,12 +88,8 @@ export function limit(overrides: Partial<RunLimit> = {}): RunLimit {
 }
 
 export function stageOf(state: RunState | null, stageId: string): StageState {
-  if (!state) {
-    throw new Error("expected a run, got none");
-  }
+  assert(state, "expected a run, got none");
   const found = state.stages.find((item) => item.id === stageId);
-  if (!found) {
-    throw new Error(`no stage ${stageId} in run fixture`);
-  }
+  assert(found, `no stage ${stageId} in run fixture`);
   return found;
 }

@@ -6,7 +6,7 @@
 //
 // Registered via `setEngineAdapter()` (packages/server/src/engines/registry.ts),
 // which is what keeps a component test from ever spawning a real CLI.
-import { expect } from "vitest";
+import { assert, expect } from "vitest";
 import type { EngineId, StageUsage } from "@adhd/core";
 import { detectEngineLimit } from "../../src/domain/engine-limit.ts";
 import type {
@@ -153,20 +153,14 @@ QUESTION: ${question}`,
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
     const ctx = this.calls[count - 1];
-    if (!ctx) {
-      throw new Error(
-        `FakeEngine: timed out waiting for call #${count}; saw ${this.calls.length}`,
-      );
-    }
+    assert(ctx, `FakeEngine: timed out waiting for call #${count}; saw ${this.calls.length}`);
     return ctx;
   }
 
-  /** The context of the nth engine call (0-based), or throw if it never arrived. */
+  /** The context of the nth engine call (0-based); fails if it never arrived. */
   callAt(index: number): EngineRunContext {
     const ctx = this.calls[index];
-    if (!ctx) {
-      throw new Error(`FakeEngine: no call at index ${index}; saw ${this.calls.length}`);
-    }
+    assert(ctx, `FakeEngine: no call at index ${index}; saw ${this.calls.length}`);
     return ctx;
   }
 
@@ -204,9 +198,7 @@ QUESTION: ${question}`,
   private verifyCall({ anticipation }: Scripted, index: number): void {
     const ctx = this.calls[index];
     const who = anticipation.as ?? `call #${index + 1}`;
-    if (ctx === undefined) {
-      throw new Error(`${who}: no engine call was recorded at index ${index}`);
-    }
+    assert(ctx !== undefined, `${who}: no engine call was recorded at index ${index}`);
     const check = (
       field: string,
       actual: string | undefined,

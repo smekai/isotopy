@@ -1,5 +1,6 @@
 // AAAAA forbids branching or inline logic in a test body, so every loop, poll
 // and retry in a component test lives here instead.
+import { assert, expect } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -164,9 +165,7 @@ export async function startRun(
   headers: TestHeaders = {},
 ): Promise<RunState> {
   const { status, body: run } = await post<RunState>(app, "/runs", body, headers);
-  if (status !== 201) {
-    throw new Error(`Expected 201 from POST /runs, got ${status}: ${JSON.stringify(run)}`);
-  }
+  expect(status, `POST /runs returned ${JSON.stringify(run)}`).toBe(201);
   return run;
 }
 
@@ -180,7 +179,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Poll until `predicate` holds, then return the run. Throws with the run's last
+ * Poll until `predicate` holds, then return the run. Fails with the run's last
  * known state on timeout, which is what makes a failure diagnosable.
  */
 export async function waitForRun(
@@ -195,11 +194,10 @@ export async function waitForRun(
     await sleep(POLL_INTERVAL_MS);
     last = await getRun(app, runId);
   }
-  if (!predicate(last)) {
-    throw new Error(
-      `Timed out waiting for ${description}. Run was: ${JSON.stringify(last, null, 2)}`,
-    );
-  }
+  assert(
+    predicate(last),
+    `Timed out waiting for ${description}. Run was: ${JSON.stringify(last, null, 2)}`,
+  );
   return last;
 }
 
@@ -257,9 +255,7 @@ export async function openSse(
   headers: TestHeaders = {},
 ): Promise<SseCollector> {
   const response = await app.request(route, { headers });
-  if (!response.body) {
-    throw new Error(`No SSE body from ${route}`);
-  }
+  assert(response.body, `No SSE body from ${route}`);
 
   const events: SseEvent[] = [];
   const reader = response.body.getReader();
@@ -288,11 +284,10 @@ export async function openSse(
       while (!predicate(events) && Date.now() < deadline) {
         await sleep(POLL_INTERVAL_MS);
       }
-      if (!predicate(events)) {
-        throw new Error(
-          `Timed out waiting for ${description}. Saw: ${JSON.stringify(events, null, 2)}`,
-        );
-      }
+      assert(
+        predicate(events),
+        `Timed out waiting for ${description}. Saw: ${JSON.stringify(events, null, 2)}`,
+      );
       return [...events];
     },
     async close() {
@@ -320,10 +315,8 @@ export function runEventOf<T extends RunEvent["type"]>(
     .filter((event) => event.event === type)
     .map((event) => JSON.parse(event.data) as RunEvent)
     .find((event): event is Extract<RunEvent, { type: T }> => event.type === type);
-  if (!match) {
-    const seen = events.map((event) => event.event).join(", ");
-    throw new Error(`No "${type}" event in the stream. Saw: ${seen || "nothing"}`);
-  }
+  const seen = events.map((event) => event.event).join(", ");
+  assert(match, `No "${type}" event in the stream. Saw: ${seen || "nothing"}`);
   return match;
 }
 
@@ -335,16 +328,12 @@ export function runEventOf<T extends RunEvent["type"]>(
 export async function approveIntake(app: Hono, runId: string): Promise<void> {
   await waitForStageStatus(app, runId, "intake", "awaiting");
   const { status } = await post(app, `/runs/${runId}/gates/intake/approve`);
-  if (status !== 200) {
-    throw new Error(`Expected 200 approving the intake gate, got ${status}`);
-  }
+  expect(status, "approving the intake gate").toBe(200);
 }
 
 export function stageOf(run: RunState, stageId: string) {
   const stage = run.stages.find((item) => item.id === stageId);
-  if (!stage) {
-    throw new Error(`Run has no stage "${stageId}"`);
-  }
+  assert(stage, `Run has no stage "${stageId}"`);
   return stage;
 }
 
