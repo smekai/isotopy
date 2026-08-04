@@ -9,6 +9,7 @@ import {
 } from "../src/services/bundled-prompts.ts";
 
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
+const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
 
 describe("skill generation", () => {
   test("committed outputs are in sync with their sources (gen:skills --check)", () => {
@@ -20,31 +21,27 @@ describe("skill generation", () => {
   });
 
   test("every persona a shipped pipeline references is bundled", async () => {
-    const referenced = DEMO_PIPELINES.flatMap(flattenPipelineStages)
-      .map((stage) => stage.skill)
-      .filter((skill): skill is string => skill !== undefined);
+    const referenced = STAGES.map((stage) => stage.skill).filter((id) => id !== undefined);
+
+    const loaded = await Promise.all(referenced.map((id) => loadBundledPersona(id)));
 
     expect(referenced.length).toBeGreaterThan(0);
-    for (const id of referenced) {
-      expect(
-        await loadBundledPersona(id),
-        `a pipeline stage uses skill "${id}" with no bundled persona`,
-      ).toBeTruthy();
-    }
+    expect(
+      referenced.filter((_, index) => !loaded[index]),
+      "pipeline stages naming a skill with no bundled persona",
+    ).toEqual([]);
   });
 
   test("every step task a shipped pipeline references is bundled", async () => {
-    const referenced = DEMO_PIPELINES.flatMap(flattenPipelineStages)
-      .map((stage) => stage.stepTask)
-      .filter((stepTask): stepTask is string => stepTask !== undefined);
+    const referenced = STAGES.map((stage) => stage.stepTask).filter((id) => id !== undefined);
+
+    const loaded = await Promise.all(referenced.map((id) => loadBundledStepTask(id)));
 
     expect(referenced.length).toBeGreaterThan(0);
-    for (const id of referenced) {
-      expect(
-        await loadBundledStepTask(id),
-        `a pipeline stage uses step task "${id}" with no bundled assignment`,
-      ).toBeTruthy();
-    }
+    expect(
+      referenced.filter((_, index) => !loaded[index]),
+      "pipeline stages naming a step task with no bundled assignment",
+    ).toEqual([]);
   });
 
   test("QA stays an ordinary Playwright-only workflow step", async () => {

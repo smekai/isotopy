@@ -1,6 +1,6 @@
 # Competitor Matrix: ADHD
 
-**Last updated:** July 2026  
+**Last updated:** August 2026 (added Guild.ai; refreshed CrewAI; added launch resolution)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where ADHD wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -101,7 +101,7 @@
 |-----------|------|-------------------|-------|----------|
 | **Aiki** | Code (TypeScript) | Durable workflows (you design stages) | Yes | Long-running agent pipelines, HITL gates |
 | **LangGraph** | Code (Python) | None (you design graph) | Yes | Custom state machines |
-| **CrewAI** | Code (Python) | Role-based crews | Yes | Rapid multi-agent prototypes |
+| **CrewAI** | Code (Python) | Role-based crews + event-driven Flows | Yes | Rapid multi-agent prototypes → production automations |
 | **AutoGen** | Code (Python) | Conversation-centric | Yes | Research / open-ended tasks |
 | **n8n** | Visual + self-host | Generic automation | Yes | Integrations + AI nodes |
 | **Manifold** | Visual + self-host (Go/Vue) | None (long-horizon agent workflows) | Yes | Teams of "specialist" agents; MCP tools auto-exposed as nodes; saved workflows become reusable tools |
@@ -111,6 +111,10 @@
 **What they miss:** Product-level stages, git isolation, harness adapters, deploy adapters, and dashboard out of the box. **Why not popular as products:** frameworks require engineering to become a product.
 
 **Manifold note:** The most product-like entry here — self-hosted (Go + Vue, SQLite/Postgres, MIT), ships a visual flow editor, specialist chat, observability dashboard, and scheduled runs (Pulse) out of the box. But it is model-API-driven (OpenAI/Anthropic/Google/llama.cpp/vLLM), not harness-driven: no Claude Code/Cursor adapters, no git/repo artifacts, no SDLC stages, no E2E or deploy story. Self-described **experimental** (~500 stars). Watch it as a pattern source for "workflows as reusable tools" and MCP-tools-as-nodes, not as a direct competitor.
+
+**CrewAI update (Aug 2026):** Now the #2 multi-agent framework by mindshare after LangGraph (~54k stars, v1.15, MIT). Two layers: **Crews** (autonomous teams of role-playing agents — the same "team of professions" metaphor we use) and **Flows** (event-driven workflows with typed state, branching, and native Crew embedding), plus an enterprise platform (AMP). Why it still isn't us: it's a **build-your-own framework** — you write Python to define roles, tasks, and tools; there are no prepared SDLC professions, no repo-native artifacts, no coding-harness adapters (it orchestrates LLM calls, not Claude Code/Cursor sessions), no stage restart, no Playwright E2E, no deploy adapters. Known limits at scale per third-party reviews: coarse error handling, no built-in checkpointing, agent communication mediated through task outputs. **Threat vector:** the role-based-team metaphor is now mainstream vocabulary CrewAI owns; our messaging must lead with "ready dev team + full delivery pipeline," never with "crew of agents," or we read as a CrewAI wrapper.
+
+**Artel (NicolasPrimeau/artel) note (Aug 2026):** Not a direct competitor — a **pattern / build-on source**. Self-hosted MCP + REST coordination layer for AI agent fleets (~early OSS): shared memory with semantic search and confidence decay, typed memory (`memory` / `doc` / `directive` / `skill` / `compiled`), tasks with claim/complete, async agent messaging, session handoffs across context resets, CRDT mesh between instances (feeds + mDNS), and an autonomous **archivist** that compacts raw session captures into clean memory. Claude Code plugin makes memory *ambient* (push relevant knowledge in; capture sessions out) rather than pull-only tool calls. **What it is not:** no prepared SDLC professions, no Full Delivery pipeline, no Playwright E2E, no deploy adapters, no visual run-control product for feature lifecycle — it coordinates fleets, it does not ship the delivery process. **Ideas worth borrowing:** ambient memory injection at session start; confidence-decay / heat-protected knowledge; archivist compaction of run transcripts into durable repo memory; session handoff packages so any harness can resume; `compiled` memory anchored to source files. Complementary framing: Artel-like memory could sit *under* an ADHD run; ADHD remains the opinionated pipeline on top. Also blocks **ARTEL** as a clean product name in our space.
 
 **Gap:** Frameworks give flexibility; they do not ship app-builder stages, git isolation, Playwright E2E, or deploy adapters out of the box.
 
@@ -140,6 +144,9 @@
 | Product | Local | OSS | Focus | Lifecycle coverage | Harness support | Maturity |
 |---------|-------|-----|-------|--------------------|-----------------|----------|
 | **Paperclip** | Yes (self-hosted, embedded Postgres) | Yes (MIT) | Agent org: org chart, roles, budgets, heartbeats, audit trails | None (explicitly "orchestrates work, not pull requests") | Claude Code, Codex, Cursor, HTTP bots, bash — "if it can receive a heartbeat, it's hired" | 73k+ stars, 3k+ commits, plugin system shipped; desktop app + cloud agents in progress |
+| **Guild.ai** | No (cloud control plane) | No | Agent governance: scoped credentials, read-only audit logs, cost visibility, Agent Hub registry | None (governs agents; does not run an SDLC) | Framework-agnostic — governs agents built with LangChain, CrewAI, custom code, or its TypeScript SDK | Series A March 2026; GA April 28, 2026; enterprise integrations (GitHub, Jira, Slack, New Relic, ...) |
+
+**Guild.ai note (new, Aug 2026):** The team behind the old Guild AI experiment tracker pivoted; Guild.ai is now a **neutral control plane for AI agents** — every agent runs under workspace-scoped least-privilege credentials, every model call and tool invocation lands in immutable audit logs, with cost controls and an Agent Hub for sharing agents across an org. **What it misses (our wedge):** it sits *under* agents, not *in* the delivery loop — no SDLC stages, no prepared professions, no repo artifacts, no E2E, no deploy pipeline; enterprise-first, cloud-first, not local/solo. **Why it matters:** same broad buyer conversation ("how do I run AI agents responsibly"), well funded, and its dev-pipeline example (tracing which agent action broke a build) shows appetite for exactly the auditability story we tell with git-native artifacts. Complementary framing available: an ADHD pipeline could run *under* Guild governance in an enterprise. Also blocks "Guild" as a product name in our space.
 
 **What it is:** A horizontal platform for running teams of AI agents as an "autonomous business" — org hierarchy with reporting lines, per-agent budget hard-stops, scheduled heartbeat execution with persistent session state, atomic task checkout with goal tracing, approval workflows, multi-company isolation, immutable audit logs. Pitch: "If OpenClaw is an *employee*, Paperclip is the *company*."
 
@@ -217,8 +224,37 @@ Low abstraction                             High abstraction
    - **n8n** — visual workflow mental model (stages as nodes)
    - **sandcastle** — sandbox/worktree execution primitive for the implement stage (same TS stack; candidate to wrap rather than rebuild)
    - **beads** — dependency-aware task graph + "ready work" detection + semantic compaction for the repo-native backlog
+   - **Artel (NicolasPrimeau/artel)** — ambient shared memory, archivist compaction of session captures, session handoffs, confidence decay; coordination layer under the pipeline, not a substitute for it
 
 4. **MVP wedge:** "Capture tasks in repo-native backlog, run a feature through requirements → design → implement → review → test (Playwright E2E) → release → deploy" on your machine, with one-click restart of any stage.
+
+---
+
+## Launch Resolution (August 2026)
+
+**Question:** With Guild.ai funded and live, CrewAI at ~54k stars, and Paperclip at 73k+, does launching v1 still make sense?
+
+**Resolution: yes — launch.** The crowding is in adjacent layers, not in our slot:
+
+| Layer | Who owns it | Do they do our job? |
+|-------|-------------|---------------------|
+| Governance under agents | Guild.ai | No — no SDLC, no artifacts, enterprise cloud |
+| Frameworks to build agents | CrewAI, LangGraph | No — DIY libraries, no prepared dev team, no harness adapters |
+| Horizontal agent workforce | Paperclip | No — org chart and budgets, explicitly not pull requests |
+| Coding harnesses | Claude Code, Cursor, Codex | No — single-session tools; they are our adapters |
+| **Local, ready AI dev team running a full delivery pipeline** | **Unclaimed** | **This is us** |
+
+Three reasons the timing argument favors launching, not waiting:
+
+1. **Every funded neighbor validates the demand** we depend on: Guild.ai proves organizations want governed agents; CrewAI proves developers want role-based teams; Paperclip proves self-hosters want agent workforces. Nobody has combined that demand into a local, artifact-producing SDLC product — the longer the slot stays open, the more likely a Paperclip plugin or CrewAI template fills it approximately.
+2. **Our differentiators are already shipped, not promised** — Full Delivery pipeline dogfooded (Milestone D), restartable stages, git-native artifacts, three harness adapters. We are not launching a roadmap.
+3. **The window is a window.** CrewAI moving down into "prepared templates" or Paperclip's community shipping a dev-company plugin are realistic 6–12 month threats. Launching v1 on Aug 30 and owning "the dev pipeline, not the company / not the framework / not the control plane" is cheaper now than repositioning later.
+
+**Conditions attached to the resolution:**
+
+- Messaging must never lead with "crew/team of agents" generically — that vocabulary is CrewAI's; lead with **prepared professions + full delivery pipeline + local ownership**.
+- The name question must be settled before the public teaser (see `.github/marketing/name-decision.md`) — GUILD and CREW are off the table as names for occupancy reasons.
+- Re-check this matrix at each milestone: watch Paperclip's plugin ecosystem and CrewAI templates for SDLC scope creep.
 
 ---
 
@@ -241,8 +277,11 @@ Low abstraction                             High abstraction
 | Singulary | https://github.com/sammwyy/singulary |
 | Aiki | https://github.com/aikirun/aiki |
 | Paperclip | https://github.com/paperclipai/paperclip |
+| Guild.ai | https://www.guild.ai |
+| CrewAI | https://github.com/crewaiinc/crewai |
 | sandcastle | https://github.com/mattpocock/sandcastle |
 | beads (bd) | https://github.com/gastownhall/beads |
+| Artel | https://github.com/NicolasPrimeau/artel |
 | Manifold | https://github.com/intelligencedev/manifold |
 | LangGraph | https://langchain.com/langgraph |
 | OpenHands | https://www.openhands.dev |

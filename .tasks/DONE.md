@@ -1,5 +1,58 @@
 # Done
 
+## TASK-118: AAAAA testing standard — a loadable skill, a conformance sweep, a green-CI merge gate
+**Priority:** P2 | **Tags:** testing, infra
+**Updated:** 2026-08-04 21:30
+
+Made the [AAAAA approach](https://medium.com/bolt-labs/aaaaa-testing-96583245ae24) the
+enforced standard rather than a paragraph in a doc. Delivered:
+
+- **`write-tests` skill, generated.** `docs/testing.md` gained four `gen:` blocks;
+  `scripts/generate-skills.mjs` was generalised from one hardcoded source to a list of
+  `{ source, blocks, outputs }`, and now emits `.claude/skills/write-tests/SKILL.md` plus
+  the shipped QA persona `tester.md`. Architect's two outputs are byte-identical. The
+  transferable half was widened beyond phase banners to the article's actual thesis —
+  logic belongs in the application, not the test — with atomic anticipations, generators
+  over flag-driven factories, and duplication-as-a-boundary.
+- **ESLint enforcement.** `if`/`for`/`while`/`try` inside a `test()`/`it()` callback is an
+  error under `packages/*/test/**` and `packages/ui/e2e/**`, with `**/support/**` exempt.
+  It found 7 violations, two of them in `e2e/` that a manual grep had missed.
+- **Conformance sweep** across all behaviour tests: 7 server `*.comp.ts`, 9 UI
+  `*.comp.tsx`, 8 Playwright specs. Multi-action tests were split; pure `*.spec.ts` files
+  got the hard-rule fixes only. Suite went 414 → 430 tests with none lost.
+- **Merge gate** documented in `docs/testing.md` (the four required check names, admin
+  bypass, why "up to date" stays off) for the maintainer to apply in the GitHub UI.
+
+**Revised after review.** The first sweep read "don't repeat yourself" as the governing
+rule and invented a layer of one-line helpers to remove duplication — the exact instinct
+the article opens by warning against. A second pass corrected it:
+
+- **Twelve helpers deleted**, ten of them added by the first sweep, their bodies inlined.
+  Four generators that had drifted into two copies were collapsed onto one, because a
+  *generator* is what makes inlining affordable.
+- **Render wrappers became props generators**, typed to each component's own exported
+  props, so `render()` is visible as the Act and spies live on the generated props.
+- **`throw` → `expect`/`assert`** in every helper, including the seven pre-existing sites
+  in `harness.ts` that the pattern had been copied from. `assert` narrows, which is what
+  lets an accessor return a non-optional value without a cast.
+- **`anticipate*` reserved for external interactions**; helpers that drive the real system
+  are Arrange and named for the state they produce. Helpers moved below the tests.
+- **`fixture()` split** — it built six unrelated things and no test used all six. Shared
+  setup moved to `beforeEach` (a `describe` group where only some tests share it), which
+  also cut the e2e suite from 55.9s to 30.9s.
+- **Tests grouped** into `milestone/`, `engine/`, `run/`; Playwright files renamed
+  `*.e2e.ts` so `.spec.ts` means exactly one thing repo-wide.
+
+Three decision-log entries record the generation split, the branch-protection choice, and
+the shared-vs-inline line (including the rejected `support/domain/` layer).
+`e2e/run/live-dev-test.e2e.ts` is the one documented exemption from one-action-per-test —
+splitting it would buy six paid runs to learn what one already proves.
+
+Cross-platform: n/a — docs, lint config, test structure, and a Node generator that
+already normalises CRLF before comparing.
+
+---
+
 ## TASK-107: One definition per shape — RunEvent union, schema dedupe, structured tool calls
 **Priority:** P1 | **Tags:** core, server, ui, testing
 **Updated:** 2026-08-03 22:40

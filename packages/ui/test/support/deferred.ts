@@ -1,3 +1,5 @@
+import { assert } from "vitest";
+
 export interface Deferred<T> {
   promise: Promise<T>;
   resolve(value: T): void;
@@ -16,8 +18,6 @@ export function deferred<T>(): Deferred<T> {
 
 export function last<T>(items: T[], waitingFor: string): T {
   const item = items[items.length - 1];
-  if (item === undefined) {
-    throw new Error(`${waitingFor} has not called the api yet`);
-  }
+  assert(item !== undefined, `${waitingFor} has not called the api yet`);
   return item;
 }
