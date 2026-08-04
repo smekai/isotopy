@@ -13,26 +13,7 @@ import type { MilestoneDashboardProps } from "../../src/components/MilestoneDash
 import { DIRS } from "../../src/theme";
 import { feature, featureRun, finding, milestone } from "../support/milestone-fixtures";
 
-function dashboardProps(
-  overrides: Partial<MilestoneDashboardProps> = {},
-): MilestoneDashboardProps {
-  return {
-    milestone: milestone([feature("f1", "ready")]),
-    runs: [],
-    busy: false,
-    d: DIRS.indigo,
-    onToggleAutoRun: vi.fn(),
-    onStartNext: vi.fn(),
-    onFinalize: vi.fn(),
-    onOpenRun: vi.fn(),
-    onAcceptFeature: vi.fn(),
-    ...overrides,
-  };
-}
 
-function control(testId: string): HTMLButtonElement | HTMLInputElement {
-  return screen.getByTestId(testId) as HTMLButtonElement | HTMLInputElement;
-}
 
 afterEach(() => {
   cleanup();
@@ -276,3 +257,24 @@ test("an unapproved milestone says so instead of rendering an empty feature list
   expect(screen.queryAllByTestId("milestone-feature")).toHaveLength(0);
   expect(control("milestone-start-next").disabled).toBe(true);
 });
+
+function dashboardProps(
+  overrides: Partial<MilestoneDashboardProps> = {},
+): MilestoneDashboardProps {
+  return {
+    milestone: milestone([feature("f1", "ready")]),
+    runs: [],
+    busy: false,
+    d: DIRS.indigo,
+    onToggleAutoRun: vi.fn(),
+    onStartNext: vi.fn(),
+    onFinalize: vi.fn(),
+    onOpenRun: vi.fn(),
+    onAcceptFeature: vi.fn(),
+    ...overrides,
+  };
+}
+
+function control(testId: string): HTMLButtonElement | HTMLInputElement {
+  return screen.getByTestId(testId) as HTMLButtonElement | HTMLInputElement;
+}

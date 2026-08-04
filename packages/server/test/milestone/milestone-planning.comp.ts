@@ -44,44 +44,11 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-/**
- * Anticipate the two-turn planning conversation and drive it to a saved draft.
- * Both tests below need a draft; only one of them is *about* getting there.
- */
-async function planUntilDraft(): Promise<{ run: RunState; draft: Milestone }> {
-  ctx.engine
-    .anticipate({
-      as: "Product Manager question",
-      persona: /# Role: Product Manager/,
-      prompt: /task board/i,
-    })
-    .asks("Should this include the UI?", "planning-session");
-  ctx.engine
-    .anticipate({
-      as: "Product Manager proposal",
-      resumeSessionId: "planning-session",
-      prompt: /Yes, include the UI/,
-    })
-    .reports(
-      `Recommended plan\n\n\`\`\`adhd-milestone-plan\n${JSON.stringify(PLAN)}\n\`\`\``,
-    );
-
-  const { status, body: run } = await post<RunState>(
-    ctx.app,
-    "/milestones/plan",
-    { goal: "Plan milestone D", engine: "claude-code" },
-  );
-  expect(status, "starting a planning run").toBe(201);
-  await waitForStageStatus(ctx.app, run.id, "milestone-plan", "asking");
-  await post(ctx.app, `/runs/${run.id}/messages`, { text: "Yes, include the UI" });
-  await waitForRunStatus(ctx.app, run.id, "completed");
-
-  const { body: draft } = await get<Milestone>(ctx.app, `/milestones/${run.milestoneId}`);
-  return { run, draft };
-}
-
 test("answering the Product Manager's question yields a saved draft proposal", async () => {
-  // Arrange, Anticipate and Act all live in the conversation itself.
+  // Anticipate
+  anticipatePlanningConversation();
+
+  // Act
   const { run, draft } = await planUntilDraft();
 
   // Assert
@@ -95,6 +62,9 @@ test("answering the Product Manager's question yields a saved draft proposal", a
 });
 
 test("approving a draft mints the task its feature only proposed", async () => {
+  // Anticipate
+  anticipatePlanningConversation();
+
   // Arrange
   const { draft } = await planUntilDraft();
 
@@ -160,3 +130,39 @@ test("invalid existing task links leave the proposal as a retryable draft", asyn
   expect(draft.approvalError).toContain("TASK-404");
   ctx.engine.verify();
 });
+
+/** The Product Manager asks one question, then proposes PLAN on the answer. */
+function anticipatePlanningConversation(): void {
+  ctx.engine
+    .anticipate({
+      as: "Product Manager question",
+      persona: /# Role: Product Manager/,
+      prompt: /task board/i,
+    })
+    .asks("Should this include the UI?", "planning-session");
+  ctx.engine
+    .anticipate({
+      as: "Product Manager proposal",
+      resumeSessionId: "planning-session",
+      prompt: /Yes, include the UI/,
+    })
+    .reports(
+      `Recommended plan\n\n\`\`\`adhd-milestone-plan\n${JSON.stringify(PLAN)}\n\`\`\``,
+    );
+}
+
+/** Drive the anticipated conversation through its parked question to a draft. */
+async function planUntilDraft(): Promise<{ run: RunState; draft: Milestone }> {
+  const { status, body: run } = await post<RunState>(
+    ctx.app,
+    "/milestones/plan",
+    { goal: "Plan milestone D", engine: "claude-code" },
+  );
+  expect(status, "starting a planning run").toBe(201);
+  await waitForStageStatus(ctx.app, run.id, "milestone-plan", "asking");
+  await post(ctx.app, `/runs/${run.id}/messages`, { text: "Yes, include the UI" });
+  await waitForRunStatus(ctx.app, run.id, "completed");
+
+  const { body: draft } = await get<Milestone>(ctx.app, `/milestones/${run.milestoneId}`);
+  return { run, draft };
+}

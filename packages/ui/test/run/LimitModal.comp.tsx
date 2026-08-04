@@ -15,18 +15,6 @@ import { limit, run, stage } from "../support/run-fixtures";
 
 const RAW_LINE = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 
-function limitProps(overrides: Partial<LimitModalProps> = {}): LimitModalProps {
-  return {
-    d: DIRS.indigo,
-    run: run([stage("design", "blocked")], "blocked"),
-    limit: limit(),
-    onResolve: vi.fn(),
-    onAbort: vi.fn(),
-    onOpenConnection: vi.fn(),
-    onDismiss: vi.fn(),
-    ...overrides,
-  };
-}
 
 beforeEach(() => {
   vi.stubGlobal("Notification", undefined);
@@ -157,3 +145,16 @@ test("a browser without the Notification API hides the enable-notifications offe
   // Assert
   expect(screen.queryByText(LIMIT_COPY.enableNotifications)).toBeNull();
 });
+
+function limitProps(overrides: Partial<LimitModalProps> = {}): LimitModalProps {
+  return {
+    d: DIRS.indigo,
+    run: run([stage("design", "blocked")], "blocked"),
+    limit: limit(),
+    onResolve: vi.fn(),
+    onAbort: vi.fn(),
+    onOpenConnection: vi.fn(),
+    onDismiss: vi.fn(),
+    ...overrides,
+  };
+}

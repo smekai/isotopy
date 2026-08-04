@@ -27,15 +27,6 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-/**
- * Seed a run straight into the home project's DB, the way a crashed process
- * would have left it — used to drive the crash-recovery path on restart.
- */
-async function seedHomeRun(home: string, run: RunState): Promise<void> {
-  const repository = new RunRepository({ id: HOME_PROJECT_ID, root: home, dataDir: home });
-  await repository.writeState(run.id, { version: 1, run });
-  await repository.settle();
-}
 
 test("runs are restored when the server comes back", async () => {
   // Arrange
@@ -160,3 +151,13 @@ test("run numbering continues from the highest number on disk", async () => {
   ctx.engine.verify();
   await restarted.orchestrator.shutdown();
 });
+
+/**
+ * Seed a run straight into the home project's DB, the way a crashed process
+ * would have left it — used to drive the crash-recovery path on restart.
+ */
+async function seedHomeRun(home: string, run: RunState): Promise<void> {
+  const repository = new RunRepository({ id: HOME_PROJECT_ID, root: home, dataDir: home });
+  await repository.writeState(run.id, { version: 1, run });
+  await repository.settle();
+}

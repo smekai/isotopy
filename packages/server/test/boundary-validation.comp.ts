@@ -23,17 +23,6 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-async function rawJsonRequest(
-  route: string,
-  body: string,
-): Promise<{ status: number; value: InvalidInput }> {
-  const response = await ctx.app.request(route, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-  });
-  return { status: response.status, value: await response.json() };
-}
 
 test("malformed request JSON returns the shared path-aware error shape", async () => {
   // Act
@@ -166,3 +155,15 @@ test("TaskPlanner config validates consumed fields and preserves plugin fields",
   });
   expect(parsed).toMatchObject({ pluginSpecific: { enabled: true } });
 });
+
+async function rawJsonRequest(
+  route: string,
+  body: string,
+): Promise<{ status: number; value: InvalidInput }> {
+  const response = await ctx.app.request(route, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  return { status: response.status, value: await response.json() };
+}

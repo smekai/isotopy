@@ -31,60 +31,7 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-function anticipatePlanningAndImplementation(): void {
-  ctx.engine
-    .anticipate({
-      as: "Product Manager",
-      persona: /# Role: Product Manager/,
-      prompt: /# Assignment: Plan a feature/,
-    })
-    .reports(PLAN);
-  ctx.engine
-    .anticipate({
-      as: "Product Designer",
-      persona: /# Role: Product Designer/,
-      prompt: /# Assignment: Design the product experience/,
-    })
-    .reports("No UI change\n\nVERDICT: SKIP");
-  ctx.engine
-    .anticipate({
-      as: "Software Architect design",
-      persona: /# Role: Software Architect/,
-      prompt: /# Assignment: Design the software architecture/,
-    })
-    .reports("Existing architecture applies\n\nVERDICT: SKIP");
-  ctx.engine
-    .anticipate({
-      as: "Developer",
-      persona: /# Role: Developer/,
-      prompt: /Approved milestone progress scope/,
-    })
-    .reports(IMPLEMENTATION);
-}
 
-function anticipateDeliveryAndCloseout(): void {
-  ctx.engine
-    .anticipate({
-      as: "Release Manager",
-      persona: /# Role: Release Manager/,
-      prompt: /# Assignment: Prepare the feature release/,
-    })
-    .reports("Release checklist ready\n\nVERDICT: PASS");
-  ctx.engine
-    .anticipate({
-      as: "SRE",
-      persona: /# Role: Site Reliability Engineer/,
-      prompt: /# Assignment: Deploy the preview environment/,
-    })
-    .reports("No preview target\n\nVERDICT: SKIP");
-  ctx.engine
-    .anticipate({
-      as: "Product Manager closeout",
-      persona: /# Role: Product Manager/,
-      prompt: /# Assignment: Close out the feature run/,
-    })
-    .reports(CLOSEOUT);
-}
 
 test("the revised persona team completes one Full Delivery run", async () => {
   // Anticipate — all nine boxes, in order, each keyed to its own persona.
@@ -219,3 +166,58 @@ test("cancellation never starts a paid closeout stage", async () => {
   expect(stageOf(finished, "closeout").status).toBe("skipped");
   ctx.engine.verify();
 });
+
+function anticipatePlanningAndImplementation(): void {
+  ctx.engine
+    .anticipate({
+      as: "Product Manager",
+      persona: /# Role: Product Manager/,
+      prompt: /# Assignment: Plan a feature/,
+    })
+    .reports(PLAN);
+  ctx.engine
+    .anticipate({
+      as: "Product Designer",
+      persona: /# Role: Product Designer/,
+      prompt: /# Assignment: Design the product experience/,
+    })
+    .reports("No UI change\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({
+      as: "Software Architect design",
+      persona: /# Role: Software Architect/,
+      prompt: /# Assignment: Design the software architecture/,
+    })
+    .reports("Existing architecture applies\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({
+      as: "Developer",
+      persona: /# Role: Developer/,
+      prompt: /Approved milestone progress scope/,
+    })
+    .reports(IMPLEMENTATION);
+}
+
+function anticipateDeliveryAndCloseout(): void {
+  ctx.engine
+    .anticipate({
+      as: "Release Manager",
+      persona: /# Role: Release Manager/,
+      prompt: /# Assignment: Prepare the feature release/,
+    })
+    .reports("Release checklist ready\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({
+      as: "SRE",
+      persona: /# Role: Site Reliability Engineer/,
+      prompt: /# Assignment: Deploy the preview environment/,
+    })
+    .reports("No preview target\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({
+      as: "Product Manager closeout",
+      persona: /# Role: Product Manager/,
+      prompt: /# Assignment: Close out the feature run/,
+    })
+    .reports(CLOSEOUT);
+}

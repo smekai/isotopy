@@ -10,17 +10,8 @@ import { log, message, run, stage, started } from "../support/run-fixtures";
 /** Narration the chat must drop and the log must keep. */
 const MACHINERY = ["Developer online", "Read src/auth.ts", "Tool error"];
 
-function toolLog(ts: string, text: string, name = "Read") {
-  return log(ts, "run", text, { kind: "tool", name });
-}
 
-function toolErrorLog(ts: string, text: string, name = "Edit") {
-  return log(ts, "warn", text, { kind: "tool-error", name });
-}
 
-function threadOf(state: RunState) {
-  return buildTranscript(state).map((item) => [item.kind, "text" in item ? item.text : item.kind]);
-}
 
 describe("buildTranscript", () => {
   test("a stage that has started opens with its own divider", () => {
@@ -241,3 +232,15 @@ describe("conversationOnly", () => {
     ]);
   });
 });
+
+function toolLog(ts: string, text: string, name = "Read") {
+  return log(ts, "run", text, { kind: "tool", name });
+}
+
+function toolErrorLog(ts: string, text: string, name = "Edit") {
+  return log(ts, "warn", text, { kind: "tool-error", name });
+}
+
+function threadOf(state: RunState) {
+  return buildTranscript(state).map((item) => [item.kind, "text" in item ? item.text : item.kind]);
+}

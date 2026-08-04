@@ -90,41 +90,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** One anticipation per endpoint the panel can reach — none of them branch. */
-function anticipateLoadedProposal(): void {
-  vi.mocked(fetchMilestone).mockResolvedValue(milestone);
-}
 
-function anticipateProposalSave(): void {
-  vi.mocked(updateMilestoneProposal).mockImplementation(async (_id, edited) => ({
-    ...milestone,
-    name: edited.name,
-    goal: edited.goal,
-    proposal: { ...proposal, ...edited, revision: 2 },
-  }));
-}
 
-function anticipateApproval(): void {
-  vi.mocked(approveMilestonePlan).mockResolvedValue({ ...milestone, status: "active" });
-}
 
-function anticipateRevisionRun(): void {
-  vi.mocked(reviseMilestonePlan).mockResolvedValue({ ...run, id: "r2" });
-}
-
-/** Render the panel and wait for the loaded proposal to reach the form. */
-async function renderLoadedPanel(onRunStarted = vi.fn()): Promise<{ onRunStarted: typeof onRunStarted }> {
-  render(
-    <MilestonePlanPanel
-      run={run}
-      d={DIRS.indigo}
-      settings={settings}
-      onRunStarted={onRunStarted}
-    />,
-  );
-  await screen.findByLabelText("Milestone name");
-  return { onRunStarted };
-}
 
 test("requesting an AI revision starts a new planning run and reports its id", async () => {
   // Anticipate
@@ -165,3 +133,41 @@ test("approving saves the edits made to the form before it approves", async () =
   );
   await waitFor(() => expect(approveMilestonePlan).toHaveBeenCalledWith("m1"));
 });
+
+/** One anticipation per endpoint the panel can reach — none of them branch. */
+function anticipateLoadedProposal(): void {
+  vi.mocked(fetchMilestone).mockResolvedValue(milestone);
+}
+
+function anticipateProposalSave(): void {
+  vi.mocked(updateMilestoneProposal).mockImplementation(async (_id, edited) => ({
+    ...milestone,
+    name: edited.name,
+    goal: edited.goal,
+    proposal: { ...proposal, ...edited, revision: 2 },
+  }));
+}
+
+function anticipateApproval(): void {
+  vi.mocked(approveMilestonePlan).mockResolvedValue({ ...milestone, status: "active" });
+}
+
+function anticipateRevisionRun(): void {
+  vi.mocked(reviseMilestonePlan).mockResolvedValue({ ...run, id: "r2" });
+}
+
+/** Render the panel and wait for the loaded proposal to reach the form. */
+async function renderLoadedPanel(
+  onRunStarted = vi.fn(),
+): Promise<{ onRunStarted: ReturnType<typeof vi.fn> }> {
+  render(
+    <MilestonePlanPanel
+      run={run}
+      d={DIRS.indigo}
+      settings={settings}
+      onRunStarted={onRunStarted}
+    />,
+  );
+  await screen.findByLabelText("Milestone name");
+  return { onRunStarted };
+}

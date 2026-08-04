@@ -36,19 +36,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderMilestones(refreshKey = "") {
-  return renderHook(
-    ({ key }: { key: string }) => useMilestones("home", true, key),
-    { initialProps: { key: refreshKey } },
-  );
-}
 
-function renderForProject(projectId: string) {
-  return renderHook(
-    ({ project }: { project: string }) => useMilestones(project, true, ""),
-    { initialProps: { project: projectId } },
-  );
-}
 
 test("loads the project's milestones and reports ready", async () => {
   // Act
@@ -271,3 +259,17 @@ test("a failed load still reports ready, so the rail is not stuck loading foreve
   await waitFor(() => expect(result.current.ready).toBe(true));
   expect(result.current.error).toBe("Could not reach the server");
 });
+
+function renderMilestones(refreshKey = "") {
+  return renderHook(
+    ({ key }: { key: string }) => useMilestones("home", true, key),
+    { initialProps: { key: refreshKey } },
+  );
+}
+
+function renderForProject(projectId: string) {
+  return renderHook(
+    ({ project }: { project: string }) => useMilestones(project, true, ""),
+    { initialProps: { project: projectId } },
+  );
+}

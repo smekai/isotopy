@@ -20,30 +20,6 @@ import {
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 
-/** Distinct markers so an assertion can tell the boxes' output apart. */
-const PM_REPORT = "Add a greet function. Done when it prints a greeting. MARKER-PM";
-const DEV_REPORT = "Added greet.js and a smoke check. MARKER-DEVELOPER";
-const TESTER_REPORT = "Ran the suite, all green. MARKER-TESTER\n\nVERDICT: PASS";
-const SKIP_REPORT = "No product planning is required. MARKER-SKIP\n\nVERDICT: SKIP";
-
-const TASK = "add a greet function";
-
-const PIPELINE = { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" };
-
-let ctx: TestApp;
-
-beforeEach(async () => {
-  ctx = await createTestApp();
-});
-
-afterEach(async () => {
-  await ctx.dispose();
-});
-
-/** Read a stage's handoff artifact from the run directory. */
-function readHandoff(home: string, runId: string, stageId: string): Promise<string> {
-  return readFile(path.join(home, "runs", runId, stageId, "handoff.md"), "utf8");
-}
 
 test("the boxes run in order, in one shared workspace, each with its own persona", async () => {
   // Arrange
@@ -349,3 +325,28 @@ test("an api-key connection with no stored key is rejected before a run is creat
   expect(runs).toHaveLength(0);
   engine.verify();
 });
+
+/** Distinct markers so an assertion can tell the boxes' output apart. */
+const PM_REPORT = "Add a greet function. Done when it prints a greeting. MARKER-PM";
+const DEV_REPORT = "Added greet.js and a smoke check. MARKER-DEVELOPER";
+const TESTER_REPORT = "Ran the suite, all green. MARKER-TESTER\n\nVERDICT: PASS";
+const SKIP_REPORT = "No product planning is required. MARKER-SKIP\n\nVERDICT: SKIP";
+
+const TASK = "add a greet function";
+
+const PIPELINE = { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" };
+
+let ctx: TestApp;
+
+beforeEach(async () => {
+  ctx = await createTestApp();
+});
+
+afterEach(async () => {
+  await ctx.dispose();
+});
+
+/** Read a stage's handoff artifact from the run directory. */
+function readHandoff(home: string, runId: string, stageId: string): Promise<string> {
+  return readFile(path.join(home, "runs", runId, stageId, "handoff.md"), "utf8");
+}

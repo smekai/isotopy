@@ -22,42 +22,7 @@ const DEV_PROSE = "I added the toggle.";
 const TOOL_ROW = "Read src/theme.ts";
 const CHATTER = "Developer online · Claude Code · haiku";
 
-function runWithTwoStages(): RunState {
-  const state = run(
-    [
-      started("implementation", "passed", STARTED_AT, [
-        log("2026-07-27T10:00:01.000Z", "run", CHATTER, {
-          kind: "engine",
-          name: "Claude Code",
-        }),
-        log("2026-07-27T10:00:02.000Z", "info", DEV_PROSE),
-        log("2026-07-27T10:00:03.000Z", "run", TOOL_ROW, {
-          kind: "tool",
-          name: "Read",
-          detail: "src/theme.ts",
-        }),
-      ]),
-      started("test", "passed", STARTED_AT, [
-        log("2026-07-27T10:01:00.000Z", "info", "Checked it."),
-      ]),
-    ],
-    "completed",
-  );
-  state.stageOutputs = { implementation: "DEV HANDOFF", test: "TESTER HANDOFF" };
-  return state;
-}
 
-function tabsProps(overrides: Partial<RunTabsProps> = {}): RunTabsProps {
-  return {
-    run: runWithTwoStages(),
-    focusedStageId: null,
-    sending: false,
-    d,
-    onSend: vi.fn(),
-    onClearFocus: vi.fn(),
-    ...overrides,
-  };
-}
 
 afterEach(() => {
   cleanup();
@@ -163,3 +128,40 @@ test("a run with no workspace offers no solution folder toggle", () => {
   // Assert
   expect(screen.queryByTestId("artifact-view-files")).toBeNull();
 });
+
+function runWithTwoStages(): RunState {
+  const state = run(
+    [
+      started("implementation", "passed", STARTED_AT, [
+        log("2026-07-27T10:00:01.000Z", "run", CHATTER, {
+          kind: "engine",
+          name: "Claude Code",
+        }),
+        log("2026-07-27T10:00:02.000Z", "info", DEV_PROSE),
+        log("2026-07-27T10:00:03.000Z", "run", TOOL_ROW, {
+          kind: "tool",
+          name: "Read",
+          detail: "src/theme.ts",
+        }),
+      ]),
+      started("test", "passed", STARTED_AT, [
+        log("2026-07-27T10:01:00.000Z", "info", "Checked it."),
+      ]),
+    ],
+    "completed",
+  );
+  state.stageOutputs = { implementation: "DEV HANDOFF", test: "TESTER HANDOFF" };
+  return state;
+}
+
+function tabsProps(overrides: Partial<RunTabsProps> = {}): RunTabsProps {
+  return {
+    run: runWithTwoStages(),
+    focusedStageId: null,
+    sending: false,
+    d,
+    onSend: vi.fn(),
+    onClearFocus: vi.fn(),
+    ...overrides,
+  };
+}

@@ -86,36 +86,13 @@ const BLOCKED_RUN: RunState = {
   ],
 };
 
-async function seedBlockedRun(page: Page): Promise<void> {
-  await page.route(
-    (url) => url.pathname === "/runs",
-    (route) => route.fulfill({ json: [BLOCKED_RUN] }),
-  );
-  await page.route(
-    (url) => url.pathname === `/runs/${RUN_ID}`,
-    (route) => route.fulfill({ json: BLOCKED_RUN }),
-  );
-  // Not terminal, so the app holds both streams open for the length of the wait.
-  await page.route(
-    (url) => url.pathname === `/runs/${RUN_ID}/events`,
-    (route) => route.fulfill({ contentType: "text/event-stream", body: "" }),
-  );
-  await page.route(
-    (url) => url.pathname === "/runs/events",
-    (route) => route.fulfill({ contentType: "text/event-stream", body: "" }),
-  );
-}
 
-async function openBlockedRun(page: Page): Promise<void> {
-  await page.goto(`/#/runs/${RUN_ID}`);
-  await expect(page.getByTestId("limit-modal")).toBeVisible();
-}
 
 test("a parked run announces the limit over the run, with the raw line behind it", async ({
   page,
 }) => {
   // Anticipate — every endpoint the page reaches, fulfilled from the fixture.
-  await seedBlockedRun(page);
+  await anticipateBlockedRun(page);
 
   // Act
   await openBlockedRun(page);
@@ -129,7 +106,7 @@ test("a parked run announces the limit over the run, with the raw line behind it
 
 test("the countdown ticks down rather than showing a frozen timestamp", async ({ page }) => {
   // Anticipate
-  await seedBlockedRun(page);
+  await anticipateBlockedRun(page);
 
   // Act
   await openBlockedRun(page);
@@ -142,7 +119,7 @@ test("the countdown ticks down rather than showing a frozen timestamp", async ({
 
 test("the rail shows BLOCKED so a parked run is visible without opening it", async ({ page }) => {
   // Anticipate
-  await seedBlockedRun(page);
+  await anticipateBlockedRun(page);
 
   // Act
   await openBlockedRun(page);
@@ -155,7 +132,7 @@ test("the rail shows BLOCKED so a parked run is visible without opening it", asy
 
 test("choosing a cheaper model posts that model to the resolve endpoint", async ({ page }) => {
   // Anticipate — the seeded run, plus a recording route for the resolve call.
-  await seedBlockedRun(page);
+  await anticipateBlockedRun(page);
 
   const posted: Request[] = [];
   await page.route(
@@ -180,7 +157,7 @@ test("choosing a cheaper model posts that model to the resolve endpoint", async 
 
 test("Escape dismisses the popup and leaves the run parked, not resolved", async ({ page }) => {
   // Anticipate — any limit call at all would be a bug, so record every one.
-  await seedBlockedRun(page);
+  await anticipateBlockedRun(page);
 
   const posted: Request[] = [];
   await page.route(
@@ -205,7 +182,7 @@ test("Escape dismisses the popup and leaves the run parked, not resolved", async
 
 test("a parked run can still be aborted from the bottom bar", async ({ page }) => {
   // Anticipate
-  await seedBlockedRun(page);
+  await anticipateBlockedRun(page);
 
   // Arrange
   await openBlockedRun(page);
@@ -216,3 +193,28 @@ test("a parked run can still be aborted from the bottom bar", async ({ page }) =
   // Assert
   await expect(page.getByRole("button", { name: "Abort" })).toBeVisible();
 });
+
+async function anticipateBlockedRun(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.pathname === "/runs",
+    (route) => route.fulfill({ json: [BLOCKED_RUN] }),
+  );
+  await page.route(
+    (url) => url.pathname === `/runs/${RUN_ID}`,
+    (route) => route.fulfill({ json: BLOCKED_RUN }),
+  );
+  // Not terminal, so the app holds both streams open for the length of the wait.
+  await page.route(
+    (url) => url.pathname === `/runs/${RUN_ID}/events`,
+    (route) => route.fulfill({ contentType: "text/event-stream", body: "" }),
+  );
+  await page.route(
+    (url) => url.pathname === "/runs/events",
+    (route) => route.fulfill({ contentType: "text/event-stream", body: "" }),
+  );
+}
+
+async function openBlockedRun(page: Page): Promise<void> {
+  await page.goto(`/#/runs/${RUN_ID}`);
+  await expect(page.getByTestId("limit-modal")).toBeVisible();
+}

@@ -20,38 +20,6 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
-/** A milestone with one fully specified feature, created through the API. */
-async function milestoneWithOneFeature(feature: object = {}): Promise<Milestone> {
-  const { status, body } = await post<Milestone>(ctx.app, "/milestones", {
-    name: "Milestone D",
-    goal: "Ship milestone planning",
-    autoRunNext: true,
-    features: [
-      {
-        title: "Persistence",
-        acceptanceCriteria: ["Survives restart"],
-        taskIds: ["TASK-088"],
-        ...feature,
-      },
-    ],
-  });
-  expect(status, "creating a milestone").toBe(201);
-  return body;
-}
-
-async function acceptedFeature(): Promise<{ milestone: Milestone; featureId: string }> {
-  const { body: created } = await post<Milestone>(ctx.app, "/milestones", {
-    name: "Delivery",
-    features: [{ title: "Reviewed feature" }],
-  });
-  const featureId = created.features[0]?.id;
-  assert(featureId, `milestone ${created.id} was created with no features`);
-  await patch(ctx.app, `/milestones/${created.id}/features/${featureId}`, {
-    status: "needs_attention",
-  });
-  return { milestone: created, featureId };
-}
-
 test("a created feature keeps the metadata it was given and starts ready", async () => {
   // Act
   const created = await milestoneWithOneFeature();
@@ -215,14 +183,6 @@ const DRAFT_PLAN = {
   ],
 };
 
-async function draftMilestone(): Promise<Milestone> {
-  const { body } = await post<Milestone>(ctx.app, "/milestones", {
-    name: "Milestone E",
-    goal: "Ship the editor",
-    status: "draft",
-  });
-  return body;
-}
 
 test("editing a draft proposal stamps a new revision", async () => {
   // Arrange
@@ -277,3 +237,44 @@ test("a proposal whose feature has no acceptance criteria is refused", async () 
   expect(status).toBe(400);
   expect(body.issues[0]?.path).toEqual(["features", 0, "acceptanceCriteria"]);
 });
+
+/** A milestone with one fully specified feature, created through the API. */
+async function milestoneWithOneFeature(feature: object = {}): Promise<Milestone> {
+  const { status, body } = await post<Milestone>(ctx.app, "/milestones", {
+    name: "Milestone D",
+    goal: "Ship milestone planning",
+    autoRunNext: true,
+    features: [
+      {
+        title: "Persistence",
+        acceptanceCriteria: ["Survives restart"],
+        taskIds: ["TASK-088"],
+        ...feature,
+      },
+    ],
+  });
+  expect(status, "creating a milestone").toBe(201);
+  return body;
+}
+
+async function acceptedFeature(): Promise<{ milestone: Milestone; featureId: string }> {
+  const { body: created } = await post<Milestone>(ctx.app, "/milestones", {
+    name: "Delivery",
+    features: [{ title: "Reviewed feature" }],
+  });
+  const featureId = created.features[0]?.id;
+  assert(featureId, `milestone ${created.id} was created with no features`);
+  await patch(ctx.app, `/milestones/${created.id}/features/${featureId}`, {
+    status: "needs_attention",
+  });
+  return { milestone: created, featureId };
+}
+
+async function draftMilestone(): Promise<Milestone> {
+  const { body } = await post<Milestone>(ctx.app, "/milestones", {
+    name: "Milestone E",
+    goal: "Ship the editor",
+    status: "draft",
+  });
+  return body;
+}

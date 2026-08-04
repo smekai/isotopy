@@ -36,31 +36,7 @@ const ADAPTERS: Record<EngineId, EngineAdapter> = {
 
 let stubDir: string;
 
-function writeStub(name: string, line: string): string {
-  const windows = process.platform === "win32";
-  const file = path.join(stubDir, windows ? `${name}.cmd` : name);
-  const body = windows
-    ? `@echo off\r\necho ${line} 1>&2\r\nexit /b 1\r\n`
-    : `#!/bin/sh\necho "${line}" >&2\nexit 1\n`;
-  writeFileSync(file, body);
-  if (!windows) {
-    chmodSync(file, 0o755);
-  }
-  return file;
-}
 
-function runAdapter(engine: EngineId): Promise<EngineRunResult> {
-  return ADAPTERS[engine].run({
-    runId: `limit-${engine}`,
-    prompt: "say hello",
-    cwd: stubDir,
-    permissionMode: "skip",
-    connection: { mode: "subscription" },
-    timeoutMs: 15_000,
-    signal: new AbortController().signal,
-    onLog: () => {},
-  });
-}
 
 beforeAll(() => {
   stubDir = mkdtempSync(path.join(os.tmpdir(), "adhd-limit-stub-"));
@@ -119,3 +95,29 @@ describe("every harness reports a plan limit as a limit", () => {
     expect(result.success).toBe(false);
   });
 });
+
+function writeStub(name: string, line: string): string {
+  const windows = process.platform === "win32";
+  const file = path.join(stubDir, windows ? `${name}.cmd` : name);
+  const body = windows
+    ? `@echo off\r\necho ${line} 1>&2\r\nexit /b 1\r\n`
+    : `#!/bin/sh\necho "${line}" >&2\nexit 1\n`;
+  writeFileSync(file, body);
+  if (!windows) {
+    chmodSync(file, 0o755);
+  }
+  return file;
+}
+
+function runAdapter(engine: EngineId): Promise<EngineRunResult> {
+  return ADAPTERS[engine].run({
+    runId: `limit-${engine}`,
+    prompt: "say hello",
+    cwd: stubDir,
+    permissionMode: "skip",
+    connection: { mode: "subscription" },
+    timeoutMs: 15_000,
+    signal: new AbortController().signal,
+    onLog: () => {},
+  });
+}

@@ -18,32 +18,7 @@ vi.mock("../../src/api", () => ({
 
 const d = DIRS.indigo;
 
-function closeout(overrides: Partial<RunCloseoutRecord> = {}): RunCloseoutRecord {
-  return {
-    report: {
-      summary: "Shipped the milestone dashboard.",
-      deliveredScope: ["Milestone route", "Autorun toggle"],
-      decisions: ["Kept the composer untouched"],
-      knowledge: ["Milestones have no SSE channel"],
-      findings: [],
-      tasks: [],
-      completedTaskIds: ["TASK-093"],
-      unresolvedTaskIds: ["TASK-094"],
-      cleanup: [],
-    },
-    createdTasks: [],
-    cleanup: { removed: [], rejected: [] },
-    validationErrors: [],
-    completedAt: "2026-07-31T00:00:00.000Z",
-    ...overrides,
-  };
-}
 
-function completedRun(overrides: Partial<RunState> = {}): RunState {
-  const state = run([stage("implementation", "passed"), stage("closeout", "passed")], "completed");
-  state.stageOutputs = { implementation: "DEV HANDOFF" };
-  return { ...state, ...overrides };
-}
 
 afterEach(() => {
   cleanup();
@@ -172,3 +147,30 @@ test("opening the Closeout view from Artifacts shows the report", () => {
     "Shipped the milestone dashboard.",
   );
 });
+
+function closeout(overrides: Partial<RunCloseoutRecord> = {}): RunCloseoutRecord {
+  return {
+    report: {
+      summary: "Shipped the milestone dashboard.",
+      deliveredScope: ["Milestone route", "Autorun toggle"],
+      decisions: ["Kept the composer untouched"],
+      knowledge: ["Milestones have no SSE channel"],
+      findings: [],
+      tasks: [],
+      completedTaskIds: ["TASK-093"],
+      unresolvedTaskIds: ["TASK-094"],
+      cleanup: [],
+    },
+    createdTasks: [],
+    cleanup: { removed: [], rejected: [] },
+    validationErrors: [],
+    completedAt: "2026-07-31T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function completedRun(overrides: Partial<RunState> = {}): RunState {
+  const state = run([stage("implementation", "passed"), stage("closeout", "passed")], "completed");
+  state.stageOutputs = { implementation: "DEV HANDOFF" };
+  return { ...state, ...overrides };
+}

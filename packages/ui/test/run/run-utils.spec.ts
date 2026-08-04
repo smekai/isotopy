@@ -11,10 +11,6 @@ import {
 } from "../../src/run-utils";
 import { run as runFixture, stage } from "../support/run-fixtures";
 
-/** Every case here is about resuming, so the run is always a failed one. */
-function run(stages: StageState[]): RunState {
-  return runFixture(stages, "failed");
-}
 
 describe("resumeStageId", () => {
   test("resumes at the stage that failed", () => {
@@ -95,3 +91,8 @@ describe("childPath", () => {
     );
   });
 });
+
+/** Every case here is about resuming, so the run is always a failed one. */
+function run(stages: StageState[]): RunState {
+  return runFixture(stages, "failed");
+}
