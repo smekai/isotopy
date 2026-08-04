@@ -66,6 +66,21 @@ schema accepts. Normalisation that belongs to an agent boundary — deduping str
 arrays, rewriting severity prose — stays in the server, which is the same line
 drawn under "Strict for what ADHD writes, salvaging for what an agent writes".
 
+**Where this stops.** A schema earns its place where untrusted data crosses a
+boundary at runtime — SQLite reads, HTTP request bodies, engine JSONL, agent
+fenced blocks. Everywhere else a plain type is the whole contract, and deriving
+one from a codec that validates nothing buys no safety while costing a runtime
+object. `EngineLimit` is the worked example: produced by `detectEngineLimit` and
+consumed in-process, so it is an interface, while `RunLimit` — persisted, and
+carried on `stage.blocked` — keeps its schema.
+
+Three `z.ZodType<T>` pairs survive on purpose, all of them request-input codecs
+whose type the browser also imports: `projectPreferencesUpdateSchema` (whose
+legacy-alias transform means input and output genuinely differ),
+`engineConnectionUpdateSchema`, and `resolveLimitSchema`. Collapsing those means
+core absorbing HTTP-input shapes and their trimming, which is a different
+decision from this one and has not been taken.
+
 ---
 
 ## 2026-08-03 — A plan limit is a wait, not a failure

@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type {
-  CreateMilestoneFeatureInput,
-  CreateMilestoneInput,
   EngineLimit,
   EnginePermissionMode,
   LimitChoice,
@@ -11,6 +9,7 @@ import type {
   Milestone,
   MilestoneFeature,
   MilestonePlan,
+  UpdateMilestoneInput,
   PipelineDefinition,
   RunEvent,
   RunMessage,
@@ -22,8 +21,6 @@ import type {
   StageState,
   StageUsage,
   StageVerdict,
-  UpdateMilestoneFeatureInput,
-  UpdateMilestoneInput,
 } from "@adhd/core";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -42,6 +39,11 @@ import {
 } from "@adhd/core";
 import { ListenerRegistry } from "./listener-registry.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
+import type {
+  CreateMilestoneFeatureInput,
+  CreateMilestoneInput,
+  UpdateMilestoneFeatureInput,
+} from "../domain/request-schemas.ts";
 import { assertEngineId, getEngineAdapter } from "../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";

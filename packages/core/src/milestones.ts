@@ -185,48 +185,16 @@ export const milestoneSchema = z
 
 export type Milestone = z.infer<typeof milestoneSchema>;
 
-export interface CreateMilestoneFeatureInput {
-  title: string;
-  description?: string;
-  acceptanceCriteria?: string[];
-  taskIds?: string[];
-}
-
-export interface CreateMilestoneInput {
-  name: string;
-  goal?: string;
-  status?: "draft" | "active";
-  autoRunNext?: boolean;
-  features?: CreateMilestoneFeatureInput[];
-}
-
-export interface StartMilestonePlanningInput {
-  goal: string;
-  engine?: string;
-  model?: string;
-  permissionMode?: string;
-}
-
-export interface ReviseMilestonePlanInput {
-  feedback: string;
-  engine?: string;
-  model?: string;
-  permissionMode?: string;
-}
-
+/**
+ * The one milestone input the browser also sends, so it stays a shared type.
+ * Its codec lives with the other request schemas; the orchestrator's signature
+ * is what holds the two in step.
+ */
 export interface UpdateMilestoneInput {
   name?: string;
   goal?: string | null;
   status?: MilestoneStatus;
   autoRunNext?: boolean;
-}
-
-export interface UpdateMilestoneFeatureInput {
-  title?: string;
-  description?: string | null;
-  acceptanceCriteria?: string[];
-  status?: MilestoneFeatureStatus;
-  taskIds?: string[];
 }
 
 export function nextMilestoneFeature(

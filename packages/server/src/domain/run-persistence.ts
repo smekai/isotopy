@@ -15,21 +15,12 @@ import {
   timestamp,
 } from "@adhd/core";
 import type {
-  EnginePermissionMode,
   RunEvent,
-  RunState,
 } from "@adhd/core";
 import { z } from "zod";
 
 import { parseJson } from "./validation.ts";
 import type { ValidationResult } from "./validation.ts";
-
-export interface PersistedRun {
-  version: 1;
-  run: RunState;
-  permissionMode?: EnginePermissionMode;
-  openWorkflowRunId?: string;
-}
 
 const text = requiredText;
 const strings = requiredTexts;
@@ -74,7 +65,7 @@ const runStateSchema = z
   })
   .strict();
 
-const persistedRunSchema: z.ZodType<PersistedRun> = z
+const persistedRunSchema = z
   .object({
     version: z.literal(1),
     run: runStateSchema,
@@ -82,6 +73,8 @@ const persistedRunSchema: z.ZodType<PersistedRun> = z
     openWorkflowRunId: text.optional(),
   })
   .strict();
+
+export type PersistedRun = z.infer<typeof persistedRunSchema>;
 
 export function parsePersistedRun(
   textValue: string,

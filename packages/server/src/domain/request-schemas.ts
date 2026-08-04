@@ -7,15 +7,9 @@ import {
   findPipeline,
 } from "@adhd/core";
 import type {
-  CreateMilestoneFeatureInput,
-  CreateMilestoneInput,
   EngineId,
   LimitResolution,
   ProjectPreferencesUpdate,
-  ReviseMilestonePlanInput,
-  StartMilestonePlanningInput,
-  UpdateMilestoneFeatureInput,
-  UpdateMilestoneInput,
 } from "@adhd/core";
 import { z } from "zod";
 import type { EngineConnectionUpdate } from "../services/settings-store.ts";
@@ -86,7 +80,7 @@ export const resolveLimitSchema: z.ZodType<LimitResolution> = z.discriminatedUni
     .strict(),
 ]);
 
-export const createMilestoneFeatureSchema: z.ZodType<CreateMilestoneFeatureInput> = z
+export const createMilestoneFeatureSchema = z
   .object({
     title: text,
     description: optionalText,
@@ -95,7 +89,7 @@ export const createMilestoneFeatureSchema: z.ZodType<CreateMilestoneFeatureInput
   })
   .strict();
 
-export const createMilestoneSchema: z.ZodType<CreateMilestoneInput> = z
+export const createMilestoneSchema = z
   .object({
     name: text,
     goal: optionalText,
@@ -105,7 +99,7 @@ export const createMilestoneSchema: z.ZodType<CreateMilestoneInput> = z
   })
   .strict();
 
-export const updateMilestoneSchema: z.ZodType<UpdateMilestoneInput> = z
+export const updateMilestoneSchema = z
   .object({
     name: optionalText,
     goal: text.nullable().optional(),
@@ -114,7 +108,7 @@ export const updateMilestoneSchema: z.ZodType<UpdateMilestoneInput> = z
   })
   .strict();
 
-export const updateMilestoneFeatureSchema: z.ZodType<UpdateMilestoneFeatureInput> = z
+export const updateMilestoneFeatureSchema = z
   .object({
     title: optionalText,
     description: text.nullable().optional(),
@@ -124,7 +118,7 @@ export const updateMilestoneFeatureSchema: z.ZodType<UpdateMilestoneFeatureInput
   })
   .strict();
 
-export const startMilestonePlanningSchema: z.ZodType<StartMilestonePlanningInput> = z
+export const startMilestonePlanningSchema = z
   .object({
     goal: text,
     engine: optionalText,
@@ -133,7 +127,7 @@ export const startMilestonePlanningSchema: z.ZodType<StartMilestonePlanningInput
   })
   .strict();
 
-export const reviseMilestonePlanSchema: z.ZodType<ReviseMilestonePlanInput> = z
+export const reviseMilestonePlanSchema = z
   .object({
     feedback: text,
     engine: optionalText,
@@ -149,3 +143,9 @@ export const startNextMilestoneRunSchema = z
     permissionMode: optionalText,
   })
   .strict();
+
+export type CreateMilestoneFeatureInput = z.infer<typeof createMilestoneFeatureSchema>;
+export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+export type UpdateMilestoneFeatureInput = z.infer<typeof updateMilestoneFeatureSchema>;
+export type StartMilestonePlanningInput = z.infer<typeof startMilestonePlanningSchema>;
+export type ReviseMilestonePlanInput = z.infer<typeof reviseMilestonePlanSchema>;
