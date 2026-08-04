@@ -1,5 +1,17 @@
 # Rejected
 
+## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
+**Priority:** P2 | **Tags:** core, server, ui, engine
+**Updated:** 2026-07-29 08:56
+
+**Superseded by:** TASK-110
+
+Use an initialization/planning step to analyze an approved feature and select the required personas and developer specializations from the available catalog, for example adding a Product Designer for UI work or a mobile developer specialization for a mobile feature. Persist the generated workflow, explain its composition, preserve required quality and closeout policies, and require human approval before execution.
+
+Cross-platform: workflow composition is pure logic/UI; any selected persona tools must declare Windows and macOS support or degrade with an accurate SKIP reason.
+
+---
+
 ## TASK-039: Pluggable run persistence — storage adapter + selectable DB backend
 **Priority:** P2 | **Tags:** server, core, infra
 **Updated:** 2026-07-26 19:27

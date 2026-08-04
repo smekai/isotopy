@@ -1,12 +1,116 @@
 # Backlog
 
-## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
-**Priority:** P2 | **Tags:** core, server, ui, engine
-**Updated:** 2026-07-29 08:56
+## TASK-108: Milestone E — Orchestrator epic
+**Priority:** P1 | **Tags:** core, server, ui, engine, milestone-c
+**Updated:** 2026-08-04 11:33
 
-Use an initialization/planning step to analyze an approved feature and select the required personas and developer specializations from the available catalog, for example adding a Product Designer for UI work or a mobile developer specialization for a mobile feature. Persist the generated workflow, explain its composition, preserve required quality and closeout policies, and require human approval before execution.
+Milestone E adds a top-level Orchestrator entry point that conversations with the user, composes a reusable team from the persona catalog, launches composed runs, and decides what happens next after each run completes.
 
-Cross-platform: workflow composition is pure logic/UI; any selected persona tools must declare Windows and macOS support or degrade with an accurate SKIP reason.
+MVP scope includes `TASK-109`, `TASK-110`, `TASK-112`, and minimal UI from `TASK-114`. Post-MVP scope covers reusable teams (`TASK-111`), per-persona accumulated context (`TASK-113`), full UI (`TASK-114`), and per-role engine/model configuration (`TASK-115`).
+
+Cross-platform: orchestrator reuses existing server filesystem/path helpers and OpenWorkflow; UI is web; verification covers Windows and macOS.
+
+---
+
+## TASK-109: Orchestrator persona + conversational loop
+**Priority:** P1 | **Tags:** core, server, ui, engine
+**Updated:** 2026-08-04 11:33
+
+Create an `orchestrator` persona and a durable conversational loop that produces structured decisions. The orchestrator contract is a discriminated union with explicit actions such as `propose_team`, `delegate_milestone_planning`, `start_run`, `ask_user`, and `stop`.
+
+Strict runtime validation at the engine boundary (Zod codec), and durability via OpenWorkflow so the conversation can pause and resume without losing state.
+
+Cross-platform: n/a — uses existing request schema, run persistence, and engine adapter plumbing.
+
+---
+
+## TASK-110: Dynamic workflow composition from persona catalog
+**Priority:** P1 | **Tags:** core, server, ui, engine
+**Updated:** 2026-08-04 11:33
+
+Implement runtime composition of a `PipelineDefinition` (stages) from the persona/step-task catalog. Each composed stage must declare `executionPolicy`, preserve quality/closeout requirements, and require human approval before execution.
+
+This task subsumes the intent of `TASK-097` and becomes the orchestrator's mechanism for building the team workflow.
+
+Cross-platform: n/a — compose/validate/persist uses existing path and JSON helpers; no shell-only commands.
+
+---
+
+## TASK-111: Reusable teams for later orchestrations
+**Priority:** P2 | **Tags:** core, server
+**Updated:** 2026-08-04 11:33
+
+Persist approved team compositions to `.adhd/teams/<id>.json` with a strict schema and a single writer. The orchestrator lists and reuses saved teams across later conversations instead of recomposing from scratch.
+
+Cross-platform: n/a — JSON + path-joined storage under the existing `.adhd` roots.
+
+---
+
+## TASK-112: Post-run decision loop (next phase routing)
+**Priority:** P1 | **Tags:** core, server
+**Updated:** 2026-08-04 11:33
+
+After a composed run settles, feed its closeout artifacts (knowledge, decisions, findings, and `nextRecommendation`) back into the orchestrator conversation. The orchestrator then decides whether to start a next composed run, ask the user for an answer, or stop.
+
+Generalizes the current `autoRunNext` behavior: each orchestration phase is a separate run, and earlier runs remain finished records.
+
+Cross-platform: n/a — reuses existing closeout extraction and milestone/run projection.
+
+---
+
+## TASK-113: Per-persona accumulated context (artifact distilled memory)
+**Priority:** P2 | **Tags:** core, server, ui
+**Updated:** 2026-08-04 11:33
+
+Distill closeout knowledge into per-persona accumulated notes under `.adhd` and inject those notes into `composeSkill` alongside existing user/project overrides.
+
+Also add an orchestrator-facing constraint digest so the orchestrator can reason about “must-do differently for stage X in this project” without needing deep per-agent state.
+
+Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell assumptions.
+
+---
+
+## TASK-114: Orchestrator UI (chat + proposal + run timeline)
+**Priority:** P2 | **Tags:** ui, core, server
+**Updated:** 2026-08-04 11:33
+
+Implement a chat-first UI entry point that supports orchestrator conversations, shows a team proposal/approval panel, and renders a timeline of orchestrated runs within a single initiative.
+
+Cross-platform: n/a — browser UI; relies on the existing cross-platform server API and run projections.
+
+---
+
+## TASK-115: Per-role engine/model configuration (post-MVP)
+**Priority:** P2 | **Tags:** core, server, engine
+**Updated:** 2026-08-04 11:33
+
+Post-MVP: extend workflow input / run state so each stage can select its own engine+model (allowing the orchestrator to run on a stronger model than team agents). Include settings surface and correct limit-park handling per stage.
+
+Cross-platform: n/a — engine/model selection integrates with existing engine adapter registry.
+
+---
+
+## TASK-116: README — top-level product schema (“How it works”)
+**Priority:** P2 | **Tags:** ui, server
+**Updated:** 2026-08-04 11:33
+
+Add a “How it works” section to `README.md` with a mermaid diagram of the whole product flow: user → orchestrator conversation → team composition/approval → composed runs (personas + step-tasks + engines) → closeout artifacts → orchestrator decision loop → milestones/task board.
+
+Update this section as part of the milestone so it reflects the orchestrator rather than only today’s static pipelines.
+
+Cross-platform: n/a — docs only.
+
+---
+
+## TASK-117: E2E verification for the orchestrator milestone
+**Priority:** P1 | **Tags:** testing, adapters, engine, ui, milestone-c
+**Updated:** 2026-08-04 11:33
+
+Following the `qa-testing` skill, run repository gates (lint, typecheck, test, build, e2e), then drive the app (Hono `:9477` + Vite `:5173`) through the full orchestrator flow using the internal browser and/or Playwright.
+
+Verify: user chat with orchestrator, approval of the proposed team, execution of the composed run, and correctness of the post-run decision loop + run timeline. Record a release verdict for the milestone.
+
+Cross-platform: verify on Windows (primary), and ensure test/run commands are valid on macOS (both shells).
 
 ---
 
