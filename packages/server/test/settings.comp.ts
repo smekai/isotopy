@@ -47,7 +47,7 @@ test("a preference set through the API is visible to a second server over the sa
     permissionMode: "acceptEdits",
     pipelineId: "solo",
   });
-  const { app } = await restartApp();
+  const { app, shutdown } = await restartApp();
 
   // Act — another browser, another process, no localStorage in sight.
   const { body } = await get<SettingsView>(app, "/settings");
@@ -59,6 +59,7 @@ test("a preference set through the API is visible to a second server over the sa
     permissionMode: "acceptEdits",
     pipelineId: "solo",
   });
+  await shutdown();
 });
 
 test("an update touches only the fields it carries", async () => {

@@ -89,14 +89,14 @@ test("an invalid settings record is ignored as a whole and left untouched", asyn
   const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
   // Act
-  const { app, orchestrator } = await restartApp();
+  const { app, shutdown } = await restartApp();
 
   // Assert — the record is dropped whole, never salvaged field by field.
   const { body } = await get<SettingsView>(app, "/settings");
   expect(body.preferences).toEqual(defaultProjectPreferences());
   expect(await readFile(settingsPath, "utf8")).toBe(contents);
   expect(warn).toHaveBeenCalledWith(expect.stringContaining("projects.home"));
-  await orchestrator.shutdown();
+  await shutdown();
 });
 
 test("an invalid project registry is ignored as a whole and left untouched", async () => {
@@ -120,7 +120,7 @@ test("an invalid project registry is ignored as a whole and left untouched", asy
   const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
   // Act
-  const { app, orchestrator } = await restartApp();
+  const { app, shutdown } = await restartApp();
 
   // Assert — the malformed entry takes only itself down, and the file is intact.
   const { body } = await get<ProjectsView>(app, "/projects");
@@ -128,7 +128,7 @@ test("an invalid project registry is ignored as a whole and left untouched", asy
   expect(body.activeProjectId).toBe("home");
   expect(await readFile(registryPath, "utf8")).toBe(contents);
   expect(warn).toHaveBeenCalledWith(expect.stringContaining("projects.1.id"));
-  await orchestrator.shutdown();
+  await shutdown();
 });
 
 test("TaskPlanner config validates consumed fields and preserves plugin fields", () => {

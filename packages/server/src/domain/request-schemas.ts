@@ -136,6 +136,15 @@ export const reviseMilestonePlanSchema = z
   })
   .strict();
 
+export const startOrchestrationSchema = z
+  .object({
+    goal: text,
+    engine: optionalText,
+    model: z.string().optional(),
+    permissionMode: optionalText,
+  })
+  .strict();
+
 export const startNextMilestoneRunSchema = z
   .object({
     engine: optionalText,

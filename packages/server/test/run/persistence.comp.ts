@@ -53,7 +53,7 @@ test("runs are restored when the server comes back", async () => {
   expect(restoredRun?.id).toBe(run.id);
   expect(restoredRun?.task).toBe("comp survives restart");
   expect(restoredRun?.status).toBe("completed");
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 test("a needs-attention run remains terminal when the server comes back", async () => {
@@ -82,7 +82,7 @@ test("a needs-attention run remains terminal when the server comes back", async 
   expect(body.status).toBe("needs_attention");
   expect(stageOf(body, "test").status).toBe("failed");
   expect(stageOf(body, "test").verdict).toBe("FAIL");
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 test("a run left mid-flight by a crash with no durable run is reconciled to failed", async () => {
@@ -117,7 +117,7 @@ test("a run left mid-flight by a crash with no durable run is reconciled to fail
   expect(stageOf(body, "test").logs.at(-1)?.message).toMatch(/Interrupted by server restart/);
   expect(stageOf(body, "implementation").status).toBe("passed");
   ctx.engine.verify();
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 test("run numbering continues from the highest number on disk", async () => {
@@ -149,7 +149,7 @@ test("run numbering continues from the highest number on disk", async () => {
   expect(second.number).toBe(2);
   await waitForRunStatus(restarted.app, second.id, "completed");
   ctx.engine.verify();
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 /**

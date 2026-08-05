@@ -44,7 +44,7 @@ test("a milestone and its feature metadata survive a server restart", async () =
   // Assert
   const { body: loaded } = await get<Milestone>(restarted.app, `/milestones/${created.id}`);
   expect(loaded).toEqual(created);
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 test("accepting a needs-attention feature completes it with an audit stamp", async () => {
@@ -92,7 +92,7 @@ test("the acceptance stamp survives a server restart", async () => {
   // Assert
   const { body: loaded } = await get<Milestone>(restarted.app, `/milestones/${milestone.id}`);
   expect(loaded.features[0]?.acceptedAt).toBe(accepted.features[0]?.acceptedAt);
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 test("starting the next feature links one Full Delivery run", async () => {

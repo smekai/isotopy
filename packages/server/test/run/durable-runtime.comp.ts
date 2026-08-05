@@ -58,7 +58,7 @@ describe("durable runtime", () => {
     expect(stageOf(finished, "intake").status).toBe("passed");
     expect(finished.stageOutputs?.intake).toBe(PM_REPORT);
 
-    await restarted.orchestrator.shutdown();
+    await restarted.shutdown();
   });
 
   test("a project runs one at a time while another project runs concurrently (G2/S5)", async () => {

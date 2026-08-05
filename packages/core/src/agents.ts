@@ -6,6 +6,7 @@ export interface AgentDefinition {
 
 export const AGENTS: Record<string, AgentDefinition> = {
   solo: { stageId: "solo", profession: "Agent", glyph: "✦" },
+  orchestrate: { stageId: "orchestrate", profession: "Orchestrator", glyph: "❖" },
   intake: { stageId: "intake", profession: "Product Manager", glyph: "◈" },
   "milestone-plan": {
     stageId: "milestone-plan",

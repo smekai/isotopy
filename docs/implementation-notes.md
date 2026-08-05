@@ -183,6 +183,29 @@ never a clock time, because the server does not know the reader's zone.
 
 ---
 
+## Orchestration (`services/orchestration.ts`)
+
+**`start()` registers in memory before the run, but persists only after it.** The
+two halves look interchangeable and are not.
+
+Persisting first is wrong: `startRun` throws on a project that already has an
+active run, on a connection mode missing its API key, and on an unknown engine.
+Any of those would leave a durable orchestration row with no runs, visible in
+`GET /orchestrations` forever, with no endpoint that can remove it. Nothing is
+written until the run is admitted, so a rejected start leaves no trace.
+
+Registering in the map first is also required, for the opposite reason. The map
+is what `consume()` looks the aggregate up in, and the workflow can reach the
+first stage's output before `startRun` has resolved — a fast engine turn would
+otherwise find no orchestration and drop its decision silently. The entry is
+removed again if the start throws.
+
+The transient row that `consume()` may write before `start()` finishes carries an
+empty `runIds`; the write at the end of `start()` supersedes it, and the upsert
+makes the ordering harmless.
+
+---
+
 ## Run orchestration (`services/run-orchestrator.ts`)
 
 `RunOrchestrator` owns run lifecycle — it starts pipelines, streams stage events

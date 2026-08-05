@@ -15,6 +15,62 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-04 — The Orchestrator is a persona that brokers other personas' questions
+
+**Context:** Milestone E adds a top-level entry point that talks to the user, composes a
+team, and decides what runs next. Two things about it were open: whether it is a new kind
+of thing, and what happens when one of its specialists needs to ask something. Today an
+`interactive` stage's `QUESTION:` parks the run and goes **straight to the user** — nothing
+sits in between — which means every clarification a Developer needs interrupts a human,
+including ones already answered by the approved scope.
+
+**Decision:** the Orchestrator is an ordinary persona — same markdown, same skill layering,
+same engine adapter — with two extra abilities. Its turn ends in a typed decision the system
+executes rather than a `VERDICT:` line, and it sits between the other personas and the user:
+it answers a specialist's question itself when the answer follows from the goal, the approved
+team, or an earlier run's artifacts, and escalates when it does not, when answering would
+change agreed scope, or when only the user holds the preference. The reach is every
+interactive stage in a project that has an Orchestrator, not only orchestrated runs.
+
+A stage now declares its own output protocol (`verdict` | `decision`) instead of the
+interpretation being keyed to a stage name, so the second ability needed no new machinery:
+`ask_user` drives the same durable park `QUESTION:` already drove. TASK-109 ships the
+contract for all eight actions; TASK-120 wires the three brokering ones.
+
+**Rejected:** making the Orchestrator a new kind of actor above the persona catalog — it
+would have needed its own loading, overriding, and engine path, all duplicating what
+personas already have, to express a difference that is really about output. Also rejected:
+keeping `QUESTION:` as the Orchestrator's way of asking and letting `ask_user` be an alias.
+Two ways to ask means two things to keep in step, and the transcript could no longer
+distinguish the Orchestrator's own question from one it passed on.
+
+---
+
+## 2026-08-04 — An orchestration is its own aggregate, and stage output reaches it through a seam
+
+**Context:** the orchestration conversation needed somewhere to live. Parking the decision on
+`RunState` was cheapest, and reusing `Milestone` was cheaper still, but `TASK-112` makes each
+phase of an initiative a separate run with earlier runs kept as finished records — which is an
+aggregate that owns runs, exactly as a milestone owns features. `Milestone` is the wrong home
+because the Orchestrator can *delegate* milestone planning; it sits above it.
+
+Separately, `RunOrchestrator.captureStageOutput` already branched on `pipelineId` twice — once
+for the milestone plan, once for the closeout. A third branch would have made the pattern the
+design.
+
+**Decision:** `Orchestration` is its own aggregate with its own table, repository, and single
+writer (`OrchestrationService`). Stage output reaches every aggregate through a
+`StageOutputConsumer` seam: the orchestrator writes the run read model and the handoff, then
+hands the output to registered consumers. `RunOrchestrator` stays the single writer of the
+*run* read model and stops knowing which pipelines mean something to which aggregate.
+
+**Rejected:** deferring the aggregate to `TASK-112` — the decision contract would have been
+reshaped once it landed, and the reshape is the expensive part. Also rejected: growing
+`RunOrchestrator` with orchestration state; at 1600 lines it already owns runs and milestones,
+and a third responsibility keyed off pipeline ids is how a god class is built.
+
+---
+
 ## 2026-08-04 — Generators and framework are shared; everything else is duplicated
 
 **Context:** the first pass at the AAAAA sweep read "don't repeat yourself" as the
