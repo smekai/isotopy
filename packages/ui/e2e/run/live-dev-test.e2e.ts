@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openPipelineComposer } from "../support/composer";
 
 // Live tier — the ONLY test in the repo that spends money.
 //
@@ -49,6 +50,7 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
   await page.locator("select").selectOption("haiku");
   await page.getByRole("button", { name: "Close" }).click();
 
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: "Developer + Tester" }).click();
   await page.getByRole("option", { name: /Developer \+ Tester/ }).click();
   await page.getByPlaceholder("Describe the task...").fill(TASK);

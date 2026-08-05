@@ -1,6 +1,7 @@
 // AAAAA forbids branching or inline logic in a test body, so every loop, poll
 // and retry in a component test lives here instead.
 import { assert, expect } from "vitest";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -371,4 +372,23 @@ export function stageOf(run: RunState, stageId: string) {
   const stage = run.stages.find((item) => item.id === stageId);
   assert(stage, `Run has no stage "${stageId}"`);
   return stage;
+}
+
+/**
+ * Table names in one of a project's SQLite files. Read-only and opened fresh, so
+ * it never competes with the connections the app holds — which is the whole
+ * point of the file the caller is usually asking about.
+ */
+export function tablesIn(projectRoot: string, file: string): string[] {
+  const connection = new DatabaseSync(path.join(projectRoot, ".adhd", file), {
+    readOnly: true,
+  });
+  try {
+    return connection
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((row) => String(row.name));
+  } finally {
+    connection.close();
+  }
 }

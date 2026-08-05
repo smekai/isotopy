@@ -4,6 +4,7 @@ import type {
   EngineModelList,
   EngineStatus,
   LimitResolution,
+  Orchestration,
   Project,
   ProjectPreferencesUpdate,
   ProjectsView,
@@ -158,6 +159,29 @@ export function startMilestonePlanning(
   options: Omit<StartRunOptions, "pipelineId" | "task"> & { goal: string },
 ): Promise<RunState> {
   return postJson<RunState>("/milestones/plan", options);
+}
+
+export type OrchestrationRunOptions = Omit<StartRunOptions, "pipelineId" | "task">;
+
+export function fetchOrchestrations(): Promise<Orchestration[]> {
+  return requestJson<Orchestration[]>("/orchestrations");
+}
+
+export function startOrchestration(
+  options: OrchestrationRunOptions & { goal: string },
+): Promise<RunState> {
+  return postJson<RunState>("/orchestrations", options);
+}
+
+export function approveOrchestratorTeam(
+  orchestrationId: string,
+  options: OrchestrationRunOptions = {},
+): Promise<RunState> {
+  return postJson<RunState>(`/orchestrations/${orchestrationId}/approve`, options);
+}
+
+export function stopOrchestration(orchestrationId: string): Promise<Orchestration> {
+  return postJson<Orchestration>(`/orchestrations/${orchestrationId}/stop`);
 }
 
 export function fetchMilestones(): Promise<Milestone[]> {

@@ -12,7 +12,7 @@ import {
   startMilestonePlanning,
   startRun,
 } from "./api";
-import { EmptyState } from "./components/EmptyState";
+import { HomeComposer } from "./components/home/HomeComposer";
 import { LimitModal } from "./components/LimitModal";
 import { MilestoneDashboard } from "./components/MilestoneDashboard";
 import { PipelineRow } from "./components/PipelineRow";
@@ -20,6 +20,7 @@ import { ProjectDrawer } from "./components/ProjectDrawer";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunRail } from "./components/RunRail";
 import { RunStatusBar } from "./components/RunStatusBar";
+import type { OrchestratorView } from "./components/run/OrchestratorPanel";
 import { RunTabs } from "./components/run/RunTabs";
 import { SetupModal } from "./components/setup/SetupModal";
 import type { SetupSection } from "./components/setup/SetupModal";
@@ -27,6 +28,7 @@ import { TeamController } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useMilestones } from "./hooks/useMilestones";
+import { useOrchestration } from "./hooks/useOrchestration";
 import { useProjects } from "./hooks/useProjects";
 import { useRoute } from "./hooks/useRoute";
 import { useRunEvents } from "./hooks/useRunEvents";
@@ -39,7 +41,12 @@ import {
   routeRunId,
   runRoute,
 } from "./route";
-import { firstActiveRunId, milestoneRefreshKey } from "./run-list";
+import {
+  firstActiveRunId,
+  milestoneRefreshKey,
+  orchestrationRefreshKey,
+  runsForOrchestration,
+} from "./run-list";
 import type { Dir } from "./theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "./theme";
 import { useTheme } from "./ThemeContext";
@@ -141,6 +148,11 @@ export function App() {
     projects.ready,
     milestoneRefreshKey(runs.runs),
   );
+  const orchestration = useOrchestration(
+    projectId,
+    projects.ready,
+    orchestrationRefreshKey(runs.runs),
+  );
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -190,20 +202,48 @@ export function App() {
     setFocusedId(null);
   }
 
+  function currentRunOptions() {
+    const { engine, permissionMode } = settings.preferences;
+    return {
+      engine,
+      model: modelForEngine(settings.preferences, engine),
+      permissionMode,
+    };
+  }
+
   async function handleStartNextFeature(milestoneId: string) {
     setStarting(true);
     try {
-      const { engine, permissionMode } = settings.preferences;
-      const created = await milestones.startNext(milestoneId, {
-        engine,
-        model: modelForEngine(settings.preferences, engine),
-        permissionMode,
-      });
+      const created = await milestones.startNext(milestoneId, currentRunOptions());
       if (created) {
         attachRun(created.id);
       }
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function handleStartOrchestrator(goal: string) {
+    setError(null);
+    setStarting(true);
+    try {
+      const created = await orchestration.start(goal, currentRunOptions());
+      if (created) {
+        setFocusedId(null);
+        attachRun(created.id);
+      }
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  async function handleApproveTeam(orchestrationId: string) {
+    const created = await orchestration.approveTeam(
+      orchestrationId,
+      currentRunOptions(),
+    );
+    if (created) {
+      attachRun(created.id);
     }
   }
 
@@ -217,14 +257,7 @@ export function App() {
     setError(null);
     setStarting(true);
     try {
-      const { engine, permissionMode } = settings.preferences;
-      const created = await startRun({
-        task,
-        pipelineId,
-        engine,
-        model: modelForEngine(settings.preferences, engine),
-        permissionMode,
-      });
+      const created = await startRun({ task, pipelineId, ...currentRunOptions() });
       setFocusedId(null);
       attachRun(created.id);
     } catch (err) {
@@ -238,13 +271,7 @@ export function App() {
     setError(null);
     setStarting(true);
     try {
-      const { engine, permissionMode } = settings.preferences;
-      const created = await startMilestonePlanning({
-        goal,
-        engine,
-        model: modelForEngine(settings.preferences, engine),
-        permissionMode,
-      });
+      const created = await startMilestonePlanning({ goal, ...currentRunOptions() });
       attachRun(created.id);
     } catch (err) {
       setError(
@@ -331,13 +358,25 @@ export function App() {
       ? run.limit
       : undefined;
   const showEmpty = runs.ready && route.kind === "home";
+  const activeOrchestration = run?.orchestrationId
+    ? orchestration.find(run.orchestrationId)
+    : undefined;
+  const orchestratorView: OrchestratorView | undefined = activeOrchestration && {
+    orchestration: activeOrchestration,
+    runs: runsForOrchestration(runs.runs, activeOrchestration),
+    busy: orchestration.busy,
+    onApprove: () => void handleApproveTeam(activeOrchestration.id),
+    onStop: () => void orchestration.stop(activeOrchestration.id),
+    onOpenRun: attachRun,
+  };
   const banner =
     error ??
     runError ??
     projects.error ??
     settings.error ??
     runs.error ??
-    milestones.error;
+    milestones.error ??
+    orchestration.error;
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
@@ -390,7 +429,7 @@ export function App() {
 
         <div style={mainPane(d)}>
           {showEmpty ? (
-            <EmptyState
+            <HomeComposer
               key={`${projectId}:${prefill?.key ?? "composer"}`}
               d={d}
               projectId={projectId}
@@ -398,6 +437,7 @@ export function App() {
               settings={settings}
               onOpenProject={() => setShowProject(true)}
               initialTask={prefill?.task}
+              onStartOrchestrator={(goal) => void handleStartOrchestrator(goal)}
               onStart={(task, pipelineId) => void handleStart(task, pipelineId)}
               onPlanMilestone={(goal) => void handlePlanMilestone(goal)}
               starting={starting}
@@ -434,6 +474,7 @@ export function App() {
                 sending={sending}
                 d={d}
                 settings={settings}
+                orchestrator={orchestratorView}
                 onSend={(text) => void handleSend(text)}
                 onRunStarted={attachRun}
                 onClearFocus={() => setFocusedId(null)}

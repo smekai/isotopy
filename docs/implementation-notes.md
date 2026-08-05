@@ -89,10 +89,16 @@ that path Claude also falls back to prompt-folding via stdin.
 **Cursor (`engines/cursor.ts`).** Headless runs must not stop for confirmation;
 Cursor has no accept-edits-only mode, so both permission modes use `--force`.
 `--trust` is on by default (fresh scratch workspaces would otherwise hit the
-workspace-trust prompt and hang). Experimentation knobs, since the CLI's headless
-behavior on Windows is still being mapped: `ADHD_CURSOR_TRUST=0` drops `--trust`,
-`ADHD_CURSOR_ARGS` appends args verbatim, `ADHD_CURSOR_PROMPT_VIA=stdin` pipes
-the prompt instead of passing it positionally (Windows arg limit ≈ 32K).
+workspace-trust prompt and hang). **The prompt goes on stdin whenever the binary
+is a Windows `.cmd` shim**, which is what `cursor-agent` always resolves to on
+Windows: cmd.exe cannot carry a multi-line argument, and every ADHD prompt is
+multi-line, so passing it positionally made the run fail before it spawned.
+`cursor-agent -p` with no positional prompt reads it from stdin (verified against
+the real CLI). Experimentation knobs, since the CLI's headless behavior on Windows
+is still being mapped: `ADHD_CURSOR_TRUST=0` drops `--trust`, `ADHD_CURSOR_ARGS`
+appends args verbatim, `ADHD_CURSOR_PROMPT_VIA=stdin` pipes the prompt on
+platforms where it would otherwise be positional (arg limit ≈ 32K). That knob
+cannot force the *opposite* — a shim always uses stdin.
 Cursor's own `auto` router model is distinct from our **Auto** (which sends no
 `--model` at all), so the roster prepends ours and relabels theirs.
 

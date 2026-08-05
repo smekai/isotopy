@@ -1,5 +1,75 @@
 # Done
 
+## TASK-122: Two bugs that stopped a real run on Windows
+**Priority:** P0 | **Tags:** server, engine, infra
+**Updated:** 2026-08-05 23:35
+
+Found by driving the app after `TASK-114`. Both predate the Orchestrator; both block using it.
+
+### 1. Cursor could never run on Windows
+
+Every ADHD prompt is multi-line, and `cursor-agent` resolves to a `.cmd` shim, which cmd.exe
+cannot carry a multi-line argument through — `runSubprocess` refused the spawn with *"Multi-line
+argument cannot be passed through a Windows .cmd/.bat shim"*. `claude-code` already fell back to
+stdin on that path and `codex` always reads stdin; only `cursor` still passed the prompt in argv.
+
+**Fix:** `promptGoesInArgs` returns false for a shim binary. Verified against the real CLI that
+`cursor-agent -p` with no positional prompt reads it from stdin.
+
+### 2. `Worker tick failed: database is locked`, every tick of every run
+
+`WorkflowRuntime` opened OpenWorkflow's `BackendSqlite` on **`runs.db`** — ADHD's own file. Two
+connections, one file. `busy_timeout` is per-connection and OpenWorkflow's sets none, while
+`claimWorkflowRun` opens `BEGIN IMMEDIATE`; `BackendSqliteOptions` offers no way to change that.
+
+**Fix:** the durable runtime owns `workflow.db`. One writer per file. Old workflow tables are
+left in `runs.db` (not dropped, not migrated) — decided with the user, no deployed installs.
+
+### Verification
+
+Real run, real Cursor CLI, scratch workspace: run `completed`, stage `passed`, a valid `ask_user`
+decision recorded, **zero** lock errors in the server log. Gates: lint, typecheck, test (528),
+build all green. New tests: `engine/prompt-delivery.comp.ts` (all three adapters carry a
+multi-line prompt — fails on `cursor` without the fix) and one in `run/durable-runtime.comp.ts`
+(the two databases are separate files).
+
+Cross-platform: fix 1 is Windows-only behaviour reached through a platform-neutral check; fix 2
+applies to both.
+
+---
+
+## TASK-114: Orchestrator UI (chat + proposal + run timeline)
+**Priority:** P2 | **Tags:** ui, core, server
+**Updated:** 2026-08-05 23:10
+
+Chat-first UI entry point for orchestrator conversations, a team proposal/approval panel, and a
+timeline of the orchestrated runs in one initiative. MVP slice of the milestone's UI scope; the
+fuller surface (decision history, broker turns, a dedicated initiative page) stays post-MVP.
+
+### Plan — done
+
+- **Home leads with the Orchestrator.** `components/EmptyState.tsx` became
+  `components/home/` — `HomeComposer` (mode switch + shared composer card), `PipelineHeader`
+  (glyph strip, pipeline copy, dropdown), `home-styles.ts`. The fixed pipeline composer is one
+  click behind `choose-pipeline` and otherwise unchanged.
+- **The orchestrator surface is a tab on its own run**, not a route: `run/OrchestratorPanel`
+  renders goal + status, the team awaiting approval with Approve/Stop, the latest decision, and
+  the initiative's runs oldest-first. `RunTabs` adds it for an `orchestration` run and opens on
+  it. Rationale and the rejected route alternative are in `docs/decisions.md` (2026-08-05).
+- **Seams:** five calls added to `api.ts` (the only network module); `useOrchestration` mirrors
+  `useMilestones` but keys on `orchestrationRefreshKey`, which folds stage statuses in because a
+  decision is recorded when the `orchestrate` *stage* settles, not when the run does. No new SSE
+  channel. Pure rules live in `src/orchestration.ts` and `run-list.ts`.
+- **Tests:** `orchestration.spec.ts` (the Approve guard reads status *and* decision),
+  `run-list.spec.ts` (+6), `RunTabs.comp.tsx` (+4 — the tab appears, opens, lists the timeline,
+  reports approval). E2E updated for the new home via `e2e/support/composer.ts`; the full
+  browser flow through a live orchestrator belongs to `TASK-117`.
+- **Gates:** lint, typecheck, test (524), build, e2e (56 passed, 1 live-tier skipped) all green.
+
+Cross-platform: browser UI over the existing cross-platform server API and run projections.
+
+---
+
 ## TASK-112: Post-run decision loop (next phase routing)
 **Priority:** P1 | **Tags:** core, server
 **Updated:** 2026-08-05 17:20

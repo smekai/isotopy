@@ -4,10 +4,16 @@
 // to see that, because the filter and the tab switch meet in the markup.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+import { ORCHESTRATION_PIPELINE } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { RunTabs } from "../../src/components/run/RunTabs";
 import type { RunTabsProps } from "../../src/components/run/RunTabs";
 import { DIRS } from "../../src/theme";
+import {
+  orchestratedRun,
+  orchestration,
+  team,
+} from "../support/orchestration-fixtures";
 import { log, run, started } from "../support/run-fixtures";
 
 vi.mock("../../src/api", () => ({
@@ -129,6 +135,63 @@ test("a run with no workspace offers no solution folder toggle", () => {
   expect(screen.queryByTestId("artifact-view-files")).toBeNull();
 });
 
+test("an orchestration run opens on the Orchestrator, not the chat", () => {
+  // Act
+  render(<RunTabs {...tabsProps(orchestrationOverrides())} />);
+
+  // Assert
+  expect(screen.getByTestId("orchestrator-panel")).toBeDefined();
+  expect(screen.queryByTestId("chat-thread")).toBeNull();
+});
+
+test("the awaited team is offered for approval alongside the initiative's runs", () => {
+  // Act
+  render(<RunTabs {...tabsProps(orchestrationOverrides())} />);
+
+  // Assert
+  expect(screen.getByTestId("orchestrator-team").textContent).toContain("Delivery trio");
+  expect(screen.getByTestId("approve-team")).toBeDefined();
+  expect(screen.getAllByTestId("orchestrator-run").map((el) => el.dataset.runId)).toEqual([
+    "earlier",
+    "later",
+  ]);
+});
+
+test("approving the team reports the decision rather than acting on it", () => {
+  // Arrange
+  const props = tabsProps(orchestrationOverrides());
+  render(<RunTabs {...props} />);
+
+  // Act
+  fireEvent.click(screen.getByTestId("approve-team"));
+
+  // Assert
+  expect(props.orchestrator?.onApprove).toHaveBeenCalledTimes(1);
+});
+
+test("the Orchestrator opens even though its orchestration lands after the run does", () => {
+  // Arrange — App feeds RunTabs from two independent loads: the run arrives on
+  // its own SSE subscription, the orchestration on a separate fetch. The run
+  // almost always wins, so the tab is mounted before there is anything to put
+  // in it.
+  const { orchestrator, ...runOnly } = orchestrationOverrides();
+  const { rerender } = render(<RunTabs {...tabsProps(runOnly)} />);
+
+  // Act
+  rerender(<RunTabs {...tabsProps({ ...runOnly, orchestrator })} />);
+
+  // Assert
+  expect(screen.getByTestId("orchestrator-panel")).toBeDefined();
+});
+
+test("an ordinary run is given no Orchestrator tab to open", () => {
+  // Act
+  render(<RunTabs {...tabsProps()} />);
+
+  // Assert
+  expect(screen.queryByTestId("run-tab-team")).toBeNull();
+});
+
 function runWithTwoStages(): RunState {
   const state = run(
     [
@@ -152,6 +215,32 @@ function runWithTwoStages(): RunState {
   );
   state.stageOutputs = { implementation: "DEV HANDOFF", test: "TESTER HANDOFF" };
   return state;
+}
+
+function orchestrationOverrides(): Partial<RunTabsProps> {
+  const awaiting = orchestration({
+    status: "awaiting_approval",
+    runIds: ["earlier", "later"],
+    latestDecision: {
+      action: "propose_team",
+      rationale: "Small scope.",
+      team: team({ name: "Delivery trio" }),
+    },
+  });
+  return {
+    run: { ...runWithTwoStages(), pipelineId: ORCHESTRATION_PIPELINE.id },
+    orchestrator: {
+      orchestration: awaiting,
+      runs: [
+        orchestratedRun("earlier", "2026-08-01T09:00:00.000Z"),
+        orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
+      ],
+      busy: false,
+      onApprove: vi.fn(),
+      onStop: vi.fn(),
+      onOpenRun: vi.fn(),
+    },
+  };
 }
 
 function tabsProps(overrides: Partial<RunTabsProps> = {}): RunTabsProps {

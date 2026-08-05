@@ -8,7 +8,7 @@ import { detectEngineLimit } from "../domain/engine-limit.ts";
 import { parseCursorProtocolLine } from "./cursor-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
-import { probeCommand, runSubprocess } from "./subprocess.ts";
+import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import {
   applyProtocolUpdate,
   protocolProblemMessage,
@@ -153,6 +153,13 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
     env.CURSOR_API_KEY = connection.apiKey;
   }
   return env;
+}
+
+function promptGoesInArgs(binary: string): boolean {
+  if (commandNeedsWindowsShell(binary)) {
+    return false;
+  }
+  return process.env.ADHD_CURSOR_PROMPT_VIA !== "stdin";
 }
 
 function buildArgs(ctx: EngineRunContext, promptViaArg: boolean): string[] {
@@ -330,7 +337,7 @@ export const cursorAdapter: EngineAdapter = {
 
     const runCtx = withPersonaPrompt(ctx);
 
-    const promptViaArg = process.env.ADHD_CURSOR_PROMPT_VIA !== "stdin";
+    const promptViaArg = promptGoesInArgs(binary);
     if (ctx.permissionMode === "acceptEdits") {
       ctx.onLog({ level: "info", message: "Cursor has no accept-edits-only headless mode — running with --force" });
     }

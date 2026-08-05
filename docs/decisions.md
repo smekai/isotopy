@@ -15,6 +15,63 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-05 — OpenWorkflow gets its own SQLite file, separate from ADHD's read model
+
+**Context:** `WorkflowRuntime` opened `BackendSqlite` on `runs.db` — the same file
+`db/database.ts` uses for `runs`, `events`, `milestones`, `orchestrations` and
+`active_runs`. Two independent `DatabaseSync` connections, one file. During any real run
+the worker logged `SQLITE_BUSY: database is locked` on every tick.
+
+**Why it fails:** ADHD's connection sets `busy_timeout=5000`, but that pragma is
+**per-connection**. OpenWorkflow's connection sets only `journal_mode=WAL` and
+`foreign_keys=ON`, and `claimWorkflowRun` opens with `BEGIN IMMEDIATE` — which wants the
+write lock at once and, with no busy timeout, fails instantly the moment ADHD is mid-write.
+`BackendSqliteOptions` exposes `namespaceId` and `runMigrations` and nothing else, and the
+connection is private, so there is no supported way to set the pragma from our side.
+
+**Decision:** the durable runtime owns `workflow.db` in the same project data dir. `runs.db`
+stays ADHD's. One writer per file, so the two can never contend.
+
+**Rejected:** reaching into `BackendSqlite`'s private `db` to set `busy_timeout` — a cast that
+defeats the type system (**A7**) and breaks on any upstream change. Also rejected: migrating
+the four existing OpenWorkflow tables across. There are no deployed installs, so a workflow
+in flight at upgrade time is simply restarted from the UI; the old tables are left in
+`runs.db` rather than dropped, so the split stays reversible.
+
+**Consequence:** `WorkflowRuntime.ensure()` is now async — it calls `ensureProjectDataDir`
+before connecting, because `workflow.db` may be the first file a project ever writes.
+
+---
+
+## 2026-08-05 — Home leads with the Orchestrator, and the Orchestrator surface is a tab on its own run
+
+**Context:** Milestone E gives the product a top-level Orchestrator, but the UI had no
+reference to it at all — the home screen offered only a fixed pipeline and a milestone
+planning shortcut, and the `/orchestrations` endpoints were unreachable from the browser.
+Two placements were open: a dedicated `#/orchestrations/:id` route beside `#/runs/:id` and
+`#/milestones/:id`, or a surface on the orchestration run that already exists.
+
+**Decision:** the home composer opens in Orchestrator mode; the fixed pipeline composer is
+one click behind `choose-pipeline` and otherwise unchanged. The Orchestrator's own surface —
+status, the team awaiting approval, and the timeline of runs in the initiative — is an
+**extra tab on the orchestration run**, not a route of its own.
+
+**Why:** an orchestration *is* a run — the `orchestrate` stage is `interactive: true` with 24
+turns, so the conversation is already the run's chat and `POST /runs/:id/messages` already
+answers an `ask_user`. A separate route would have had to rebuild the transcript, the
+composer, the status bar and the SSE subscription to show the same thing the run view shows,
+and would have left the user with two places to look for one conversation. The rejected
+alternative is worth revisiting only if the Orchestrator gains state that outlives every run
+it owns.
+
+**Consequence:** `useOrchestration` refetches on `orchestrationRefreshKey(runs)` — the same
+derivation `useMilestones` uses, widened to stage statuses, because a decision is recorded
+when the `orchestrate` **stage** settles, which for a multi-stage team run is not a run status
+change. No third SSE channel; see the milestone rule in
+[`architecture-ui.md`](./architecture-ui.md) §5.
+
+---
+
 ## 2026-08-05 — Every settled run is reviewed by its Orchestrator, and the review is what routes the next phase
 
 **Context:** a composed team run produced nothing durable. `CloseoutConsumer` is bound to the
