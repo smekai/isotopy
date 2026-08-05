@@ -46,6 +46,7 @@ const runStateSchema = z
     projectId: text,
     milestoneId: text.optional(),
     featureId: text.optional(),
+    orchestrationId: text.optional(),
     sourceTaskIds: strings.optional(),
     closeout: runCloseoutRecordSchema.optional(),
     pipelineId: text,

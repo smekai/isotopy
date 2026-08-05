@@ -56,6 +56,12 @@ export interface AnticipationOutcome {
    * this on its event stream; the workflow feeds it back as `resumeSessionId`.
    */
   asks(question: string, sessionId: string, usage?: StageUsage): FakeEngine;
+  /**
+   * The box reports this exact text and hands back a session id. What parks the
+   * stage is in the text itself — which is how a stage whose output protocol is
+   * a decision block rather than a `QUESTION:` line stops to ask.
+   */
+  parks(result: string, sessionId: string, usage?: StageUsage): FakeEngine;
 }
 
 function describeMatcher(matcher: Matcher): string {
@@ -120,6 +126,17 @@ export class FakeEngine implements EngineAdapter {
             result: `Working on it.
 
 QUESTION: ${question}`,
+            sessionId,
+          };
+          if (usage !== undefined) response.usage = usage;
+          return Promise.resolve(response);
+        }),
+      parks: (result, sessionId, usage) =>
+        push(() => {
+          const response: EngineRunResult = {
+            success: true,
+            exitCode: 0,
+            result,
             sessionId,
           };
           if (usage !== undefined) response.usage = usage;

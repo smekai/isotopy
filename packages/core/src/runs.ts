@@ -188,6 +188,7 @@ export interface RunState {
   projectId: string;
   milestoneId?: string;
   featureId?: string;
+  orchestrationId?: string;
   sourceTaskIds?: string[];
   closeout?: RunCloseoutRecord;
   pipelineId: string;
@@ -218,6 +219,7 @@ export interface RunSummary {
   projectId: string;
   milestoneId?: string;
   featureId?: string;
+  orchestrationId?: string;
   pipelineId: string;
   pipelineName: string;
   status: RunStatus;
@@ -284,6 +286,7 @@ export function toRunSummary(run: RunState): RunSummary {
     projectId: run.projectId,
     milestoneId: run.milestoneId,
     featureId: run.featureId,
+    orchestrationId: run.orchestrationId,
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     status: run.status,
@@ -309,6 +312,7 @@ export interface NewRunInput {
   task?: string;
   milestoneId?: string;
   featureId?: string;
+  orchestrationId?: string;
   sourceTaskIds?: string[];
 }
 
@@ -320,6 +324,7 @@ export function createInitialRunState({
   task,
   milestoneId,
   featureId,
+  orchestrationId,
   sourceTaskIds,
 }: NewRunInput): RunState {
   return {
@@ -328,6 +333,7 @@ export function createInitialRunState({
     projectId,
     milestoneId,
     featureId,
+    orchestrationId,
     sourceTaskIds,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,

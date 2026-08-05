@@ -9,6 +9,7 @@ import { RUN_SUMMARY_EVENT } from "@adhd/core";
 import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
+import { OrchestrationService } from "../../src/services/orchestration.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
@@ -20,6 +21,7 @@ const POLL_INTERVAL_MS = 10;
 export interface TestApp {
   app: Hono;
   orchestrator: RunOrchestrator;
+  orchestrations: OrchestrationService;
   registry: ProjectRegistry;
   settings: SettingsStore;
   engine: FakeEngine;
@@ -47,11 +49,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
   const orchestrator = new RunOrchestrator({ registry, settings });
-  const app = createApp({ orchestrator, registry, settings });
+  const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
+  orchestrator.registerStageOutputConsumer(orchestrations);
+  const app = createApp({ orchestrator, orchestrations, registry, settings });
 
   return {
     app,
     orchestrator,
+    orchestrations,
     registry,
     settings,
     engine,
@@ -62,6 +67,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       // waits for queued writes) before removing the directory those writes
       // target, or Windows fails the delete with EBUSY.
       await orchestrator.shutdown();
+      await orchestrations.shutdown();
       resetEngineAdapters();
       delete process.env.ADHD_HOME;
       delete process.env.ADHD_USER_HOME;
@@ -78,12 +84,25 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   };
 }
 
-export async function restartApp(): Promise<{ app: Hono; orchestrator: RunOrchestrator }> {
+export interface RestartedApp {
+  app: Hono;
+  orchestrator: RunOrchestrator;
+  orchestrations: OrchestrationService;
+}
+
+export async function restartApp(): Promise<RestartedApp> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
   const orchestrator = new RunOrchestrator({ registry, settings });
+  const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
+  orchestrator.registerStageOutputConsumer(orchestrations);
   await orchestrator.init();
-  return { app: createApp({ orchestrator, registry, settings }), orchestrator };
+  await orchestrations.init();
+  return {
+    app: createApp({ orchestrator, orchestrations, registry, settings }),
+    orchestrator,
+    orchestrations,
+  };
 }
 
 export async function addTestProject(

@@ -38,7 +38,9 @@ import {
   toRunSummary,
 } from "@adhd/core";
 import { ListenerRegistry } from "./listener-registry.ts";
-import { formatValidationIssues } from "../domain/validation.ts";
+import { CloseoutConsumer } from "./closeout-consumer.ts";
+import { MilestonePlanConsumer } from "./milestone-plan-consumer.ts";
+import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
@@ -59,7 +61,6 @@ import {
   selectionAfterLimit,
 } from "../domain/engine-limit.ts";
 import { formatHandoff } from "../domain/markdown/stage.ts";
-import { extractMilestonePlan } from "../domain/milestone-plan.ts";
 import {
   renderMilestonePlanningContext,
   renderMilestoneRevisionContext,
@@ -78,7 +79,6 @@ import {
   transitionTasks,
 } from "./task-board-adapter.ts";
 import {
-  applyProductManagerCloseout,
   cleanupCancelledRun,
   milestoneCloseoutContext,
   persistMilestoneSummary,
@@ -128,6 +128,7 @@ export interface StartRunOptions {
   permissionMode?: string;
   milestoneId?: string;
   featureId?: string;
+  orchestrationId?: string;
   sourceTaskIds?: string[];
 }
 
@@ -167,10 +168,15 @@ export class RunOrchestrator implements RunProjection {
   private readonly registry: ProjectRegistry;
   private readonly settings: SettingsStore;
   private readonly runtimes: WorkflowRuntimeRegistry;
+  private readonly stageOutputConsumers: StageOutputConsumer[];
 
   constructor({ registry, settings }: RunOrchestratorDependencies) {
     this.registry = registry;
     this.settings = settings ?? new SettingsStore();
+    this.stageOutputConsumers = [
+      new MilestonePlanConsumer(this),
+      new CloseoutConsumer(this.registry),
+    ];
     const deps: WorkflowDeps = {
       projection: this,
       registry: this.registry,
@@ -285,6 +291,18 @@ export class RunOrchestrator implements RunProjection {
   getMilestone(milestoneId: string): Milestone | undefined {
     const milestone = this.milestones.get(milestoneId);
     return milestone ? structuredClone(milestone) : undefined;
+  }
+
+  mutableMilestone(milestoneId: string): Milestone | undefined {
+    return this.milestones.get(milestoneId);
+  }
+
+  saveMilestone(milestone: Milestone): Promise<void> {
+    return this.persistMilestone(milestone);
+  }
+
+  registerStageOutputConsumer(consumer: StageOutputConsumer): void {
+    this.stageOutputConsumers.push(consumer);
   }
 
   async createMilestone(
@@ -632,6 +650,7 @@ export class RunOrchestrator implements RunProjection {
       permissionMode,
       milestoneId,
       featureId,
+      orchestrationId,
       sourceTaskIds,
     } = options;
     const planningRun =
@@ -688,6 +707,7 @@ export class RunOrchestrator implements RunProjection {
       task,
       milestoneId,
       featureId,
+      orchestrationId,
       sourceTaskIds,
     });
 
@@ -1199,30 +1219,6 @@ export class RunOrchestrator implements RunProjection {
     }
     run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
     run.result = output;
-    if (
-      run.pipelineId === "milestone-planning" &&
-      stageDef.id === "milestone-plan" &&
-      run.milestoneId
-    ) {
-      const milestone = this.milestones.get(run.milestoneId);
-      if (milestone) {
-        const parsed = extractMilestonePlan(output);
-        if (parsed.ok) {
-          milestone.proposal = toMilestoneProposal(
-            parsed.value,
-            (milestone.proposal?.revision ?? 0) + 1,
-            nowIso(),
-          );
-          milestone.name = parsed.value.name;
-          milestone.goal = parsed.value.goal;
-          delete milestone.approvalError;
-        } else {
-          milestone.approvalError = formatValidationIssues(parsed.issues);
-        }
-        milestone.updatedAt = nowIso();
-        await this.persistMilestone(milestone);
-      }
-    }
     await this.repositoryForRun(runId).writeHandoff(
       runId,
       stageDef.id,
@@ -1237,12 +1233,8 @@ export class RunOrchestrator implements RunProjection {
         output,
       ),
     );
-    if (run.pipelineId === "full-delivery" && stageDef.id === "closeout") {
-      run.closeout = await applyProductManagerCloseout(
-        this.registry.resolve(run.projectId),
-        run,
-        output,
-      );
+    for (const consumer of this.stageOutputConsumers) {
+      await consumer.consume(run, stageDef, output);
     }
     this.schedulePersist(runId, true);
   }

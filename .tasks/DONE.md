@@ -1,5 +1,47 @@
 # Done
 
+## TASK-109: Orchestrator persona + conversational loop
+**Priority:** P1 | **Tags:** core, server, ui, engine
+**Updated:** 2026-08-04 23:10
+
+Shipped the Orchestrator as an ordinary persona whose turn ends in a typed decision, plus the
+durable conversation that carries it. `POST /orchestrations` starts one; the user answers
+through the existing `POST /runs/:id/messages`; the aggregate and its parked run survive a
+restart.
+
+**Delivered:**
+
+- `core/orchestration.ts` — an eight-action discriminated union (`propose_team`,
+  `delegate_milestone_planning`, `start_run`, `ask_user`, `stop`, and the three
+  `TASK-120` reserves), the `Orchestration` aggregate, and `orchestrationStatusFor`.
+- `StageDefinition.outputProtocol` (`verdict` | `decision`) and `maxTurns` — a stage now
+  declares how its output is read, rather than the interpretation being keyed to a name.
+  `ask_user` drives the durable park `QUESTION:` already drove, so the workflow needed no
+  new machinery. A turn with no valid decision ends `needs_attention` with the reason.
+- `orchestrator.md` persona, `orchestrate` step task, a pure persona/step-task catalog, and
+  the internal `orchestration` pipeline.
+- `orchestrations` table, repository, `OrchestrationService`, and `routes/orchestrations.ts`.
+- `StageOutputConsumer` seam — `captureStageOutput` stops branching on `pipelineId`; the
+  milestone-plan and closeout branches moved into their own consumers.
+
+**Decisions:** the Orchestrator is a persona, not a new kind of actor; the orchestration is
+its own aggregate rather than a `Milestone`, because it can *delegate* milestone planning.
+Both recorded in `docs/decisions.md`.
+
+**Found while validating:** a parked decision stage never reached its consumer —
+`stage-execution` returned before capturing output when a stage asks. A decision stage now
+records its decision on the way into a park, since the decision to ask *is* the turn's
+product. Caught by the component test, fixed, covered.
+
+**Not done here, by design:** `propose_team` is stored unapproved (`TASK-110` composes it),
+`start_run` / `delegate_milestone_planning` are recorded but not launched (`TASK-112`), and
+the three brokering actions are contract-only (`TASK-120`, created by this task).
+
+Gates: lint, typecheck, 452 tests, build, `gen:skills` (no drift) — all green. Endpoint
+smoke-tested against the built server. No UI change, so no e2e.
+
+---
+
 ## TASK-119: Prune the docs folder to what still earns its place
 **Priority:** P2 | **Tags:** infra
 **Updated:** 2026-08-04 22:10

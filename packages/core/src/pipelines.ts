@@ -6,7 +6,17 @@ export interface StageDefinition {
   skill?: string;
   stepTask?: string;
   executionPolicy?: StageExecutionPolicy;
+  outputProtocol?: StageOutputProtocol;
+  maxTurns?: number;
 }
+
+export const STAGE_OUTPUT_PROTOCOLS = {
+  VERDICT: "verdict",
+  DECISION: "decision",
+} as const;
+
+export type StageOutputProtocol =
+  (typeof STAGE_OUTPUT_PROTOCOLS)[keyof typeof STAGE_OUTPUT_PROTOCOLS];
 
 export const STAGE_EXECUTION_POLICIES = {
   STANDARD: "standard",
@@ -172,11 +182,37 @@ export const MILESTONE_PLANNING_PIPELINE: PipelineDefinition = {
   ],
 };
 
+export const ORCHESTRATION_MAX_TURNS = 24;
+
+export const ORCHESTRATION_PIPELINE: PipelineDefinition = {
+  id: "orchestration",
+  name: "Orchestration",
+  description:
+    "An Orchestrator conversation that decides what the team is and what runs next.",
+  internal: true,
+  groups: [
+    {
+      stages: [
+        {
+          id: "orchestrate",
+          label: "Orchestrator",
+          skill: "orchestrator",
+          stepTask: "orchestrate",
+          interactive: true,
+          outputProtocol: STAGE_OUTPUT_PROTOCOLS.DECISION,
+          maxTurns: ORCHESTRATION_MAX_TURNS,
+        },
+      ],
+    },
+  ],
+};
+
 export const DEMO_PIPELINES: PipelineDefinition[] = [
   FULL_DELIVERY_PIPELINE,
   PM_DEV_TEST_PIPELINE,
   SOLO_PIPELINE,
   MILESTONE_PLANNING_PIPELINE,
+  ORCHESTRATION_PIPELINE,
 ];
 
 export const RETIRED_PIPELINE_IDS: string[] = ["one-box", "dev-test", "gated-dev-test"];

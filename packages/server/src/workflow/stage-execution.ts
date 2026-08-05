@@ -2,6 +2,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   ENGINES,
   STAGE_OUTCOMES,
+  STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
   agentForStage,
   isConversational,
@@ -14,7 +15,7 @@ import { buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { interpretEngineResult } from "../domain/stage-context.ts";
 import { loadSkill } from "../services/skills.ts";
-import { loadStepTask } from "../services/step-tasks.ts";
+import { loadBundledStepTask } from "../services/bundled-prompts.ts";
 import { nowIso } from "../utils.ts";
 import type {
   PipelineWorkflowInput,
@@ -30,8 +31,14 @@ export const MAX_QUESTION_TURNS = 6;
 
 function canAsk(stageDef: StageDefinition, engine: EngineId, turn: number): boolean {
   return (
-    stageDef.interactive === true && isConversational(engine) && turn < MAX_QUESTION_TURNS
+    stageDef.interactive === true &&
+    isConversational(engine) &&
+    turn < (stageDef.maxTurns ?? MAX_QUESTION_TURNS)
   );
+}
+
+function recordsOutputWhileAsking(stageDef: StageDefinition): boolean {
+  return stageDef.outputProtocol === STAGE_OUTPUT_PROTOCOLS.DECISION;
 }
 
 function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
@@ -80,7 +87,7 @@ export async function runStageWork(
   const controller = deps.beginEngineStage(runId);
   const projectPath = registry.resolve(run.projectId);
   const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
-  const stepTask = stageDef.stepTask ? await loadStepTask(stageDef.stepTask) : undefined;
+  const stepTask = stageDef.stepTask ? await loadBundledStepTask(stageDef.stepTask) : undefined;
   if (stageDef.skill && !persona) {
     projection.log(runId, stageDef.id, {
       level: "warn",
@@ -139,6 +146,7 @@ export async function runStageWork(
   const decision = interpretEngineResult(outcome, {
     profession,
     canAsk: canAsk(stageDef, run.engine, turn.index),
+    protocol: stageDef.outputProtocol,
   });
 
   if (decision.outcome === STAGE_OUTCOMES.LIMITED && decision.limit !== undefined) {
@@ -151,6 +159,9 @@ export async function runStageWork(
   }
 
   if (decision.outcome === STAGE_OUTCOMES.ASKING && decision.question !== undefined) {
+    if (recordsOutputWhileAsking(stageDef) && decision.output !== undefined) {
+      await projection.captureStageOutput(runId, stageDef, decision.output);
+    }
     projection.stageAsking(runId, stageDef.id, decision.question);
     return {
       outcome: STAGE_OUTCOMES.ASKING,

@@ -305,6 +305,7 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 | `closeout.ts` | The Product Manager closeout record — findings, follow-up task drafts, cleanup result |
 | `engines.ts` | Engine/harness definitions, connection modes, model options |
 | `milestones.ts` | Milestone and feature models, the plan proposal, and pure predicates (`nextMilestoneFeature`, `milestoneProgress`, `canStartNextFeature`, `canFinalizeMilestone`, `milestoneFindings`) |
+| `orchestration.ts` | The Orchestrator's decision union, the orchestration aggregate, and `orchestrationStatusFor` |
 | `pipelines.ts` | Pipeline/stage definitions and pure helpers |
 | `projects.ts` | Project model and the home-project constant |
 | `runs.ts` | Run/stage state models, run events, status constants |
@@ -565,6 +566,46 @@ tabs must not start it twice.
 **A feature ends `needs_attention`, not `failed`, when quality found something.** The
 run continues to closeout either way, so the feature keeps the findings that blocked
 it and `finalizeMilestone` refuses while any feature is unfinished.
+
+### 2c. Orchestration — the entry point above milestones
+
+An **orchestration** is one initiative: a conversation with the Orchestrator that
+decides what the team is, what runs, and what happens next. It owns runs the way a
+milestone owns features, and `RunState.orchestrationId` is what traces a run back
+to the conversation that asked for it.
+
+| Layer | Where |
+| --- | --- |
+| Models, the decision union, and pure predicates | `@adhd/core` `orchestration.ts` — `orchestrationStatusFor` maps a decision to the state the conversation is left in, so the status is never assigned by hand at a call site |
+| Boundary codec | `server/src/domain/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
+| Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
+| Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunOrchestrator` is for runs |
+| API | `server/src/routes/orchestrations.ts` — start, list, read. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage |
+
+**The Orchestrator is an ordinary persona.** Same markdown under
+`domain/skills/personas/`, same user-override and project-addendum layering, same
+engine adapter. Only two things distinguish it, and both are declared on the stage
+rather than hardcoded to a name.
+
+**A stage declares how its output is read.** `StageDefinition.outputProtocol` is
+`verdict` (absent, the default — prose plus a `VERDICT:` line) or `decision` (one
+fenced `adhd-orchestrator-decision` block). Under `decision`, `ask_user` drives the
+same durable park that `QUESTION:` drives elsewhere, so nothing new was needed in
+the workflow — and a turn that produces no valid decision ends `needs_attention`
+with the reason recorded, rather than passing quietly. `maxTurns` on the same
+definition raises the six-turn question bound for a conversation that is meant to
+be long.
+
+**A parked decision stage still records its decision.** Every other stage captures
+output only when it finishes; a decision stage captures on the way into a park too,
+because the decision to ask *is* the turn's product.
+
+**Stage output is consumed through a seam.** `StageOutputConsumer`
+(`services/stage-output-consumer.ts`) is how an aggregate reacts to a stage's
+output. `RunOrchestrator.captureStageOutput` writes the run read model and the
+handoff, then hands the output to each consumer — `MilestonePlanConsumer`,
+`CloseoutConsumer`, `OrchestrationService` — instead of branching on `pipelineId`
+for each one. A new aggregate registers a consumer; it does not edit the orchestrator.
 
 ### 3. Workflow state
 
