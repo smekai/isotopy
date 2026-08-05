@@ -88,17 +88,20 @@ export class OrchestrationService implements StageOutputConsumer {
       updatedAt: now,
     };
     this.orchestrations.set(orchestration.id, orchestration);
-    await this.persist(orchestration);
-
-    const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
-      ...options,
-      task: await this.buildTask(projectPath, goal),
-      orchestrationId: orchestration.id,
-    });
-    orchestration.runIds.push(run.id);
-    orchestration.updatedAt = nowIso();
-    await this.persist(orchestration);
-    return run;
+    try {
+      const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
+        ...options,
+        task: await this.buildTask(projectPath, goal),
+        orchestrationId: orchestration.id,
+      });
+      orchestration.runIds.push(run.id);
+      orchestration.updatedAt = nowIso();
+      await this.persist(orchestration);
+      return run;
+    } catch (error) {
+      this.orchestrations.delete(orchestration.id);
+      throw error;
+    }
   }
 
   async consume(

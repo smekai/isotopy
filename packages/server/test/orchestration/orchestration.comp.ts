@@ -177,6 +177,38 @@ test("a decision carrying an unknown field is rejected whole, not stripped down 
   ctx.engine.verify();
 });
 
+test("a start the project refuses leaves no orchestration behind", async () => {
+  // Anticipate — the first run holds the project open; the orchestrator is never reached.
+  ctx.engine.anticipate({ as: "solo" }).hangsUntilAborted();
+  const blocking = await post<RunState>(ctx.app, "/runs", {
+    pipelineId: "solo",
+    task: "Hold the project",
+    engine: "claude-code",
+  });
+  await ctx.engine.waitForCall();
+
+  // Act — one project runs one thing at a time, so this is rejected.
+  const rejected = await post<{ error: string }>(ctx.app, "/orchestrations", {
+    goal: "Add search to the product",
+    engine: "claude-code",
+  });
+
+  // Assert — on disk, not just in memory: a refused start must leave no durable
+  // record, and nothing can delete one once written.
+  await post(ctx.app, `/runs/${blocking.body.id}/abort`);
+  await ctx.orchestrator.shutdown();
+  const restarted = await restartApp();
+  const { body: orchestrations } = await get<Orchestration[]>(
+    restarted.app,
+    "/orchestrations",
+  );
+  expect(rejected.status).toBe(400);
+  expect(rejected.body.error).toContain("already active");
+  expect(orchestrations).toEqual([]);
+  await restarted.shutdown();
+  ctx.engine.verify();
+});
+
 test("an orchestration parked on the user survives a server restart with its turns intact", async () => {
   // Anticipate
   ctx.engine
