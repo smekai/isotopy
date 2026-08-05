@@ -15,6 +15,40 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-05 — A composed run carries its own pipeline definition
+
+**Context:** `TASK-110` turns an approved team proposal into a runnable pipeline. Until now
+every pipeline was a frozen constant: `getPipeline` resolved an id against `DEMO_PIPELINES`,
+and `RunState` persisted only `pipelineId` and `pipelineName`. A composed team belongs to
+one orchestration and exists nowhere in that constant, so a composed run had no way to
+resume after a restart, and `restartRun` would have told the user its pipeline no longer
+exists.
+
+**Decision:** a run freezes its own definition when the catalog cannot resolve it —
+`RunState.pipeline?: PipelineDefinition`, written by `createInitialRunState` only when
+`findPipeline(pipeline.id)` returns nothing, and read back through `pipelineForRun()`. Built-in
+runs are unchanged on disk. The definition types in `core/pipelines.ts` are now inferred from
+a zod schema rather than hand-written, because the field is persisted and had to be validated
+on load anyway.
+
+**Rejected:** a registry on `OrchestrationService` that `RunOrchestrator` consults through a
+resolver seam. It keeps `RunState` smaller, but it puts a cross-service lookup on the reload
+path — where the orchestration may not have loaded yet — and it lets a later edit to a stored
+team retroactively change what a finished run says it did. A run is a historical record; the
+definition it executed belongs to it.
+
+**Also rejected, and worth recording because it was planned and then removed:** giving
+`active_runs` a `(project_id, lane)` key so an Orchestrator conversation could hold a claim
+alongside a working run. The premise was that a parked conversation blocks the composed run,
+and it is false — `propose_team` completes the conversation run, since only `ask_user` and
+`escalate_to_user` park. Lanes would also not have produced concurrency on their own: the
+durable runtime runs one worker per project, so a second admitted run queues rather than
+executes. Both belong to `TASK-120`, together with the question it raises — whether the
+Orchestrator should run inside `PipelineWorkflow` at all, given that it supervises runs and
+outlives any one of them.
+
+---
+
 ## 2026-08-04 — The Orchestrator is a persona that brokers other personas' questions
 
 **Context:** Milestone E adds a top-level entry point that talks to the user, composes a

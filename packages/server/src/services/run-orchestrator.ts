@@ -271,6 +271,10 @@ export class RunOrchestrator implements RunProjection {
     return DEMO_PIPELINES.find((pipeline) => pipeline.id === pipelineId);
   }
 
+  private pipelineForRun(run: RunState): PipelineDefinition | undefined {
+    return run.pipeline ?? this.getPipeline(run.pipelineId);
+  }
+
   listRuns(projectId: string): RunState[] {
     return [...this.runs.values()]
       .filter((run) => run.projectId === projectId)
@@ -642,7 +646,22 @@ export class RunOrchestrator implements RunProjection {
     if (!pipeline) {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
+    return this.startRunWith(projectPath, pipeline, options);
+  }
 
+  startComposedRun(
+    projectPath: ProjectPath,
+    pipeline: PipelineDefinition,
+    options: StartRunOptions = {},
+  ): Promise<RunState> {
+    return this.startRunWith(projectPath, pipeline, options);
+  }
+
+  private async startRunWith(
+    projectPath: ProjectPath,
+    pipeline: PipelineDefinition,
+    options: StartRunOptions,
+  ): Promise<RunState> {
     const {
       task,
       engine,
@@ -857,7 +876,7 @@ export class RunOrchestrator implements RunProjection {
         `Run ${runId} can only be restarted after needing attention, failing, or being aborted`,
       );
     }
-    if (!this.getPipeline(run.pipelineId)) {
+    if (!this.pipelineForRun(run)) {
       throw new Error(
         `This run used the "${run.pipelineId}" pipeline, which no longer exists — start a new run instead`,
       );
@@ -907,6 +926,10 @@ export class RunOrchestrator implements RunProjection {
     run: RunState,
     extras: InputExtras,
   ): Promise<void> {
+    const pipeline = this.pipelineForRun(run);
+    if (!pipeline) {
+      throw new Error(`Unknown pipeline: ${run.pipelineId}`);
+    }
     if (extras.startStageId !== undefined) {
       const admitted = await this.repositoryFor(projectPath).admitRun(run.id);
       if (!admitted) {
@@ -916,16 +939,16 @@ export class RunOrchestrator implements RunProjection {
     }
     const runtime = this.runtimes.for(projectPath);
     await runtime.start();
-    const input = this.buildInput(run, extras);
+    const input = this.buildInput(run, pipeline, extras);
     const openWorkflowRunId = await runtime.startRun(input);
     this.bindOpenWorkflowRun(run.id, openWorkflowRunId);
   }
 
-  private buildInput(run: RunState, extras: InputExtras): PipelineWorkflowInput {
-    const pipeline = this.getPipeline(run.pipelineId);
-    if (!pipeline) {
-      throw new Error(`Unknown pipeline: ${run.pipelineId}`);
-    }
+  private buildInput(
+    run: RunState,
+    pipeline: PipelineDefinition,
+    extras: InputExtras,
+  ): PipelineWorkflowInput {
     return {
       runId: run.id,
       projectId: run.projectId,

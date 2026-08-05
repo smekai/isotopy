@@ -127,19 +127,23 @@ Wires the `answer_agent`, `escalate_to_user`, and `route_to_agent` actions that 
 
 Reach is every interactive stage in a project that has an Orchestrator, not only orchestrated runs — so `run-questions.comp.ts` and `milestone-planning.comp.ts` change behaviour and must be updated here. Sequenced with or before `TASK-112`.
 
+**Two blockers found while building `TASK-110`, both landing here.** Brokering requires the
+Orchestrator to be *live while a stage is parked*, and today it cannot be:
+
+- `active_runs` is keyed `project_id TEXT PRIMARY KEY`, so a project admits exactly one run and an
+  Orchestrator turn cannot start while a stage waits. `Database.register(schema, migrate)` already
+  provides the migration hook a rekey would need.
+- The durable runtime runs `newWorker({ concurrency: 1 })` per project
+  (`workflow/workflow-runtime.ts`), so even once admitted, an Orchestrator turn queues behind the
+  parked run rather than executing.
+
+The open design question underneath both: **should the Orchestrator run inside `PipelineWorkflow` at
+all?** `TASK-109` made it an ordinary run for good reasons (recorded in `docs/decisions.md`), but it
+supervises runs and outlives any one of them, so it may belong outside the workflow it orchestrates
+rather than competing with it for the same slot. Decide this before adding lanes — lanes alone do
+not fix the worker, and the two together may be the wrong shape.
+
 Cross-platform: n/a — reuses the existing engine adapter, workflow signal, and run persistence plumbing.
-
----
-
-## TASK-110: Dynamic workflow composition from persona catalog
-**Priority:** P1 | **Tags:** core, server, ui, engine
-**Updated:** 2026-08-04 11:33
-
-Implement runtime composition of a `PipelineDefinition` (stages) from the persona/step-task catalog. Each composed stage must declare `executionPolicy`, preserve quality/closeout requirements, and require human approval before execution.
-
-This task subsumes the intent of `TASK-097` and becomes the orchestrator's mechanism for building the team workflow.
-
-Cross-platform: n/a — compose/validate/persist uses existing path and JSON helpers; no shell-only commands.
 
 ---
 

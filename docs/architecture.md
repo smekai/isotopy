@@ -580,7 +580,8 @@ to the conversation that asked for it.
 | Boundary codec | `server/src/domain/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunOrchestrator` is for runs |
-| API | `server/src/routes/orchestrations.ts` — start, list, read. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage |
+| Composition | `server/src/domain/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
+| API | `server/src/routes/orchestrations.ts` — start, list, read, approve. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
 `domain/skills/personas/`, same user-override and project-addendum layering, same
@@ -606,6 +607,20 @@ output. `RunOrchestrator.captureStageOutput` writes the run read model and the
 handoff, then hands the output to each consumer — `MilestonePlanConsumer`,
 `CloseoutConsumer`, `OrchestrationService` — instead of branching on `pipelineId`
 for each one. A new aggregate registers a consumer; it does not edit the orchestrator.
+
+**An approved team becomes a pipeline, and the run keeps it.** `composeTeamPipeline`
+validates every `skill` and `stepTask` against the persona and step-task catalogs —
+which is also what stops the Orchestrator composing itself, since neither
+`orchestrator` nor `orchestrate` is listed — requires unique role ids matching
+`/^[a-z0-9-]+$/`, and gives every composed stage an explicit `executionPolicy` so
+the quality, delivery and closeout suppression rules apply to a composed run exactly
+as they do to `full-delivery`. The id guard is not tidiness: a stage id becomes a
+directory name in `persistHandoff`.
+
+Because a composed pipeline exists in no constant, the run carries it —
+`RunState.pipeline` is written only when `findPipeline` cannot resolve the id, and
+`pipelineForRun()` is what `buildInput` and `restartRun` resolve through. Built-in
+runs persist exactly what they did before.
 
 ### 3. Workflow state
 

@@ -1,5 +1,8 @@
 import { Hono } from "hono";
-import { startOrchestrationSchema } from "../domain/request-schemas.ts";
+import {
+  approveTeamSchema,
+  startOrchestrationSchema,
+} from "../domain/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { OrchestrationService } from "../services/orchestration.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
@@ -43,5 +46,33 @@ export function createOrchestrationRoutes(
       return !orchestration || orchestration.projectId !== project.id
         ? c.json({ error: "Orchestration not found" }, 404)
         : c.json(orchestration);
+    })
+    .post("/:id/approve", async (c) => {
+      const parsed = await parseRequestBody(c.req, approveTeamSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      const project = projectScope(registry, c);
+      const orchestration = orchestrations.get(c.req.param("id"));
+      if (!orchestration || orchestration.projectId !== project.id) {
+        return c.json({ error: "Orchestration not found" }, 404);
+      }
+      const body = parsed.value;
+      try {
+        const started = await orchestrations.approveTeam(
+          project,
+          orchestration.id,
+          {
+            engine: body.engine,
+            model: body.model,
+            permissionMode: body.permissionMode,
+          },
+        );
+        return started.ok
+          ? c.json(started.value, 201)
+          : c.json(invalidRequest(started.issues), 400);
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
     });
 }

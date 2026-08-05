@@ -1,5 +1,54 @@
 # Done
 
+## TASK-110: Dynamic workflow composition from persona catalog
+**Priority:** P1 | **Tags:** core, server, engine
+**Updated:** 2026-08-05 12:30
+
+An approved team is now a runnable pipeline. `POST /orchestrations/:id/approve` validates the
+stored `propose_team` proposal against the catalogs, composes a `PipelineDefinition`, freezes it
+onto the run, and starts it — the first point at which the Orchestrator flow runs end to end.
+
+**Delivered:**
+
+- `domain/team-composition.ts` — pure composition. Every `skill`/`stepTask` must be a catalog id,
+  which is also what stops the Orchestrator composing itself (`orchestrator`/`orchestrate` are
+  deliberately absent). Role ids must be unique and match `/^[a-z0-9-]+$/`; that guard is security,
+  not tidiness, because `persistHandoff` joins a stage id straight into a path and composed ids come
+  from the model. Every composed stage carries an explicit `executionPolicy`, so quality/delivery/
+  closeout suppression applies to a composed run exactly as to `full-delivery`.
+- `RunState.pipeline` — a run freezes its own definition when `findPipeline` cannot resolve the id.
+  `pipelineForRun()` is what `buildInput` and `restartRun` resolve through, so a composed run
+  resumes after a restart and can be restarted from a stage. Built-in runs persist unchanged.
+- `core/pipelines.ts` definition types are now inferred from `pipelineDefinitionSchema` rather than
+  hand-written, since the field is persisted and validated on load.
+- `startRunWith` seam extracted from `startRun`; `startComposedRun` for a definition rather than an
+  id. `OrchestrationService.approveTeam` records `approvedTeam`, `composedPipeline` and status
+  `running` **after** the run starts, following the ordering rule `e5cbd89` set.
+
+**Decisions:** the definition lives on the run rather than in an orchestration-owned registry — a
+run is a historical record, and a later edit to a stored team must not change what a finished run
+says it did. Recorded in `docs/decisions.md` with the rejected alternative.
+
+**Planned and then dropped, with the reason recorded:** an `active_runs` lane change. Its premise —
+that a parked Orchestrator conversation blocks the composed run — proved false: `propose_team`
+completes the conversation run, since only `ask_user`/`escalate_to_user` park. Lanes would also not
+have produced concurrency alone, because the durable runtime runs one worker per project. Both moved
+to `TASK-120`, together with the design question they raise: whether the Orchestrator belongs inside
+`PipelineWorkflow` at all, given it supervises runs and outlives any one of them.
+
+**Not done here, by design:** no closeout stage is forced on a composed team — per-step data is the
+`stageOutputs` and per-stage `handoff.md` a run already captures, which `TASK-112` consolidates.
+`CloseoutConsumer` is untouched. No UI (`TASK-114`); reusable teams stay in `TASK-111`.
+
+Gates: lint, typecheck, 467 tests (452 + 15 new), build, `gen:skills` (no drift) — all green. The
+approve endpoint was smoke-tested against the built server. No UI change, so no e2e.
+
+Cross-platform: n/a for branching — pure zod/JSON composition, no new subprocess, path building, or
+shell command. The `/^[a-z0-9-]+$/` stage-id guard excludes `\`, `/`, `..` and drive letters, so one
+guard covers both platforms. Tested on Windows; macOS is the same code with no branch, untested.
+
+---
+
 ## TASK-109: Orchestrator persona + conversational loop
 **Priority:** P1 | **Tags:** core, server, ui, engine
 **Updated:** 2026-08-04 23:10

@@ -13,6 +13,7 @@ import {
   findPipeline,
   flattenPipelineStages,
   isRetiredPipeline,
+  pipelineDefinitionSchema,
   pipelineUsesEngine,
   pipelineUsesEngineById,
 } from "../src/pipelines.ts";
@@ -77,6 +78,17 @@ describe("retired pipelines", () => {
 });
 
 describe("the shipped set", () => {
+  test("every shipped pipeline satisfies the codec that persists a composed one", () => {
+    // The definition types are inferred from this schema, so a shape the schema
+    // rejects could still be written by hand and only fail when a composed run
+    // is reloaded from disk.
+    const rejected = DEMO_PIPELINES.filter(
+      (pipeline) => !pipelineDefinitionSchema.safeParse(pipeline).success,
+    );
+
+    expect(rejected.map((pipeline) => pipeline.id)).toEqual([]);
+  });
+
   test("every interactive stage sits behind a persona that knows the QUESTION contract", () => {
     // A stage may only ask if its persona was told how; the two are declared in
     // different files, so nothing but a cross-check catches them drifting apart.

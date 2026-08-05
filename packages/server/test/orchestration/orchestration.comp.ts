@@ -242,6 +242,123 @@ test("an orchestration parked on the user survives a server restart with its tur
   await restarted.shutdown();
 });
 
+test("approving a proposed team starts a composed run carrying its own pipeline definition", async () => {
+  // Anticipate — the Orchestrator proposes a team; the approved team then runs.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  const conversation = await proposedTeam();
+
+  // Act
+  const { status, body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert — the definition travels on the run, since no constant can resolve it.
+  expect(status, JSON.stringify(composed)).toBe(201);
+  const finished = await waitForRunStatus(ctx.app, composed.id, "completed");
+  expect(finished.pipelineId).toBe(`team-${conversation.orchestrationId}`);
+  expect(finished.pipeline?.groups[0]?.stages).toMatchObject([
+    { id: "implementation", executionPolicy: "standard" },
+    { id: "test", executionPolicy: "quality" },
+  ]);
+  ctx.engine.verify();
+});
+
+test("approving records the team on the orchestration and moves it to running", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert — both runs belong to the orchestration, in the order they happened.
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}`,
+  );
+  expect(orchestration).toMatchObject({
+    status: "running",
+    approvedTeam: { name: "Delivery pair" },
+    runIds: [conversation.id, composed.id],
+  });
+  ctx.engine.verify();
+});
+
+test("approving when no team is awaiting approval is refused rather than composing nothing", async () => {
+  // Anticipate — the Orchestrator asks a question, so no team was ever proposed.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .parks(fenced({ action: "ask_user", question: "Which database?" }), "session");
+  const conversation = await startOrchestration();
+  await waitForStageStatus(ctx.app, conversation.id, "orchestrate", "asking");
+
+  // Act
+  const rejected = await post<{ error: string }>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  expect(rejected.status).toBe(400);
+  expect(rejected.body.error).toContain("No team is awaiting approval");
+  ctx.engine.verify();
+});
+
+test("a composed run reloads with its definition, so it can be restarted after a server restart", async () => {
+  // Anticipate — the composed team fails QA, leaving the run restartable.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Broken.\n\nVERDICT: FAIL");
+  const conversation = await proposedTeam();
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  await ctx.orchestrator.shutdown();
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert — a composed id is in no constant, so only the frozen definition
+  // can answer "which pipeline was this".
+  const { body: reloaded } = await get<RunState>(
+    restarted.app,
+    `/runs/${composed.id}`,
+  );
+  expect(reloaded.pipeline?.name).toBe("Delivery pair");
+  const retried = await post(restarted.app, `/runs/${composed.id}/restart`, {
+    stageId: "test",
+  });
+  expect(retried.status).toBe(200);
+  await restarted.shutdown();
+});
+
+async function proposedTeam(): Promise<RunState> {
+  const conversation = await startOrchestration();
+  await waitForRunStatus(ctx.app, conversation.id, "completed");
+  return conversation;
+}
+
 async function startOrchestration(): Promise<RunState> {
   const { status, body: run } = await post<RunState>(ctx.app, "/orchestrations", {
     goal: "Add search to the product",
