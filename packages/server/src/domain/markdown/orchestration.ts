@@ -4,7 +4,7 @@ import type {
   ProductManagerCloseout,
 } from "@adhd/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
-import { renderCloseout } from "./closeout.ts";
+import { renderCloseoutBody } from "./closeout.ts";
 import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";
 
 export interface OrchestrationContext {
@@ -150,7 +150,7 @@ export function renderRunReviewContext({
       : "## Approved team\n\nNo team has been approved yet.",
     `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
     closeout
-      ? `## Product Manager closeout\n\n${markdownBody(renderCloseout(closeout))}`
+      ? `## Product Manager closeout\n\n${renderCloseoutBody(closeout, "###")}`
       : undefined,
     milestone ? renderReviewMilestone(milestone) : undefined,
     renderArtifactSections("Stage outputs", artifacts),

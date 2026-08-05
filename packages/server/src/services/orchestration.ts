@@ -19,7 +19,7 @@ import type {
   QuestionMediationArtifact,
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
-import { renderRunArtifacts } from "../domain/markdown/closeout.ts";
+import { renderRunArtifactsBody } from "../domain/markdown/closeout.ts";
 import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import { composeTeamPipeline } from "../domain/team-composition.ts";
@@ -80,7 +80,7 @@ function artifactDigestOf(run: RunState): QuestionMediationArtifact[] {
         {
           runLabel: runLabel(run),
           stageLabel: "Orchestrator artifacts",
-          output: renderRunArtifacts(report),
+          output: renderRunArtifactsBody(report, "####"),
         },
       ]
     : stageOutputsOf(run);
