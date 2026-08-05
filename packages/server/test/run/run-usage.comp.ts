@@ -79,6 +79,8 @@ test("a question loop's turns add up instead of the last one winning", async () 
   engine
     .anticipate({ as: "resumed turn", resumeSessionId: SESSION, prompt: "Use SQLite." })
     .reports("Added the settings page.", { costUsd: 0.03, turns: 2 });
+  // The review reports no spend, so the stage total stays the specialist's own.
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });

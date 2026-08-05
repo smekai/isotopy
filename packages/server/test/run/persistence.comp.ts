@@ -124,9 +124,11 @@ test("run numbering continues from the highest number on disk", async () => {
   // Arrange — one completed run on disk, then a fresh process over the same home.
   const { app } = ctx;
 
-  // Anticipate — one call per run; the queue outlives the restart.
+  // Anticipate — one call plus a review per run; the queue outlives the restart.
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
 
   const first = await startRun(app, {
     pipelineId: "solo",

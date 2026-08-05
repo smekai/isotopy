@@ -1,5 +1,12 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { Orchestration, OrchestratorDecision, RunState } from "@adhd/core";
+import type {
+  Orchestration,
+  OrchestratorDecision,
+  OrchestratorTeamProposal,
+  RunState,
+} from "@adhd/core";
 import {
   createTestApp,
   get,
@@ -15,29 +22,52 @@ import {
   seedOrchestration,
 } from "../support/orchestration-fixtures.ts";
 
+const DEVELOPER_ROLE: OrchestratorTeamProposal["roles"][number] = {
+  id: "implementation",
+  label: "Developer",
+  skill: "developer",
+  stepTask: "implement-feature",
+};
+
+const QA_ROLE: OrchestratorTeamProposal["roles"][number] = {
+  id: "test",
+  label: "QA Engineer",
+  skill: "tester",
+  stepTask: "verify-feature",
+  executionPolicy: "quality",
+};
+
+const TEAM: OrchestratorTeamProposal = {
+  name: "Delivery pair",
+  summary: "Build the search endpoint and verify it",
+  roles: [DEVELOPER_ROLE, QA_ROLE],
+};
+
 const TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
   rationale: "One Developer and one QA Engineer cover this",
+  team: TEAM,
+};
+
+/** The same pair, but the Developer may stop and ask — only then is a question brokered. */
+const INTERACTIVE_TEAM_PROPOSAL: OrchestratorDecision = {
+  action: "propose_team",
+  rationale: "One Developer and one QA Engineer cover this",
   team: {
-    name: "Delivery pair",
-    summary: "Build the search endpoint and verify it",
-    roles: [
-      {
-        id: "implementation",
-        label: "Developer",
-        skill: "developer",
-        stepTask: "implement-feature",
-      },
-      {
-        id: "test",
-        label: "QA Engineer",
-        skill: "tester",
-        stepTask: "verify-feature",
-        executionPolicy: "quality",
-      },
-    ],
+    ...TEAM,
+    roles: [{ ...DEVELOPER_ROLE, interactive: true }, QA_ROLE],
   },
 };
+
+const REVIEW_ARTIFACTS = {
+  summary: "The composed team delivered",
+  deliveredScope: [],
+  decisions: [],
+  knowledge: [],
+  findings: [],
+};
+
+const STOP: OrchestratorDecision = { action: "stop", reason: "goal met" };
 
 let ctx: TestApp;
 
@@ -318,6 +348,7 @@ test("a decision carrying an unknown field is rejected whole, not stripped down 
 test("ordinary work bootstraps its own Orchestrator, so a fresh project is never deadlocked", async () => {
   // Anticipate
   ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine.anticipateRunReview();
 
   // Act
   const run = await startRun(ctx.app, {
@@ -326,14 +357,16 @@ test("ordinary work bootstraps its own Orchestrator, so a fresh project is never
     engine: "claude-code",
   });
 
-  // Assert
+  // Assert — the bootstrapped Orchestrator owns the run, reviews it when it
+  // settles, and stops because its own review asked for nothing further.
   await waitForRunStatus(ctx.app, run.id, "completed");
   expect(ctx.orchestrations.list(ctx.registry.resolve().id)).toMatchObject([
     {
       id: run.orchestrationId,
       goal: "Add search to the product",
-      status: "running",
+      status: "stopped",
       runIds: [run.id],
+      turns: [{ runId: run.id, decision: { action: "stop" } }],
     },
   ]);
   ctx.engine.verify();
@@ -345,6 +378,11 @@ test("restarting work whose Orchestrator stopped adopts it into the current one"
     .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
     .reports(fenced(TEAM_PROPOSAL));
   ctx.engine.anticipate({ as: "Developer" }).fails("engine stopped");
+  // The review parks rather than stopping, so the user's own stop is what ends it.
+  ctx.engine.anticipateRunReview({
+    as: "review of the failed run",
+    decision: { action: "ask_user", question: "Should I retry the Developer?" },
+  });
   const conversation = await proposedTeam();
   const { body: composed } = await post<RunState>(
     ctx.app,
@@ -357,6 +395,7 @@ test("restarting work whose Orchestrator stopped adopts it into the current one"
   // Anticipate
   ctx.engine.anticipate({ as: "restarted Developer" }).reports("done");
   ctx.engine.anticipate({ as: "QA Engineer" }).reports("PASS — verified");
+  ctx.engine.anticipateRunReview({ as: "review of the restarted run" });
 
   // Act
   const { status, body: restarted } = await post<RunState>(
@@ -412,6 +451,7 @@ test("approving a proposed team starts a composed run carrying its own pipeline 
     .reports(fenced(TEAM_PROPOSAL));
   ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
   ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
   const conversation = await proposedTeam();
 
   // Act
@@ -432,13 +472,16 @@ test("approving a proposed team starts a composed run carrying its own pipeline 
   ctx.engine.verify();
 });
 
-test("approving records the team on the orchestration and moves it to running", async () => {
+test("approving records the team and keeps both runs on the orchestration", async () => {
   // Anticipate
   ctx.engine
     .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
     .reports(fenced(TEAM_PROPOSAL));
   ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
   ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({
+    decision: { action: "ask_user", question: "Ship it now?" },
+  });
   const conversation = await proposedTeam();
 
   // Act
@@ -448,14 +491,15 @@ test("approving records the team on the orchestration and moves it to running", 
     { engine: "claude-code" },
   );
 
-  // Assert — both runs belong to the orchestration, in the order they happened.
+  // Assert — both runs belong to the orchestration, in the order they happened,
+  // and the post-run review is what moved it off running.
   await waitForRunStatus(ctx.app, composed.id, "completed");
   const { body: orchestration } = await get<Orchestration>(
     ctx.app,
     `/orchestrations/${conversation.orchestrationId}`,
   );
   expect(orchestration).toMatchObject({
-    status: "running",
+    status: "awaiting_user",
     approvedTeam: { name: "Delivery pair" },
     runIds: [conversation.id, composed.id],
   });
@@ -516,6 +560,295 @@ test("a composed run reloads with its definition, so it can be restarted after a
   await restarted.shutdown();
 });
 
+test("a composed run's review records its artifacts and its own orchestration turn", async () => {
+  // Anticipate — a composed team with no closeout stage still produces artifacts.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator review",
+      persona: /# Role: Orchestrator/,
+      prompt: /# Assignment: Review a settled run/,
+    })
+    .reports(
+      `${artifactsBlock({
+        summary: "Search endpoint shipped",
+        deliveredScope: ["Search endpoint"],
+        decisions: ["Postgres full-text search"],
+        knowledge: ["The seed script needs the extension installed first"],
+        findings: [],
+        nextRecommendation: "Warm the index on startup",
+      })}\n\n${fenced({ action: "ask_user", question: "Ship it now?" })}`,
+    );
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, composed.id, "completed");
+  expect(finished.artifacts?.report).toMatchObject({
+    knowledge: ["The seed script needs the extension installed first"],
+    nextRecommendation: "Warm the index on startup",
+  });
+  // The record outlives the process, alongside the run's per-stage handoffs.
+  expect(await readArtifacts(ctx.home, composed.id)).toContain(
+    "# Orchestrator run artifacts",
+  );
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}`,
+  );
+  expect(orchestration.turns.at(-1)).toMatchObject({
+    runId: composed.id,
+    decision: { action: "ask_user" },
+  });
+  ctx.engine.verify();
+});
+
+test("the review is handed the settled run's stage outputs, not its raw task alone", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("MARKER-DEVELOPER built it.");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("MARKER-QA checked it.");
+  ctx.engine
+    .anticipate({ as: "Orchestrator review", prompt: /MARKER-DEVELOPER[\s\S]*MARKER-QA/ })
+    .reports(`${artifactsBlock(REVIEW_ARTIFACTS)}\n\n${fenced(STOP)}`);
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  ctx.engine.verify();
+});
+
+test("a start_run review launches the next run only once the first freed the project", async () => {
+  // Anticipate — the second composed run proves the admission claim was released
+  // before the review's decision was acted on.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({
+    as: "review asking for a second run",
+    decision: {
+      action: "start_run",
+      rationale: "The index still needs warming",
+      task: "Warm the search index on startup",
+    },
+  });
+  ctx.engine
+    .anticipate({ as: "second Developer", prompt: /Warm the search index/ })
+    .reports("Warmed it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "second QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the second run" });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+
+  // Assert — three runs on the orchestration: conversation, composed, and the
+  // one the review started. The second reuses the approved team's pipeline.
+  const second = await waitForOrchestrationRuns(
+    conversation.orchestrationId ?? "",
+    3,
+  );
+  expect(second).not.toBe(composed.id);
+  const { body: latest } = await get<RunState>(ctx.app, `/runs/${second}`);
+  expect(latest).toMatchObject({
+    pipelineId: `team-${conversation.orchestrationId}`,
+    task: "Warm the search index on startup",
+    orchestrationId: conversation.orchestrationId,
+  });
+  await waitForRunStatus(ctx.app, second, "completed");
+  ctx.engine.verify();
+});
+
+test("a start_run review with no approved team records the error instead of launching", async () => {
+  // Anticipate — nothing was ever approved, so there is no pipeline to reuse.
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine.anticipateRunReview({
+    decision: {
+      action: "start_run",
+      rationale: "There is more to do",
+      task: "Do the rest",
+    },
+  });
+
+  // Act
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  const orchestrationId = run.orchestrationId ?? "";
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}`,
+  );
+  expect(orchestration.decisionError).toContain("before a team was approved");
+  expect(orchestration.runIds).toEqual([run.id]);
+  ctx.engine.verify();
+});
+
+test("a malformed review leaves the run terminal and records why it was unusable", async () => {
+  // Anticipate — the Orchestrator answers with prose and no blocks at all.
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine
+    .anticipate({ as: "Orchestrator review" })
+    .reports("Looks fine to me, nothing structured to add.");
+
+  // Act
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+
+  // Assert — the run's own work stands; only the review is lost.
+  const finished = await waitForRunStatus(ctx.app, run.id, "completed");
+  expect(finished.artifacts).toBeUndefined();
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${run.orchestrationId}`,
+  );
+  expect(orchestration.decisionError).toContain("adhd-run-artifacts");
+  expect(orchestration.decisionError).toContain("adhd-orchestrator-decision");
+  expect(orchestration.turns).toEqual([]);
+  ctx.engine.verify();
+});
+
+test("a review turn survives a server restart without appending a second turn", async () => {
+  // Anticipate
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine.anticipateRunReview({
+    decision: { action: "ask_user", question: "Anything else?" },
+  });
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  await ctx.orchestrator.shutdown();
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const { body: orchestration } = await get<Orchestration>(
+    restarted.app,
+    `/orchestrations/${run.orchestrationId}`,
+  );
+  expect(orchestration.turns).toHaveLength(1);
+  expect(orchestration.status).toBe("awaiting_user");
+  await restarted.shutdown();
+});
+
+test("a later question is brokered against the prior run's digest, not its raw output", async () => {
+  // Anticipate — run one's stage output is bulky; its review condenses it, and
+  // that condensation is what the next run's mediation turn is handed.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(INTERACTIVE_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("MARKER-RAW-DEVELOPER-OUTPUT");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("MARKER-RAW-QA-OUTPUT");
+  ctx.engine.anticipateRunReview({
+    as: "review of the first run",
+    artifacts: { summary: "MARKER-CONDENSED-SUMMARY" },
+    decision: {
+      action: "start_run",
+      rationale: "One more pass is needed",
+      task: "Warm the search index",
+    },
+  });
+  ctx.engine.anticipate({ as: "second Developer" }).asks("Which index?", "second-session");
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator mediation",
+      // The digest is present and the first run's raw output is not.
+      prompt: /^(?![\s\S]*MARKER-RAW-DEVELOPER-OUTPUT)[\s\S]*MARKER-CONDENSED-SUMMARY/,
+    })
+    .reports(
+      fenced({
+        action: "answer_agent",
+        answer: "The search index.",
+        rationale: "Named in the run task",
+      }),
+    );
+  ctx.engine
+    .anticipate({ as: "resumed second Developer", resumeSessionId: "second-session" })
+    .reports("Warmed it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "second QA Engineer" }).reports("Checked.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the second run" });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+
+  // Assert — the mediation prompt matcher above carries both halves of the
+  // claim; verify() is what enforces it once the second run has finished.
+  const second = await waitForOrchestrationRuns(
+    conversation.orchestrationId ?? "",
+    3,
+  );
+  await waitForRunStatus(ctx.app, second, "completed");
+  ctx.engine.verify();
+}, 20_000);
+
+async function waitForOrchestrationRuns(
+  orchestrationId: string,
+  count: number,
+): Promise<string> {
+  const deadline = Date.now() + 10_000;
+  let runIds: string[] = [];
+  while (runIds.length < count && Date.now() < deadline) {
+    const { body } = await get<Orchestration>(
+      ctx.app,
+      `/orchestrations/${orchestrationId}`,
+    );
+    runIds = body.runIds;
+    if (runIds.length < count) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  const last = runIds.at(-1);
+  expect(
+    runIds.length,
+    `Orchestration ${orchestrationId} had runs ${runIds.join(", ")}`,
+  ).toBe(count);
+  return last ?? "";
+}
+
 async function proposedTeam(): Promise<RunState> {
   const conversation = await startOrchestration();
   await waitForRunStatus(ctx.app, conversation.id, "completed");
@@ -539,5 +872,13 @@ function stageMessage(run: RunState): string {
 
 function fenced(decision: unknown): string {
   return `Here is what I propose.\n\n\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+}
+
+function readArtifacts(home: string, runId: string): Promise<string> {
+  return readFile(path.join(home, "runs", runId, "artifacts", "artifacts.md"), "utf8");
+}
+
+function artifactsBlock(report: unknown): string {
+  return `\`\`\`adhd-run-artifacts\n${JSON.stringify(report)}\n\`\`\``;
 }
 

@@ -49,12 +49,13 @@ describe("durable runtime", () => {
     // Approving in the fresh process resumes and finishes the run.
     ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
     ctx.engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+    ctx.engine.anticipateRunReview();
     await post(restarted.app, `/runs/${run.id}/gates/intake/approve`, {}, project.headers);
     const finished = await waitForRunStatus(restarted.app, run.id, "completed");
 
-    // M7: exactly three engine calls — the Project Manager (before the crash)
-    // was replayed from SQLite on resume, not re-run.
-    expect(ctx.engine.calls.length).toBe(3);
+    // M7: four engine calls — three stages plus the Orchestrator's review. The
+    // Project Manager (before the crash) was replayed from SQLite, not re-run.
+    expect(ctx.engine.calls.length).toBe(4);
     expect(stageOf(finished, "intake").status).toBe("passed");
     expect(finished.stageOutputs?.intake).toBe(PM_REPORT);
 
@@ -87,6 +88,7 @@ describe("durable runtime", () => {
 
     // A run in project B is allowed to run concurrently.
     ctx.engine.anticipate({ as: "B Agent" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview({ as: "B review" });
     const inB = await startRun(
       ctx.app,
       { pipelineId: "solo", task: TASK, engine: "claude-code" },
@@ -97,10 +99,12 @@ describe("durable runtime", () => {
     // Once A's run finishes, its project frees and a new run is admitted.
     ctx.engine.anticipate({ as: "A Developer" }).reports(DEV_REPORT);
     ctx.engine.anticipate({ as: "A Tester" }).reports(TESTER_REPORT);
+    ctx.engine.anticipateRunReview({ as: "A review" });
     await post(ctx.app, `/runs/${first.id}/gates/intake/approve`, {}, a.headers);
     await waitForRunStatus(ctx.app, first.id, "completed");
 
     ctx.engine.anticipate({ as: "A Agent 2" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview({ as: "A review, second run" });
     const third = await startRun(
       ctx.app,
       { pipelineId: "solo", task: TASK, engine: "claude-code" },

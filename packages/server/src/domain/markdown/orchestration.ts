@@ -1,9 +1,11 @@
 import type {
   OrchestratorBrokerPhase,
   OrchestratorTeamProposal,
+  ProductManagerCloseout,
 } from "@adhd/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
-import { bullet, markdownBlocks, markdownBody } from "./format.ts";
+import { renderCloseout } from "./closeout.ts";
+import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";
 
 export interface OrchestrationContext {
   goal: string;
@@ -75,16 +77,83 @@ export function renderComposedRunTask({ goal, team }: ComposedRunContext): strin
   ]);
 }
 
-function renderMediationArtifacts(artifacts: QuestionMediationArtifact[]): string {
+function renderArtifactSections(
+  heading: string,
+  artifacts: QuestionMediationArtifact[],
+): string {
   if (artifacts.length === 0) {
-    return "## Prior run artifacts\n\nNone.";
+    return `## ${heading}\n\nNone.`;
   }
   return markdownBlocks([
-    "## Prior run artifacts",
+    `## ${heading}`,
     ...artifacts.map(
       ({ runLabel, stageLabel, output }) =>
         `### ${runLabel} · ${stageLabel}\n\n${markdownBody(output)}`,
     ),
+  ]);
+}
+
+export interface RunReviewMilestoneContext {
+  name: string;
+  autoRunNext: boolean;
+  readyFeatures: RunReviewFeature[];
+}
+
+export interface RunReviewFeature {
+  id: string;
+  title: string;
+}
+
+export interface RunReviewMarkdownContext {
+  goal: string;
+  team?: OrchestratorTeamProposal;
+  runLabel: string;
+  runStatus: string;
+  closeout?: ProductManagerCloseout;
+  artifacts: QuestionMediationArtifact[];
+  milestone?: RunReviewMilestoneContext;
+}
+
+function renderReviewMilestone(milestone: RunReviewMilestoneContext): string {
+  const features =
+    milestone.readyFeatures.length > 0
+      ? milestone.readyFeatures
+          .map((feature) =>
+            bullet(`\`${feature.id}\` — ${structuralText(feature.title)}`),
+          )
+          .join("\n")
+      : "No feature is ready to run.";
+  const permission = milestone.autoRunNext
+    ? "`continue_milestone` is permitted."
+    : "`continue_milestone` is not permitted — this milestone does not continue on its own.";
+  return markdownBlocks([
+    `## Milestone: ${structuralText(milestone.name)}`,
+    permission,
+    "### Ready features",
+    features,
+  ]);
+}
+
+export function renderRunReviewContext({
+  goal,
+  team,
+  runLabel,
+  runStatus,
+  closeout,
+  artifacts,
+  milestone,
+}: RunReviewMarkdownContext): string {
+  return markdownBlocks([
+    `## Orchestration goal\n\n${markdownBody(goal)}`,
+    team
+      ? `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}`
+      : "## Approved team\n\nNo team has been approved yet.",
+    `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
+    closeout
+      ? `## Product Manager closeout\n\n${markdownBody(renderCloseout(closeout))}`
+      : undefined,
+    milestone ? renderReviewMilestone(milestone) : undefined,
+    renderArtifactSections("Stage outputs", artifacts),
   ]);
 }
 
@@ -110,7 +179,7 @@ export function renderQuestionMediationContext({
     userAnswer === undefined
       ? undefined
       : `## User answer\n\n${markdownBody(userAnswer)}`,
-    renderMediationArtifacts(artifacts),
+    renderArtifactSections("Prior run artifacts", artifacts),
     `## Current assignment\n\n${assignment}`,
   ]);
 }

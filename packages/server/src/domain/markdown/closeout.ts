@@ -1,6 +1,8 @@
 import type {
   CleanupResult,
+  CloseoutFinding,
   ProductManagerCloseout,
+  RunArtifacts,
 } from "@adhd/core";
 import {
   bullet,
@@ -30,22 +32,25 @@ function listSection(title: string, items: string[]): string | undefined {
     : undefined;
 }
 
+function findingsSection(findings: CloseoutFinding[]): string | undefined {
+  if (findings.length === 0) {
+    return undefined;
+  }
+  const entries = findings.map((finding) => {
+    const label = finding.severity === "blocking" ? "Blocking" : "Non-blocking";
+    const evidence = finding.evidence ? ` — ${markdownBody(finding.evidence)}` : "";
+    return bullet(`**${label} · ${structuralText(finding.title)}**${evidence}`);
+  });
+  return `## Findings\n\n${entries.join("\n")}`;
+}
+
+function recommendationSection(recommendation?: string): string | undefined {
+  return recommendation
+    ? `## Next recommendation\n\n${markdownBody(recommendation)}`
+    : undefined;
+}
+
 export function renderCloseout(report: ProductManagerCloseout): string {
-  const findings =
-    report.findings.length > 0
-      ? `## Findings\n\n${report.findings
-          .map((finding) => {
-            const label =
-              finding.severity === "blocking" ? "Blocking" : "Non-blocking";
-            const content = `**${label} · ${structuralText(finding.title)}**${
-              finding.evidence
-                ? ` — ${markdownBody(finding.evidence)}`
-                : ""
-            }`;
-            return bullet(content);
-          })
-          .join("\n")}`
-      : undefined;
   return markdownBlocks(
     [
       "# Product Manager closeout",
@@ -55,10 +60,23 @@ export function renderCloseout(report: ProductManagerCloseout): string {
       listSection("Unresolved source tasks", report.unresolvedTaskIds),
       listSection("Decisions", report.decisions),
       listSection("Knowledge", report.knowledge),
-      findings,
-      report.nextRecommendation
-        ? `## Next recommendation\n\n${markdownBody(report.nextRecommendation)}`
-        : undefined,
+      findingsSection(report.findings),
+      recommendationSection(report.nextRecommendation),
+    ],
+    true,
+  );
+}
+
+export function renderRunArtifacts(report: RunArtifacts): string {
+  return markdownBlocks(
+    [
+      "# Orchestrator run artifacts",
+      markdownBody(report.summary),
+      listSection("Delivered scope", report.deliveredScope),
+      listSection("Decisions", report.decisions),
+      listSection("Knowledge", report.knowledge),
+      findingsSection(report.findings),
+      recommendationSection(report.nextRecommendation),
     ],
     true,
   );

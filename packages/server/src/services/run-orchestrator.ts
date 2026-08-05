@@ -11,6 +11,7 @@ import type {
   MilestonePlan,
   UpdateMilestoneInput,
   PipelineDefinition,
+  RunArtifactRecord,
   RunEvent,
   RunMessage,
   RunState,
@@ -31,7 +32,7 @@ import {
   canAcceptMilestoneFeature,
   createInitialRunState,
   isTerminalRunStatus,
-  nextMilestoneFeature,
+  requestedMilestoneFeature,
   STAGE_OUTCOMES,
   pipelineUsesEngine,
   toMilestoneProposal,
@@ -43,6 +44,7 @@ import { MilestonePlanConsumer } from "./milestone-plan-consumer.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 import { OrchestratorRequiredError } from "./question-mediator.ts";
 import type { QuestionMediator } from "./question-mediator.ts";
+import type { RunReviewer } from "./run-reviewer.ts";
 import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
@@ -84,6 +86,7 @@ import {
   cleanupCancelledRun,
   milestoneCloseoutContext,
   persistMilestoneSummary,
+  persistRunArtifacts,
 } from "./product-manager-closeout.ts";
 
 const PERSIST_DEBOUNCE_MS = 150;
@@ -125,11 +128,14 @@ type RunListener = (event: RunEvent) => void;
 
 type RunSummaryListener = (summary: RunSummary) => void;
 
-export interface StartRunOptions {
-  task?: string;
+export interface InheritedRunOptions {
   engine?: string;
   model?: string;
   permissionMode?: string;
+}
+
+export interface StartRunOptions extends InheritedRunOptions {
+  task?: string;
   milestoneId?: string;
   featureId?: string;
   orchestrationId?: string;
@@ -175,6 +181,8 @@ export class RunOrchestrator implements RunProjection {
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private questionMediator?: QuestionMediator;
 
+  private runReviewer?: RunReviewer;
+
   constructor({ registry, settings }: RunOrchestratorDependencies) {
     this.registry = registry;
     this.settings = settings ?? new SettingsStore();
@@ -187,6 +195,7 @@ export class RunOrchestrator implements RunProjection {
       registry: this.registry,
       settings: this.settings,
       questionMediator: () => this.questionMediator,
+      runReviewer: () => this.runReviewer,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
@@ -332,6 +341,20 @@ export class RunOrchestrator implements RunProjection {
 
   registerQuestionMediator(mediator: QuestionMediator): void {
     this.questionMediator = mediator;
+  }
+
+  registerRunReviewer(reviewer: RunReviewer): void {
+    this.runReviewer = reviewer;
+  }
+
+  inheritedRunOptions(runId: string): InheritedRunOptions {
+    const run = this.runs.get(runId);
+    const permissionMode = this.enginePermissionModes.get(runId);
+    return {
+      ...(run?.engine === undefined ? {} : { engine: run.engine }),
+      ...(run?.model === undefined ? {} : { model: run.model }),
+      ...(permissionMode === undefined ? {} : { permissionMode }),
+    };
   }
 
   async createMilestone(
@@ -611,10 +634,7 @@ export class RunOrchestrator implements RunProjection {
   async startNextMilestoneRun(
     projectPath: ProjectPath,
     milestoneId: string,
-    options: Omit<
-      StartRunOptions,
-      "task" | "milestoneId" | "featureId" | "sourceTaskIds"
-    > = {},
+    options: Omit<StartRunOptions, "task" | "milestoneId" | "sourceTaskIds"> = {},
   ): Promise<RunState> {
     const milestone = this.requireMilestone(projectPath.id, milestoneId);
     if (milestone.status !== "active") {
@@ -623,9 +643,13 @@ export class RunOrchestrator implements RunProjection {
     if (milestone.features.some((feature) => feature.status === "in_progress")) {
       throw new Error("Milestone already has a feature run in progress");
     }
-    const feature = nextMilestoneFeature(milestone);
+    const feature = requestedMilestoneFeature(milestone, options.featureId);
     if (!feature) {
-      throw new Error("Milestone has no ready feature");
+      throw new Error(
+        options.featureId
+          ? `Milestone has no ready feature "${options.featureId}"`
+          : "Milestone has no ready feature",
+      );
     }
     const task = [
       `Milestone: ${milestone.name}`,
@@ -1328,6 +1352,16 @@ export class RunOrchestrator implements RunProjection {
     this.schedulePersist(runId, true);
   }
 
+  async captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void> {
+    const run = this.live(runId);
+    if (!run) {
+      return;
+    }
+    run.artifacts = record;
+    await persistRunArtifacts(this.registry.resolve(run.projectId), runId, record);
+    this.schedulePersist(runId, true);
+  }
+
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageDef.id);
@@ -1570,6 +1604,7 @@ export class RunOrchestrator implements RunProjection {
   private async settleCompletedRun(run: RunState): Promise<void> {
     await this.repositoryForRun(run.id).releaseRun(run.id);
     await this.completeMilestoneRun(run);
+    await this.runReviewer?.settle(run.id);
   }
 
   private async completeMilestoneRun(run: RunState): Promise<void> {
@@ -1592,8 +1627,9 @@ export class RunOrchestrator implements RunProjection {
       const now = nowIso();
       feature.status =
         run.status === "completed" ? "completed" : "needs_attention";
-      if (run.closeout) {
-        feature.findings = run.closeout.report.findings.map((finding) => ({
+      const findings = run.closeout?.report.findings ?? run.artifacts?.report.findings;
+      if (findings) {
+        feature.findings = findings.map((finding) => ({
           ...finding,
           sourceRunId: run.id,
         }));
@@ -1606,24 +1642,6 @@ export class RunOrchestrator implements RunProjection {
       }
       milestone.updatedAt = now;
       await this.persistMilestone(milestone);
-
-      if (
-        !milestone.autoRunNext ||
-        milestone.status !== "active" ||
-        (run.status !== "completed" && run.status !== "needs_attention") ||
-        !nextMilestoneFeature(milestone)
-      ) {
-        return;
-      }
-      await this.startNextMilestoneRun(
-        this.registry.resolve(run.projectId),
-        milestone.id,
-        {
-          engine: run.engine,
-          model: run.model,
-          permissionMode: this.enginePermissionModes.get(run.id),
-        },
-      );
     } finally {
       this.completingMilestoneRuns.delete(run.id);
     }

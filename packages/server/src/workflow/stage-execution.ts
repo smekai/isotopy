@@ -11,6 +11,8 @@ import type {
   EngineId,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
+  RunArtifactRecord,
+  RunArtifacts,
   RunState,
   StageDefinition,
 } from "@adhd/core";
@@ -21,6 +23,7 @@ import { buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { interpretEngineResult } from "../domain/stage-context.ts";
 import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
+import { extractRunArtifacts } from "../domain/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { loadSkill } from "../services/skills.ts";
 import { loadBundledStepTask } from "../services/bundled-prompts.ts";
@@ -36,6 +39,11 @@ import type {
   QuestionMediationContext,
   QuestionMediationRequest,
 } from "../services/question-mediator.ts";
+import type {
+  RunReview,
+  RunReviewContext,
+  RunReviewRequest,
+} from "../services/run-reviewer.ts";
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
@@ -232,6 +240,98 @@ export async function runQuestionMediationWork(
     decision,
     sessionId: outcome.sessionId,
   };
+}
+
+function reviewRecord(artifacts: RunArtifacts): RunArtifactRecord {
+  return { report: artifacts, validationErrors: [], collectedAt: nowIso() };
+}
+
+export async function runOrchestratorReviewWork(
+  deps: WorkflowDeps,
+  input: PipelineWorkflowInput,
+  status: RunState["status"],
+): Promise<null> {
+  const run = deps.projection.getRun(input.runId);
+  const reviewer = deps.runReviewer();
+  const stageId = run?.stages.at(-1)?.id;
+  if (!run || !run.engine || !reviewer || stageId === undefined) {
+    return null;
+  }
+  const request: RunReviewRequest = { runId: run.id, status };
+  let context: RunReviewContext;
+  try {
+    context = await reviewer.reviewContextFor(request);
+  } catch (error) {
+    deps.projection.log(run.id, stageId, {
+      level: "warn",
+      message: `Orchestrator review skipped — ${messageOf(error)}`,
+    });
+    return null;
+  }
+  deps.projection.log(run.id, stageId, {
+    level: "run",
+    message: `Orchestrator reviewing the run · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
+    activity: { kind: "engine", name: engineLabel(run) },
+  });
+  const outcome = await runAdapter(
+    deps,
+    input,
+    run,
+    run.engine,
+    stageId,
+    buildStagePrompt(context.prompt, [], await loadBundledStepTask("review-run")),
+    await loadSkill(deps.registry.resolve(run.projectId), "orchestrator"),
+    undefined,
+  );
+  if (outcome.usage) {
+    deps.projection.stageUsage(run.id, stageId, outcome.usage);
+  }
+  if (deps.isCancelled(run.id)) {
+    return null;
+  }
+  const review = readReview(outcome);
+  if (review.artifacts) {
+    await deps.projection.captureRunArtifacts(run.id, review.artifacts);
+  }
+  try {
+    await reviewer.recordReview(request, context, review);
+  } catch (error) {
+    deps.projection.log(run.id, stageId, {
+      level: "warn",
+      message: `Orchestrator review was not recorded — ${messageOf(error)}`,
+    });
+  }
+  return null;
+}
+
+function readReview(outcome: EngineRunResult): RunReview {
+  if (!outcome.success) {
+    return { errors: [outcome.errorMessage ?? "Orchestrator review failed"] };
+  }
+  const output = outcome.result ?? "";
+  const artifacts = extractRunArtifacts(output);
+  const decision = extractOrchestratorDecision(output);
+  const review: RunReview = {
+    errors: [
+      ...(artifacts.ok
+        ? []
+        : [`Run artifacts: ${formatValidationIssues(artifacts.issues)}`]),
+      ...(decision.ok
+        ? []
+        : [`Review decision: ${formatValidationIssues(decision.issues)}`]),
+    ],
+  };
+  if (artifacts.ok) {
+    review.artifacts = reviewRecord(artifacts.value);
+  }
+  if (decision.ok) {
+    review.decision = decision.value;
+  }
+  return review;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export async function runStageWork(

@@ -127,18 +127,6 @@ Cross-platform: n/a — JSON + path-joined storage under the existing `.adhd` ro
 
 ---
 
-## TASK-112: Post-run decision loop (next phase routing)
-**Priority:** P1 | **Tags:** core, server
-**Updated:** 2026-08-04 11:33
-
-After a composed run settles, feed its closeout artifacts (knowledge, decisions, findings, and `nextRecommendation`) back into the orchestrator conversation. The orchestrator then decides whether to start a next composed run, ask the user for an answer, or stop.
-
-Generalizes the current `autoRunNext` behavior: each orchestration phase is a separate run, and earlier runs remain finished records.
-
-Cross-platform: n/a — reuses existing closeout extraction and milestone/run projection.
-
----
-
 ## TASK-113: Per-persona accumulated context (artifact distilled memory)
 **Priority:** P2 | **Tags:** core, server, ui
 **Updated:** 2026-08-04 11:33

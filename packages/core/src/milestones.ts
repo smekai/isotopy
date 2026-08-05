@@ -193,6 +193,18 @@ export function nextMilestoneFeature(
   return milestone.features.find((feature) => feature.status === "ready");
 }
 
+export function requestedMilestoneFeature(
+  milestone: Milestone,
+  featureId?: string,
+): MilestoneFeature | undefined {
+  if (featureId === undefined) {
+    return nextMilestoneFeature(milestone);
+  }
+  return milestone.features.find(
+    (feature) => feature.id === featureId && feature.status === "ready",
+  );
+}
+
 export interface MilestoneProgress {
   completed: number;
   total: number;

@@ -971,7 +971,7 @@ only for loading the tool's own `.env`.
 
 | Location | Holds | Scope |
 |----------|-------|-------|
-| `<project>/.adhd/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md` | One project |
+| `<project>/.adhd/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `artifacts/artifacts.{json,md}` | One project |
 | `<project>/.adhd/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.adhd/skills/<id>.md` | Full persona replacement (power users) | One project |
 | `<project>/.adhd/.gitignore` | `*` — the folder ignores itself by default | One project |

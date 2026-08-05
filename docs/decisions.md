@@ -15,6 +15,52 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-05 — Every settled run is reviewed by its Orchestrator, and the review is what routes the next phase
+
+**Context:** a composed team run produced nothing durable. `CloseoutConsumer` is bound to the
+`full-delivery` pipeline's `closeout` stage, so a `team-*` run ended with its outputs in memory
+and no record a later run could read. Meanwhile the Orchestrator's `start_run` and
+`delegate_milestone_planning` decisions were recorded and never acted on, and milestone chaining
+picked the first `ready` feature without consulting anything the finished run had learned.
+
+**Decision:** the Orchestrator reviews **every** run it owns, as a named durable step inside that
+run's own `PipelineWorkflow`, immediately before the run is marked complete. The review turn
+returns two independent fenced blocks — `adhd-run-artifacts` and `adhd-orchestrator-decision` —
+each read on its own, so a malformed report never costs a sound decision. A review that fails
+outright is never fatal: the run's work is already done, and only the review is lost.
+
+Artifacts are a new `RunArtifacts` type, and `ProductManagerCloseout` is redefined as its
+task-board-coupled superset through a shared `RUN_ARTIFACTS_SHAPE`. That relation is now
+structural rather than coincidental. Where a run already carries a Product Manager closeout, the
+Orchestrator is handed it to condense instead of re-deriving a second account of the same run
+from raw stage outputs.
+
+**Launching happens after the admission claim is released, never inside the review.** The
+per-project claim is held for the whole of a run, and the durable runtime gives each project one
+worker, so acting on a decision from inside the run that produced it would deadlock against
+both. `recordReview` therefore only persists; `settleCompletedRun` dispatches the decision after
+`releaseRun`, in the ordering the previous `autoRunNext` chaining already depended on. This is
+the same reason `consume()` records rather than launches: an Orchestrator conversation turn is
+captured while its own run still holds the claim.
+
+This is the run-completion seam that TASK-120 rejected. It was right to reject it then —
+superseding already solved the problem it would have addressed — and it earns its place here,
+because there is no other point at which the claim is free and the decision is known.
+
+Milestone chaining now routes through the Orchestrator. `completeMilestoneRun` keeps the feature
+bookkeeping and no longer starts anything; a new `continue_milestone` decision does, and
+`milestone.autoRunNext` survives as the gate that decision must respect. A named `featureId`
+lets the closeout's `nextRecommendation` influence *which* feature runs next — the first thing
+in the system to read that field, which until now was parsed, persisted, rendered, and ignored.
+
+**Rejected:** making the Orchestrator the sole closeout author by dropping the `full-delivery`
+closeout stage — it is a behaviour change to a shipped pipeline for no gain, since a closeout
+that already exists is cheaper to condense than to reproduce. Also rejected: reusing
+`RunCloseoutRecord` for composed runs, which would have forced every team run to emit empty
+`completedTaskIds`, `unresolvedTaskIds`, and `cleanup` arrays it has no source tasks for.
+
+---
+
 ## 2026-08-05 — The Orchestrator is a persisted project supervisor, not a resident workflow
 
 **Context:** specialists must route questions through the Orchestrator, but the Orchestrator

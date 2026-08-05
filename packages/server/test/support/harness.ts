@@ -52,6 +52,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerQuestionMediator(orchestrations);
+  orchestrator.registerRunReviewer(orchestrations);
   await orchestrations.init();
   const app = createApp({ orchestrator, orchestrations, registry, settings });
 
@@ -107,6 +108,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerQuestionMediator(orchestrations);
+  orchestrator.registerRunReviewer(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
   return {

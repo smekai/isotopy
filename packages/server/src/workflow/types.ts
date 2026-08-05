@@ -6,6 +6,7 @@ import type {
   OrchestratorBrokerDecision,
   StageLogDraft,
   PipelineDefinition,
+  RunArtifactRecord,
   RunState,
   StageDefinition,
   StageOutcome,
@@ -15,6 +16,7 @@ import type {
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 import type { QuestionMediator } from "../services/question-mediator.ts";
+import type { RunReviewer } from "../services/run-reviewer.ts";
 
 export interface PipelineWorkflowInput {
   runId: string;
@@ -86,6 +88,7 @@ export interface RunProjection {
     output: string,
   ): Promise<void>;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
+  captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void>;
   runCompleted(runId: string, status: RunCompletionStatus): void;
 }
 
@@ -94,6 +97,7 @@ export interface WorkflowDeps {
   registry: ProjectRegistry;
   settings: SettingsStore;
   questionMediator(): QuestionMediator | undefined;
+  runReviewer(): RunReviewer | undefined;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;
   isCancelled(runId: string): boolean;

@@ -12,6 +12,7 @@ const orchestrator = new RunOrchestrator({ registry, settings });
 const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
 orchestrator.registerStageOutputConsumer(orchestrations);
 orchestrator.registerQuestionMediator(orchestrations);
+orchestrator.registerRunReviewer(orchestrations);
 
 await orchestrations.init();
 await orchestrator.init();

@@ -1,11 +1,12 @@
 import { afterEach, assert, beforeEach, expect, test } from "vitest";
-import type { Milestone, RunState } from "@adhd/core";
+import type { Milestone, Orchestration, RunState } from "@adhd/core";
 import {
   createTestApp,
   get,
   patch,
   post,
   restartApp,
+  waitForRunStatus,
   waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
@@ -130,6 +131,58 @@ test("starting the next feature links one Full Delivery run", async () => {
   ctx.engine.verify();
 });
 
+test("a continue_milestone review starts the milestone's next feature", async () => {
+  // Arrange
+  const milestone = await twoFeatureMilestone(true);
+
+  // Anticipate — the review of the first feature's run asks for the next one.
+  anticipateFullDelivery("first");
+  ctx.engine.anticipateRunReview({
+    as: "review asking to continue",
+    decision: { action: "continue_milestone", rationale: "The first feature landed" },
+  });
+  anticipateFullDelivery("second");
+  ctx.engine.anticipateRunReview({ as: "review of the second feature" });
+
+  // Act
+  const first = await startAndApproveNextFeature(milestone.id);
+  await waitForRunStatus(ctx.app, first.id, "completed");
+
+  // Assert — the Orchestrator, not the milestone, is what started the next run.
+  const second = await waitForFeatureRun(milestone.id, 1);
+  await waitForStageStatus(ctx.app, second, "intake", "awaiting");
+  await post(ctx.app, `/runs/${second}/gates/intake/approve`);
+  await waitForRunStatus(ctx.app, second, "completed");
+  ctx.engine.verify();
+}, 20_000);
+
+test("a milestone that does not auto-run refuses the review's continuation", async () => {
+  // Arrange
+  const milestone = await twoFeatureMilestone(false);
+
+  // Anticipate — the Orchestrator asks anyway; the flag is what refuses it.
+  anticipateFullDelivery("first");
+  ctx.engine.anticipateRunReview({
+    as: "review asking to continue",
+    decision: { action: "continue_milestone", rationale: "The first feature landed" },
+  });
+
+  // Act
+  const first = await startAndApproveNextFeature(milestone.id);
+  await waitForRunStatus(ctx.app, first.id, "completed");
+
+  // Assert — the second feature is still ready, and the refusal is recorded.
+  const orchestrationId = first.orchestrationId ?? "";
+  const orchestration = await waitForDecisionError(orchestrationId);
+  expect(orchestration.decisionError).toContain("does not continue on its own");
+  const { body: after } = await get<Milestone>(ctx.app, `/milestones/${milestone.id}`);
+  expect(after.features.map((feature) => feature.status)).toEqual([
+    "completed",
+    "ready",
+  ]);
+  ctx.engine.verify();
+}, 20_000);
+
 test("a feature already in progress cannot be started a second time", async () => {
   // Arrange
   const { body: milestone } = await post<Milestone>(ctx.app, "/milestones", {
@@ -237,6 +290,93 @@ test("a proposal whose feature has no acceptance criteria is refused", async () 
   expect(status).toBe(400);
   expect(body.issues[0]?.path).toEqual(["features", 0, "acceptanceCriteria"]);
 });
+
+/**
+ * Nine reports, one per Full Delivery stage. The gate after intake is approved
+ * separately; every stage here reports a PASS so the run reaches closeout.
+ */
+function anticipateFullDelivery(label: string): void {
+  const closeout = {
+    summary: "Feature delivered",
+    deliveredScope: [],
+    decisions: [],
+    knowledge: [],
+    findings: [],
+    tasks: [],
+    completedTaskIds: [],
+    unresolvedTaskIds: [],
+    cleanup: [],
+  };
+  ctx.engine.anticipate({ as: `${label} intake` }).reports("Scope approved");
+  ctx.engine.anticipate({ as: `${label} design` }).reports("No UI\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({ as: `${label} architecture` })
+    .reports("Existing architecture applies\n\nVERDICT: SKIP");
+  ctx.engine.anticipate({ as: `${label} implementation` }).reports("Built it");
+  ctx.engine.anticipate({ as: `${label} review` }).reports("Fine\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: `${label} test` }).reports("Checked\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: `${label} release` }).reports("Ready\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: `${label} deploy` }).reports("No target\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({ as: `${label} closeout` })
+    .reports(
+      `\`\`\`adhd-closeout\n${JSON.stringify(closeout)}\n\`\`\`\n\nVERDICT: PASS`,
+    );
+}
+
+async function startAndApproveNextFeature(milestoneId: string): Promise<RunState> {
+  const { body: run } = await post<RunState>(
+    ctx.app,
+    `/milestones/${milestoneId}/start-next`,
+    { engine: "claude-code" },
+  );
+  await waitForStageStatus(ctx.app, run.id, "intake", "awaiting");
+  await post(ctx.app, `/runs/${run.id}/gates/intake/approve`);
+  return run;
+}
+
+async function waitForFeatureRun(milestoneId: string, index: number): Promise<string> {
+  const deadline = Date.now() + 10_000;
+  let runId: string | undefined;
+  while (runId === undefined && Date.now() < deadline) {
+    const { body } = await get<Milestone>(ctx.app, `/milestones/${milestoneId}`);
+    runId = body.features[index]?.runIds?.[0];
+    if (runId === undefined) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  assert(runId, `feature ${index} of milestone ${milestoneId} never started a run`);
+  return runId;
+}
+
+async function waitForDecisionError(orchestrationId: string): Promise<Orchestration> {
+  const deadline = Date.now() + 10_000;
+  let orchestration: Orchestration | undefined;
+  while (orchestration?.decisionError === undefined && Date.now() < deadline) {
+    const { body } = await get<Orchestration>(
+      ctx.app,
+      `/orchestrations/${orchestrationId}`,
+    );
+    orchestration = body;
+    if (orchestration.decisionError === undefined) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  assert(orchestration, `orchestration ${orchestrationId} was never readable`);
+  return orchestration;
+}
+
+async function twoFeatureMilestone(autoRunNext: boolean): Promise<Milestone> {
+  const { body } = await post<Milestone>(ctx.app, "/milestones", {
+    name: "Delivery",
+    autoRunNext,
+    features: [
+      { title: "First feature", taskIds: [] },
+      { title: "Second feature", taskIds: [] },
+    ],
+  });
+  return body;
+}
 
 /** A milestone with one fully specified feature, created through the API. */
 async function milestoneWithOneFeature(feature: object = {}): Promise<Milestone> {

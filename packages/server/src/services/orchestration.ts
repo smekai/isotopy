@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { isTerminalRunStatus, orchestrationStatusFor } from "@adhd/core";
 import type {
+  Milestone,
   Orchestration,
   OrchestrationStatus,
   OrchestratorBrokerDecision,
+  OrchestratorDecision,
   RunState,
   StageDefinition,
 } from "@adhd/core";
@@ -11,8 +13,13 @@ import {
   renderComposedRunTask,
   renderOrchestrationContext,
   renderQuestionMediationContext,
+  renderRunReviewContext,
 } from "../domain/markdown/orchestration.ts";
-import type { QuestionMediationArtifact } from "../domain/markdown/orchestration.ts";
+import type {
+  QuestionMediationArtifact,
+  RunReviewMilestoneContext,
+} from "../domain/markdown/orchestration.ts";
+import { renderRunArtifacts } from "../domain/markdown/closeout.ts";
 import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import { composeTeamPipeline } from "../domain/team-composition.ts";
@@ -31,6 +38,12 @@ import type {
   QuestionMediationRequest,
   QuestionMediator,
 } from "./question-mediator.ts";
+import type {
+  RunReview,
+  RunReviewContext,
+  RunReviewRequest,
+  RunReviewer,
+} from "./run-reviewer.ts";
 import { taskBoardPlanningContext } from "./task-board-adapter.ts";
 
 const PIPELINE_ID = "orchestration";
@@ -47,9 +60,53 @@ export interface OrchestrationDependencies {
   runs: RunOrchestrator;
 }
 
-export class OrchestrationService implements StageOutputConsumer, QuestionMediator {
+function runLabel(run: RunState): string {
+  return `Run ${run.number}: ${run.pipelineName}`;
+}
+
+function stageOutputsOf(run: RunState): QuestionMediationArtifact[] {
+  return run.stages.flatMap((stage) => {
+    const output = run.stageOutputs?.[stage.id];
+    return output
+      ? [{ runLabel: runLabel(run), stageLabel: stage.label, output }]
+      : [];
+  });
+}
+
+function artifactDigestOf(run: RunState): QuestionMediationArtifact[] {
+  const report = run.artifacts?.report;
+  return report
+    ? [
+        {
+          runLabel: runLabel(run),
+          stageLabel: "Orchestrator artifacts",
+          output: renderRunArtifacts(report),
+        },
+      ]
+    : stageOutputsOf(run);
+}
+
+function milestoneReviewContext(
+  milestone: Milestone,
+  settlingFeatureId?: string,
+): RunReviewMilestoneContext {
+  return {
+    name: milestone.name,
+    autoRunNext: milestone.autoRunNext,
+    readyFeatures: milestone.features
+      .filter(
+        (feature) => feature.status === "ready" && feature.id !== settlingFeatureId,
+      )
+      .map((feature) => ({ id: feature.id, title: feature.title })),
+  };
+}
+
+export class OrchestrationService
+  implements StageOutputConsumer, QuestionMediator, RunReviewer
+{
   private readonly orchestrations = new Map<string, Orchestration>();
   private readonly repositories = new Map<string, OrchestrationRepository>();
+  private readonly settledRuns = new Set<string>();
   private readonly registry: ProjectRegistry;
   private readonly runs: RunOrchestrator;
 
@@ -304,6 +361,179 @@ export class OrchestrationService implements StageOutputConsumer, QuestionMediat
     }
   }
 
+  async reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext> {
+    const run = this.runs.getRun(request.runId);
+    if (!run) {
+      throw new Error(`Run not found: ${request.runId}`);
+    }
+    const orchestration = this.activeFor(run.projectId);
+    if (!orchestration) {
+      throw new OrchestratorRequiredError(
+        "The project has no active Orchestrator to review this run",
+      );
+    }
+    if (
+      run.orchestrationId !== undefined &&
+      run.orchestrationId !== orchestration.id
+    ) {
+      throw new OrchestratorRequiredError(
+        "The run belongs to an Orchestrator that is no longer active",
+      );
+    }
+    return {
+      orchestrationId: orchestration.id,
+      prompt: renderRunReviewContext({
+        goal: orchestration.goal,
+        team: orchestration.approvedTeam,
+        runLabel: runLabel(run),
+        runStatus: request.status,
+        closeout: run.closeout?.report,
+        artifacts: stageOutputsOf(run),
+        milestone: this.reviewMilestone(run),
+      }),
+    };
+  }
+
+  async recordReview(
+    request: RunReviewRequest,
+    context: RunReviewContext,
+    review: RunReview,
+  ): Promise<void> {
+    const orchestration = this.orchestrations.get(context.orchestrationId);
+    if (!orchestration || orchestration.status === "stopped") {
+      throw new OrchestratorRequiredError(
+        "The Orchestrator stopped before it could record the run review",
+      );
+    }
+    if (review.decision && !this.hasTurnFor(orchestration, request.runId)) {
+      orchestration.turns.push({
+        runId: request.runId,
+        decision: review.decision,
+        at: nowIso(),
+      });
+      orchestration.latestDecision = review.decision;
+      if (review.decision.action !== "stop") {
+        orchestration.status = orchestrationStatusFor(review.decision);
+      }
+    }
+    if (review.errors.length > 0) {
+      orchestration.decisionError = review.errors.join("; ");
+    } else if (review.decision) {
+      delete orchestration.decisionError;
+    }
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+  }
+
+  async settle(runId: string): Promise<void> {
+    if (this.settledRuns.has(runId)) {
+      return;
+    }
+    const run = this.runs.getRun(runId);
+    if (!run) {
+      return;
+    }
+    const orchestration = this.activeFor(run.projectId);
+    const decision = orchestration?.turns.at(-1);
+    if (!orchestration || decision?.runId !== runId) {
+      return;
+    }
+    this.settledRuns.add(runId);
+    await this.act(orchestration, run, decision.decision);
+  }
+
+  private async act(
+    orchestration: Orchestration,
+    run: RunState,
+    decision: OrchestratorDecision,
+  ): Promise<void> {
+    if (decision.action === "stop") {
+      await this.terminate(orchestration, decision.reason, run.id);
+      return;
+    }
+    const projectPath = this.registry.resolve(orchestration.projectId);
+    const options = this.runs.inheritedRunOptions(run.id);
+    const started = await this.launch(
+      projectPath,
+      orchestration,
+      run,
+      decision,
+      options,
+    ).catch((error: unknown) => {
+      orchestration.decisionError =
+        error instanceof Error ? error.message : String(error);
+      return undefined;
+    });
+    if (started && !orchestration.runIds.includes(started.id)) {
+      orchestration.runIds.push(started.id);
+    }
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+  }
+
+  private async launch(
+    projectPath: ProjectPath,
+    orchestration: Orchestration,
+    run: RunState,
+    decision: OrchestratorDecision,
+    options: StartOrchestrationOptions,
+  ): Promise<RunState | undefined> {
+    if (decision.action === "start_run") {
+      const pipeline = orchestration.composedPipeline;
+      if (!pipeline) {
+        throw new Error(
+          "The Orchestrator asked to start a run before a team was approved",
+        );
+      }
+      return this.runs.startComposedRun(projectPath, pipeline, {
+        ...options,
+        task: decision.task,
+        orchestrationId: orchestration.id,
+      });
+    }
+    if (decision.action === "delegate_milestone_planning") {
+      return this.runs.startMilestonePlanning(projectPath, decision.goal, options);
+    }
+    if (decision.action === "continue_milestone") {
+      return this.continueMilestone(projectPath, run, decision.featureId, options);
+    }
+    return undefined;
+  }
+
+  private continueMilestone(
+    projectPath: ProjectPath,
+    run: RunState,
+    featureId: string | undefined,
+    options: StartOrchestrationOptions,
+  ): Promise<RunState> {
+    const milestone = run.milestoneId
+      ? this.runs.getMilestone(run.milestoneId)
+      : undefined;
+    if (!milestone) {
+      throw new Error("The settled run does not belong to a milestone to continue");
+    }
+    if (!milestone.autoRunNext) {
+      throw new Error(
+        `Milestone "${milestone.name}" does not continue on its own — enable auto-run to let the Orchestrator start its next feature`,
+      );
+    }
+    return this.runs.startNextMilestoneRun(projectPath, milestone.id, {
+      ...options,
+      ...(featureId === undefined ? {} : { featureId }),
+    });
+  }
+
+  private reviewMilestone(run: RunState): RunReviewMilestoneContext | undefined {
+    const milestone = run.milestoneId
+      ? this.runs.getMilestone(run.milestoneId)
+      : undefined;
+    return milestone ? milestoneReviewContext(milestone, run.featureId) : undefined;
+  }
+
+  private hasTurnFor(orchestration: Orchestration, runId: string): boolean {
+    return orchestration.turns.some((turn) => turn.runId === runId);
+  }
+
   private async buildTask(projectPath: ProjectPath, goal: string): Promise<string> {
     const [boardContext, closeoutContext] = await Promise.all([
       taskBoardPlanningContext(projectPath),
@@ -355,18 +585,7 @@ export class OrchestrationService implements StageOutputConsumer, QuestionMediat
       .filter((run) => runIds.has(run.id) && run.pipelineId !== PIPELINE_ID)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .flatMap((run) =>
-        run.stages.flatMap((stage) => {
-          const output = run.stageOutputs?.[stage.id];
-          return output
-            ? [
-                {
-                  runLabel: `Run ${run.number}: ${run.pipelineName}`,
-                  stageLabel: stage.label,
-                  output,
-                },
-              ]
-            : [];
-        }),
+        run.id === current.id ? stageOutputsOf(run) : artifactDigestOf(run),
       );
   }
 

@@ -122,6 +122,7 @@ test("answering resumes the same session rather than starting a new one", async 
   engine
     .anticipate({ as: "resumed turn", prompt: "Use SQLite.", resumeSessionId: SESSION })
     .reports(DONE);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
@@ -167,6 +168,7 @@ test("the user's reply to an escalation is recorded as the user's turn in the tr
       }),
     );
   engine.anticipate({ as: "resumed turn", resumeSessionId: SESSION }).reports(DONE);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
@@ -209,6 +211,7 @@ test("the run leaves asking as soon as the answer lands, not when the specialist
       }),
     );
   engine.anticipate({ as: "resumed turn", resumeSessionId: SESSION }).reports(DONE);
+  engine.anticipateRunReview();
   const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   const stream = await openSse(app, `/runs/${run.id}/events`);
   await waitForStageStatus(app, run.id, "solo", "asking");
@@ -243,6 +246,7 @@ test("an answer derived by the Orchestrator is recorded as an agent turn", async
   engine
     .anticipate({ as: "resumed turn", prompt: "Use SQLite.", resumeSessionId: SESSION })
     .reports(DONE);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
@@ -286,6 +290,7 @@ test("an Orchestrator plan limit parks and retries the mediation turn", async ()
   engine
     .anticipate({ as: "resumed specialist", prompt: "Use SQLite.", resumeSessionId: SESSION })
     .reports(DONE);
+  engine.anticipateRunReview();
   const run = await startRun(app, {
     pipelineId: "solo",
     task: TASK,
@@ -341,6 +346,7 @@ test("a stage retried after a limit re-asks the Orchestrator instead of replayin
   engine
     .anticipate({ as: "retried resumed turn", resumeSessionId: "sess-retry" })
     .reports(DONE);
+  engine.anticipateRunReview();
   const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
   await waitForStageStatus(app, run.id, "solo", "blocked");
 
@@ -368,6 +374,7 @@ test("a mediation decision for another stage needs attention instead of bypassin
         originStageId: "implementation",
       }),
     );
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, {
@@ -379,9 +386,9 @@ test("a mediation decision for another stage needs attention instead of bypassin
   // Assert
   const finished = await waitForRunStatus(app, run.id, "needs_attention");
   expect(stageOf(finished, "solo").status).toBe("failed");
-  expect(stageOf(finished, "solo").logs.at(-1)?.message).toContain(
-    'instead of "solo"',
-  );
+  expect(
+    stageOf(finished, "solo").logs.map((entry) => entry.message).join("\n"),
+  ).toContain('instead of "solo"');
   expect(finished.status).toBe("needs_attention");
   engine.verify();
 });
@@ -393,6 +400,7 @@ test("a non-interactive stage never parks, even if it prints a QUESTION line", a
   engine.anticipate({ as: "Project Manager" }).reports("Build it with SQLite.");
   engine.anticipate({ as: "Developer" }).asks(QUESTION, SESSION);
   engine.anticipate({ as: "Tester" }).reports("Checked it.\n\nVERDICT: PASS");
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" });

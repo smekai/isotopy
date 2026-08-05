@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ENGINE_IDS } from "./engines.ts";
 import type { EngineId } from "./engines.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
+import type { RunArtifactRecord } from "./run-artifacts.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { findPipeline, flattenPipelineStages } from "./pipelines.ts";
 import { requiredText, timestamp } from "./schema.ts";
@@ -191,6 +192,7 @@ export interface RunState {
   orchestrationId?: string;
   sourceTaskIds?: string[];
   closeout?: RunCloseoutRecord;
+  artifacts?: RunArtifactRecord;
   pipelineId: string;
   pipelineName: string;
   pipeline?: PipelineDefinition;
