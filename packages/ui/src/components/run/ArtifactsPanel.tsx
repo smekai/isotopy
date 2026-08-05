@@ -5,7 +5,7 @@ import { agentForStage } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { fetchRunFileContent, fetchRunFiles } from "../../api";
 import type { WorkspaceFile, WorkspaceFileContent } from "../../api";
-import { CloseoutPanel } from "./CloseoutPanel";
+import { CloseoutPanel, RunArtifactsPanel } from "./CloseoutPanel";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
@@ -242,7 +242,7 @@ export function ArtifactsPanel({ run, focusedStageId, d }: ArtifactsPanelProps) 
   const handoffs = handoffsOf(run);
   const views: ArtifactView[] = [
     "workflow",
-    ...(run.closeout ? (["closeout"] as const) : []),
+    ...(run.closeout || run.artifacts ? (["closeout"] as const) : []),
     ...(run.workspacePath != null ? (["files"] as const) : []),
   ];
   const active = views.includes(view) ? view : "workflow";
@@ -267,6 +267,8 @@ export function ArtifactsPanel({ run, focusedStageId, d }: ArtifactsPanelProps) 
 
       {active === "closeout" && run.closeout ? (
         <CloseoutPanel closeout={run.closeout} d={d} />
+      ) : active === "closeout" && run.artifacts ? (
+        <RunArtifactsPanel artifacts={run.artifacts} d={d} />
       ) : active === "files" ? (
         <WorkspaceBrowser runId={run.id} runStatus={run.status} d={d} />
       ) : (

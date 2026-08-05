@@ -1,5 +1,48 @@
 # Done
 
+## TASK-112: Post-run decision loop (next phase routing)
+**Priority:** P1 | **Tags:** core, server
+**Updated:** 2026-08-05 17:20
+
+After a run settles, its Orchestrator reviews it, collects its artifacts, and decides the next
+phase. Closes Milestone E's loop: `start_run`, `delegate_milestone_planning`, and the new
+`continue_milestone` now launch work instead of being recorded and ignored.
+
+### Done
+
+**The review.** A durable `orchestrator:review` step runs at the end of every non-orchestration
+run's own `PipelineWorkflow`, before `run:completed`. It loads the Orchestrator persona and the
+new `review-run` step task, and is fed the settled run's stage outputs, its Product Manager
+closeout where one exists, and — for a milestone run — the remaining ready features and whether
+`autoRunNext` permits continuing. The turn returns two independent fenced blocks,
+`adhd-run-artifacts` and `adhd-orchestrator-decision`; each is read on its own, and a failed
+review is never fatal to the run.
+
+**Artifacts.** New `RunArtifacts` / `RunArtifactRecord` in `packages/core/src/run-artifacts.ts`,
+with `CLOSEOUT_SHAPE` rebuilt as `{ ...RUN_ARTIFACTS_SHAPE, tasks, completedTaskIds,
+unresolvedTaskIds, cleanup }` so the superset relation is structural. Persisted on `RunState`
+and to `runs/<id>/artifacts/artifacts.{json,md}`. A composed `team-*` run, which produces no
+closeout, now produces a durable record.
+
+**Launching after the claim releases.** `recordReview` persists but never launches;
+`settleCompletedRun` dispatches through the new `RunReviewer.settle` after `releaseRun`. This is
+the run-completion seam TASK-120 rejected — it earns its place here because that is the only
+point at which the per-project admission claim is free and the decision is known.
+
+**Milestone chaining through the Orchestrator.** `completeMilestoneRun` keeps the feature
+bookkeeping and no longer starts anything. `continue_milestone` does, gated on
+`milestone.autoRunNext`, and its optional `featureId` lets the closeout's `nextRecommendation`
+choose which feature runs next — the first code path to read that field.
+
+**Reach.** `mediationArtifacts` now prefers a prior run's condensed artifacts over its raw stage
+outputs, so a brokering prompt stops growing linearly with the orchestration. `CloseoutPanel`
+falls back to `run.artifacts` through a shared `ArtifactReport`.
+
+Gates: lint, typecheck, 510 tests, build, 54 e2e. `FakeEngine.anticipateRunReview()` absorbed the
+trailing engine call across 17 component files without weakening AAAAA's declare-up-front rule.
+
+---
+
 ## TASK-120: Mandatory Orchestrator question mediation
 **Priority:** P1 | **Tags:** core, server, engine
 **Updated:** 2026-08-05 15:40

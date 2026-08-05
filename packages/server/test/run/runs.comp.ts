@@ -32,6 +32,7 @@ test("a gate holds the run at awaiting until it is approved", async () => {
   engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, {

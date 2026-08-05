@@ -63,6 +63,7 @@ describe("plan limit", () => {
     ctx.engine.anticipate({ as: "Developer", model: "opus" }).hitsLimit(SESSION_LIMIT);
     ctx.engine.anticipate({ as: "Developer on Haiku", model: "haiku" }).reports(DEV_REPORT);
     ctx.engine.anticipate({ as: "Tester", model: "haiku" }).reports(TESTER_REPORT);
+    ctx.engine.anticipateRunReview();
     const run = await startRun(
       ctx.app,
       { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code", model: "opus" },
@@ -119,6 +120,7 @@ describe("plan limit", () => {
     const project = await addTestProject(ctx.registry, "limit-timeout");
     ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SHORT_LIMIT);
     ctx.engine.anticipate({ as: "Agent after the reset" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
 
     // Act
     const run = await startRun(

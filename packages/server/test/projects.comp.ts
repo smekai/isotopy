@@ -156,6 +156,8 @@ test("each project lists only its own runs", async () => {
   // Act
   ctx.engine.anticipate().reports("done");
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
+  ctx.engine.anticipateRunReview();
   const inAlpha = await startRun(ctx.app, { ...ENGINE_RUN, task: "alpha work" }, alpha.headers);
   const inBeta = await startRun(ctx.app, { ...ENGINE_RUN, task: "beta work" }, beta.headers);
   await waitForRunStatus(ctx.app, inAlpha.id, "completed");
@@ -177,10 +179,13 @@ test("run numbering restarts per project", async () => {
 
   // Act
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
   const firstAlpha = await startRun(ctx.app, ENGINE_RUN, alpha.headers);
   await waitForRunStatus(ctx.app, firstAlpha.id, "completed");
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
   ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
   const secondAlpha = await startRun(ctx.app, ENGINE_RUN, alpha.headers);
   const firstBeta = await startRun(ctx.app, ENGINE_RUN, beta.headers);
 

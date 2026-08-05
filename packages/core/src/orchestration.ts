@@ -6,6 +6,7 @@ export const ORCHESTRATOR_ACTIONS = [
   "propose_team",
   "delegate_milestone_planning",
   "start_run",
+  "continue_milestone",
   "ask_user",
   "stop",
   "answer_agent",
@@ -97,6 +98,13 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       rationale: requiredText,
       task: requiredText,
       teamId: requiredText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("continue_milestone"),
+      rationale: requiredText,
+      featureId: requiredText.optional(),
     })
     .strict(),
   z.object({ action: z.literal("ask_user"), question: requiredText }).strict(),
@@ -193,6 +201,8 @@ export function orchestrationStatusFor(
       return "stopped";
     case "delegate_milestone_planning":
     case "start_run":
+    case "continue_milestone":
+      return "running";
     case "answer_agent":
     case "route_to_agent":
       return "conversing";

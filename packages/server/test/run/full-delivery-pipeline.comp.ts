@@ -50,6 +50,12 @@ test("the revised persona team completes one Full Delivery run", async () => {
     })
     .reports(QA_PASS);
   anticipateDeliveryAndCloseout();
+  // The Orchestrator is handed the Product Manager's closeout rather than being
+  // left to re-derive one from nine raw stage outputs.
+  ctx.engine.anticipateRunReview({
+    as: "Orchestrator review",
+    artifacts: { summary: "Full Delivery landed" },
+  });
 
   // Act
   const run = await startRun(ctx.app, PIPELINE);
@@ -84,6 +90,7 @@ test("a blocking architecture review continues through QA and closeout", async (
   ctx.engine
     .anticipate({ as: "Product Manager closeout", prompt: /Missing rollback boundary/ })
     .reports(CLOSEOUT);
+  ctx.engine.anticipateRunReview();
 
   // Act
   const run = await startRun(ctx.app, PIPELINE);
@@ -107,6 +114,7 @@ test("an engine failure skips unsafe work but still runs closeout", async () => 
   ctx.engine
     .anticipate({ as: "Product Manager closeout" })
     .reports("Recorded the runtime failure\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
 
   // Act
   const run = await startRun(ctx.app, PIPELINE);
@@ -131,6 +139,7 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
   ctx.engine
     .anticipate({ as: "Product Manager closeout, first" })
     .reports("Recorded the runtime failure\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "Review of the failed pass" });
   const run = await startRun(ctx.app, PIPELINE);
   await approveIntake(ctx.app, run.id);
   await waitForRunStatus(ctx.app, run.id, "failed");
@@ -138,6 +147,7 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
   ctx.engine
     .anticipate({ as: "Product Manager closeout, retry" })
     .reports(CLOSEOUT);
+  ctx.engine.anticipateRunReview({ as: "Review of the retry" });
 
   // Act
   await post(ctx.app, `/runs/${run.id}/restart`, { stageId: "test" });

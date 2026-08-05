@@ -108,6 +108,7 @@ test("invalid existing task links leave the proposal as a retryable draft", asyn
     .reports(
       `\`\`\`adhd-milestone-plan\n${JSON.stringify(invalidLinkPlan)}\n\`\`\``,
     );
+  ctx.engine.anticipateRunReview();
   const { body: run } = await post<RunState>(ctx.app, "/milestones/plan", {
     goal: "Reuse a missing task",
   });
@@ -177,6 +178,7 @@ function anticipatePlanningConversation(): void {
     .reports(
       `Recommended plan\n\n\`\`\`adhd-milestone-plan\n${JSON.stringify(PLAN)}\n\`\`\``,
     );
+  ctx.engine.anticipateRunReview();
 }
 
 function fenced(decision: unknown): string {

@@ -52,6 +52,7 @@ test("the boxes run in order, in one shared workspace, each with its own persona
       prompt: /MARKER-DEVELOPER/,
     })
     .reports(TESTER_REPORT);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, { ...PIPELINE, model: "haiku" });
@@ -77,6 +78,7 @@ test("each prompt quotes every upstream report under a handoff heading", async (
   engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -104,6 +106,7 @@ test("each box's output is stored per stage and written as its own handoff.md", 
   engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -136,6 +139,7 @@ test("a FAIL verdict fails the stage and leaves the run needing attention", asyn
   engine
     .anticipate({ as: "QA Engineer" })
     .reports("The greet function returns undefined.\n\nVERDICT: FAIL");
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -157,6 +161,7 @@ test("a PASS verdict is recorded on the verifying stage only", async () => {
   engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -177,6 +182,7 @@ test("a SKIP verdict records evidence and continues to downstream stages", async
     .anticipate({ as: "Developer", prompt: /MARKER-SKIP/ })
     .reports(DEV_REPORT);
   engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
 
   const run = await startRun(app, PIPELINE);
 
@@ -196,9 +202,10 @@ test("a failing Developer stops the run before QA is ever called", async () => {
   // Arrange
   const { app, engine } = ctx;
 
-  // Anticipate — two calls. verify() proves QA never ran.
+  // Anticipate — two stage calls plus the review. verify() proves QA never ran.
   engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).fails("claude exited with code 1");
+  engine.anticipateRunReview();
 
   // Act
   const run = await startRun(app, PIPELINE);
@@ -238,6 +245,7 @@ test("restarting from QA keeps the upstream output and re-runs only QA", async (
   engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "QA, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
+  engine.anticipateRunReview({ as: "Review of the failed attempt" });
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
   await waitForRunStatus(app, run.id, "needs_attention");
@@ -247,6 +255,7 @@ test("restarting from QA keeps the upstream output and re-runs only QA", async (
   engine
     .anticipate({ as: "QA, retry", prompt: /MARKER-DEVELOPER/ })
     .reports(TESTER_REPORT);
+  engine.anticipateRunReview({ as: "Review of the retry" });
 
   // Act
   const { status } = await post(app, `/runs/${run.id}/restart`, { stageId: "test" });
@@ -289,12 +298,14 @@ test("restarting a stage drops its old report, so a failed retry leaves no stale
   engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
   engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   engine.anticipate({ as: "QA, first attempt" }).reports("Broken.\n\nVERDICT: FAIL");
+  engine.anticipateRunReview({ as: "Review of the failed attempt" });
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
   await waitForRunStatus(app, run.id, "needs_attention");
 
   // Anticipate — the retry dies at the process level, producing no report at all.
   engine.anticipate({ as: "QA, retry" }).fails("claude exited with code 1");
+  engine.anticipateRunReview({ as: "Review of the retry" });
 
   // Act
   await post(app, `/runs/${run.id}/restart`, { stageId: "test" });

@@ -7,7 +7,12 @@
 // Registered via `setEngineAdapter()` (packages/server/src/engines/registry.ts),
 // which is what keeps a component test from ever spawning a real CLI.
 import { assert, expect } from "vitest";
-import type { EngineId, StageUsage } from "@adhd/core";
+import type {
+  EngineId,
+  OrchestratorDecision,
+  RunArtifacts,
+  StageUsage,
+} from "@adhd/core";
 import { detectEngineLimit } from "../../src/domain/engine-limit.ts";
 import type {
   EngineAdapter,
@@ -62,6 +67,30 @@ export interface AnticipationOutcome {
    * a decision block rather than a `QUESTION:` line stops to ask.
    */
   parks(result: string, sessionId: string, usage?: StageUsage): FakeEngine;
+}
+
+/** What the Orchestrator's post-run review returns; both halves default. */
+export interface RunReviewScript {
+  artifacts?: Partial<RunArtifacts>;
+  decision?: OrchestratorDecision;
+  as?: string;
+}
+
+const DEFAULT_REVIEW_ARTIFACTS: RunArtifacts = {
+  summary: "The run finished.",
+  deliveredScope: [],
+  decisions: [],
+  knowledge: [],
+  findings: [],
+};
+
+const DEFAULT_REVIEW_DECISION: OrchestratorDecision = {
+  action: "stop",
+  reason: "Nothing further was asked of this orchestration",
+};
+
+export function fencedBlock(fence: string, payload: unknown): string {
+  return `\`\`\`${fence}\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
 }
 
 function describeMatcher(matcher: Matcher): string {
@@ -157,6 +186,24 @@ QUESTION: ${question}`,
             }),
         ),
     };
+  }
+
+  /**
+   * Declare the Orchestrator's post-run review — the trailing engine call every
+   * non-orchestration run now makes before it completes. Overrides let a test
+   * about the decision loop script what the review returns; the defaults keep a
+   * test that is about something else to one line.
+   */
+  anticipateRunReview(review: RunReviewScript = {}): FakeEngine {
+    const artifacts = { ...DEFAULT_REVIEW_ARTIFACTS, ...review.artifacts };
+    const decision = review.decision ?? DEFAULT_REVIEW_DECISION;
+    return this.anticipate({ as: review.as ?? "Orchestrator review" }).reports(
+      [
+        "Reviewed the run.",
+        fencedBlock("adhd-run-artifacts", artifacts),
+        fencedBlock("adhd-orchestrator-decision", decision),
+      ].join("\n\n"),
+    );
   }
 
   /**

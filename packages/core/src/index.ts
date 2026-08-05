@@ -5,6 +5,7 @@ export * from "./milestones.ts";
 export * from "./orchestration.ts";
 export * from "./pipelines.ts";
 export * from "./projects.ts";
+export * from "./run-artifacts.ts";
 export * from "./run-events.ts";
 export * from "./runs.ts";
 export * from "./schema.ts";

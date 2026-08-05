@@ -1,17 +1,8 @@
 import { z } from "zod";
-import { FINDING_SEVERITIES, TASK_PRIORITIES } from "./milestones.ts";
+import { TASK_PRIORITIES } from "./milestones.ts";
+import { RUN_ARTIFACTS_SHAPE } from "./run-artifacts.ts";
+import type { CloseoutFinding } from "./run-artifacts.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
-
-export const closeoutFindingSchema = z
-  .object({
-    id: requiredText,
-    title: requiredText,
-    severity: z.enum(FINDING_SEVERITIES),
-    evidence: requiredText.optional(),
-  })
-  .strict();
-
-export type CloseoutFinding = z.infer<typeof closeoutFindingSchema>;
 
 export const followUpTaskDraftSchema = z
   .object({
@@ -34,21 +25,12 @@ export const cleanupCandidateSchema = z
 
 export type CleanupCandidate = z.infer<typeof cleanupCandidateSchema>;
 
-/**
- * The field-by-field shape, exported so the agent boundary can override
- * individual fields with its salvaging variants rather than restating all ten.
- */
 export const CLOSEOUT_SHAPE = {
-  summary: requiredText,
-  deliveredScope: requiredTexts,
-  decisions: requiredTexts,
-  knowledge: requiredTexts,
-  findings: z.array(closeoutFindingSchema),
+  ...RUN_ARTIFACTS_SHAPE,
   tasks: z.array(followUpTaskDraftSchema),
   completedTaskIds: requiredTexts,
   unresolvedTaskIds: requiredTexts,
   cleanup: z.array(cleanupCandidateSchema),
-  nextRecommendation: requiredText.optional(),
 };
 
 export function refineDeclaredFindings(

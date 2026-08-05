@@ -16,6 +16,7 @@ import type {
 } from "@adhd/core";
 import { limitWaitMs } from "../domain/engine-limit.ts";
 import {
+  runOrchestratorReviewWork,
   runQuestionMediationWork,
   runStageWork,
 } from "./stage-execution.ts";
@@ -563,6 +564,12 @@ export function createPipelineWorkflow(
       }
 
       const status = walk.status;
+      if (pipeline.id !== ORCHESTRATION_PIPELINE.id) {
+        await step.run({ name: "orchestrator:review" }, () =>
+          runOrchestratorReviewWork(deps, input, status),
+        );
+      }
+
       await step.run({ name: "run:completed" }, () => {
         deps.projection.runCompleted(runId, status);
         return null;

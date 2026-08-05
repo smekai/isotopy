@@ -2,6 +2,8 @@ import type { CSSProperties, ReactNode } from "react";
 import type {
   CloseoutFinding,
   CreatedTaskReference,
+  RunArtifactRecord,
+  RunArtifacts,
   RunCloseoutRecord,
 } from "@adhd/core";
 import type { Dir } from "../../theme";
@@ -225,17 +227,24 @@ function FindingItem({ finding, d }: FindingItemProps) {
   );
 }
 
-export interface CloseoutPanelProps {
-  closeout: RunCloseoutRecord;
+interface ArtifactReportProps {
+  report: RunArtifacts;
+  validationErrors: string[];
+  testId: string;
   d: Dir;
+  children?: ReactNode;
 }
 
-export function CloseoutPanel({ closeout, d }: CloseoutPanelProps) {
-  const { report, createdTasks, cleanup, validationErrors } = closeout;
-
+function ArtifactReport({
+  report,
+  validationErrors,
+  testId,
+  d,
+  children,
+}: ArtifactReportProps) {
   return (
     <div style={SCROLL_BODY}>
-      <div style={CONTENT} data-testid="closeout-panel">
+      <div style={CONTENT} data-testid={testId}>
         <div style={summaryText(d)}>{report.summary}</div>
 
         {validationErrors.length > 0 && (
@@ -264,37 +273,7 @@ export function CloseoutPanel({ closeout, d }: CloseoutPanelProps) {
           </Section>
         )}
 
-        {createdTasks.length > 0 && (
-          <Section heading="Created tasks" d={d}>
-            <div style={CHIP_ROW}>
-              {createdTasks.map((task) => (
-                <span key={task.id} style={taskChip(d)} data-testid="closeout-created-task">
-                  <span style={taskId(d)}>{task.id}</span>
-                  {task.title}
-                  <span style={backendBadge(d)}>{BACKEND_LABEL[task.backend]}</span>
-                </span>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        <IdChips heading="Completed source tasks" ids={report.completedTaskIds} d={d} />
-        <IdChips heading="Unresolved source tasks" ids={report.unresolvedTaskIds} d={d} />
-
-        {(cleanup.removed.length > 0 || cleanup.rejected.length > 0) && (
-          <Section heading="Cleanup" d={d}>
-            <div style={cleanupLine(d)}>
-              {cleanup.removed.map((entry) => (
-                <div key={entry}>Removed {entry}</div>
-              ))}
-              {cleanup.rejected.map((entry) => (
-                <div key={entry} style={REJECTED_TEXT}>
-                  Rejected {entry}
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
+        {children}
 
         {report.nextRecommendation && (
           <Section heading="Next recommendation" d={d}>
@@ -303,5 +282,71 @@ export function CloseoutPanel({ closeout, d }: CloseoutPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+export interface CloseoutPanelProps {
+  closeout: RunCloseoutRecord;
+  d: Dir;
+}
+
+export function CloseoutPanel({ closeout, d }: CloseoutPanelProps) {
+  const { report, createdTasks, cleanup, validationErrors } = closeout;
+
+  return (
+    <ArtifactReport
+      report={report}
+      validationErrors={validationErrors}
+      testId="closeout-panel"
+      d={d}
+    >
+      {createdTasks.length > 0 && (
+        <Section heading="Created tasks" d={d}>
+          <div style={CHIP_ROW}>
+            {createdTasks.map((task) => (
+              <span key={task.id} style={taskChip(d)} data-testid="closeout-created-task">
+                <span style={taskId(d)}>{task.id}</span>
+                {task.title}
+                <span style={backendBadge(d)}>{BACKEND_LABEL[task.backend]}</span>
+              </span>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <IdChips heading="Completed source tasks" ids={report.completedTaskIds} d={d} />
+      <IdChips heading="Unresolved source tasks" ids={report.unresolvedTaskIds} d={d} />
+
+      {(cleanup.removed.length > 0 || cleanup.rejected.length > 0) && (
+        <Section heading="Cleanup" d={d}>
+          <div style={cleanupLine(d)}>
+            {cleanup.removed.map((entry) => (
+              <div key={entry}>Removed {entry}</div>
+            ))}
+            {cleanup.rejected.map((entry) => (
+              <div key={entry} style={REJECTED_TEXT}>
+                Rejected {entry}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+    </ArtifactReport>
+  );
+}
+
+export interface RunArtifactsPanelProps {
+  artifacts: RunArtifactRecord;
+  d: Dir;
+}
+
+export function RunArtifactsPanel({ artifacts, d }: RunArtifactsPanelProps) {
+  return (
+    <ArtifactReport
+      report={artifacts.report}
+      validationErrors={artifacts.validationErrors}
+      testId="run-artifacts-panel"
+      d={d}
+    />
   );
 }

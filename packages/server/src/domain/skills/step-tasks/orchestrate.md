@@ -62,6 +62,17 @@ Start a run with an approved team:
 }
 ```
 
+Continue a milestone by running its next feature, when the supplied milestone
+context says continuing is permitted:
+
+```json
+{
+  "action": "continue_milestone",
+  "rationale": "Why this feature is next",
+  "featureId": "optional ready feature id"
+}
+```
+
 Ask the user something you need for your own next decision:
 
 ```json
