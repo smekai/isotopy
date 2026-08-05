@@ -145,6 +145,14 @@ export const startOrchestrationSchema = z
   })
   .strict();
 
+export const approveTeamSchema = z
+  .object({
+    engine: optionalText,
+    model: z.string().optional(),
+    permissionMode: optionalText,
+  })
+  .strict();
+
 export const startNextMilestoneRunSchema = z
   .object({
     engine: optionalText,

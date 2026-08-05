@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { STAGE_EXECUTION_POLICIES } from "./pipelines.ts";
+import { STAGE_EXECUTION_POLICIES, pipelineDefinitionSchema } from "./pipelines.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const ORCHESTRATOR_ACTIONS = [
@@ -102,6 +102,7 @@ export const ORCHESTRATION_STATUSES = [
   "conversing",
   "awaiting_user",
   "awaiting_approval",
+  "running",
   "stopped",
 ] as const;
 
@@ -126,6 +127,8 @@ export const orchestrationSchema = z
     turns: z.array(orchestrationTurnSchema),
     latestDecision: orchestratorDecisionSchema.optional(),
     decisionError: requiredText.optional(),
+    approvedTeam: orchestratorTeamProposalSchema.optional(),
+    composedPipeline: pipelineDefinitionSchema.optional(),
     runIds: requiredTexts,
     createdAt: timestamp,
     updatedAt: timestamp,

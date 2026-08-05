@@ -3,7 +3,7 @@ import { ENGINE_IDS } from "./engines.ts";
 import type { EngineId } from "./engines.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
-import { flattenPipelineStages } from "./pipelines.ts";
+import { findPipeline, flattenPipelineStages } from "./pipelines.ts";
 import { requiredText, timestamp } from "./schema.ts";
 
 export const STAGE_STATUSES = [
@@ -193,6 +193,7 @@ export interface RunState {
   closeout?: RunCloseoutRecord;
   pipelineId: string;
   pipelineName: string;
+  pipeline?: PipelineDefinition;
   status: RunStatus;
   task?: string;
   engine?: EngineId;
@@ -316,6 +317,10 @@ export interface NewRunInput {
   sourceTaskIds?: string[];
 }
 
+function isCatalogPipeline(pipeline: PipelineDefinition): boolean {
+  return findPipeline(pipeline.id) !== undefined;
+}
+
 export function createInitialRunState({
   runId,
   number,
@@ -337,6 +342,7 @@ export function createInitialRunState({
     sourceTaskIds,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
+    pipeline: isCatalogPipeline(pipeline) ? undefined : pipeline,
     status: "pending",
     task,
     stageOutputs: {},

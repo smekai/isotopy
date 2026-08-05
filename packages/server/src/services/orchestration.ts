@@ -1,10 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { orchestrationStatusFor } from "@adhd/core";
 import type { Orchestration, RunState, StageDefinition } from "@adhd/core";
-import { renderOrchestrationContext } from "../domain/markdown/orchestration.ts";
+import {
+  renderComposedRunTask,
+  renderOrchestrationContext,
+} from "../domain/markdown/orchestration.ts";
 import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
+import { composeTeamPipeline } from "../domain/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
+import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
 import { nowIso } from "../utils.ts";
@@ -102,6 +107,43 @@ export class OrchestrationService implements StageOutputConsumer {
       this.orchestrations.delete(orchestration.id);
       throw error;
     }
+  }
+
+  async approveTeam(
+    projectPath: ProjectPath,
+    orchestrationId: string,
+    options: StartOrchestrationOptions,
+  ): Promise<ValidationResult<RunState>> {
+    const orchestration = this.orchestrations.get(orchestrationId);
+    if (!orchestration || orchestration.projectId !== projectPath.id) {
+      throw new Error("Orchestration not found");
+    }
+    const decision = orchestration.latestDecision;
+    if (
+      orchestration.status !== "awaiting_approval" ||
+      decision?.action !== "propose_team"
+    ) {
+      throw new Error("No team is awaiting approval on this orchestration");
+    }
+    const composed = composeTeamPipeline(decision.team, orchestration.id);
+    if (!composed.ok) {
+      return composed;
+    }
+    const run = await this.runs.startComposedRun(projectPath, composed.value, {
+      ...options,
+      task: renderComposedRunTask({
+        goal: orchestration.goal,
+        team: decision.team,
+      }),
+      orchestrationId: orchestration.id,
+    });
+    orchestration.approvedTeam = decision.team;
+    orchestration.composedPipeline = composed.value;
+    orchestration.runIds.push(run.id);
+    orchestration.status = "running";
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+    return { ok: true, value: run };
   }
 
   async consume(

@@ -1,14 +1,5 @@
-export interface StageDefinition {
-  id: string;
-  label: string;
-  gateAfter?: boolean;
-  interactive?: boolean;
-  skill?: string;
-  stepTask?: string;
-  executionPolicy?: StageExecutionPolicy;
-  outputProtocol?: StageOutputProtocol;
-  maxTurns?: number;
-}
+import { z } from "zod";
+import { requiredText } from "./schema.ts";
 
 export const STAGE_OUTPUT_PROTOCOLS = {
   VERDICT: "verdict",
@@ -28,17 +19,39 @@ export const STAGE_EXECUTION_POLICIES = {
 export type StageExecutionPolicy =
   (typeof STAGE_EXECUTION_POLICIES)[keyof typeof STAGE_EXECUTION_POLICIES];
 
-export interface PipelineGroup {
-  stages: StageDefinition[];
-}
+export const stageDefinitionSchema = z
+  .object({
+    id: requiredText,
+    label: requiredText,
+    gateAfter: z.boolean().optional(),
+    interactive: z.boolean().optional(),
+    skill: requiredText.optional(),
+    stepTask: requiredText.optional(),
+    executionPolicy: z.enum(STAGE_EXECUTION_POLICIES).optional(),
+    outputProtocol: z.enum(STAGE_OUTPUT_PROTOCOLS).optional(),
+    maxTurns: z.number().int().positive().optional(),
+  })
+  .strict();
 
-export interface PipelineDefinition {
-  id: string;
-  name: string;
-  description: string;
-  internal?: boolean;
-  groups: PipelineGroup[];
-}
+export type StageDefinition = z.infer<typeof stageDefinitionSchema>;
+
+export const pipelineGroupSchema = z
+  .object({ stages: z.array(stageDefinitionSchema) })
+  .strict();
+
+export type PipelineGroup = z.infer<typeof pipelineGroupSchema>;
+
+export const pipelineDefinitionSchema = z
+  .object({
+    id: requiredText,
+    name: requiredText,
+    description: requiredText,
+    internal: z.boolean().optional(),
+    groups: z.array(pipelineGroupSchema),
+  })
+  .strict();
+
+export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
 
 export const SOLO_PIPELINE: PipelineDefinition = {
   id: "solo",
