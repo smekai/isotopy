@@ -54,7 +54,30 @@ test("a question loop's turns add up instead of the last one winning", async () 
   const { app, engine } = ctx;
   engine.anticipate({ as: "opening turn" }).asks(QUESTION, SESSION, { costUsd: 0.02, turns: 1 });
   engine
-    .anticipate({ as: "resumed turn", resumeSessionId: SESSION })
+    .anticipate({ as: "Orchestrator escalation", persona: /# Role: Orchestrator/ })
+    .parks(
+      fenced({
+        action: "escalate_to_user",
+        question: "Should the settings use SQLite?",
+        originStageId: "solo",
+      }),
+      "usage-broker-session",
+    );
+  engine
+    .anticipate({
+      as: "Orchestrator routing",
+      resumeSessionId: "usage-broker-session",
+    })
+    .reports(
+      fenced({
+        action: "route_to_agent",
+        stageId: "solo",
+        message: "Use SQLite.",
+        rationale: "The user selected it",
+      }),
+    );
+  engine
+    .anticipate({ as: "resumed turn", resumeSessionId: SESSION, prompt: "Use SQLite." })
     .reports("Added the settings page.", { costUsd: 0.03, turns: 2 });
 
   // Act
@@ -116,3 +139,7 @@ test("spend survives a server restart", async () => {
   expect(stageOf(body, "solo").usage).toEqual({ costUsd: 0.11, turns: 2 });
   await restarted.shutdown();
 }, 15_000);
+
+function fenced(decision: unknown): string {
+  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+}

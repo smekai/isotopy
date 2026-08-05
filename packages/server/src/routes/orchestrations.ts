@@ -5,6 +5,7 @@ import {
 } from "../domain/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { OrchestrationService } from "../services/orchestration.ts";
+import { ActiveOrchestratorConflictError } from "../services/question-mediator.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
@@ -37,7 +38,10 @@ export function createOrchestrationRoutes(
           201,
         );
       } catch (error) {
-        return c.json({ error: messageOf(error) }, 400);
+        return c.json(
+          { error: messageOf(error) },
+          error instanceof ActiveOrchestratorConflictError ? 409 : 400,
+        );
       }
     })
     .get("/:id", (c) => {
@@ -71,6 +75,18 @@ export function createOrchestrationRoutes(
         return started.ok
           ? c.json(started.value, 201)
           : c.json(invalidRequest(started.issues), 400);
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
+    .post("/:id/stop", async (c) => {
+      const project = projectScope(registry, c);
+      const orchestration = orchestrations.get(c.req.param("id"));
+      if (!orchestration || orchestration.projectId !== project.id) {
+        return c.json({ error: "Orchestration not found" }, 404);
+      }
+      try {
+        return c.json(await orchestrations.stop(project, orchestration.id));
       } catch (error) {
         return c.json({ error: messageOf(error) }, 400);
       }

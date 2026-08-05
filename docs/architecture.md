@@ -581,7 +581,7 @@ to the conversation that asked for it.
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunOrchestrator` is for runs |
 | Composition | `server/src/domain/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
-| API | `server/src/routes/orchestrations.ts` — start, list, read, approve. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage |
+| API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
 `domain/skills/personas/`, same user-override and project-addendum layering, same
@@ -621,6 +621,32 @@ Because a composed pipeline exists in no constant, the run carries it —
 `RunState.pipeline` is written only when `findPipeline` cannot resolve the id, and
 `pipelineForRun()` is what `buildInput` and `restartRun` resolve through. Built-in
 runs persist exactly what they did before.
+
+**One persisted Orchestrator supervises a project.** It is an aggregate, not a
+continuously running process. The orchestration conversation is the bootstrap
+exception; every other run and restart requires a non-stopped Orchestrator and is
+attached to it. A second active record is rejected. Startup reconciles legacy
+duplicates by retaining the newest `updatedAt`, stopping the others, and cancelling
+their non-terminal owned work before durable workers start. `POST
+/orchestrations/:id/stop` uses the same termination path as a typed `stop`, retains
+history and artifacts, and leaves ordinary work unavailable until another
+Orchestrator is created.
+
+**Specialist questions are mediated inside the specialist workflow.** The
+`QuestionMediator` seam lets `PipelineWorkflow` request active aggregate context and
+record a narrowed broker decision. The workflow executes the Orchestrator persona as
+a named durable step with the asking run's engine, model, permissions, workspace,
+limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
+same specialist CLI session. `escalate_to_user` uses the existing `asking` state and
+durable user-signal wait, then a second step requires `route_to_agent` for that same
+stage before resuming it. The Orchestrator's own `ask_user` remains direct, preventing
+recursion.
+
+`Orchestration.brokerTurns` stores these decisions separately from lifecycle `turns`.
+Its context is deliberately narrow: active goal, approved team, current upstream
+outputs, and prior outputs owned by the active Orchestrator. Raw transcripts, logs,
+and stopped Orchestrators are excluded. There is no broker queue, secondary workflow
+worker, admission lane, or direct-user fallback when the invariant is broken.
 
 ### 3. Workflow state
 

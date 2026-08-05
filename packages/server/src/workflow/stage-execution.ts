@@ -7,22 +7,32 @@ import {
   agentForStage,
   isConversational,
 } from "@adhd/core";
-import type { EngineId, RunState, StageDefinition } from "@adhd/core";
+import type {
+  EngineId,
+  OrchestratorBrokerDecision,
+  OrchestratorDecision,
+  RunState,
+  StageDefinition,
+} from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { interpretEngineResult } from "../domain/stage-context.ts";
+import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
 import { loadSkill } from "../services/skills.ts";
 import { loadBundledStepTask } from "../services/bundled-prompts.ts";
 import { nowIso } from "../utils.ts";
 import type {
   PipelineWorkflowInput,
+  QuestionMediationResult,
   StageResult,
   StageTurn,
   WorkflowDeps,
 } from "./types.ts";
+import type { QuestionMediationRequest } from "../services/question-mediator.ts";
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
@@ -57,13 +67,177 @@ function engineLabel(run: RunState): string {
   return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
 }
 
+async function runAdapter(
+  deps: WorkflowDeps,
+  input: PipelineWorkflowInput,
+  run: RunState,
+  engine: EngineId,
+  stageId: string,
+  prompt: string,
+  persona: string | undefined,
+  resumeSessionId: string | undefined,
+): Promise<EngineRunResult> {
+  const controller = deps.beginEngineStage(run.id);
+  try {
+    const adapter = getEngineAdapter(engine);
+    return await adapter.run({
+      runId: run.id,
+      prompt,
+      cwd: run.workspacePath ?? process.cwd(),
+      model: run.model,
+      appendSystemPrompt: persona,
+      permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
+      connection: deps.settings.getEngineConnection(run.projectId, engine),
+      resumeSessionId,
+      timeoutMs: config.engineTimeoutMs,
+      signal: controller.signal,
+      onLog: (log) => deps.projection.log(run.id, stageId, log),
+    });
+  } catch (error) {
+    return {
+      success: false,
+      exitCode: null,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    deps.endEngineStage(run.id);
+  }
+}
+
+function brokerDecisionError(
+  request: QuestionMediationRequest,
+  decision: OrchestratorDecision,
+): string | undefined {
+  if (request.phase === "question") {
+    if (decision.action === "answer_agent") {
+      return undefined;
+    }
+    if (decision.action === "escalate_to_user") {
+      return decision.originStageId === request.stageId
+        ? undefined
+        : `Orchestrator escalated for stage "${decision.originStageId}" instead of "${request.stageId}"`;
+    }
+    return `Orchestrator must answer or escalate the question, not ${decision.action}`;
+  }
+  if (decision.action !== "route_to_agent") {
+    return `Orchestrator must route the user's answer, not ${decision.action}`;
+  }
+  return decision.stageId === request.stageId
+    ? undefined
+    : `Orchestrator routed the answer to stage "${decision.stageId}" instead of "${request.stageId}"`;
+}
+
+function asBrokerDecision(
+  decision: OrchestratorDecision,
+): OrchestratorBrokerDecision | undefined {
+  return decision.action === "answer_agent" ||
+    decision.action === "escalate_to_user" ||
+    decision.action === "route_to_agent"
+    ? decision
+    : undefined;
+}
+
+export async function runQuestionMediationWork(
+  deps: WorkflowDeps,
+  input: PipelineWorkflowInput,
+  stageDef: StageDefinition,
+  request: QuestionMediationRequest,
+  resumeSessionId?: string,
+): Promise<QuestionMediationResult> {
+  const run = deps.projection.getRun(input.runId);
+  if (!run || !run.engine) {
+    return {
+      outcome: STAGE_OUTCOMES.FAILED,
+      failureMessage: "The asking run has no engine for Orchestrator mediation",
+    };
+  }
+  const mediator = deps.questionMediator();
+  if (!mediator) {
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      failureMessage: "The project has no registered Orchestrator question mediator",
+    };
+  }
+  let context;
+  try {
+    context = await mediator.contextFor(request);
+  } catch (error) {
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      failureMessage: error instanceof Error ? error.message : String(error),
+    };
+  }
+  const projectPath = deps.registry.resolve(run.projectId);
+  const persona = await loadSkill(projectPath, "orchestrator");
+  const stepTask = await loadBundledStepTask("mediate-question");
+  deps.projection.log(run.id, stageDef.id, {
+    level: "run",
+    message: `Orchestrator mediating · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
+    activity: { kind: "engine", name: engineLabel(run) },
+  });
+  const prompt = buildStagePrompt(context.prompt, [], stepTask);
+  const outcome = await runAdapter(
+    deps,
+    input,
+    run,
+    run.engine,
+    stageDef.id,
+    prompt,
+    persona,
+    resumeSessionId,
+  );
+  if (outcome.usage) {
+    deps.projection.stageUsage(run.id, stageDef.id, outcome.usage);
+  }
+  if (deps.isCancelled(run.id)) {
+    return { outcome: STAGE_OUTCOMES.CANCELLED };
+  }
+  if (outcome.limit) {
+    return { outcome: STAGE_OUTCOMES.LIMITED, limit: outcome.limit };
+  }
+  if (!outcome.success) {
+    return {
+      outcome: STAGE_OUTCOMES.FAILED,
+      failureMessage: outcome.errorMessage ?? "Orchestrator mediation failed",
+    };
+  }
+  const parsed = extractOrchestratorDecision(outcome.result ?? "");
+  if (!parsed.ok) {
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      failureMessage: `Orchestrator produced no usable mediation decision — ${formatValidationIssues(parsed.issues)}`,
+    };
+  }
+  const decisionError = brokerDecisionError(request, parsed.value);
+  const decision = asBrokerDecision(parsed.value);
+  if (decisionError || !decision) {
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      failureMessage: decisionError ?? "Orchestrator produced an invalid mediation decision",
+    };
+  }
+  try {
+    await mediator.recordDecision(request, context, decision);
+  } catch (error) {
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      failureMessage: error instanceof Error ? error.message : String(error),
+    };
+  }
+  return {
+    outcome: STAGE_OUTCOMES.PASSED,
+    decision,
+    sessionId: outcome.sessionId,
+  };
+}
+
 export async function runStageWork(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,
   stageDef: StageDefinition,
   turn: StageTurn,
 ): Promise<StageResult> {
-  const { projection, registry, settings } = deps;
+  const { projection, registry } = deps;
   const { runId } = input;
   const startedAt = nowIso();
   const run = projection.getRun(runId);
@@ -84,7 +258,6 @@ export async function runStageWork(
     });
   }
 
-  const controller = deps.beginEngineStage(runId);
   const projectPath = registry.resolve(run.projectId);
   const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
   const stepTask = stageDef.stepTask ? await loadBundledStepTask(stageDef.stepTask) : undefined;
@@ -105,35 +278,19 @@ export async function runStageWork(
     : buildStagePrompt(input.task ?? "", upstreamFor(run, stageDef.id), stepTask);
 
   if (deps.isCancelled(runId)) {
-    deps.endEngineStage(runId);
     return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };
   }
 
-  let outcome: EngineRunResult;
-  try {
-    const adapter = getEngineAdapter(run.engine);
-    outcome = await adapter.run({
-      runId,
-      prompt,
-      cwd: run.workspacePath ?? process.cwd(),
-      model: run.model,
-      appendSystemPrompt: persona,
-      permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
-      connection: settings.getEngineConnection(run.projectId, run.engine),
-      resumeSessionId: turn.resumeSessionId,
-      timeoutMs: config.engineTimeoutMs,
-      signal: controller.signal,
-      onLog: (log) => projection.log(runId, stageDef.id, log),
-    });
-  } catch (error) {
-    outcome = {
-      success: false,
-      exitCode: null,
-      errorMessage: error instanceof Error ? error.message : String(error),
-    };
-  } finally {
-    deps.endEngineStage(runId);
-  }
+  const outcome = await runAdapter(
+    deps,
+    input,
+    run,
+    run.engine,
+    stageDef.id,
+    prompt,
+    persona,
+    turn.resumeSessionId,
+  );
 
   if (outcome.usage) {
     projection.stageUsage(runId, stageDef.id, outcome.usage);
@@ -162,7 +319,6 @@ export async function runStageWork(
     if (recordsOutputWhileAsking(stageDef) && decision.output !== undefined) {
       await projection.captureStageOutput(runId, stageDef, decision.output);
     }
-    projection.stageAsking(runId, stageDef.id, decision.question);
     return {
       outcome: STAGE_OUTCOMES.ASKING,
       question: decision.question,

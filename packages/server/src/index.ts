@@ -11,9 +11,10 @@ const settings = new SettingsStore();
 const orchestrator = new RunOrchestrator({ registry, settings });
 const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
 orchestrator.registerStageOutputConsumer(orchestrations);
+orchestrator.registerQuestionMediator(orchestrations);
 
-await orchestrator.init();
 await orchestrations.init();
+await orchestrator.init();
 
 serve(
   {

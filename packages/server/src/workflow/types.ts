@@ -3,6 +3,7 @@ import type {
   EngineLimit,
   EnginePermissionMode,
   LimitChoice,
+  OrchestratorBrokerDecision,
   StageLogDraft,
   PipelineDefinition,
   RunState,
@@ -13,6 +14,7 @@ import type {
 } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
+import type { QuestionMediator } from "../services/question-mediator.ts";
 
 export interface PipelineWorkflowInput {
   runId: string;
@@ -44,6 +46,14 @@ export interface StageResult {
   completedAt: string;
 }
 
+export interface QuestionMediationResult {
+  outcome: StageOutcome;
+  decision?: OrchestratorBrokerDecision;
+  failureMessage?: string;
+  limit?: EngineLimit;
+  sessionId?: string;
+}
+
 export interface StageTurn {
   /** 0 is the stage's opening turn; later turns resume the CLI session. */
   index: number;
@@ -59,6 +69,8 @@ export interface RunProjection {
   log(runId: string, stageId: string, draft: StageLogDraft): void;
   stageAwaiting(runId: string, stageId: string): void;
   stageAsking(runId: string, stageId: string, question: string): void;
+  stageQuestion(runId: string, stageId: string, question: string): void;
+  stageMediatedAnswer(runId: string, stageId: string, answer: string): void;
   stageAnswered(runId: string, stageId: string): void;
   stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void;
   limitResolved(runId: string, stageId: string, choice?: LimitChoice): void;
@@ -81,6 +93,7 @@ export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
   settings: SettingsStore;
+  questionMediator(): QuestionMediator | undefined;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;
   isCancelled(runId: string): boolean;

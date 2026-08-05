@@ -142,6 +142,34 @@ function anticipatePlanningConversation(): void {
     .asks("Should this include the UI?", "planning-session");
   ctx.engine
     .anticipate({
+      as: "Orchestrator escalation",
+      persona: /# Role: Orchestrator/,
+      prompt: /Should this include the UI/,
+    })
+    .parks(
+      fenced({
+        action: "escalate_to_user",
+        question: "Should this milestone include UI work?",
+        originStageId: "milestone-plan",
+      }),
+      "planning-broker-session",
+    );
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator routing",
+      resumeSessionId: "planning-broker-session",
+      prompt: /Yes, include the UI/,
+    })
+    .reports(
+      fenced({
+        action: "route_to_agent",
+        stageId: "milestone-plan",
+        message: "Yes, include the UI.",
+        rationale: "The user confirmed the scope",
+      }),
+    );
+  ctx.engine
+    .anticipate({
       as: "Product Manager proposal",
       resumeSessionId: "planning-session",
       prompt: /Yes, include the UI/,
@@ -149,6 +177,10 @@ function anticipatePlanningConversation(): void {
     .reports(
       `Recommended plan\n\n\`\`\`adhd-milestone-plan\n${JSON.stringify(PLAN)}\n\`\`\``,
     );
+}
+
+function fenced(decision: unknown): string {
+  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }
 
 /** Drive the anticipated conversation through its parked question to a draft. */

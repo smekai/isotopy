@@ -15,6 +15,39 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-05 — The Orchestrator is a persisted project supervisor, not a resident workflow
+
+**Context:** specialists must route questions through the Orchestrator, but the Orchestrator
+also supervises several runs and outlives each one. Keeping its original conversation workflow
+resident would occupy the project's single durable worker, while a separate broker workflow or
+admission lane would create another lifecycle without solving concurrency.
+
+**Decision:** each project has at most one non-stopped Orchestrator aggregate. Creating that
+aggregate is the bootstrap action; every ordinary run requires it and is attached to it. The
+aggregate persists goal, approved team, owned runs, lifecycle decisions, mediation turns, and
+stop history, but no process stays resident between decisions. On legacy startup, the newest
+active aggregate survives and older duplicates are retired before their owned work can resume.
+
+Question mediation runs as named durable steps inside the asking specialist's existing
+`PipelineWorkflow`. Each step uses the specialist run's engine configuration, limits,
+cancellation, logging, and usage accounting while loading the Orchestrator persona and its
+aggregate context. An escalation uses the existing `asking` state and signal wait; the answer is
+then routed in a second durable mediation step before the same specialist session resumes.
+Broker decisions are a separate append-only part of the aggregate and never change its
+lifecycle status or latest lifecycle decision.
+
+Stopping retains the aggregate and artifacts but releases it as the active supervisor. An
+explicit stop aborts its non-terminal owned runs; a typed `stop` lets the conversation turn that
+issued it finish naturally. New ordinary work remains unavailable until a new Orchestrator is
+created.
+
+**Rejected:** a message queue, a second OpenWorkflow worker, a long-lived supervisory
+`PipelineWorkflow`, admission lanes, and direct-to-user fallback. They either duplicate durable
+state, imply concurrency the per-project worker does not provide, or bypass the mandatory
+mediation invariant.
+
+---
+
 ## 2026-08-05 — A composed run carries its own pipeline definition
 
 **Context:** `TASK-110` turns an approved team proposal into a runnable pipeline. Until now
@@ -43,9 +76,8 @@ alongside a working run. The premise was that a parked conversation blocks the c
 and it is false — `propose_team` completes the conversation run, since only `ask_user` and
 `escalate_to_user` park. Lanes would also not have produced concurrency on their own: the
 durable runtime runs one worker per project, so a second admitted run queues rather than
-executes. Both belong to `TASK-120`, together with the question it raises — whether the
-Orchestrator should run inside `PipelineWorkflow` at all, given that it supervises runs and
-outlives any one of them.
+executes. TASK-120 consequently keeps no resident Orchestrator workflow: only its on-demand
+mediation turns execute inside the asking specialist's `PipelineWorkflow`.
 
 ---
 

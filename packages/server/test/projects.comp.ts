@@ -74,7 +74,7 @@ test("adding the same folder twice returns one project, not two", async () => {
 
 test("a run is written into its own project's .adhd, not the home project's", async () => {
   // Arrange
-  const project = await addTestProject(ctx.registry, "writes");
+  const project = await addTestProject(ctx.registry, "writes", ctx.orchestrations);
 
   // Act
   ctx.engine.anticipate().reports("done");
@@ -85,13 +85,13 @@ test("a run is written into its own project's .adhd, not the home project's", as
   // Assert
   expect(run.projectId).toBe(project.id);
   expect(await exists(path.join(project.root, ".adhd", "runs.db"))).toBe(true);
-  expect(await exists(path.join(ctx.home, "runs.db"))).toBe(false);
+  expect(ctx.orchestrator.listRuns(HOME_PROJECT_ID)).toEqual([]);
 });
 
-test("starting a run restores the .adhd git-ignore if the folder was wiped", async () => {
+test("starting a run restores the .adhd git-ignore if the file was wiped", async () => {
   // Arrange
-  const project = await addTestProject(ctx.registry, "reignore");
-  await rm(path.join(project.root, ".adhd"), { recursive: true, force: true });
+  const project = await addTestProject(ctx.registry, "reignore", ctx.orchestrations);
+  await rm(path.join(project.root, ".adhd", ".gitignore"), { force: true });
 
   // Act
   ctx.engine.anticipate().reports("done");
@@ -105,7 +105,7 @@ test("starting a run restores the .adhd git-ignore if the folder was wiped", asy
 
 test("an engine run works in the project folder itself", async () => {
   // Arrange
-  const project = await addTestProject(ctx.registry, "cwd");
+  const project = await addTestProject(ctx.registry, "cwd", ctx.orchestrations);
   ctx.engine.anticipate({ as: "Developer" }).reports("done");
 
   // Act
@@ -148,8 +148,8 @@ test("a home run works in a scratch folder of its own, not in a real project", a
 
 test("each project lists only its own runs", async () => {
   // Arrange
-  const alpha = await addTestProject(ctx.registry, "alpha");
-  const beta = await addTestProject(ctx.registry, "beta");
+  const alpha = await addTestProject(ctx.registry, "alpha", ctx.orchestrations);
+  const beta = await addTestProject(ctx.registry, "beta", ctx.orchestrations);
 
   // Act
   ctx.engine.anticipate().reports("done");
@@ -170,8 +170,8 @@ test("each project lists only its own runs", async () => {
 
 test("run numbering restarts per project", async () => {
   // Arrange
-  const alpha = await addTestProject(ctx.registry, "num-a");
-  const beta = await addTestProject(ctx.registry, "num-b");
+  const alpha = await addTestProject(ctx.registry, "num-a", ctx.orchestrations);
+  const beta = await addTestProject(ctx.registry, "num-b", ctx.orchestrations);
 
   // Act
   ctx.engine.anticipate().reports("done");
@@ -231,7 +231,7 @@ test("a key set on one project does not leak into another", async () => {
 
 test("removing a project unregisters it but leaves its folder and history on disk", async () => {
   // Arrange
-  const project = await addTestProject(ctx.registry, "keepfiles");
+  const project = await addTestProject(ctx.registry, "keepfiles", ctx.orchestrations);
   ctx.engine.anticipate().reports("done");
   const run = await startRun(ctx.app, ENGINE_RUN, project.headers);
   await waitForRunStatus(ctx.app, run.id, "completed");
@@ -267,7 +267,7 @@ test("adding a folder that does not exist is rejected", async () => {
 
 test("activating a project switches which runs an unheadered request sees", async () => {
   // Arrange
-  const project = await addTestProject(ctx.registry, "switch");
+  const project = await addTestProject(ctx.registry, "switch", ctx.orchestrations);
   ctx.engine.anticipate().reports("done");
   const run = await startRun(ctx.app, ENGINE_RUN, project.headers);
   await waitForRunStatus(ctx.app, run.id, "completed");

@@ -1,5 +1,17 @@
 # Done
 
+## TASK-120: Mandatory Orchestrator question mediation
+**Priority:** P1 | **Tags:** core, server, engine
+**Updated:** 2026-08-05 11:47
+
+Delivered mandatory project-level Orchestrator mediation. Ordinary starts and restarts now require the singleton active Orchestrator; specialist questions execute as durable mediation steps in the specialist's existing workflow, with automatic answers or durable user escalation and same-session routing. Broker decisions persist separately from lifecycle turns.
+
+Added persisted stop/history fields, singleton conflict and legacy reconciliation, `POST /orchestrations/:id/stop`, owned-run cancellation, bootstrap/no-recursion behavior, and precise invariant failures. No admission lanes, queue, secondary workflow, worker-concurrency change, or UI work was introduced.
+
+Verification: lint, all TypeScript configurations, 475 tests, production build, and generated-skill drift check pass on Windows. Version bumped to 0.9.4; macOS verification remains the CI gate.
+
+---
+
 ## TASK-110: Dynamic workflow composition from persona catalog
 **Priority:** P1 | **Tags:** core, server, engine
 **Updated:** 2026-08-05 12:30

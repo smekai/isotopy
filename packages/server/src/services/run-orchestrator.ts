@@ -41,6 +41,8 @@ import { ListenerRegistry } from "./listener-registry.ts";
 import { CloseoutConsumer } from "./closeout-consumer.ts";
 import { MilestonePlanConsumer } from "./milestone-plan-consumer.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
+import { OrchestratorRequiredError } from "./question-mediator.ts";
+import type { QuestionMediator } from "./question-mediator.ts";
 import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
@@ -87,6 +89,8 @@ import {
 const PERSIST_DEBOUNCE_MS = 150;
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
+
+const ORCHESTRATION_PIPELINE_ID = "orchestration";
 
 function outcomeForRestart(stage: StageState): StageOutcome {
   if (stage.status === "failed") {
@@ -169,6 +173,7 @@ export class RunOrchestrator implements RunProjection {
   private readonly settings: SettingsStore;
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
+  private questionMediator?: QuestionMediator;
 
   constructor({ registry, settings }: RunOrchestratorDependencies) {
     this.registry = registry;
@@ -181,6 +186,7 @@ export class RunOrchestrator implements RunProjection {
       projection: this,
       registry: this.registry,
       settings: this.settings,
+      questionMediator: () => this.questionMediator,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
@@ -192,6 +198,10 @@ export class RunOrchestrator implements RunProjection {
     for (const project of this.registry.all()) {
       const projectPath = this.registry.resolve(project.id);
       await this.loadProject(projectPath);
+    }
+    this.questionMediator?.reconcileRuns();
+    for (const project of this.registry.all()) {
+      const projectPath = this.registry.resolve(project.id);
       await this.runtimes.for(projectPath).start();
     }
   }
@@ -275,6 +285,22 @@ export class RunOrchestrator implements RunProjection {
     return run.pipeline ?? this.getPipeline(run.pipelineId);
   }
 
+  private activeOrchestrationId(
+    projectId: string,
+    pipelineId: string,
+  ): string | undefined {
+    if (pipelineId === ORCHESTRATION_PIPELINE_ID) {
+      return undefined;
+    }
+    const orchestrationId = this.questionMediator?.activeId(projectId);
+    if (!orchestrationId) {
+      throw new OrchestratorRequiredError(
+        "Start an Orchestrator for this project before starting or restarting work",
+      );
+    }
+    return orchestrationId;
+  }
+
   listRuns(projectId: string): RunState[] {
     return [...this.runs.values()]
       .filter((run) => run.projectId === projectId)
@@ -307,6 +333,10 @@ export class RunOrchestrator implements RunProjection {
 
   registerStageOutputConsumer(consumer: StageOutputConsumer): void {
     this.stageOutputConsumers.push(consumer);
+  }
+
+  registerQuestionMediator(mediator: QuestionMediator): void {
+    this.questionMediator = mediator;
   }
 
   async createMilestone(
@@ -662,6 +692,10 @@ export class RunOrchestrator implements RunProjection {
     pipeline: PipelineDefinition,
     options: StartRunOptions,
   ): Promise<RunState> {
+    const activeOrchestrationId = this.activeOrchestrationId(
+      projectPath.id,
+      pipeline.id,
+    );
     const {
       task,
       engine,
@@ -669,9 +703,19 @@ export class RunOrchestrator implements RunProjection {
       permissionMode,
       milestoneId,
       featureId,
-      orchestrationId,
+      orchestrationId: requestedOrchestrationId,
       sourceTaskIds,
     } = options;
+    if (
+      requestedOrchestrationId !== undefined &&
+      activeOrchestrationId !== undefined &&
+      requestedOrchestrationId !== activeOrchestrationId
+    ) {
+      throw new OrchestratorRequiredError(
+        "The requested Orchestrator is not the project's active Orchestrator",
+      );
+    }
+    const orchestrationId = requestedOrchestrationId ?? activeOrchestrationId;
     const planningRun =
       pipeline.id === "milestone-planning" &&
       milestoneId !== undefined &&
@@ -759,6 +803,9 @@ export class RunOrchestrator implements RunProjection {
     }
     await this.flushPersist(runId);
 
+    if (activeOrchestrationId && this.questionMediator) {
+      await this.questionMediator.attachRun(projectPath.id, runId);
+    }
     await this.launch(projectPath, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
     return structuredClone(run);
   }
@@ -862,10 +909,20 @@ export class RunOrchestrator implements RunProjection {
     return message;
   }
 
-  restartRun(runId: string, stageId: string): RunState {
+  async restartRun(runId: string, stageId: string): Promise<RunState> {
     const run = this.runs.get(runId);
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
+    }
+    const orchestrationId = this.activeOrchestrationId(run.projectId, run.pipelineId);
+    if (
+      orchestrationId !== undefined &&
+      run.orchestrationId !== undefined &&
+      run.orchestrationId !== orchestrationId
+    ) {
+      throw new OrchestratorRequiredError(
+        "The run belongs to an Orchestrator that is no longer active",
+      );
     }
     if (
       run.status !== "needs_attention" &&
@@ -908,6 +965,10 @@ export class RunOrchestrator implements RunProjection {
     }
     run.stageOutputs = outputs;
     run.status = "running";
+    if (orchestrationId !== undefined && this.questionMediator) {
+      run.orchestrationId = orchestrationId;
+      await this.questionMediator.attachRun(run.projectId, run.id);
+    }
     delete run.completedAt;
     void this.flushPersist(runId);
 
@@ -1037,6 +1098,30 @@ export class RunOrchestrator implements RunProjection {
       status: "asking",
       message: question,
     });
+  }
+
+  stageQuestion(runId: string, stageId: string, question: string): void {
+    const run = this.live(runId);
+    if (run) {
+      this.appendMessage(run, {
+        role: "agent",
+        stageId,
+        kind: "question",
+        text: question,
+      });
+    }
+  }
+
+  stageMediatedAnswer(runId: string, stageId: string, answer: string): void {
+    const run = this.live(runId);
+    if (run) {
+      this.appendMessage(run, {
+        role: "agent",
+        stageId,
+        kind: "answer",
+        text: answer,
+      });
+    }
   }
 
   stageAnswered(runId: string, stageId: string): void {

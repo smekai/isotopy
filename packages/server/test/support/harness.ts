@@ -6,13 +6,20 @@ import os from "node:os";
 import path from "node:path";
 import type { Hono } from "hono";
 import { RUN_SUMMARY_EVENT } from "@adhd/core";
-import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
+import type {
+  EngineId,
+  Orchestration,
+  RunEvent,
+  RunState,
+  RunSummary,
+} from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { OrchestrationService } from "../../src/services/orchestration.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
+import { OrchestrationRepository } from "../../src/repository/orchestration-repository.ts";
 import { FakeEngine } from "./fake-engine.ts";
 
 const WAIT_TIMEOUT_MS = 10_000;
@@ -34,6 +41,7 @@ export interface TestApp {
 
 export interface TestAppOptions {
   engineId?: EngineId;
+  activeOrchestrator?: boolean;
 }
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
@@ -51,6 +59,11 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const orchestrator = new RunOrchestrator({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
+  orchestrator.registerQuestionMediator(orchestrations);
+  if (options.activeOrchestrator !== false) {
+    await seedActiveOrchestrator(registry, registry.resolve().id);
+  }
+  await orchestrations.init();
   const app = createApp({ orchestrator, orchestrations, registry, settings });
 
   return {
@@ -104,8 +117,9 @@ export async function restartApp(): Promise<RestartedApp> {
   const orchestrator = new RunOrchestrator({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
-  await orchestrator.init();
+  orchestrator.registerQuestionMediator(orchestrations);
   await orchestrations.init();
+  await orchestrator.init();
   return {
     app: createApp({ orchestrator, orchestrations, registry, settings }),
     orchestrator,
@@ -117,12 +131,38 @@ export async function restartApp(): Promise<RestartedApp> {
   };
 }
 
+async function seedActiveOrchestrator(
+  registry: ProjectRegistry,
+  projectId: string,
+): Promise<void> {
+  const repository = new OrchestrationRepository(registry.resolve(projectId));
+  const at = "2026-08-05T00:00:00.000Z";
+  const orchestration: Orchestration = {
+    id: `test-orchestrator-${projectId}`,
+    projectId,
+    goal: "Deliver the requested work",
+    status: "running",
+    turns: [],
+    brokerTurns: [],
+    runIds: [],
+    createdAt: at,
+    updatedAt: at,
+  };
+  await repository.write(orchestration);
+  await repository.settle();
+}
+
 export async function addTestProject(
   registry: ProjectRegistry,
   label: string,
+  orchestrations?: OrchestrationService,
 ): Promise<{ id: string; root: string; headers: Record<string, string> }> {
   const root = await mkdtemp(path.join(os.tmpdir(), `adhd-${label}-`));
   const project = await registry.add(root);
+  if (orchestrations) {
+    await seedActiveOrchestrator(registry, project.id);
+    await orchestrations.init();
+  }
   return { id: project.id, root, headers: { "X-ADHD-Project": project.id } };
 }
 
@@ -367,4 +407,3 @@ export function stageOf(run: RunState, stageId: string) {
   assert(stage, `Run has no stage "${stageId}"`);
   return stage;
 }
-
