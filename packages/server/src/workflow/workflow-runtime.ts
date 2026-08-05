@@ -3,6 +3,7 @@ import { OpenWorkflow } from "openworkflow";
 import type { Worker, Workflow } from "openworkflow";
 import { BackendSqlite } from "openworkflow/sqlite";
 import type { LimitChoice } from "@adhd/core";
+import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import {
@@ -14,7 +15,7 @@ import {
 import type { PipelineWorkflowResult } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
-const RUNS_DB_FILE = "runs.db";
+const WORKFLOW_DB_FILE = "workflow.db";
 
 type PipelineWorkflow = Workflow<
   PipelineWorkflowInput,
@@ -33,9 +34,12 @@ export class WorkflowRuntime {
     private readonly workflow: PipelineWorkflow,
   ) {}
 
-  private ensure(): { client: OpenWorkflow; backend: BackendSqlite } {
+  private async ensure(): Promise<{ client: OpenWorkflow; backend: BackendSqlite }> {
     if (!this.client || !this.backend) {
-      this.backend = BackendSqlite.connect(path.join(this.projectPath.dataDir, RUNS_DB_FILE));
+      await ensureProjectDataDir(this.projectPath);
+      this.backend = BackendSqlite.connect(
+        path.join(this.projectPath.dataDir, WORKFLOW_DB_FILE),
+      );
       this.client = new OpenWorkflow({ backend: this.backend });
       this.client.implementWorkflow(this.workflow.spec, this.workflow.fn);
     }
@@ -46,40 +50,40 @@ export class WorkflowRuntime {
     if (this.started) {
       return;
     }
-    const { client } = this.ensure();
+    const { client } = await this.ensure();
     this.worker = client.newWorker({ concurrency: 1 });
     await this.worker.start();
     this.started = true;
   }
 
   async startRun(input: PipelineWorkflowInput): Promise<string> {
-    const { client } = this.ensure();
+    const { client } = await this.ensure();
     const handle = await client.runWorkflow(this.workflow.spec, input);
     return handle.workflowRun.id;
   }
 
   async approveGate(runId: string, stageId: string): Promise<void> {
-    const { client } = this.ensure();
+    const { client } = await this.ensure();
     await client.sendSignal({ signal: gateSignal(runId, stageId) });
   }
 
   async answerQuestion(runId: string, stageId: string, text: string): Promise<void> {
-    const { client } = this.ensure();
+    const { client } = await this.ensure();
     await client.sendSignal({ signal: answerSignal(runId, stageId), data: { text } });
   }
 
   async resolveLimit(runId: string, stageId: string, choice: LimitChoice): Promise<void> {
-    const { client } = this.ensure();
+    const { client } = await this.ensure();
     await client.sendSignal({ signal: limitSignal(runId, stageId), data: { choice } });
   }
 
   async cancel(openWorkflowRunId: string): Promise<void> {
-    const { client } = this.ensure();
+    const { client } = await this.ensure();
     await client.cancelWorkflowRun(openWorkflowRunId);
   }
 
   async runStatus(openWorkflowRunId: string): Promise<string | undefined> {
-    const { backend } = this.ensure();
+    const { backend } = await this.ensure();
     const run = await backend.getWorkflowRun({ workflowRunId: openWorkflowRunId });
     return run?.status;
   }

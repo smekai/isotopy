@@ -7,6 +7,7 @@ import {
   restartApp,
   startRun,
   stageOf,
+  tablesIn,
   waitForRunStatus,
   waitForStageStatus,
 } from "../support/harness.ts";
@@ -112,5 +113,27 @@ describe("durable runtime", () => {
     );
     expect(third.number).toBe(2);
     await waitForRunStatus(ctx.app, third.id, "completed");
+  });
+
+  test("the durable runtime keeps its own database, so it never waits on a lock ADHD holds", async () => {
+    // Arrange — OpenWorkflow's connection sets no busy_timeout and claims work
+    // with BEGIN IMMEDIATE, and `BackendSqliteOptions` exposes no way to change
+    // that. Sharing a file with ADHD's own writer means SQLITE_BUSY on contention,
+    // so the two must never be the same file.
+    const project = await addTestProject(ctx.registry, "split-db");
+    ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(
+      ctx.app,
+      { pipelineId: "solo", task: TASK, engine: "claude-code" },
+      project.headers,
+    );
+
+    // Assert
+    await waitForRunStatus(ctx.app, run.id, "completed");
+    expect(tablesIn(project.root, "workflow.db")).toContain("workflow_runs");
+    expect(tablesIn(project.root, "runs.db")).not.toContain("workflow_runs");
   });
 });

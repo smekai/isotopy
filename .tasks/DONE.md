@@ -1,5 +1,43 @@
 # Done
 
+## TASK-122: Two bugs that stopped a real run on Windows
+**Priority:** P0 | **Tags:** server, engine, infra
+**Updated:** 2026-08-05 23:35
+
+Found by driving the app after `TASK-114`. Both predate the Orchestrator; both block using it.
+
+### 1. Cursor could never run on Windows
+
+Every ADHD prompt is multi-line, and `cursor-agent` resolves to a `.cmd` shim, which cmd.exe
+cannot carry a multi-line argument through — `runSubprocess` refused the spawn with *"Multi-line
+argument cannot be passed through a Windows .cmd/.bat shim"*. `claude-code` already fell back to
+stdin on that path and `codex` always reads stdin; only `cursor` still passed the prompt in argv.
+
+**Fix:** `promptGoesInArgs` returns false for a shim binary. Verified against the real CLI that
+`cursor-agent -p` with no positional prompt reads it from stdin.
+
+### 2. `Worker tick failed: database is locked`, every tick of every run
+
+`WorkflowRuntime` opened OpenWorkflow's `BackendSqlite` on **`runs.db`** — ADHD's own file. Two
+connections, one file. `busy_timeout` is per-connection and OpenWorkflow's sets none, while
+`claimWorkflowRun` opens `BEGIN IMMEDIATE`; `BackendSqliteOptions` offers no way to change that.
+
+**Fix:** the durable runtime owns `workflow.db`. One writer per file. Old workflow tables are
+left in `runs.db` (not dropped, not migrated) — decided with the user, no deployed installs.
+
+### Verification
+
+Real run, real Cursor CLI, scratch workspace: run `completed`, stage `passed`, a valid `ask_user`
+decision recorded, **zero** lock errors in the server log. Gates: lint, typecheck, test (528),
+build all green. New tests: `engine/prompt-delivery.comp.ts` (all three adapters carry a
+multi-line prompt — fails on `cursor` without the fix) and one in `run/durable-runtime.comp.ts`
+(the two databases are separate files).
+
+Cross-platform: fix 1 is Windows-only behaviour reached through a platform-neutral check; fix 2
+applies to both.
+
+---
+
 ## TASK-114: Orchestrator UI (chat + proposal + run timeline)
 **Priority:** P2 | **Tags:** ui, core, server
 **Updated:** 2026-08-05 23:10
