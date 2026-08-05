@@ -227,6 +227,15 @@ the Orchestrator tab additionally requires the `orchestrator` prop — so a run 
 orchestration `App` cannot resolve falls back to the ordinary three rather than rendering
 an empty panel.
 
+**Neither default can live in the `useState` initialiser alone**, and the Orchestrator is the
+sharper case. `App` feeds `RunTabs` from two independent loads — the run over its own SSE
+subscription, the orchestration over `useOrchestration`'s fetch — and the run almost always
+wins, so the component mounts with `orchestrator` still `undefined`. A first-render-only
+default would leave every orchestration run sitting on Chat with a live Orchestrator tab
+beside it. Both defaults are therefore effects: `plan` on `planning && completed`, `team` on
+`orchestrating` becoming true. Keyed on `run.id`, so a *new* run re-opens on its tab while a
+user who has since clicked Logs is left alone.
+
 **A message posted from the composer either answers a question or is just
 recorded.** `POST /runs/:id/messages` appends to `run.messages` and emits
 `run.message`. If a stage is `asking`, the same call releases the durable park and

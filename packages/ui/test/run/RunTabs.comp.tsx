@@ -169,6 +169,21 @@ test("approving the team reports the decision rather than acting on it", () => {
   expect(props.orchestrator?.onApprove).toHaveBeenCalledTimes(1);
 });
 
+test("the Orchestrator opens even though its orchestration lands after the run does", () => {
+  // Arrange — App feeds RunTabs from two independent loads: the run arrives on
+  // its own SSE subscription, the orchestration on a separate fetch. The run
+  // almost always wins, so the tab is mounted before there is anything to put
+  // in it.
+  const { orchestrator, ...runOnly } = orchestrationOverrides();
+  const { rerender } = render(<RunTabs {...tabsProps(runOnly)} />);
+
+  // Act
+  rerender(<RunTabs {...tabsProps({ ...runOnly, orchestrator })} />);
+
+  // Assert
+  expect(screen.getByTestId("orchestrator-panel")).toBeDefined();
+});
+
 test("an ordinary run is given no Orchestrator tab to open", () => {
   // Act
   render(<RunTabs {...tabsProps()} />);

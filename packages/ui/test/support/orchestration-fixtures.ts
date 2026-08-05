@@ -13,11 +13,11 @@ export const ORCHESTRATION_ID = "o1";
 
 export function role(overrides: Partial<OrchestratorRole> = {}): OrchestratorRole {
   return {
+    ...overrides,
     id: overrides.id ?? "implementation",
     label: overrides.label ?? "Developer",
     skill: overrides.skill ?? "developer",
     stepTask: overrides.stepTask ?? "implement",
-    ...overrides,
   };
 }
 
@@ -35,6 +35,7 @@ export function orchestration(
   overrides: Partial<Orchestration> = {},
 ): Orchestration {
   return {
+    ...overrides,
     id: overrides.id ?? ORCHESTRATION_ID,
     projectId: overrides.projectId ?? HOME_PROJECT_ID,
     goal: overrides.goal ?? "Ship the settings screen",
@@ -43,7 +44,6 @@ export function orchestration(
     runIds: overrides.runIds ?? [],
     createdAt: overrides.createdAt ?? CREATED_AT,
     updatedAt: overrides.updatedAt ?? CREATED_AT,
-    ...overrides,
   };
 }
 

@@ -123,6 +123,11 @@ export function RunTabs({
       setTab("plan");
     }
   }, [planning, run.id, run.status]);
+  useEffect(() => {
+    if (orchestrating) {
+      setTab("team");
+    }
+  }, [orchestrating, run.id]);
   const focusedStage = run.stages.find((stage) => stage.id === focusedStageId);
   const filtered = tab !== "chat" && focusedStage !== undefined;
 
