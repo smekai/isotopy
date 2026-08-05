@@ -51,6 +51,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const orchestrator = new RunOrchestrator({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
+  orchestrator.registerQuestionMediator(orchestrations);
+  await orchestrations.init();
   const app = createApp({ orchestrator, orchestrations, registry, settings });
 
   return {
@@ -104,8 +106,9 @@ export async function restartApp(): Promise<RestartedApp> {
   const orchestrator = new RunOrchestrator({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
-  await orchestrator.init();
+  orchestrator.registerQuestionMediator(orchestrations);
   await orchestrations.init();
+  await orchestrator.init();
   return {
     app: createApp({ orchestrator, orchestrations, registry, settings }),
     orchestrator,
@@ -367,4 +370,3 @@ export function stageOf(run: RunState, stageId: string) {
   assert(stage, `Run has no stage "${stageId}"`);
   return stage;
 }
-

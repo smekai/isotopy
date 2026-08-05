@@ -85,7 +85,9 @@ test("a run is written into its own project's .adhd, not the home project's", as
   // Assert
   expect(run.projectId).toBe(project.id);
   expect(await exists(path.join(project.root, ".adhd", "runs.db"))).toBe(true);
-  expect(await exists(path.join(ctx.home, "runs.db"))).toBe(false);
+  // Every project's database file exists from startup, so what proves isolation
+  // is that no run landed in the home project, not that the file is absent.
+  expect(ctx.orchestrator.listRuns(HOME_PROJECT_ID)).toEqual([]);
 });
 
 test("starting a run restores the .adhd git-ignore if the folder was wiped", async () => {

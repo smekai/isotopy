@@ -74,5 +74,17 @@ export function createOrchestrationRoutes(
       } catch (error) {
         return c.json({ error: messageOf(error) }, 400);
       }
+    })
+    .post("/:id/stop", async (c) => {
+      const project = projectScope(registry, c);
+      const orchestration = orchestrations.get(c.req.param("id"));
+      if (!orchestration || orchestration.projectId !== project.id) {
+        return c.json({ error: "Orchestration not found" }, 404);
+      }
+      try {
+        return c.json(await orchestrations.stop(project, orchestration.id));
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
     });
 }

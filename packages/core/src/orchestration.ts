@@ -40,6 +40,42 @@ export const orchestratorTeamProposalSchema = z
 
 export type OrchestratorTeamProposal = z.infer<typeof orchestratorTeamProposalSchema>;
 
+const answerAgentDecisionSchema = z
+  .object({
+    action: z.literal("answer_agent"),
+    answer: requiredText,
+    rationale: requiredText,
+  })
+  .strict();
+
+const escalateToUserDecisionSchema = z
+  .object({
+    action: z.literal("escalate_to_user"),
+    question: requiredText,
+    originStageId: requiredText,
+    context: requiredText.optional(),
+  })
+  .strict();
+
+const routeToAgentDecisionSchema = z
+  .object({
+    action: z.literal("route_to_agent"),
+    stageId: requiredText,
+    message: requiredText,
+    rationale: requiredText,
+  })
+  .strict();
+
+export const orchestratorBrokerDecisionSchema = z.discriminatedUnion("action", [
+  answerAgentDecisionSchema,
+  escalateToUserDecisionSchema,
+  routeToAgentDecisionSchema,
+]);
+
+export type OrchestratorBrokerDecision = z.infer<
+  typeof orchestratorBrokerDecisionSchema
+>;
+
 export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -71,29 +107,9 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       summary: requiredText.optional(),
     })
     .strict(),
-  z
-    .object({
-      action: z.literal("answer_agent"),
-      answer: requiredText,
-      rationale: requiredText,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("escalate_to_user"),
-      question: requiredText,
-      originStageId: requiredText,
-      context: requiredText.optional(),
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("route_to_agent"),
-      stageId: requiredText,
-      message: requiredText,
-      rationale: requiredText,
-    })
-    .strict(),
+  answerAgentDecisionSchema,
+  escalateToUserDecisionSchema,
+  routeToAgentDecisionSchema,
 ]);
 
 export type OrchestratorDecision = z.infer<typeof orchestratorDecisionSchema>;
@@ -118,6 +134,24 @@ export const orchestrationTurnSchema = z
 
 export type OrchestrationTurn = z.infer<typeof orchestrationTurnSchema>;
 
+export const ORCHESTRATOR_BROKER_PHASES = ["question", "user_answer"] as const;
+
+export type OrchestratorBrokerPhase =
+  (typeof ORCHESTRATOR_BROKER_PHASES)[number];
+
+export const orchestratorBrokerTurnSchema = z
+  .object({
+    id: requiredText,
+    runId: requiredText,
+    stageId: requiredText,
+    phase: z.enum(ORCHESTRATOR_BROKER_PHASES),
+    decision: orchestratorBrokerDecisionSchema,
+    at: timestamp,
+  })
+  .strict();
+
+export type OrchestratorBrokerTurn = z.infer<typeof orchestratorBrokerTurnSchema>;
+
 export const orchestrationSchema = z
   .object({
     id: requiredText,
@@ -125,11 +159,14 @@ export const orchestrationSchema = z
     goal: requiredText,
     status: z.enum(ORCHESTRATION_STATUSES),
     turns: z.array(orchestrationTurnSchema),
+    brokerTurns: z.array(orchestratorBrokerTurnSchema).optional(),
     latestDecision: orchestratorDecisionSchema.optional(),
     decisionError: requiredText.optional(),
     approvedTeam: orchestratorTeamProposalSchema.optional(),
     composedPipeline: pipelineDefinitionSchema.optional(),
     runIds: requiredTexts,
+    stoppedAt: timestamp.optional(),
+    stopReason: requiredText.optional(),
     createdAt: timestamp,
     updatedAt: timestamp,
   })

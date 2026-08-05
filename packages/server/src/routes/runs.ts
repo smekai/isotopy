@@ -154,7 +154,7 @@ export function createRunRoutes(
         return c.json(invalidRequest(parsed.issues), 400);
       }
       try {
-        return c.json(orchestrator.restartRun(runId, parsed.value.stageId));
+        return c.json(await orchestrator.restartRun(runId, parsed.value.stageId));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to restart run";
         return c.json({ error: message }, 409);

@@ -581,7 +581,7 @@ to the conversation that asked for it.
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunOrchestrator` is for runs |
 | Composition | `server/src/domain/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
-| API | `server/src/routes/orchestrations.ts` — start, list, read, approve. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage |
+| API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
 `domain/skills/personas/`, same user-override and project-addendum layering, same
@@ -621,6 +621,41 @@ Because a composed pipeline exists in no constant, the run carries it —
 `RunState.pipeline` is written only when `findPipeline` cannot resolve the id, and
 `pipelineForRun()` is what `buildInput` and `restartRun` resolve through. Built-in
 runs persist exactly what they did before.
+
+**One persisted Orchestrator supervises a project.** It is an aggregate, not a
+continuously running process. Every run except the orchestration conversation is
+attached to the project's single non-stopped Orchestrator, and a run that finds none
+**bootstraps** one from its own task rather than being refused — the invariant is
+mandatory mediation, not a manual setup step, so a project with no Orchestrator is
+never a dead end. `POST /orchestrations` supersedes: it terminates the active record
+before starting the new one, which is what lets a project move to a second goal.
+Startup reconciles legacy duplicates by retaining the newest `updatedAt`, stopping the
+others, and cancelling their non-terminal owned work before durable workers start.
+`POST /orchestrations/:id/stop` uses the same termination path as a typed `stop` and
+retains history and artifacts. A restart adopts its run into whichever Orchestrator is
+active now, so stopping one never strands the work it owned.
+
+**Specialist questions are mediated inside the specialist workflow.** The
+`QuestionMediator` seam lets `PipelineWorkflow` request active aggregate context and
+record a narrowed broker decision. The workflow executes the Orchestrator persona as
+a named durable step with the asking run's engine, model, permissions, workspace,
+limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
+same specialist CLI session. `escalate_to_user` uses the existing `asking` state and
+durable user-signal wait; the answer moves the stage back to `running` before the
+routing step, so the composer is never open on a question nothing is waiting for. That
+second step requires `route_to_agent` for the same stage before the specialist resumes.
+Only the orchestration pipeline itself asks the user directly, which is what prevents
+recursion.
+
+Of the two messages a mediated question produces, only the Orchestrator's rewrite
+carries `kind: "question"` — the specialist's raw wording is ordinary chat, because it
+never parks the run and may be answered without the user ever seeing it.
+
+`Orchestration.brokerTurns` stores these decisions separately from lifecycle `turns`.
+Its context is deliberately narrow: active goal, approved team, current upstream
+outputs, and prior outputs owned by the active Orchestrator. Raw transcripts, logs,
+and stopped Orchestrators are excluded. There is no broker queue, secondary workflow
+worker, admission lane, or direct-user fallback when the invariant is broken.
 
 ### 3. Workflow state
 
