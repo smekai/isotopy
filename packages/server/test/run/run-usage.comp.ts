@@ -114,5 +114,5 @@ test("spend survives a server restart", async () => {
 
   // Assert — the number is persisted with the run, not held in memory.
   expect(stageOf(body, "solo").usage).toEqual({ costUsd: 0.11, turns: 2 });
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 }, 15_000);

@@ -207,8 +207,7 @@ test("an orchestration parked on the user survives a server restart with its tur
     latestDecision: { action: "ask_user" },
     runIds: [run.id],
   });
-  await restarted.orchestrator.shutdown();
-  await restarted.orchestrations.shutdown();
+  await restarted.shutdown();
 });
 
 async function startOrchestration(): Promise<RunState> {

@@ -88,6 +88,14 @@ export interface RestartedApp {
   app: Hono;
   orchestrator: RunOrchestrator;
   orchestrations: OrchestrationService;
+  /**
+   * Settles every service this rebooted app opened. Each one holds its own
+   * SQLite connection to the project's `runs.db`, and on Windows a connection
+   * left open blocks the temp-directory delete in `dispose()`. Always prefer
+   * this over shutting a single service down by hand — a service added here
+   * later is then torn down without revisiting fourteen call sites.
+   */
+  shutdown(): Promise<void>;
 }
 
 export async function restartApp(): Promise<RestartedApp> {
@@ -102,6 +110,10 @@ export async function restartApp(): Promise<RestartedApp> {
     app: createApp({ orchestrator, orchestrations, registry, settings }),
     orchestrator,
     orchestrations,
+    shutdown: async () => {
+      await orchestrator.shutdown();
+      await orchestrations.shutdown();
+    },
   };
 }
 

@@ -142,5 +142,5 @@ test("messages survive a server restart", async () => {
 
   // Assert
   expect(body.messages.map((message) => message.text)).toEqual(["written mid-run"]);
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });

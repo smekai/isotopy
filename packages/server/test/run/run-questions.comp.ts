@@ -128,7 +128,7 @@ test("a parked question survives a server restart", async () => {
   expect(body.status).toBe("asking");
   expect(stageOf(body, "solo").status).toBe("asking");
   expect(body.messages.at(-1)?.text).toBe(QUESTION);
-  await restarted.orchestrator.shutdown();
+  await restarted.shutdown();
 });
 
 test("aborting a parked run skips the asking stage rather than stranding it", async () => {

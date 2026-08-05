@@ -111,7 +111,7 @@ describe("plan limit", () => {
     expect(stageOf(afterBoot, "solo").status).toBe("blocked");
     expect(afterBoot.limit?.raw).toBe(SESSION_LIMIT);
 
-    await restarted.orchestrator.shutdown();
+    await restarted.shutdown();
   });
 
   test("the run resumes on its own once the parsed reset time passes", async () => {
