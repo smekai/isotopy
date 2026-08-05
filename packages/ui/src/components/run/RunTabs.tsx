@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { FileText, Flag, MessageSquare, Terminal } from "lucide-react";
+import { FileText, Flag, MessageSquare, Terminal, Users } from "lucide-react";
+import { MILESTONE_PLANNING_PIPELINE, ORCHESTRATION_PIPELINE } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import type { Dir } from "../../theme";
 import type { SettingsController } from "../../hooks/useSettings";
@@ -9,11 +10,19 @@ import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ChatPanel } from "./ChatPanel";
 import { LogsPanel } from "./LogsPanel";
 import { MilestonePlanPanel } from "./MilestonePlanPanel";
+import { OrchestratorPanel } from "./OrchestratorPanel";
+import type { OrchestratorView } from "./OrchestratorPanel";
 import { PANEL } from "./run-styles";
 
-export type RunTab = "chat" | "plan" | "logs" | "artifacts";
+export type RunTab = "chat" | "plan" | "team" | "logs" | "artifacts";
 
-const STANDARD_TABS: { id: RunTab; label: string; icon: ReactNode }[] = [
+interface RunTabEntry {
+  id: RunTab;
+  label: string;
+  icon: ReactNode;
+}
+
+const STANDARD_TABS: RunTabEntry[] = [
   { id: "chat", label: "Chat", icon: <MessageSquare size={ICON.sm} /> },
   { id: "logs", label: "Logs", icon: <Terminal size={ICON.sm} /> },
   { id: "artifacts", label: "Artifacts", icon: <FileText size={ICON.sm} /> },
@@ -63,12 +72,29 @@ function clearFilterButton(d: Dir): CSSProperties {
   };
 }
 
+function tabsFor(planning: boolean, orchestrating: boolean): RunTabEntry[] {
+  if (planning) {
+    return [
+      STANDARD_TABS[0]!,
+      { id: "plan", label: "Plan", icon: <Flag size={ICON.sm} /> },
+      ...STANDARD_TABS.slice(1),
+    ];
+  }
+  return orchestrating
+    ? [
+        { id: "team", label: "Orchestrator", icon: <Users size={ICON.sm} /> },
+        ...STANDARD_TABS,
+      ]
+    : STANDARD_TABS;
+}
+
 export interface RunTabsProps {
   run: RunState;
   focusedStageId: string | null;
   sending: boolean;
   d: Dir;
   settings?: SettingsController;
+  orchestrator?: OrchestratorView;
   onSend: (text: string) => void;
   onRunStarted?: (runId: string) => void;
   onClearFocus: () => void;
@@ -80,20 +106,17 @@ export function RunTabs({
   sending,
   d,
   settings,
+  orchestrator,
   onSend,
   onRunStarted,
   onClearFocus,
 }: RunTabsProps) {
-  const planning = run.pipelineId === "milestone-planning";
-  const tabs = planning
-    ? [
-        STANDARD_TABS[0]!,
-        { id: "plan" as const, label: "Plan", icon: <Flag size={ICON.sm} /> },
-        ...STANDARD_TABS.slice(1),
-      ]
-    : STANDARD_TABS;
+  const planning = run.pipelineId === MILESTONE_PLANNING_PIPELINE.id;
+  const orchestrating =
+    run.pipelineId === ORCHESTRATION_PIPELINE.id && orchestrator !== undefined;
+  const tabs = tabsFor(planning, orchestrating);
   const [tab, setTab] = useState<RunTab>(
-    planning && run.status === "completed" ? "plan" : "chat",
+    planning && run.status === "completed" ? "plan" : orchestrating ? "team" : "chat",
   );
   useEffect(() => {
     if (planning && run.status === "completed") {
@@ -126,6 +149,7 @@ export function RunTabs({
       </div>
 
       {tab === "chat" && <ChatPanel run={run} d={d} sending={sending} onSend={onSend} />}
+      {tab === "team" && orchestrator && <OrchestratorPanel {...orchestrator} d={d} />}
       {tab === "plan" && planning && settings && onRunStarted && (
         <MilestonePlanPanel
           run={run}

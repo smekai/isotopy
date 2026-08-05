@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { RunState } from "@adhd/core";
+import { openPipelineComposer } from "../support/composer";
 import { resetPreferences } from "../support/preferences";
 
 // The Developer+Tester (`dev-test`) two-box flow, without running an engine.
@@ -29,6 +30,7 @@ const PM_DEV_TEST_OPTION = new RegExp(PM_DEV_TEST.replace(/\+/g, "\\+"));
 test("the default pipeline is selectable in the picker and previews all three boxes", async ({ page }) => {
   // Act
   await page.goto("/");
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: PM_DEV_TEST }).click();
   await page.getByRole("option", { name: PM_DEV_TEST_OPTION }).click();
 
@@ -53,6 +55,7 @@ test("the default pipeline is selectable in the picker and previews all three bo
 test("the pipeline choice is stored server-side, so it survives a reload", async ({ page }) => {
   // Arrange
   await page.goto("/");
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: PM_DEV_TEST }).click();
   await page.getByRole("option", { name: PM_DEV_TEST_OPTION }).click();
 
@@ -60,6 +63,7 @@ test("the pipeline choice is stored server-side, so it survives a reload", async
   await page.reload();
 
   // Assert
+  await openPipelineComposer(page);
   await expect(page.getByRole("button", { name: PM_DEV_TEST })).toBeVisible();
 });
 

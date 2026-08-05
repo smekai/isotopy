@@ -15,6 +15,35 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-05 — Home leads with the Orchestrator, and the Orchestrator surface is a tab on its own run
+
+**Context:** Milestone E gives the product a top-level Orchestrator, but the UI had no
+reference to it at all — the home screen offered only a fixed pipeline and a milestone
+planning shortcut, and the `/orchestrations` endpoints were unreachable from the browser.
+Two placements were open: a dedicated `#/orchestrations/:id` route beside `#/runs/:id` and
+`#/milestones/:id`, or a surface on the orchestration run that already exists.
+
+**Decision:** the home composer opens in Orchestrator mode; the fixed pipeline composer is
+one click behind `choose-pipeline` and otherwise unchanged. The Orchestrator's own surface —
+status, the team awaiting approval, and the timeline of runs in the initiative — is an
+**extra tab on the orchestration run**, not a route of its own.
+
+**Why:** an orchestration *is* a run — the `orchestrate` stage is `interactive: true` with 24
+turns, so the conversation is already the run's chat and `POST /runs/:id/messages` already
+answers an `ask_user`. A separate route would have had to rebuild the transcript, the
+composer, the status bar and the SSE subscription to show the same thing the run view shows,
+and would have left the user with two places to look for one conversation. The rejected
+alternative is worth revisiting only if the Orchestrator gains state that outlives every run
+it owns.
+
+**Consequence:** `useOrchestration` refetches on `orchestrationRefreshKey(runs)` — the same
+derivation `useMilestones` uses, widened to stage statuses, because a decision is recorded
+when the `orchestrate` **stage** settles, which for a multi-stage team run is not a run status
+change. No third SSE channel; see the milestone rule in
+[`architecture-ui.md`](./architecture-ui.md) §5.
+
+---
+
 ## 2026-08-05 — Every settled run is reviewed by its Orchestrator, and the review is what routes the next phase
 
 **Context:** a composed team run produced nothing durable. `CloseoutConsumer` is bound to the

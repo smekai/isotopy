@@ -1,5 +1,37 @@
 # Done
 
+## TASK-114: Orchestrator UI (chat + proposal + run timeline)
+**Priority:** P2 | **Tags:** ui, core, server
+**Updated:** 2026-08-05 23:10
+
+Chat-first UI entry point for orchestrator conversations, a team proposal/approval panel, and a
+timeline of the orchestrated runs in one initiative. MVP slice of the milestone's UI scope; the
+fuller surface (decision history, broker turns, a dedicated initiative page) stays post-MVP.
+
+### Plan — done
+
+- **Home leads with the Orchestrator.** `components/EmptyState.tsx` became
+  `components/home/` — `HomeComposer` (mode switch + shared composer card), `PipelineHeader`
+  (glyph strip, pipeline copy, dropdown), `home-styles.ts`. The fixed pipeline composer is one
+  click behind `choose-pipeline` and otherwise unchanged.
+- **The orchestrator surface is a tab on its own run**, not a route: `run/OrchestratorPanel`
+  renders goal + status, the team awaiting approval with Approve/Stop, the latest decision, and
+  the initiative's runs oldest-first. `RunTabs` adds it for an `orchestration` run and opens on
+  it. Rationale and the rejected route alternative are in `docs/decisions.md` (2026-08-05).
+- **Seams:** five calls added to `api.ts` (the only network module); `useOrchestration` mirrors
+  `useMilestones` but keys on `orchestrationRefreshKey`, which folds stage statuses in because a
+  decision is recorded when the `orchestrate` *stage* settles, not when the run does. No new SSE
+  channel. Pure rules live in `src/orchestration.ts` and `run-list.ts`.
+- **Tests:** `orchestration.spec.ts` (the Approve guard reads status *and* decision),
+  `run-list.spec.ts` (+6), `RunTabs.comp.tsx` (+4 — the tab appears, opens, lists the timeline,
+  reports approval). E2E updated for the new home via `e2e/support/composer.ts`; the full
+  browser flow through a live orchestrator belongs to `TASK-117`.
+- **Gates:** lint, typecheck, test (524), build, e2e (56 passed, 1 live-tier skipped) all green.
+
+Cross-platform: browser UI over the existing cross-platform server API and run projections.
+
+---
+
 ## TASK-112: Post-run decision loop (next phase routing)
 **Priority:** P1 | **Tags:** core, server
 **Updated:** 2026-08-05 17:20

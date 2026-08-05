@@ -6,10 +6,13 @@ import {
   mergeSummaries,
   mergeSummary,
   milestoneRefreshKey,
+  orchestrationRefreshKey,
   runsForFeature,
+  runsForOrchestration,
 } from "../../src/run-list";
 import { featureRun } from "../support/milestone-fixtures";
-import { summary } from "../support/run-fixtures";
+import { orchestratedRun, orchestration } from "../support/orchestration-fixtures";
+import { stage, summary } from "../support/run-fixtures";
 
 describe("mergeSummary", () => {
   test("replaces a run in place, keeping its position", () => {
@@ -74,5 +77,57 @@ describe("milestoneRefreshKey", () => {
     const a = featureRun("a", 1, "completed", "f1");
     const b = featureRun("b", 1, "running", "f2");
     expect(milestoneRefreshKey([a, b])).toBe(milestoneRefreshKey([b, a]));
+  });
+});
+
+describe("runsForOrchestration", () => {
+  test("reads oldest first, because a timeline runs forward while the rail runs back", () => {
+    const runs = [
+      orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
+      orchestratedRun("earlier", "2026-08-01T09:00:00.000Z"),
+    ];
+    expect(
+      runsForOrchestration(runs, orchestration({ runIds: ["earlier", "later"] })).map(
+        (run) => run.id,
+      ),
+    ).toEqual(["earlier", "later"]);
+  });
+
+  test("keeps only the runs the orchestration claims, not every run it can see", () => {
+    const runs = [
+      orchestratedRun("mine", "2026-08-01T09:00:00.000Z"),
+      orchestratedRun("someone-elses", "2026-08-01T10:00:00.000Z"),
+    ];
+    expect(
+      runsForOrchestration(runs, orchestration({ runIds: ["mine"] })).map((run) => run.id),
+    ).toEqual(["mine"]);
+  });
+});
+
+describe("orchestrationRefreshKey", () => {
+  test("changes when a stage settles, which is when a decision is recorded", () => {
+    const before = orchestrationRefreshKey([
+      orchestratedRun("a", "2026-08-01T09:00:00.000Z", { stages: [stage("orchestrate", "running")] }),
+    ]);
+    const after = orchestrationRefreshKey([
+      orchestratedRun("a", "2026-08-01T09:00:00.000Z", { stages: [stage("orchestrate", "passed")] }),
+    ]);
+    expect(after).not.toBe(before);
+  });
+
+  test("ignores runs no orchestrator owns", () => {
+    const key = orchestrationRefreshKey([orchestratedRun("a", "2026-08-01T09:00:00.000Z")]);
+    expect(
+      orchestrationRefreshKey([
+        orchestratedRun("a", "2026-08-01T09:00:00.000Z"),
+        summary({ id: "loose", status: "completed" }),
+      ]),
+    ).toBe(key);
+  });
+
+  test("is stable under rail reordering, so a prepend alone does not refetch", () => {
+    const a = orchestratedRun("a", "2026-08-01T09:00:00.000Z");
+    const b = orchestratedRun("b", "2026-08-01T10:00:00.000Z");
+    expect(orchestrationRefreshKey([a, b])).toBe(orchestrationRefreshKey([b, a]));
   });
 });

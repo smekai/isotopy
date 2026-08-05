@@ -120,10 +120,8 @@ test("the milestone route is a sibling of home, so the composer is untouched", a
   await page.getByRole("button", { name: "New run" }).click();
 
   // Assert
-  await expect(page.getByPlaceholder("Describe the task...")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Product Manager + Developer + QA" }),
-  ).toBeVisible();
+  await expect(page.getByPlaceholder("Describe the goal...")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Start Orchestrator/ })).toBeVisible();
   await expect(page.getByTestId("milestone-dashboard")).toHaveCount(0);
 });
 

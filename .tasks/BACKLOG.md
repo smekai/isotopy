@@ -139,16 +139,6 @@ Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell ass
 
 ---
 
-## TASK-114: Orchestrator UI (chat + proposal + run timeline)
-**Priority:** P2 | **Tags:** ui, core, server
-**Updated:** 2026-08-04 11:33
-
-Implement a chat-first UI entry point that supports orchestrator conversations, shows a team proposal/approval panel, and renders a timeline of orchestrated runs within a single initiative.
-
-Cross-platform: n/a — browser UI; relies on the existing cross-platform server API and run projections.
-
----
-
 ## TASK-115: Per-role engine/model configuration (post-MVP)
 **Priority:** P2 | **Tags:** core, server, engine
 **Updated:** 2026-08-04 11:33

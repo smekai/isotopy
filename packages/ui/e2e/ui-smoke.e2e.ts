@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openPipelineComposer } from "./support/composer";
 import { readPreferences, resetPreferences, writePreferences } from "./support/preferences";
 
 // Free tier of docs/e2e-test-plan.md: picker, Setup modal, persistence,
@@ -12,9 +13,33 @@ test.beforeEach(async ({ page }) => {
 
 const DEFAULT_PIPELINE = "Product Manager + Developer + QA";
 
-test("the empty state cannot start a run until a task is described", async ({ page }) => {
+test("home leads with the Orchestrator, which cannot start until a goal is described", async ({ page }) => {
   // Act
   await page.goto("/");
+
+  // Assert
+  await expect(page.getByText("What are we building?")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Start Orchestrator/ })).toBeDisabled();
+  await expect(page.getByPlaceholder("Describe the goal...")).toBeVisible();
+});
+
+test("describing a goal arms the Orchestrator", async ({ page }) => {
+  // Arrange
+  await page.goto("/");
+
+  // Act
+  await page.getByPlaceholder("Describe the goal...").fill("smoke");
+
+  // Assert
+  await expect(page.getByRole("button", { name: /Start Orchestrator/ })).toBeEnabled();
+});
+
+test("the fixed pipeline composer is one click behind the Orchestrator", async ({ page }) => {
+  // Arrange
+  await page.goto("/");
+
+  // Act
+  await openPipelineComposer(page);
 
   // Assert
   await expect(page.getByRole("button", { name: DEFAULT_PIPELINE })).toBeVisible();
@@ -25,6 +50,7 @@ test("the empty state cannot start a run until a task is described", async ({ pa
 test("the pipeline dropdown offers every pipeline and closes on Escape", async ({ page }) => {
   // Arrange
   await page.goto("/");
+  await openPipelineComposer(page);
 
   // Act
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
@@ -42,6 +68,7 @@ test("the pipeline dropdown offers every pipeline and closes on Escape", async (
 test("describing a task arms both Start run and Plan milestone", async ({ page }) => {
   // Arrange
   await page.goto("/");
+  await openPipelineComposer(page);
 
   // Act
   await page.getByPlaceholder("Describe the task...").fill("smoke");
@@ -54,6 +81,7 @@ test("describing a task arms both Start run and Plan milestone", async ({ page }
 test("Full Delivery previews the revised persona team", async ({ page }) => {
   // Arrange
   await page.goto("/");
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
 
   // Act
@@ -73,6 +101,7 @@ test("Full Delivery previews the revised persona team", async ({ page }) => {
 test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
   // Arrange
   await page.goto("/");
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
 
   // Act
@@ -159,6 +188,7 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
 test("pipeline, model, and permission mode persist across a reload", async ({ page }) => {
   // Arrange — change all three, then close Setup.
   await page.goto("/");
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: "Product Manager + Developer + QA" }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
 
@@ -171,7 +201,8 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   // Act
   await page.reload();
 
-  // Assert — pipeline and model resurface in the empty-state caption.
+  // Assert — the pipeline composer is where a stored pipeline is visible at all.
+  await openPipelineComposer(page);
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect(page.getByText(/Engine: Claude Code · haiku/)).toBeVisible();
 
@@ -195,6 +226,7 @@ test("preferences survive a browser with no storage of its own", async ({ page }
   await page.reload();
 
   // Assert
+  await openPipelineComposer(page);
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
 });
 
@@ -207,6 +239,7 @@ test("legacy full model IDs migrate to standard-context CLI aliases", async ({ p
   await page.reload();
 
   // Assert
+  await openPipelineComposer(page);
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
   await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
@@ -229,6 +262,7 @@ test("a preference left in localStorage by an older build is adopted once", asyn
   await page.reload();
 
   // Assert
+  await openPipelineComposer(page);
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect
     .poll(async () => (await readPreferences(page)).pipelineId)

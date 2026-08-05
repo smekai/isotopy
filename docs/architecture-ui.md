@@ -38,8 +38,8 @@ by accident and nobody defends them past their usefulness.
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
-on ports, and proxies `/pipelines /projects /runs /milestones /health /settings
-/engines /fs` to the server. **That proxy list must stay in sync with the routes
+on ports, and proxies `/pipelines /projects /runs /milestones /orchestrations /health
+/settings /engines /fs` to the server. **That proxy list must stay in sync with the routes
 mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
 dev UI until it is added there.
 
@@ -56,7 +56,8 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run rail, run view vs. composer, every overlay. See §6 for what it may own. |
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
 | [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union of home, `#/runs/:id` and `#/milestones/:id`. Unit-tested. |
-| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`. Unit-tested. |
+| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `orchestrationRefreshKey`. Unit-tested. |
+| [`orchestration.ts`](../packages/ui/src/orchestration.ts) | Pure orchestrator view rules — `teamAwaitingApproval` (status **and** decision must agree before Approve is offered), `decisionPresentation`, status labels. Unit-tested. |
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
@@ -65,18 +66,21 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
 | [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
-| `components/` | 15 flat component files, plus two feature folders — `setup/` and `run/`. §3. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
+| `components/` | 14 flat component files, plus three feature folders — `setup/`, `run/` and `home/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
 
 **Rule.** `components/` stays flat until a *feature* owns four or more files that no
 other feature imports; then it gets a folder named for the feature, not for the file
 kind. Do not create `components/ui/`, `components/common/`, or a barrel.
-`components/setup/` is the only feature folder so far (TASK-073) and the pattern to
-copy: the entry component keeps the feature's name and public types, its siblings are
-named for what they own, and the builders shared by two or more of them — and only
-those — sit in one `setup-styles.ts` beside them.
+`components/setup/` set the pattern (TASK-073) and is the one to copy: the entry
+component keeps the feature's name and public types, its siblings are named for what
+they own, and the builders shared by two or more of them — and only those — sit in one
+`setup-styles.ts` beside them. `components/home/` followed it in TASK-114, when the
+composer gained a second mode: `HomeComposer` owns the mode and the shared composer
+card, `PipelineHeader` owns the glyph strip and pipeline copy that only fixed-pipeline
+mode shows, and `home-styles.ts` holds the three builders both use.
 
 ---
 
@@ -112,9 +116,11 @@ The split as it stands:
 
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
   `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`,
-  `MilestoneDashboard`, `MilestoneFeatureCard`, and inside `run/` — `CloseoutPanel`.
-- **Local-state presentational:** `PipelineDropdown`, `EmptyState`, `VoiceControls`,
-  and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state, no I/O.
+  `MilestoneDashboard`, `MilestoneFeatureCard`, inside `home/` — `PipelineHeader`,
+  and inside `run/` — `CloseoutPanel`, `OrchestratorPanel`.
+- **Local-state presentational:** `PipelineDropdown`, `VoiceControls`, inside `home/` —
+  `HomeComposer`, and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state,
+  no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
   `run/ArtifactsPanel`, and inside `setup/` — `EngineStatusCard`,
   `EngineConnection`, `EngineModelPicker` — call `api.ts` themselves. `SetupModal`
@@ -133,7 +139,10 @@ example of the rule: nine files replace the one, the largest of them
 (`EngineStatusCard`, 322 lines — half of it style builders) is one responsibility
 and stays whole. TASK-082 applied the same treatment to the 586-line
 `StageFocusPanel`, which is gone: `components/run/` replaces it with one file per
-run view. Nothing in `packages/ui` is over ~330 lines now.
+run view. Outside `App.tsx` — the composition root, governed by §6 instead — nothing in
+`packages/ui` passes ~380 lines, and the three over 350 (`MilestonePlanPanel`,
+`OrchestratorPanel`, `CloseoutPanel`) are more than half style builders each. Length
+alone is not the trigger; a second responsibility is.
 
 ---
 
@@ -181,7 +190,7 @@ useProjects ──ready──▶ useRunList(projectId) ──▶ RunRail
                           │                           │
              first non-terminal run ──▶ replace(#/runs/:id) ◀┘
                                                               │
-EmptyState ──onStart──▶ App.handleStart ──▶ startRun() ────────┤
+HomeComposer ─onStart─▶ App.handleStart ──▶ startRun() ────────┤
                                                               ▼
                                               useRoute() ──▶ routeRunId
                                                               │
@@ -208,6 +217,15 @@ minus `tool` items, which is where tool calls, tool errors and engine chatter al
 land. **The chat is a projection of the log, never a second source.** `RunTabs`
 owns which tab is open, so `App` does not; a stage-node click sets `focusedId`,
 which filters Logs and Artifacts rather than opening a pane.
+
+**Two pipelines earn a fourth tab, and each opens on it.** A `milestone-planning` run
+gains `Plan` and switches to it once the run completes — the proposal is not editable
+before then. An `orchestration` run gains `Orchestrator` and opens on it immediately,
+because the decision waiting there is usually why the user came. Both tabs are added by
+`tabsFor`, keyed on `run.pipelineId` against the pipeline definition in `@adhd/core`, and
+the Orchestrator tab additionally requires the `orchestrator` prop — so a run whose
+orchestration `App` cannot resolve falls back to the ordinary three rather than rendering
+an empty panel.
 
 **A message posted from the composer either answers a question or is just
 recorded.** `POST /runs/:id/messages` appends to `run.messages` and emits
@@ -239,6 +257,15 @@ on `milestoneRefreshKey(runs)`: a string built from the id and status of the run
 carry a `milestoneId`, sorted, so it changes exactly when a refetch would see
 something new and stays stable under a rail reorder. **Rule:** do not add a third SSE
 channel for milestones without first showing that this derivation misses an update.
+
+**Orchestrations derive their refetch the same way, one level finer.** `useOrchestration`
+keys on `orchestrationRefreshKey(runs)`, which folds each owned run's **stage** statuses in
+as well as its own. A milestone only moves when a run reaches a terminal status; an
+orchestration moves when the `orchestrate` *stage* settles and its decision is consumed —
+which, for a multi-stage team run, happens while the run itself is still `running`. Keying
+on run status alone would leave an approved team, an `ask_user` question or a routed
+decision invisible until the whole run finished. The rest of the shape is `useMilestones`':
+clear on a project switch, never on a same-project refresh, mutations clear `error` up front.
 
 Refetching on a key rather than on the project alone has three consequences, all
 load-bearing and all found in review:
@@ -399,7 +426,7 @@ The baseline that already exists, and is the pattern to copy:
 - **Escape closes transient surfaces** — `PipelineDropdown`, `ProjectSwitcher`,
   `FolderPicker`, `ProjectDrawer` each register a `document` `keydown` listener and
   remove it on unmount.
-- **Enter submits** where a single-line input is the whole form (`EmptyState`,
+- **Enter submits** where a single-line input is the whole form (`HomeComposer`,
   API-key and custom-model fields in `SetupModal`).
 - **Icon-only buttons carry `aria-label`** (`ProjectDrawer`'s close button).
 
@@ -424,7 +451,7 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
 | Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events`, `route`, `run-list`, `transcript` |
-| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList`, `useMilestones`, `RunTabs`, `MilestoneDashboard`, `MilestonePlanPanel`, `CloseoutPanel` |
+| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList`, `useMilestones`, `RunTabs` (including the Orchestrator tab), `MilestoneDashboard`, `MilestonePlanPanel`, `CloseoutPanel` |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
 The root [`vitest.config.ts`](../vitest.config.ts) declares two projects: **`node`**
@@ -458,7 +485,7 @@ list card. The current roster:
 
 `open-project` · `workspace-chip` · `folder-picker` · `project-switcher` ·
 `project-drawer` · `project-root` · `run-status` · `run-cost` ·
-`run-tab-<chat|logs|artifacts>` · `stage-node-<stageId>` · `stage-profession` ·
+`run-tab-<chat|team|plan|logs|artifacts>` · `stage-node-<stageId>` · `stage-profession` ·
 `stage-persona` · `stage-verdict` · `stage-scroll` · `artifact-preview` ·
 `artifact-view-<workflow|closeout|files>` · `artifact-files` · `run-card` ·
 `run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer` ·
@@ -467,7 +494,9 @@ list card. The current roster:
 `milestone-progress` · `milestone-autorun` · `milestone-start-next` ·
 `milestone-finalize` · `milestone-feature` · `milestone-feature-run` ·
 `milestone-feature-accept` · `closeout-panel` · `closeout-created-task` ·
-`closeout-validation-errors`
+`closeout-validation-errors` · `choose-pipeline` · `choose-orchestrator` ·
+`orchestrator-panel` · `orchestrator-status` · `orchestrator-team` ·
+`orchestrator-decision` · `orchestrator-run` · `approve-team` · `stop-orchestrator`
 
 `milestone-card` and `milestone-feature` also carry `data-milestone-id` /
 `data-feature-id`, which is what the e2e suite locates on: the e2e home is durable,
