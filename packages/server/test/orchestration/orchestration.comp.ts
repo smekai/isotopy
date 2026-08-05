@@ -5,11 +5,15 @@ import {
   get,
   post,
   restartApp,
+  startRun,
   waitForRunStatus,
   waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
-import { OrchestrationRepository } from "../../src/repository/orchestration-repository.ts";
+import {
+  orchestration,
+  seedOrchestration,
+} from "../support/orchestration-fixtures.ts";
 
 const TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
@@ -38,7 +42,7 @@ const TEAM_PROPOSAL: OrchestratorDecision = {
 let ctx: TestApp;
 
 beforeEach(async () => {
-  ctx = await createTestApp({ activeOrchestrator: false });
+  ctx = await createTestApp();
 });
 
 afterEach(async () => {
@@ -135,7 +139,7 @@ test("a proposed team is stored unapproved — nothing is composed or started fr
   ctx.engine.verify();
 });
 
-test("a project rejects a second active Orchestrator after the first conversation finishes", async () => {
+test("a second Orchestrator supersedes the first, so a project is never stuck on one goal", async () => {
   // Arrange
   ctx.engine
     .anticipate({ as: "first Orchestrator", persona: /# Role: Orchestrator/ })
@@ -143,17 +147,24 @@ test("a project rejects a second active Orchestrator after the first conversatio
   const first = await startOrchestration();
   await waitForRunStatus(ctx.app, first.id, "completed");
 
-  // Anticipate — none: singleton admission stops before the engine boundary.
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "second Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
 
   // Act
-  const rejected = await post<{ error: string }>(ctx.app, "/orchestrations", {
+  const { status, body: second } = await post<RunState>(ctx.app, "/orchestrations", {
     goal: "Start another initiative",
     engine: "claude-code",
   });
 
   // Assert
-  expect(rejected.status).toBe(409);
-  expect(rejected.body.error).toContain("active Orchestrator");
+  expect(status).toBe(201);
+  await waitForRunStatus(ctx.app, second.id, "completed");
+  expect(ctx.orchestrations.get(first.orchestrationId!)).toMatchObject({
+    status: "stopped",
+    stopReason: "Superseded by a new Orchestrator",
+  });
   ctx.engine.verify();
 });
 
@@ -232,10 +243,15 @@ test("explicit stop is idempotent for an already stopped Orchestrator", async ()
 
 test("startup retains the newest legacy Orchestrator and retires older active records", async () => {
   // Arrange
-  const repository = new OrchestrationRepository(ctx.registry.resolve());
-  await repository.write(orchestrationRecord("older", "2026-08-04T10:00:00.000Z"));
-  await repository.write(orchestrationRecord("newer", "2026-08-04T11:00:00.000Z"));
-  await repository.settle();
+  const projectId = ctx.registry.resolve().id;
+  await seedOrchestration(
+    ctx.registry,
+    orchestration({ id: "older", projectId, updatedAt: "2026-08-04T10:00:00.000Z" }),
+  );
+  await seedOrchestration(
+    ctx.registry,
+    orchestration({ id: "newer", projectId, updatedAt: "2026-08-04T11:00:00.000Z" }),
+  );
 
   // Anticipate — none: reconciliation is persistence-only.
 
@@ -299,24 +315,31 @@ test("a decision carrying an unknown field is rejected whole, not stripped down 
   ctx.engine.verify();
 });
 
-test("ordinary work is rejected before run state exists when the project has no Orchestrator", async () => {
-  // Anticipate — none: the missing Orchestrator blocks the engine boundary.
+test("ordinary work bootstraps its own Orchestrator, so a fresh project is never deadlocked", async () => {
+  // Anticipate
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
 
   // Act
-  const rejected = await post<{ error: string }>(ctx.app, "/runs", {
+  const run = await startRun(ctx.app, {
     pipelineId: "solo",
     task: "Add search to the product",
     engine: "claude-code",
   });
 
   // Assert
-  expect(rejected.status).toBe(409);
-  expect(rejected.body.error).toContain("Start an Orchestrator");
-  expect(ctx.orchestrator.listRuns(ctx.registry.resolve().id)).toEqual([]);
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  expect(ctx.orchestrations.list(ctx.registry.resolve().id)).toMatchObject([
+    {
+      id: run.orchestrationId,
+      goal: "Add search to the product",
+      status: "running",
+      runIds: [run.id],
+    },
+  ]);
   ctx.engine.verify();
 });
 
-test("ordinary work cannot restart after its Orchestrator stops", async () => {
+test("restarting work whose Orchestrator stopped adopts it into the current one", async () => {
   // Arrange
   ctx.engine
     .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
@@ -331,18 +354,21 @@ test("ordinary work cannot restart after its Orchestrator stops", async () => {
   await waitForRunStatus(ctx.app, composed.id, "failed");
   await post(ctx.app, `/orchestrations/${conversation.orchestrationId}/stop`);
 
-  // Anticipate — none: restart admission fails before the engine boundary.
+  // Anticipate
+  ctx.engine.anticipate({ as: "restarted Developer" }).reports("done");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("PASS — verified");
 
   // Act
-  const rejected = await post<{ error: string }>(
+  const { status, body: restarted } = await post<RunState>(
     ctx.app,
     `/runs/${composed.id}/restart`,
     { stageId: "implementation" },
   );
 
   // Assert
-  expect(rejected.status).toBe(409);
-  expect(rejected.body.error).toContain("Start an Orchestrator");
+  expect(status).toBe(200);
+  expect(restarted.orchestrationId).not.toBe(conversation.orchestrationId);
+  await waitForRunStatus(ctx.app, composed.id, "completed");
   ctx.engine.verify();
 });
 
@@ -515,15 +541,3 @@ function fenced(decision: unknown): string {
   return `Here is what I propose.\n\n\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }
 
-function orchestrationRecord(id: string, updatedAt: string): Orchestration {
-  return {
-    id,
-    projectId: "home",
-    goal: `Goal for ${id}`,
-    status: "running",
-    turns: [],
-    runIds: [],
-    createdAt: updatedAt,
-    updatedAt,
-  };
-}

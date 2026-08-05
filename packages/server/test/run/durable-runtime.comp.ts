@@ -30,7 +30,7 @@ describe("durable runtime", () => {
 
   test("a gate survives a hard restart and the completed stage is not re-run (M6/M7)", async () => {
     // Arrange — pm-dev-test gates after the Project Manager's recommendation.
-    const project = await addTestProject(ctx.registry, "durable", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "durable");
     ctx.engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
     const run = await startRun(
       ctx.app,
@@ -63,8 +63,8 @@ describe("durable runtime", () => {
 
   test("a project runs one at a time while another project runs concurrently (G2/S5)", async () => {
     // Arrange
-    const a = await addTestProject(ctx.registry, "adm-a", ctx.orchestrations);
-    const b = await addTestProject(ctx.registry, "adm-b", ctx.orchestrations);
+    const a = await addTestProject(ctx.registry, "adm-a");
+    const b = await addTestProject(ctx.registry, "adm-b");
 
     // A gated run in A stays active (parked at its gate).
     ctx.engine.anticipate({ as: "A Project Manager" }).reports(PM_REPORT);

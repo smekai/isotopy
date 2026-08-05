@@ -5,7 +5,6 @@ import {
 } from "../domain/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { OrchestrationService } from "../services/orchestration.ts";
-import { ActiveOrchestratorConflictError } from "../services/question-mediator.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
@@ -38,10 +37,7 @@ export function createOrchestrationRoutes(
           201,
         );
       } catch (error) {
-        return c.json(
-          { error: messageOf(error) },
-          error instanceof ActiveOrchestratorConflictError ? 409 : 400,
-        );
+        return c.json({ error: messageOf(error) }, 400);
       }
     })
     .get("/:id", (c) => {

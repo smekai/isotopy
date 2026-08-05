@@ -2,6 +2,7 @@ import type {
   OrchestratorBrokerDecision,
   OrchestratorBrokerPhase,
 } from "@adhd/core";
+import type { ProjectPath } from "../paths.ts";
 
 export interface QuestionMediationRequest {
   runId: string;
@@ -18,7 +19,7 @@ export interface QuestionMediationContext {
 }
 
 export interface QuestionMediator {
-  activeId(projectId: string): string | undefined;
+  ensureActive(projectPath: ProjectPath, goal: string): Promise<string>;
   attachRun(projectId: string, runId: string): Promise<void>;
   reconcileRuns(): void;
   contextFor(request: QuestionMediationRequest): Promise<QuestionMediationContext>;
@@ -30,5 +31,3 @@ export interface QuestionMediator {
 }
 
 export class OrchestratorRequiredError extends Error {}
-
-export class ActiveOrchestratorConflictError extends Error {}

@@ -75,7 +75,7 @@ test("a summary carries stage progress but never the logs", async () => {
 test("the stream carries only its own project's runs", async () => {
   // Arrange
   const { app, engine, registry } = ctx;
-  const other = await addTestProject(registry, "stream-other", ctx.orchestrations);
+  const other = await addTestProject(registry, "stream-other");
   engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
   const homeStream = await openSse(app, "/runs/events");
 
@@ -96,7 +96,7 @@ test("the stream carries only its own project's runs", async () => {
 test("the project is selectable by query, because EventSource cannot set headers", async () => {
   // Arrange
   const { app, engine, registry } = ctx;
-  const other = await addTestProject(registry, "stream-query", ctx.orchestrations);
+  const other = await addTestProject(registry, "stream-query");
   engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
   const stream = await openSse(app, `/runs/events?project=${other.id}`);
 

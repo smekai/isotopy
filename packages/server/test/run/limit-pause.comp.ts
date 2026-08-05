@@ -35,7 +35,7 @@ describe("plan limit", () => {
 
   test("a plan limit parks the run instead of failing it, carrying the reset time", async () => {
     // Arrange
-    const project = await addTestProject(ctx.registry, "limit-park", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "limit-park");
     // Anticipate — the engine reports the limit rather than a plain crash.
     ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SESSION_LIMIT);
 
@@ -58,7 +58,7 @@ describe("plan limit", () => {
   test("resolving with a new model resumes the same stage without re-running finished ones", async () => {
     // Arrange — pm-dev-test gates after intake, so the Project Manager is finished
     // work by the time the Developer hits the limit.
-    const project = await addTestProject(ctx.registry, "limit-switch", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "limit-switch");
     ctx.engine.anticipate({ as: "Project Manager", model: "opus" }).reports(PM_REPORT);
     ctx.engine.anticipate({ as: "Developer", model: "opus" }).hitsLimit(SESSION_LIMIT);
     ctx.engine.anticipate({ as: "Developer on Haiku", model: "haiku" }).reports(DEV_REPORT);
@@ -92,7 +92,7 @@ describe("plan limit", () => {
 
   test("a run parked on a limit is still parked after a hard restart", async () => {
     // Arrange
-    const project = await addTestProject(ctx.registry, "limit-restart", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "limit-restart");
     ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SESSION_LIMIT);
     const run = await startRun(
       ctx.app,
@@ -116,7 +116,7 @@ describe("plan limit", () => {
 
   test("the run resumes on its own once the parsed reset time passes", async () => {
     // Arrange
-    const project = await addTestProject(ctx.registry, "limit-timeout", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "limit-timeout");
     ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SHORT_LIMIT);
     ctx.engine.anticipate({ as: "Agent after the reset" }).reports(DEV_REPORT);
 
@@ -136,7 +136,7 @@ describe("plan limit", () => {
 
   test("aborting while parked cancels the run and frees the project", async () => {
     // Arrange
-    const project = await addTestProject(ctx.registry, "limit-abort", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "limit-abort");
     ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SESSION_LIMIT);
     const run = await startRun(
       ctx.app,
@@ -162,7 +162,7 @@ describe("plan limit", () => {
 
   test("resolving a stage that is not parked is refused", async () => {
     // Arrange
-    const project = await addTestProject(ctx.registry, "limit-guard", ctx.orchestrations);
+    const project = await addTestProject(ctx.registry, "limit-guard");
     ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
     const run = await startRun(
       ctx.app,

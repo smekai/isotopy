@@ -285,20 +285,15 @@ export class RunOrchestrator implements RunProjection {
     return run.pipeline ?? this.getPipeline(run.pipelineId);
   }
 
-  private activeOrchestrationId(
-    projectId: string,
+  private async owningOrchestrationId(
+    projectPath: ProjectPath,
     pipelineId: string,
-  ): string | undefined {
+    goal: string,
+  ): Promise<string | undefined> {
     if (pipelineId === ORCHESTRATION_PIPELINE_ID) {
       return undefined;
     }
-    const orchestrationId = this.questionMediator?.activeId(projectId);
-    if (!orchestrationId) {
-      throw new OrchestratorRequiredError(
-        "Start an Orchestrator for this project before starting or restarting work",
-      );
-    }
-    return orchestrationId;
+    return this.questionMediator?.ensureActive(projectPath, goal);
   }
 
   listRuns(projectId: string): RunState[] {
@@ -692,10 +687,6 @@ export class RunOrchestrator implements RunProjection {
     pipeline: PipelineDefinition,
     options: StartRunOptions,
   ): Promise<RunState> {
-    const activeOrchestrationId = this.activeOrchestrationId(
-      projectPath.id,
-      pipeline.id,
-    );
     const {
       task,
       engine,
@@ -706,6 +697,11 @@ export class RunOrchestrator implements RunProjection {
       orchestrationId: requestedOrchestrationId,
       sourceTaskIds,
     } = options;
+    const activeOrchestrationId = await this.owningOrchestrationId(
+      projectPath,
+      pipeline.id,
+      task ?? pipeline.name,
+    );
     if (
       requestedOrchestrationId !== undefined &&
       activeOrchestrationId !== undefined &&
@@ -914,16 +910,11 @@ export class RunOrchestrator implements RunProjection {
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
     }
-    const orchestrationId = this.activeOrchestrationId(run.projectId, run.pipelineId);
-    if (
-      orchestrationId !== undefined &&
-      run.orchestrationId !== undefined &&
-      run.orchestrationId !== orchestrationId
-    ) {
-      throw new OrchestratorRequiredError(
-        "The run belongs to an Orchestrator that is no longer active",
-      );
-    }
+    const orchestrationId = await this.owningOrchestrationId(
+      this.registry.resolve(run.projectId),
+      run.pipelineId,
+      run.task ?? run.pipelineName,
+    );
     if (
       run.status !== "needs_attention" &&
       run.status !== "failed" &&
@@ -1103,24 +1094,14 @@ export class RunOrchestrator implements RunProjection {
   stageQuestion(runId: string, stageId: string, question: string): void {
     const run = this.live(runId);
     if (run) {
-      this.appendMessage(run, {
-        role: "agent",
-        stageId,
-        kind: "question",
-        text: question,
-      });
+      this.appendMessage(run, { role: "agent", stageId, text: question });
     }
   }
 
   stageMediatedAnswer(runId: string, stageId: string, answer: string): void {
     const run = this.live(runId);
     if (run) {
-      this.appendMessage(run, {
-        role: "agent",
-        stageId,
-        kind: "answer",
-        text: answer,
-      });
+      this.appendMessage(run, { role: "agent", stageId, text: answer });
     }
   }
 

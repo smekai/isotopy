@@ -2,13 +2,15 @@
 
 ## TASK-120: Mandatory Orchestrator question mediation
 **Priority:** P1 | **Tags:** core, server, engine
-**Updated:** 2026-08-05 11:47
+**Updated:** 2026-08-05 15:40
 
-Delivered mandatory project-level Orchestrator mediation. Ordinary starts and restarts now require the singleton active Orchestrator; specialist questions execute as durable mediation steps in the specialist's existing workflow, with automatic answers or durable user escalation and same-session routing. Broker decisions persist separately from lifecycle turns.
+Delivered mandatory project-level Orchestrator mediation. Specialist questions execute as durable mediation steps in the specialist's existing workflow, with automatic answers or durable user escalation and same-session routing. Broker decisions persist separately from lifecycle turns.
 
-Added persisted stop/history fields, singleton conflict and legacy reconciliation, `POST /orchestrations/:id/stop`, owned-run cancellation, bootstrap/no-recursion behavior, and precise invariant failures. No admission lanes, queue, secondary workflow, worker-concurrency change, or UI work was introduced.
+Ownership is established rather than demanded: a run with no active Orchestrator bootstraps one from its own task, `POST /orchestrations` supersedes the active record, and a restart adopts its run into the current Orchestrator. The first cut refused all three with `409`, which deadlocked a UI that has no orchestration surface and pinned each project to a single goal.
 
-Verification: lint, all TypeScript configurations, 475 tests, production build, and generated-skill drift check pass on Windows. Version bumped to 0.9.4; macOS verification remains the CI gate.
+Added persisted stop/history fields, legacy reconciliation, `POST /orchestrations/:id/stop`, owned-run cancellation, and the missing `/orchestrations` dev-proxy prefix. No admission lanes, queue, secondary workflow, worker-concurrency change, or UI work was introduced.
+
+Verification: lint, all TypeScript configurations, 479 tests, production build, and generated-skill drift check pass on Windows. Version bumped to 0.9.5; macOS verification remains the CI gate.
 
 ---
 

@@ -32,7 +32,10 @@ import type {
   StageTurn,
   WorkflowDeps,
 } from "./types.ts";
-import type { QuestionMediationRequest } from "../services/question-mediator.ts";
+import type {
+  QuestionMediationContext,
+  QuestionMediationRequest,
+} from "../services/question-mediator.ts";
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
@@ -158,7 +161,7 @@ export async function runQuestionMediationWork(
       failureMessage: "The project has no registered Orchestrator question mediator",
     };
   }
-  let context;
+  let context: QuestionMediationContext;
   try {
     context = await mediator.contextFor(request);
   } catch (error) {

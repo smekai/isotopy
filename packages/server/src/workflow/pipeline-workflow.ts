@@ -1,14 +1,15 @@
 import { defineWorkflow } from "openworkflow";
 import type { Workflow } from "openworkflow";
 import {
+  ORCHESTRATION_PIPELINE,
   STAGE_EXECUTION_POLICIES,
-  STAGE_OUTPUT_PROTOCOLS,
   STAGE_OUTCOMES,
   agentForStage,
 } from "@adhd/core";
 import type {
   EngineLimit,
   LimitChoice,
+  OrchestratorBrokerPhase,
   PipelineGroup,
   StageDefinition,
   StageExecutionPolicy,
@@ -81,21 +82,30 @@ interface QuestionResolution {
   answer?: string;
 }
 
+interface QuestionContext {
+  step: StepApiLike;
+  deps: WorkflowDeps;
+  input: PipelineWorkflowInput;
+  stageDef: StageDefinition;
+  attempt: number;
+  turnIndex: number;
+}
+
 function stepName(stageId: string, attempt: number, suffix: string): string {
   return attempt === 0 ? `${stageId}:${suffix}` : `${stageId}:attempt:${attempt}:${suffix}`;
 }
 
+function turnStepName(ctx: QuestionContext, suffix: string): string {
+  return stepName(ctx.stageDef.id, ctx.attempt, `turn:${ctx.turnIndex}:${suffix}`);
+}
+
 async function failQuestionMediation(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  runId: string,
-  stageId: string,
-  turnIndex: number,
+  ctx: QuestionContext,
   outcome: QuestionResolution["outcome"],
   message: string,
 ): Promise<QuestionResolution> {
-  await step.run({ name: `${stageId}:turn:${turnIndex}:mediation:failed` }, () => {
-    deps.projection.stageFailed(runId, stageId, message);
+  await ctx.step.run({ name: turnStepName(ctx, "mediation:failed") }, () => {
+    ctx.deps.projection.stageFailed(ctx.input.runId, ctx.stageDef.id, message);
     return null;
   });
   return { outcome };
@@ -114,17 +124,15 @@ function questionFailureOutcome(
 }
 
 async function waitOutMediationLimit(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
-  request: QuestionMediationRequest,
-  attempt: number,
+  ctx: QuestionContext,
+  phase: OrchestratorBrokerPhase,
+  mediationAttempt: number,
   limit: EngineLimit,
 ): Promise<boolean> {
-  const prefix = `${request.phase}:${request.stageTurn}:mediation`;
-  await step.run({ name: `${stageDef.id}:${prefix}:limit:${attempt}` }, () => {
-    deps.projection.stageBlocked(input.runId, stageDef.id, limit, attempt + 1);
+  const { step, deps, input, stageDef } = ctx;
+  const prefix = `mediation:${phase}:${mediationAttempt}:limit`;
+  await step.run({ name: turnStepName(ctx, prefix) }, () => {
+    deps.projection.stageBlocked(input.runId, stageDef.id, limit, mediationAttempt + 1);
     return null;
   });
   const signal = await step.waitForSignal<LimitSignalPayload>({
@@ -134,7 +142,7 @@ async function waitOutMediationLimit(
   if (deps.isCancelled(input.runId)) {
     return false;
   }
-  await step.run({ name: `${stageDef.id}:${prefix}:limit:${attempt}:resume` }, () => {
+  await step.run({ name: turnStepName(ctx, `${prefix}:resume`) }, () => {
     deps.projection.limitResolved(input.runId, stageDef.id, signal?.data.choice);
     return null;
   });
@@ -142,37 +150,23 @@ async function waitOutMediationLimit(
 }
 
 async function mediateQuestion(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
+  ctx: QuestionContext,
   request: QuestionMediationRequest,
   resumeSessionId?: string,
 ): Promise<QuestionMediationResult> {
-  for (let attempt = 0; ; attempt += 1) {
+  const { step, deps, input, stageDef } = ctx;
+  for (let mediationAttempt = 0; ; mediationAttempt += 1) {
     const result = await step.run(
-      {
-        name: `${stageDef.id}:turn:${request.stageTurn}:mediation:${request.phase}:${attempt}`,
-      },
-      () =>
-        runQuestionMediationWork(
-          deps,
-          input,
-          stageDef,
-          request,
-          resumeSessionId,
-        ),
+      { name: turnStepName(ctx, `mediation:${request.phase}:${mediationAttempt}`) },
+      () => runQuestionMediationWork(deps, input, stageDef, request, resumeSessionId),
     );
     if (result.outcome !== STAGE_OUTCOMES.LIMITED || result.limit === undefined) {
       return result;
     }
     const resumed = await waitOutMediationLimit(
-      step,
-      deps,
-      input,
-      stageDef,
-      request,
-      attempt,
+      ctx,
+      request.phase,
+      mediationAttempt,
       result.limit,
     );
     if (!resumed) {
@@ -182,14 +176,11 @@ async function mediateQuestion(
 }
 
 async function waitForUserAnswer(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
-  turnIndex: number,
+  ctx: QuestionContext,
   question: string,
 ): Promise<string | undefined> {
-  await step.run({ name: `${stageDef.id}:turn:${turnIndex}:question:user` }, () => {
+  const { step, deps, input, stageDef } = ctx;
+  await step.run({ name: turnStepName(ctx, "question:user") }, () => {
     deps.projection.stageAsking(input.runId, stageDef.id, question);
     return null;
   });
@@ -204,42 +195,35 @@ async function waitForUserAnswer(
 }
 
 async function resolveSpecialistQuestion(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
-  turn: StageTurn,
+  ctx: QuestionContext,
   question: string,
 ): Promise<QuestionResolution> {
-  await step.run({ name: `${stageDef.id}:turn:${turn.index}:question:recorded` }, () => {
+  const { step, deps, input, stageDef } = ctx;
+  await step.run({ name: turnStepName(ctx, "question:recorded") }, () => {
     deps.projection.stageQuestion(input.runId, stageDef.id, question);
     return null;
   });
   const request: QuestionMediationRequest = {
     runId: input.runId,
     stageId: stageDef.id,
-    stageTurn: turn.index,
+    stageTurn: ctx.turnIndex,
     phase: "question",
     question,
   };
-  const mediated = await mediateQuestion(step, deps, input, stageDef, request);
+  const mediated = await mediateQuestion(ctx, request);
   if (mediated.outcome === STAGE_OUTCOMES.CANCELLED) {
     return { outcome: STAGE_OUTCOMES.CANCELLED };
   }
   if (mediated.outcome !== STAGE_OUTCOMES.PASSED || !mediated.decision) {
     return failQuestionMediation(
-      step,
-      deps,
-      input.runId,
-      stageDef.id,
-      turn.index,
+      ctx,
       questionFailureOutcome(mediated.outcome),
       mediated.failureMessage ?? "Orchestrator could not mediate the question",
     );
   }
   if (mediated.decision.action === "answer_agent") {
     const answer = mediated.decision.answer;
-    await step.run({ name: `${stageDef.id}:turn:${turn.index}:question:answered` }, () => {
+    await step.run({ name: turnStepName(ctx, "question:answered") }, () => {
       deps.projection.stageMediatedAnswer(input.runId, stageDef.id, answer);
       return null;
     });
@@ -247,46 +231,28 @@ async function resolveSpecialistQuestion(
   }
   if (mediated.decision.action !== "escalate_to_user") {
     return failQuestionMediation(
-      step,
-      deps,
-      input.runId,
-      stageDef.id,
-      turn.index,
+      ctx,
       STAGE_OUTCOMES.NEEDS_ATTENTION,
       "Orchestrator returned an invalid first mediation action",
     );
   }
-  const userAnswer = await waitForUserAnswer(
-    step,
-    deps,
-    input,
-    stageDef,
-    turn.index,
-    mediated.decision.question,
-  );
+  const userAnswer = await waitForUserAnswer(ctx, mediated.decision.question);
   if (userAnswer === undefined) {
     return deps.isCancelled(input.runId)
       ? { outcome: STAGE_OUTCOMES.CANCELLED }
       : failQuestionMediation(
-          step,
-          deps,
-          input.runId,
-          stageDef.id,
-          turn.index,
+          ctx,
           STAGE_OUTCOMES.FAILED,
           "Nobody answered the mediated question",
         );
   }
+  await step.run({ name: turnStepName(ctx, "question:routing") }, () => {
+    deps.projection.stageAnswered(input.runId, stageDef.id);
+    return null;
+  });
   const routed = await mediateQuestion(
-    step,
-    deps,
-    input,
-    stageDef,
-    {
-      ...request,
-      phase: "user_answer",
-      userAnswer,
-    },
+    ctx,
+    { ...request, phase: "user_answer", userAnswer },
     mediated.sessionId,
   );
   if (routed.outcome === STAGE_OUTCOMES.CANCELLED) {
@@ -297,17 +263,13 @@ async function resolveSpecialistQuestion(
     routed.decision?.action !== "route_to_agent"
   ) {
     return failQuestionMediation(
-      step,
-      deps,
-      input.runId,
-      stageDef.id,
-      turn.index,
+      ctx,
       questionFailureOutcome(routed.outcome),
       routed.failureMessage ?? "Orchestrator could not route the user's answer",
     );
   }
   const answer = routed.decision.message;
-  await step.run({ name: `${stageDef.id}:turn:${turn.index}:question:routed` }, () => {
+  await step.run({ name: turnStepName(ctx, "question:routed") }, () => {
     deps.projection.stageMediatedAnswer(input.runId, stageDef.id, answer);
     return null;
   });
@@ -338,27 +300,21 @@ async function runStageTurns(
       return { outcome: result.outcome };
     }
 
+    const ctx: QuestionContext = {
+      step,
+      deps,
+      input,
+      stageDef,
+      attempt,
+      turnIndex: turn.index,
+    };
     const resolution =
-      stageDef.outputProtocol === STAGE_OUTPUT_PROTOCOLS.DECISION
+      input.pipeline.id === ORCHESTRATION_PIPELINE.id
         ? {
             outcome: STAGE_OUTCOMES.PASSED,
-            answer: await waitForUserAnswer(
-              step,
-              deps,
-              input,
-              stageDef,
-              turn.index,
-              result.question ?? "",
-            ),
+            answer: await waitForUserAnswer(ctx, result.question ?? ""),
           }
-        : await resolveSpecialistQuestion(
-            step,
-            deps,
-            input,
-            stageDef,
-            turn,
-            result.question ?? "",
-          );
+        : await resolveSpecialistQuestion(ctx, result.question ?? "");
     if (resolution.outcome !== STAGE_OUTCOMES.PASSED) {
       return { outcome: resolution.outcome };
     }

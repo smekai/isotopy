@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isTerminalRunStatus, orchestrationStatusFor } from "@adhd/core";
 import type {
   Orchestration,
+  OrchestrationStatus,
   OrchestratorBrokerDecision,
   RunState,
   StageDefinition,
@@ -11,6 +12,7 @@ import {
   renderOrchestrationContext,
   renderQuestionMediationContext,
 } from "../domain/markdown/orchestration.ts";
+import type { QuestionMediationArtifact } from "../domain/markdown/orchestration.ts";
 import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import { composeTeamPipeline } from "../domain/team-composition.ts";
@@ -23,10 +25,7 @@ import { milestoneCloseoutContext } from "./product-manager-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunOrchestrator, StartRunOptions } from "./run-orchestrator.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
-import {
-  ActiveOrchestratorConflictError,
-  OrchestratorRequiredError,
-} from "./question-mediator.ts";
+import { OrchestratorRequiredError } from "./question-mediator.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
@@ -88,8 +87,15 @@ export class OrchestrationService implements StageOutputConsumer, QuestionMediat
     return orchestration ? structuredClone(orchestration) : undefined;
   }
 
-  activeId(projectId: string): string | undefined {
-    return this.activeFor(projectId)?.id;
+  async ensureActive(projectPath: ProjectPath, goal: string): Promise<string> {
+    const active = this.activeFor(projectPath.id);
+    if (active) {
+      return active.id;
+    }
+    const orchestration = this.newOrchestration(projectPath.id, goal, "running");
+    this.orchestrations.set(orchestration.id, orchestration);
+    await this.persist(orchestration);
+    return orchestration.id;
   }
 
   async attachRun(projectId: string, runId: string): Promise<void> {
@@ -131,21 +137,9 @@ export class OrchestrationService implements StageOutputConsumer, QuestionMediat
     }
     const active = this.activeFor(projectPath.id);
     if (active) {
-      throw new ActiveOrchestratorConflictError(
-        `Project already has an active Orchestrator: ${active.id}`,
-      );
+      await this.terminate(active, "Superseded by a new Orchestrator");
     }
-    const now = nowIso();
-    const orchestration: Orchestration = {
-      id: randomUUID().slice(0, 8),
-      projectId: projectPath.id,
-      goal,
-      status: "conversing",
-      turns: [],
-      runIds: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    const orchestration = this.newOrchestration(projectPath.id, goal, "conversing");
     this.orchestrations.set(orchestration.id, orchestration);
     try {
       const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
@@ -324,6 +318,24 @@ export class OrchestrationService implements StageOutputConsumer, QuestionMediat
     });
   }
 
+  private newOrchestration(
+    projectId: string,
+    goal: string,
+    status: OrchestrationStatus,
+  ): Orchestration {
+    const now = nowIso();
+    return {
+      id: randomUUID().slice(0, 8),
+      projectId,
+      goal,
+      status,
+      turns: [],
+      runIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
   private activeFor(projectId: string): Orchestration | undefined {
     return [...this.orchestrations.values()]
       .filter(
@@ -333,7 +345,10 @@ export class OrchestrationService implements StageOutputConsumer, QuestionMediat
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   }
 
-  private mediationArtifacts(orchestration: Orchestration, current: RunState) {
+  private mediationArtifacts(
+    orchestration: Orchestration,
+    current: RunState,
+  ): QuestionMediationArtifact[] {
     const runIds = new Set([...orchestration.runIds, current.id]);
     return this.runs
       .listRuns(orchestration.projectId)

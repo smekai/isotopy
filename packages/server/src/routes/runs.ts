@@ -4,7 +4,6 @@ import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@ad
 import type { RunEvent } from "@adhd/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunOrchestrator } from "../services/run-orchestrator.ts";
-import { OrchestratorRequiredError } from "../services/question-mediator.ts";
 import {
   postRunMessageSchema,
   resolveLimitSchema,
@@ -79,10 +78,7 @@ export function createRunRoutes(
         return c.json(run, 201);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to start run";
-        return c.json(
-          { error: message },
-          error instanceof OrchestratorRequiredError ? 409 : 400,
-        );
+        return c.json({ error: message }, 400);
       }
     })
 
