@@ -1,5 +1,13 @@
 # Done
 
+## TASK-123: Stop controls for a live pipeline in the UI
+**Priority:** P1 | **Tags:** ui
+**Updated:** 2026-08-06 22:50
+
+The server had both kill switches (`POST /runs/:id/abort`, `POST /orchestrations/:id/stop`); the UI hid them. `TeamController` now offers **Abort** for every non-terminal run status — derived from `isTerminalRunStatus`, so `pending` and `asking` are no longer dead ends — and a **Stop initiative** button whenever the attached run belongs to an orchestration that is not stopped, including after that run settles. Six component tests in `packages/ui/test/run/TeamController.comp.tsx`; decision recorded in `docs/decisions.md`. Version 0.9.21.
+
+---
+
 ## TASK-121: Rename the run service, split it, and write the placement rule down
 **Priority:** P1 | **Tags:** server, core, infra
 **Updated:** 2026-08-06 17:15
