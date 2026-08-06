@@ -6,6 +6,7 @@ import {
   type CloseoutFinding,
   type FollowUpTaskDraft,
   type ProductManagerCloseout,
+  type RunState,
 } from "@adhd/core";
 import { z } from "zod";
 
@@ -242,4 +243,40 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
   }
 
   return salvageCloseout(record.data, output.trim());
+}
+
+export function validateSourceTaskOutcome(
+  run: RunState,
+  report: ProductManagerCloseout,
+): string[] {
+  const sourceIds = new Set(run.sourceTaskIds ?? []);
+  const reportedIds = [
+    ...report.completedTaskIds,
+    ...report.unresolvedTaskIds,
+  ];
+  const unknown = reportedIds.filter((id) => !sourceIds.has(id));
+  const completed = report.completedTaskIds.filter((id) => sourceIds.has(id));
+  const unresolved = report.unresolvedTaskIds.filter((id) => sourceIds.has(id));
+  const overlap = completed.filter((id) => unresolved.includes(id));
+  const declared = new Set([...completed, ...unresolved]);
+  const omitted = [...sourceIds].filter((id) => !declared.has(id));
+  report.completedTaskIds = completed.filter((id) => !overlap.includes(id));
+  report.unresolvedTaskIds = [
+    ...new Set([...unresolved, ...overlap, ...omitted]),
+  ];
+  const errors: string[] = [];
+  if (overlap.length > 0) {
+    errors.push(
+      `Tasks cannot be both completed and unresolved: ${overlap.join(", ")}`,
+    );
+  }
+  if (unknown.length > 0) {
+    errors.push(`Closeout referenced unknown source tasks: ${unknown.join(", ")}`);
+  }
+  if (omitted.length > 0) {
+    errors.push(
+      `Unclassified source tasks were preserved as unresolved: ${omitted.join(", ")}`,
+    );
+  }
+  return errors;
 }

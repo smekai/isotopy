@@ -28,7 +28,7 @@ import type {
   StageTurn,
   WorkflowDeps,
 } from "./types.ts";
-import type { QuestionMediationRequest } from "../services/question-mediator.ts";
+import type { QuestionMediationRequest } from "./types.ts";
 
 export const PIPELINE_WORKFLOW_NAME = "adhd-pipeline";
 

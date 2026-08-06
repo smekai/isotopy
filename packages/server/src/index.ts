@@ -11,8 +11,7 @@ const settings = new SettingsStore();
 const runs = new RunService({ registry, settings });
 const orchestrations = new OrchestrationService({ registry, runs });
 runs.registerStageOutputConsumer(orchestrations);
-runs.registerQuestionMediator(orchestrations);
-runs.registerRunReviewer(orchestrations);
+runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();
 await runs.init();

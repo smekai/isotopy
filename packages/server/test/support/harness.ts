@@ -52,8 +52,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const orchestrator = new RunService({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
-  orchestrator.registerQuestionMediator(orchestrations);
-  orchestrator.registerRunReviewer(orchestrations);
+  orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   const app = createApp({
     runs: orchestrator,
@@ -114,8 +113,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const orchestrator = new RunService({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
-  orchestrator.registerQuestionMediator(orchestrations);
-  orchestrator.registerRunReviewer(orchestrations);
+  orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
   return {

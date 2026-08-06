@@ -658,8 +658,9 @@ retains history and artifacts. A restart adopts its run into whichever Orchestra
 active now, so stopping one never strands the work it owned.
 
 **Specialist questions are mediated inside the specialist workflow.** The
-`QuestionMediator` seam lets `PipelineWorkflow` request active aggregate context and
-record a narrowed broker decision. The workflow executes the Orchestrator persona as
+`OrchestrationHooks` seam (implemented by `OrchestrationService`) lets
+`PipelineWorkflow` request active aggregate context and record a narrowed broker
+decision. The workflow executes the Orchestrator persona as
 a named durable step with the asking run's engine, model, permissions, workspace,
 limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
 same specialist CLI session. `escalate_to_user` uses the existing `asking` state and

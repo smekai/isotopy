@@ -4,6 +4,8 @@ import type {
   EnginePermissionMode,
   LimitChoice,
   OrchestratorBrokerDecision,
+  OrchestratorBrokerPhase,
+  OrchestratorDecision,
   StageLogDraft,
   PipelineDefinition,
   RunArtifactRecord,
@@ -13,10 +15,12 @@ import type {
   StageUsage,
   StageVerdict,
 } from "@adhd/core";
+import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
+import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
-import type { QuestionMediator } from "../services/question-mediator.ts";
-import type { RunReviewer } from "../services/run-reviewer.ts";
+
+export type { RunCompletionStatus };
 
 export interface PipelineWorkflowInput {
   runId: string;
@@ -34,8 +38,6 @@ export interface PipelineWorkflowInput {
 }
 
 export type { StageOutcome } from "@adhd/core";
-
-export type RunCompletionStatus = "completed" | "needs_attention" | "failed";
 
 export interface StageResult {
   outcome: StageOutcome;
@@ -92,12 +94,60 @@ export interface RunProjection {
   runCompleted(runId: string, status: RunCompletionStatus): void;
 }
 
+export interface QuestionMediationRequest {
+  runId: string;
+  stageId: string;
+  stageTurn: number;
+  phase: OrchestratorBrokerPhase;
+  question: string;
+  userAnswer?: string;
+}
+
+export interface QuestionMediationContext {
+  orchestrationId: string;
+  prompt: string;
+}
+
+export interface RunReviewRequest {
+  runId: string;
+  status: RunState["status"];
+}
+
+export interface RunReviewContext {
+  orchestrationId: string;
+  prompt: string;
+}
+
+export interface RunReview {
+  artifacts?: RunArtifactRecord;
+  decision?: OrchestratorDecision;
+  errors: string[];
+}
+
+export interface OrchestrationHooks {
+  ensureActive(projectPath: ProjectPath, goal: string): Promise<string>;
+  attachRun(projectId: string, runId: string): Promise<void>;
+  reconcileRuns(): void;
+  contextFor(request: QuestionMediationRequest): Promise<QuestionMediationContext>;
+  recordDecision(
+    request: QuestionMediationRequest,
+    context: QuestionMediationContext,
+    decision: OrchestratorBrokerDecision,
+  ): Promise<void>;
+  reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext>;
+  recordReview(
+    request: RunReviewRequest,
+    context: RunReviewContext,
+    review: RunReview,
+  ): Promise<void>;
+  settle(runId: string): Promise<void>;
+}
+
 export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
   settings: SettingsStore;
-  questionMediator(): QuestionMediator | undefined;
-  runReviewer(): RunReviewer | undefined;
+  orchestration(): OrchestrationHooks | undefined;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;
   isCancelled(runId: string): boolean;

@@ -23,7 +23,6 @@ import {
 import type { ProjectPath } from "../../paths.ts";
 import { MilestoneRepository } from "../../repository/milestone-repository.ts";
 import { nowIso } from "../../utils/time.ts";
-import type { MilestoneProposalStore } from "../consumers/milestone-plan-consumer.ts";
 import {
   milestoneCloseoutContext,
   persistMilestoneSummary,
@@ -35,7 +34,7 @@ import {
 } from "../task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "../run/run-service.ts";
 
-export class MilestoneService implements MilestoneProposalStore {
+export class MilestoneService {
   private readonly milestoneRepositories = new Map<string, MilestoneRepository>();
   private readonly milestones = new Map<string, Milestone>();
   private readonly completingMilestoneRuns = new Set<string>();

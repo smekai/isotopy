@@ -26,7 +26,6 @@ import {
   agentForStage,
   createInitialRunState,
   isTerminalRunStatus,
-  STAGE_OUTCOMES,
   pipelineUsesEngine,
   toRunSummary,
 } from "@adhd/core";
@@ -34,8 +33,6 @@ import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
 import { OrchestratorRequiredError } from "../orchestrator-required-error.ts";
-import type { QuestionMediator } from "../question-mediator.ts";
-import type { RunReviewer } from "../run-reviewer.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
@@ -43,6 +40,7 @@ import type { ProjectRegistry } from "../project-registry.ts";
 import { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
+  OrchestrationHooks,
   PipelineWorkflowInput,
   RunCompletionStatus,
   RunProjection,
@@ -59,76 +57,20 @@ import {
   selectionAfterLimit,
 } from "../../domain/rules/engine-limit.ts";
 import { formatHandoff } from "../../domain/markdown/stage.ts";
+import {
+  TERMINAL_OPENWORKFLOW_STATUSES,
+  completionMessage,
+  outcomeForRestart,
+} from "../../domain/rules/run-lifecycle.ts";
 import { nowIso } from "../../utils/time.ts";
+import type {
+  InheritedRunOptions,
+  RunServiceDependencies,
+  StartRunOptions,
+} from "./run-options.ts";
 import { RunStore } from "./run-store.ts";
 
-const ORCHESTRATION_PIPELINE_ID = "orchestration";
-const UNKNOWN_ENGINE_LABEL = "unknown";
-
-function outcomeForRestart(stage: StageState): StageOutcome {
-  if (stage.status === "failed") {
-    return stage.verdict === "FAIL"
-      ? STAGE_OUTCOMES.NEEDS_ATTENTION
-      : STAGE_OUTCOMES.FAILED;
-  }
-  if (stage.status === "skipped") {
-    return STAGE_OUTCOMES.SKIPPED;
-  }
-  return STAGE_OUTCOMES.PASSED;
-}
-
-function completionMessage(status: RunCompletionStatus): string {
-  if (status === "completed") {
-    return "Run completed successfully";
-  }
-  if (status === "needs_attention") {
-    return "Run needs attention";
-  }
-  return "Run failed";
-}
-
-const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
-  "succeeded",
-  "completed",
-  "failed",
-  "canceled",
-]);
-
-type RunListener = (event: RunEvent) => void;
-type RunSummaryListener = (summary: RunSummary) => void;
-
-interface MessageDraft {
-  role: MessageRole;
-  stageId?: string;
-  kind?: MessageKind;
-  text: string;
-}
-
-export interface InheritedRunOptions {
-  engine?: string;
-  model?: string;
-  permissionMode?: string;
-}
-
-export interface StartRunOptions extends InheritedRunOptions {
-  task?: string;
-  milestoneId?: string;
-  featureId?: string;
-  orchestrationId?: string;
-  sourceTaskIds?: string[];
-}
-
-export interface RunServiceDependencies {
-  registry: ProjectRegistry;
-  settings?: SettingsStore;
-}
-
-interface InputExtras {
-  startedMessage: string;
-  seededOutputs?: Record<string, string>;
-  seededOutcomes?: Record<string, StageOutcome>;
-  startStageId?: string;
-}
+export type { InheritedRunOptions, RunServiceDependencies, StartRunOptions } from "./run-options.ts";
 
 export class RunService implements RunProjection {
   readonly store: RunStore;
@@ -141,8 +83,7 @@ export class RunService implements RunProjection {
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
   private readonly projectListeners = new ListenerRegistry<RunSummary>();
-  private questionMediator?: QuestionMediator;
-  private runReviewer?: RunReviewer;
+  private orchestration?: OrchestrationHooks;
 
   constructor({ registry, settings }: RunServiceDependencies) {
     this.registry = registry;
@@ -160,8 +101,7 @@ export class RunService implements RunProjection {
       projection: this,
       registry: this.registry,
       settings: this.settings,
-      questionMediator: () => this.questionMediator,
-      runReviewer: () => this.runReviewer,
+      orchestration: () => this.orchestration,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
@@ -180,7 +120,7 @@ export class RunService implements RunProjection {
         }
       }
     }
-    this.questionMediator?.reconcileRuns();
+    this.orchestration?.reconcileRuns();
     for (const project of this.registry.all()) {
       const projectPath = this.registry.resolve(project.id);
       await this.runtimes.for(projectPath).start();
@@ -245,7 +185,7 @@ export class RunService implements RunProjection {
     if (pipelineId === ORCHESTRATION_PIPELINE_ID) {
       return undefined;
     }
-    return this.questionMediator?.ensureActive(projectPath, goal);
+    return this.orchestration?.ensureActive(projectPath, goal);
   }
 
   listRuns(projectId: string): RunState[] {
@@ -264,12 +204,8 @@ export class RunService implements RunProjection {
     this.stageOutputConsumers.push(consumer);
   }
 
-  registerQuestionMediator(mediator: QuestionMediator): void {
-    this.questionMediator = mediator;
-  }
-
-  registerRunReviewer(reviewer: RunReviewer): void {
-    this.runReviewer = reviewer;
+  registerOrchestration(orchestration: OrchestrationHooks): void {
+    this.orchestration = orchestration;
   }
 
   inheritedRunOptions(runId: string): InheritedRunOptions {
@@ -418,8 +354,8 @@ export class RunService implements RunProjection {
       await this.milestones.recordFeatureRun(linkedMilestone, linkedFeature, runId);
     }
     await this.store.flushPersist(runId);
-    if (activeOrchestrationId && this.questionMediator) {
-      await this.questionMediator.attachRun(projectPath.id, runId);
+    if (activeOrchestrationId && this.orchestration) {
+      await this.orchestration.attachRun(projectPath.id, runId);
     }
     await this.launch(projectPath, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
     return structuredClone(run);
@@ -549,9 +485,9 @@ export class RunService implements RunProjection {
     }
     run.stageOutputs = outputs;
     run.status = "running";
-    if (orchestrationId !== undefined && this.questionMediator) {
+    if (orchestrationId !== undefined && this.orchestration) {
       run.orchestrationId = orchestrationId;
-      await this.questionMediator.attachRun(run.projectId, run.id);
+      await this.orchestration.attachRun(run.projectId, run.id);
     }
     delete run.completedAt;
     void this.store.flushPersist(runId);
@@ -916,7 +852,7 @@ export class RunService implements RunProjection {
   private async settleCompletedRun(run: RunState): Promise<void> {
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.milestones.completeMilestoneRun(run);
-    await this.runReviewer?.settle(run.id);
+    await this.orchestration?.settle(run.id);
   }
 
   private async launch(
@@ -963,3 +899,23 @@ export class RunService implements RunProjection {
     };
   }
 }
+
+interface InputExtras {
+  startedMessage: string;
+  seededOutputs?: Record<string, string>;
+  seededOutcomes?: Record<string, StageOutcome>;
+  startStageId?: string;
+}
+
+interface MessageDraft {
+  role: MessageRole;
+  stageId?: string;
+  kind?: MessageKind;
+  text: string;
+}
+
+type RunListener = (event: RunEvent) => void;
+type RunSummaryListener = (summary: RunSummary) => void;
+
+const ORCHESTRATION_PIPELINE_ID = "orchestration";
+const UNKNOWN_ENGINE_LABEL = "unknown";

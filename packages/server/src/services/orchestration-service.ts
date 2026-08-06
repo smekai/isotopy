@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isTerminalRunStatus, orchestrationStatusFor } from "@adhd/core";
 import type {
-  Milestone,
   Orchestration,
   OrchestrationStatus,
   OrchestratorBrokerDecision,
@@ -19,7 +18,12 @@ import type {
   QuestionMediationArtifact,
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
-import { renderRunArtifactsBody } from "../domain/markdown/closeout.ts";
+import {
+  artifactDigestOf,
+  milestoneReviewContext,
+  runLabel,
+  stageOutputsOf,
+} from "../domain/rules/orchestration-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import { composeTeamPipeline } from "../schemas/team-composition.ts";
@@ -36,74 +40,13 @@ import { OrchestratorRequiredError } from "./orchestrator-required-error.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
-  QuestionMediator,
-} from "./question-mediator.ts";
-import type {
   RunReview,
   RunReviewContext,
   RunReviewRequest,
-  RunReviewer,
-} from "./run-reviewer.ts";
+} from "../workflow/types.ts";
 import { taskBoardPlanningContext } from "./task-board-adapter.ts";
 
-const PIPELINE_ID = "orchestration";
-
-const STAGE_ID = "orchestrate";
-
-export type StartOrchestrationOptions = Omit<
-  StartRunOptions,
-  "task" | "milestoneId" | "featureId" | "orchestrationId" | "sourceTaskIds"
->;
-
-export interface OrchestrationDependencies {
-  registry: ProjectRegistry;
-  runs: RunService;
-}
-
-function runLabel(run: RunState): string {
-  return `Run ${run.number}: ${run.pipelineName}`;
-}
-
-function stageOutputsOf(run: RunState): QuestionMediationArtifact[] {
-  return run.stages.flatMap((stage) => {
-    const output = run.stageOutputs?.[stage.id];
-    return output
-      ? [{ runLabel: runLabel(run), stageLabel: stage.label, output }]
-      : [];
-  });
-}
-
-function artifactDigestOf(run: RunState): QuestionMediationArtifact[] {
-  const report = run.artifacts?.report;
-  return report
-    ? [
-        {
-          runLabel: runLabel(run),
-          stageLabel: "Orchestrator artifacts",
-          output: renderRunArtifactsBody(report, "####"),
-        },
-      ]
-    : stageOutputsOf(run);
-}
-
-function milestoneReviewContext(
-  milestone: Milestone,
-  settlingFeatureId?: string,
-): RunReviewMilestoneContext {
-  return {
-    name: milestone.name,
-    autoRunNext: milestone.autoRunNext,
-    readyFeatures: milestone.features
-      .filter(
-        (feature) => feature.status === "ready" && feature.id !== settlingFeatureId,
-      )
-      .map((feature) => ({ id: feature.id, title: feature.title })),
-  };
-}
-
-export class OrchestrationService
-  implements StageOutputConsumer, QuestionMediator, RunReviewer
-{
+export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
   private readonly repositories = new Map<string, OrchestrationRepository>();
   private readonly settledRuns = new Set<string>();
@@ -646,3 +589,17 @@ export class OrchestrationService
     return repository;
   }
 }
+
+export type StartOrchestrationOptions = Omit<
+  StartRunOptions,
+  "task" | "milestoneId" | "featureId" | "orchestrationId" | "sourceTaskIds"
+>;
+
+export interface OrchestrationDependencies {
+  registry: ProjectRegistry;
+  runs: RunService;
+}
+
+const PIPELINE_ID = "orchestration";
+
+const STAGE_ID = "orchestrate";

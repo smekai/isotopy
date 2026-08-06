@@ -9,7 +9,10 @@ import type {
   RunCloseoutRecord,
   RunState,
 } from "@adhd/core";
-import { parseProductManagerCloseout } from "../domain/rules/closeout.ts";
+import {
+  parseProductManagerCloseout,
+  validateSourceTaskOutcome,
+} from "../domain/rules/closeout.ts";
 import {
   renderCancelledCleanupReport,
   renderCleanupReport,
@@ -26,116 +29,6 @@ import {
   createFollowUpTasks,
   transitionTasks,
 } from "./task-board-adapter.ts";
-
-function validateSourceTaskOutcome(
-  run: RunState,
-  report: ProductManagerCloseout,
-): string[] {
-  const sourceIds = new Set(run.sourceTaskIds ?? []);
-  const reportedIds = [
-    ...report.completedTaskIds,
-    ...report.unresolvedTaskIds,
-  ];
-  const unknown = reportedIds.filter((id) => !sourceIds.has(id));
-  const completed = report.completedTaskIds.filter((id) => sourceIds.has(id));
-  const unresolved = report.unresolvedTaskIds.filter((id) => sourceIds.has(id));
-  const overlap = completed.filter((id) => unresolved.includes(id));
-  const declared = new Set([...completed, ...unresolved]);
-  const omitted = [...sourceIds].filter((id) => !declared.has(id));
-  report.completedTaskIds = completed.filter((id) => !overlap.includes(id));
-  report.unresolvedTaskIds = [
-    ...new Set([...unresolved, ...overlap, ...omitted]),
-  ];
-  const errors: string[] = [];
-  if (overlap.length > 0) {
-    errors.push(
-      `Tasks cannot be both completed and unresolved: ${overlap.join(", ")}`,
-    );
-  }
-  if (unknown.length > 0) {
-    errors.push(`Closeout referenced unknown source tasks: ${unknown.join(", ")}`);
-  }
-  if (omitted.length > 0) {
-    errors.push(
-      `Unclassified source tasks were preserved as unresolved: ${omitted.join(", ")}`,
-    );
-  }
-  return errors;
-}
-
-async function cleanupRunTemp(
-  projectPath: ProjectPath,
-  runId: string,
-  report: ProductManagerCloseout,
-): Promise<CleanupResult> {
-  const tempRoot = path.resolve(runsDir(projectPath), runId, "tmp");
-  const removed: string[] = [];
-  const rejected: string[] = [];
-  for (const candidate of report.cleanup) {
-    const relative = candidate.relativePath;
-    const allowed =
-      relative === "." ||
-      (!path.isAbsolute(relative) &&
-        relative !== "" &&
-        relative !== ".." &&
-        path.basename(relative) === relative);
-    if (!allowed) {
-      rejected.push(relative);
-      continue;
-    }
-    const target = relative === "." ? tempRoot : path.join(tempRoot, relative);
-    if (target !== tempRoot && !target.startsWith(`${tempRoot}${path.sep}`)) {
-      rejected.push(relative);
-      continue;
-    }
-    await rm(target, { recursive: true, force: true, maxRetries: 3 });
-    removed.push(relative);
-  }
-  return { removed, rejected };
-}
-
-async function persistRunCloseout(
-  projectPath: ProjectPath,
-  run: RunState,
-  record: RunCloseoutRecord,
-): Promise<void> {
-  const closeoutDir = path.join(runsDir(projectPath), run.id, "closeout");
-  await mkdir(closeoutDir, { recursive: true });
-  await Promise.all([
-    writeFile(
-      path.join(closeoutDir, "closeout.json"),
-      `${JSON.stringify(record, null, 2)}\n`,
-    ),
-    writeFile(
-      path.join(closeoutDir, "closeout.md"),
-      renderCloseout(record.report),
-    ),
-    writeFile(
-      path.join(closeoutDir, "cleanup-report.md"),
-      renderCleanupReport(record.cleanup),
-    ),
-  ]);
-
-  if (run.milestoneId) {
-    const milestoneRunsDir = path.join(
-      projectPath.dataDir,
-      "milestones",
-      run.milestoneId,
-      "runs",
-    );
-    await mkdir(milestoneRunsDir, { recursive: true });
-    await Promise.all([
-      writeFile(
-        path.join(milestoneRunsDir, `${run.id}.json`),
-        `${JSON.stringify(record, null, 2)}\n`,
-      ),
-      writeFile(
-        path.join(milestoneRunsDir, `${run.id}.md`),
-        renderCloseout(record.report),
-      ),
-    ]);
-  }
-}
 
 export async function applyProductManagerCloseout(
   projectPath: ProjectPath,
@@ -224,10 +117,6 @@ export async function cleanupCancelledRun(
   );
 }
 
-function milestoneReportOf(run: RunState): RunArtifacts | undefined {
-  return run.closeout?.report ?? run.artifacts?.report;
-}
-
 export async function persistMilestoneSummary(
   projectPath: ProjectPath,
   milestone: Milestone,
@@ -298,4 +187,82 @@ export async function milestoneCloseoutContext(
     (summary): summary is NonNullable<typeof summary> => summary !== undefined,
   );
   return renderPriorMilestoneCloseouts(valid);
+}
+
+async function cleanupRunTemp(
+  projectPath: ProjectPath,
+  runId: string,
+  report: ProductManagerCloseout,
+): Promise<CleanupResult> {
+  const tempRoot = path.resolve(runsDir(projectPath), runId, "tmp");
+  const removed: string[] = [];
+  const rejected: string[] = [];
+  for (const candidate of report.cleanup) {
+    const relative = candidate.relativePath;
+    const allowed =
+      relative === "." ||
+      (!path.isAbsolute(relative) &&
+        relative !== "" &&
+        relative !== ".." &&
+        path.basename(relative) === relative);
+    if (!allowed) {
+      rejected.push(relative);
+      continue;
+    }
+    const target = relative === "." ? tempRoot : path.join(tempRoot, relative);
+    if (target !== tempRoot && !target.startsWith(`${tempRoot}${path.sep}`)) {
+      rejected.push(relative);
+      continue;
+    }
+    await rm(target, { recursive: true, force: true, maxRetries: 3 });
+    removed.push(relative);
+  }
+  return { removed, rejected };
+}
+
+async function persistRunCloseout(
+  projectPath: ProjectPath,
+  run: RunState,
+  record: RunCloseoutRecord,
+): Promise<void> {
+  const closeoutDir = path.join(runsDir(projectPath), run.id, "closeout");
+  await mkdir(closeoutDir, { recursive: true });
+  await Promise.all([
+    writeFile(
+      path.join(closeoutDir, "closeout.json"),
+      `${JSON.stringify(record, null, 2)}\n`,
+    ),
+    writeFile(
+      path.join(closeoutDir, "closeout.md"),
+      renderCloseout(record.report),
+    ),
+    writeFile(
+      path.join(closeoutDir, "cleanup-report.md"),
+      renderCleanupReport(record.cleanup),
+    ),
+  ]);
+
+  if (run.milestoneId) {
+    const milestoneRunsDir = path.join(
+      projectPath.dataDir,
+      "milestones",
+      run.milestoneId,
+      "runs",
+    );
+    await mkdir(milestoneRunsDir, { recursive: true });
+    await Promise.all([
+      writeFile(
+        path.join(milestoneRunsDir, `${run.id}.json`),
+        `${JSON.stringify(record, null, 2)}\n`,
+      ),
+      writeFile(
+        path.join(milestoneRunsDir, `${run.id}.md`),
+        renderCloseout(record.report),
+      ),
+    ]);
+  }
+}
+
+function milestoneReportOf(run: RunState): RunArtifacts | undefined {
+  return run.closeout?.report ?? run.artifacts?.report;
 }

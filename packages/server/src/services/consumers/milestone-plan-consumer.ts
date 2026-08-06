@@ -1,21 +1,13 @@
 import { toMilestoneProposal } from "@adhd/core";
-import type { Milestone, RunState, StageDefinition } from "@adhd/core";
+import type { RunState, StageDefinition } from "@adhd/core";
 import { extractMilestonePlan } from "../../schemas/milestone-plan.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
 import { nowIso } from "../../utils/time.ts";
+import type { MilestoneService } from "../milestone/milestone-service.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 
-export interface MilestoneProposalStore {
-  mutableMilestone(milestoneId: string): Milestone | undefined;
-  saveMilestone(milestone: Milestone): Promise<void>;
-}
-
-const PIPELINE_ID = "milestone-planning";
-
-const STAGE_ID = "milestone-plan";
-
 export class MilestonePlanConsumer implements StageOutputConsumer {
-  constructor(private readonly store: MilestoneProposalStore) {}
+  constructor(private readonly milestones: MilestoneService) {}
 
   async consume(
     run: RunState,
@@ -29,7 +21,7 @@ export class MilestonePlanConsumer implements StageOutputConsumer {
     ) {
       return;
     }
-    const milestone = this.store.mutableMilestone(run.milestoneId);
+    const milestone = this.milestones.mutableMilestone(run.milestoneId);
     if (!milestone) {
       return;
     }
@@ -47,6 +39,10 @@ export class MilestonePlanConsumer implements StageOutputConsumer {
       milestone.approvalError = formatValidationIssues(parsed.issues);
     }
     milestone.updatedAt = nowIso();
-    await this.store.saveMilestone(milestone);
+    await this.milestones.saveMilestone(milestone);
   }
 }
+
+const PIPELINE_ID = "milestone-planning";
+
+const STAGE_ID = "milestone-plan";
