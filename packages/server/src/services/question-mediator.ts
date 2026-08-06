@@ -29,5 +29,3 @@ export interface QuestionMediator {
     decision: OrchestratorBrokerDecision,
   ): Promise<void>;
 }
-
-export class OrchestratorRequiredError extends Error {}

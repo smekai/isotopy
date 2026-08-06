@@ -12,7 +12,7 @@ import type {
   ProjectPreferencesUpdate,
 } from "@adhd/core";
 import { z } from "zod";
-import type { EngineConnectionUpdate } from "../services/settings-store.ts";
+import type { EngineConnectionUpdate } from "../../services/settings-store.ts";
 
 const text = z.string().trim().min(1);
 const optionalText = text.optional();

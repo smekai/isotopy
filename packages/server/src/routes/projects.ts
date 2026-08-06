@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { addProjectSchema } from "../domain/request-schemas.ts";
+import { addProjectSchema } from "../domain/codecs/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { parseRequestBody } from "./request-body.ts";

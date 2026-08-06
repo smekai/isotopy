@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractMilestonePlan } from "../../src/domain/milestone-plan.ts";
+import { extractMilestonePlan } from "../../src/domain/codecs/milestone-plan.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 const VALID_PLAN = {

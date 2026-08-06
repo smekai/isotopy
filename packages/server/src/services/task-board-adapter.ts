@@ -25,13 +25,13 @@ import {
   ownedBoardConfigSchema,
   type BoardConfig,
   type StateConfig,
-} from "../domain/task-board-config.ts";
+} from "../domain/codecs/task-board-config.ts";
 import {
   formatValidationIssues,
   parseJson,
 } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
-import { nowIso } from "../utils.ts";
+import { nowIso } from "../utils/time.ts";
 
 interface Board {
   backend: "taskplanner" | "adhd";

@@ -20,19 +20,19 @@ import type {
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
 import { renderRunArtifactsBody } from "../domain/markdown/closeout.ts";
-import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
+import { extractOrchestratorDecision } from "../domain/codecs/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
-import { composeTeamPipeline } from "../domain/team-composition.ts";
+import { composeTeamPipeline } from "../domain/codecs/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
-import { nowIso } from "../utils.ts";
+import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./product-manager-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
-import type { RunOrchestrator, StartRunOptions } from "./run-orchestrator.ts";
-import type { StageOutputConsumer } from "./stage-output-consumer.ts";
-import { OrchestratorRequiredError } from "./question-mediator.ts";
+import type { RunService, StartRunOptions } from "./run/run-service.ts";
+import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
+import { OrchestratorRequiredError } from "./orchestrator-required-error.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
@@ -57,7 +57,7 @@ export type StartOrchestrationOptions = Omit<
 
 export interface OrchestrationDependencies {
   registry: ProjectRegistry;
-  runs: RunOrchestrator;
+  runs: RunService;
 }
 
 function runLabel(run: RunState): string {
@@ -108,7 +108,7 @@ export class OrchestrationService
   private readonly repositories = new Map<string, OrchestrationRepository>();
   private readonly settledRuns = new Set<string>();
   private readonly registry: ProjectRegistry;
-  private readonly runs: RunOrchestrator;
+  private readonly runs: RunService;
 
   constructor({ registry, runs }: OrchestrationDependencies) {
     this.registry = registry;
@@ -492,7 +492,7 @@ export class OrchestrationService
       });
     }
     if (decision.action === "delegate_milestone_planning") {
-      return this.runs.startMilestonePlanning(projectPath, decision.goal, options);
+      return this.runs.milestones.startMilestonePlanning(projectPath, decision.goal, options);
     }
     if (decision.action === "continue_milestone") {
       return this.continueMilestone(projectPath, run, decision.featureId, options);
@@ -507,7 +507,7 @@ export class OrchestrationService
     options: StartOrchestrationOptions,
   ): Promise<RunState> {
     const milestone = run.milestoneId
-      ? this.runs.getMilestone(run.milestoneId)
+      ? this.runs.milestones.getMilestone(run.milestoneId)
       : undefined;
     if (!milestone) {
       throw new Error("The settled run does not belong to a milestone to continue");
@@ -517,7 +517,7 @@ export class OrchestrationService
         `Milestone "${milestone.name}" does not continue on its own — enable auto-run to let the Orchestrator start its next feature`,
       );
     }
-    return this.runs.startNextMilestoneRun(projectPath, milestone.id, {
+    return this.runs.milestones.startNextMilestoneRun(projectPath, milestone.id, {
       ...options,
       ...(featureId === undefined ? {} : { featureId }),
     });
@@ -525,7 +525,7 @@ export class OrchestrationService
 
   private reviewMilestone(run: RunState): RunReviewMilestoneContext | undefined {
     const milestone = run.milestoneId
-      ? this.runs.getMilestone(run.milestoneId)
+      ? this.runs.milestones.getMilestone(run.milestoneId)
       : undefined;
     return milestone ? milestoneReviewContext(milestone, run.featureId) : undefined;
   }

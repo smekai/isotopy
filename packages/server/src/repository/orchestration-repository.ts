@@ -1,7 +1,7 @@
 import type { Orchestration } from "@adhd/core";
 import { Database } from "../db/database.ts";
 import { OrchestrationsTable } from "../db/orchestrations-table.ts";
-import { parsePersistedOrchestration } from "../domain/orchestration.ts";
+import { parsePersistedOrchestration } from "../domain/codecs/orchestration.ts";
 import type { ProjectPath } from "../paths.ts";
 
 export class OrchestrationRepository {

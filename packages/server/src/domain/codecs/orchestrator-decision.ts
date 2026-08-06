@@ -1,6 +1,6 @@
 import { orchestratorDecisionSchema, type OrchestratorDecision } from "@adhd/core";
-import { parseJson } from "./validation.ts";
-import type { ValidationResult } from "./validation.ts";
+import { parseJson } from "../validation.ts";
+import type { ValidationResult } from "../validation.ts";
 
 const DECISION_BLOCK = /```adhd-orchestrator-decision\s*([\s\S]*?)```/i;
 

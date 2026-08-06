@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Database } from "../../src/db/database.ts";
 import { MilestonesTable } from "../../src/db/milestones-table.ts";
-import { parsePersistedMilestone } from "../../src/domain/milestone.ts";
+import { parsePersistedMilestone } from "../../src/domain/codecs/milestone.ts";
 
 const roots: string[] = [];
 

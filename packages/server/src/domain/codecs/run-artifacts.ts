@@ -1,6 +1,6 @@
 import { runArtifactsSchema, type RunArtifacts } from "@adhd/core";
-import { parseJson } from "./validation.ts";
-import type { ValidationResult } from "./validation.ts";
+import { parseJson } from "../validation.ts";
+import type { ValidationResult } from "../validation.ts";
 
 const ARTIFACTS_BLOCK = /```adhd-run-artifacts\s*([\s\S]*?)```/i;
 

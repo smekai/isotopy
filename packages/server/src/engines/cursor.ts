@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
 import type { EngineLimit, EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
-import { detectEngineLimit } from "../domain/engine-limit.ts";
+import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { parseCursorProtocolLine } from "./cursor-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";

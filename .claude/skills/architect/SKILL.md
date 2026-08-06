@@ -38,7 +38,9 @@ named for one backend is not where a shared abstraction belongs. Layer a coarse
 concern over its detail: a repository (domain-facing persistence) sits over a
 data-access layer, each in a folder named for the *layer* — `repository/`, `db/` —
 never for a backend (`sqlite/`), one responsibility per file. Prefer direct imports;
-a barrel `index.ts` that only re-exports is indirection to avoid.
+a barrel `index.ts` that only re-exports is indirection to avoid. A file's name is
+the kebab-case of its main exported class (or the package's existing component
+convention).
 
 ### A3 — DDD layering: fat domain, thin service
 
@@ -46,7 +48,9 @@ Pure functions and domain rules live in a **domain** layer with no I/O. The
 **service** layer stays thin — a top-level narration of *what happens*,
 delegating the *how* to the domain. A service method should read like a table of
 contents. If a service is doing arithmetic, string-building, or branching on
-domain state, that logic belongs in a pure domain function it calls.
+domain state, that logic belongs in a pure domain function it calls. Ask whether
+the file names a product concept: if it would make just as much sense in another
+product, it is a util, not domain or service.
 
 ### A4 — Long-running work is a workflow, not an inline await chain
 
@@ -124,6 +128,16 @@ expression, and a change is judged against its tier.
   through a typed seam. (No mobile package exists yet; these are the rules for
   when one lands, so it is not invented under deadline.)
 
+### Placement and naming of files
+
+**Placement:** does this file name a product concept? A run, a milestone, a
+stage, a persona, a task board. If it would make just as much sense in a
+different product, it is a `util`. If it names a product concept: pure →
+`domain/`, I/O or lifecycle → `services/`.
+
+**Naming:** a file's name is the kebab-case of its main exported class
+(PascalCase for UI components, matching each package's existing convention).
+
 ## Applying this in the ADHD repo
 
 Concrete anchors for the rules above, specific to this codebase. Read
@@ -143,10 +157,14 @@ of the source. When you strip or avoid a comment, that is where its content goes
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
   by the UI too, so nothing platform- or server-specific goes there).
-  Server-only pure logic lives in `packages/server/src/domain/`. Markdown
-  parsing and rendering is grouped by format in `domain/markdown/`; services
-  pass it typed values and keep only I/O and lifecycle. Repositories persist
-  already-rendered content and know nothing about Markdown semantics.
+  Server-only pure logic lives in `packages/server/src/domain/` — codecs under
+  `domain/codecs/`, pure rules under `domain/rules/`, Markdown under
+  `domain/markdown/`, bundled prompts under `domain/skills/`. Services pass typed
+  values and keep only I/O and lifecycle. Repositories persist already-rendered
+  content and know nothing about Markdown semantics. Product-named files land in
+  `domain/` or `services/`; product-neutral helpers land in `utils/` (see
+  Placement and naming above). A file that exports a class is named for that
+  class (`run-service.ts` → `RunService`).
 
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
   `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
@@ -157,11 +175,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
   claim that a durable executor "replaces `executeStage()` alone" was wrong and
   is corrected here.
 
-- **The stateful class (A5):** `RunOrchestrator` owns the run read model
+- **The stateful class (A5):** `RunService` owns the run read model
   (`RunState` + events + SSE) and hosts the per-project durable runtime; that is
   why it is a class, not a module of functions. It is the *single writer* of the
   read model — the durable workflow drives it; the API only reads it.
-
+  `MilestoneService` owns milestone CRUD beside it; `RunStore` holds the
+  cross-project run map and persistence.
 - **Named types & styles (A6):** every component exports a named `XProps`
   interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
   into named constants and builders.

@@ -15,6 +15,25 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-06 — RunService split, and stage logs live only in events
+
+**Context:** `RunOrchestrator` had grown past 1700 lines and its name collided with
+the Orchestrator product concept. Stage logs were also written twice — into the
+persisted run snapshot and into the `events` table — which made the snapshot the
+wrong place to look for history and forced a 150 ms debounce around every log line.
+
+**Decision:** rename to `RunService`, split the class into `RunStore` (cross-project
+read model + persistence), `MilestoneService` (milestone CRUD and proposal store),
+and `RunService` (run lifecycle + `RunProjection`). Persist snapshots without
+`stage.logs`; rehydrate logs from `stage.log` events on load; flush immediately.
+Write the placement and naming rules into `docs/architecture.md` and guard them
+with `packages/server/test/structure.spec.ts`.
+
+**Rejected:** folding the global `runs` map into `RunRepository` — repositories are
+per-project, while run ids are looked up without a project header for SSE.
+
+---
+
 ## 2026-08-05 — OpenWorkflow gets its own SQLite file, separate from ADHD's read model
 
 **Context:** `WorkflowRuntime` opened `BackendSqlite` on `runs.db` — the same file

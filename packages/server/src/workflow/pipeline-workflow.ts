@@ -14,7 +14,7 @@ import type {
   StageDefinition,
   StageExecutionPolicy,
 } from "@adhd/core";
-import { limitWaitMs } from "../domain/engine-limit.ts";
+import { limitWaitMs } from "../domain/rules/engine-limit.ts";
 import {
   runOrchestratorReviewWork,
   runQuestionMediationWork,

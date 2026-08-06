@@ -1,6 +1,6 @@
 import type { RunState, StageDefinition } from "@adhd/core";
-import type { ProjectRegistry } from "./project-registry.ts";
-import { applyProductManagerCloseout } from "./product-manager-closeout.ts";
+import type { ProjectRegistry } from "../project-registry.ts";
+import { applyProductManagerCloseout } from "../product-manager-closeout.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 
 const PIPELINE_ID = "full-delivery";

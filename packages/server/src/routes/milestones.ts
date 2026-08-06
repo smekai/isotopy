@@ -8,10 +8,10 @@ import {
   startNextMilestoneRunSchema,
   updateMilestoneFeatureSchema,
   updateMilestoneSchema,
-} from "../domain/request-schemas.ts";
+} from "../domain/codecs/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
-import type { RunOrchestrator } from "../services/run-orchestrator.ts";
+import type { MilestoneService } from "../services/milestone/milestone-service.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
 
@@ -20,12 +20,12 @@ function messageOf(error: unknown): string {
 }
 
 export function createMilestoneRoutes(
-  orchestrator: RunOrchestrator,
+  milestones: MilestoneService,
   registry: ProjectRegistry,
 ): Hono {
   return new Hono()
     .get("/", (c) =>
-      c.json(orchestrator.listMilestones(projectScope(registry, c).id)),
+      c.json(milestones.listMilestones(projectScope(registry, c).id)),
     )
     .post("/plan", async (c) => {
       const parsed = await parseRequestBody(c.req, startMilestonePlanningSchema);
@@ -35,7 +35,7 @@ export function createMilestoneRoutes(
       const body = parsed.value;
       try {
         return c.json(
-          await orchestrator.startMilestonePlanning(
+          await milestones.startMilestonePlanning(
             projectScope(registry, c),
             body.goal,
             {
@@ -52,7 +52,7 @@ export function createMilestoneRoutes(
     })
     .get("/:id", (c) => {
       const project = projectScope(registry, c);
-      const milestone = orchestrator.getMilestone(c.req.param("id"));
+      const milestone = milestones.getMilestone(c.req.param("id"));
       return !milestone || milestone.projectId !== project.id
         ? c.json({ error: "Milestone not found" }, 404)
         : c.json(milestone);
@@ -64,7 +64,7 @@ export function createMilestoneRoutes(
       }
       try {
         return c.json(
-          await orchestrator.createMilestone(projectScope(registry, c), parsed.value),
+          await milestones.createMilestone(projectScope(registry, c), parsed.value),
           201,
         );
       } catch (error) {
@@ -78,7 +78,7 @@ export function createMilestoneRoutes(
       }
       try {
         return c.json(
-          await orchestrator.updateMilestone(
+          await milestones.updateMilestone(
             projectScope(registry, c),
             c.req.param("id"),
             parsed.value,
@@ -96,7 +96,7 @@ export function createMilestoneRoutes(
       const body = parsed.value;
       try {
         return c.json(
-          await orchestrator.reviseMilestonePlan(
+          await milestones.reviseMilestonePlan(
             projectScope(registry, c),
             c.req.param("id"),
             body.feedback,
@@ -119,7 +119,7 @@ export function createMilestoneRoutes(
       }
       try {
         return c.json(
-          await orchestrator.updateMilestoneProposal(
+          await milestones.updateMilestoneProposal(
             projectScope(registry, c),
             c.req.param("id"),
             parsed.value,
@@ -132,7 +132,7 @@ export function createMilestoneRoutes(
     .post("/:id/approve", async (c) => {
       try {
         return c.json(
-          await orchestrator.approveMilestonePlan(
+          await milestones.approveMilestonePlan(
             projectScope(registry, c),
             c.req.param("id"),
           ),
@@ -148,7 +148,7 @@ export function createMilestoneRoutes(
       }
       try {
         return c.json(
-          await orchestrator.addMilestoneFeature(
+          await milestones.addMilestoneFeature(
             projectScope(registry, c),
             c.req.param("id"),
             parsed.value,
@@ -166,7 +166,7 @@ export function createMilestoneRoutes(
       }
       try {
         return c.json(
-          await orchestrator.updateMilestoneFeature(
+          await milestones.updateMilestoneFeature(
             projectScope(registry, c),
             c.req.param("id"),
             c.req.param("featureId"),
@@ -180,7 +180,7 @@ export function createMilestoneRoutes(
     .post("/:id/features/:featureId/accept", async (c) => {
       try {
         return c.json(
-          await orchestrator.acceptMilestoneFeature(
+          await milestones.acceptMilestoneFeature(
             projectScope(registry, c),
             c.req.param("id"),
             c.req.param("featureId"),
@@ -197,7 +197,7 @@ export function createMilestoneRoutes(
       }
       try {
         return c.json(
-          await orchestrator.startNextMilestoneRun(
+          await milestones.startNextMilestoneRun(
             projectScope(registry, c),
             c.req.param("id"),
             parsed.value,
@@ -211,7 +211,7 @@ export function createMilestoneRoutes(
     .post("/:id/finalize", async (c) => {
       try {
         return c.json(
-          await orchestrator.finalizeMilestone(
+          await milestones.finalizeMilestone(
             projectScope(registry, c),
             c.req.param("id"),
           ),

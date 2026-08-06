@@ -9,7 +9,7 @@ import type {
   RunCloseoutRecord,
   RunState,
 } from "@adhd/core";
-import { parseProductManagerCloseout } from "../domain/closeout.ts";
+import { parseProductManagerCloseout } from "../domain/rules/closeout.ts";
 import {
   renderCancelledCleanupReport,
   renderCleanupReport,
@@ -18,10 +18,10 @@ import {
   renderRunArtifacts,
 } from "../domain/markdown/closeout.ts";
 import { renderPriorMilestoneCloseouts } from "../domain/markdown/planning.ts";
-import { parseMilestoneSummary } from "../domain/milestone-summary.ts";
+import { parseMilestoneSummary } from "../domain/codecs/milestone-summary.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
-import { nowIso } from "../utils.ts";
+import { nowIso } from "../utils/time.ts";
 import {
   createFollowUpTasks,
   transitionTasks,

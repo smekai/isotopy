@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { defaultProjectPreferences } from "@adhd/core";
 import type { ProjectsView, SettingsView } from "@adhd/core";
-import { boardConfigSchema } from "../src/domain/task-board-config.ts";
+import { boardConfigSchema } from "../src/domain/codecs/task-board-config.ts";
 import type { InvalidInput } from "../src/domain/validation.ts";
 import {
   createTestApp,

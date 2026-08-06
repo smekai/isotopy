@@ -7,13 +7,13 @@ import type {
   ProjectPreferencesUpdate,
   SettingsView,
 } from "@adhd/core";
-import { normalizeProjectPreferences } from "../domain/preferences.ts";
-import { settingsFileSchema } from "../domain/settings-file.ts";
+import { normalizeProjectPreferences } from "../domain/codecs/preferences.ts";
+import { settingsFileSchema } from "../domain/codecs/settings-file.ts";
 import type {
   EngineConnectionSettings,
   ProjectSettings,
   SettingsFile,
-} from "../domain/settings-file.ts";
+} from "../domain/codecs/settings-file.ts";
 import {
   formatValidationIssues,
   parseJson,

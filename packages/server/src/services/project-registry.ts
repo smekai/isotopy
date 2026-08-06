@@ -7,8 +7,8 @@ import {
   registryFileSchema,
   type RegistryFile,
   type StoredProject,
-} from "../domain/project-registry-file.ts";
-import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/projects.ts";
+} from "../domain/codecs/project-registry-file.ts";
+import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/rules/projects.ts";
 import { formatValidationIssues, parseJson } from "../domain/validation.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";

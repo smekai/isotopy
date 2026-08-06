@@ -1,6 +1,6 @@
 import { milestonePlanSchema, type MilestonePlan } from "@adhd/core";
-import { parseJson } from "./validation.ts";
-import type { ValidationResult } from "./validation.ts";
+import { parseJson } from "../validation.ts";
+import type { ValidationResult } from "../validation.ts";
 
 const PLAN_BLOCK = /```adhd-milestone-plan\s*([\s\S]*?)```/i;
 

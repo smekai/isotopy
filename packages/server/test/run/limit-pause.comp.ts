@@ -11,7 +11,7 @@ import {
   waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
-import { LIMIT_ERRORS } from "../../src/domain/limit-copy.ts";
+import { LIMIT_ERRORS } from "../../src/domain/rules/limit-copy.ts";
 
 const TASK = "add a greet function";
 const PM_REPORT = "Build a greet function. Done when it prints a greeting.";
