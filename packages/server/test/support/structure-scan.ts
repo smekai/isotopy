@@ -45,12 +45,15 @@ function exportedClassNames(source: string): string[] {
   );
 }
 
+const FS_MODULE = String.raw`(?:node:)?fs(?:\/promises)?`;
+
 export function domainFilesImportingNodeFs(domainRoot: string): string[] {
   return listSourceFiles(domainRoot).filter((file) => {
     const source = readFileSync(file, "utf8");
     return (
-      /from\s+["']node:fs(?:\/promises)?["']/.test(source) ||
-      /require\(["']fs["']\)/.test(source)
+      new RegExp(String.raw`from\s+["']${FS_MODULE}["']`).test(source) ||
+      new RegExp(String.raw`import\s+["']${FS_MODULE}["']`).test(source) ||
+      new RegExp(String.raw`require\(["']${FS_MODULE}["']\)`).test(source)
     );
   });
 }

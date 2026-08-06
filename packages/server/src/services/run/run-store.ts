@@ -99,6 +99,9 @@ export class RunStore {
 
   repositoryForRun(runId: string): RunRepository {
     const projectId = this.runs.get(runId)?.projectId;
+    if (projectId === undefined) {
+      throw new Error(`Run not found: ${runId}`);
+    }
     return this.repositoryFor(this.registry.resolve(projectId));
   }
 

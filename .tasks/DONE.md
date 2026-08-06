@@ -4,11 +4,11 @@
 **Priority:** P1 | **Tags:** server, core, infra
 **Updated:** 2026-08-06 17:15
 
-Renamed `RunOrchestrator` → `RunService`, split into exactly `RunStore` + `MilestoneService` + `RunService`, regrouped `domain/codecs|rules`, `services/consumers`, and `utils/`. Snapshots omit `stage.logs` (rehydrated from events); debounce removed. Placement/naming rules in architecture + CLAUDE + decisions; `structure.spec.ts` and persistence tests added. Version 0.9.11.
+Renamed `RunOrchestrator` → `RunService`, split into exactly `RunStore` + `MilestoneService` + `RunService`, regrouped `domain/codecs|rules`, `services/consumers`, and `utils/`. Snapshots omit `stage.logs` (rehydrated from events); debounce removed. Placement/naming rules in architecture + CLAUDE + decisions; `structure.spec.ts` and persistence tests added. Version 0.9.14.
 
 ### Plan
 
-Done: RunService split, log persistence fix, placement rules, structure tests, 0.9.11.
+Done: RunService split, log persistence fix, placement rules, structure tests, 0.9.14.
 
 ---
 
