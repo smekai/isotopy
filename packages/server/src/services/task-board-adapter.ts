@@ -33,16 +33,199 @@ import {
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils/time.ts";
 
+export interface ApprovedTaskLinks {
+  backend: "taskplanner" | "adhd";
+  featureTaskIds: Record<string, string[]>;
+}
+
+export async function taskBoardPlanningContext(
+  projectPath: ProjectPath,
+): Promise<string> {
+  const board = await boardFor(projectPath, false);
+  if (!board) {
+    return "No existing task board is configured.";
+  }
+  const texts = await stateTexts(board);
+  return renderTaskBoardPlanningContext(
+    board.backend,
+    [...texts].map(([name, content]) => ({ name, content })),
+  );
+}
+
+export async function approveMilestoneTasks(
+  projectPath: ProjectPath,
+  milestone: Milestone,
+  proposal: MilestoneProposal,
+): Promise<ApprovedTaskLinks> {
+  const board = await boardFor(projectPath, true);
+  if (!board) {
+    throw new Error("Task board is unavailable");
+  }
+  const texts = await stateTexts(board);
+  const knownIds = taskIdsIn(texts.values());
+  const requestedIds = proposal.features.flatMap(
+    (feature) => feature.existingTaskIds,
+  );
+  const missing = [...new Set(requestedIds)].filter((id) => !knownIds.has(id));
+  if (missing.length > 0) {
+    throw new Error(`Existing task IDs were not found: ${missing.join(", ")}`);
+  }
+
+  const backlog = backlogState(board);
+  let backlogText =
+    texts.get(backlog.name) ??
+    (await readText(path.join(board.dir, backlog.fileName))) ??
+    boardHeading("Backlog");
+  let allText = [...texts.values()].join("\n");
+  let next = nextTaskNumber(
+    board.config.idPrefix,
+    board.config.nextId,
+    allText,
+  );
+  const featureTaskIds: Record<string, string[]> = {};
+
+  for (const feature of proposal.features) {
+    const ids = [...feature.existingTaskIds];
+    for (const draft of feature.taskDrafts) {
+      const sourceMarker = marker(
+        fingerprint(milestone.id, feature.id, draft.id),
+      );
+      let id = existingTaskIdForMarker(allText, sourceMarker);
+      if (!id) {
+        id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
+        const section = milestoneTaskSection(
+          board,
+          id,
+          draft,
+          sourceMarker,
+          milestone,
+          feature.id,
+        );
+        backlogText = insertTaskSection(
+          backlogText,
+          section,
+          board.config.insertPosition ?? "top",
+        );
+        allText += `\n${section}`;
+        next += 1;
+      }
+      draft.createdTaskId = id;
+      ids.push(id);
+    }
+    featureTaskIds[feature.id] = [...new Set(ids)];
+  }
+
+  await writeFile(path.join(board.dir, backlog.fileName), backlogText);
+  board.config.nextId = next;
+  await writeFile(
+    board.configPath,
+    `${JSON.stringify(board.config, null, 2)}\n`,
+  );
+  return { backend: board.backend, featureTaskIds };
+}
+
+export async function createFollowUpTasks(
+  projectPath: ProjectPath,
+  run: RunState,
+  tasks: FollowUpTaskDraft[],
+): Promise<CreatedTaskReference[]> {
+  if (tasks.length === 0) return [];
+  const board = await boardFor(projectPath, true);
+  if (!board) throw new Error("Task board is unavailable");
+  const texts = await stateTexts(board);
+  const backlog = backlogState(board);
+  let backlogText =
+    texts.get(backlog.name) ??
+    (await readText(path.join(board.dir, backlog.fileName))) ??
+    boardHeading("Backlog");
+  let allText = [...texts.values()].join("\n");
+  let next = nextTaskNumber(
+    board.config.idPrefix,
+    board.config.nextId,
+    allText,
+  );
+  const created: CreatedTaskReference[] = [];
+
+  for (const task of tasks) {
+    const sourceMarker = `<!-- ADHD-FINDING:${findingFingerprint(run, task.findingId)} -->`;
+    const existingId = existingTaskIdForMarker(allText, sourceMarker);
+    if (existingId) {
+      continue;
+    }
+    const id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
+    const section = followUpTaskSection(
+      board,
+      id,
+      task,
+      sourceMarker,
+      run,
+    );
+    backlogText = insertTaskSection(
+      backlogText,
+      section,
+      board.config.insertPosition ?? "top",
+    );
+    allText += `\n${section}`;
+    created.push({ id, title: task.title, backend: board.backend });
+    next += 1;
+  }
+  if (created.length === 0) return [];
+  await writeFile(path.join(board.dir, backlog.fileName), backlogText);
+  board.config.nextId = next;
+  await writeFile(
+    board.configPath,
+    `${JSON.stringify(board.config, null, 2)}\n`,
+  );
+  return created;
+}
+
+export async function transitionTasks(
+  projectPath: ProjectPath,
+  ids: string[],
+  targetStateName: "In Progress" | "Done",
+  runId: string,
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const board = await boardFor(projectPath, false);
+  if (!board) return [];
+  const targetState = stateFor(board, targetStateName);
+  if (!targetState) return [];
+  const targetPath = path.join(board.dir, targetState.fileName);
+  let destination =
+    (await readText(targetPath)) ?? boardHeading(targetStateName);
+  const moved: string[] = [];
+
+  for (const id of [...new Set(ids)]) {
+    if (destination.includes(`## ${id}:`)) continue;
+    let section: string | undefined;
+    for (const state of board.config.states) {
+      if (state.fileName === targetState.fileName) continue;
+      const sourcePath = path.join(board.dir, state.fileName);
+      const current = await readText(sourcePath);
+      if (!current) continue;
+      const taken = takeTaskSection(current, id);
+      if (!taken.section) continue;
+      await writeFile(sourcePath, taken.text);
+      section = taken.section;
+      break;
+    }
+    if (!section) continue;
+    destination = insertTaskSection(destination, section, "top");
+    moved.push(id);
+  }
+  if (moved.length === 0) return [];
+  await writeFile(targetPath, destination);
+  if (targetStateName === "Done") {
+    await appendWorkLog(board, runId, moved);
+  }
+  return moved;
+}
+
 interface Board {
   backend: "taskplanner" | "adhd";
   dir: string;
   configPath: string;
   config: BoardConfig;
-}
-
-export interface ApprovedTaskLinks {
-  backend: Board["backend"];
-  featureTaskIds: Record<string, string[]>;
 }
 
 async function readText(filePath: string): Promise<string | undefined> {
@@ -138,20 +321,6 @@ async function stateTexts(board: Board): Promise<Map<string, string>> {
   return result;
 }
 
-export async function taskBoardPlanningContext(
-  projectPath: ProjectPath,
-): Promise<string> {
-  const board = await boardFor(projectPath, false);
-  if (!board) {
-    return "No existing task board is configured.";
-  }
-  const texts = await stateTexts(board);
-  return renderTaskBoardPlanningContext(
-    board.backend,
-    [...texts].map(([name, content]) => ({ name, content })),
-  );
-}
-
 function fingerprint(
   milestoneId: string,
   featureId: string,
@@ -199,78 +368,6 @@ function milestoneTaskSection(
   });
 }
 
-export async function approveMilestoneTasks(
-  projectPath: ProjectPath,
-  milestone: Milestone,
-  proposal: MilestoneProposal,
-): Promise<ApprovedTaskLinks> {
-  const board = await boardFor(projectPath, true);
-  if (!board) {
-    throw new Error("Task board is unavailable");
-  }
-  const texts = await stateTexts(board);
-  const knownIds = taskIdsIn(texts.values());
-  const requestedIds = proposal.features.flatMap(
-    (feature) => feature.existingTaskIds,
-  );
-  const missing = [...new Set(requestedIds)].filter((id) => !knownIds.has(id));
-  if (missing.length > 0) {
-    throw new Error(`Existing task IDs were not found: ${missing.join(", ")}`);
-  }
-
-  const backlog = backlogState(board);
-  let backlogText =
-    texts.get(backlog.name) ??
-    (await readText(path.join(board.dir, backlog.fileName))) ??
-    boardHeading("Backlog");
-  let allText = [...texts.values()].join("\n");
-  let next = nextTaskNumber(
-    board.config.idPrefix,
-    board.config.nextId,
-    allText,
-  );
-  const featureTaskIds: Record<string, string[]> = {};
-
-  for (const feature of proposal.features) {
-    const ids = [...feature.existingTaskIds];
-    for (const draft of feature.taskDrafts) {
-      const sourceMarker = marker(
-        fingerprint(milestone.id, feature.id, draft.id),
-      );
-      let id = existingTaskIdForMarker(allText, sourceMarker);
-      if (!id) {
-        id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
-        const section = milestoneTaskSection(
-          board,
-          id,
-          draft,
-          sourceMarker,
-          milestone,
-          feature.id,
-        );
-        backlogText = insertTaskSection(
-          backlogText,
-          section,
-          board.config.insertPosition ?? "top",
-        );
-        allText += `\n${section}`;
-        next += 1;
-      }
-      draft.createdTaskId = id;
-      ids.push(id);
-    }
-    featureTaskIds[feature.id] = [...new Set(ids)];
-  }
-
-  await writeFile(path.join(board.dir, backlog.fileName), backlogText);
-  board.config.nextId = next;
-  await writeFile(
-    board.configPath,
-    `${JSON.stringify(board.config, null, 2)}\n`,
-  );
-  return { backend: board.backend, featureTaskIds };
-}
-
 function findingFingerprint(run: RunState, findingId: string): string {
   return createHash("sha256")
     .update(
@@ -316,61 +413,6 @@ function followUpTaskSection(
   });
 }
 
-export async function createFollowUpTasks(
-  projectPath: ProjectPath,
-  run: RunState,
-  tasks: FollowUpTaskDraft[],
-): Promise<CreatedTaskReference[]> {
-  if (tasks.length === 0) return [];
-  const board = await boardFor(projectPath, true);
-  if (!board) throw new Error("Task board is unavailable");
-  const texts = await stateTexts(board);
-  const backlog = backlogState(board);
-  let backlogText =
-    texts.get(backlog.name) ??
-    (await readText(path.join(board.dir, backlog.fileName))) ??
-    boardHeading("Backlog");
-  let allText = [...texts.values()].join("\n");
-  let next = nextTaskNumber(
-    board.config.idPrefix,
-    board.config.nextId,
-    allText,
-  );
-  const created: CreatedTaskReference[] = [];
-
-  for (const task of tasks) {
-    const sourceMarker = `<!-- ADHD-FINDING:${findingFingerprint(run, task.findingId)} -->`;
-    const existingId = existingTaskIdForMarker(allText, sourceMarker);
-    if (existingId) {
-      continue;
-    }
-    const id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
-    const section = followUpTaskSection(
-      board,
-      id,
-      task,
-      sourceMarker,
-      run,
-    );
-    backlogText = insertTaskSection(
-      backlogText,
-      section,
-      board.config.insertPosition ?? "top",
-    );
-    allText += `\n${section}`;
-    created.push({ id, title: task.title, backend: board.backend });
-    next += 1;
-  }
-  if (created.length === 0) return [];
-  await writeFile(path.join(board.dir, backlog.fileName), backlogText);
-  board.config.nextId = next;
-  await writeFile(
-    board.configPath,
-    `${JSON.stringify(board.config, null, 2)}\n`,
-  );
-  return created;
-}
-
 function stateFor(board: Board, name: string): StateConfig | undefined {
   return board.config.states.find(
     (state) => state.name.toLowerCase() === name.toLowerCase(),
@@ -389,46 +431,4 @@ async function appendWorkLog(
     .map((id) => renderWorkLogEntry(id, nowIso().slice(0, 10), runId))
     .join("\n");
   await writeFile(target, insertTaskSection(current, entries, "top"));
-}
-
-export async function transitionTasks(
-  projectPath: ProjectPath,
-  ids: string[],
-  targetStateName: "In Progress" | "Done",
-  runId: string,
-): Promise<string[]> {
-  if (ids.length === 0) return [];
-  const board = await boardFor(projectPath, false);
-  if (!board) return [];
-  const targetState = stateFor(board, targetStateName);
-  if (!targetState) return [];
-  const targetPath = path.join(board.dir, targetState.fileName);
-  let destination =
-    (await readText(targetPath)) ?? boardHeading(targetStateName);
-  const moved: string[] = [];
-
-  for (const id of [...new Set(ids)]) {
-    if (destination.includes(`## ${id}:`)) continue;
-    let section: string | undefined;
-    for (const state of board.config.states) {
-      if (state.fileName === targetState.fileName) continue;
-      const sourcePath = path.join(board.dir, state.fileName);
-      const current = await readText(sourcePath);
-      if (!current) continue;
-      const taken = takeTaskSection(current, id);
-      if (!taken.section) continue;
-      await writeFile(sourcePath, taken.text);
-      section = taken.section;
-      break;
-    }
-    if (!section) continue;
-    destination = insertTaskSection(destination, section, "top");
-    moved.push(id);
-  }
-  if (moved.length === 0) return [];
-  await writeFile(targetPath, destination);
-  if (targetStateName === "Done") {
-    await appendWorkLog(board, runId, moved);
-  }
-  return moved;
 }

@@ -33,6 +33,9 @@ import {
   taskBoardPlanningContext,
 } from "../task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "../run/run-service.ts";
+import type { MilestoneServiceDependencies } from "./milestone-options.ts";
+
+export type { MilestoneServiceDependencies } from "./milestone-options.ts";
 
 export class MilestoneService {
   private readonly milestoneRepositories = new Map<string, MilestoneRepository>();
@@ -41,7 +44,7 @@ export class MilestoneService {
   private readonly registry: ProjectRegistry;
   private readonly runs: () => RunService;
 
-  constructor({ registry, runs }: { registry: ProjectRegistry; runs: () => RunService }) {
+  constructor({ registry, runs }: MilestoneServiceDependencies) {
     this.registry = registry;
     this.runs = runs;
   }

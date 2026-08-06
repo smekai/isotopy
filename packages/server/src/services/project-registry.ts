@@ -13,21 +13,6 @@ import { formatValidationIssues, parseJson } from "../domain/validation.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 
-function homeProject(): Project {
-  const projectPath = homeProjectPaths();
-  return {
-    id: HOME_PROJECT_ID,
-    name: "Home",
-    root: projectPath.root,
-    dataDir: projectPath.dataDir,
-    createdAt: new Date(0).toISOString(),
-  };
-}
-
-function withDataDir(project: StoredProject): Project {
-  return { ...project, dataDir: projectPaths(project).dataDir };
-}
-
 export class ProjectRegistry {
   private file: RegistryFile = { version: 1, activeProjectId: HOME_PROJECT_ID, projects: [] };
   private loaded = false;
@@ -154,4 +139,19 @@ export class ProjectRegistry {
     this.write();
     return this.list();
   }
+}
+
+function homeProject(): Project {
+  const projectPath = homeProjectPaths();
+  return {
+    id: HOME_PROJECT_ID,
+    name: "Home",
+    root: projectPath.root,
+    dataDir: projectPath.dataDir,
+    createdAt: new Date(0).toISOString(),
+  };
+}
+
+function withDataDir(project: StoredProject): Project {
+  return { ...project, dataDir: projectPaths(project).dataDir };
 }

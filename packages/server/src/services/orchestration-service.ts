@@ -34,8 +34,12 @@ import { OrchestrationRepository } from "../repository/orchestration-repository.
 import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./product-manager-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
-import type { RunService, StartRunOptions } from "./run/run-service.ts";
+import type { RunService } from "./run/run-service.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
+import type {
+  OrchestrationDependencies,
+  StartOrchestrationOptions,
+} from "./orchestration-options.ts";
 import { OrchestratorRequiredError } from "./orchestrator-required-error.ts";
 import type {
   QuestionMediationContext,
@@ -45,6 +49,11 @@ import type {
   RunReviewRequest,
 } from "../workflow/types.ts";
 import { taskBoardPlanningContext } from "./task-board-adapter.ts";
+
+export type {
+  OrchestrationDependencies,
+  StartOrchestrationOptions,
+} from "./orchestration-options.ts";
 
 export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
@@ -588,16 +597,6 @@ export class OrchestrationService implements StageOutputConsumer {
     this.repositories.set(projectPath.id, repository);
     return repository;
   }
-}
-
-export type StartOrchestrationOptions = Omit<
-  StartRunOptions,
-  "task" | "milestoneId" | "featureId" | "orchestrationId" | "sourceTaskIds"
->;
-
-export interface OrchestrationDependencies {
-  registry: ProjectRegistry;
-  runs: RunService;
 }
 
 const PIPELINE_ID = "orchestration";
