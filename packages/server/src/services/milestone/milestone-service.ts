@@ -15,7 +15,7 @@ import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
   UpdateMilestoneFeatureInput,
-} from "../../domain/codecs/request-schemas.ts";
+} from "../../schemas/request-schemas.ts";
 import {
   renderMilestonePlanningContext,
   renderMilestoneRevisionContext,

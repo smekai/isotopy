@@ -18,7 +18,7 @@ import {
   renderRunArtifacts,
 } from "../domain/markdown/closeout.ts";
 import { renderPriorMilestoneCloseouts } from "../domain/markdown/planning.ts";
-import { parseMilestoneSummary } from "../domain/codecs/milestone-summary.ts";
+import { parseMilestoneSummary } from "../schemas/milestone-summary.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils/time.ts";

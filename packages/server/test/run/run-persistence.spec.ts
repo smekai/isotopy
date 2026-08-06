@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   parsePersistedRun,
   parsePersistedRunEvent,
-} from "../../src/domain/codecs/run-persistence.ts";
+} from "../../src/schemas/run-persistence.ts";
 import { makePersistedRun, makeRunEvent } from "../support/run-fixtures.ts";
 
 function json(value: unknown): string {

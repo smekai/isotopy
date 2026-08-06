@@ -7,7 +7,7 @@ import {
   registryFileSchema,
   type RegistryFile,
   type StoredProject,
-} from "../domain/codecs/project-registry-file.ts";
+} from "../schemas/project-registry-file.ts";
 import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/rules/projects.ts";
 import { formatValidationIssues, parseJson } from "../domain/validation.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";

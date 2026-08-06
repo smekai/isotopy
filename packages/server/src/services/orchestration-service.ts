@@ -20,9 +20,9 @@ import type {
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
 import { renderRunArtifactsBody } from "../domain/markdown/closeout.ts";
-import { extractOrchestratorDecision } from "../domain/codecs/orchestrator-decision.ts";
+import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
-import { composeTeamPipeline } from "../domain/codecs/team-composition.ts";
+import { composeTeamPipeline } from "../schemas/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";

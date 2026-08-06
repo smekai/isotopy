@@ -141,7 +141,7 @@ then delete it.
 
 Does this file name an ADHD concept — a run, a milestone, a stage, a persona, a
 task board? If it would make just as much sense in a different product, it is a
-`util` under `packages/server/src/utils/`. If it names an ADHD concept: pure →
-`domain/` (`codecs/`, `rules/`, `markdown/`, `skills/`), I/O or lifecycle →
-`services/`. A file's name is the kebab-case of its main exported class
-(`run-service.ts` exports `RunService`).
+`util` under `packages/server/src/utils/`. If it names an ADHD concept: parse an
+untrusted boundary → `schemas/`; other pure logic → `domain/` (`rules/`,
+`markdown/`, `skills/`); I/O or lifecycle → `services/`. A file's name is the
+kebab-case of its main exported class (`run-service.ts` exports `RunService`).

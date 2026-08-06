@@ -8,7 +8,7 @@ import {
   startNextMilestoneRunSchema,
   updateMilestoneFeatureSchema,
   updateMilestoneSchema,
-} from "../domain/codecs/request-schemas.ts";
+} from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { MilestoneService } from "../services/milestone/milestone-service.ts";

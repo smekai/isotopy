@@ -156,8 +156,9 @@ expression, and a change is judged against its tier.
 
 **Placement:** does this file name a product concept? A run, a milestone, a
 stage, a persona, a task board. If it would make just as much sense in a
-different product, it is a `util`. If it names a product concept: pure →
-`domain/`, I/O or lifecycle → `services/`.
+different product, it is a `util`. If it names a product concept: parse an
+untrusted boundary → `schemas/`; other pure logic → `domain/`; I/O or
+lifecycle → `services/`.
 
 **Naming:** a file's name is the kebab-case of its main exported class
 (PascalCase for UI components, matching each package's existing convention).
@@ -184,14 +185,15 @@ of the source. When you strip or avoid a comment, that is where its content goes
   backend, and there is no barrel `index.ts` — callers import the file they need.
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
-  by the UI too, so nothing platform- or server-specific goes there).
-  Server-only pure logic lives in `packages/server/src/domain/` — codecs under
-  `domain/codecs/`, pure rules under `domain/rules/`, Markdown under
+  by the UI too, so nothing platform- or server-specific goes there). Boundary
+  schemas live in `packages/server/src/schemas/` (HTTP, persistence, settings,
+  and LLM extractors). Server-only pure logic lives in
+  `packages/server/src/domain/` — rules under `domain/rules/`, Markdown under
   `domain/markdown/`, bundled prompts under `domain/skills/`. Services pass typed
   values and keep only I/O and lifecycle. Repositories persist already-rendered
   content and know nothing about Markdown semantics. Product-named files land in
-  `domain/` or `services/`; product-neutral helpers land in `utils/` (see
-  Placement and naming above). A file that exports a class is named for that
+  `schemas/`, `domain/`, or `services/`; product-neutral helpers land in `utils/`
+  (see Placement and naming above). A file that exports a class is named for that
   class (`run-service.ts` → `RunService`).
 
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
@@ -345,8 +347,9 @@ functions only.
 | `src/app.ts` | Composition: wires middleware + route controllers |
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
+| `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
 | `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone/` (`MilestoneService`), `consumers/`, `orchestration-service.ts`, settings, skills; no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: `codecs/`, `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
+| `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |
@@ -596,10 +599,10 @@ to the conversation that asked for it.
 | Layer | Where |
 | --- | --- |
 | Models, the decision union, and pure predicates | `@adhd/core` `orchestration.ts` — `orchestrationStatusFor` maps a decision to the state the conversation is left in, so the status is never assigned by hand at a call site |
-| Boundary codec | `server/src/domain/codecs/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
+| Boundary schema | `server/src/schemas/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunService` is for runs |
-| Composition | `server/src/domain/codecs/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
+| Composition | `server/src/schemas/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
 | API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 
 **The Orchestrator is an ordinary persona.** Same markdown under

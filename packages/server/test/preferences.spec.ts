@@ -6,7 +6,7 @@
 // `isValid(x) ? x : default` ternaries, and its one piece of real logic (the
 // legacy alias rewrite in `readEngineModels`) is shared with the parser below.
 import { describe, expect, test } from "vitest";
-import { projectPreferencesUpdateSchema } from "../src/domain/codecs/request-schemas.ts";
+import { projectPreferencesUpdateSchema } from "../src/schemas/request-schemas.ts";
 
 function parse(input: unknown) {
   const result = projectPreferencesUpdateSchema.safeParse(input);

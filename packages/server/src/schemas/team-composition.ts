@@ -5,8 +5,8 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@adhd/core";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../skills/catalog.ts";
-import type { ValidationIssue, ValidationResult } from "../validation.ts";
+import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
+import type { ValidationIssue, ValidationResult } from "../domain/validation.ts";
 
 const STAGE_ID = /^[a-z0-9-]+$/;
 

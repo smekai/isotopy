@@ -132,8 +132,9 @@ expression, and a change is judged against its tier.
 
 **Placement:** does this file name a product concept? A run, a milestone, a
 stage, a persona, a task board. If it would make just as much sense in a
-different product, it is a `util`. If it names a product concept: pure →
-`domain/`, I/O or lifecycle → `services/`.
+different product, it is a `util`. If it names a product concept: parse an
+untrusted boundary → `schemas/`; other pure logic → `domain/`; I/O or
+lifecycle → `services/`.
 
 **Naming:** a file's name is the kebab-case of its main exported class
 (PascalCase for UI components, matching each package's existing convention).
@@ -156,14 +157,15 @@ of the source. When you strip or avoid a comment, that is where its content goes
   backend, and there is no barrel `index.ts` — callers import the file they need.
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
-  by the UI too, so nothing platform- or server-specific goes there).
-  Server-only pure logic lives in `packages/server/src/domain/` — codecs under
-  `domain/codecs/`, pure rules under `domain/rules/`, Markdown under
+  by the UI too, so nothing platform- or server-specific goes there). Boundary
+  schemas live in `packages/server/src/schemas/` (HTTP, persistence, settings,
+  and LLM extractors). Server-only pure logic lives in
+  `packages/server/src/domain/` — rules under `domain/rules/`, Markdown under
   `domain/markdown/`, bundled prompts under `domain/skills/`. Services pass typed
   values and keep only I/O and lifecycle. Repositories persist already-rendered
   content and know nothing about Markdown semantics. Product-named files land in
-  `domain/` or `services/`; product-neutral helpers land in `utils/` (see
-  Placement and naming above). A file that exports a class is named for that
+  `schemas/`, `domain/`, or `services/`; product-neutral helpers land in `utils/`
+  (see Placement and naming above). A file that exports a class is named for that
   class (`run-service.ts` → `RunService`).
 
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in

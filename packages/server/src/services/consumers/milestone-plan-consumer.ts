@@ -1,6 +1,6 @@
 import { toMilestoneProposal } from "@adhd/core";
 import type { Milestone, RunState, StageDefinition } from "@adhd/core";
-import { extractMilestonePlan } from "../../domain/codecs/milestone-plan.ts";
+import { extractMilestonePlan } from "../../schemas/milestone-plan.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";

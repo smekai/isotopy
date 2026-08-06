@@ -25,7 +25,7 @@ import {
   ownedBoardConfigSchema,
   type BoardConfig,
   type StateConfig,
-} from "../domain/codecs/task-board-config.ts";
+} from "../schemas/task-board-config.ts";
 import {
   formatValidationIssues,
   parseJson,

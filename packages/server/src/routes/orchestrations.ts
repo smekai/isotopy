@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import {
   approveTeamSchema,
   startOrchestrationSchema,
-} from "../domain/codecs/request-schemas.ts";
+} from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { OrchestrationService } from "../services/orchestration-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";

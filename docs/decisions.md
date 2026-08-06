@@ -31,7 +31,9 @@ model + persistence), `MilestoneService` (milestone CRUD and proposal store), an
 `stage.logs`; rehydrate logs from `stage.log` events on load; flush immediately.
 `utils/` is defined by the ADHD-concept test — if the file would make sense in
 another product it is a util; if it names a run/milestone/stage/persona/task board
-it is `domain/` (pure) or `services/` (I/O). Guard placement with
+it is `schemas/` (boundary parse), `domain/` (other pure), or `services/` (I/O).
+Boundary parsers live at top-level `src/schemas/` (not `domain/codecs/`) — they
+sit next to `routes/` as the ingress validation layer. Guard placement with
 `packages/server/test/structure.spec.ts`.
 
 **Rejected:** folding the global `runs` map into `RunRepository` — repositories are

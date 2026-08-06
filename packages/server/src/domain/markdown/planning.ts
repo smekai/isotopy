@@ -1,5 +1,5 @@
 import type { MilestoneProposal } from "@adhd/core";
-import type { MilestoneSummaryContext } from "../codecs/milestone-summary.ts";
+import type { MilestoneSummaryContext } from "../../schemas/milestone-summary.ts";
 import {
   bullet,
   markdownBlocks,

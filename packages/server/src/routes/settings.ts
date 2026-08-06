@@ -4,7 +4,7 @@ import type { EngineId } from "@adhd/core";
 import {
   engineConnectionUpdateSchema,
   projectPreferencesUpdateSchema,
-} from "../domain/codecs/request-schemas.ts";
+} from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";

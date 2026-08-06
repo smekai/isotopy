@@ -9,7 +9,7 @@ import {
   resolveLimitSchema,
   restartRunSchema,
   startRunSchema,
-} from "../domain/codecs/request-schemas.ts";
+} from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import { listWorkspaceFiles, readWorkspaceFile } from "../utils/workspace-files.ts";
 import { projectScope } from "./project-scope.ts";

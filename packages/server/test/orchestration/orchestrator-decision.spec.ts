@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractOrchestratorDecision } from "../../src/domain/codecs/orchestrator-decision.ts";
+import { extractOrchestratorDecision } from "../../src/schemas/orchestrator-decision.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 function fenced(decision: unknown): string {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractOrchestratorDecision } from "../../src/domain/codecs/orchestrator-decision.ts";
-import { extractRunArtifacts } from "../../src/domain/codecs/run-artifacts.ts";
+import { extractOrchestratorDecision } from "../../src/schemas/orchestrator-decision.ts";
+import { extractRunArtifacts } from "../../src/schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 const ARTIFACTS = {

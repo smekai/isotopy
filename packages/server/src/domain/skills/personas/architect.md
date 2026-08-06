@@ -134,8 +134,9 @@ expression, and a change is judged against its tier.
 
 **Placement:** does this file name a product concept? A run, a milestone, a
 stage, a persona, a task board. If it would make just as much sense in a
-different product, it is a `util`. If it names a product concept: pure →
-`domain/`, I/O or lifecycle → `services/`.
+different product, it is a `util`. If it names a product concept: parse an
+untrusted boundary → `schemas/`; other pure logic → `domain/`; I/O or
+lifecycle → `services/`.
 
 **Naming:** a file's name is the kebab-case of its main exported class
 (PascalCase for UI components, matching each package's existing convention).
