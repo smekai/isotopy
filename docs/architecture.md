@@ -345,7 +345,7 @@ functions only.
 | `src/app.ts` | Composition: wires middleware + route controllers |
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`, `RunProjectionSupport`), `milestone/` (`MilestoneService`), `consumers/`, `orchestration-service.ts`, settings, skills; no HTTP awareness |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone/` (`MilestoneService`), `consumers/`, `orchestration-service.ts`, settings, skills; no HTTP awareness |
 | `src/domain/` | Server-only **pure** logic: `codecs/`, `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
