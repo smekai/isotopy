@@ -6,9 +6,9 @@ import type {
   StageOutputProtocol,
   StageVerdict,
 } from "@adhd/core";
-import type { EngineRunResult } from "../engines/types.ts";
-import { extractOrchestratorDecision } from "./orchestrator-decision.ts";
-import { formatValidationIssues } from "./validation.ts";
+import type { EngineRunResult } from "../../engines/types.ts";
+import { extractOrchestratorDecision } from "../../schemas/orchestrator-decision.ts";
+import { formatValidationIssues } from "../validation.ts";
 
 const VERDICT_LINE = new RegExp(
   `^[*\`_\\s]*VERDICT:\\s*(${Object.values(STAGE_VERDICTS).join("|")})[*\`_\\s]*$`,

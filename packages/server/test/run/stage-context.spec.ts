@@ -11,7 +11,7 @@ import {
   interpretEngineResult,
   parseStageQuestion,
   parseStageVerdict,
-} from "../../src/domain/stage-context.ts";
+} from "../../src/domain/rules/stage-context.ts";
 import type { EngineRunResult } from "../../src/engines/types.ts";
 
 function engineResult(over: Partial<EngineRunResult>): EngineRunResult {

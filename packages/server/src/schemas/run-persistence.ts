@@ -21,8 +21,8 @@ import type {
 } from "@adhd/core";
 import { z } from "zod";
 
-import { parseJson } from "./validation.ts";
-import type { ValidationResult } from "./validation.ts";
+import { parseJson } from "../domain/validation.ts";
+import type { ValidationResult } from "../domain/validation.ts";
 
 const text = requiredText;
 const strings = requiredTexts;

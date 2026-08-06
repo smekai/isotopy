@@ -6,7 +6,7 @@ import {
   normalizeProjectRoot,
   projectIdFor,
   sameProjectRoot,
-} from "../src/domain/projects.ts";
+} from "../src/domain/rules/projects.ts";
 
 const isWindows = process.platform === "win32";
 

@@ -40,7 +40,9 @@ named for one backend is not where a shared abstraction belongs. Layer a coarse
 concern over its detail: a repository (domain-facing persistence) sits over a
 data-access layer, each in a folder named for the *layer* — `repository/`, `db/` —
 never for a backend (`sqlite/`), one responsibility per file. Prefer direct imports;
-a barrel `index.ts` that only re-exports is indirection to avoid.
+a barrel `index.ts` that only re-exports is indirection to avoid. A file's name is
+the kebab-case of its main exported class (or the package's existing component
+convention).
 
 ### A3 — DDD layering: fat domain, thin service
 
@@ -48,7 +50,9 @@ Pure functions and domain rules live in a **domain** layer with no I/O. The
 **service** layer stays thin — a top-level narration of *what happens*,
 delegating the *how* to the domain. A service method should read like a table of
 contents. If a service is doing arithmetic, string-building, or branching on
-domain state, that logic belongs in a pure domain function it calls.
+domain state, that logic belongs in a pure domain function it calls. Ask whether
+the file names a product concept: if it would make just as much sense in another
+product, it is a util, not domain or service.
 
 ### A4 — Long-running work is a workflow, not an inline await chain
 
@@ -125,6 +129,17 @@ expression, and a change is judged against its tier.
   OS. View code stays declarative; anything touching a native capability goes
   through a typed seam. (No mobile package exists yet; these are the rules for
   when one lands, so it is not invented under deadline.)
+
+### Placement and naming of files
+
+**Placement:** does this file name a product concept? A run, a milestone, a
+stage, a persona, a task board. If it would make just as much sense in a
+different product, it is a `util`. If it names a product concept: parse an
+untrusted boundary → `schemas/`; other pure logic → `domain/`; I/O or
+lifecycle → `services/`.
+
+**Naming:** a file's name is the kebab-case of its main exported class
+(PascalCase for UI components, matching each package's existing convention).
 
 ## How you work
 

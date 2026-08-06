@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isTerminalRunStatus, orchestrationStatusFor } from "@adhd/core";
 import type {
-  Milestone,
   Orchestration,
   OrchestrationStatus,
   OrchestratorBrokerDecision,
@@ -19,96 +18,49 @@ import type {
   QuestionMediationArtifact,
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
-import { renderRunArtifactsBody } from "../domain/markdown/closeout.ts";
-import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
+import {
+  artifactDigestOf,
+  milestoneReviewContext,
+  runLabel,
+  stageOutputsOf,
+} from "../domain/rules/orchestration-context.ts";
+import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
-import { composeTeamPipeline } from "../domain/team-composition.ts";
+import { composeTeamPipeline } from "../schemas/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
-import { nowIso } from "../utils.ts";
+import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./product-manager-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
-import type { RunOrchestrator, StartRunOptions } from "./run-orchestrator.ts";
-import type { StageOutputConsumer } from "./stage-output-consumer.ts";
-import { OrchestratorRequiredError } from "./question-mediator.ts";
+import type { RunService } from "./run/run-service.ts";
+import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
+import type {
+  OrchestrationDependencies,
+  StartOrchestrationOptions,
+} from "./orchestration-options.ts";
+import { OrchestratorRequiredError } from "./orchestrator-required-error.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
-  QuestionMediator,
-} from "./question-mediator.ts";
-import type {
   RunReview,
   RunReviewContext,
   RunReviewRequest,
-  RunReviewer,
-} from "./run-reviewer.ts";
+} from "../workflow/types.ts";
 import { taskBoardPlanningContext } from "./task-board-adapter.ts";
 
-const PIPELINE_ID = "orchestration";
+export type {
+  OrchestrationDependencies,
+  StartOrchestrationOptions,
+} from "./orchestration-options.ts";
 
-const STAGE_ID = "orchestrate";
-
-export type StartOrchestrationOptions = Omit<
-  StartRunOptions,
-  "task" | "milestoneId" | "featureId" | "orchestrationId" | "sourceTaskIds"
->;
-
-export interface OrchestrationDependencies {
-  registry: ProjectRegistry;
-  runs: RunOrchestrator;
-}
-
-function runLabel(run: RunState): string {
-  return `Run ${run.number}: ${run.pipelineName}`;
-}
-
-function stageOutputsOf(run: RunState): QuestionMediationArtifact[] {
-  return run.stages.flatMap((stage) => {
-    const output = run.stageOutputs?.[stage.id];
-    return output
-      ? [{ runLabel: runLabel(run), stageLabel: stage.label, output }]
-      : [];
-  });
-}
-
-function artifactDigestOf(run: RunState): QuestionMediationArtifact[] {
-  const report = run.artifacts?.report;
-  return report
-    ? [
-        {
-          runLabel: runLabel(run),
-          stageLabel: "Orchestrator artifacts",
-          output: renderRunArtifactsBody(report, "####"),
-        },
-      ]
-    : stageOutputsOf(run);
-}
-
-function milestoneReviewContext(
-  milestone: Milestone,
-  settlingFeatureId?: string,
-): RunReviewMilestoneContext {
-  return {
-    name: milestone.name,
-    autoRunNext: milestone.autoRunNext,
-    readyFeatures: milestone.features
-      .filter(
-        (feature) => feature.status === "ready" && feature.id !== settlingFeatureId,
-      )
-      .map((feature) => ({ id: feature.id, title: feature.title })),
-  };
-}
-
-export class OrchestrationService
-  implements StageOutputConsumer, QuestionMediator, RunReviewer
-{
+export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
   private readonly repositories = new Map<string, OrchestrationRepository>();
   private readonly settledRuns = new Set<string>();
   private readonly registry: ProjectRegistry;
-  private readonly runs: RunOrchestrator;
+  private readonly runs: RunService;
 
   constructor({ registry, runs }: OrchestrationDependencies) {
     this.registry = registry;
@@ -492,7 +444,7 @@ export class OrchestrationService
       });
     }
     if (decision.action === "delegate_milestone_planning") {
-      return this.runs.startMilestonePlanning(projectPath, decision.goal, options);
+      return this.runs.milestones.startMilestonePlanning(projectPath, decision.goal, options);
     }
     if (decision.action === "continue_milestone") {
       return this.continueMilestone(projectPath, run, decision.featureId, options);
@@ -507,7 +459,7 @@ export class OrchestrationService
     options: StartOrchestrationOptions,
   ): Promise<RunState> {
     const milestone = run.milestoneId
-      ? this.runs.getMilestone(run.milestoneId)
+      ? this.runs.milestones.getMilestone(run.milestoneId)
       : undefined;
     if (!milestone) {
       throw new Error("The settled run does not belong to a milestone to continue");
@@ -517,7 +469,7 @@ export class OrchestrationService
         `Milestone "${milestone.name}" does not continue on its own — enable auto-run to let the Orchestrator start its next feature`,
       );
     }
-    return this.runs.startNextMilestoneRun(projectPath, milestone.id, {
+    return this.runs.milestones.startNextMilestoneRun(projectPath, milestone.id, {
       ...options,
       ...(featureId === undefined ? {} : { featureId }),
     });
@@ -525,7 +477,7 @@ export class OrchestrationService
 
   private reviewMilestone(run: RunState): RunReviewMilestoneContext | undefined {
     const milestone = run.milestoneId
-      ? this.runs.getMilestone(run.milestoneId)
+      ? this.runs.milestones.getMilestone(run.milestoneId)
       : undefined;
     return milestone ? milestoneReviewContext(milestone, run.featureId) : undefined;
   }
@@ -646,3 +598,7 @@ export class OrchestrationService
     return repository;
   }
 }
+
+const PIPELINE_ID = "orchestration";
+
+const STAGE_ID = "orchestrate";

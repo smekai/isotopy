@@ -10,20 +10,23 @@ import { createOrchestrationRoutes } from "./routes/orchestrations.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
 import { createRunRoutes } from "./routes/runs.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
-import type { OrchestrationService } from "./services/orchestration.ts";
+import type { MilestoneService } from "./services/milestone/milestone-service.ts";
+import type { OrchestrationService } from "./services/orchestration-service.ts";
 import type { ProjectRegistry } from "./services/project-registry.ts";
-import type { RunOrchestrator } from "./services/run-orchestrator.ts";
+import type { RunService } from "./services/run/run-service.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
 
 export interface AppDependencies {
-  orchestrator: RunOrchestrator;
+  runs: RunService;
+  milestones: MilestoneService;
   orchestrations: OrchestrationService;
   registry: ProjectRegistry;
   settings: SettingsStore;
 }
 
 export function createApp({
-  orchestrator,
+  runs,
+  milestones,
   orchestrations,
   registry,
   settings,
@@ -39,12 +42,12 @@ export function createApp({
 
   app.route("/health", healthRoutes);
   app.route("/projects", createProjectRoutes(registry));
-  app.route("/pipelines", createPipelineRoutes(orchestrator));
-  app.route("/milestones", createMilestoneRoutes(orchestrator, registry));
+  app.route("/pipelines", createPipelineRoutes(runs));
+  app.route("/milestones", createMilestoneRoutes(milestones, registry));
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", engineRoutes);
   app.route("/settings", createSettingsRoutes(registry, settings));
-  app.route("/runs", createRunRoutes(orchestrator, registry));
+  app.route("/runs", createRunRoutes(runs, registry));
   app.route("/fs", fsRoutes);
 
   return app;

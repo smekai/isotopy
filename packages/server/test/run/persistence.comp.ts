@@ -120,6 +120,68 @@ test("a run left mid-flight by a crash with no durable run is reconciled to fail
   await restarted.shutdown();
 });
 
+test("a log written before a restart is still readable after it", async () => {
+  // Arrange
+  const { app } = ctx;
+
+  // Anticipate
+  ctx.engine.anticipate().reports("done");
+
+  const run = await startRun(app, {
+    pipelineId: "solo",
+    task: "comp log survives restart",
+    engine: "claude-code",
+  });
+  await waitForRunStatus(app, run.id, "completed");
+  const before = await get<RunState>(app, `/runs/${run.id}`);
+  const priorLog = stageOf(before.body, "solo").logs.find((entry) =>
+    entry.message.length > 0,
+  );
+  expect(priorLog).toBeDefined();
+  await ctx.orchestrator.shutdown();
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const { body } = await get<RunState>(restarted.app, `/runs/${run.id}`);
+  expect(
+    stageOf(body, "solo").logs.some(
+      (entry) => entry.message === priorLog?.message && entry.ts === priorLog.ts,
+    ),
+  ).toBe(true);
+  await restarted.shutdown();
+});
+
+test("the persisted run snapshot does not store stage.logs", async () => {
+  // Arrange
+  const { app, home } = ctx;
+
+  // Anticipate
+  ctx.engine.anticipate().reports("done");
+
+  const run = await startRun(app, {
+    pipelineId: "solo",
+    task: "comp snapshot omits logs",
+    engine: "claude-code",
+  });
+  await waitForRunStatus(app, run.id, "completed");
+  await ctx.orchestrator.shutdown();
+
+  // Act
+  const repository = new RunRepository({
+    id: HOME_PROJECT_ID,
+    root: home,
+    dataDir: home,
+  });
+  const [persisted] = await repository.loadAll();
+  await repository.settle();
+
+  // Assert
+  expect(persisted?.run.id).toBe(run.id);
+  expect(persisted?.run.stages.every((stage) => stage.logs.length === 0)).toBe(true);
+});
+
 test("run numbering continues from the highest number on disk", async () => {
   // Arrange — one completed run on disk, then a fresh process over the same home.
   const { app } = ctx;

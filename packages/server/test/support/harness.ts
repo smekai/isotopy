@@ -10,9 +10,9 @@ import { RUN_SUMMARY_EVENT } from "@adhd/core";
 import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
-import { OrchestrationService } from "../../src/services/orchestration.ts";
+import { OrchestrationService } from "../../src/services/orchestration-service.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
-import { RunOrchestrator } from "../../src/services/run-orchestrator.ts";
+import { RunService } from "../../src/services/run/run-service.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
 import { FakeEngine } from "./fake-engine.ts";
 
@@ -21,7 +21,7 @@ const POLL_INTERVAL_MS = 10;
 
 export interface TestApp {
   app: Hono;
-  orchestrator: RunOrchestrator;
+  orchestrator: RunService;
   orchestrations: OrchestrationService;
   registry: ProjectRegistry;
   settings: SettingsStore;
@@ -49,13 +49,18 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
-  const orchestrator = new RunOrchestrator({ registry, settings });
+  const orchestrator = new RunService({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
-  orchestrator.registerQuestionMediator(orchestrations);
-  orchestrator.registerRunReviewer(orchestrations);
+  orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
-  const app = createApp({ orchestrator, orchestrations, registry, settings });
+  const app = createApp({
+    runs: orchestrator,
+    milestones: orchestrator.milestones,
+    orchestrations,
+    registry,
+    settings,
+  });
 
   return {
     app,
@@ -90,7 +95,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
 export interface RestartedApp {
   app: Hono;
-  orchestrator: RunOrchestrator;
+  orchestrator: RunService;
   orchestrations: OrchestrationService;
   /**
    * Settles every service this rebooted app opened. Each one holds its own
@@ -105,15 +110,20 @@ export interface RestartedApp {
 export async function restartApp(): Promise<RestartedApp> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
-  const orchestrator = new RunOrchestrator({ registry, settings });
+  const orchestrator = new RunService({ registry, settings });
   const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
   orchestrator.registerStageOutputConsumer(orchestrations);
-  orchestrator.registerQuestionMediator(orchestrations);
-  orchestrator.registerRunReviewer(orchestrations);
+  orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
   return {
-    app: createApp({ orchestrator, orchestrations, registry, settings }),
+    app: createApp({
+      runs: orchestrator,
+      milestones: orchestrator.milestones,
+      orchestrations,
+      registry,
+      settings,
+    }),
     orchestrator,
     orchestrations,
     shutdown: async () => {

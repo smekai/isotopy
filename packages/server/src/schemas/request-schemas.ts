@@ -12,7 +12,6 @@ import type {
   ProjectPreferencesUpdate,
 } from "@adhd/core";
 import { z } from "zod";
-import type { EngineConnectionUpdate } from "../services/settings-store.ts";
 
 const text = z.string().trim().min(1);
 const optionalText = text.optional();
@@ -43,12 +42,14 @@ export const projectPreferencesUpdateSchema: z.ZodType<ProjectPreferencesUpdate>
   })
   .strict();
 
-export const engineConnectionUpdateSchema: z.ZodType<EngineConnectionUpdate> = z
+export const engineConnectionUpdateSchema = z
   .object({
     connectionMode: optionalText,
     apiKey: z.string().nullable().optional(),
   })
   .strict();
+
+export type EngineConnectionUpdate = z.infer<typeof engineConnectionUpdateSchema>;
 
 export const addProjectSchema = z.object({ root: text }).strict();
 

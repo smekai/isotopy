@@ -62,7 +62,9 @@ named for one backend is not where a shared abstraction belongs. Layer a coarse
 concern over its detail: a repository (domain-facing persistence) sits over a
 data-access layer, each in a folder named for the *layer* — `repository/`, `db/` —
 never for a backend (`sqlite/`), one responsibility per file. Prefer direct imports;
-a barrel `index.ts` that only re-exports is indirection to avoid.
+a barrel `index.ts` that only re-exports is indirection to avoid. A file's name is
+the kebab-case of its main exported class (or the package's existing component
+convention).
 
 ### A3 — DDD layering: fat domain, thin service
 
@@ -70,7 +72,9 @@ Pure functions and domain rules live in a **domain** layer with no I/O. The
 **service** layer stays thin — a top-level narration of *what happens*,
 delegating the *how* to the domain. A service method should read like a table of
 contents. If a service is doing arithmetic, string-building, or branching on
-domain state, that logic belongs in a pure domain function it calls.
+domain state, that logic belongs in a pure domain function it calls. Ask whether
+the file names a product concept: if it would make just as much sense in another
+product, it is a util, not domain or service.
 
 ### A4 — Long-running work is a workflow, not an inline await chain
 
@@ -147,6 +151,17 @@ expression, and a change is judged against its tier.
   OS. View code stays declarative; anything touching a native capability goes
   through a typed seam. (No mobile package exists yet; these are the rules for
   when one lands, so it is not invented under deadline.)
+
+### Placement and naming of files
+
+**Placement:** does this file name a product concept? A run, a milestone, a
+stage, a persona, a task board. If it would make just as much sense in a
+different product, it is a `util`. If it names a product concept: parse an
+untrusted boundary → `schemas/`; other pure logic → `domain/`; I/O or
+lifecycle → `services/`.
+
+**Naming:** a file's name is the kebab-case of its main exported class
+(PascalCase for UI components, matching each package's existing convention).
 <!-- gen:shared:end -->
 
 ---
@@ -170,11 +185,16 @@ of the source. When you strip or avoid a comment, that is where its content goes
   backend, and there is no barrel `index.ts` — callers import the file they need.
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
-  by the UI too, so nothing platform- or server-specific goes there).
-  Server-only pure logic lives in `packages/server/src/domain/`. Markdown
-  parsing and rendering is grouped by format in `domain/markdown/`; services
-  pass it typed values and keep only I/O and lifecycle. Repositories persist
-  already-rendered content and know nothing about Markdown semantics.
+  by the UI too, so nothing platform- or server-specific goes there). Boundary
+  schemas live in `packages/server/src/schemas/` (HTTP, persistence, settings,
+  and LLM extractors). Server-only pure logic lives in
+  `packages/server/src/domain/` — rules under `domain/rules/`, Markdown under
+  `domain/markdown/`, bundled prompts under `domain/skills/`. Services pass typed
+  values and keep only I/O and lifecycle. Repositories persist already-rendered
+  content and know nothing about Markdown semantics. Product-named files land in
+  `schemas/`, `domain/`, or `services/`; product-neutral helpers land in `utils/`
+  (see Placement and naming above). A file that exports a class is named for that
+  class (`run-service.ts` → `RunService`).
 
 - **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
   `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
@@ -185,11 +205,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
   claim that a durable executor "replaces `executeStage()` alone" was wrong and
   is corrected here.
 
-- **The stateful class (A5):** `RunOrchestrator` owns the run read model
+- **The stateful class (A5):** `RunService` owns the run read model
   (`RunState` + events + SSE) and hosts the per-project durable runtime; that is
   why it is a class, not a module of functions. It is the *single writer* of the
   read model — the durable workflow drives it; the API only reads it.
-
+  `MilestoneService` owns milestone CRUD beside it; `RunStore` holds the
+  cross-project run map and persistence.
 - **Named types & styles (A6):** every component exports a named `XProps`
   interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
   into named constants and builders.
@@ -326,14 +347,15 @@ functions only.
 | `src/app.ts` | Composition: wires middleware + route controllers |
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
-| `src/services/` | I/O and lifecycle (run orchestrator, persistence, skill loading); no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: runtime validation and verdict rules, `markdown/` (focused prompt, artifact, skill, and task-board codecs), plus `skills/personas/*.md` and `skills/step-tasks/*.md` (bundled prompts). No I/O — the thin-service/fat-domain split (A3) |
+| `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone/` (`MilestoneService`), `consumers/`, `orchestration-service.ts`, settings, skills; no HTTP awareness |
+| `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
+| `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |
-| `src/utils.ts` | Pure, context-free helpers (no I/O, no internal imports) |
 | `test/` | Component tests, unit specs, and their support harness ([`testing.md`](./testing.md)) — never colocated with `src/`, which would emit them into `dist/` |
 
-Dependency direction: `index.ts → app.ts → routes → services → engines/core`. Routes never contain business rules; services never touch `Request`/`Response`. Routes are factories (`createRunRoutes(orchestrator)`) that receive their service rather than importing a singleton — which is what lets a component test mount them over a throwaway orchestrator.
+Dependency direction: `index.ts → app.ts → routes → services → engines/core`. Routes never contain business rules; services never touch `Request`/`Response`. Routes are factories (`createRunRoutes(runs)`, `createMilestoneRoutes(milestones)`) that receive their service rather than importing a singleton — which is what lets a component test mount them over a throwaway run service.
 
 ### `packages/ui` — React app
 
@@ -365,7 +387,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 
 Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
 
-**Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunOrchestrator` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunOrchestrator` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
+**Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunService` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunService` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
 
 **Known gap (not code):** persona adherence is model-dependent. On `haiku` the Tester verified with inline `node -e` checks rather than writing a test file, and ignored an instruction placed *after* the closing "Do not restate this prompt" line. Put must-follow output rules before that line.
 
@@ -377,7 +399,7 @@ Already in place:
 - **`import type`** for type-only imports (enforced by lint).
 - **UI-safe views**: the server never serializes secrets to the client (`SettingsView`).
 - **Layered tests** — component tests (Vitest, `pnpm test`) are the primary level; specs cover complicated pure functions; Playwright covers only the browser; one opt-in live canary. See [`testing.md`](./testing.md) for the policy and the AAAAA convention (TASK-062).
-- **Testable seams** — `ADHD_HOME` and `ADHD_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, `RunOrchestrator` takes its `RunStore` factory, and `createApp({ orchestrator, registry, settings })` injects services instead of routes reaching for a module singleton.
+- **Testable seams** — `ADHD_HOME` and `ADHD_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, and `createApp({ runs, milestones, registry, settings })` injects services instead of routes reaching for a module singleton.
 
 Recommended next steps, in rough priority order:
 
@@ -545,10 +567,10 @@ is what lets a run be traced back to the feature it was started for.
 
 | Layer | Where |
 | --- | --- |
-| Models and pure predicates | `@adhd/core` `milestones.ts` — `canStartNextFeature` mirrors the guards `RunOrchestrator.startNextMilestoneRun` throws on, so the UI can disable the control instead of letting the request be rejected. Change one, change both. |
+| Models and pure predicates | `@adhd/core` `milestones.ts` — `canStartNextFeature` mirrors the guards `MilestoneService.startNextMilestoneRun` throws on, so the UI can disable the control instead of letting the request be rejected. Change one, change both. |
 | Persistence | `server/src/repository/milestone-repository.ts` over `db/milestones-table.ts` |
 | API | `server/src/routes/milestones.ts` — plan, revise, approve, CRUD, start-next, finalize |
-| Lifecycle | `RunOrchestrator` — the single writer, as it is for runs |
+| Lifecycle | `MilestoneService` — the single writer for milestones; `RunService` remains the single writer for runs |
 | UI | `#/milestones/:id` → `MilestoneDashboard`, fed by `useMilestones` |
 
 **A milestone is planned before it is executed.** A dedicated `milestone-planning`
@@ -577,10 +599,10 @@ to the conversation that asked for it.
 | Layer | Where |
 | --- | --- |
 | Models, the decision union, and pure predicates | `@adhd/core` `orchestration.ts` — `orchestrationStatusFor` maps a decision to the state the conversation is left in, so the status is never assigned by hand at a call site |
-| Boundary codec | `server/src/domain/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
+| Boundary schema | `server/src/schemas/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
-| Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunOrchestrator` is for runs |
-| Composition | `server/src/domain/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
+| Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunService` is for runs |
+| Composition | `server/src/schemas/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
 | API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
@@ -602,11 +624,11 @@ output only when it finishes; a decision stage captures on the way into a park t
 because the decision to ask *is* the turn's product.
 
 **Stage output is consumed through a seam.** `StageOutputConsumer`
-(`services/stage-output-consumer.ts`) is how an aggregate reacts to a stage's
-output. `RunOrchestrator.captureStageOutput` writes the run read model and the
+(`services/consumers/stage-output-consumer.ts`) is how an aggregate reacts to a stage's
+output. `RunService.captureStageOutput` writes the run read model and the
 handoff, then hands the output to each consumer — `MilestonePlanConsumer`,
 `CloseoutConsumer`, `OrchestrationService` — instead of branching on `pipelineId`
-for each one. A new aggregate registers a consumer; it does not edit the orchestrator.
+for each one. A new aggregate registers a consumer; it does not edit the run service.
 
 **An approved team becomes a pipeline, and the run keeps it.** `composeTeamPipeline`
 validates every `skill` and `stepTask` against the persona and step-task catalogs —
@@ -636,8 +658,9 @@ retains history and artifacts. A restart adopts its run into whichever Orchestra
 active now, so stopping one never strands the work it owned.
 
 **Specialist questions are mediated inside the specialist workflow.** The
-`QuestionMediator` seam lets `PipelineWorkflow` request active aggregate context and
-record a narrowed broker decision. The workflow executes the Orchestrator persona as
+`OrchestrationHooks` seam (implemented by `OrchestrationService`) lets
+`PipelineWorkflow` request active aggregate context and record a narrowed broker
+decision. The workflow executes the Orchestrator persona as
 a named durable step with the asking run's engine, model, permissions, workspace,
 limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
 same specialist CLI session. `escalate_to_user` uses the existing `asking` state and
@@ -752,13 +775,12 @@ see `workflow-runtime-options.md` §4):
 │  engine adapters, subprocess kill (G4)  │
 ├─────────────────────────────────────────┤
 │  workflow/ (durable runtime)            │
-│  RunOrchestrator hosts OpenWorkflow;    │
+│  RunService hosts OpenWorkflow;         │
 │  pipeline-workflow = the run loop,      │
 │  stage-execution = the durable step     │
 ├─────────────────────────────────────────┤
-│  db/ — one shared .adhd/runs.db         │
-│  OpenWorkflow's tables (SoT) +          │
-│  runs/events read-model projection      │
+│  .adhd/workflow.db — OpenWorkflow SoT   │
+│  .adhd/runs.db — runs/events projection │
 └─────────────────────────────────────────┘
 ```
 
@@ -1049,12 +1071,12 @@ user-level root; both exist so tests get isolated roots.
 │  - POST /engines/:id/install|login               │
 │  - GET /pipelines, GET /fs/dirs, GET /health     │
 ├──────────────────────────────────────────────────┤
-│  RunOrchestrator (durable OpenWorkflow runtime)  │
+│  RunService (durable OpenWorkflow runtime)       │
 │  + per-project SQLite read model                 │
 └──────────────────────────────────────────────────┘
 ```
 
-Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow's SQLite state is the source of truth and the run snapshot/event tables are a rebuildable read model. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
+Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow owns `.adhd/workflow.db`, and ADHD's run/event/milestone/orchestration tables live in `.adhd/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 

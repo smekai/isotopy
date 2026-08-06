@@ -13,7 +13,7 @@ import type {
   RunArtifacts,
   StageUsage,
 } from "@adhd/core";
-import { detectEngineLimit } from "../../src/domain/engine-limit.ts";
+import { detectEngineLimit } from "../../src/domain/rules/engine-limit.ts";
 import type {
   EngineAdapter,
   EngineRunContext,

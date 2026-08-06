@@ -6,14 +6,14 @@ import { RunsTable } from "../db/runs-table.ts";
 import {
   parsePersistedRun,
   parsePersistedRunEvent,
-} from "../domain/run-persistence.ts";
-import type { PersistedRun } from "../domain/run-persistence.ts";
+} from "../schemas/run-persistence.ts";
+import type { PersistedRun } from "../schemas/run-persistence.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
-import { nowIso } from "../utils.ts";
+import { nowIso } from "../utils/time.ts";
 import { persistHandoff } from "./handoff.ts";
 
-export type { PersistedRun } from "../domain/run-persistence.ts";
+export type { PersistedRun } from "../schemas/run-persistence.ts";
 
 export class RunRepository {
   private readonly db: Database;

@@ -7,13 +7,14 @@ import type {
   ProjectPreferencesUpdate,
   SettingsView,
 } from "@adhd/core";
-import { normalizeProjectPreferences } from "../domain/preferences.ts";
-import { settingsFileSchema } from "../domain/settings-file.ts";
+import { normalizeProjectPreferences } from "../schemas/preferences.ts";
+import type { EngineConnectionUpdate } from "../schemas/request-schemas.ts";
+import { settingsFileSchema } from "../schemas/settings-file.ts";
 import type {
   EngineConnectionSettings,
   ProjectSettings,
   SettingsFile,
-} from "../domain/settings-file.ts";
+} from "../schemas/settings-file.ts";
 import {
   formatValidationIssues,
   parseJson,
@@ -21,58 +22,7 @@ import {
 import type { EngineConnection } from "../engines/types.ts";
 import { userSettingsPath } from "../paths.ts";
 
-export interface EngineConnectionUpdate {
-  connectionMode?: string;
-  apiKey?: string | null;
-}
-
-function emptyProjectSettings(): ProjectSettings {
-  return { engines: {} };
-}
-
-function emptySettings(): SettingsFile {
-  return { version: 1, defaults: emptyProjectSettings(), projects: {} };
-}
-
-function resolvedEntry(
-  settings: SettingsFile,
-  projectId: string,
-  engineId: EngineId,
-): EngineConnectionSettings | undefined {
-  return settings.projects[projectId]?.engines[engineId] ?? settings.defaults.engines[engineId];
-}
-
-function detachedCopyOfResolvedEntry(
-  settings: SettingsFile,
-  projectId: string,
-  engineId: EngineId,
-): EngineConnectionSettings {
-  return {
-    ...(resolvedEntry(settings, projectId, engineId) ?? {
-      connectionMode: defaultConnectionMode(engineId),
-    }),
-  };
-}
-
-function mergedPreferenceOverride(
-  current: ProjectPreferencesUpdate | undefined,
-  update: ProjectPreferencesUpdate,
-): ProjectPreferencesUpdate {
-  const merged: ProjectPreferencesUpdate = { ...current, ...update };
-  if (update.engineModels) {
-    merged.engineModels = { ...current?.engineModels, ...update.engineModels };
-  }
-  return merged;
-}
-
-function resolvedPreferences(settings: SettingsFile, projectId: string): ProjectPreferences {
-  return normalizeProjectPreferences(
-    mergedPreferenceOverride(
-      settings.defaults.preferences,
-      settings.projects[projectId]?.preferences ?? {},
-    ),
-  );
-}
+export type { EngineConnectionUpdate } from "../schemas/request-schemas.ts";
 
 export class SettingsStore {
   private read(): SettingsFile {
@@ -161,4 +111,52 @@ export class SettingsStore {
     this.write(settings);
     return this.getSettingsView(projectId);
   }
+}
+
+function emptyProjectSettings(): ProjectSettings {
+  return { engines: {} };
+}
+
+function emptySettings(): SettingsFile {
+  return { version: 1, defaults: emptyProjectSettings(), projects: {} };
+}
+
+function resolvedEntry(
+  settings: SettingsFile,
+  projectId: string,
+  engineId: EngineId,
+): EngineConnectionSettings | undefined {
+  return settings.projects[projectId]?.engines[engineId] ?? settings.defaults.engines[engineId];
+}
+
+function detachedCopyOfResolvedEntry(
+  settings: SettingsFile,
+  projectId: string,
+  engineId: EngineId,
+): EngineConnectionSettings {
+  return {
+    ...(resolvedEntry(settings, projectId, engineId) ?? {
+      connectionMode: defaultConnectionMode(engineId),
+    }),
+  };
+}
+
+function mergedPreferenceOverride(
+  current: ProjectPreferencesUpdate | undefined,
+  update: ProjectPreferencesUpdate,
+): ProjectPreferencesUpdate {
+  const merged: ProjectPreferencesUpdate = { ...current, ...update };
+  if (update.engineModels) {
+    merged.engineModels = { ...current?.engineModels, ...update.engineModels };
+  }
+  return merged;
+}
+
+function resolvedPreferences(settings: SettingsFile, projectId: string): ProjectPreferences {
+  return normalizeProjectPreferences(
+    mergedPreferenceOverride(
+      settings.defaults.preferences,
+      settings.projects[projectId]?.preferences ?? {},
+    ),
+  );
 }

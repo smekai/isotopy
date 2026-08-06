@@ -14,7 +14,7 @@ import type {
   StageDefinition,
   StageExecutionPolicy,
 } from "@adhd/core";
-import { limitWaitMs } from "../domain/engine-limit.ts";
+import { limitWaitMs } from "../domain/rules/engine-limit.ts";
 import {
   runOrchestratorReviewWork,
   runQuestionMediationWork,
@@ -28,7 +28,7 @@ import type {
   StageTurn,
   WorkflowDeps,
 } from "./types.ts";
-import type { QuestionMediationRequest } from "../services/question-mediator.ts";
+import type { QuestionMediationRequest } from "./types.ts";
 
 export const PIPELINE_WORKFLOW_NAME = "adhd-pipeline";
 

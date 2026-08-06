@@ -5,7 +5,7 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@adhd/core";
-import { composeTeamPipeline } from "../../src/domain/team-composition.ts";
+import { composeTeamPipeline } from "../../src/schemas/team-composition.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 test("an invented persona id is rejected, rather than degrading the stage to no persona", () => {

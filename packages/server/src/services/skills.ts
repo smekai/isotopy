@@ -5,13 +5,6 @@ import type { ProjectPath } from "../paths.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
 import { loadBundledPersona } from "./bundled-prompts.ts";
 
-interface CacheEntry {
-  mtimeMs: number;
-  content: string;
-}
-
-const cache = new Map<string, CacheEntry>();
-
 export function userSkillFilePath(skillId: string): string {
   return path.join(userSkillsDir(), `${skillId}.md`);
 }
@@ -22,22 +15,6 @@ export function projectSkillFilePath(projectPath: ProjectPath, skillId: string):
 
 export function projectSkillAddendumPath(projectPath: ProjectPath, skillId: string): string {
   return path.join(skillsDir(projectPath), `${skillId}.project.md`);
-}
-
-async function readCached(filePath: string): Promise<string | undefined> {
-  try {
-    const { mtimeMs } = await stat(filePath);
-    const cached = cache.get(filePath);
-    if (cached && cached.mtimeMs === mtimeMs) {
-      return cached.content;
-    }
-    const content = await readFile(filePath, "utf8");
-    cache.set(filePath, { mtimeMs, content });
-    return content;
-  } catch {
-    cache.delete(filePath);
-    return undefined;
-  }
 }
 
 export async function loadSkill(
@@ -55,4 +32,27 @@ export async function loadSkill(
     projectOverride,
     projectAddendum,
   });
+}
+
+interface CacheEntry {
+  mtimeMs: number;
+  content: string;
+}
+
+const cache = new Map<string, CacheEntry>();
+
+async function readCached(filePath: string): Promise<string | undefined> {
+  try {
+    const { mtimeMs } = await stat(filePath);
+    const cached = cache.get(filePath);
+    if (cached && cached.mtimeMs === mtimeMs) {
+      return cached.content;
+    }
+    const content = await readFile(filePath, "utf8");
+    cache.set(filePath, { mtimeMs, content });
+    return content;
+  } catch {
+    cache.delete(filePath);
+    return undefined;
+  }
 }

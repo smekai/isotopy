@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import type { RunOrchestrator } from "../services/run-orchestrator.ts";
+import type { RunService } from "../services/run/run-service.ts";
 
-export function createPipelineRoutes(orchestrator: RunOrchestrator): Hono {
-  return new Hono().get("/", (c) => c.json(orchestrator.listPipelines()));
+export function createPipelineRoutes(runs: RunService): Hono {
+  return new Hono().get("/", (c) => c.json(runs.listPipelines()));
 }

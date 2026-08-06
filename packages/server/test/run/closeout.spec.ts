@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { productManagerCloseoutSchema } from "@adhd/core";
-import { parseProductManagerCloseout } from "../../src/domain/closeout.ts";
+import { parseProductManagerCloseout } from "../../src/domain/rules/closeout.ts";
 
 const VALID_CLOSEOUT = {
   summary: "Delivered the feature.",

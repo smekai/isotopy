@@ -6,7 +6,7 @@ import {
   limitWaitMs,
   parseLimitResetMs,
   selectionAfterLimit,
-} from "../../src/domain/engine-limit.ts";
+} from "../../src/domain/rules/engine-limit.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

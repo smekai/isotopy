@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineLimit, EngineStatus } from "@adhd/core";
-import { detectEngineLimit } from "../domain/engine-limit.ts";
+import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { parseClaudeProtocolLine } from "./claude-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";

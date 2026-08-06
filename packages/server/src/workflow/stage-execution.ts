@@ -21,29 +21,25 @@ import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
-import { interpretEngineResult } from "../domain/stage-context.ts";
-import { extractOrchestratorDecision } from "../domain/orchestrator-decision.ts";
-import { extractRunArtifacts } from "../domain/run-artifacts.ts";
+import { interpretEngineResult } from "../domain/rules/stage-context.ts";
+import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
+import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { loadSkill } from "../services/skills.ts";
 import { loadBundledStepTask } from "../services/bundled-prompts.ts";
-import { nowIso } from "../utils.ts";
+import { nowIso } from "../utils/time.ts";
 import type {
   PipelineWorkflowInput,
+  QuestionMediationContext,
+  QuestionMediationRequest,
   QuestionMediationResult,
+  RunReview,
+  RunReviewContext,
+  RunReviewRequest,
   StageResult,
   StageTurn,
   WorkflowDeps,
 } from "./types.ts";
-import type {
-  QuestionMediationContext,
-  QuestionMediationRequest,
-} from "../services/question-mediator.ts";
-import type {
-  RunReview,
-  RunReviewContext,
-  RunReviewRequest,
-} from "../services/run-reviewer.ts";
 
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
@@ -162,16 +158,16 @@ export async function runQuestionMediationWork(
       failureMessage: "The asking run has no engine for Orchestrator mediation",
     };
   }
-  const mediator = deps.questionMediator();
-  if (!mediator) {
+  const orchestration = deps.orchestration();
+  if (!orchestration) {
     return {
       outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
-      failureMessage: "The project has no registered Orchestrator question mediator",
+      failureMessage: "The project has no registered Orchestrator",
     };
   }
   let context: QuestionMediationContext;
   try {
-    context = await mediator.contextFor(request);
+    context = await orchestration.contextFor(request);
   } catch (error) {
     return {
       outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
@@ -228,7 +224,7 @@ export async function runQuestionMediationWork(
     };
   }
   try {
-    await mediator.recordDecision(request, context, decision);
+    await orchestration.recordDecision(request, context, decision);
   } catch (error) {
     return {
       outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
@@ -252,15 +248,15 @@ export async function runOrchestratorReviewWork(
   status: RunState["status"],
 ): Promise<null> {
   const run = deps.projection.getRun(input.runId);
-  const reviewer = deps.runReviewer();
+  const orchestration = deps.orchestration();
   const stageId = run?.stages.at(-1)?.id;
-  if (!run || !run.engine || !reviewer || stageId === undefined) {
+  if (!run || !run.engine || !orchestration || stageId === undefined) {
     return null;
   }
   const request: RunReviewRequest = { runId: run.id, status };
   let context: RunReviewContext;
   try {
-    context = await reviewer.reviewContextFor(request);
+    context = await orchestration.reviewContextFor(request);
   } catch (error) {
     deps.projection.log(run.id, stageId, {
       level: "warn",
@@ -294,7 +290,7 @@ export async function runOrchestratorReviewWork(
     await deps.projection.captureRunArtifacts(run.id, review.artifacts);
   }
   try {
-    await reviewer.recordReview(request, context, review);
+    await orchestration.recordReview(request, context, review);
   } catch (error) {
     deps.projection.log(run.id, stageId, {
       level: "warn",

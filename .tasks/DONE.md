@@ -1,5 +1,17 @@
 # Done
 
+## TASK-121: Rename the run service, split it, and write the placement rule down
+**Priority:** P1 | **Tags:** server, core, infra
+**Updated:** 2026-08-06 17:15
+
+Renamed `RunOrchestrator` → `RunService`, split into exactly `RunStore` + `MilestoneService` + `RunService`, regrouped `schemas/` (was `domain/codecs/`), `domain/rules`, `services/consumers`, and `utils/`. Snapshots omit `stage.logs` (rehydrated from events); debounce removed. Placement/naming rules in architecture + CLAUDE + decisions; `structure.spec.ts` and persistence tests added. Version 0.9.18.
+
+### Plan
+
+Done: RunService split, log persistence fix, placement rules, schemas rename, structure tests, 0.9.18.
+
+---
+
 ## TASK-122: Two bugs that stopped a real run on Windows
 **Priority:** P0 | **Tags:** server, engine, infra
 **Updated:** 2026-08-05 23:35
