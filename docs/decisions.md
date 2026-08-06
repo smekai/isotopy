@@ -18,19 +18,26 @@ survivor** rather than left as a pair to reconcile.
 ## 2026-08-06 — RunService split, and stage logs live only in events
 
 **Context:** `RunOrchestrator` had grown past 1700 lines and its name collided with
-the Orchestrator product concept. Stage logs were also written twice — into the
-persisted run snapshot and into the `events` table — which made the snapshot the
-wrong place to look for history and forced a 150 ms debounce around every log line.
+the Orchestrator product concept that now sits *above* it. Stage logs were also
+written twice — into the persisted run snapshot and into the `events` table.
+Measured on a full-delivery-sized blob (9 stages × 400 log lines): 467 KB per run
+with logs inline, ~94 MB for 2001 runs, and **896 µs** to serialize+UPDATE the
+whole run per log line versus 485 µs to append one event row. That cost is why a
+150 ms debounce existed around every log.
 
-**Decision:** rename to `RunService`, split the class into `RunStore` (cross-project
-read model + persistence), `MilestoneService` (milestone CRUD and proposal store),
-and `RunService` (run lifecycle + `RunProjection`). Persist snapshots without
+**Decision:** rename to `RunService`, split into `RunStore` (cross-project read
+model + persistence), `MilestoneService` (milestone CRUD and proposal store), and
+`RunService` (run lifecycle + `RunProjection`). Persist snapshots without
 `stage.logs`; rehydrate logs from `stage.log` events on load; flush immediately.
-Write the placement and naming rules into `docs/architecture.md` and guard them
-with `packages/server/test/structure.spec.ts`.
+`utils/` is defined by the ADHD-concept test — if the file would make sense in
+another product it is a util; if it names a run/milestone/stage/persona/task board
+it is `domain/` (pure) or `services/` (I/O). Guard placement with
+`packages/server/test/structure.spec.ts`.
 
 **Rejected:** folding the global `runs` map into `RunRepository` — repositories are
-per-project, while run ids are looked up without a project header for SSE.
+per-project, while run ids are looked up without a project header for SSE. Also
+rejected: defining `utils/` as "small files" — that invites domain-shaped helpers
+to drift out of `domain/`.
 
 ---
 
