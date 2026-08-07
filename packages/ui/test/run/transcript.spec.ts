@@ -218,6 +218,45 @@ describe("conversationOnly", () => {
     expect(items[2]?.kind === "notice" && items[2].text).toContain("Developer finished");
   });
 
+  test("a protocol block an agent wrote for the server never reaches the chat", () => {
+    const decision =
+      '```adhd-orchestrator-decision\n{"action":"ask_user","question":"Which database?"}\n```';
+    const state = run([
+      started("orchestrate", "asking", "2026-07-27T10:00:00.000Z", [
+        log("2026-07-27T10:00:01.000Z", "info", `I need one thing from you.\n\n${decision}`),
+        log("2026-07-27T10:00:02.000Z", "info", decision),
+      ]),
+    ]);
+
+    const chat = conversationOnly(buildTranscript(state));
+
+    expect(chat.map((item) => ("text" in item ? item.text : item.kind))).toEqual([
+      "stage",
+      "I need one thing from you.",
+    ]);
+    expect(
+      buildTranscript(state).some((item) => "text" in item && item.text.includes("ask_user")),
+    ).toBe(true);
+  });
+
+  test("a protocol block still streaming in is withheld until it is prose again", () => {
+    const state = run([
+      started("orchestrate", "running", "2026-07-27T10:00:00.000Z", [
+        log(
+          "2026-07-27T10:00:01.000Z",
+          "info",
+          'Here it is.\n\n```adhd-orchestrator-decision\n{"action":"propo',
+        ),
+      ]),
+    ]);
+
+    expect(
+      conversationOnly(buildTranscript(state)).map((item) =>
+        "text" in item ? item.text : item.kind,
+      ),
+    ).toEqual(["stage", "Here it is."]);
+  });
+
   test("questions and the user's own turns survive the filter", () => {
     const state = run([started("intake", "asking", "2026-07-27T10:00:00.000Z", [])]);
     state.messages = [

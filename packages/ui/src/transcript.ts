@@ -133,10 +133,30 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
 
 export type ConversationItem = Exclude<TranscriptItem, { kind: "tool" }>;
 
+// Trailing `$` alternative catches a fence still streaming in, which has no closer yet.
+const MACHINERY_FENCE = /```adhd-[a-z-]+[\s\S]*?(?:```|$)/g;
+
+function withoutMachinery(text: string): string {
+  return text.replace(MACHINERY_FENCE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function spoken(item: ConversationItem): ConversationItem | undefined {
+  if (item.kind !== "agent") {
+    return item;
+  }
+  const text = withoutMachinery(item.text);
+  return text === "" ? undefined : { ...item, text };
+}
+
 /**
  * The conversation is the transcript minus the machinery: tool calls, tool
- * errors and engine chatter all arrive as `tool` items, and belong in the log.
+ * errors and engine chatter all arrive as `tool` items and belong in the log,
+ * and a protocol block an agent emitted for the server to parse is addressed to
+ * the server, not to the user. The log keeps both, verbatim.
  */
 export function conversationOnly(items: TranscriptItem[]): ConversationItem[] {
-  return items.filter((item): item is ConversationItem => item.kind !== "tool");
+  return items
+    .filter((item): item is ConversationItem => item.kind !== "tool")
+    .map(spoken)
+    .filter((item): item is ConversationItem => item !== undefined);
 }
