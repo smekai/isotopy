@@ -1,5 +1,37 @@
 # Done
 
+## TASK-108: Milestone E — Eigen: the Orchestrator
+**Priority:** P1 | **Tags:** core, server, ui, engine, milestone-e
+**Updated:** 2026-08-07 11:40
+
+**Closed at 0.9.23.** Milestone E gave the product a top-level Orchestrator: an ordinary
+persona whose turn ends in a typed decision rather than a `VERDICT:` line, and which
+brokers questions between the other personas and the user. You describe a goal, it talks
+it through, composes a team from the persona catalog for you to approve, launches the
+composed run, and decides what happens next when that run settles.
+
+Delivered by `TASK-109` (persona + conversational loop), `TASK-110` (dynamic workflow
+composition), `TASK-120` (mandatory question mediation), `TASK-112` (post-run decision
+loop), `TASK-114` (UI — chat, proposal, run timeline), `TASK-121` (the RunService split
+the milestone was built on), and `TASK-117`, whose entry below carries the release verdict:
+verified live on **Cursor (Auto)** and **Codex (gpt-5.6-luna)**, five defects found and
+fixed on the way.
+
+**Why it closes here.** The epic had been holding four tasks it had itself labelled
+*post-MVP*, which is what a milestone must not do — a milestone is its scope. Its
+deferred tail moved out: reusable teams (`TASK-111`), per-persona accumulated context
+(`TASK-113`), per-role engine/model configuration (`TASK-115`) and the full Orchestrator
+UI now belong to **Milestone H — Harmonic**, to be built if prospective users ask for
+them. Milestones are named with mathematical terms from here; E is **Eigen**, the
+characteristic direction.
+
+**Known limits it ships with.** One run per project at a time and a per-project worker
+concurrency of 1 — both inherited from `TASK-110`, both still standing. The design
+question underneath them, whether the Orchestrator should run inside `PipelineWorkflow`
+at all, was answered by shipping: it does, and nothing has yet argued otherwise.
+
+---
+
 ## TASK-117: E2E verification for the orchestrator milestone
 **Priority:** P1 | **Tags:** testing, adapters, engine, ui, milestone-c
 **Updated:** 2026-08-07 10:15
