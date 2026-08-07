@@ -13,10 +13,11 @@ Proven end to end: goal → orchestrator conversation → `propose_team` → **A
 → composed run → post-run review → next decision. Cursor composed one Solo role for a
 trivial page and a four-role team (PM → Developer → QA → PM closeout) for the evolve goal,
 gated at planning, and stopped the initiative with a reasoned summary. QA verified the
-evolved feature through its own Playwright run with screenshots. Codex took the other
-branch — `delegate_milestone_planning` — which launched a planning run that parked on a
-question and resumed on its session. Both engines produced parseable decisions on the
-first turn, every time.
+evolved feature through its own Playwright run with screenshots. Codex closed the same
+loop on its own (`propose_team` → approve → composed Solo run → `stop`) and also took the
+branch Cursor never did — `delegate_milestone_planning`, which launched a planning run
+that parked on a question and resumed on its session. Both engines produced parseable
+decisions on the first turn, every time.
 
 **Five defects found and fixed here:**
 
