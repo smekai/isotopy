@@ -1,6 +1,6 @@
 # Competitor Matrix: ADHD
 
-**Last updated:** August 2026 (added Guild.ai; refreshed CrewAI; added launch resolution)  
+**Last updated:** August 2026 (added Open SWE; added Guild.ai; refreshed CrewAI; added launch resolution)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where ADHD wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -100,7 +100,7 @@
 | Framework | Type | Lifecycle opinion | Local | Use case |
 |-----------|------|-------------------|-------|----------|
 | **Aiki** | Code (TypeScript) | Durable workflows (you design stages) | Yes | Long-running agent pipelines, HITL gates |
-| **LangGraph** | Code (Python) | None (you design graph) | Yes | Custom state machines |
+| **LangGraph** | Code (Python + TypeScript) | None (you design graph) | Yes | Custom state machines |
 | **CrewAI** | Code (Python) | Role-based crews + event-driven Flows | Yes | Rapid multi-agent prototypes → production automations |
 | **AutoGen** | Code (Python) | Conversation-centric | Yes | Research / open-ended tasks |
 | **n8n** | Visual + self-host | Generic automation | Yes | Integrations + AI nodes |
@@ -131,9 +131,16 @@
 | **Cline** | VS Code ext | Medium (plan/act) | Yes | Implementation harness |
 | **SWE-agent** | Headless | High (benchmark-oriented) | Yes | Research / CI harness |
 | **Codex (OpenAI)** | CLI/API | High | Partial | Implementation harness |
+| **Open SWE (LangChain)** | Async bot (Slack / Linear / GitHub) | High ("no confirmation prompts") | Self-hostable, but executes in a remote sandbox | **Rival at the implement stage** — not an adapter |
 | **sandcastle** | TS library | High (sandboxed) | Yes (Docker/Podman/Vercel) | Sandbox/execution layer (build-on candidate) |
 
 **Gap:** Single-task, single-session tools. No cross-stage artifact handoff or workflow dashboard.
+
+**Open SWE note (Aug 2026):** LangChain's *"open-source asynchronous coding agent"* — MIT, ~11k stars, Python core (TypeScript UI/desktop app), built on LangGraph plus the `deepagents` harness. The most product-like thing in the langchain-ai org and the only one that touches our loop. You never open an editor: mention `@openswe` in a Slack thread, comment it on a Linear issue, or tag it in a GitHub PR comment; it clones the repo into an isolated cloud sandbox (Modal, Daytona, Runloop, E2B or LangSmith — pluggable, or bring your own), works autonomously with ~15 curated tools, and opens a **draft PR** linked back to the ticket. Each thread keeps a persistent sandbox that auto-recreates if unreachable; tasks run in parallel with no queuing. Subagents can fan out via a `task` tool, and deterministic middleware hooks fire pre-model and post-agent.
+
+**Why it is not us:** one agent per ticket, not a pipeline. No prepared professions, no requirements/design/review stages, no cross-stage artifact handoff, no Playwright E2E in the loop, no deploy adapters, no visual run control, no restart-one-stage. **The draft PR is the only gate** — the README says plainly it runs with "no production access, no confirmation prompts", so oversight is review-after, not approve-between. Nor is it local-first in our sense: self-hosting is documented (your own LangGraph API server, or LangGraph Platform self-host), but the unit of execution is a **remote Linux sandbox**, and local development needs `ngrok` plus a GitHub App. LangChain concedes it is not turnkey.
+
+**Why it matters anyway:** it owns the *"file a ticket, get a PR while you do something else"* story — the front half of Full Delivery — with LangChain's distribution behind it, and it validates the same primitives we build on (per-task isolation, parallel runs, pluggable execution backends, harness-agnostic middleware). **Threat vector:** it grows *backwards* into spec/design or *forwards* into test-and-deploy and lands in §1. **Positioning response:** ours is a pipeline you watch and restart stage-by-stage on your own machine; theirs is a fire-and-forget teammate in Slack whose sandbox lives in someone else's cloud. Note the harness relationship is competitive rather than complementary — unlike Claude Code or Codex, Open SWE wants to own the sandbox, the branch and the PR, so it is not an adapter candidate. Runtime evaluation of its LangGraph substrate is a separate question, settled in [`workflow-runtime-options.md`](workflow-runtime-options.md).
 
 **sandcastle note:** Not a competitor — the **closest-fit build-on candidate for our implementation-stage adapter**. A TypeScript library (`sandcastle.run()`) that runs a coding agent in an isolated sandbox and merges commits back: pluggable sandbox providers (Docker, Podman, Vercel Firecracker VMs), git-worktree isolation, branch strategies, session capture/resume, typed structured-output extraction, TUI, and lifecycle hooks — provider-agnostic (Claude Code, Codex, Cursor, etc.). It has **no SDLC stages, no requirements/design/review, no Playwright, no deploy, no visual run control, no v1→evolution story** — orchestration on top is *our* value. Same TS stack as us, so it directly covers several "required" rows below (worktree isolation, harness adapter, session resume). See TASK-036: evaluate wrapping `sandcastle.run()` for the implement stage vs. building the subprocess harness (TASK-006) ourselves.
 
@@ -225,6 +232,7 @@ Low abstraction                             High abstraction
    - **sandcastle** — sandbox/worktree execution primitive for the implement stage (same TS stack; candidate to wrap rather than rebuild)
    - **beads** — dependency-aware task graph + "ready work" detection + semantic compaction for the repo-native backlog
    - **Artel (NicolasPrimeau/artel)** — ambient shared memory, archivist compaction of session captures, session handoffs, confidence decay; coordination layer under the pipeline, not a substitute for it
+   - **Open SWE** — pluggable execution backends behind one interface, per-task sandboxes that auto-recreate, and middleware hooks around the agent call as the extension seam
 
 4. **MVP wedge:** "Capture tasks in repo-native backlog, run a feature through requirements → design → implement → review → test (Playwright E2E) → release → deploy" on your machine, with one-click restart of any stage.
 
@@ -242,6 +250,7 @@ Low abstraction                             High abstraction
 | Frameworks to build agents | CrewAI, LangGraph | No — DIY libraries, no prepared dev team, no harness adapters |
 | Horizontal agent workforce | Paperclip | No — org chart and budgets, explicitly not pull requests |
 | Coding harnesses | Claude Code, Cursor, Codex | No — single-session tools; they are our adapters |
+| Async ticket→PR agents | Open SWE, Codegen, Copilot coding agent | No — one PR per ticket, no lifecycle stages, no E2E or deploy |
 | **Local, ready AI dev team running a full delivery pipeline** | **Unclaimed** | **This is us** |
 
 Three reasons the timing argument favors launching, not waiting:
@@ -284,4 +293,5 @@ Three reasons the timing argument favors launching, not waiting:
 | Artel | https://github.com/NicolasPrimeau/artel |
 | Manifold | https://github.com/intelligencedev/manifold |
 | LangGraph | https://langchain.com/langgraph |
+| Open SWE | https://github.com/langchain-ai/open-swe |
 | OpenHands | https://www.openhands.dev |
