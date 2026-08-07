@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { isTerminalRunStatus, orchestrationStatusFor } from "@adhd/core";
+import {
+  agentForStage,
+  isTerminalRunStatus,
+  orchestrationStatusFor,
+} from "@adhd/core";
 import type {
   Orchestration,
   OrchestrationStatus,
@@ -35,6 +39,7 @@ import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
+import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
 import type { InheritedRunOptions } from "./run/run-options.ts";
 import { OrchestratorRequiredError } from "../domain/orchestrator-required-error.ts";
@@ -201,17 +206,17 @@ export class OrchestrationService implements StageOutputConsumer {
     run: RunState,
     stageDef: StageDefinition,
     output: string,
-  ): Promise<void> {
+  ): Promise<StageOutputRejection | undefined> {
     if (
       run.pipelineId !== PIPELINE_ID ||
       stageDef.id !== STAGE_ID ||
       !run.orchestrationId
     ) {
-      return;
+      return undefined;
     }
     const orchestration = this.orchestrations.get(run.orchestrationId);
     if (!orchestration) {
-      return;
+      return undefined;
     }
     const parsed = extractOrchestratorDecision(output);
     if (parsed.ok) {
@@ -224,7 +229,7 @@ export class OrchestrationService implements StageOutputConsumer {
       delete orchestration.decisionError;
       if (parsed.value.action === "stop") {
         await this.terminate(orchestration, parsed.value.reason, run.id);
-        return;
+        return undefined;
       }
       orchestration.status = orchestrationStatusFor(parsed.value);
     } else {
@@ -232,6 +237,11 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
+    return parsed.ok
+      ? undefined
+      : {
+          reason: `${agentForStage(stageDef.id).profession} produced no usable decision — ${orchestration.decisionError}`,
+        };
   }
 
   async stop(projectPath: ProjectPath, orchestrationId: string): Promise<Orchestration> {

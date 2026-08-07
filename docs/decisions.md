@@ -900,3 +900,44 @@ summary and prior-closeout context in `services/milestone-closeout.ts`.
 only closeout. That also removes source-task transitions, run temp cleanup, and the
 written `closeout.md` from every full-delivery run — a product change wearing a
 refactor's clothes.
+
+---
+
+## 2026-08-07 — A consumer that cannot use a stage's output is what fails the stage
+
+**Context:** a `milestone-planning` run on Codex returned prose instead of a fenced
+`adhd-milestone-plan` block. `MilestonePlanConsumer` recorded `approvalError` correctly,
+and the stage still passed — the run completed and the Orchestrator's review reported
+work as delivered. `StageOutputConsumer.consume` returned `Promise<void>`, and consumers
+ran *after* `interpretEngineResult` had already fixed the outcome, so a consumer could not
+influence the status of the stage whose output it had just rejected. The same swallow was
+live on `full-delivery`: its own test fixtures fed the closeout stage prose, and four
+tests asserted a green run over an empty closeout.
+
+**Decision:** `consume` returns `StageOutputRejection | undefined`, and
+`settleStageOutput` turns a rejection into `NEEDS_ATTENTION` with the consumer's reason.
+**Only a `PASSED` outcome is downgraded** — `interpretEngineResult` returns no output for
+three different reasons, and widening past `PASSED` would run the closeout consumer on a
+*crashed* stage and write a "Product Manager produced no closeout text" artifact for a run
+where the agent never returned. Empty output reaches the consumers instead of
+short-circuiting on length, so usability is judged by whoever claims the stage. The
+closeout splits report errors from side-effect errors, and that split is deliberately
+**not persisted** — `RunCloseoutRecord.validationErrors` keeps its exact current content.
+A rejected stage keeps the verdict the agent claimed: the contradiction between a claimed
+`PASS` and a rejected artifact is the evidence a reader wants.
+
+`OrchestrationService.consume` returns a rejection that is unreachable today — a
+`decision`-protocol stage can never arrive at `PASSED` with unparseable output, because
+`interpretDecision` has already caught it. It exists so the seam is uniform; do not go
+looking for the test that covers it.
+
+**Rejected:** a `claims()` predicate on the seam — a second thing to keep in sync with the
+guard already at the top of every `consume`. Persisting `sideEffectErrors` on
+`RunCloseoutRecord` — a core schema change, a `CloseoutPanel` change and every historical
+`closeout.json`, to express something no reader needs. Downgrading inside
+`captureStageOutput` — that would make the run service decide stage outcomes, which is
+`stage-execution`'s job. Failing on task-board or cleanup errors — those are the board's
+problem, not the report's. Treating an omitted source task as fatal — `validateSourceTaskOutcome`
+already repairs it into `unresolvedTaskIds` before recording it, so failing on it would
+turn a complete, correctly-recorded closeout red: this bug with the sign flipped. And
+downgrading `SKIPPED` — an explicit skip is stated intent, not a silent swallow.

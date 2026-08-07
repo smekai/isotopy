@@ -55,6 +55,10 @@ export interface EngineStageOutcome {
   limit?: EngineLimit;
 }
 
+export interface StageOutputRejection {
+  reason: string;
+}
+
 export interface InterpretOptions {
   profession: string;
   canAsk: boolean;

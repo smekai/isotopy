@@ -50,29 +50,6 @@ Cross-platform: opening a folder and starting a process differ per OS; go throug
 
 ---
 
-## TASK-127: A stage must not pass on output no consumer could use
-**Priority:** P1 | **Tags:** server, core, testing, milestone-f
-**Updated:** 2026-08-07 11:40
-
-Found during `TASK-117`, filed rather than fixed there. A `milestone-planning` run on
-Codex produced prose instead of a fenced `adhd-milestone-plan` block.
-`MilestonePlanConsumer` recorded `milestone.approvalError` correctly — and then the stage
-passed, the run completed, and the Orchestrator's review recorded artifacts describing
-work as delivered. The user sees a green run over an empty milestone.
-
-The orchestration path already gets this right: a decision that will not parse yields
-`NEEDS_ATTENTION` in `domain/rules/stage-context.ts`. The consumer path has no equivalent.
-
-**Scope:** give `StageOutputConsumer.consume` a way to report that the output was
-unusable, and have `captureStageOutput` and the workflow turn that into
-`NEEDS_ATTENTION` rather than `PASSED`. Audit every consumer — `closeout-consumer`,
-`stage-output-consumer`, `milestone-plan-consumer`, and `OrchestrationService` — for the
-same swallow. A green run over an empty result is the worst thing a new user can be shown.
-
-Cross-platform: n/a — pure server logic.
-
----
-
 ## TASK-129: Model rosters must not offer ids the user's plan rejects
 **Priority:** P1 | **Tags:** core, engine, server, milestone-f
 **Updated:** 2026-08-07 11:40

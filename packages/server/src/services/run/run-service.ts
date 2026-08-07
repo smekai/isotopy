@@ -33,6 +33,8 @@ import {
 } from "@adhd/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
+import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
+import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
 import { OrchestratorRequiredError } from "../../domain/orchestrator-required-error.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
@@ -697,29 +699,35 @@ export class RunService implements RunProjection {
     runId: string,
     stageDef: StageDefinition,
     output: string,
-  ): Promise<void> {
+  ): Promise<StageOutputRejection | undefined> {
     const run = this.live(runId);
-    if (!run || output.trim() === "") return;
-    run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
-    run.result = output;
-    await this.store.repositoryForRun(runId).writeHandoff(
-      runId,
-      stageDef.id,
-      formatHandoff(
-        {
-          stageLabel: stageDef.label,
-          profession: agentForStage(stageDef.id).profession,
-          engine: this.engineLabel(run),
-          model: run.model,
-          completedAt: nowIso(),
-        },
-        output,
-      ),
-    );
-    for (const consumer of this.stageOutputConsumers) {
-      await consumer.consume(run, stageDef, output);
+    if (!run) return undefined;
+    if (output.trim() !== "") {
+      run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
+      run.result = output;
+      await this.store.repositoryForRun(runId).writeHandoff(
+        runId,
+        stageDef.id,
+        formatHandoff(
+          {
+            stageLabel: stageDef.label,
+            profession: agentForStage(stageDef.id).profession,
+            engine: this.engineLabel(run),
+            model: run.model,
+            completedAt: nowIso(),
+          },
+          output,
+        ),
+      );
     }
+    const rejection = await firstRejectionFrom(
+      this.stageOutputConsumers,
+      run,
+      stageDef,
+      output,
+    );
     void this.store.flushPersist(runId);
+    return rejection;
   }
 
   async captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void> {

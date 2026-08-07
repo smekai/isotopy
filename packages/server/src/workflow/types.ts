@@ -18,6 +18,7 @@ import type {
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 
@@ -90,7 +91,7 @@ export interface RunProjection {
     runId: string,
     stageDef: StageDefinition,
     output: string,
-  ): Promise<void>;
+  ): Promise<StageOutputRejection | undefined>;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
   captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void>;
   runCompleted(runId: string, status: RunCompletionStatus): void;

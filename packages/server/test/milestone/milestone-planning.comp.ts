@@ -6,6 +6,7 @@ import {
   createTestApp,
   get,
   post,
+  stageMessage,
   waitForRunStatus,
   waitForStageStatus,
 } from "../support/harness.ts";
@@ -129,6 +130,32 @@ test("invalid existing task links leave the proposal as a retryable draft", asyn
   expect(approval.body.error).toContain("TASK-404");
   expect(draft.status).toBe("draft");
   expect(draft.approvalError).toContain("TASK-404");
+  ctx.engine.verify();
+});
+
+test("a plan with no fenced block leaves the run needing attention and the milestone unproposed, rather than completing green", async () => {
+  // Anticipate — a turn that reads well and proposes nothing the system can execute.
+  ctx.engine
+    .anticipate({ as: "Product Manager", persona: /# Role: Product Manager/ })
+    .reports("I reckon we should build the planner next, then the dashboard.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const { body: run } = await post<RunState>(ctx.app, "/milestones/plan", {
+    goal: "Plan milestone D",
+  });
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id, "needs_attention");
+  const { body: draft } = await get<Milestone>(
+    ctx.app,
+    `/milestones/${run.milestoneId}`,
+  );
+  expect(stageMessage(finished)).toContain("no usable milestone plan");
+  expect(draft.approvalError).toContain(
+    "Missing fenced adhd-milestone-plan JSON block",
+  );
+  expect(draft.proposal).toBeUndefined();
   ctx.engine.verify();
 });
 

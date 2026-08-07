@@ -337,6 +337,27 @@ test("an api-key connection with no stored key is rejected before a run is creat
   engine.verify();
 });
 
+test("a stage no consumer claims still passes when the agent returns nothing", async () => {
+  // Arrange
+  const { app, engine } = ctx;
+
+  // Anticipate — the Developer finishes cleanly and writes nothing. No consumer
+  // claims this stage, so there is no structured contract for it to break.
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Developer" }).reports("");
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(app, PIPELINE);
+  await approveIntake(app, run.id);
+
+  // Assert
+  const finished = await waitForRunStatus(app, run.id, "completed");
+  expect(stageOf(finished, "implementation").status).toBe("passed");
+  engine.verify();
+});
+
 /** Distinct markers so an assertion can tell the boxes' output apart. */
 const PM_REPORT = "Add a greet function. Done when it prints a greeting. MARKER-PM";
 const DEV_REPORT = "Added greet.js and a smoke check. MARKER-DEVELOPER";

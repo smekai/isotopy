@@ -1,5 +1,6 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { agentForStage } from "@adhd/core";
 import type {
   CleanupResult,
   ProductManagerCloseout,
@@ -20,7 +21,13 @@ import type { ProjectPath } from "../../paths.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
+import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
+
+export interface CloseoutApplication {
+  record: RunCloseoutRecord;
+  reportErrors: string[];
+}
 
 export class CloseoutConsumer implements StageOutputConsumer {
   constructor(private readonly registry: ProjectRegistry) {}
@@ -29,15 +36,22 @@ export class CloseoutConsumer implements StageOutputConsumer {
     run: RunState,
     stageDef: StageDefinition,
     output: string,
-  ): Promise<void> {
+  ): Promise<StageOutputRejection | undefined> {
     if (run.pipelineId !== PIPELINE_ID || stageDef.id !== STAGE_ID) {
-      return;
+      return undefined;
     }
-    run.closeout = await applyProductManagerCloseout(
+    const applied = await applyProductManagerCloseout(
       this.registry.resolve(run.projectId),
       run,
       output,
     );
+    run.closeout = applied.record;
+    if (applied.reportErrors.length === 0) {
+      return undefined;
+    }
+    return {
+      reason: `${agentForStage(stageDef.id).profession} produced no usable closeout — ${applied.reportErrors.join("; ")}`,
+    };
   }
 }
 
@@ -45,17 +59,16 @@ export async function applyProductManagerCloseout(
   projectPath: ProjectPath,
   run: RunState,
   output: string,
-): Promise<RunCloseoutRecord> {
+): Promise<CloseoutApplication> {
   const parsed = parseProductManagerCloseout(output);
-  const validationErrors = [
-    ...parsed.validationErrors,
-    ...validateSourceTaskOutcome(run, parsed.report),
-  ];
+  const review = validateSourceTaskOutcome(run, parsed.report);
+  const reportErrors = [...parsed.validationErrors, ...review.contradictions];
+  const sideEffectErrors: string[] = [];
   const taskBoard = taskBoardFor(projectPath);
   const createdTasks = await taskBoard
     .createFollowUpTasks(run, parsed.report.tasks)
     .catch((error: unknown) => {
-      validationErrors.push(
+      sideEffectErrors.push(
         `Task creation failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       return [];
@@ -63,7 +76,7 @@ export async function applyProductManagerCloseout(
   await taskBoard
     .transitionTasks(parsed.report.completedTaskIds, "Done", run.id)
     .catch((error: unknown) => {
-      validationErrors.push(
+      sideEffectErrors.push(
         `Task transition failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     });
@@ -72,7 +85,7 @@ export async function applyProductManagerCloseout(
     run.id,
     parsed.report,
   ).catch((error: unknown) => {
-    validationErrors.push(
+    sideEffectErrors.push(
       `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
     );
     return {
@@ -84,11 +97,15 @@ export async function applyProductManagerCloseout(
     report: parsed.report,
     createdTasks,
     cleanup,
-    validationErrors,
+    validationErrors: [
+      ...reportErrors,
+      ...review.recoveries,
+      ...sideEffectErrors,
+    ],
     completedAt: nowIso(),
   };
   await persistRunCloseout(projectPath, run, record);
-  return record;
+  return { record, reportErrors };
 }
 
 const PIPELINE_ID = "full-delivery";
