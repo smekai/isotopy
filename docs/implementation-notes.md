@@ -452,8 +452,8 @@ Run history lives in one `node:sqlite` database per project at
 **services → repository → db**: `RunOrchestrator` depends on `RunRepository`
 (`repository/run-repository.ts`), a single concrete class that owns the
 `PersistedRun` shape and coordinates the low-level pieces — a `Database` connection
-plus `RunsTable` / `EventsTable` in `db/`, and the handoff file writer in
-`repository/handoff.ts`. SQLite was chosen over `better-sqlite3`, which fails to
+plus `RunsTable` / `EventsTable` in `db/`, and the handoff file writer that
+`writeHandoff` tracks. SQLite was chosen over `better-sqlite3`, which fails to
 install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23).
 
 - **The `db/` layer knows nothing about `PersistedRun`.** `Database` owns the

@@ -3,7 +3,7 @@ import type { RunState, StageDefinition } from "@adhd/core";
 import { extractMilestonePlan } from "../../schemas/milestone-plan.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
 import { nowIso } from "../../utils/time.ts";
-import type { MilestoneService } from "../milestone/milestone-service.ts";
+import type { MilestoneService } from "../milestone-service.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 
 export class MilestonePlanConsumer implements StageOutputConsumer {

@@ -24,8 +24,7 @@ import { interpretEngineResult } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
-import { loadSkill } from "../services/skills.ts";
-import { loadBundledStepTask } from "../services/bundled-prompts.ts";
+import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
   PipelineWorkflowInput,

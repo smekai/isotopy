@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import nodepath from "node:path";
 import type { RunEvent } from "@adhd/core";
 import { ActiveRunsTable } from "../db/active-runs-table.ts";
 import { Database } from "../db/database.ts";
@@ -9,9 +11,9 @@ import {
 } from "../schemas/run-persistence.ts";
 import type { PersistedRun } from "../schemas/run-persistence.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
+import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils/time.ts";
-import { persistHandoff } from "./handoff.ts";
 
 export type { PersistedRun } from "../schemas/run-persistence.ts";
 
@@ -91,5 +93,20 @@ export class RunRepository {
   async settle(): Promise<void> {
     await Promise.allSettled([...this.handoffs]);
     await this.db.settle();
+  }
+}
+
+async function persistHandoff(
+  path: ProjectPath,
+  runId: string,
+  stageId: string,
+  content: string,
+): Promise<void> {
+  try {
+    const dir = nodepath.join(runsDir(path), runId, stageId);
+    await mkdir(dir, { recursive: true });
+    await writeFile(nodepath.join(dir, "handoff.md"), content);
+  } catch (error) {
+    console.warn(`Failed to write handoff for run ${runId}/${stageId}:`, error);
   }
 }

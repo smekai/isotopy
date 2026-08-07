@@ -7,8 +7,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { composeSkill } from "../src/domain/markdown/skill.ts";
 import { homeProjectPaths, skillsDir, userSkillsDir } from "../src/paths.ts";
-import { loadBundledPersona } from "../src/services/bundled-prompts.ts";
-import { loadSkill } from "../src/services/skills.ts";
+import { loadBundledPersona, loadSkill } from "../src/services/skills.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
 const ADDENDUM = "Always use pnpm, never npm.";

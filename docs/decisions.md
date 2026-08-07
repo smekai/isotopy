@@ -858,3 +858,42 @@ hand.
 **nothing is written to disk on read**. Composition is a pure function; the service only
 reads. A full project replacement stays available for power users, but appending an
 addendum is the default path.
+
+---
+
+## 2026-08-07 — The task board adapter caches where the board is, never what it holds
+
+**Context:** every task-board operation re-probed `<root>/.tasks/config.json` and then
+`<dataDir>/tasks/config.json` before doing anything, so a single closeout paid the
+detection cost four times over.
+
+**Decision:** `TaskBoardAdapter` is a class that resolves the board *location* once and
+keeps it, while `config.json` and the state markdown are re-read on every call. The
+split is deliberate: `.tasks/` is an external directory that a human, TaskPlanner, or
+another agent edits between calls, so a cached `nextId` would hand out IDs that already
+exist. Only a *positive* resolution is remembered — a project with no board is re-probed
+next time, because a project can gain a `.tasks/` directory mid-session.
+
+**Rejected:** caching the parsed `BoardConfig` alongside the location. It halves the
+reads and reintroduces exactly the ID-collision bug that `nextTaskNumber`'s scan of the
+board text exists to defend against.
+
+---
+
+## 2026-08-07 — The Product Manager closeout and the Orchestrator review are two paths, not one
+
+**Context:** with the Orchestrator now deciding what happens after each run, the
+Product Manager closeout stage looked like leftover scaffolding.
+
+**Decision:** keep both. `FULL_DELIVERY_PIPELINE` ends in the `closeout` stage and
+produces a `RunCloseoutRecord`; an Orchestrator-composed pipeline has no closeout stage
+and produces a `RunArtifactRecord` from its review step instead. Consumers merge them at
+`run.closeout?.report ?? run.artifacts?.report`, and the Orchestrator treats a supplied
+closeout as authoritative rather than recomputing it. The file that held both was split
+by owner into `services/run-closeout.ts` and `services/milestone-closeout.ts`, because
+three of its five exports served the Orchestrator path and its name claimed otherwise.
+
+**Rejected:** deleting the `closeout` stage and letting the Orchestrator review be the
+only closeout. That also removes source-task transitions, run temp cleanup, and the
+written `closeout.md` from every full-delivery run — a product change wearing a
+refactor's clothes.

@@ -10,7 +10,7 @@ import { createOrchestrationRoutes } from "./routes/orchestrations.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
 import { createRunRoutes } from "./routes/runs.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
-import type { MilestoneService } from "./services/milestone/milestone-service.ts";
+import type { MilestoneService } from "./services/milestone-service.ts";
 import type { OrchestrationService } from "./services/orchestration-service.ts";
 import type { ProjectRegistry } from "./services/project-registry.ts";
 import type { RunService } from "./services/run/run-service.ts";

@@ -15,39 +15,31 @@ import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,
   UpdateMilestoneFeatureInput,
-} from "../../schemas/request-schemas.ts";
+} from "../schemas/request-schemas.ts";
 import {
   renderMilestonePlanningContext,
   renderMilestoneRevisionContext,
-} from "../../domain/markdown/planning.ts";
-import type { ProjectPath } from "../../paths.ts";
-import { MilestoneRepository } from "../../repository/milestone-repository.ts";
-import { nowIso } from "../../utils/time.ts";
+} from "../domain/markdown/planning.ts";
+import type { ProjectPath } from "../paths.ts";
+import { MilestoneRepository } from "../repository/milestone-repository.ts";
+import { nowIso } from "../utils/time.ts";
 import {
   milestoneCloseoutContext,
   persistMilestoneSummary,
-} from "../product-manager-closeout.ts";
-import type { ProjectRegistry } from "../project-registry.ts";
-import {
-  approveMilestoneTasks,
-  taskBoardPlanningContext,
-} from "../task-board-adapter.ts";
-import type { RunService, StartRunOptions } from "../run/run-service.ts";
-import type { MilestoneServiceDependencies } from "./milestone-options.ts";
-
-export type { MilestoneServiceDependencies } from "./milestone-options.ts";
+} from "./milestone-closeout.ts";
+import type { ProjectRegistry } from "./project-registry.ts";
+import { taskBoardFor } from "./task-board-adapter.ts";
+import type { RunService, StartRunOptions } from "./run/run-service.ts";
 
 export class MilestoneService {
   private readonly milestoneRepositories = new Map<string, MilestoneRepository>();
   private readonly milestones = new Map<string, Milestone>();
   private readonly completingMilestoneRuns = new Set<string>();
-  private readonly registry: ProjectRegistry;
-  private readonly runs: () => RunService;
 
-  constructor({ registry, runs }: MilestoneServiceDependencies) {
-    this.registry = registry;
-    this.runs = runs;
-  }
+  constructor(
+    private readonly registry: ProjectRegistry,
+    private readonly runs: () => RunService,
+  ) {}
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
     for (const milestone of await this.milestoneRepositoryFor(projectPath).loadAll()) {
@@ -185,8 +177,7 @@ export class MilestoneService {
       throw new Error("Milestone has no valid proposal");
     }
     try {
-      const links = await approveMilestoneTasks(
-        projectPath,
+      const links = await taskBoardFor(projectPath).approveMilestoneTasks(
         milestone,
         milestone.proposal,
       );
@@ -407,7 +398,7 @@ export class MilestoneService {
     userContext: string,
     options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
   ): Promise<RunState> {
-    const boardContext = await taskBoardPlanningContext(projectPath);
+    const boardContext = await taskBoardFor(projectPath).planningContext();
     const storedCloseoutContext = await milestoneCloseoutContext(projectPath);
     const priorKnowledge = [...this.milestones.values()]
       .filter(
