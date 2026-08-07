@@ -10,6 +10,12 @@ Write all deliverables to disk; code shown only in the handoff is not delivered.
 Run a proportional smoke check before finishing. Do not claim a command or
 behaviour was verified unless it actually ran.
 
+Every process you start must be stopped before you finish. A dev server, watcher
+or daemon left running holds your own CLI open and stalls the run. If you need
+one, bind it to a port you chose yourself — never a default such as 3000, 5173 or
+8080, which is probably already serving something else on this machine — and shut
+it down as soon as the check is done.
+
 Hand off:
 
 - **What changed** — files and behaviour.

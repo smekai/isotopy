@@ -14,7 +14,7 @@ still costs **zero tokens**.
 | Tier | Cost | What it proves | Where |
 | --- | --- | --- | --- |
 | Free | none | Composer, Setup, persistence, the milestone dashboard, and that run state reaches the status bar / stage focus / live log | `e2e/ui-smoke.spec.ts`, `e2e/run-lifecycle.spec.ts`, `e2e/milestone-dashboard.spec.ts`, first test of `e2e/dev-test-flow.spec.ts` |
-| Seeded | none | Per-stage rendering of a two-box run, from a fabricated `RunState` served by route interception | `e2e/dev-test-flow.spec.ts` |
+| Seeded | none | Per-stage rendering of a two-box run, and the Orchestrator panel, from a fabricated `RunState` / `Orchestration` served by route interception | `e2e/dev-test-flow.spec.ts`, `e2e/orchestration/orchestrator-flow.e2e.ts` |
 | Live | ≈ $0.01 | Canary that the real CLI still integrates | `e2e/live-dev-test.spec.ts` (opt-in) |
 
 ## Running
@@ -110,6 +110,13 @@ is typed as `RunState` from `@adhd/core`, so a change to the run model breaks
    regression guard for TASK-047, where every stage showed `run.result` — which
    holds only the *last* box's output. The fixture sets `result` to the Tester's
    text on purpose, so the bug reappearing fails the test.
+
+**The Orchestrator panel** (`e2e/orchestration/orchestrator-flow.e2e.ts`) is seeded
+the same way, because every orchestration stage spawns a CLI and there is no
+cheaper tier that can render one. Three tests: a proposed team lists its roles
+behind an enabled **Approve & start**; an `awaiting_user` initiative reads
+"Needs your answer" and offers no team; and the run timeline carries the
+initiative's runs on `data-run-id`.
 
 ## Live tier (opt-in)
 

@@ -172,8 +172,8 @@ export const DEFAULT_CURSOR_MODEL = AUTO_MODEL_ID;
 
 export const CODEX_MODEL_OPTIONS: EngineModelOption[] = [
   AUTO_MODEL_OPTION,
-  { id: "gpt-5", label: "GPT-5", hint: "OpenAI flagship" },
-  { id: "gpt-5-mini", label: "GPT-5 Mini", hint: "faster, cheaper" },
+  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "most capable" },
+  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "faster, cheaper" },
 ];
 
 export const DEFAULT_CODEX_MODEL = AUTO_MODEL_ID;
@@ -208,6 +208,8 @@ export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
   codex: {
     "gpt-5-codex": AUTO_MODEL_ID,
     "o4-mini": AUTO_MODEL_ID,
+    "gpt-5": AUTO_MODEL_ID,
+    "gpt-5-mini": AUTO_MODEL_ID,
   },
 };
 

@@ -47,6 +47,13 @@ describe("projectPreferencesUpdateSchema", () => {
     ).toEqual({ ok: true, update: { engineModels: { "claude-code": "opus" } } });
   });
 
+  test("a Codex model a ChatGPT account rejects is migrated to Auto, not carried into a run", () => {
+    expect(parse({ engineModels: { codex: "gpt-5-mini" } })).toEqual({
+      ok: true,
+      update: { engineModels: { codex: "" } },
+    });
+  });
+
   test("unknown top-level fields are rejected", () => {
     expect(parse({ pipelineId: "solo", typo: true }).ok).toBe(false);
   });
