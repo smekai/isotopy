@@ -21,6 +21,7 @@ import type { EngineRunResult } from "../engines/types.ts";
 import { buildContinuationPrompt, buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
+import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
@@ -31,6 +32,7 @@ import type {
   QuestionMediationContext,
   QuestionMediationRequest,
   QuestionMediationResult,
+  RunProjection,
   RunReview,
   RunReviewContext,
   RunReviewRequest,
@@ -436,23 +438,21 @@ export async function runStageWork(
     };
   }
 
-  if (decision.output !== undefined) {
-    await projection.captureStageOutput(runId, stageDef, decision.output);
-  }
-  if (decision.verdict !== undefined) {
-    projection.setVerdict(runId, stageDef.id, decision.verdict);
+  const settled = await settleStageOutput(projection, runId, stageDef, decision);
+  if (settled.verdict !== undefined) {
+    projection.setVerdict(runId, stageDef.id, settled.verdict);
   }
 
   if (
-    decision.outcome === STAGE_OUTCOMES.FAILED ||
-    decision.outcome === STAGE_OUTCOMES.NEEDS_ATTENTION
+    settled.outcome === STAGE_OUTCOMES.FAILED ||
+    settled.outcome === STAGE_OUTCOMES.NEEDS_ATTENTION
   ) {
-    projection.stageFailed(runId, stageDef.id, decision.failureMessage ?? `${profession} failed`);
-  } else if (decision.outcome === STAGE_OUTCOMES.SKIPPED) {
+    projection.stageFailed(runId, stageDef.id, settled.failureMessage ?? `${profession} failed`);
+  } else if (settled.outcome === STAGE_OUTCOMES.SKIPPED) {
     projection.log(runId, stageDef.id, { level: "warn", message: `${profession} reported VERDICT: SKIP` });
     projection.stageSkipped(runId, stageDef.id);
   } else {
-    if (decision.verdict === STAGE_VERDICTS.PASS) {
+    if (settled.verdict === STAGE_VERDICTS.PASS) {
       projection.log(runId, stageDef.id, { level: "pass", message: `${profession} reported VERDICT: PASS` });
     }
     if (!stageDef.gateAfter) {
@@ -463,13 +463,35 @@ export async function runStageWork(
 
   return {
     outcome:
-      decision.outcome === STAGE_OUTCOMES.ASKING
+      settled.outcome === STAGE_OUTCOMES.ASKING
         ? STAGE_OUTCOMES.PASSED
-        : decision.outcome,
-    output: decision.output,
-    verdict: decision.verdict,
+        : settled.outcome,
+    output: settled.output,
+    verdict: settled.verdict,
     sessionId: outcome.sessionId,
     startedAt,
     completedAt: nowIso(),
+  };
+}
+
+async function settleStageOutput(
+  projection: RunProjection,
+  runId: string,
+  stageDef: StageDefinition,
+  decision: EngineStageOutcome,
+): Promise<EngineStageOutcome> {
+  const passing = decision.outcome === STAGE_OUTCOMES.PASSED;
+  const output = decision.output ?? (passing ? "" : undefined);
+  if (output === undefined) {
+    return decision;
+  }
+  const rejection = await projection.captureStageOutput(runId, stageDef, output);
+  if (!passing || !rejection) {
+    return decision;
+  }
+  return {
+    ...decision,
+    outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+    failureMessage: rejection.reason,
   };
 }

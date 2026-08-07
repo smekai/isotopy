@@ -245,10 +245,15 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
   return salvageCloseout(record.data, output.trim());
 }
 
+export interface SourceTaskOutcomeReview {
+  contradictions: string[];
+  recoveries: string[];
+}
+
 export function validateSourceTaskOutcome(
   run: RunState,
   report: ProductManagerCloseout,
-): string[] {
+): SourceTaskOutcomeReview {
   const sourceIds = new Set(run.sourceTaskIds ?? []);
   const reportedIds = [
     ...report.completedTaskIds,
@@ -264,19 +269,22 @@ export function validateSourceTaskOutcome(
   report.unresolvedTaskIds = [
     ...new Set([...unresolved, ...overlap, ...omitted]),
   ];
-  const errors: string[] = [];
+  const contradictions: string[] = [];
   if (overlap.length > 0) {
-    errors.push(
+    contradictions.push(
       `Tasks cannot be both completed and unresolved: ${overlap.join(", ")}`,
     );
   }
   if (unknown.length > 0) {
-    errors.push(`Closeout referenced unknown source tasks: ${unknown.join(", ")}`);
-  }
-  if (omitted.length > 0) {
-    errors.push(
-      `Unclassified source tasks were preserved as unresolved: ${omitted.join(", ")}`,
+    contradictions.push(
+      `Closeout referenced unknown source tasks: ${unknown.join(", ")}`,
     );
   }
-  return errors;
+  const recoveries =
+    omitted.length > 0
+      ? [
+          `Unclassified source tasks were preserved as unresolved: ${omitted.join(", ")}`,
+        ]
+      : [];
+  return { contradictions, recoveries };
 }

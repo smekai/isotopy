@@ -630,6 +630,17 @@ handoff, then hands the output to each consumer — `MilestonePlanConsumer`,
 `CloseoutConsumer`, `OrchestrationService` — instead of branching on `pipelineId`
 for each one. A new aggregate registers a consumer; it does not edit the run service.
 
+**A consumer that cannot use the output is what fails the stage.** `consume` returns
+`StageOutputRejection | undefined`, and `settleStageOutput` in `workflow/stage-execution.ts`
+turns a rejection into `NEEDS_ATTENTION` carrying the consumer's own reason. Three rules
+bound it. Only a `PASSED` outcome is downgraded, so a protocol that already spoke —
+`interpretDecision` on a `decision` stage — keeps its message, and a crashed stage is never
+handed to a consumer. Empty output still reaches the consumers, so *"is this usable"* is
+answered by whoever claims the stage rather than by a length check in the run service; a
+stage no consumer claims is unaffected. And the closeout separates report errors from
+side-effect errors: a report that would not parse fails the stage, while a task-board write
+that failed afterwards is recorded on the record and does not.
+
 **An approved team becomes a pipeline, and the run keeps it.** `composeTeamPipeline`
 validates every `skill` and `stepTask` against the persona and step-task catalogs —
 which is also what stops the Orchestrator composing itself, since neither

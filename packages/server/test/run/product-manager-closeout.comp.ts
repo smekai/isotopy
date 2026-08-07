@@ -90,13 +90,14 @@ test("only the tasks the report calls completed move to Done", async () => {
   await writeTaskBoard(project);
 
   // Act
-  const record = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyProductManagerCloseout(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
   );
 
   // Assert
+  expect(reportErrors).toEqual([]);
   expect(record.validationErrors).toEqual([]);
   expect(record.createdTasks).toMatchObject([{ id: "TASK-003", backend: "taskplanner" }]);
   expect(await readFile(path.join(project.root, ".tasks", "DONE.md"), "utf8"))
@@ -122,7 +123,7 @@ test("cleanup deletes inside the run directory and refuses to escape it", async 
   await writeFile(path.join(project.root, "user-work.txt"), "preserve");
 
   // Act
-  const record = await applyProductManagerCloseout(
+  const { record } = await applyProductManagerCloseout(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
@@ -148,7 +149,7 @@ test("closing the same run out twice does not file the follow-up task again", as
   await applyProductManagerCloseout(project, run, output);
 
   // Act
-  const second = await applyProductManagerCloseout(project, run, output);
+  const { record: second } = await applyProductManagerCloseout(project, run, output);
 
   // Assert
   expect(second.createdTasks).toEqual([]);
@@ -189,15 +190,40 @@ test("keeps findings and follow-up tasks when the agent writes a hyphenated seve
   };
 
   // Act
-  const record = await applyProductManagerCloseout(project, run, closeoutOutput(report, "PASS"));
+  const { record, reportErrors } = await applyProductManagerCloseout(
+    project,
+    run,
+    closeoutOutput(report, "PASS"),
+  );
 
   // Assert — the agent boundary normalises the prose the model wrote.
+  expect(reportErrors).toEqual([]);
   expect(record.validationErrors).toEqual([]);
   expect(record.report.findings).toMatchObject([{ severity: "non_blocking" }]);
   expect(record.createdTasks).toMatchObject([{ id: "TASK-003", backend: "taskplanner" }]);
   expect(
     await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8"),
   ).toContain("Fix the dashboard spacing");
+});
+
+test("a task-board failure is recorded in the closeout without making the report unusable", async () => {
+  // Arrange — a board whose config cannot be parsed, so creating tasks throws.
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  const tasksDir = path.join(project.root, ".tasks");
+  await mkdir(tasksDir, { recursive: true });
+  await writeFile(path.join(tasksDir, "config.json"), "{ not json");
+
+  // Act
+  const { record, reportErrors } = await applyProductManagerCloseout(
+    project,
+    run,
+    closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
+  );
+
+  // Assert — the report parsed fine; only the side effect broke.
+  expect(reportErrors).toEqual([]);
+  expect(record.validationErrors.join("\n")).toContain("Task creation failed");
 });
 
 /** An empty project root, swept by the afterEach above. */

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { productManagerCloseoutSchema } from "@adhd/core";
-import { parseProductManagerCloseout } from "../../src/domain/rules/closeout.ts";
+import type { ProductManagerCloseout, RunState } from "@adhd/core";
+import {
+  parseProductManagerCloseout,
+  validateSourceTaskOutcome,
+} from "../../src/domain/rules/closeout.ts";
 
 const VALID_CLOSEOUT = {
   summary: "Delivered the feature.",
@@ -96,3 +100,58 @@ describe("parseProductManagerCloseout", () => {
     );
   });
 });
+
+describe("validateSourceTaskOutcome", () => {
+  it("treats a source task the report never classified as a recovery, since it is repaired in place", () => {
+    const report = closeoutFor({ completedTaskIds: ["TASK-001"] });
+
+    const review = validateSourceTaskOutcome(
+      runWithSourceTasks(["TASK-001", "TASK-002"]),
+      report,
+    );
+
+    expect(review.contradictions).toEqual([]);
+    expect(review.recoveries).toEqual([
+      "Unclassified source tasks were preserved as unresolved: TASK-002",
+    ]);
+    expect(report.unresolvedTaskIds).toEqual(["TASK-002"]);
+  });
+
+  it("treats a task listed as both completed and unresolved as a contradiction", () => {
+    const review = validateSourceTaskOutcome(
+      runWithSourceTasks(["TASK-001"]),
+      closeoutFor({ completedTaskIds: ["TASK-001"], unresolvedTaskIds: ["TASK-001"] }),
+    );
+
+    expect(review.contradictions).toEqual([
+      "Tasks cannot be both completed and unresolved: TASK-001",
+    ]);
+    expect(review.recoveries).toEqual([]);
+  });
+
+  it("treats a task the run never carried as a contradiction", () => {
+    const review = validateSourceTaskOutcome(
+      runWithSourceTasks(["TASK-001"]),
+      closeoutFor({ completedTaskIds: ["TASK-001", "TASK-404"] }),
+    );
+
+    expect(review.contradictions).toEqual([
+      "Closeout referenced unknown source tasks: TASK-404",
+    ]);
+  });
+});
+
+function runWithSourceTasks(sourceTaskIds: string[]): RunState {
+  return { sourceTaskIds } as RunState;
+}
+
+function closeoutFor(
+  overrides: Partial<ProductManagerCloseout> = {},
+): ProductManagerCloseout {
+  return {
+    ...VALID_CLOSEOUT,
+    findings: [],
+    completedTaskIds: overrides.completedTaskIds ?? [],
+    unresolvedTaskIds: overrides.unresolvedTaskIds ?? [],
+  } as ProductManagerCloseout;
+}

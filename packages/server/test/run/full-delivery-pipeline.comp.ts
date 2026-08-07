@@ -3,6 +3,7 @@ import {
   approveIntake,
   createTestApp,
   post,
+  stageMessage,
   stageOf,
   startRun,
   waitForRunStatus,
@@ -19,7 +20,52 @@ const PLAN = "Approved milestone progress scope";
 const IMPLEMENTATION = "Implemented milestone progress";
 const REVIEW_PASS = "No blocking findings\n\nVERDICT: PASS";
 const QA_PASS = "All required checks pass\n\nVERDICT: PASS";
-const CLOSEOUT = "Captured decisions and follow-up work\n\nVERDICT: PASS";
+
+interface CloseoutReport {
+  summary: string;
+  deliveredScope: string[];
+  decisions: string[];
+  knowledge: string[];
+  findings: { id: string; title: string; severity: string; evidence: string }[];
+  tasks: never[];
+  completedTaskIds: never[];
+  unresolvedTaskIds: never[];
+  cleanup: never[];
+}
+
+function closeoutReport(overrides: Partial<CloseoutReport> = {}): CloseoutReport {
+  return {
+    summary: overrides.summary ?? "Captured decisions and follow-up work",
+    deliveredScope: overrides.deliveredScope ?? ["Milestone progress"],
+    decisions: overrides.decisions ?? ["Kept the existing stage seam"],
+    knowledge: overrides.knowledge ?? ["Full Delivery runs nine boxes"],
+    findings: overrides.findings ?? [],
+    tasks: [],
+    completedTaskIds: [],
+    unresolvedTaskIds: [],
+    cleanup: [],
+  };
+}
+
+function closeoutBlock(report: CloseoutReport): string {
+  return `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: PASS`;
+}
+
+const CLOSEOUT = closeoutBlock(closeoutReport());
+
+const CLOSEOUT_AFTER_CRASH = closeoutBlock(
+  closeoutReport({
+    summary: "Recorded the runtime failure",
+    findings: [
+      {
+        id: "qa-crash",
+        title: "QA runner crashed before reporting",
+        severity: "blocking",
+        evidence: "test runner crashed",
+      },
+    ],
+  }),
+);
 
 let ctx: TestApp;
 
@@ -113,7 +159,7 @@ test("an engine failure skips unsafe work but still runs closeout", async () => 
   ctx.engine.anticipate({ as: "QA Engineer" }).fails("test runner crashed");
   ctx.engine
     .anticipate({ as: "Product Manager closeout" })
-    .reports("Recorded the runtime failure\n\nVERDICT: PASS");
+    .reports(CLOSEOUT_AFTER_CRASH);
   ctx.engine.anticipateRunReview();
 
   // Act
@@ -138,7 +184,7 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
   ctx.engine.anticipate({ as: "QA Engineer, first" }).fails("test runner crashed");
   ctx.engine
     .anticipate({ as: "Product Manager closeout, first" })
-    .reports("Recorded the runtime failure\n\nVERDICT: PASS");
+    .reports(CLOSEOUT_AFTER_CRASH);
   ctx.engine.anticipateRunReview({ as: "Review of the failed pass" });
   const run = await startRun(ctx.app, PIPELINE);
   await approveIntake(ctx.app, run.id);
@@ -159,6 +205,49 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
   expect(stageOf(finished, "release").status).toBe("skipped");
   expect(stageOf(finished, "deploy").status).toBe("skipped");
   expect(stageOf(finished, "closeout").status).toBe("passed");
+  ctx.engine.verify();
+});
+
+test("a closeout the Product Manager wrote as prose leaves the run needing attention, not completed", async () => {
+  // Anticipate — a closeout that reads like a report and carries no closeout block.
+  anticipatePlanningAndImplementation();
+  ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
+  ctx.engine.anticipate({ as: "Release Manager" }).reports("Release checklist ready\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "SRE" }).reports("No preview target\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({ as: "Product Manager closeout" })
+    .reports("Captured decisions and follow-up work\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(ctx.app, PIPELINE);
+  await approveIntake(ctx.app, run.id);
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id, "needs_attention");
+  expect(stageOf(finished, "closeout").status).toBe("failed");
+  expect(stageMessage(finished)).toContain("no usable closeout");
+  ctx.engine.verify();
+});
+
+test("a closeout stage that returns nothing at all needs attention rather than passing on silence", async () => {
+  // Anticipate — the Product Manager finishes cleanly and says nothing.
+  anticipatePlanningAndImplementation();
+  ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
+  ctx.engine.anticipate({ as: "Release Manager" }).reports("Release checklist ready\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "SRE" }).reports("No preview target\n\nVERDICT: SKIP");
+  ctx.engine.anticipate({ as: "Product Manager closeout" }).reports("");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(ctx.app, PIPELINE);
+  await approveIntake(ctx.app, run.id);
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id, "needs_attention");
+  expect(stageOf(finished, "closeout").status).toBe("failed");
   ctx.engine.verify();
 });
 

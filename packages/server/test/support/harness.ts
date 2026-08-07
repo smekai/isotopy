@@ -384,6 +384,13 @@ export function stageOf(run: RunState, stageId: string) {
   return stage;
 }
 
+/** Every stage log flattened into one string, for asserting on a failure reason. */
+export function stageMessage(run: RunState): string {
+  return run.stages
+    .flatMap((stage) => stage.logs.map((entry) => entry.message))
+    .join("\n");
+}
+
 /**
  * Table names in one of a project's SQLite files. Read-only and opened fresh, so
  * it never competes with the connections the app holds — which is the whole
