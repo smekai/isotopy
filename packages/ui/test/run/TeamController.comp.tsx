@@ -14,19 +14,40 @@ afterEach(() => {
 });
 
 test("a run parked on an agent question can still be aborted", () => {
+  // Arrange
+  const props = controllerProps({ run: run([stage("design")], "asking") });
+  render(<TeamController {...props} />);
+
   // Act
-  render(<TeamController {...controllerProps({ run: run([stage("design")], "asking") })} />);
+  fireEvent.click(screen.getByTestId("abort-run"));
 
   // Assert
-  expect(screen.getByTestId("abort-run")).toBeTruthy();
+  expect(props.onAbort).toHaveBeenCalled();
 });
 
 test("a run that has not started a stage yet can still be aborted", () => {
+  // Arrange
+  const props = controllerProps({ run: run([stage("design")], "pending") });
+  render(<TeamController {...props} />);
+
   // Act
-  render(<TeamController {...controllerProps({ run: run([stage("design")], "pending") })} />);
+  fireEvent.click(screen.getByTestId("abort-run"));
 
   // Assert
-  expect(screen.getByTestId("abort-run")).toBeTruthy();
+  expect(props.onAbort).toHaveBeenCalled();
+});
+
+test("aborting a run inside an initiative leaves the initiative running", () => {
+  // Arrange
+  const props = controllerProps({ initiative: { busy: false, onStop: vi.fn() } });
+  render(<TeamController {...props} />);
+
+  // Act
+  fireEvent.click(screen.getByTestId("abort-run"));
+
+  // Assert
+  expect(props.onAbort).toHaveBeenCalled();
+  expect(props.initiative?.onStop).not.toHaveBeenCalled();
 });
 
 test("a finished run offers no abort, since there is nothing left to stop", () => {

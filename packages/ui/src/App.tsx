@@ -328,6 +328,13 @@ export function App() {
     } catch {}
   }
 
+  function handleStopInitiative() {
+    if (!activeOrchestration) {
+      return;
+    }
+    void orchestration.stop(activeOrchestration.id);
+  }
+
   async function handleRestart(runId: string, stageId: string) {
     setError(null);
     try {
@@ -367,15 +374,12 @@ export function App() {
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
-    onStop: () => void orchestration.stop(activeOrchestration.id),
+    onStop: handleStopInitiative,
     onOpenRun: attachRun,
   };
   const liveInitiative: LiveInitiative | undefined =
     activeOrchestration && activeOrchestration.status !== "stopped"
-      ? {
-          busy: orchestration.busy,
-          onStop: () => void orchestration.stop(activeOrchestration.id),
-        }
+      ? { busy: orchestration.busy, onStop: handleStopInitiative }
       : undefined;
   const banner =
     error ??
