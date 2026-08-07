@@ -1,5 +1,60 @@
 # Done
 
+## TASK-117: E2E verification for the orchestrator milestone
+**Priority:** P1 | **Tags:** testing, adapters, engine, ui, milestone-c
+**Updated:** 2026-08-07 10:15
+
+**Verdict: Milestone E's orchestrator MVP ships at 0.9.23.** Driven from the internal
+browser against two live harnesses — **Cursor (Auto)** and **Codex (gpt-5.6-luna)** —
+across a throwaway smoke project per engine and a persistent dogfood repo
+(`adhd-testbed/dogfood`, a Vite+TS focus timer the team built and then evolved).
+
+Proven end to end: goal → orchestrator conversation → `propose_team` → **Approve & start**
+→ composed run → post-run review → next decision. Cursor composed one Solo role for a
+trivial page and a four-role team (PM → Developer → QA → PM closeout) for the evolve goal,
+gated at planning, and stopped the initiative with a reasoned summary. QA verified the
+evolved feature through its own Playwright run with screenshots. Codex took the other
+branch — `delegate_milestone_planning` — which launched a planning run that parked on a
+question and resumed on its session. Both engines produced parseable decisions on the
+first turn, every time.
+
+**Five defects found and fixed here:**
+
+1. **An orchestrator question was dropped on any non-resumable engine.** `canAsk` required
+   `isConversational`, so on Cursor an `ask_user` decision made the stage *pass* while the
+   initiative moved to `awaiting_user` — pointing the user at a run that was already over.
+   Asking is now a stage property; session resume only decides how the next turn is
+   delivered (bare answer with a session, `buildContinuationPrompt` replaying the exchange
+   without one). `conversational`/`isConversational` deleted. Verified live: Cursor parked,
+   was answered from the Chat tab, and its next turn cited the answer.
+2. **A stage hung indefinitely when an agent left a process behind.** A Developer smoke
+   checking its work ran `pnpm dev`; the CLI exited but the dev server held the inherited
+   stdout pipe, so `close` never fired and `runSubprocess` waited past the ten-minute
+   timeout on a promise nothing would resolve. Now settles on `exit` with a flush grace.
+3. **`killProcessTree` did not kill the tree on POSIX** — only the direct child. Children
+   now get their own process group and the signal goes to the group.
+4. **Codex offered models a ChatGPT account rejects.** `gpt-5`/`gpt-5-mini` 400 with "not
+   supported when using Codex with a ChatGPT account"; retired to Auto via the legacy-alias
+   path and replaced with `gpt-5.6-sol` / `gpt-5.6-luna`.
+5. **Protocol blocks leaked into the user-facing chat** — a whole `propose_team` JSON blob
+   rendered above the same question shown properly. `conversationOnly` strips machinery
+   fences; the log still keeps them verbatim.
+
+Plus a step-task rule — stop every process you start, never bind a default port — which the
+next QA stage visibly obeyed (chose 4177, killed it before finishing).
+
+**Filed, not fixed:** a stage whose output no consumer can parse still reports `passed`.
+A Codex planning run produced prose instead of a plan block; `approvalError` was recorded
+correctly, but the run read green over an empty milestone.
+
+Coverage added: seeded orchestrator e2e (`e2e/orchestration/orchestrator-flow.e2e.ts`),
+component tests for asking and continuing on a non-resumable engine, a subprocess-lifetime
+spec, and transcript/preferences unit tests. Gates green: lint, typecheck, 548 tests,
+build, 59 e2e. Decisions in `docs/decisions.md`; subprocess "why" in
+`docs/implementation-notes.md`. Version 0.9.23.
+
+---
+
 ## TASK-123: Stop controls for a live pipeline in the UI
 **Priority:** P1 | **Tags:** ui
 **Updated:** 2026-08-06 22:50
