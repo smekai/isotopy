@@ -25,6 +25,7 @@ import { RunTabs } from "./components/run/RunTabs";
 import { SetupModal } from "./components/setup/SetupModal";
 import type { SetupSection } from "./components/setup/SetupModal";
 import { TeamController } from "./components/TeamController";
+import type { LiveInitiative } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useMilestones } from "./hooks/useMilestones";
@@ -327,6 +328,13 @@ export function App() {
     } catch {}
   }
 
+  function handleStopInitiative() {
+    if (!activeOrchestration) {
+      return;
+    }
+    void orchestration.stop(activeOrchestration.id);
+  }
+
   async function handleRestart(runId: string, stageId: string) {
     setError(null);
     try {
@@ -366,9 +374,13 @@ export function App() {
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
-    onStop: () => void orchestration.stop(activeOrchestration.id),
+    onStop: handleStopInitiative,
     onOpenRun: attachRun,
   };
+  const liveInitiative: LiveInitiative | undefined =
+    activeOrchestration && activeOrchestration.status !== "stopped"
+      ? { busy: orchestration.busy, onStop: handleStopInitiative }
+      : undefined;
   const banner =
     error ??
     runError ??
@@ -488,6 +500,7 @@ export function App() {
         d={d}
         run={run}
         pipeVs={pipeVs}
+        initiative={liveInitiative}
         onCycleVoice={() => setPipeVs((v) => cycleVS(v))}
         onApprove={() => awaitingStage && void handleApprove(awaitingStage.id)}
         onAbort={() => void handleAbort()}

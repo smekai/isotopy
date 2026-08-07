@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Play, RotateCcw, Square, UserCheck } from "lucide-react";
+import { CircleStop, Play, RotateCcw, Square, UserCheck } from "lucide-react";
 import { isTerminalRunStatus } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import { useElapsed } from "../hooks/useElapsed";
@@ -112,7 +112,7 @@ const APPROVE_BUTTON: CSSProperties = {
   boxShadow: "0 2px 8px rgba(217,119,6,0.30)",
 };
 
-const RESUME_BUTTON: CSSProperties = {
+const ALERT_BUTTON: CSSProperties = {
   ...ACTION_BASE,
   background: "rgba(220,38,38,0.08)",
   color: FAIL_RED,
@@ -144,10 +144,16 @@ function newRunButton(d: Dir): CSSProperties {
   };
 }
 
+export interface LiveInitiative {
+  busy: boolean;
+  onStop: () => void;
+}
+
 export interface TeamControllerProps {
   d: Dir;
   run: RunState | null;
   pipeVs: VoiceState;
+  initiative?: LiveInitiative;
   onCycleVoice: () => void;
   onApprove: () => void;
   onAbort: () => void;
@@ -156,7 +162,7 @@ export interface TeamControllerProps {
 }
 
 export function TeamController({
-  d, run, pipeVs, onCycleVoice, onApprove, onAbort, onRestart, onNewRun,
+  d, run, pipeVs, initiative, onCycleVoice, onApprove, onAbort, onRestart, onNewRun,
 }: TeamControllerProps) {
   const elapsed = useElapsed(run?.createdAt, run?.completedAt);
   const resumeId = run && (
@@ -200,15 +206,23 @@ export function TeamController({
           </button>
         )}
         {resumeId && resumeLabel && (
-          <button onClick={() => onRestart(resumeId)} style={RESUME_BUTTON}>
+          <button onClick={() => onRestart(resumeId)} style={ALERT_BUTTON}>
             <RotateCcw size={ICON.sm} /> Resume from {resumeLabel}
           </button>
         )}
-        {(run?.status === "running" ||
-          run?.status === "awaiting" ||
-          run?.status === "blocked") && (
-          <button onClick={onAbort} style={abortButton(d)}>
+        {run && !terminal && (
+          <button onClick={onAbort} data-testid="abort-run" style={abortButton(d)}>
             <Square size={ICON.sm} /> Abort
+          </button>
+        )}
+        {initiative && (
+          <button
+            onClick={initiative.onStop}
+            disabled={initiative.busy}
+            data-testid="stop-initiative"
+            style={ALERT_BUTTON}
+          >
+            <CircleStop size={ICON.sm} /> Stop initiative
           </button>
         )}
         {terminal && (

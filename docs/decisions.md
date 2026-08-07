@@ -15,6 +15,28 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-06 — Stopping is two levels, and both live in the bottom bar
+
+**Context:** the server has had both kill switches since the Orchestrator landed —
+`POST /runs/:id/abort` and `POST /orchestrations/:id/stop`, the latter aborting the
+orchestration's non-terminal runs. The UI exposed neither reliably. Abort rendered only
+for `running | awaiting | blocked`, so the two states a user is most likely to walk away
+from — `pending` and `asking` — offered no way out, and the initiative-level stop was
+buried in the Orchestrator tab.
+
+**Decision:** the bottom bar is the surface that answers "how do I stop this?", because it
+is the only always-visible chrome. Abort is offered for **every** non-terminal run status,
+derived from `isTerminalRunStatus` rather than a hand-listed set that a new status can
+silently fall out of. Beside it, **Stop initiative** appears whenever the attached run
+belongs to an orchestration that is not stopped — including after that run settles, since
+a live Orchestrator will otherwise start the next one. Two controls, because aborting a
+run inside an initiative is a legitimate act that leaves the supervisor running.
+
+**Rejected:** a single stop button that guesses the level from context — it makes the
+broader, irreversible action the accidental one.
+
+---
+
 ## 2026-08-06 — RunService split, and stage logs live only in events
 
 **Context:** `RunOrchestrator` had grown past 1700 lines and its name collided with
