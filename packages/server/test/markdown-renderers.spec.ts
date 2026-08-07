@@ -14,7 +14,7 @@ import {
   renderMilestoneRevisionContext,
   renderPriorMilestoneCloseouts,
 } from "../src/domain/markdown/planning.ts";
-import { buildStagePrompt } from "../src/domain/markdown/stage.ts";
+import { buildContinuationPrompt, buildStagePrompt } from "../src/domain/markdown/stage.ts";
 
 const CLOSEOUT: ProductManagerCloseout = {
   summary: "Delivered\r\ncleanly.",
@@ -146,6 +146,34 @@ describe("prompt Markdown", () => {
         "## Handoff from previous steps\n\n" +
         "These are reports from the boxes that ran before you, in order. They describe intent — the working directory is the source of truth. Verify rather than assume.\n\n" +
         "### Software Architect\n\nReview\nnotes",
+    );
+  });
+
+  it("replays every exchange after the original assignment when a session cannot be resumed", () => {
+    expect(
+      buildContinuationPrompt({
+        task: "Build\r\nthis",
+        upstream: [],
+        stepTask: "Implement carefully",
+        exchanges: [
+          {
+            output: "Started.\r\n",
+            question: "Which database?",
+            answer: "Postgres",
+          },
+          { question: "Which table?", answer: "settings" },
+        ],
+      }),
+    ).toBe(
+      "## Step task\n\nImplement carefully\n\n" +
+        "## Task\n\nBuild\nthis\n\n" +
+        "## Conversation so far\n\n" +
+        "You already worked on this stage and stopped to ask. Your CLI cannot resume its own session, so the exchange is replayed below. Continue from it — do not start the stage over.\n\n" +
+        "### Your turn 1 response\n\nStarted.\n\n" +
+        "### What you asked on turn 1\n\nWhich database?\n\n" +
+        "### The answer you were given\n\nPostgres\n\n" +
+        "### What you asked on turn 2\n\nWhich table?\n\n" +
+        "### The answer you were given\n\nsettings",
     );
   });
 

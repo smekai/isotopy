@@ -15,6 +15,32 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-07 — Asking is a stage property; resuming is an engine one
+
+**Context:** `canAsk` required `isConversational(engine)`, and only Claude Code and Codex
+were declared conversational because only they can resume a CLI session. The consequence
+was silent and bad: on Cursor an `ask_user` decision was *dropped* by
+`interpretDecision` — the orchestrate stage passed, `orchestrationStatusFor` still moved
+the initiative to `awaiting_user`, and the run that should have held the question was
+already finished. The UI then offered "Answer in the Chat tab" against a terminal run.
+An initiative could reach a state with no exit but Stop. TASK-117 found this before the
+first Cursor run, not after.
+
+**Decision:** whether an agent may stop and ask is a property of the **stage**
+(`interactive`, bounded by `maxTurns`) — never of the engine. Session resume is an engine
+capability and now affects only *how* the next turn is delivered: with a session id the
+answer is sent bare, as before; without one the stage is re-prompted with
+`buildContinuationPrompt`, which replays the assignment plus every question and answer so
+far. The `conversational` flag and `isConversational` are deleted rather than left as a
+field nothing branches on.
+
+**Rejected:** refusing to start an orchestration on a non-conversational engine. It would
+have made the dead end loud instead of silent, but it also concedes a third of the engine
+roster for a limitation that costs one prompt-builder to work around — and it would have
+kept "can resume" and "may ask" fused, which is the actual modelling error.
+
+---
+
 ## 2026-08-06 — Stopping is two levels, and both live in the bottom bar
 
 **Context:** the server has had both kill switches since the Orchestrator landed —

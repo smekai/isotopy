@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type {
+  EngineId,
   Orchestration,
   OrchestratorDecision,
   OrchestratorTeamProposal,
@@ -124,6 +125,45 @@ test("answering the parked question resumes the same session and records both tu
 
   // Arrange
   const run = await startOrchestration();
+  await waitForStageStatus(ctx.app, run.id, "orchestrate", "asking");
+
+  // Act
+  await post(ctx.app, `/runs/${run.id}/messages`, { text: "Postgres" });
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${run.orchestrationId}`,
+  );
+  expect(orchestration).toMatchObject({
+    status: "awaiting_approval",
+    latestDecision: { action: "propose_team" },
+  });
+  expect(orchestration.turns.map((turn) => turn.decision.action)).toEqual([
+    "ask_user",
+    "propose_team",
+  ]);
+  ctx.engine.verify();
+});
+
+test("an Orchestrator on a CLI that cannot resume still parks, and continues from the replayed conversation", async () => {
+  // Arrange — Cursor's CLI has no session to hand back, so every turn starts cold.
+  await ctx.dispose();
+  ctx = await createTestApp({ engineId: "cursor" });
+
+  // Anticipate — the second turn must carry the goal, the question, and the answer,
+  // because there is no session holding any of them.
+  ctx.engine
+    .anticipate({ as: "Orchestrator question", persona: /# Role: Orchestrator/ })
+    .reports(fenced({ action: "ask_user", question: "Which database?" }));
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator proposal",
+      prompt: /^(?=[\s\S]*Add search to the product)(?=[\s\S]*Which database\?)(?=[\s\S]*Postgres)/,
+    })
+    .reports(fenced(TEAM_PROPOSAL));
+  const run = await startOrchestration("cursor");
   await waitForStageStatus(ctx.app, run.id, "orchestrate", "asking");
 
   // Act
@@ -855,10 +895,10 @@ async function proposedTeam(): Promise<RunState> {
   return conversation;
 }
 
-async function startOrchestration(): Promise<RunState> {
+async function startOrchestration(engine: EngineId = "claude-code"): Promise<RunState> {
   const { status, body: run } = await post<RunState>(ctx.app, "/orchestrations", {
     goal: "Add search to the product",
-    engine: "claude-code",
+    engine,
   });
   expect(status, `POST /orchestrations returned ${JSON.stringify(run)}`).toBe(201);
   return run;

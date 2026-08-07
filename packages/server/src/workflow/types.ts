@@ -15,6 +15,7 @@ import type {
   StageUsage,
   StageVerdict,
 } from "@adhd/core";
+import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
@@ -59,10 +60,11 @@ export interface QuestionMediationResult {
 }
 
 export interface StageTurn {
-  /** 0 is the stage's opening turn; later turns resume the CLI session. */
+  /** 0 is the stage's opening turn; a later turn resumes the session, or replays `exchanges`. */
   index: number;
   resumeSessionId?: string;
   answer?: string;
+  exchanges?: StageExchange[];
 }
 
 export interface RunProjection {

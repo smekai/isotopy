@@ -15,6 +15,7 @@ import type {
   StageExecutionPolicy,
 } from "@adhd/core";
 import { limitWaitMs } from "../domain/rules/engine-limit.ts";
+import type { StageExchange } from "../domain/markdown/stage.ts";
 import {
   runOrchestratorReviewWork,
   runQuestionMediationWork,
@@ -333,9 +334,17 @@ async function runStageTurns(
       return { outcome: STAGE_OUTCOMES.FAILED };
     }
 
+    const exchange: StageExchange = {
+      question: result.question ?? "",
+      answer: resolution.answer,
+    };
+    if (result.output !== undefined) {
+      exchange.output = result.output;
+    }
     const nextTurn: StageTurn = {
       index: turn.index + 1,
       answer: resolution.answer,
+      exchanges: [...(turn.exchanges ?? []), exchange],
     };
     if (result.sessionId !== undefined) {
       nextTurn.resumeSessionId = result.sessionId;

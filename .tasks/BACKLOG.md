@@ -1,5 +1,19 @@
 # Backlog
 
+## TASK-124: Orchestrator-brokered permission modes for the harnesses
+**Priority:** P2 | **Tags:** core, server, engine, adapters
+**Updated:** 2026-08-07 00:00
+
+Every engine runs effectively unrestricted today — Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox`, Cursor `--force` — and the one alternative, `acceptEdits`, degrades back to the same on Cursor and Codex, both of which log that they have no accept-edits-only headless mode.
+
+Post-MVP, add a **controlled** mode per engine (Claude's `acceptEdits`/auto, Codex's `--sandbox workspace-write` with on-request approval, Cursor documented as degrading) and route the resulting approval requests to the Orchestrator, which already brokers questions (`TASK-120`). The Orchestrator decides on security and cost grounds and escalates to the user only when the blast radius is real: spending money, reaching the network, touching credentials, or writing outside the workspace.
+
+The brokering policy is the point: **prefer the bounded option over the metered one** — a fixed-price host over pay-per-use credits, reversible over irreversible, and never enter credentials. That is what makes a controlled mode worth the stalls it costs.
+
+Cross-platform: mode flags differ per CLI, not per OS; verify the Windows and macOS argument arrays through `runSubprocess` without shell-only commands.
+
+---
+
 ## TASK-111: Reusable teams for later orchestrations
 **Priority:** P2 | **Tags:** core, server
 **Updated:** 2026-08-04 11:33
@@ -41,18 +55,6 @@ Add a “How it works” section to `README.md` with a mermaid diagram of the wh
 Update this section as part of the milestone so it reflects the orchestrator rather than only today’s static pipelines.
 
 Cross-platform: n/a — docs only.
-
----
-
-## TASK-117: E2E verification for the orchestrator milestone
-**Priority:** P1 | **Tags:** testing, adapters, engine, ui, milestone-c
-**Updated:** 2026-08-04 11:33
-
-Following the `qa-testing` skill, run repository gates (lint, typecheck, test, build, e2e), then drive the app (Hono `:9477` + Vite `:5173`) through the full orchestrator flow using the internal browser and/or Playwright.
-
-Verify: user chat with orchestrator, approval of the proposed team, execution of the composed run, and correctness of the post-run decision loop + run timeline. Record a release verdict for the milestone.
-
-Cross-platform: verify on Windows (primary), and ensure test/run commands are valid on macOS (both shells).
 
 ---
 
