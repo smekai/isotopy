@@ -32,15 +32,12 @@ import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
 import { nowIso } from "../utils/time.ts";
-import { milestoneCloseoutContext } from "./product-manager-closeout.ts";
+import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
-import type {
-  OrchestrationDependencies,
-  StartOrchestrationOptions,
-} from "./orchestration-options.ts";
-import { OrchestratorRequiredError } from "./orchestrator-required-error.ts";
+import type { InheritedRunOptions } from "./run/run-options.ts";
+import { OrchestratorRequiredError } from "../domain/orchestrator-required-error.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
@@ -48,24 +45,19 @@ import type {
   RunReviewContext,
   RunReviewRequest,
 } from "../workflow/types.ts";
-import { taskBoardPlanningContext } from "./task-board-adapter.ts";
+import { taskBoardFor } from "./task-board-adapter.ts";
 
-export type {
-  OrchestrationDependencies,
-  StartOrchestrationOptions,
-} from "./orchestration-options.ts";
+export type StartOrchestrationOptions = InheritedRunOptions;
 
 export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
   private readonly repositories = new Map<string, OrchestrationRepository>();
   private readonly settledRuns = new Set<string>();
-  private readonly registry: ProjectRegistry;
-  private readonly runs: RunService;
 
-  constructor({ registry, runs }: OrchestrationDependencies) {
-    this.registry = registry;
-    this.runs = runs;
-  }
+  constructor(
+    private readonly registry: ProjectRegistry,
+    private readonly runs: RunService,
+  ) {}
 
   async init(): Promise<void> {
     for (const project of this.registry.all()) {
@@ -488,7 +480,7 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private async buildTask(projectPath: ProjectPath, goal: string): Promise<string> {
     const [boardContext, closeoutContext] = await Promise.all([
-      taskBoardPlanningContext(projectPath),
+      taskBoardFor(projectPath).planningContext(),
       milestoneCloseoutContext(projectPath),
     ]);
     return renderOrchestrationContext({

@@ -1,9 +1,17 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { skillsDir, userSkillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
-import { loadBundledPersona } from "./bundled-prompts.ts";
+
+export function loadBundledPersona(id: string): Promise<string | undefined> {
+  return loadBundledMarkdown(PERSONA_DIR, id);
+}
+
+export function loadBundledStepTask(id: string): Promise<string | undefined> {
+  return loadBundledMarkdown(STEP_TASK_DIR, id);
+}
 
 export function userSkillFilePath(skillId: string): string {
   return path.join(userSkillsDir(), `${skillId}.md`);
@@ -32,6 +40,24 @@ export async function loadSkill(
     projectOverride,
     projectAddendum,
   });
+}
+
+const PROMPT_ID = /^[a-z0-9-]+$/;
+const PERSONA_DIR = new URL("../domain/skills/personas/", import.meta.url);
+const STEP_TASK_DIR = new URL("../domain/skills/step-tasks/", import.meta.url);
+
+async function loadBundledMarkdown(
+  directory: URL,
+  id: string,
+): Promise<string | undefined> {
+  if (!PROMPT_ID.test(id)) {
+    return undefined;
+  }
+  try {
+    return await readFile(fileURLToPath(new URL(`${id}.md`, directory)), "utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 interface CacheEntry {

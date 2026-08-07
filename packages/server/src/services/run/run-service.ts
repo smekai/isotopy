@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import nodepath from "node:path";
 import type {
   EngineLimit,
   LimitChoice,
@@ -32,10 +34,14 @@ import {
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
-import { OrchestratorRequiredError } from "../orchestrator-required-error.ts";
+import { OrchestratorRequiredError } from "../../domain/orchestrator-required-error.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
-import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
+import { ensureProjectDataDir, resolveWorkspace, runsDir } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
+import {
+  renderCancelledCleanupReport,
+  renderRunArtifacts,
+} from "../../domain/markdown/closeout.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
@@ -46,9 +52,8 @@ import type {
   RunProjection,
   WorkflowDeps,
 } from "../../workflow/types.ts";
-import { transitionTasks } from "../task-board-adapter.ts";
-import { cleanupCancelledRun, persistRunArtifacts } from "../product-manager-closeout.ts";
-import { MilestoneService } from "../milestone/milestone-service.ts";
+import { taskBoardFor } from "../task-board-adapter.ts";
+import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
 import { LIMIT_ERRORS, LIMIT_LOG } from "../../domain/rules/limit-copy.ts";
 import {
@@ -63,21 +68,16 @@ import {
   outcomeForRestart,
 } from "../../domain/rules/run-lifecycle.ts";
 import { nowIso } from "../../utils/time.ts";
-import type {
-  InheritedRunOptions,
-  RunServiceDependencies,
-  StartRunOptions,
-} from "./run-options.ts";
+import type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 import { RunStore } from "./run-store.ts";
 
-export type { InheritedRunOptions, RunServiceDependencies, StartRunOptions } from "./run-options.ts";
+export type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 
 export class RunService implements RunProjection {
   readonly store: RunStore;
   readonly milestones: MilestoneService;
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
-  private readonly registry: ProjectRegistry;
   private readonly settings: SettingsStore;
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
@@ -85,14 +85,13 @@ export class RunService implements RunProjection {
   private readonly projectListeners = new ListenerRegistry<RunSummary>();
   private orchestration?: OrchestrationHooks;
 
-  constructor({ registry, settings }: RunServiceDependencies) {
-    this.registry = registry;
+  constructor(
+    private readonly registry: ProjectRegistry,
+    settings?: SettingsStore,
+  ) {
     this.settings = settings ?? new SettingsStore();
     this.store = new RunStore(registry);
-    this.milestones = new MilestoneService({
-      registry,
-      runs: () => this,
-    });
+    this.milestones = new MilestoneService(registry, () => this);
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
       new CloseoutConsumer(this.registry),
@@ -376,12 +375,9 @@ export class RunService implements RunProjection {
     }
     this.gateApproved(runId, stageId);
     if (stageId === "intake" && run.sourceTaskIds?.length) {
-      void transitionTasks(
-        this.registry.resolve(run.projectId),
-        run.sourceTaskIds,
-        "In Progress",
-        run.id,
-      ).catch((error: unknown) =>
+      void taskBoardFor(this.registry.resolve(run.projectId))
+        .transitionTasks(run.sourceTaskIds, "In Progress", run.id)
+        .catch((error: unknown) =>
         console.warn(`Failed to move source tasks for run ${runId}:`, error),
       );
     }
@@ -919,3 +915,36 @@ type RunSummaryListener = (summary: RunSummary) => void;
 
 const ORCHESTRATION_PIPELINE_ID = "orchestration";
 const UNKNOWN_ENGINE_LABEL = "unknown";
+
+async function persistRunArtifacts(
+  projectPath: ProjectPath,
+  runId: string,
+  record: RunArtifactRecord,
+): Promise<void> {
+  const artifactsDir = nodepath.join(runsDir(projectPath), runId, "artifacts");
+  await mkdir(artifactsDir, { recursive: true });
+  await Promise.all([
+    writeFile(
+      nodepath.join(artifactsDir, "artifacts.json"),
+      `${JSON.stringify(record, null, 2)}\n`,
+    ),
+    writeFile(
+      nodepath.join(artifactsDir, "artifacts.md"),
+      renderRunArtifacts(record.report),
+    ),
+  ]);
+}
+
+async function cleanupCancelledRun(
+  projectPath: ProjectPath,
+  runId: string,
+): Promise<void> {
+  const tempRoot = nodepath.join(runsDir(projectPath), runId, "tmp");
+  await rm(tempRoot, { recursive: true, force: true, maxRetries: 3 });
+  const closeoutDir = nodepath.join(runsDir(projectPath), runId, "closeout");
+  await mkdir(closeoutDir, { recursive: true });
+  await writeFile(
+    nodepath.join(closeoutDir, "cleanup-report.md"),
+    renderCancelledCleanupReport(),
+  );
+}

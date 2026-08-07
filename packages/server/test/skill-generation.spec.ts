@@ -6,7 +6,7 @@ import { REPO_ROOT } from "../src/paths.ts";
 import {
   loadBundledPersona,
   loadBundledStepTask,
-} from "../src/services/bundled-prompts.ts";
+} from "../src/services/skills.ts";
 
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);

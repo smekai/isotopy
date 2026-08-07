@@ -8,8 +8,8 @@ import { SettingsStore } from "./services/settings-store.ts";
 
 const registry = new ProjectRegistry();
 const settings = new SettingsStore();
-const runs = new RunService({ registry, settings });
-const orchestrations = new OrchestrationService({ registry, runs });
+const runs = new RunService(registry, settings);
+const orchestrations = new OrchestrationService(registry, runs);
 runs.registerStageOutputConsumer(orchestrations);
 runs.registerOrchestration(orchestrations);
 

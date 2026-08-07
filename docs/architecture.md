@@ -348,8 +348,8 @@ functions only.
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone/` (`MilestoneService`), `consumers/`, `orchestration-service.ts`, settings, skills; no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the PM closeout), `orchestration-service.ts`, `milestone-closeout.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
+| `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts` and `orchestrator-required-error.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
 | `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |

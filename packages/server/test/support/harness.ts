@@ -49,8 +49,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
-  const orchestrator = new RunService({ registry, settings });
-  const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
+  const orchestrator = new RunService(registry, settings);
+  const orchestrations = new OrchestrationService(registry, orchestrator);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
@@ -110,8 +110,8 @@ export interface RestartedApp {
 export async function restartApp(): Promise<RestartedApp> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
-  const orchestrator = new RunService({ registry, settings });
-  const orchestrations = new OrchestrationService({ registry, runs: orchestrator });
+  const orchestrator = new RunService(registry, settings);
+  const orchestrations = new OrchestrationService(registry, orchestrator);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();

@@ -1,5 +1,25 @@
 # Done
 
+## TASK-136: Server layering cleanup — placement, dead weight, and a task-board class
+**Priority:** P2 | **Tags:** server, infra
+**Updated:** 2026-08-07 00:00
+
+Nine drifts from the project's own layering rule (`CLAUDE.md` "Server file placement", A3):
+
+1. `TaskBoardAdapter` — `services/task-board-adapter.ts` is four free functions, each re-probing `<root>/.tasks/config.json` then `<dataDir>/tasks/config.json` on every call. Make it a class that resolves the board **location** once and still re-reads config and state markdown per call, since `.tasks/` is edited externally between calls and a stale `nextId` would collide IDs. Cache only a positive resolution.
+2. `OrchestratorRequiredError` → `domain/orchestrator-required-error.ts`. No new `model/` folder; `schemas/` plus `@adhd/core` already are the model layer.
+3. `packages/server/scripts/` — keep. `copy-skill-assets.mjs` copies the `.md` prompt assets `tsc` does not emit into `dist/`, using Node's fs API rather than shell `cp`.
+4. `services/bundled-prompts.ts` folds into `services/skills.ts`. It cannot go to `domain/` (imports `node:fs`) or `utils/` (personas and step-tasks are ADHD concepts).
+5. Delete `services/orchestration-options.ts`. `StartOrchestrationOptions` reduces to `InheritedRunOptions`; move it to `orchestration-service.ts`. Drop `OrchestrationDependencies`, `MilestoneServiceDependencies` and `RunServiceDependencies` in favour of positional constructor params — `MilestoneService`'s `() => RunService` thunk stays, it breaks the construction cycle.
+6. `services/product-manager-closeout.ts` splits by owner into `run-closeout.ts` and `milestone-closeout.ts`. The PM closeout itself stays: it is the last stage of `FULL_DELIVERY_PIPELINE`, and the Orchestrator consumes its report rather than replacing it.
+7. `services/skills.ts` stays in services — its pure half is already `composeSkill` in `domain/markdown/skill.ts`.
+8. Flatten `services/milestone/` — `milestone-service.ts` moves up, `milestone-options.ts` is deleted.
+9. `repository/handoff.ts` folds into `run-repository.ts`, its only importer.
+
+Cross-platform: n/a — file moves and in-process refactors only; no process spawning, binary lookup, new path construction, or npm-script changes.
+
+---
+
 ## TASK-108: Milestone E — Eigen: the Orchestrator
 **Priority:** P1 | **Tags:** core, server, ui, engine, milestone-e
 **Updated:** 2026-08-07 11:40
