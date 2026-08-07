@@ -8,7 +8,7 @@ import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@adhd/core";
 import type { ProjectPath } from "../../src/paths.ts";
-import { applyProductManagerCloseout } from "../../src/services/run-closeout.ts";
+import { applyProductManagerCloseout } from "../../src/services/consumers/closeout-consumer.ts";
 
 const roots: string[] = [];
 

@@ -889,9 +889,12 @@ Product Manager closeout stage looked like leftover scaffolding.
 produces a `RunCloseoutRecord`; an Orchestrator-composed pipeline has no closeout stage
 and produces a `RunArtifactRecord` from its review step instead. Consumers merge them at
 `run.closeout?.report ?? run.artifacts?.report`, and the Orchestrator treats a supplied
-closeout as authoritative rather than recomputing it. The file that held both was split
-by owner into `services/run-closeout.ts` and `services/milestone-closeout.ts`, because
-three of its five exports served the Orchestrator path and its name claimed otherwise.
+closeout as authoritative rather than recomputing it. The file that held both was
+dissolved into its callers, because three of its five exports served the Orchestrator
+path and its name claimed otherwise: `applyProductManagerCloseout` and the closeout
+files it writes now live in `services/consumers/closeout-consumer.ts`, the run-directory
+artifact and cancellation writers in `services/run/run-service.ts`, and the milestone
+summary and prior-closeout context in `services/milestone-closeout.ts`.
 
 **Rejected:** deleting the `closeout` stage and letting the Orchestrator review be the
 only closeout. That also removes source-task transitions, run temp cleanup, and the

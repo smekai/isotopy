@@ -20,7 +20,7 @@ afterEach(async () => {
   );
 });
 
-test("a nextId bumped on disk between calls is honoured — the adapter remembers where the board is, never what it holds", async () => {
+test("a nextId bumped on disk between calls is honoured — board config is re-read every call, never cached", async () => {
   // Arrange — a TaskPlanner board, one call to settle the board location, then
   // an external edit of the kind a human or another agent makes mid-session.
   const adapter = new TaskBoardAdapter(project);
@@ -33,6 +33,22 @@ test("a nextId bumped on disk between calls is honoured — the adapter remember
 
   // Assert
   expect(created.map((task) => task.id)).toEqual(["TASK-050"]);
+});
+
+test("a .tasks board appearing after the built-in one is already in use does not steal the run — the resolved location is kept", async () => {
+  // Arrange — no board at all, so the first call creates the built-in one and
+  // settles the location there. A .tasks board then appears; on a fresh probe
+  // it would outrank the built-in board.
+  const adapter = new TaskBoardAdapter(project);
+  const first = await adapter.createFollowUpTasks(run(), [draft("f1")]);
+  expect(first.map((task) => task.backend)).toEqual(["adhd"]);
+  await writeTaskPlannerBoard(1);
+
+  // Act
+  const created = await adapter.createFollowUpTasks(run(), [draft("f2")]);
+
+  // Assert
+  expect(created.map((task) => task.backend)).toEqual(["adhd"]);
 });
 
 test("a board created after a lookup that found none is picked up — an absent board is not remembered as absent", async () => {
@@ -93,7 +109,7 @@ function run(overrides: Partial<RunState> = {}): RunState {
     projectId: overrides.projectId ?? "p",
     pipelineId: overrides.pipelineId ?? "pm-dev-test",
     pipelineName: overrides.pipelineName ?? "Developer + Tester",
-    status: overrides.status ?? "succeeded",
+    status: overrides.status ?? "completed",
     stages: overrides.stages ?? [],
     messages: overrides.messages ?? [],
     createdAt: overrides.createdAt ?? "2026-08-07T00:00:00.000Z",
