@@ -44,6 +44,48 @@ export function buildStagePrompt(
   ]);
 }
 
+const CONTINUATION_NOTE =
+  "You already worked on this stage and stopped to ask. Your CLI cannot resume its " +
+  "own session, so the exchange is replayed below. Continue from it — do not start " +
+  "the stage over.";
+
+export interface StageExchange {
+  output?: string;
+  question: string;
+  answer: string;
+}
+
+export interface ContinuationPromptInput {
+  task: string;
+  upstream: UpstreamOutput[];
+  exchanges: StageExchange[];
+  stepTask?: string;
+}
+
+function exchangeBlocks(exchange: StageExchange, index: number): Array<string | undefined> {
+  const turn = index + 1;
+  return [
+    exchange.output === undefined
+      ? undefined
+      : `### Your turn ${turn} response\n\n${markdownBody(exchange.output)}`,
+    `### What you asked on turn ${turn}\n\n${markdownBody(exchange.question)}`,
+    `### The answer you were given\n\n${markdownBody(exchange.answer)}`,
+  ];
+}
+
+export function buildContinuationPrompt({
+  task,
+  upstream,
+  exchanges,
+  stepTask,
+}: ContinuationPromptInput): string {
+  return markdownBlocks([
+    buildStagePrompt(task, upstream, stepTask),
+    `## Conversation so far\n\n${CONTINUATION_NOTE}`,
+    ...exchanges.flatMap(exchangeBlocks),
+  ]);
+}
+
 export function formatHandoff(meta: HandoffMeta, output: string): string {
   const engine = `${structuralText(meta.engine)}${
     meta.model ? ` · ${structuralText(meta.model)}` : ""

@@ -57,7 +57,6 @@ export interface EngineStageOutcome {
 
 export interface InterpretOptions {
   profession: string;
-  /** Only an interactive stage on a conversational engine may park on a question. */
   canAsk: boolean;
   protocol?: StageOutputProtocol;
 }

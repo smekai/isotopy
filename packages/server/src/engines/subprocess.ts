@@ -5,6 +5,13 @@ import os from "node:os";
 const STDERR_TAIL_LINES = 10;
 const SIGKILL_ESCALATE_MS = 5000;
 
+/**
+ * `close` waits for every holder of the child's stdio to let go, and a coding
+ * CLI that leaves a dev server behind never gets there. `exit` says the process
+ * itself is gone; this is how long we still wait for its output to drain.
+ */
+const STDIO_FLUSH_GRACE_MS = 2000;
+
 export type SubprocessStream = "stdout" | "stderr";
 
 export interface SubprocessSpec {
@@ -31,17 +38,30 @@ export interface SubprocessResult {
   errorMessage?: string;
 }
 
+function ownsProcessGroup(): boolean {
+  return process.platform !== "win32";
+}
+
+function signalGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // The group is already gone, which is the outcome we wanted.
+  }
+}
+
 export function killProcessTree(child: ChildProcess): void {
   if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) {
     return;
   }
-  if (process.platform === "win32") {
+  if (!ownsProcessGroup()) {
     spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
-  } else {
-    child.kill("SIGTERM");
-    const escalate = setTimeout(() => child.kill("SIGKILL"), SIGKILL_ESCALATE_MS);
-    escalate.unref();
+    return;
   }
+  const { pid } = child;
+  signalGroup(pid, "SIGTERM");
+  const escalate = setTimeout(() => signalGroup(pid, "SIGKILL"), SIGKILL_ESCALATE_MS);
+  escalate.unref();
 }
 
 function createLineReader(emit: (line: string) => void): (chunk: string, flush?: boolean) => void {
@@ -128,6 +148,7 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
         windowsVerbatimArguments: needsWindowsShell(spec),
         env: spec.env,
         stdio: ["pipe", "pipe", "pipe"],
+        detached: ownsProcessGroup(),
       });
     } catch (error) {
       resolve({
@@ -156,12 +177,15 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
       stderrTail = [...stderrTail, line].slice(-STDERR_TAIL_LINES);
     });
 
+    let flushGrace: NodeJS.Timeout | undefined;
+
     const finish = (result: SubprocessResult): void => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timeout);
+      clearTimeout(flushGrace);
       spec.signal?.removeEventListener("abort", onAbort);
       resolve(result);
     };
@@ -202,7 +226,7 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
       });
     });
 
-    child.on("close", (code, termSignal) => {
+    const settle = (code: number | null, termSignal: NodeJS.Signals | null): void => {
       readStdout("", true);
       readStderr("", true);
       const aborted = spec.signal?.aborted ?? false;
@@ -231,6 +255,12 @@ export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {
         durationMs: Date.now() - startedAt,
         errorMessage,
       });
+    };
+
+    child.on("close", settle);
+    child.on("exit", (code, termSignal) => {
+      flushGrace = setTimeout(() => settle(code, termSignal), STDIO_FLUSH_GRACE_MS);
+      flushGrace.unref();
     });
 
     child.stdin?.on("error", () => {});

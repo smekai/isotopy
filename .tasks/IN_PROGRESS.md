@@ -10,10 +10,13 @@ The Orchestrator is an ordinary persona — same markdown, same skill layering, 
 
 MVP scope includes `TASK-109`, `TASK-110`, `TASK-112`, `TASK-120`, and minimal UI from `TASK-114`. Post-MVP scope covers reusable teams (`TASK-111`), per-persona accumulated context (`TASK-113`), full UI (`TASK-114`), and per-role engine/model configuration (`TASK-115`).
 
-**Order:** `TASK-109` (done) → `TASK-110` (done) → `TASK-120` (done) → `TASK-112` (done) → `TASK-114` (done, MVP slice) → `TASK-121` (done) → **`TASK-117`** (E2E). The refactor landed before the browser gate so the release verdict is recorded against the structure we intend to keep.
+**Order:** `TASK-109` (done) → `TASK-110` (done) → `TASK-120` (done) → `TASK-112` (done) → `TASK-114` (done, MVP slice) → `TASK-121` (done) → `TASK-117` (done — MVP verified live on Cursor and Codex at 0.9.23). The refactor landed before the browser gate so the release verdict is recorded against the structure we intend to keep.
+
+The MVP is closed. What remains in this epic is post-MVP: `TASK-111`, `TASK-113`, `TASK-114`'s full UI, and `TASK-115`.
 
 `TASK-120` inherits two blockers `TASK-110` found — the one-run-per-project admission claim and the per-project worker concurrency of 1 — plus the design question under both: whether the Orchestrator should run inside `PipelineWorkflow` at all.
 
 Cross-platform: orchestrator reuses existing server filesystem/path helpers and OpenWorkflow; UI is web; verification covers Windows and macOS.
 
 ---
+

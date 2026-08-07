@@ -47,13 +47,7 @@ export interface EngineDefinition {
   label: string;
   description: string;
   available: boolean;
-  /** The CLI can resume a session, so an agent on it may stop and ask a question. */
-  conversational: boolean;
   connections: EngineConnectionDefinition[];
-}
-
-export function isConversational(engineId: EngineId): boolean {
-  return ENGINES[engineId].conversational;
 }
 
 export const ENGINES: Record<EngineId, EngineDefinition> = {
@@ -62,7 +56,6 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Claude Code",
     description: "Anthropic's agentic coding CLI",
     available: true,
-    conversational: true,
     connections: [
       {
         id: "subscription",
@@ -84,7 +77,6 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Cursor",
     description: "Cursor CLI agent",
     available: true,
-    conversational: false,
     connections: [
       {
         id: "subscription",
@@ -107,7 +99,6 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     label: "Codex",
     description: "OpenAI Codex CLI",
     available: true,
-    conversational: true,
     connections: [
       {
         id: "subscription",
@@ -181,8 +172,8 @@ export const DEFAULT_CURSOR_MODEL = AUTO_MODEL_ID;
 
 export const CODEX_MODEL_OPTIONS: EngineModelOption[] = [
   AUTO_MODEL_OPTION,
-  { id: "gpt-5", label: "GPT-5", hint: "OpenAI flagship" },
-  { id: "gpt-5-mini", label: "GPT-5 Mini", hint: "faster, cheaper" },
+  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "most capable" },
+  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "faster, cheaper" },
 ];
 
 export const DEFAULT_CODEX_MODEL = AUTO_MODEL_ID;
@@ -217,6 +208,8 @@ export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
   codex: {
     "gpt-5-codex": AUTO_MODEL_ID,
     "o4-mini": AUTO_MODEL_ID,
+    "gpt-5": AUTO_MODEL_ID,
+    "gpt-5-mini": AUTO_MODEL_ID,
   },
 };
 

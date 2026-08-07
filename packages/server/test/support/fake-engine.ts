@@ -59,14 +59,17 @@ export interface AnticipationOutcome {
   /**
    * The box stops and asks, handing back a session id. A real CLI would print
    * this on its event stream; the workflow feeds it back as `resumeSessionId`.
+   * Omit the id for a CLI that cannot resume (Cursor) — the next turn then
+   * replays the conversation instead of continuing a session.
    */
-  asks(question: string, sessionId: string, usage?: StageUsage): FakeEngine;
+  asks(question: string, sessionId?: string, usage?: StageUsage): FakeEngine;
   /**
    * The box reports this exact text and hands back a session id. What parks the
    * stage is in the text itself — which is how a stage whose output protocol is
-   * a decision block rather than a `QUESTION:` line stops to ask.
+   * a decision block rather than a `QUESTION:` line stops to ask. The id is
+   * optional for the same reason it is on `asks`.
    */
-  parks(result: string, sessionId: string, usage?: StageUsage): FakeEngine;
+  parks(result: string, sessionId?: string, usage?: StageUsage): FakeEngine;
 }
 
 /** What the Orchestrator's post-run review returns; both halves default. */
@@ -155,8 +158,8 @@ export class FakeEngine implements EngineAdapter {
             result: `Working on it.
 
 QUESTION: ${question}`,
-            sessionId,
           };
+          if (sessionId !== undefined) response.sessionId = sessionId;
           if (usage !== undefined) response.usage = usage;
           return Promise.resolve(response);
         }),
@@ -166,8 +169,8 @@ QUESTION: ${question}`,
             success: true,
             exitCode: 0,
             result,
-            sessionId,
           };
+          if (sessionId !== undefined) response.sessionId = sessionId;
           if (usage !== undefined) response.usage = usage;
           return Promise.resolve(response);
         }),

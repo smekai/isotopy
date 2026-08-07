@@ -143,6 +143,42 @@ test("answering resumes the same session rather than starting a new one", async 
   engine.verify();
 });
 
+test("a specialist whose CLI cannot resume continues from a replayed conversation, not a bare answer", async () => {
+  // Arrange — on Cursor there is no session, so a bare "Use SQLite." would reach
+  // an engine that has never heard of the task.
+  await ctx.dispose();
+  ctx = await createTestApp({ engineId: "cursor" });
+  const { app, engine } = ctx;
+
+  // Anticipate
+  engine.anticipate({ as: "opening turn", prompt: /add a settings page/ }).asks(QUESTION);
+  engine
+    .anticipate({ as: "Orchestrator answer", persona: /# Role: Orchestrator/ })
+    .reports(
+      fenced({
+        action: "answer_agent",
+        answer: "Use SQLite.",
+        rationale: "The approved goal requires local storage",
+      }),
+    );
+  engine
+    .anticipate({
+      as: "continued turn",
+      prompt: /^(?=[\s\S]*add a settings page)(?=[\s\S]*Which database should the settings live in)(?=[\s\S]*Use SQLite\.)/,
+    })
+    .reports(DONE);
+  engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "cursor" });
+  const finished = await waitForRunStatus(app, run.id, "completed");
+
+  // Assert
+  expect(stageOf(finished, "solo").status).toBe("passed");
+  expect(finished.result).toBe(DONE);
+  engine.verify();
+});
+
 test("the user's reply to an escalation is recorded as the user's turn in the transcript", async () => {
   // Arrange
   const { app, engine } = ctx;

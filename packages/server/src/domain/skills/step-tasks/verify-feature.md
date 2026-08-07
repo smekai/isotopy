@@ -15,7 +15,10 @@ Inspect the repository and choose the relevant validation mix:
 For UI work, use Playwright only. Prefer the repository's existing Playwright
 configuration and `webServer` lifecycle. Otherwise use its documented
 application command, wait for readiness, run Playwright headlessly, retain
-useful screenshots or traces, and stop every process you started.
+useful screenshots or traces, and stop every process you started. Bind any
+server you start to a port you chose yourself — never a default such as 3000,
+5173 or 8080, which is probably already serving something else on this machine.
+A process left running holds your own CLI open and stalls the run.
 
 Report in the normal stage handoff:
 

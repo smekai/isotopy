@@ -5,7 +5,6 @@ import {
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
   agentForStage,
-  isConversational,
 } from "@adhd/core";
 import type {
   EngineId,
@@ -19,7 +18,7 @@ import type {
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
-import { buildStagePrompt } from "../domain/markdown/stage.ts";
+import { buildContinuationPrompt, buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
@@ -46,16 +45,29 @@ const UNKNOWN_ENGINE_LABEL = "unknown";
 /** Bounds the question loop so a persona that always asks cannot run forever. */
 export const MAX_QUESTION_TURNS = 6;
 
-function canAsk(stageDef: StageDefinition, engine: EngineId, turn: number): boolean {
-  return (
-    stageDef.interactive === true &&
-    isConversational(engine) &&
-    turn < (stageDef.maxTurns ?? MAX_QUESTION_TURNS)
-  );
+function canAsk(stageDef: StageDefinition, turn: number): boolean {
+  return stageDef.interactive === true && turn < (stageDef.maxTurns ?? MAX_QUESTION_TURNS);
 }
 
 function recordsOutputWhileAsking(stageDef: StageDefinition): boolean {
   return stageDef.outputProtocol === STAGE_OUTPUT_PROTOCOLS.DECISION;
+}
+
+function turnPrompt(
+  input: PipelineWorkflowInput,
+  run: RunState,
+  stageDef: StageDefinition,
+  turn: StageTurn,
+  stepTask: string | undefined,
+): string {
+  if (turn.resumeSessionId !== undefined) {
+    return turn.answer ?? "";
+  }
+  const task = input.task ?? "";
+  const upstream = upstreamFor(run, stageDef.id);
+  return turn.exchanges === undefined || turn.exchanges.length === 0
+    ? buildStagePrompt(task, upstream, stepTask)
+    : buildContinuationPrompt({ task, upstream, exchanges: turn.exchanges, stepTask });
 }
 
 function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
@@ -344,9 +356,9 @@ export async function runStageWork(
     return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
   }
   const profession = agentForStage(stageDef.id).profession;
-  const resuming = turn.resumeSessionId !== undefined;
+  const continuing = turn.index > 0;
 
-  if (resuming) {
+  if (continuing) {
     projection.stageAnswered(runId, stageDef.id);
   } else {
     projection.stageStarted(runId, stageDef.id);
@@ -372,9 +384,7 @@ export async function runStageWork(
       message: `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
     });
   }
-  const prompt = resuming
-    ? (turn.answer ?? "")
-    : buildStagePrompt(input.task ?? "", upstreamFor(run, stageDef.id), stepTask);
+  const prompt = turnPrompt(input, run, stageDef, turn, stepTask);
 
   if (deps.isCancelled(runId)) {
     return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };
@@ -401,7 +411,7 @@ export async function runStageWork(
 
   const decision = interpretEngineResult(outcome, {
     profession,
-    canAsk: canAsk(stageDef, run.engine, turn.index),
+    canAsk: canAsk(stageDef, turn.index),
     protocol: stageDef.outputProtocol,
   });
 

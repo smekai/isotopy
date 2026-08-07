@@ -44,8 +44,21 @@ instead; callers with long text (a persona) must send it via stdin on that path.
 
 **Process-tree kill (`killProcessTree`).** `child.kill()` alone orphans
 grandchildren spawned under a Windows `.cmd` shim, so Windows uses
-`taskkill /pid <pid> /T /F`. POSIX sends `SIGTERM`, then escalates to `SIGKILL`
-after a grace period.
+`taskkill /pid <pid> /T /F`. POSIX children are spawned `detached`, which puts
+each in its own process group, and the signal goes to the group
+(`process.kill(-pid, …)`) — `SIGTERM`, then `SIGKILL` after a grace period.
+Signalling the pid alone left the same grandchildren running, which is the bug
+the function's name always claimed it did not have.
+
+**Settling on `exit`, not `close`.** `close` fires only once every holder of the
+child's stdio has let go — and a coding agent that starts a dev server to smoke
+check its own work hands that pipe to a process which never ends. TASK-117 hit
+exactly this on a real Cursor run: the CLI exited, Vite kept the pipe, `close`
+never came, and the stage sat past its ten-minute timeout with nothing left to
+resolve it. `runSubprocess` therefore settles on `exit` after a short flush
+grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
+does drain. The grace window is the whole trade: too short truncates a chatty
+CLI's last lines, too long re-introduces the stall.
 
 ## Engines — binary resolution (all adapters)
 
