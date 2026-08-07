@@ -1,8 +1,5 @@
 import type { RunState, StageDefinition } from "@adhd/core";
-
-export interface StageOutputRejection {
-  reason: string;
-}
+import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 
 export interface StageOutputConsumer {
   consume(

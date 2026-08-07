@@ -21,10 +21,8 @@ import type { ProjectPath } from "../../paths.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
-import type {
-  StageOutputConsumer,
-  StageOutputRejection,
-} from "./stage-output-consumer.ts";
+import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
+import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 
 export interface CloseoutApplication {
   record: RunCloseoutRecord;

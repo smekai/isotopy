@@ -34,10 +34,8 @@ import {
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
 import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
-import type {
-  StageOutputConsumer,
-  StageOutputRejection,
-} from "../consumers/stage-output-consumer.ts";
+import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
+import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
 import { OrchestratorRequiredError } from "../../domain/orchestrator-required-error.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace, runsDir } from "../../paths.ts";

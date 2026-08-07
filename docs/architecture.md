@@ -631,7 +631,10 @@ handoff, then hands the output to each consumer — `MilestonePlanConsumer`,
 for each one. A new aggregate registers a consumer; it does not edit the run service.
 
 **A consumer that cannot use the output is what fails the stage.** `consume` returns
-`StageOutputRejection | undefined`, and `settleStageOutput` in `workflow/stage-execution.ts`
+`StageOutputRejection | undefined` — the type lives in `domain/rules/stage-context.ts`
+beside `EngineStageOutcome`, so the seam and the durable runtime both depend *downward* on
+the domain rather than the workflow reaching into services — and `settleStageOutput` in
+`workflow/stage-execution.ts`
 turns a rejection into `NEEDS_ATTENTION` carrying the consumer's own reason. Three rules
 bound it. Only a `PASSED` outcome is downgraded, so a protocol that already spoke —
 `interpretDecision` on a `decision` stage — keeps its message, and a crashed stage is never

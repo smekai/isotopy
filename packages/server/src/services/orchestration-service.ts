@@ -39,10 +39,8 @@ import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
-import type {
-  StageOutputConsumer,
-  StageOutputRejection,
-} from "./consumers/stage-output-consumer.ts";
+import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
+import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
 import type { InheritedRunOptions } from "./run/run-options.ts";
 import { OrchestratorRequiredError } from "../domain/orchestrator-required-error.ts";
 import type {

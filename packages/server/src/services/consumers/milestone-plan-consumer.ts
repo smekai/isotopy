@@ -4,10 +4,8 @@ import { extractMilestonePlan } from "../../schemas/milestone-plan.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { MilestoneService } from "../milestone-service.ts";
-import type {
-  StageOutputConsumer,
-  StageOutputRejection,
-} from "./stage-output-consumer.ts";
+import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
+import type { StageOutputConsumer } from "./stage-output-consumer.ts";
 
 export class MilestonePlanConsumer implements StageOutputConsumer {
   constructor(private readonly milestones: MilestoneService) {}
@@ -26,7 +24,9 @@ export class MilestonePlanConsumer implements StageOutputConsumer {
     }
     const milestone = this.milestones.mutableMilestone(run.milestoneId);
     if (!milestone) {
-      return rejection(stageDef, `milestone ${run.milestoneId} is no longer loaded`);
+      return {
+        reason: `The plan could not be recorded — milestone ${run.milestoneId} is no longer loaded`,
+      };
     }
     const parsed = extractMilestonePlan(output);
     const unusable = parsed.ok ? undefined : formatValidationIssues(parsed.issues);
@@ -44,14 +44,13 @@ export class MilestonePlanConsumer implements StageOutputConsumer {
     }
     milestone.updatedAt = nowIso();
     await this.milestones.saveMilestone(milestone);
-    return unusable === undefined ? undefined : rejection(stageDef, unusable);
+    if (unusable === undefined) {
+      return undefined;
+    }
+    return {
+      reason: `${agentForStage(stageDef.id).profession} produced no usable milestone plan — ${unusable}`,
+    };
   }
-}
-
-function rejection(stageDef: StageDefinition, detail: string): StageOutputRejection {
-  return {
-    reason: `${agentForStage(stageDef.id).profession} produced no usable milestone plan — ${detail}`,
-  };
 }
 
 const PIPELINE_ID = "milestone-planning";

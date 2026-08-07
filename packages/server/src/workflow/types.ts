@@ -18,9 +18,9 @@ import type {
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
-import type { StageOutputRejection } from "../services/consumers/stage-output-consumer.ts";
 
 export type { RunCompletionStatus };
 
