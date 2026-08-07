@@ -58,12 +58,18 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 ## Status
 
-**Milestone E — the Orchestrator — shipped its MVP at 0.9.23**, closed on live runs
-against two harnesses: Cursor and Codex. An **Orchestrator** now sits above the
-pipelines: you describe a goal, it talks it through, composes a team from the persona
-catalog for you to approve, launches the composed run, and decides what happens next
-when that run settles — another run, a milestone to plan, or a reasoned stop. Reusable
-teams, per-persona memory, and per-role engine selection are still backlog.
+**Milestone E — Eigen: the Orchestrator — closed at 0.9.23** on live runs against two
+harnesses, Cursor and Codex. An **Orchestrator** now sits above the pipelines: you
+describe a goal, it talks it through, composes a team from the persona catalog for you to
+approve, launches the composed run, and decides what happens next when that run settles —
+another run, a milestone to plan, or a reasoned stop.
+
+**In progress — Milestone F, Fixpoint:** stabilising to something a first-time user can
+install, point at a folder, and *see the result of*. Its headline gap is exactly that last
+step: a run finishes and the files are somewhere, and you have to already know where.
+Next after it are **G — Gauge** (the product is renamed **Isotopy**) and **H — Harmonic**
+(features chosen by the people who try it, not by us). Milestones are named for
+mathematical terms; A–D keep their letters.
 
 **Milestone D — the Full Delivery loop — shipped at 0.8.7**, and was closed on a live
 dogfood against a real project. The current version is in

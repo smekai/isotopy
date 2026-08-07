@@ -1,8 +1,260 @@
 # Backlog
 
+## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
+**Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
+**Updated:** 2026-08-07 11:40
+
+A fixed point is where a system stops changing under its own operation. That is the goal:
+stop adding, and make what exists hold still and hold up.
+
+**The bar:** someone who is not us installs it, points it at a folder, describes a goal —
+and *sees the thing that was built*. Today the last step barely exists. A run ends and the
+result is somewhere on disk, and you have to already know where.
+
+**Scope:** `TASK-126` (show what was built), `TASK-092` (project automation and preview
+deploy — the dependency under 126's second half), `TASK-124` (permission modes and blast
+radius), `TASK-127` (a stage must not pass on output nothing could use), `TASK-129` (model
+rosters that do not offer ids the plan rejects), `TASK-116` (README "How it works"), and
+`TASK-128` (the closing dogfood).
+
+Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
+research spikes belong to no milestone at all.
+
+Cross-platform: every task here is verified on Windows and reasoned through for macOS,
+and `TASK-092`'s process handling is where that bites hardest.
+
+---
+
+## TASK-126: Show the user what was built
+**Priority:** P0 | **Tags:** ui, server, milestone-f
+**Updated:** 2026-08-07 11:40
+
+There is no clear way to look at the product ADHD just built. A finished run leaves files
+somewhere and says so in prose; the user is left to find them.
+
+**Always:** a finished run ends by naming what changed — the files it created and edited,
+linked, with the project folder one click away. This must work for every run, on every
+engine, with no project configuration at all.
+
+**When the project declares how to start itself:** additionally offer to run it and show
+it — start the product, wait for readiness, and put it in front of the user. That half
+depends on `TASK-092`'s automation config for the start command, readiness check and port
+strategy, and must degrade honestly to the always-half when no such config exists.
+
+Do not start anything the user did not ask to start, and stop whatever was started when
+they are done looking — `TASK-117` closed a stage that hung for its whole engine timeout
+because an agent left a dev server running.
+
+Cross-platform: opening a folder and starting a process differ per OS; go through
+`runSubprocess` with executable-plus-argument arrays, never a shell string.
+
+---
+
+## TASK-127: A stage must not pass on output no consumer could use
+**Priority:** P1 | **Tags:** server, core, testing, milestone-f
+**Updated:** 2026-08-07 11:40
+
+Found during `TASK-117`, filed rather than fixed there. A `milestone-planning` run on
+Codex produced prose instead of a fenced `adhd-milestone-plan` block.
+`MilestonePlanConsumer` recorded `milestone.approvalError` correctly — and then the stage
+passed, the run completed, and the Orchestrator's review recorded artifacts describing
+work as delivered. The user sees a green run over an empty milestone.
+
+The orchestration path already gets this right: a decision that will not parse yields
+`NEEDS_ATTENTION` in `domain/rules/stage-context.ts`. The consumer path has no equivalent.
+
+**Scope:** give `StageOutputConsumer.consume` a way to report that the output was
+unusable, and have `captureStageOutput` and the workflow turn that into
+`NEEDS_ATTENTION` rather than `PASSED`. Audit every consumer — `closeout-consumer`,
+`stage-output-consumer`, `milestone-plan-consumer`, and `OrchestrationService` — for the
+same swallow. A green run over an empty result is the worst thing a new user can be shown.
+
+Cross-platform: n/a — pure server logic.
+
+---
+
+## TASK-129: Model rosters must not offer ids the user's plan rejects
+**Priority:** P1 | **Tags:** core, engine, server, milestone-f
+**Updated:** 2026-08-07 11:40
+
+`TASK-117` hit this on the first Codex run: the shipped list offered `gpt-5-mini`, and a
+ChatGPT-account login answered `400 — not supported when using Codex with a ChatGPT
+account`. Those two ids were retired, but the shape of the problem was not.
+
+- **Cursor** resolves its roster live from the CLI, and its static fallback still lists
+  ids the CLI no longer has. The fallback only shows when the CLI is missing, so it is
+  low-harm — but it is still wrong.
+- **Codex** has no `models` subcommand, so its roster is static plus whatever
+  `~/.codex/config.toml` names. It will drift again.
+- The failure lands as a raw provider `400` in the stage log, mid-run, after the user has
+  waited.
+
+**Scope:** decide per engine how a roster stays true — resolve live where the CLI allows
+it, and where it does not, make Auto the honest default and mark unverified entries as
+such rather than presenting them as offers. Validate the chosen model *before* a run
+starts, so a rejection is a Setup-time message and not a failed stage.
+
+Cross-platform: model probes go through `probeCommand`; no shell-only invocations.
+
+---
+
+## TASK-128: Closing dogfood for Milestone F
+**Priority:** P1 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-07 11:40
+
+Milestones D and E both closed on a live dogfood rather than on tests, and F closes the
+same way — but from a *clean* state, because F's bar is a first-time user.
+
+Start from an empty `ADHD_USER_HOME`, install as the README instructs, register a fresh
+project, and drive one goal end to end: build, evolve, and **see the result** through
+`TASK-126`. Record what a newcomer would hit — every place the app assumes knowledge the
+person does not have. Fix what is small; file what is not.
+
+Record a release verdict for Milestone F.
+
+Cross-platform: run on Windows; confirm every documented command is valid on macOS.
+
+---
+
+## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
+**Priority:** P1 | **Tags:** core, server, ui, infra, milestone-g
+**Updated:** 2026-08-07 11:40
+
+A gauge transformation changes the representation and not the physics. That is exactly
+this milestone: the product becomes **Isotopy**, and nothing it does changes.
+
+Do it before anyone outside sees the product, and after `TASK-125` — renaming a system
+that is still moving means renaming it twice.
+
+**Open question this epic settles first:** what "Isotopy" expands to, if anything. "ADHD"
+was a backronym — *Artificial Development, Human Directed* — and the new name needs its
+own answer or an explicit decision to have none. Everything downstream quotes it.
+
+**Split by contract surface** — `TASK-131` (visible), `TASK-132` (code), `TASK-133` (data
+and protocol) — because the rename touches 262 files and a half-renamed system is worse
+than either end state.
+
+**Clean break, decided with the user on 2026-08-07:** no migration, no dual-parsing, no
+compatibility shims. Local run history under `.adhd` is abandoned rather than carried
+across. There are no external users; a migration path written now is one we delete later.
+
+Cross-platform: path and env-var handling already goes through `paths.ts` and `config.ts`;
+the rename must not introduce a literal separator anywhere.
+
+---
+
+## TASK-131: Rename the visible surface to Isotopy
+**Priority:** P1 | **Tags:** ui, infra, milestone-g
+**Updated:** 2026-08-07 11:40
+
+Product name and tagline, `README.md`, everything under `docs/`, `CLAUDE.md`, `AGENTS.md`,
+the generated skills under `.claude/skills/`, UI strings and the window title,
+`packages/ui/public/adhd-icon.png`, and the GitHub repository with its URLs in
+`package.json` (`repository`, `homepage`, `bugs`).
+
+Depends on `TASK-130` having settled the expansion, since the tagline quotes it.
+
+Cross-platform: n/a — text and assets.
+
+---
+
+## TASK-132: Rename the code surface to Isotopy
+**Priority:** P1 | **Tags:** core, server, ui, milestone-g
+**Updated:** 2026-08-07 11:40
+
+- `@adhd/core`, `@adhd/server`, `@adhd/ui` → `@isotopy/*` — 272 references across
+  `package.json` files, imports, `tsconfig` paths and `pnpm-workspace.yaml`.
+- `ADHD_*` environment variables → `ISOTOPY_*` — 145 references: `ADHD_HOME`,
+  `ADHD_USER_HOME`, `ADHD_PORT`, `ADHD_UI_PORT`, `ADHD_ENGINE_TIMEOUT_MS`,
+  `ADHD_E2E_LIVE`, and the per-engine path and argument overrides.
+- The `X-ADHD-Project` header → `X-Isotopy-Project` — 14 references across
+  `routes/project-scope.ts`, the UI's single network module, and the test harness.
+
+Mechanical, but verify by running rather than by grepping: `pnpm dev`, one real run, and
+the full e2e suite.
+
+Cross-platform: env-var names are case-sensitive on POSIX and not on Windows — rename
+every reader and writer together, not one side.
+
+---
+
+## TASK-133: Rename the data and protocol surface to Isotopy
+**Priority:** P1 | **Tags:** server, core, engine, milestone-g
+**Updated:** 2026-08-07 11:40
+
+The two surfaces that are contracts rather than names, which is why they are their own
+task.
+
+- **On-disk `.adhd` → `.isotopy`** — 169 references. `~/.adhd/` (registry, settings,
+  credentials, the home project) and every project's `.adhd/` (runs, `runs.db`,
+  artifacts, orchestrations, milestones, teams). **No migration:** existing directories
+  are left where they are and ignored, and the task must say so in the code review so
+  nobody adds a reader for them later.
+- **Protocol fences** — 42 references. `adhd-orchestrator-decision`, `adhd-run-artifacts`
+  and `adhd-milestone-plan` appear in the bundled step tasks that instruct the model, and
+  in the extractors under `packages/server/src/schemas/` that parse what comes back.
+  Rename both sides in one change; a mismatch means every decision fails to parse and
+  every run needs attention. **No dual-parsing** — old persisted outputs stop being
+  readable, and that is accepted.
+
+Verify with a real run on at least two engines: the model must emit the new fence and the
+extractor must accept it.
+
+Cross-platform: n/a — the directory name is a literal, and joins already go through
+`paths.ts`.
+
+---
+
+## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
+**Priority:** P2 | **Tags:** ui, server, core, milestone-h
+**Updated:** 2026-08-07 11:40
+
+Show Isotopy to people who might want it, find out what they actually need, and build
+that — rather than what we guessed while building it.
+
+**Goal:** the features in this milestone are chosen by users, not by us. `TASK-135`
+collects the feedback; what follows is decided by what it says.
+
+**Parked here pending that evidence:** `TASK-111` (reusable teams), `TASK-113` (per-persona
+accumulated context), `TASK-115` (per-role engine/model configuration), `TASK-095`
+(agent-native browser testing for QA). Each was written as post-MVP by whoever deferred
+it, and none has a user behind it yet. Build the ones feedback asks for; reject the rest
+rather than letting them age in the backlog.
+
+Also unclaimed: the **full Orchestrator UI** beyond the MVP slice `TASK-114` shipped. No
+task exists for it on purpose — write one when someone says what is missing.
+
+Cross-platform: whatever this milestone builds carries the same Windows and macOS bar as
+everything else.
+
+---
+
+## TASK-135: Recruit prospective users and collect their feedback
+**Priority:** P2 | **Tags:** ui, milestone-h
+**Updated:** 2026-08-07 11:40
+
+The input `TASK-134` runs on.
+
+**Decide and record:** who to approach and why they are the target (developers who want a
+local, model-agnostic team over a hosted app builder); what to put in front of them — a
+README, a recording, or a session where they drive it themselves; what to ask, in
+questions that surface what they *tried to do* rather than what they thought of the UI;
+and where answers land so they are quotable in a task later.
+
+The bar for a useful answer is a sentence naming something they wanted and could not do.
+
+Cross-platform: n/a — process, not code.
+
+---
+
 ## TASK-124: Orchestrator-brokered permission modes for the harnesses
-**Priority:** P2 | **Tags:** core, server, engine, adapters
-**Updated:** 2026-08-07 00:00
+**Priority:** P1 | **Tags:** core, server, engine, adapters, milestone-f
+**Updated:** 2026-08-07 11:40
+
+**Milestone F — Fixpoint.** Blast radius has to have an opinion before strangers point
+agents at their own machines. `TASK-117` supplied the concrete argument: a Developer agent
+started a dev server on port 5173 — ADHD's own UI port — and left it running, and nothing
+in the system had a view on whether that was acceptable.
 
 Every engine runs effectively unrestricted today — Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox`, Cursor `--force` — and the one alternative, `acceptEdits`, degrades back to the same on Cursor and Codex, both of which log that they have no accept-edits-only headless mode.
 
@@ -15,8 +267,11 @@ Cross-platform: mode flags differ per CLI, not per OS; verify the Windows and ma
 ---
 
 ## TASK-111: Reusable teams for later orchestrations
-**Priority:** P2 | **Tags:** core, server
-**Updated:** 2026-08-04 11:33
+**Priority:** P3 | **Tags:** core, server, milestone-h
+**Updated:** 2026-08-07 11:40
+
+**Milestone H — Harmonic. Build only if feedback asks for it.** Written as post-MVP when
+Milestone E deferred it; no user has yet said they recompose teams often enough to mind.
 
 Persist approved team compositions to `.adhd/teams/<id>.json` with a strict schema and a single writer. The orchestrator lists and reuses saved teams across later conversations instead of recomposing from scratch.
 
@@ -25,8 +280,11 @@ Cross-platform: n/a — JSON + path-joined storage under the existing `.adhd` ro
 ---
 
 ## TASK-113: Per-persona accumulated context (artifact distilled memory)
-**Priority:** P2 | **Tags:** core, server, ui
-**Updated:** 2026-08-04 11:33
+**Priority:** P3 | **Tags:** core, server, ui, milestone-h
+**Updated:** 2026-08-07 11:40
+
+**Milestone H — Harmonic. Build only if feedback asks for it.** The evidence to wait for
+is a user saying an agent kept relearning the same thing about their project.
 
 Distill closeout knowledge into per-persona accumulated notes under `.adhd` and inject those notes into `composeSkill` alongside existing user/project overrides.
 
@@ -36,19 +294,25 @@ Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell ass
 
 ---
 
-## TASK-115: Per-role engine/model configuration (post-MVP)
-**Priority:** P2 | **Tags:** core, server, engine
-**Updated:** 2026-08-04 11:33
+## TASK-115: Per-role engine/model configuration
+**Priority:** P3 | **Tags:** core, server, engine, milestone-h
+**Updated:** 2026-08-07 11:40
 
-Post-MVP: extend workflow input / run state so each stage can select its own engine+model (allowing the orchestrator to run on a stronger model than team agents). Include settings surface and correct limit-park handling per stage.
+**Milestone H — Harmonic. Build only if feedback asks for it.** Watch for the user who
+wants a cheap model doing the typing and an expensive one deciding.
+
+Extend workflow input / run state so each stage can select its own engine+model (allowing the orchestrator to run on a stronger model than team agents). Include settings surface and correct limit-park handling per stage.
 
 Cross-platform: n/a — engine/model selection integrates with existing engine adapter registry.
 
 ---
 
 ## TASK-116: README — top-level product schema (“How it works”)
-**Priority:** P2 | **Tags:** ui, server
-**Updated:** 2026-08-04 11:33
+**Priority:** P1 | **Tags:** ui, server, milestone-f
+**Updated:** 2026-08-07 11:40
+
+**Milestone F — Fixpoint.** Comprehension before exposure: the README still explains the
+static pipelines and not the Orchestrator that now sits above them.
 
 Add a “How it works” section to `README.md` with a mermaid diagram of the whole product flow: user → orchestrator conversation → team composition/approval → composed runs (personas + step-tasks + engines) → closeout artifacts → orchestrator decision loop → milestones/task board.
 
@@ -58,9 +322,13 @@ Cross-platform: n/a — docs only.
 
 ---
 
-## TASK-095: Post-MVP — agent-native browser testing for QA
-**Priority:** P3 | **Tags:** testing, adapters, engine, milestone-d
-**Updated:** 2026-08-03 15:11
+## TASK-095: Agent-native browser testing for QA
+**Priority:** P3 | **Tags:** testing, adapters, engine, milestone-h
+**Updated:** 2026-08-07 11:40
+
+**Milestone H — Harmonic. Build only if feedback asks for it.** Playwright covered QA
+through Milestone E without complaint, including the live browser verification in
+`TASK-117`.
 
 **Stays parked (re-confirmed 2026-08-03):** TASK-051 closed by deliberately keeping QA on Playwright only for the MVP and deferring agent-native browser support here. This is a new capability seam, not cleanup, so it does not ride along with the Milestone D close-out.
 
@@ -70,9 +338,14 @@ Cross-platform: support Windows and macOS capability detection and degrade to Pl
 
 ---
 
-## TASK-092: Post-MVP — release management and preview deployment automation
-**Priority:** P2 | **Tags:** server, adapters, setup, infra, milestone-d
-**Updated:** 2026-07-30 00:00
+## TASK-092: Release management and preview deployment automation
+**Priority:** P0 | **Tags:** server, adapters, setup, infra, milestone-f
+**Updated:** 2026-08-07 11:40
+
+**Milestone F — Fixpoint, and no longer deferrable.** `TASK-126` needs the start command,
+readiness check and port strategy this task defines in order to run a built product and
+show it. Deferred through Milestones D and E on the grounds that the seam degraded
+honestly without it — that reasoning ends where "see what was built" begins.
 
 Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
 
@@ -84,7 +357,10 @@ Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Window
 
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P3 | **Tags:** server, engine, infra
-**Updated:** 2026-08-03 15:11
+**Updated:** 2026-08-07 11:40
+
+**No milestone, deliberately.** Research cannot close a milestone, so this sits outside
+F, G and H rather than diluting one of them. Pick it up when a runtime question forces it.
 
 **Deprioritized to P3 on 2026-08-03:** OpenWorkflow landed under TASK-068 and then survived a real mid-flight process kill in the TASK-094 dogfood, resuming without re-running completed stages. The comparison this spike was written to force has largely been answered by that evidence, so it is no longer worth a branch's cost.
 
@@ -105,8 +381,12 @@ The standing second choice from [`docs/workflow-runtime-options.md`](../docs/wor
 ---
 
 ## TASK-036: Spike — sandcastle as the implement-stage harness/sandbox layer
-**Priority:** P2 | **Tags:** adapters, engine, milestone-c
-**Updated:** 2026-07-16 00:00
+**Priority:** P3 | **Tags:** adapters, engine
+**Updated:** 2026-08-07 11:40
+
+**No milestone, deliberately.** Same reason as `TASK-069`. Its premise has also weakened:
+the subprocess harness it proposed replacing now exists, is dogfooded, and was hardened
+again in `TASK-117`.
 
 Evaluate [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle) as the execution layer behind the implementation stage instead of building the subprocess harness (TASK-006) from scratch. It's a TS library (`sandcastle.run()`) that runs a coding agent in an isolated sandbox and merges commits back: Docker/Podman/Vercel-Firecracker providers, git-worktree isolation, branch strategies, session capture/resume, typed structured-output extraction, lifecycle hooks — provider-agnostic (Claude Code, Codex, Cursor).
 
