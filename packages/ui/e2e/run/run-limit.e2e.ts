@@ -202,7 +202,11 @@ async function anticipateBlockedRun(page: Page): Promise<void> {
   );
 }
 
+// Waiting for focus, not just visibility: the modal paints before its effect
+// runs, and that effect focuses the dialog immediately before attaching the
+// document-level Escape listener. Pressing Escape on a merely-visible modal
+// races the listener, which is what failed on CI's slower runner.
 async function openBlockedRun(page: Page): Promise<void> {
   await page.goto(`/#/runs/${RUN_ID}`);
-  await expect(page.getByTestId("limit-modal")).toBeVisible();
+  await expect(page.getByTestId("limit-modal")).toBeFocused();
 }
