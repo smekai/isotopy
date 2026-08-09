@@ -142,7 +142,7 @@ export function EngineModelPicker({
             : `→ ${resolved.model || "the harness's own default"}${resolved.effort ? ` · effort ${resolved.effort}` : ""}`}
         </div>
       )}
-      {!overridden && resolved.degraded && (
+      {!overridden && !unavailable && resolved.degraded && (
         <div style={DEGRADED_NOTE}>
           This harness offers nothing matching that preset right now, so the run falls back to
           its own default.

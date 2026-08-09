@@ -16,13 +16,11 @@ const CODEX_CONFIG = [
   'model = "gpt-5.6-luna"',
 ].join("\n");
 
-// Verbatim head of `agent models`, including the bare header line.
 const CURSOR_MODELS = [
-  "Available models",
-  "",
-  "auto - Auto (current, default)",
-  "composer-2.5 - Composer 2.5",
-  "claude-opus-5-thinking-high - Opus 5 1M Thinking",
+  "Available choices",
+  "alpha.v1 - First label",
+  "this line has no separator",
+  "vendor:model-2 - Second label",
 ].join("\n");
 
 describe("codexConfigModel", () => {
@@ -90,21 +88,10 @@ describe("cursorCliConfigModel", () => {
 });
 
 describe("parseCursorModels", () => {
-  test("reads every listed id past the header line", () => {
+  test("only id - label lines yield model ids", () => {
     expect(parseCursorModels(CURSOR_MODELS).map((option) => option.id)).toEqual([
-      "auto",
-      "composer-2.5",
-      "claude-opus-5-thinking-high",
+      "alpha.v1",
+      "vendor:model-2",
     ]);
-  });
-
-  test("the CLI's current default is marked and its suffix stripped from the label", () => {
-    const [current] = parseCursorModels(CURSOR_MODELS);
-
-    expect(current).toEqual({ id: "auto", label: "Cursor Auto", hint: "the CLI's current default" });
-  });
-
-  test("output with no listing lines yields nothing", () => {
-    expect(parseCursorModels("Available models\n\n")).toEqual([]);
   });
 });

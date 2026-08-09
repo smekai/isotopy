@@ -2,7 +2,7 @@
 
 ## TASK-129: Model rosters must not offer ids the user's plan rejects
 **Priority:** P1 | **Tags:** core, engine, server, milestone-f
-**Updated:** 2026-08-09 00:00
+**Updated:** 2026-08-09 20:55
 
 `TASK-117` hit this on the first Codex run: the shipped list offered `gpt-5-mini`, and a
 ChatGPT-account login answered `400 — not supported when using Codex with a ChatGPT
@@ -30,8 +30,14 @@ Verified live on all three CLIs: `opus` promoted to `origin: "config"` from the 
 preset resolving to `opus · effort high` on Claude and `gpt-5.3-codex-high` on Cursor.
 `POST /runs` with `gpt-5-mini` answers 400 naming Setup, with no run created.
 
-Gates green: lint, typecheck, 619 tests, build, 59 e2e. Decisions in `docs/decisions.md`;
-roster, effort and migration behaviour in `docs/implementation-notes.md`. Version 0.9.27.
+**Review follow-up.** Setup no longer claims a preset degraded when its roster request
+failed. Limit recovery uses a tier-driven run's tier as the cutoff, so lower intents stay
+available even when they resolve to the same model; pinned and legacy runs retain their
+model-based fallback. Parser and resolver tests now assert stable format and selection
+contracts instead of copying the current model catalogue.
+
+Gates green: lint, typecheck, 614 tests, build, 59 e2e. Decisions in `docs/decisions.md`;
+roster, effort and migration behaviour in `docs/implementation-notes.md`. Version 0.9.28.
 
 **Follow-on:** `TASK-115` (per-role engine/model configuration) moved out of Milestone H
 into Milestone F's scope — presets are its precondition, and the tier is already resolved

@@ -1,12 +1,26 @@
 import { describe, expect, test } from "vitest";
-import { CODEX_STATIC_MODELS, mergeModelLayers, resolveTier, rosterOrigins } from "../src/engines.ts";
-import type { EngineModelOption, EngineModelRoster, ModelOptionDraft } from "../src/engines.ts";
-
-const BUNDLED = CODEX_STATIC_MODELS;
+import { mergeModelLayers, resolveTier, rosterOrigins, tierLadderFor } from "../src/engines.ts";
+import type {
+  EngineModelOption,
+  EngineModelRoster,
+  ModelOptionDraft,
+  StaticModelRoster,
+  TierCandidate,
+} from "../src/engines.ts";
 
 function draft(id: string): ModelOptionDraft {
   return { id, label: id, hint: "" };
 }
+
+const BUNDLED = {
+  checkedOn: "2026-08-07",
+  options: [draft("bundled-primary"), draft("bundled-fallback")],
+} satisfies StaticModelRoster;
+
+const RESOLUTION_LADDER = tierLadderFor("claude-code", "deep");
+const PREFERRED_CANDIDATE = RESOLUTION_LADDER[0] as TierCandidate;
+const FALLBACK_CANDIDATE = RESOLUTION_LADDER[1] as TierCandidate;
+const AUTO_CANDIDATE = tierLadderFor("claude-code", "auto")[0] as TierCandidate;
 
 function originOf(roster: EngineModelRoster, id: string): string | undefined {
   return roster.options.find((option) => option.id === id)?.origin;
@@ -34,26 +48,30 @@ describe("mergeModelLayers", () => {
   test("an id only the bundled list knows is marked unverified", () => {
     const roster = mergeModelLayers({ live: [], bundled: BUNDLED });
 
-    expect(originOf(roster, "gpt-5.6-sol")).toBe("static");
+    expect(originOf(roster, "bundled-primary")).toBe("static");
   });
 
   test("an id the CLI listed outranks the same id in the bundled list", () => {
-    const roster = mergeModelLayers({ live: [draft("gpt-5.6-sol")], bundled: BUNDLED });
+    const roster = mergeModelLayers({ live: [draft("bundled-primary")], bundled: BUNDLED });
 
-    expect(roster.options.filter((option) => option.id === "gpt-5.6-sol")).toEqual([
-      { id: "gpt-5.6-sol", label: "gpt-5.6-sol", hint: "", origin: "live" },
+    expect(roster.options.filter((option) => option.id === "bundled-primary")).toEqual([
+      { id: "bundled-primary", label: "bundled-primary", hint: "", origin: "live" },
     ]);
   });
 
   test("a configured id the bundled list also knows appears once, as verified", () => {
     const roster = mergeModelLayers({
       live: [],
-      configured: draft("gpt-5.6-sol"),
+      configured: draft("bundled-primary"),
       bundled: BUNDLED,
     });
 
-    expect(roster.options.map((option) => option.id)).toEqual(["", "gpt-5.6-sol", "gpt-5.6-luna"]);
-    expect(originOf(roster, "gpt-5.6-sol")).toBe("config");
+    expect(roster.options.map((option) => option.id)).toEqual([
+      "",
+      "bundled-primary",
+      "bundled-fallback",
+    ]);
+    expect(originOf(roster, "bundled-primary")).toBe("config");
   });
 });
 
@@ -76,24 +94,26 @@ describe("rosterOrigins", () => {
 });
 
 describe("resolveTier", () => {
-  test("a preset resolves to a model and the effort that goes with it", () => {
-    expect(resolveTier("claude-code", "deep", rosterOf("opus", "sonnet"))).toEqual({
-      model: "opus",
-      effort: "high",
+  test("the first offered candidate wins regardless of roster order", () => {
+    expect(resolveTier(
+      "claude-code",
+      "deep",
+      rosterOf(FALLBACK_CANDIDATE.model, PREFERRED_CANDIDATE.model),
+    )).toEqual({
+      ...PREFERRED_CANDIDATE,
       degraded: false,
     });
   });
 
-  test("a rung the harness has retired falls through to the next candidate", () => {
-    expect(resolveTier("claude-code", "deep", rosterOf("sonnet"))).toEqual({
-      model: "sonnet",
-      effort: "high",
+  test("an unavailable candidate falls through to the next offered candidate", () => {
+    expect(resolveTier("claude-code", "deep", rosterOf(FALLBACK_CANDIDATE.model))).toEqual({
+      ...FALLBACK_CANDIDATE,
       degraded: false,
     });
   });
 
   test("a ladder the harness offers nothing from degrades to its own default", () => {
-    expect(resolveTier("claude-code", "deep", rosterOf("haiku"))).toEqual({
+    expect(resolveTier("claude-code", "deep", rosterOf("outside-the-ladder"))).toEqual({
       model: "",
       degraded: true,
     });
@@ -101,7 +121,7 @@ describe("resolveTier", () => {
 
   test("Auto asks for nothing, so it can never degrade", () => {
     expect(resolveTier("claude-code", "auto", rosterOf())).toEqual({
-      model: "",
+      ...AUTO_CANDIDATE,
       degraded: false,
     });
   });

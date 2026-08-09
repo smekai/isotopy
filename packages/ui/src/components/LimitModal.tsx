@@ -6,6 +6,7 @@ import type {
   EngineId,
   EngineModelRoster,
   LimitResolution,
+  ModelTier,
   ModelTierDefinition,
   RunLimit,
   RunState,
@@ -182,14 +183,22 @@ interface TierEscape {
 function cheaperTiers(
   engineId: EngineId,
   currentModel: string,
+  currentTier: ModelTier | undefined,
   roster: EngineModelRoster,
 ): TierEscape[] {
-  const resolved = PRICED_TIERS.map((tier) => resolveTier(engineId, tier.id, roster).model);
-  const current = resolved.indexOf(currentModel);
+  const resolved = PRICED_TIERS.map((tier) => ({ tier, ...resolveTier(engineId, tier.id, roster) }));
+  const current = currentTier === undefined
+    ? resolved.findIndex((candidate) => candidate.model === currentModel)
+    : currentTier === "auto"
+      ? 0
+      : PRICED_TIERS.findIndex((tier) => tier.id === currentTier);
+  const candidates = resolved.slice(0, current === -1 ? resolved.length : current);
+  if (currentTier !== undefined) {
+    return candidates.map(({ tier, model }) => ({ tier, model }));
+  }
   const seen = new Set([currentModel]);
-  return PRICED_TIERS.slice(0, current === -1 ? PRICED_TIERS.length : current).flatMap(
-    (tier, index) => {
-      const model = resolved[index] ?? "";
+  return candidates.flatMap(
+    ({ tier, model }) => {
       if (seen.has(model)) {
         return [];
       }
@@ -222,10 +231,11 @@ export function LimitModal({
   const restoreFocusTo = useRef<Element | null>(null);
   const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
   const { roster } = useEngineRoster(engineId);
+  const currentTier = run.model === undefined ? run.modelTier : undefined;
   // The countdown re-renders this modal every second for the whole reset window.
   const escapes = useMemo(
-    () => cheaperTiers(engineId, limit.model ?? "", roster),
-    [engineId, limit.model, roster],
+    () => cheaperTiers(engineId, limit.model ?? "", currentTier, roster),
+    [currentTier, engineId, limit.model, roster],
   );
   const notification = useLimitNotification(limit);
   const now = useNow(limit.resetAt !== undefined);

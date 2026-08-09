@@ -7,6 +7,7 @@
 // so the spies live on the generated props and a test names the one it asserts on.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { bundledRosterFor, resolveTier } from "@adhd/core";
 import { LimitModal } from "../../src/components/LimitModal";
 import type { LimitModalProps } from "../../src/components/LimitModal";
 import { LIMIT_COPY } from "../../src/limit-copy";
@@ -14,6 +15,9 @@ import { DIRS } from "../../src/theme";
 import { limit, run, stage } from "../support/run-fixtures";
 
 const RAW_LINE = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
+const CLAUDE_ROSTER = bundledRosterFor("claude-code");
+const DEEP_MODEL = resolveTier("claude-code", "deep", CLAUDE_ROSTER).model;
+const MAX_MODEL = resolveTier("claude-code", "max", CLAUDE_ROSTER).model;
 
 
 beforeEach(() => {
@@ -65,10 +69,41 @@ test("dropping to a cheaper preset resolves with the model that preset stands fo
 });
 
 test("only rungs below the one that hit the limit are offered as a way out", () => {
+  // Arrange — a legacy run records only the concrete model that hit the limit.
+  const legacyRun = run([stage("design", "blocked")], "blocked");
+
   // Act
-  render(<LimitModal {...limitProps({ limit: limit({ model: "opus" }) })} />);
+  render(<LimitModal {...limitProps({ run: legacyRun, limit: limit({ model: DEEP_MODEL }) })} />);
 
   // Assert — Deep is what just ran out; Max costs more, not less.
+  expect(screen.queryByText("Deep")).toBeNull();
+  expect(screen.queryByText("Max")).toBeNull();
+});
+
+test("a tier-driven Max run offers Deep by tier identity", () => {
+  // Arrange
+  const tierRun = { ...run([stage("design", "blocked")], "blocked"), modelTier: "max" as const };
+
+  // Act
+  render(<LimitModal {...limitProps({ run: tierRun, limit: limit({ model: MAX_MODEL }) })} />);
+
+  // Assert
+  expect(screen.getByText("Deep")).toBeTruthy();
+  expect(screen.queryByText("Max")).toBeNull();
+});
+
+test("a pinned model takes precedence over a retained tier when finding cheaper choices", () => {
+  // Arrange
+  const pinnedRun = {
+    ...run([stage("design", "blocked")], "blocked"),
+    model: DEEP_MODEL,
+    modelTier: "max" as const,
+  };
+
+  // Act
+  render(<LimitModal {...limitProps({ run: pinnedRun, limit: limit({ model: DEEP_MODEL }) })} />);
+
+  // Assert
   expect(screen.queryByText("Deep")).toBeNull();
   expect(screen.queryByText("Max")).toBeNull();
 });

@@ -4,6 +4,7 @@
 // did not expect, so every test here is about what the choice actually resolves to.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+import { resolveTier } from "@adhd/core";
 import type { EngineModelRoster } from "@adhd/core";
 import { EngineModelPicker } from "../../src/components/setup/EngineModelPicker";
 import type { EngineModelPickerProps } from "../../src/components/setup/EngineModelPicker";
@@ -64,12 +65,14 @@ test("the choice offered is an intent, not a roster of ids", async () => {
 test("a preset says which model and effort it resolved to", async () => {
   // Arrange
   served(CLAUDE_ROSTER);
+  const resolved = resolveTier("claude-code", "deep", CLAUDE_ROSTER);
+  const resolution = `→ ${resolved.model || "the harness's own default"}${resolved.effort ? ` · effort ${resolved.effort}` : ""}`;
 
   // Act
   render(<EngineModelPicker {...pickerProps({ tier: "deep" })} />);
 
   // Assert
-  await waitFor(() => expect(screen.getByText("→ opus · effort high")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(resolution)).toBeTruthy());
 });
 
 test("choosing a preset reports the tier, not a model id", async () => {
@@ -153,10 +156,11 @@ test("a roster that cannot be reached says so rather than showing a resolution i
   fetchModels.mockRejectedValue(new Error("offline"));
 
   // Act
-  render(<EngineModelPicker {...pickerProps()} />);
+  render(<EngineModelPicker {...pickerProps({ engine: "cursor", tier: "max" })} />);
 
   // Assert
   await waitFor(() => expect(screen.getByText(/Model list unavailable/)).toBeTruthy());
+  expect(screen.queryByText(/falls back to/)).toBeNull();
 });
 
 test("opening Setup reads the cached roster rather than re-probing the harness", async () => {
