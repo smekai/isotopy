@@ -9,6 +9,7 @@
 import { assert, expect } from "vitest";
 import type {
   EngineId,
+  ModelOptionDraft,
   OrchestratorDecision,
   RunArtifacts,
   StageUsage,
@@ -28,6 +29,7 @@ export interface Anticipation {
   /** Working directory the box runs in — the shared workspace for a run. */
   cwd?: Matcher;
   model?: string;
+  effort?: string;
   permissionMode?: string;
   /** The persona injected for this stage (`appendSystemPrompt`). */
   persona?: Matcher;
@@ -112,7 +114,11 @@ export class FakeEngine implements EngineAdapter {
   private readonly scripted: Scripted[] = [];
   /** Every context received, in order — the raw material for `verify()`. */
   readonly calls: EngineRunContext[] = [];
+  /** How often the roster asked this engine to list its models — proves caching. */
+  liveModelLookups = 0;
   private unexpected = 0;
+  private liveModelScript: () => Promise<ModelOptionDraft[]> = () => Promise.resolve([]);
+  private configured: ModelOptionDraft | undefined;
 
   constructor(id: EngineId = "claude-code") {
     this.id = id;
@@ -231,6 +237,33 @@ QUESTION: ${question}`,
     return ctx;
   }
 
+  /** Declare what `agent models` and its kin answer for this engine. */
+  offersLiveModels(options: ModelOptionDraft[]): FakeEngine {
+    this.liveModelScript = () => Promise.resolve(options);
+    return this;
+  }
+
+  /** The CLI is present but its model listing fails — a broken install, a timeout. */
+  failsLiveModels(message: string): FakeEngine {
+    this.liveModelScript = () => Promise.reject(new Error(message));
+    return this;
+  }
+
+  /** Declare the model this engine's own config file names. */
+  hasConfiguredModel(draft: ModelOptionDraft): FakeEngine {
+    this.configured = draft;
+    return this;
+  }
+
+  liveModels(): Promise<ModelOptionDraft[]> {
+    this.liveModelLookups += 1;
+    return this.liveModelScript();
+  }
+
+  configuredModel(): ModelOptionDraft | undefined {
+    return this.configured;
+  }
+
   /** EngineAdapter surface — the orchestrator calls this per engine-backed stage. */
   run(ctx: EngineRunContext): Promise<EngineRunResult> {
     this.calls.push(ctx);
@@ -278,6 +311,7 @@ QUESTION: ${question}`,
     };
     check("cwd", ctx.cwd, anticipation.cwd);
     check("model", ctx.model, anticipation.model);
+    check("effort", ctx.effort, anticipation.effort);
     check("permissionMode", ctx.permissionMode, anticipation.permissionMode);
     check("persona", ctx.appendSystemPrompt, anticipation.persona);
     check("prompt", ctx.prompt, anticipation.prompt);

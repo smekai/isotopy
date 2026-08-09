@@ -55,6 +55,7 @@ test("a preference set through the API is visible to a second server over the sa
   // Assert
   expect(body.preferences).toEqual({
     engine: "codex",
+    modelTier: defaultProjectPreferences().modelTier,
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
     pipelineId: "solo",
@@ -66,7 +67,7 @@ test("an update touches only the fields it carries", async () => {
   // Arrange
   await put<SettingsView>(ctx.app, "/settings/preferences", {
     engine: "codex",
-    engineModels: { "claude-code": "opus" },
+    engineModels: { codex: "gpt-5.1-codex-max" },
   });
 
   // Act
@@ -76,14 +77,14 @@ test("an update touches only the fields it carries", async () => {
 
   // Assert
   expect(body.preferences.engine).toBe("codex");
-  expect(body.preferences.engineModels).toEqual({ "claude-code": "opus" });
+  expect(body.preferences.engineModels).toEqual({ codex: "gpt-5.1-codex-max" });
   expect(body.preferences.pipelineId).toBe("pm-dev-test");
 });
 
-test("a model stored for one engine does not disturb another engine's model", async () => {
+test("a pinned model for one engine does not disturb another engine's", async () => {
   // Arrange
   await put<SettingsView>(ctx.app, "/settings/preferences", {
-    engineModels: { "claude-code": "opus" },
+    engineModels: { cursor: "composer-9" },
   });
 
   // Act
@@ -93,9 +94,37 @@ test("a model stored for one engine does not disturb another engine's model", as
 
   // Assert
   expect(body.preferences.engineModels).toEqual({
-    "claude-code": "opus",
+    cursor: "composer-9",
     codex: "gpt-5.1-codex-max",
   });
+});
+
+test("pinning a model the presets already cover adopts the preset instead", async () => {
+  // Act
+  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", {
+    engineModels: { "claude-code": "opus" },
+  });
+
+  // Assert
+  expect(body.preferences.modelTier).toBe("deep");
+  expect(body.preferences.engineModels).toEqual({});
+});
+
+test("choosing a preset releases the pinned model", async () => {
+  // Arrange
+  await put<SettingsView>(ctx.app, "/settings/preferences", {
+    engineModels: { "claude-code": "claude-3-legacy" },
+  });
+
+  // Act
+  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", {
+    modelTier: "fast",
+    engineModels: { "claude-code": null },
+  });
+
+  // Assert
+  expect(body.preferences.modelTier).toBe("fast");
+  expect(body.preferences.engineModels).toEqual({});
 });
 
 test("preferences do not cross projects", async () => {
@@ -111,7 +140,7 @@ test("preferences do not cross projects", async () => {
   expect(body.preferences.pipelineId).toBe(defaultProjectPreferences().pipelineId);
 });
 
-test("a legacy model id stored on disk is migrated on read", async () => {
+test("a legacy model id stored on disk is migrated on read, onto the preset that covers it", async () => {
   // Arrange — what a browser wrote before the aliases landed.
   await writeUserSettings(ctx.userHome, {
     version: 1,
@@ -123,7 +152,8 @@ test("a legacy model id stored on disk is migrated on read", async () => {
   const { body } = await get<SettingsView>(ctx.app, "/settings");
 
   // Assert
-  expect(body.preferences.engineModels["claude-code"]).toBe("sonnet");
+  expect(body.preferences.modelTier).toBe("balanced");
+  expect(body.preferences.engineModels).toEqual({});
 });
 
 test("an unknown engine is rejected and nothing is stored", async () => {

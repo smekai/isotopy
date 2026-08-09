@@ -3,6 +3,7 @@ import {
   LEGACY_MODEL_ALIASES,
   MILESTONE_FEATURE_STATUSES,
   MILESTONE_STATUSES,
+  MODEL_TIERS,
   PERMISSION_MODE_IDS,
   findPipeline,
 } from "@adhd/core";
@@ -23,19 +24,20 @@ const pipelineIdSchema = text.refine((value) => findPipeline(value) !== undefine
 });
 
 const engineModelsSchema = z
-  .partialRecord(engineIdSchema, z.string())
+  .partialRecord(engineIdSchema, z.string().nullable())
   .transform((models) =>
     Object.fromEntries(
       Object.entries(models).map(([engineId, model]) => [
         engineId,
-        LEGACY_MODEL_ALIASES[engineId as EngineId][model] ?? model,
+        model === null ? null : LEGACY_MODEL_ALIASES[engineId as EngineId][model] ?? model,
       ]),
-    ) as Partial<Record<EngineId, string>>,
+    ) as Partial<Record<EngineId, string | null>>,
   );
 
 export const projectPreferencesUpdateSchema: z.ZodType<ProjectPreferencesUpdate> = z
   .object({
     engine: engineIdSchema.optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     engineModels: engineModelsSchema.optional(),
     permissionMode: permissionModeSchema.optional(),
     pipelineId: pipelineIdSchema.optional(),
@@ -59,6 +61,7 @@ export const startRunSchema = z
     task: optionalText,
     engine: optionalText,
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     permissionMode: optionalText,
     milestoneId: optionalText,
     featureId: optionalText,
@@ -124,6 +127,7 @@ export const startMilestonePlanningSchema = z
     goal: text,
     engine: optionalText,
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     permissionMode: optionalText,
   })
   .strict();
@@ -133,6 +137,7 @@ export const reviseMilestonePlanSchema = z
     feedback: text,
     engine: optionalText,
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     permissionMode: optionalText,
   })
   .strict();
@@ -142,6 +147,7 @@ export const startOrchestrationSchema = z
     goal: text,
     engine: optionalText,
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     permissionMode: optionalText,
   })
   .strict();
@@ -150,6 +156,7 @@ export const approveTeamSchema = z
   .object({
     engine: optionalText,
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     permissionMode: optionalText,
   })
   .strict();
@@ -158,6 +165,7 @@ export const startNextMilestoneRunSchema = z
   .object({
     engine: optionalText,
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     permissionMode: optionalText,
   })
   .strict();

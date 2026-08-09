@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, FolderOpen, Lock, X } from "lucide-react";
-import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, modelForEngine, permissionModeLabel } from "@adhd/core";
+import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, modelChoiceLabel, permissionModeLabel } from "@adhd/core";
 import type { Project, RunState } from "@adhd/core";
 import type { SettingsController } from "../hooks/useSettings";
 import { childPath, isScratchWorkspace } from "../run-utils";
@@ -231,7 +231,7 @@ export function ProjectDrawer({
             ENGINE
             <button onClick={() => onOpenSetup("harness")} style={editLinkStyle(d)}>Edit in Setup →</button>
           </div>
-          <Field d={d} label="For new runs" value={`${engine.label} · ${modelForEngine(preferences, engineId) || "Auto"}`} />
+          <Field d={d} label="For new runs" value={`${engine.label} · ${modelChoiceLabel(preferences, engineId)}`} />
           <Field d={d} label="Permissions" value={permissionModeLabel(preferences.permissionMode)} />
           <Field
             d={d}

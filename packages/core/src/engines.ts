@@ -122,11 +122,33 @@ export function defaultConnectionMode(engineId: EngineId): string {
   return ENGINES[engineId].connections[0]?.id ?? "subscription";
 }
 
-export interface EngineModelOption {
+export const MODEL_ORIGINS = ["auto", "live", "config", "static"] as const;
+
+export type EngineModelOrigin = (typeof MODEL_ORIGINS)[number];
+
+export type SelectableModelOrigin = Exclude<EngineModelOrigin, "auto">;
+
+export interface ModelOptionDraft {
   id: string;
   label: string;
   hint: string;
   requiresUsageCredits?: boolean;
+}
+
+export interface EngineModelOption extends ModelOptionDraft {
+  origin: EngineModelOrigin;
+}
+
+export interface StaticModelRoster {
+  checkedOn: string;
+  options: ModelOptionDraft[];
+}
+
+export interface EngineModelRoster {
+  engine: EngineId;
+  options: EngineModelOption[];
+  staticCheckedOn: string;
+  note?: string;
 }
 
 export const AUTO_MODEL_ID = "";
@@ -135,57 +157,167 @@ export const AUTO_MODEL_OPTION: EngineModelOption = {
   id: AUTO_MODEL_ID,
   label: "Auto",
   hint: "use the CLI's own configured default",
+  origin: "auto",
 };
 
-export type EngineModelSource = "cli" | "config" | "static";
-
-export interface EngineModelList {
-  options: EngineModelOption[];
-  source: EngineModelSource;
-  note?: string;
+export function isVerifiedModel(option: EngineModelOption): boolean {
+  return option.origin !== "static";
 }
 
-export const CLAUDE_MODEL_OPTIONS: EngineModelOption[] = [
-  AUTO_MODEL_OPTION,
-  { id: "opus", label: "Opus", hint: "most capable" },
-  { id: "sonnet", label: "Sonnet", hint: "balanced (default)" },
-  { id: "haiku", label: "Haiku", hint: "fastest" },
-  {
-    id: "sonnet[1m]",
-    label: "Sonnet · 1M context",
-    hint: "requires usage credits or API billing",
-    requiresUsageCredits: true,
-  },
+export function rosterAccepts(roster: EngineModelRoster, modelId: string): boolean {
+  return modelId === AUTO_MODEL_ID || roster.options.some((option) => option.id === modelId);
+}
+
+export function rosterOrigins(options: EngineModelOption[]): SelectableModelOrigin[] {
+  return MODEL_ORIGINS.filter(
+    (origin): origin is SelectableModelOrigin =>
+      origin !== "auto" && options.some((option) => option.origin === origin),
+  );
+}
+
+export const MODEL_TIERS = ["auto", "fast", "balanced", "deep", "max"] as const;
+
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+export const DEFAULT_MODEL_TIER: ModelTier = "balanced";
+
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+
+export interface ModelTierDefinition {
+  id: ModelTier;
+  label: string;
+  hint: string;
+}
+
+export const MODEL_TIER_OPTIONS: ModelTierDefinition[] = [
+  { id: "auto", label: "Auto", hint: "whatever the harness is already set to" },
+  { id: "fast", label: "Fast", hint: "quick and cheap — routine edits" },
+  { id: "balanced", label: "Balanced", hint: "the everyday default" },
+  { id: "deep", label: "Deep", hint: "more reasoning — design and hard bugs" },
+  { id: "max", label: "Max", hint: "most reasoning, slowest and priciest" },
 ];
+
+export function modelTierLabel(tier: ModelTier): string {
+  return MODEL_TIER_OPTIONS.find((option) => option.id === tier)?.label ?? tier;
+}
+
+export interface TierCandidate {
+  model: string;
+  effort?: EffortLevel;
+}
+
+const AUTO_LADDER: TierCandidate[] = [{ model: AUTO_MODEL_ID }];
+
+const TIER_LADDERS: Record<EngineId, Record<ModelTier, TierCandidate[]>> = {
+  "claude-code": {
+    auto: AUTO_LADDER,
+    fast: [{ model: "haiku", effort: "low" }],
+    balanced: [{ model: "sonnet", effort: "medium" }],
+    deep: [{ model: "opus", effort: "high" }, { model: "sonnet", effort: "high" }],
+    max: [{ model: "opus", effort: "xhigh" }, { model: "sonnet", effort: "xhigh" }],
+  },
+  cursor: {
+    auto: AUTO_LADDER,
+    fast: [{ model: "gpt-5.3-codex-low" }, { model: "composer-2.5" }],
+    balanced: [{ model: "gpt-5.3-codex" }, { model: "auto" }],
+    deep: [{ model: "gpt-5.3-codex-high" }, { model: "gpt-5.3-codex" }],
+    max: [{ model: "gpt-5.3-codex-xhigh" }, { model: "gpt-5.3-codex-high" }],
+  },
+  codex: {
+    auto: AUTO_LADDER,
+    fast: [{ model: "gpt-5.6-luna", effort: "low" }],
+    balanced: [{ model: "gpt-5.6-sol", effort: "medium" }],
+    deep: [{ model: "gpt-5.6-sol", effort: "high" }],
+    max: [{ model: "gpt-5.6-sol", effort: "high" }],
+  },
+};
+
+export function tierLadderFor(engineId: EngineId, tier: ModelTier): TierCandidate[] {
+  return TIER_LADDERS[engineId][tier];
+}
+
+export interface ResolvedModel {
+  tier: ModelTier;
+  model: string;
+  effort?: EffortLevel;
+  degraded: boolean;
+}
+
+export function resolveTier(
+  engineId: EngineId,
+  tier: ModelTier,
+  roster: EngineModelRoster,
+): ResolvedModel {
+  const offered = new Set(roster.options.map((option) => option.id));
+  for (const candidate of tierLadderFor(engineId, tier)) {
+    if (candidate.model === AUTO_MODEL_ID || offered.has(candidate.model)) {
+      return {
+        tier,
+        model: candidate.model,
+        ...(candidate.effort === undefined ? {} : { effort: candidate.effort }),
+        degraded: false,
+      };
+    }
+  }
+  return { tier, model: AUTO_MODEL_ID, degraded: true };
+}
+
+const STATIC_ROSTER_CHECKED_ON = "2026-08-07";
+
+export const CLAUDE_STATIC_MODELS: StaticModelRoster = {
+  checkedOn: STATIC_ROSTER_CHECKED_ON,
+  options: [
+    { id: "fable", label: "Fable", hint: "newest frontier alias" },
+    { id: "opus", label: "Opus", hint: "most capable" },
+    { id: "sonnet", label: "Sonnet", hint: "balanced (default)" },
+    { id: "haiku", label: "Haiku", hint: "fastest" },
+    {
+      id: "sonnet[1m]",
+      label: "Sonnet · 1M context",
+      hint: "requires usage credits or API billing",
+      requiresUsageCredits: true,
+    },
+  ],
+};
 
 export const DEFAULT_CLAUDE_MODEL = "sonnet";
 
-export const CURSOR_MODEL_OPTIONS: EngineModelOption[] = [
-  AUTO_MODEL_OPTION,
-  { id: "auto", label: "Cursor Auto", hint: "Cursor's own model router" },
-  { id: "composer-1", label: "Composer 1", hint: "Cursor's fast agent model" },
-  { id: "sonnet-4.5", label: "Claude Sonnet 4.5", hint: "Anthropic" },
-  { id: "gpt-5", label: "GPT-5", hint: "OpenAI" },
-];
+export const CURSOR_STATIC_MODELS: StaticModelRoster = {
+  checkedOn: STATIC_ROSTER_CHECKED_ON,
+  options: [
+    { id: "auto", label: "Cursor Auto", hint: "Cursor's own model router" },
+    { id: "composer-2.5", label: "Composer 2.5", hint: "Cursor's fast agent model" },
+    { id: "gpt-5.3-codex", label: "Codex 5.3", hint: "OpenAI" },
+    { id: "gpt-5.2", label: "GPT-5.2", hint: "OpenAI" },
+    { id: "gpt-5.6-sol-high", label: "GPT-5.6 Sol 1M High", hint: "OpenAI" },
+    { id: "claude-opus-5-thinking-high", label: "Opus 5 1M Thinking", hint: "Anthropic" },
+    { id: "claude-sonnet-5-thinking-high", label: "Sonnet 5 1M Thinking", hint: "Anthropic" },
+    { id: "cursor-grok-4.5-high", label: "Cursor Grok 4.5", hint: "xAI" },
+  ],
+};
 
 export const DEFAULT_CURSOR_MODEL = AUTO_MODEL_ID;
 
-export const CODEX_MODEL_OPTIONS: EngineModelOption[] = [
-  AUTO_MODEL_OPTION,
-  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "most capable" },
-  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "faster, cheaper" },
-];
+export const CODEX_STATIC_MODELS: StaticModelRoster = {
+  checkedOn: STATIC_ROSTER_CHECKED_ON,
+  options: [
+    { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "most capable" },
+    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "faster, cheaper" },
+  ],
+};
 
 export const DEFAULT_CODEX_MODEL = AUTO_MODEL_ID;
 
-const MODEL_OPTIONS: Record<EngineId, EngineModelOption[]> = {
-  "claude-code": CLAUDE_MODEL_OPTIONS,
-  cursor: CURSOR_MODEL_OPTIONS,
-  codex: CODEX_MODEL_OPTIONS,
+const STATIC_MODELS: Record<EngineId, StaticModelRoster> = {
+  "claude-code": CLAUDE_STATIC_MODELS,
+  cursor: CURSOR_STATIC_MODELS,
+  codex: CODEX_STATIC_MODELS,
 };
 
-export function modelOptionsFor(engineId: EngineId): EngineModelOption[] {
-  return MODEL_OPTIONS[engineId];
+export function staticModelsFor(engineId: EngineId): StaticModelRoster {
+  return STATIC_MODELS[engineId];
 }
 
 const DEFAULT_MODELS: Record<EngineId, string> = {
@@ -204,7 +336,11 @@ export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
     "claude-sonnet-4-6": "sonnet",
     "claude-haiku-4-5": "haiku",
   },
-  cursor: {},
+  cursor: {
+    "composer-1": AUTO_MODEL_ID,
+    "sonnet-4.5": AUTO_MODEL_ID,
+    "gpt-5": AUTO_MODEL_ID,
+  },
   codex: {
     "gpt-5-codex": AUTO_MODEL_ID,
     "o4-mini": AUTO_MODEL_ID,

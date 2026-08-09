@@ -15,6 +15,49 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-09 — A model choice is an intent, resolved per engine, not an id
+
+**Context:** `TASK-117` lost a run to a model the account rejected — the shipped Codex
+list offered `gpt-5-mini`, a ChatGPT-account login answered `400 — not supported`, and it
+surfaced mid-stage after the user had waited. The first fix made rosters honest: resolve
+live where the CLI allows it, mark bundled entries unverified, refuse an unoffered id
+before a stage runs. Driving the app then showed the honest roster was still the wrong
+surface — **Cursor's live list is 194 entries**, and every id in it turns over monthly.
+Neither a first-time user nor an Orchestrator composing a team can track that; both can
+say how much thinking a step needs.
+
+**Decision:** what the system stores and reasons about is a **preset** on one effort
+ladder — `auto · fast · balanced · deep · max` — resolved to a concrete `(model, effort)`
+pair per engine at stage-execution time. The ladder borrows the CLIs' own
+`low·medium·high·xhigh·max` vocabulary, which does not churn the way model names do, and
+effort is a genuinely separate axis on two of three engines (`--effort` on Claude,
+`-c model_reasoning_effort` on Codex; Cursor bakes it into the id). A preset that cannot
+be satisfied *degrades* to Auto, which a raw id can never do — substituting is legitimate
+precisely because the user asked for an intent. Setup always shows what the preset
+resolved to, so the abstraction is never a black box. The three-layer roster
+(`live → config → static`) stops being the UI surface and becomes what resolves and
+validates a preset. A preset is engine-independent, so it survives switching harness; an
+exact id stays available as a per-engine override behind a disclosure, and an override the
+roster rejects is still refused at run start with a message naming Setup.
+
+**Rejected:** *presets including a "coding" tier* — a real distinction on Cursor alone, and
+on Codex and Claude it would be a label with the same model behind it, reintroducing the
+per-engine divergence this task exists to remove. *A one-shot verification probe* to prove
+an id works on the user's plan — it spends real tokens on every check, and Auto plus an
+unverified badge covers the same ground for free. *Keeping the per-engine id bag as the
+primary choice* — the stored value would go stale exactly as before, and per-step
+assignment (`TASK-115`) would gain nothing to reason about.
+
+**Known limits, stated rather than papered over:** the ladder is a maintained snapshot too,
+just 3 engines × 4 rungs instead of 194 ids, and a wrong rung silently spends more than
+intended — which is why the resolved model is always on screen. Codex's accepted effort
+values above `high` are unconfirmed, so Max shares Deep's effort there. Cursor's config
+file holds a CLI-managed object with a `"default"` sentinel, so hand-pinning an unlisted id
+there is not a real escape hatch — it is unnecessary exactly where it does not work, since
+Cursor is the one engine with a complete live roster.
+
+---
+
 ## 2026-08-07 — Asking is a stage property; resuming is an engine one
 
 **Context:** `canAsk` required `isConversational(engine)`, and only Claude Code and Codex

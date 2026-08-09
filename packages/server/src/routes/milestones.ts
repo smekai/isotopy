@@ -41,6 +41,7 @@ export function createMilestoneRoutes(
             {
               engine: body.engine,
               model: body.model,
+              modelTier: body.modelTier,
               permissionMode: body.permissionMode,
             },
           ),
@@ -103,6 +104,7 @@ export function createMilestoneRoutes(
             {
               engine: body.engine,
               model: body.model,
+              modelTier: body.modelTier,
               permissionMode: body.permissionMode,
             },
           ),

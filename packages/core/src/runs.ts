@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ENGINE_IDS } from "./engines.ts";
-import type { EngineId } from "./engines.ts";
+import type { EngineId, ModelTier } from "./engines.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
 import type { RunArtifactRecord } from "./run-artifacts.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
@@ -200,6 +200,7 @@ export interface RunState {
   task?: string;
   engine?: EngineId;
   model?: string;
+  modelTier?: ModelTier;
   limit?: RunLimit;
   result?: string;
   stageOutputs?: Record<string, string>;

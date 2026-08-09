@@ -1,7 +1,7 @@
 import type {
   Milestone,
   MilestonePlan,
-  EngineModelList,
+  EngineModelRoster,
   EngineStatus,
   LimitResolution,
   Orchestration,
@@ -117,8 +117,8 @@ export function fetchEngineStatus(engineId: string): Promise<EngineStatus> {
   return requestJson<EngineStatus>(`/engines/${engineId}/status`);
 }
 
-export function fetchEngineModels(engineId: string): Promise<EngineModelList> {
-  return requestJson<EngineModelList>(`/engines/${engineId}/models`);
+export function fetchEngineModels(engineId: string, recheck = false): Promise<EngineModelRoster> {
+  return requestJson<EngineModelRoster>(`/engines/${engineId}/models${recheck ? "?refresh=1" : ""}`);
 }
 
 export interface EngineActionResult {

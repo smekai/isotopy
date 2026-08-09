@@ -52,31 +52,32 @@ test("the raw harness line is shown so the parsed reset can be checked against i
   expect(screen.getByText(/resets 4:30pm \(Europe\/Tallinn\)/)).toBeTruthy();
 });
 
-test("picking a cheaper model resolves with that model id", () => {
-  // Arrange
+test("dropping to a cheaper preset resolves with the model that preset stands for", () => {
+  // Arrange — the limit was hit on opus, which is the Deep rung.
   const props = limitProps();
   render(<LimitModal {...props} />);
 
   // Act
-  fireEvent.click(screen.getByText("Haiku"));
+  fireEvent.click(screen.getByText("Fast"));
 
   // Assert
   expect(props.onResolve).toHaveBeenCalledWith({ choice: "switch-model", model: "haiku" });
 });
 
-test("the model already in use is not offered as a way out of its own limit", () => {
+test("only rungs below the one that hit the limit are offered as a way out", () => {
   // Act
   render(<LimitModal {...limitProps({ limit: limit({ model: "opus" }) })} />);
 
-  // Assert
-  expect(screen.queryByText("Opus")).toBeNull();
+  // Assert — Deep is what just ran out; Max costs more, not less.
+  expect(screen.queryByText("Deep")).toBeNull();
+  expect(screen.queryByText("Max")).toBeNull();
 });
 
 test("a model that bills usage credits is not offered as an escape from a plan limit", () => {
   // Act
   render(<LimitModal {...limitProps()} />);
 
-  // Assert — Sonnet · 1M context costs more, not less; it cannot resolve a plan limit.
+  // Assert — Sonnet · 1M context costs more, not less, so no rung stands for it.
   expect(screen.queryByText(/1M context/)).toBeNull();
 });
 

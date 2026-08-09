@@ -1,8 +1,16 @@
 import { useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { BellRing, Play, Plug, RotateCcw, Square, X } from "lucide-react";
-import { ENGINES, modelOptionsFor } from "@adhd/core";
-import type { EngineId, LimitResolution, RunLimit, RunState } from "@adhd/core";
+import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@adhd/core";
+import type {
+  EngineId,
+  EngineModelRoster,
+  LimitResolution,
+  ModelTierDefinition,
+  RunLimit,
+  RunState,
+} from "@adhd/core";
+import { useEngineRoster } from "../hooks/useEngineRoster";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";
 import { formatCountdown, formatResetAt, remainingMs } from "../limit";
@@ -164,6 +172,36 @@ function otherEngines(current: EngineId): EngineId[] {
     .map((engine) => engine.id);
 }
 
+const EFFORT_LADDER = MODEL_TIER_OPTIONS.filter((option) => option.id !== "auto");
+
+interface TierEscape {
+  tier: ModelTierDefinition;
+  model: string;
+}
+
+/**
+ * A plan limit is a budget problem, so the way out is a lower rung — not a
+ * sideways pick from a roster of a hundred ids.
+ */
+function cheaperTiers(
+  engineId: EngineId,
+  currentModel: string,
+  roster: EngineModelRoster,
+): TierEscape[] {
+  const modelFor = (tier: ModelTierDefinition) => resolveTier(engineId, tier.id, roster).model;
+  const current = EFFORT_LADDER.findIndex((tier) => modelFor(tier) === currentModel);
+  const cheaper = current === -1 ? EFFORT_LADDER : EFFORT_LADDER.slice(0, current);
+  const seen = new Set([currentModel]);
+  return cheaper.flatMap((tier) => {
+    const model = modelFor(tier);
+    if (seen.has(model)) {
+      return [];
+    }
+    seen.add(model);
+    return [{ tier, model }];
+  });
+}
+
 export interface LimitModalProps {
   d: Dir;
   run: RunState;
@@ -185,6 +223,8 @@ export function LimitModal({
 }: LimitModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const restoreFocusTo = useRef<Element | null>(null);
+  const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
+  const { roster } = useEngineRoster(engineId);
   const notification = useLimitNotification(limit);
   const now = useNow(limit.resetAt !== undefined);
   const remaining = remainingMs(limit, now);
@@ -252,23 +292,16 @@ export function LimitModal({
           <div>
             <div style={groupLabel(d)}>{LIMIT_COPY.switchModelHeading}</div>
             <div style={CHOICE_GRID}>
-              {modelOptionsFor(limit.engine)
-                .filter(
-                  (option) =>
-                    option.id !== "" &&
-                    option.id !== limit.model &&
-                    option.requiresUsageCredits !== true,
-                )
-                .map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => onResolve({ choice: "switch-model", model: option.id })}
-                    style={modelChip(d)}
-                  >
-                    <span style={optionLabel(d)}>{option.label}</span>
-                    <span style={mutedCaption(d)}>{option.hint}</span>
-                  </button>
-                ))}
+              {cheaperTiers(engineId, limit.model ?? "", roster).map(({ tier, model }) => (
+                <button
+                  key={tier.id}
+                  onClick={() => onResolve({ choice: "switch-model", model })}
+                  style={modelChip(d)}
+                >
+                  <span style={optionLabel(d)}>{tier.label}</span>
+                  <span style={mutedCaption(d)}>{model || "the harness's own default"}</span>
+                </button>
+              ))}
             </div>
           </div>
 

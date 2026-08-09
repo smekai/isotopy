@@ -32,6 +32,7 @@ export function createOrchestrationRoutes(
           await orchestrations.start(projectScope(registry, c), body.goal, {
             engine: body.engine,
             model: body.model,
+            modelTier: body.modelTier,
             permissionMode: body.permissionMode,
           }),
           201,
@@ -65,6 +66,7 @@ export function createOrchestrationRoutes(
           {
             engine: body.engine,
             model: body.model,
+            modelTier: body.modelTier,
             permissionMode: body.permissionMode,
           },
         );

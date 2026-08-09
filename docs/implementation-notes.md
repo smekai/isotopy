@@ -113,7 +113,7 @@ appends args verbatim, `ADHD_CURSOR_PROMPT_VIA=stdin` pipes the prompt on
 platforms where it would otherwise be positional (arg limit ≈ 32K). That knob
 cannot force the *opposite* — a shim always uses stdin.
 Cursor's own `auto` router model is distinct from our **Auto** (which sends no
-`--model` at all), so the roster prepends ours and relabels theirs.
+`--model` at all), so the merge prepends ours and relabels theirs.
 
 **Codex (`engines/codex.ts`).** `codex exec --json` emits newline-delimited JSON
 events. `--skip-git-repo-check` lets it run in a non-git scratch workspace.
@@ -121,7 +121,7 @@ Permission modes: `acceptEdits` → `--sandbox workspace-write` (writes confined
 the workspace; escalation is denied, not queued); otherwise
 `--dangerously-bypass-approvals-and-sandbox`. The prompt is read from stdin via
 `-` to sidestep the Windows arg-length limit. The CLI has no `models` subcommand,
-so `listModels` reads the top-level `model = "…"` key from `~/.codex/config.toml`
+so `configuredModel` reads the top-level `model = "…"` key from `~/.codex/config.toml`
 (matched before the first `[section]` so a nested profile key isn't mistaken for
 the global default). **`codex exec resume` does not accept `--sandbox`** — only
 `--dangerously-bypass-approvals-and-sandbox` — so a resumed turn under
@@ -273,15 +273,54 @@ the workspace is the source of truth, the reports only add what a box *said*.
 
 ## Core — model rosters & pipelines (`core/engines.ts`, `core/pipelines.ts`)
 
-- **Auto (no `--model`)** is always offered and always safe: it lets the CLI's own
-  configured default win, so it can't outlive a snapshot id our roster hard-codes.
-  The Cursor and Codex rosters are snapshots that churn; `listModels()` trues them
-  up against the live CLI.
+- **What a user picks is a preset, not an id.** `MODEL_TIERS`
+  (`auto·fast·balanced·deep·max`) is one axis borrowed from the CLIs' own effort
+  vocabulary, which turns over far more slowly than model names do — Cursor's live
+  roster alone is ~194 entries. `resolveTier` walks that engine's ordered
+  `TIER_LADDERS` candidates and takes the first the resolved roster still offers,
+  falling back to Auto with `degraded: true` rather than failing: the user asked
+  for an intent, so substituting is legitimate in a way substituting an id is not.
+  Setup always renders what a preset resolved to, so it is never a black box.
+- **Effort is a separate axis on two of three CLIs.** Claude takes
+  `--effort low|medium|high|xhigh|max`, Codex takes
+  `-c model_reasoning_effort="…"`, and Cursor bakes it into the id
+  (`gpt-5.3-codex-high`), so its ladder rides one model family across four rungs
+  and ignores `EngineRunContext.effort`. Codex's accepted values above `high` are
+  unconfirmed, which is why Max shares Deep's effort there.
+- **A preset is engine-independent; a pinned id is not.** `ProjectPreferences`
+  carries one `modelTier` for the project plus `engineModels` as a per-engine
+  *override* — the advanced escape hatch. An override wins over the preset, and
+  `null` clears it (the same idiom as clearing a stored `apiKey`). The tier is
+  resolved per stage in `stage-execution.ts`, not at run start, which is the seam
+  a per-stage tier (TASK-115) needs.
+- **The roster is what a preset resolves against, and what run start validates.**
+  Three layers, same order for every engine: `live` (a CLI listing command — only
+  Cursor's `agent models` today) → `config` (the engine's own config file) →
+  `static` (bundled, always). First occurrence wins, so an id the user's own CLI
+  names outranks the bundled guess and is marked verified. `ModelRosterService`
+  caches per engine with no TTL; the Setup Re-check (`?refresh=1`), a successful
+  install and a successful login are the only invalidations, so editing
+  `~/.codex/config.toml` mid-session needs a Re-check.
+- **The config files are read, never written.** `~/.claude/settings.json` names a
+  plain-string `model`; `~/.codex/config.toml` names one in its root table only
+  (the scan stops at the first `[`, so a profile's model is not the CLI's);
+  `~/.cursor/cli-config.json` holds an *object* whose `modelId` is the sentinel
+  `"default"` meaning "let Cursor route", which is why Cursor is the one engine
+  where hand-pinning an unlisted id in a config file is not a real escape hatch.
+- **`startRunSchema.model` stays `z.string()`.** A Zod enum cannot see a roster
+  that depends on which CLIs are installed here and what their configs say. The
+  boundary parses shape; `RunService` enforces the rule, at run start and again on
+  limit resolution, before any stage runs.
 - **`LEGACY_MODEL_ALIASES`** migrates stored preferences on read so a user who
   picked a since-retired model isn't stuck with failing runs. Claude full ids
   (`claude-opus-4-8`, …) resolve to 1M-context variants that subscription plans
   reject, so they map to the short id; Codex's `gpt-5-codex` is rejected on
-  ChatGPT-account auth, so it maps to Auto.
+  ChatGPT-account auth, so it maps to Auto; Cursor's `composer-1`/`sonnet-4.5`/
+  `gpt-5` no longer exist in `agent models`. Aliases are preference-scoped only and
+  are never applied to a `model` on a run-start body — a request is not a stored
+  preference, and a direct API call with a retired id gets the 400 that names Setup.
+  A stored id the ladder already covers is adopted onto that preset and the
+  override dropped, so an existing user lands on presets rather than pinned.
 - **A stage is engine-backed iff it carries a `skill`.** `pipelineUsesEngine`
   keys off the stage model, not a hardcoded pipeline id, so a new engine-backed
   pipeline needs no orchestrator change to get engine validation and a workspace.
@@ -367,7 +406,7 @@ in `applyEvent` absorbs any overlap). On `run.completed` it stops the stream
 explicitly, otherwise `EventSource` would reconnect forever once the server
 closes it.
 
-**Model preference migration (`server/src/domain/preferences.ts`).** `""` is a
+**Model preference migration (`server/src/schemas/preferences.ts`).** `""` is a
 real stored value (`AUTO_MODEL_ID` — let the CLI decide), so only a *missing*
 entry falls back to the default. Retired model ids are rewritten on read via
 `LEGACY_MODEL_ALIASES` (see the core note above) so a stale preference can't keep

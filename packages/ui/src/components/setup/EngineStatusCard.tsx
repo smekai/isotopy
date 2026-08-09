@@ -5,10 +5,16 @@ import type { EngineId, EngineStatus } from "@adhd/core";
 import { fetchEngineStatus, installEngine, loginEngine } from "../../api";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
-import { ERROR_RED, OK_GREEN, WHITE, fieldLabel, mutedBody } from "./setup-styles";
-
-const ERROR_BORDER = "rgba(220,38,38,0.35)";
-const ERROR_TINT = "rgba(220,38,38,0.06)";
+import {
+  ERROR_BORDER,
+  ERROR_RED,
+  ERROR_TEXT,
+  ERROR_TINT,
+  OK_GREEN,
+  WHITE,
+  fieldLabel,
+  mutedBody,
+} from "./setup-styles";
 
 const COPY_FEEDBACK_MS = 2000;
 
@@ -40,7 +46,6 @@ const STATUS_BADGE_ROW: CSSProperties = { display: "flex", alignItems: "center",
 const OK_ICON: CSSProperties = { color: OK_GREEN, flexShrink: 0 };
 const OK_TEXT: CSSProperties = { color: OK_GREEN, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.bold };
 const ERROR_ICON: CSSProperties = { color: ERROR_RED, flexShrink: 0 };
-const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.bold };
 const ERROR_NOTE: CSSProperties = { color: ERROR_RED, fontFamily: SANS, fontSize: FONT.sm, marginTop: SPACE.md };
 
 function hintText(d: Dir): CSSProperties {

@@ -70,6 +70,7 @@ export function createRunRoutes(
           task: body.task,
           engine: body.engine,
           model: body.model,
+          modelTier: body.modelTier,
           permissionMode: body.permissionMode,
           milestoneId: body.milestoneId,
           featureId: body.featureId,
@@ -107,7 +108,7 @@ export function createRunRoutes(
         return c.json(invalidRequest(parsed.issues), 400);
       }
       try {
-        return c.json(runs.resolveLimit(runId, stageId, parsed.value));
+        return c.json(await runs.resolveLimit(runId, stageId, parsed.value));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to resume the run";
         return c.json({ error: message }, 409);

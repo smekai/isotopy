@@ -5,8 +5,10 @@ import {
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
   agentForStage,
+  resolveTier,
 } from "@adhd/core";
 import type {
+  EffortLevel,
   EngineId,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
@@ -100,11 +102,12 @@ async function runAdapter(
   const controller = deps.beginEngineStage(run.id);
   try {
     const adapter = getEngineAdapter(engine);
+    const selection = await selectModel(deps, run, engine);
     return await adapter.run({
       runId: run.id,
       prompt,
       cwd: run.workspacePath ?? process.cwd(),
-      model: run.model,
+      ...selection,
       appendSystemPrompt: persona,
       permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
       connection: deps.settings.getEngineConnection(run.projectId, engine),
@@ -122,6 +125,29 @@ async function runAdapter(
   } finally {
     deps.endEngineStage(run.id);
   }
+}
+
+interface ModelSelection {
+  model?: string;
+  effort?: EffortLevel;
+}
+
+async function selectModel(
+  deps: WorkflowDeps,
+  run: RunState,
+  engine: EngineId,
+): Promise<ModelSelection> {
+  if (run.model !== undefined) {
+    return { model: run.model };
+  }
+  if (run.modelTier === undefined) {
+    return {};
+  }
+  const resolved = resolveTier(engine, run.modelTier, await deps.rosters.roster(engine));
+  return {
+    model: resolved.model,
+    ...(resolved.effort === undefined ? {} : { effort: resolved.effort }),
+  };
 }
 
 function brokerDecisionError(
