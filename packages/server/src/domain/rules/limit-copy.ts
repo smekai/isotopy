@@ -2,7 +2,7 @@ import type { LimitChoice } from "@adhd/core";
 
 const CHOICE_REASONS: Record<LimitChoice, string> = {
   "retry-now": "you asked to retry now",
-  "switch-model": "you switched the model",
+  "switch-tier": "you dropped to a cheaper preset",
   "switch-engine": "you switched the harness",
 };
 

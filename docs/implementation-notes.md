@@ -321,6 +321,12 @@ the workspace is the source of truth, the reports only add what a box *said*.
   preference, and a direct API call with a retired id gets the 400 that names Setup.
   A stored id the ladder already covers is adopted onto that preset and the
   override dropped, so an existing user lands on presets rather than pinned.
+  **The adoption is keyed off the absence of `modelTier` in the stored file**, so
+  it runs once for a pre-preset settings file and never again. Without that key it
+  would run on every read, and pinning `opus` on Claude — a rung — would be
+  silently rewritten back to Deep the moment it was saved, making the advanced
+  escape hatch inoperative for every id the ladder happens to name (on Codex, that
+  is both bundled models).
 - **A stage is engine-backed iff it carries a `skill`.** `pipelineUsesEngine`
   keys off the stage model, not a hardcoded pipeline id, so a new engine-backed
   pipeline needs no orchestrator change to get engine validation and a workspace.

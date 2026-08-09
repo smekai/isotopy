@@ -4,20 +4,22 @@ import { parseJson } from "../domain/validation.ts";
 
 const CURSOR_ROUTED_MODEL_ID = "default";
 
-const claudeSettingsSchema = z.object({ model: z.string().optional() });
+const modelId = z.string().trim().min(1);
+
+const claudeSettingsSchema = z.object({ model: modelId.optional() });
 
 const cursorCliConfigSchema = z.object({
   model: z
     .union([
-      z.string(),
-      z.object({ modelId: z.string().optional(), displayModelId: z.string().optional() }),
+      modelId,
+      z.object({ modelId: modelId.optional(), displayModelId: modelId.optional() }),
     ])
     .optional(),
 });
 
 export function claudeSettingsModel(text: string): string | undefined {
   const parsed = parseJson(claudeSettingsSchema, text);
-  return parsed.ok ? nonEmpty(parsed.value.model) : undefined;
+  return parsed.ok ? parsed.value.model : undefined;
 }
 
 export function cursorCliConfigModel(text: string): string | undefined {
@@ -26,7 +28,7 @@ export function cursorCliConfigModel(text: string): string | undefined {
     return undefined;
   }
   const { model } = parsed.value;
-  const id = nonEmpty(typeof model === "string" ? model : model.displayModelId ?? model.modelId);
+  const id = typeof model === "string" ? model : model.displayModelId ?? model.modelId;
   return id === CURSOR_ROUTED_MODEL_ID ? undefined : id;
 }
 
@@ -64,8 +66,4 @@ export function parseCursorModels(stdout: string): ModelOptionDraft[] {
     });
   }
   return options;
-}
-
-function nonEmpty(value: string | undefined): string | undefined {
-  return value !== undefined && value.length > 0 ? value : undefined;
 }

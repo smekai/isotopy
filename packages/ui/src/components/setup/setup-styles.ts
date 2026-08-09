@@ -8,13 +8,6 @@ export const ERROR_RED = "#DC2626";
 export const ERROR_BORDER = "rgba(220,38,38,0.35)";
 export const ERROR_TINT = "rgba(220,38,38,0.06)";
 
-export const ERROR_TEXT: CSSProperties = {
-  color: ERROR_RED,
-  fontFamily: SANS,
-  fontSize: FONT.md,
-  fontWeight: WEIGHT.bold,
-};
-
 export interface Accent {
   accent: string;
   accentSoft: string;

@@ -144,7 +144,7 @@ test("dropping to a cheaper preset posts the model it stands for", async ({ page
   // Assert
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0]?.method()).toBe("POST");
-  expect(posted[0]?.postDataJSON()).toEqual({ choice: "switch-model", model: "haiku" });
+  expect(posted[0]?.postDataJSON()).toEqual({ choice: "switch-tier", tier: "fast" });
 });
 
 test("Escape dismisses the popup and leaves the run parked, not resolved", async ({ page }) => {

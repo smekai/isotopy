@@ -13,6 +13,7 @@ import {
   get,
   post,
   restartApp,
+  stageMessage,
   startRun,
   waitForRunStatus,
   waitForStageStatus,
@@ -902,12 +903,6 @@ async function startOrchestration(engine: EngineId = "claude-code"): Promise<Run
   });
   expect(status, `POST /orchestrations returned ${JSON.stringify(run)}`).toBe(201);
   return run;
-}
-
-function stageMessage(run: RunState): string {
-  return run.stages
-    .flatMap((stage) => stage.logs.map((entry) => entry.message))
-    .join("\n");
 }
 
 function fenced(decision: unknown): string {

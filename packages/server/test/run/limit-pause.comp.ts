@@ -77,14 +77,14 @@ describe("plan limit", () => {
     const resumed = await post(
       ctx.app,
       `/runs/${run.id}/limit/implementation/resolve`,
-      { choice: "switch-model", model: "haiku" },
+      { choice: "switch-tier", tier: "fast" },
       project.headers,
     );
 
     // Assert
     expect(resumed.status).toBe(200);
     const finished = await waitForRunStatus(ctx.app, run.id, "completed");
-    expect(finished.model).toBe("haiku");
+    expect(finished.modelTier).toBe("fast");
     expect(finished.stageOutputs?.intake).toBe(PM_REPORT);
     expect(finished.limit).toBeUndefined();
     // Four calls, not five: the Project Manager was never re-run.

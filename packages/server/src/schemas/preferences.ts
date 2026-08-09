@@ -10,6 +10,7 @@ import type {
   EngineId,
   ModelTier,
   ProjectPreferences,
+  ProjectPreferencesUpdate,
 } from "@adhd/core";
 import { z } from "zod";
 import { projectPreferencesUpdateSchema } from "./request-schemas.ts";
@@ -24,24 +25,34 @@ function currentModelId(engineId: EngineId, stored: string): string {
 export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
   const stored = storedPreferencesSchema.parse(raw);
   const defaults = defaultProjectPreferences();
-  const overrides = Object.entries(withoutClearedOverrides(stored.engineModels ?? {})).map(
-    ([engineId, model]): [EngineId, string] => [
-      engineIdSchema.parse(engineId),
-      currentModelId(engineIdSchema.parse(engineId), model),
-    ],
-  );
-  const adopted = overrides.filter(([engineId, model]) => tierOf(engineId, model) === undefined);
   const engine = stored.engine ?? defaults.engine;
-  const storedTier = overrides.find(([engineId]) => engineId === engine)?.[1];
+  const pinned = pinnedModels(stored);
+  const preTierFile = stored.modelTier === undefined;
   return {
     engine,
-    modelTier:
-      stored.modelTier ??
-      (storedTier === undefined ? defaults.modelTier : tierOf(engine, storedTier) ?? defaults.modelTier),
-    engineModels: Object.fromEntries(adopted),
+    modelTier: stored.modelTier ?? adoptedTier(engine, pinned) ?? defaults.modelTier,
+    engineModels: Object.fromEntries(preTierFile ? unladderedPins(pinned) : pinned),
     permissionMode: stored.permissionMode ?? defaults.permissionMode,
     pipelineId: stored.pipelineId ?? defaults.pipelineId,
   };
+}
+
+function pinnedModels(stored: ProjectPreferencesUpdate): [EngineId, string][] {
+  return Object.entries(withoutClearedOverrides(stored.engineModels ?? {})).map(
+    ([engineId, model]): [EngineId, string] => {
+      const id = engineIdSchema.parse(engineId);
+      return [id, currentModelId(id, model)];
+    },
+  );
+}
+
+function adoptedTier(engine: EngineId, pinned: [EngineId, string][]): ModelTier | undefined {
+  const forEngine = pinned.find(([engineId]) => engineId === engine)?.[1];
+  return forEngine === undefined ? undefined : tierOf(engine, forEngine);
+}
+
+function unladderedPins(pinned: [EngineId, string][]): [EngineId, string][] {
+  return pinned.filter(([engineId, model]) => tierOf(engineId, model) === undefined);
 }
 
 function tierOf(engineId: EngineId, modelId: string): ModelTier | undefined {

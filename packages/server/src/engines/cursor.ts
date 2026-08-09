@@ -18,6 +18,7 @@ import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
+  LiveModelLayer,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
@@ -192,15 +193,18 @@ export const cursorAdapter: EngineAdapter = {
     );
   },
 
-  async liveModels(): Promise<ModelOptionDraft[]> {
+  async liveModels(): Promise<LiveModelLayer> {
     let binary: string;
     try {
       binary = resolveCursorBinary().path;
     } catch {
-      return [];
+      return { options: [], note: "Cursor CLI not found." };
     }
     const result = await probeCommand(binary, ["models"]);
-    return result.success ? parseCursorModels(result.stdout) : [];
+    const options = result.success ? parseCursorModels(result.stdout) : [];
+    return options.length > 0
+      ? { options }
+      : { options: [], note: "`agent models` returned nothing usable." };
   },
 
   async detect(): Promise<EngineStatus> {

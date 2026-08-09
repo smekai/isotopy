@@ -15,14 +15,12 @@ export interface EngineConnectionSettingsView {
 export interface ProjectPreferences {
   engine: EngineId;
   modelTier: ModelTier;
-  /** Exact ids that override the tier, per engine — the advanced escape hatch. */
   engineModels: Partial<Record<EngineId, string>>;
   permissionMode: EnginePermissionMode;
   pipelineId: string;
 }
 
 export type ProjectPreferencesUpdate = Partial<Omit<ProjectPreferences, "engineModels">> & {
-  /** `null` clears that engine's override and hands the choice back to the tier. */
   engineModels?: Partial<Record<EngineId, string | null>>;
 };
 
@@ -84,7 +82,6 @@ export function preferredRunOptions(preferences: ProjectPreferences): PreferredR
   };
 }
 
-/** What the user chose, for display: an exact id if they pinned one, else the preset. */
 export function modelChoiceLabel(preferences: ProjectPreferences, engineId: EngineId): string {
   return modelOverrideFor(preferences, engineId) ?? modelTierLabel(preferences.modelTier);
 }

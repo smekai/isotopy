@@ -41,6 +41,11 @@ export interface EngineRunResult {
   usage?: StageUsage;
 }
 
+export interface LiveModelLayer {
+  options: ModelOptionDraft[];
+  note?: string;
+}
+
 export interface EngineActionResult {
   ok: boolean;
   output?: string;
@@ -51,8 +56,8 @@ export interface EngineAdapter {
   id: EngineId;
   run(ctx: EngineRunContext): Promise<EngineRunResult>;
   detect?(): Promise<EngineStatus>;
-  liveModels?(): Promise<ModelOptionDraft[]>;
-  configuredModel?(): ModelOptionDraft | undefined;
+  liveModels(): Promise<LiveModelLayer>;
+  configuredModel(): ModelOptionDraft | undefined;
   install?(): Promise<EngineActionResult>;
   login?(): Promise<EngineActionResult>;
 }

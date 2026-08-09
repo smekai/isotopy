@@ -25,10 +25,11 @@ import {
   radioDot,
 } from "./setup-styles";
 
-const ORIGIN_LABEL: Record<SelectableModelOrigin, string> = {
+// "static" is omitted: every roster ends with the bundled list, and the
+// unverified optgroup right above already names it with its date.
+const ORIGIN_LABEL: Partial<Record<SelectableModelOrigin, string>> = {
   live: "from the CLI",
   config: "from your CLI config",
-  static: "built-in list",
 };
 
 function modelSelect(d: Dir): CSSProperties {
@@ -68,18 +69,16 @@ function resolutionLine(d: Dir): CSSProperties {
   };
 }
 
-function warningBlock(): CSSProperties {
-  return {
-    border: `1px solid ${ERROR_BORDER}`,
-    background: ERROR_TINT,
-    borderRadius: RADIUS.lg,
-    padding: `${SPACE.md}px ${SPACE.xl}px`,
-    color: ERROR_RED,
-    fontFamily: SANS,
-    fontSize: FONT.sm,
-    marginTop: SPACE.md,
-  };
-}
+const WARNING_BLOCK: CSSProperties = {
+  border: `1px solid ${ERROR_BORDER}`,
+  background: ERROR_TINT,
+  borderRadius: RADIUS.lg,
+  padding: `${SPACE.md}px ${SPACE.xl}px`,
+  color: ERROR_RED,
+  fontFamily: SANS,
+  fontSize: FONT.sm,
+  marginTop: SPACE.md,
+};
 
 const DEGRADED_NOTE: CSSProperties = {
   color: GOLD,
@@ -177,11 +176,11 @@ export function EngineModelPicker({
             {retired && <option value={modelOverride} disabled>{modelOverride} — no longer offered</option>}
           </select>
           <div style={mutedCaption(d)}>
-            {rosterOrigins(roster.options).map((origin) => ORIGIN_LABEL[origin]).join(" · ")}
+            {rosterOrigins(roster.options).flatMap((origin) => ORIGIN_LABEL[origin] ?? []).join(" · ")}
             {roster.note ? ` · ${roster.note}` : ""}
           </div>
           {retired && (
-            <div style={warningBlock()}>
+            <div style={WARNING_BLOCK}>
               “{modelOverride}” is no longer offered for this harness — a run started with it
               will be refused. Pick another, or go back to a preset above.
             </div>

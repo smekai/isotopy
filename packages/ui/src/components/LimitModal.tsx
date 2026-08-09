@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import { BellRing, Play, Plug, RotateCcw, Square, X } from "lucide-react";
 import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@adhd/core";
@@ -172,34 +172,31 @@ function otherEngines(current: EngineId): EngineId[] {
     .map((engine) => engine.id);
 }
 
-const EFFORT_LADDER = MODEL_TIER_OPTIONS.filter((option) => option.id !== "auto");
+const PRICED_TIERS = MODEL_TIER_OPTIONS.filter((option) => option.id !== "auto");
 
 interface TierEscape {
   tier: ModelTierDefinition;
   model: string;
 }
 
-/**
- * A plan limit is a budget problem, so the way out is a lower rung — not a
- * sideways pick from a roster of a hundred ids.
- */
 function cheaperTiers(
   engineId: EngineId,
   currentModel: string,
   roster: EngineModelRoster,
 ): TierEscape[] {
-  const modelFor = (tier: ModelTierDefinition) => resolveTier(engineId, tier.id, roster).model;
-  const current = EFFORT_LADDER.findIndex((tier) => modelFor(tier) === currentModel);
-  const cheaper = current === -1 ? EFFORT_LADDER : EFFORT_LADDER.slice(0, current);
+  const resolved = PRICED_TIERS.map((tier) => resolveTier(engineId, tier.id, roster).model);
+  const current = resolved.indexOf(currentModel);
   const seen = new Set([currentModel]);
-  return cheaper.flatMap((tier) => {
-    const model = modelFor(tier);
-    if (seen.has(model)) {
-      return [];
-    }
-    seen.add(model);
-    return [{ tier, model }];
-  });
+  return PRICED_TIERS.slice(0, current === -1 ? PRICED_TIERS.length : current).flatMap(
+    (tier, index) => {
+      const model = resolved[index] ?? "";
+      if (seen.has(model)) {
+        return [];
+      }
+      seen.add(model);
+      return [{ tier, model }];
+    },
+  );
 }
 
 export interface LimitModalProps {
@@ -225,6 +222,11 @@ export function LimitModal({
   const restoreFocusTo = useRef<Element | null>(null);
   const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
   const { roster } = useEngineRoster(engineId);
+  // The countdown re-renders this modal every second for the whole reset window.
+  const escapes = useMemo(
+    () => cheaperTiers(engineId, limit.model ?? "", roster),
+    [engineId, limit.model, roster],
+  );
   const notification = useLimitNotification(limit);
   const now = useNow(limit.resetAt !== undefined);
   const remaining = remainingMs(limit, now);
@@ -292,10 +294,10 @@ export function LimitModal({
           <div>
             <div style={groupLabel(d)}>{LIMIT_COPY.switchModelHeading}</div>
             <div style={CHOICE_GRID}>
-              {cheaperTiers(engineId, limit.model ?? "", roster).map(({ tier, model }) => (
+              {escapes.map(({ tier, model }) => (
                 <button
                   key={tier.id}
-                  onClick={() => onResolve({ choice: "switch-model", model })}
+                  onClick={() => onResolve({ choice: "switch-tier", tier: tier.id })}
                   style={modelChip(d)}
                 >
                   <span style={optionLabel(d)}>{tier.label}</span>

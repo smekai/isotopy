@@ -74,14 +74,8 @@ export const restartRunSchema = z.object({ stageId: text }).strict();
 
 export const resolveLimitSchema: z.ZodType<LimitResolution> = z.discriminatedUnion("choice", [
   z.object({ choice: z.literal("retry-now") }).strict(),
-  z.object({ choice: z.literal("switch-model"), model: text }).strict(),
-  z
-    .object({
-      choice: z.literal("switch-engine"),
-      engine: engineIdSchema,
-      model: z.string().optional(),
-    })
-    .strict(),
+  z.object({ choice: z.literal("switch-tier"), tier: z.enum(MODEL_TIERS) }).strict(),
+  z.object({ choice: z.literal("switch-engine"), engine: engineIdSchema }).strict(),
 ]);
 
 export const createMilestoneFeatureSchema = z

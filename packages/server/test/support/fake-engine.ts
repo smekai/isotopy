@@ -17,6 +17,7 @@ import type {
 import { detectEngineLimit } from "../../src/domain/rules/engine-limit.ts";
 import type {
   EngineAdapter,
+  LiveModelLayer,
   EngineRunContext,
   EngineRunResult,
 } from "../../src/engines/types.ts";
@@ -117,7 +118,7 @@ export class FakeEngine implements EngineAdapter {
   /** How often the roster asked this engine to list its models — proves caching. */
   liveModelLookups = 0;
   private unexpected = 0;
-  private liveModelScript: () => Promise<ModelOptionDraft[]> = () => Promise.resolve([]);
+  private liveModelScript: () => Promise<LiveModelLayer> = () => Promise.resolve({ options: [] });
   private configured: ModelOptionDraft | undefined;
 
   constructor(id: EngineId = "claude-code") {
@@ -239,7 +240,7 @@ QUESTION: ${question}`,
 
   /** Declare what `agent models` and its kin answer for this engine. */
   offersLiveModels(options: ModelOptionDraft[]): FakeEngine {
-    this.liveModelScript = () => Promise.resolve(options);
+    this.liveModelScript = () => Promise.resolve({ options });
     return this;
   }
 
@@ -255,7 +256,7 @@ QUESTION: ${question}`,
     return this;
   }
 
-  liveModels(): Promise<ModelOptionDraft[]> {
+  liveModels(): Promise<LiveModelLayer> {
     this.liveModelLookups += 1;
     return this.liveModelScript();
   }

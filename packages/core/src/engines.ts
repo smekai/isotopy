@@ -122,7 +122,7 @@ export function defaultConnectionMode(engineId: EngineId): string {
   return ENGINES[engineId].connections[0]?.id ?? "subscription";
 }
 
-export const MODEL_ORIGINS = ["auto", "live", "config", "static"] as const;
+const MODEL_ORIGINS = ["auto", "live", "config", "static"] as const;
 
 export type EngineModelOrigin = (typeof MODEL_ORIGINS)[number];
 
@@ -145,7 +145,6 @@ export interface StaticModelRoster {
 }
 
 export interface EngineModelRoster {
-  engine: EngineId;
   options: EngineModelOption[];
   staticCheckedOn: string;
   note?: string;
@@ -181,9 +180,7 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 
 export const DEFAULT_MODEL_TIER: ModelTier = "balanced";
 
-export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
-
-export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ModelTierDefinition {
   id: ModelTier;
@@ -239,7 +236,6 @@ export function tierLadderFor(engineId: EngineId, tier: ModelTier): TierCandidat
 }
 
 export interface ResolvedModel {
-  tier: ModelTier;
   model: string;
   effort?: EffortLevel;
   degraded: boolean;
@@ -254,14 +250,56 @@ export function resolveTier(
   for (const candidate of tierLadderFor(engineId, tier)) {
     if (candidate.model === AUTO_MODEL_ID || offered.has(candidate.model)) {
       return {
-        tier,
         model: candidate.model,
         ...(candidate.effort === undefined ? {} : { effort: candidate.effort }),
         degraded: false,
       };
     }
   }
-  return { tier, model: AUTO_MODEL_ID, degraded: true };
+  return { model: AUTO_MODEL_ID, degraded: true };
+}
+
+export interface ModelLayers {
+  live: ModelOptionDraft[];
+  configured?: ModelOptionDraft;
+  bundled: StaticModelRoster;
+  note?: string;
+}
+
+export function mergeModelLayers(layers: ModelLayers): EngineModelRoster {
+  const options: EngineModelOption[] = [AUTO_MODEL_OPTION];
+  const taken = new Set([AUTO_MODEL_OPTION.id]);
+  const layered: [EngineModelOrigin, ModelOptionDraft[]][] = [
+    ["live", layers.live],
+    ["config", layers.configured === undefined ? [] : [layers.configured]],
+    ["static", layers.bundled.options],
+  ];
+  for (const [origin, drafts] of layered) {
+    for (const draft of drafts) {
+      if (taken.has(draft.id)) {
+        continue;
+      }
+      taken.add(draft.id);
+      options.push({ ...draft, origin });
+    }
+  }
+  return {
+    options,
+    staticCheckedOn: layers.bundled.checkedOn,
+    ...(layers.note === undefined ? {} : { note: layers.note }),
+  };
+}
+
+const BUNDLED_ROSTERS = new Map<EngineId, EngineModelRoster>();
+
+export function bundledRosterFor(engineId: EngineId): EngineModelRoster {
+  const cached = BUNDLED_ROSTERS.get(engineId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const roster = mergeModelLayers({ live: [], bundled: staticModelsFor(engineId) });
+  BUNDLED_ROSTERS.set(engineId, roster);
+  return roster;
 }
 
 const STATIC_ROSTER_CHECKED_ON = "2026-08-07";
@@ -282,8 +320,6 @@ export const CLAUDE_STATIC_MODELS: StaticModelRoster = {
   ],
 };
 
-export const DEFAULT_CLAUDE_MODEL = "sonnet";
-
 export const CURSOR_STATIC_MODELS: StaticModelRoster = {
   checkedOn: STATIC_ROSTER_CHECKED_ON,
   options: [
@@ -298,8 +334,6 @@ export const CURSOR_STATIC_MODELS: StaticModelRoster = {
   ],
 };
 
-export const DEFAULT_CURSOR_MODEL = AUTO_MODEL_ID;
-
 export const CODEX_STATIC_MODELS: StaticModelRoster = {
   checkedOn: STATIC_ROSTER_CHECKED_ON,
   options: [
@@ -307,8 +341,6 @@ export const CODEX_STATIC_MODELS: StaticModelRoster = {
     { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "faster, cheaper" },
   ],
 };
-
-export const DEFAULT_CODEX_MODEL = AUTO_MODEL_ID;
 
 const STATIC_MODELS: Record<EngineId, StaticModelRoster> = {
   "claude-code": CLAUDE_STATIC_MODELS,
@@ -318,16 +350,6 @@ const STATIC_MODELS: Record<EngineId, StaticModelRoster> = {
 
 export function staticModelsFor(engineId: EngineId): StaticModelRoster {
   return STATIC_MODELS[engineId];
-}
-
-const DEFAULT_MODELS: Record<EngineId, string> = {
-  "claude-code": DEFAULT_CLAUDE_MODEL,
-  cursor: DEFAULT_CURSOR_MODEL,
-  codex: DEFAULT_CODEX_MODEL,
-};
-
-export function defaultModelFor(engineId: EngineId): string {
-  return DEFAULT_MODELS[engineId];
 }
 
 export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {

@@ -861,8 +861,9 @@ does not call model APIs itself, so an engine brings **its own model selection**
 and its own auth. A `conversational` engine can resume its session, which is what
 lets an agent stop mid-stage and ask a question.
 
-Model choice per engine is a roster snapshot trued up against the live CLI by
-`listModels()`, with **Auto** always offered so the CLI's own default can win.
+Model choice is a **preset** on one effort ladder (`auto`·`fast`·`balanced`·`deep`·`max`),
+resolved per engine to a concrete model-and-effort pair against a roster the
+adapters build from the live CLI, the CLI’s own config file, and a bundled list.
 Permission modes are `skip` (default, fully autonomous) and `acceptEdits`. See
 [`implementation-notes.md`](./implementation-notes.md) for the adapter quirks and
 the legacy-alias migration.

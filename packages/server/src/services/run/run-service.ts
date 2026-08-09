@@ -631,20 +631,20 @@ export class RunService implements RunProjection {
     this.emit({ ts: nowIso(), type: "stage.unblocked", runId, stageId, status: "running", message });
   }
 
-  async resolveLimit(runId: string, stageId: string, resolution: LimitResolution): Promise<RunState> {
+  resolveLimit(runId: string, stageId: string, resolution: LimitResolution): RunState {
     const run = this.store.runs.get(runId);
     if (!run) throw new Error(`Run not found: ${runId}`);
     const stage = this.requireStage(runId, stageId);
     if (stage.status !== "blocked") throw new Error(LIMIT_ERRORS.notBlocked(stageId));
     const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
     if (!openWorkflowRunId) throw new Error(LIMIT_ERRORS.noDurableRun(runId));
-    const selection = selectionAfterLimit({ engine: run.engine, model: run.model }, resolution);
-    if (selection.engine !== undefined && selection.model !== undefined) {
-      await this.requireOfferedModel(selection.engine, selection.model);
-    }
+    const current = { engine: run.engine, model: run.model, modelTier: run.modelTier };
+    const selection = selectionAfterLimit(current, resolution);
     run.engine = selection.engine;
     if (selection.model === undefined) delete run.model;
     else run.model = selection.model;
+    if (selection.modelTier === undefined) delete run.modelTier;
+    else run.modelTier = selection.modelTier;
     this.limitResolved(runId, stageId, resolution.choice);
     void this.store.flushPersist(runId);
     void this.runtimes.forProject(run.projectId).resolveLimit(runId, stageId, resolution.choice);

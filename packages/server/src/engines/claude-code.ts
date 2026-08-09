@@ -5,7 +5,7 @@ import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
-import { configuredModelFrom } from "./cli-config.ts";
+import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseClaudeProtocolLine } from "./claude-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
@@ -17,6 +17,7 @@ import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import type {
   EngineAdapter,
+  LiveModelLayer,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
@@ -133,6 +134,10 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
 
 export const claudeCodeAdapter: EngineAdapter = {
   id: "claude-code",
+
+  liveModels(): Promise<LiveModelLayer> {
+    return Promise.resolve(NO_LIVE_LISTING);
+  },
 
   configuredModel(): ModelOptionDraft | undefined {
     return configuredModelFrom(

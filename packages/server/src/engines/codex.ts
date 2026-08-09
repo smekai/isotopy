@@ -5,7 +5,7 @@ import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { codexConfigModel } from "../schemas/engine-cli-config.ts";
-import { configuredModelFrom } from "./cli-config.ts";
+import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseCodexProtocolLine } from "./codex-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
@@ -18,6 +18,7 @@ import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
+  LiveModelLayer,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
@@ -155,6 +156,10 @@ function errorText(error: unknown): string {
 
 export const codexAdapter: EngineAdapter = {
   id: "codex",
+
+  liveModels(): Promise<LiveModelLayer> {
+    return Promise.resolve(NO_LIVE_LISTING);
+  },
 
   configuredModel(): ModelOptionDraft | undefined {
     return configuredModelFrom(

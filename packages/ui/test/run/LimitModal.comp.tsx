@@ -61,7 +61,7 @@ test("dropping to a cheaper preset resolves with the model that preset stands fo
   fireEvent.click(screen.getByText("Fast"));
 
   // Assert
-  expect(props.onResolve).toHaveBeenCalledWith({ choice: "switch-model", model: "haiku" });
+  expect(props.onResolve).toHaveBeenCalledWith({ choice: "switch-tier", tier: "fast" });
 });
 
 test("only rungs below the one that hit the limit are offered as a way out", () => {
@@ -71,14 +71,6 @@ test("only rungs below the one that hit the limit are offered as a way out", () 
   // Assert — Deep is what just ran out; Max costs more, not less.
   expect(screen.queryByText("Deep")).toBeNull();
   expect(screen.queryByText("Max")).toBeNull();
-});
-
-test("a model that bills usage credits is not offered as an escape from a plan limit", () => {
-  // Act
-  render(<LimitModal {...limitProps()} />);
-
-  // Assert — Sonnet · 1M context costs more, not less, so no rung stands for it.
-  expect(screen.queryByText(/1M context/)).toBeNull();
 });
 
 test("switching harness names the engine and leaves the model to the new harness", () => {

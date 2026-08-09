@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { AUTO_MODEL_OPTION, staticModelsFor } from "@adhd/core";
+import { useEffect, useRef, useState } from "react";
+import { bundledRosterFor } from "@adhd/core";
 import type { EngineId, EngineModelRoster } from "@adhd/core";
 import { fetchEngineModels } from "../api";
 
@@ -9,14 +9,17 @@ export interface EngineRosterState {
 }
 
 export function useEngineRoster(engine: EngineId, refreshKey = 0): EngineRosterState {
-  const [roster, setRoster] = useState<EngineModelRoster>(() => bundledRoster(engine));
+  const [roster, setRoster] = useState<EngineModelRoster>(() => bundledRosterFor(engine));
   const [unavailable, setUnavailable] = useState(false);
+  const recheckedAt = useRef(refreshKey);
 
   useEffect(() => {
     let stale = false;
-    setRoster(bundledRoster(engine));
+    const recheck = refreshKey !== recheckedAt.current;
+    recheckedAt.current = refreshKey;
+    setRoster(bundledRosterFor(engine));
     setUnavailable(false);
-    fetchEngineModels(engine, refreshKey > 0)
+    fetchEngineModels(engine, recheck)
       .then((fetched) => {
         if (!stale) setRoster(fetched);
       })
@@ -29,16 +32,4 @@ export function useEngineRoster(engine: EngineId, refreshKey = 0): EngineRosterS
   }, [engine, refreshKey]);
 
   return { roster, unavailable };
-}
-
-function bundledRoster(engine: EngineId): EngineModelRoster {
-  const bundled = staticModelsFor(engine);
-  return {
-    engine,
-    options: [
-      AUTO_MODEL_OPTION,
-      ...bundled.options.map((option) => ({ ...option, origin: "static" as const })),
-    ],
-    staticCheckedOn: bundled.checkedOn,
-  };
 }

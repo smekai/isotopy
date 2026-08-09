@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   addTestProject,
   createTestApp,
+  getRun,
   post,
   startRun,
   waitForRunStatus,
@@ -129,33 +130,10 @@ test("a pinned model wins over the preset and carries no effort of its own", asy
   expect(finished.model).toBe("haiku");
 });
 
-test("switching to a model the engine does not offer is refused", async () => {
+test("dropping to a cheaper preset releases a pinned model, so later stages resolve the ladder again", async () => {
   // Arrange
-  const project = await addTestProject(ctx.registry, "limit-unknown");
-  ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SESSION_LIMIT);
-  const run = await startRun(
-    ctx.app,
-    { pipelineId: "solo", task: TASK, engine: "claude-code", model: "sonnet" },
-    project.headers,
-  );
-  await waitForStageStatus(ctx.app, run.id, "solo", "blocked");
-
-  // Act
-  const { status } = await post(
-    ctx.app,
-    `/runs/${run.id}/limit/solo/resolve`,
-    { choice: "switch-model", model: "gpt-5-mini" },
-    project.headers,
-  );
-
-  // Assert
-  expect(status).toBe(409);
-});
-
-test("a refused switch leaves the run on the model it already had", async () => {
-  // Arrange
-  const project = await addTestProject(ctx.registry, "limit-unchanged");
-  ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SESSION_LIMIT);
+  const project = await addTestProject(ctx.registry, "limit-releases-pin");
+  ctx.engine.anticipate({ as: "Agent", model: "sonnet" }).hitsLimit(SESSION_LIMIT);
   const run = await startRun(
     ctx.app,
     { pipelineId: "solo", task: TASK, engine: "claude-code", model: "sonnet" },
@@ -167,34 +145,12 @@ test("a refused switch leaves the run on the model it already had", async () => 
   await post(
     ctx.app,
     `/runs/${run.id}/limit/solo/resolve`,
-    { choice: "switch-model", model: "gpt-5-mini" },
+    { choice: "switch-tier", tier: "fast" },
     project.headers,
   );
 
   // Assert
-  const blocked = await waitForStageStatus(ctx.app, run.id, "solo", "blocked");
-  expect(blocked.model).toBe("sonnet");
-});
-
-test("switching to a harness that does not offer the carried model is refused", async () => {
-  // Arrange
-  const project = await addTestProject(ctx.registry, "limit-cross-engine");
-  ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SESSION_LIMIT);
-  const run = await startRun(
-    ctx.app,
-    { pipelineId: "solo", task: TASK, engine: "claude-code", model: "sonnet" },
-    project.headers,
-  );
-  await waitForStageStatus(ctx.app, run.id, "solo", "blocked");
-
-  // Act
-  const { status } = await post(
-    ctx.app,
-    `/runs/${run.id}/limit/solo/resolve`,
-    { choice: "switch-engine", engine: "codex", model: "sonnet" },
-    project.headers,
-  );
-
-  // Assert
-  expect(status).toBe(409);
+  const resumed = await getRun(ctx.app, run.id);
+  expect(resumed.model).toBeUndefined();
+  expect(resumed.modelTier).toBe("fast");
 });

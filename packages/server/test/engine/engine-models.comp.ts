@@ -2,6 +2,7 @@
 // through this route. These tests drive it over the real service and merge, with
 // the engine itself scripted — the one thing a component test must never spawn.
 import { afterEach, beforeEach, expect, test } from "vitest";
+import { staticModelsFor } from "@adhd/core";
 import type { EngineModelRoster } from "@adhd/core";
 import { createTestApp, get } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
@@ -33,7 +34,7 @@ test("the built-in list says when it was last checked", async () => {
   const { body } = await get<EngineModelRoster>(ctx.app, "/engines/cursor/models");
 
   // Assert
-  expect(body.staticCheckedOn).toBe("2026-08-07");
+  expect(body.staticCheckedOn).toBe(staticModelsFor("cursor").checkedOn);
 });
 
 test("models the CLI lists lead the roster and count as verified", async () => {

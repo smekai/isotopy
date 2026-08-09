@@ -241,21 +241,22 @@ test("preferences survive a browser with no storage of its own", async ({ page }
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
 });
 
-test("a legacy pinned model ID is adopted onto the preset that covers it", async ({ page }) => {
+// Adopting a pre-preset settings file onto a tier is covered where the fixture can
+// be honest — settings.comp.ts writes the file directly, with no `modelTier` in it.
+// Through the API this is unreachable: resetting preferences stores one.
+test("an exact model pinned in the advanced disclosure is what the composer reports", async ({ page }) => {
   // Arrange
   await page.goto("/");
-  await writePreferences(page, { engineModels: { "claude-code": "claude-sonnet-4-6" } });
+  await writePreferences(page, { engineModels: { "claude-code": "claude-3-legacy" } });
 
   // Act
   await page.reload();
 
-  // Assert
+  // Assert — a pin the ladder does not cover is honoured verbatim, not rewritten.
   await openPipelineComposer(page);
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
-  await expect(page.getByText(/Engine: Claude Code · Balanced/)).toBeVisible();
-  // an id the ladder covers is no longer pinned — the preset stands for it now
-  expect((await readPreferences(page)).engineModels["claude-code"]).toBeUndefined();
+  await expect(page.getByText(/Engine: Claude Code · claude-3-legacy/)).toBeVisible();
 });
 
 test("a preference left in localStorage by an older build is adopted once", async ({ page }) => {

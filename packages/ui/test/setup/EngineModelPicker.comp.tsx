@@ -159,13 +159,27 @@ test("a roster that cannot be reached says so rather than showing a resolution i
   await waitFor(() => expect(screen.getByText(/Model list unavailable/)).toBeTruthy());
 });
 
-test("a re-check asks the server to probe the harness again", async () => {
+test("opening Setup reads the cached roster rather than re-probing the harness", async () => {
   // Arrange
   served(CLAUDE_ROSTER);
 
   // Act
-  render(<EngineModelPicker {...pickerProps({ refreshKey: 1 })} />);
+  render(<EngineModelPicker {...pickerProps()} />);
 
   // Assert
-  await waitFor(() => expect(fetchModels).toHaveBeenCalledWith("claude-code", true));
+  await waitFor(() => expect(fetchModels).toHaveBeenCalledWith("claude-code", false));
+});
+
+test("clicking Re-check is what asks the server to probe the harness again", async () => {
+  // Arrange
+  served(CLAUDE_ROSTER);
+  const props = pickerProps();
+  const { rerender } = render(<EngineModelPicker {...props} />);
+  await waitFor(() => expect(fetchModels).toHaveBeenCalledTimes(1));
+
+  // Act
+  rerender(<EngineModelPicker {...props} refreshKey={1} />);
+
+  // Assert
+  await waitFor(() => expect(fetchModels).toHaveBeenLastCalledWith("claude-code", true));
 });
