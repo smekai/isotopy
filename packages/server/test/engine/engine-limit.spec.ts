@@ -124,20 +124,20 @@ describe("formatLimitWait", () => {
 });
 
 describe("selectionAfterLimit", () => {
-  test("switching the model keeps the engine", () => {
+  test("dropping to a cheaper preset keeps the engine and releases the pinned id", () => {
     const next = selectionAfterLimit(
-      { engine: "claude-code", model: "opus" },
-      { choice: "switch-model", model: "haiku" },
+      { engine: "claude-code", model: "opus", modelTier: "deep" },
+      { choice: "switch-tier", tier: "fast" },
     );
-    expect(next).toEqual({ engine: "claude-code", model: "haiku" });
+    expect(next).toEqual({ engine: "claude-code", modelTier: "fast" });
   });
 
-  test("switching the harness drops a model id the new harness would not understand", () => {
+  test("switching the harness carries the preset and drops an id the new harness would not understand", () => {
     const next = selectionAfterLimit(
-      { engine: "claude-code", model: "opus" },
+      { engine: "claude-code", model: "opus", modelTier: "deep" },
       { choice: "switch-engine", engine: "codex" },
     );
-    expect(next).toEqual({ engine: "codex", model: undefined });
+    expect(next).toEqual({ engine: "codex", modelTier: "deep" });
   });
 
   test("retrying now changes nothing", () => {

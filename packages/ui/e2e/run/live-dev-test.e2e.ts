@@ -44,10 +44,10 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
   await page.getByTestId("project-switcher").click();
   await page.getByRole("option", { name: /Home/ }).click();
 
-  // Cheapest model.
+  // Cheapest rung — this spec spends real money on a real CLI.
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
-  await page.locator("select").selectOption("haiku");
+  await page.getByRole("button", { name: /Fast/ }).click();
   await page.getByRole("button", { name: "Close" }).click();
 
   await openPipelineComposer(page);

@@ -1,9 +1,10 @@
 import { DEFAULT_LIMIT_WAIT_MS, MAX_LIMIT_WAIT_MS } from "@adhd/core";
-import type { EngineId, EngineLimit, LimitResolution } from "@adhd/core";
+import type { EngineId, EngineLimit, LimitResolution, ModelTier } from "@adhd/core";
 
 export interface RunEngineSelection {
   engine?: EngineId;
   model?: string;
+  modelTier?: ModelTier;
 }
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -145,11 +146,11 @@ export function selectionAfterLimit(
   current: RunEngineSelection,
   resolution: LimitResolution,
 ): RunEngineSelection {
-  if (resolution.choice === "switch-model") {
-    return { engine: current.engine, model: resolution.model };
+  if (resolution.choice === "switch-tier") {
+    return { engine: current.engine, modelTier: resolution.tier };
   }
   if (resolution.choice === "switch-engine") {
-    return { engine: resolution.engine, model: resolution.model };
+    return { engine: resolution.engine, modelTier: current.modelTier };
   }
   return current;
 }

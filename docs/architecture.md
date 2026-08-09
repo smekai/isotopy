@@ -348,7 +348,7 @@ functions only.
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the PM closeout), `orchestration-service.ts`, `milestone-closeout.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the PM closeout), `orchestration-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
 | `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts` and `orchestrator-required-error.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
@@ -861,8 +861,9 @@ does not call model APIs itself, so an engine brings **its own model selection**
 and its own auth. A `conversational` engine can resume its session, which is what
 lets an agent stop mid-stage and ask a question.
 
-Model choice per engine is a roster snapshot trued up against the live CLI by
-`listModels()`, with **Auto** always offered so the CLI's own default can win.
+Model choice is a **preset** on one effort ladder (`auto`·`fast`·`balanced`·`deep`·`max`),
+resolved per engine to a concrete model-and-effort pair against a roster the
+adapters build from the live CLI, the CLI’s own config file, and a bundled list.
 Permission modes are `skip` (default, fully autonomous) and `acceptEdits`. See
 [`implementation-notes.md`](./implementation-notes.md) for the adapter quirks and
 the legacy-alias migration.

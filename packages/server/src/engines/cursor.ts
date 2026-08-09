@@ -2,9 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { AUTO_MODEL_OPTION, CURSOR_MODEL_OPTIONS } from "@adhd/core";
-import type { EngineLimit, EngineModelList, EngineModelOption, EngineStatus } from "@adhd/core";
+import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import { cursorCliConfigModel, parseCursorModels } from "../schemas/engine-cli-config.ts";
+import { configuredModelFrom } from "./cli-config.ts";
 import { parseCursorProtocolLine } from "./cursor-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
@@ -17,6 +18,7 @@ import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
+  LiveModelLayer,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
@@ -180,52 +182,29 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function parseCursorModels(stdout: string): EngineModelOption[] {
-  const options: EngineModelOption[] = [];
-  for (const line of stdout.split(/\r?\n/)) {
-    const match = /^\s*([\w.:-]+)\s+-\s+(.+?)\s*$/.exec(line);
-    if (!match) {
-      continue;
-    }
-    const [, id, label] = match;
-    if (id === undefined || label === undefined) {
-      continue;
-    }
-    const current = /\(current[^)]*\)/i.test(label);
-    const clean = label.replace(/\s*\(current[^)]*\)\s*/i, "").trim() || id;
-    options.push({
-      id,
-      label: id === "auto" ? `Cursor ${clean}` : clean,
-      hint: current ? "the CLI's current default" : "",
-    });
-  }
-  return options;
-}
-
 export const cursorAdapter: EngineAdapter = {
   id: "cursor",
 
-  async listModels(): Promise<EngineModelList> {
+  configuredModel(): ModelOptionDraft | undefined {
+    return configuredModelFrom(
+      path.join(os.homedir(), ".cursor", "cli-config.json"),
+      cursorCliConfigModel,
+      "from your ~/.cursor/cli-config.json",
+    );
+  },
+
+  async liveModels(): Promise<LiveModelLayer> {
     let binary: string;
     try {
       binary = resolveCursorBinary().path;
     } catch {
-      return {
-        options: CURSOR_MODEL_OPTIONS,
-        source: "static",
-        note: "Cursor CLI not found — showing the built-in list.",
-      };
+      return { options: [], note: "Cursor CLI not found." };
     }
     const result = await probeCommand(binary, ["models"]);
-    const parsed = result.success ? parseCursorModels(result.stdout) : [];
-    if (parsed.length === 0) {
-      return {
-        options: CURSOR_MODEL_OPTIONS,
-        source: "static",
-        note: "`agent models` returned nothing usable — showing the built-in list.",
-      };
-    }
-    return { options: [AUTO_MODEL_OPTION, ...parsed], source: "cli" };
+    const options = result.success ? parseCursorModels(result.stdout) : [];
+    return options.length > 0
+      ? { options }
+      : { options: [], note: "`agent models` returned nothing usable." };
   },
 
   async detect(): Promise<EngineStatus> {

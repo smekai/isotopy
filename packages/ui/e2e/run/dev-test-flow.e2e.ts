@@ -43,7 +43,7 @@ test("the default pipeline is selectable in the picker and previews all three bo
 
   // Engine-backed, so the folder chip and engine caption appear.
   await expect(page.getByTestId("workspace-chip")).toBeVisible();
-  await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
+  await expect(page.getByText(/Engine: Claude Code · Balanced/)).toBeVisible();
 
   // The ghost pipeline previews exactly three boxes, by profession.
   await expect(page.getByText("Product Manager", { exact: true })).toHaveCount(1);

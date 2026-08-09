@@ -70,6 +70,7 @@ export function createRunRoutes(
           task: body.task,
           engine: body.engine,
           model: body.model,
+          modelTier: body.modelTier,
           permissionMode: body.permissionMode,
           milestoneId: body.milestoneId,
           featureId: body.featureId,

@@ -1,9 +1,10 @@
 import type {
+  EffortLevel,
   EngineId,
   EngineLimit,
-  EngineModelList,
   EnginePermissionMode,
   EngineStatus,
+  ModelOptionDraft,
   StageLogDraft,
   StageUsage,
 } from "@adhd/core";
@@ -18,6 +19,7 @@ export interface EngineRunContext {
   prompt: string;
   cwd: string;
   model?: string;
+  effort?: EffortLevel;
   appendSystemPrompt?: string;
   permissionMode: EnginePermissionMode;
   connection: EngineConnection;
@@ -39,6 +41,11 @@ export interface EngineRunResult {
   usage?: StageUsage;
 }
 
+export interface LiveModelLayer {
+  options: ModelOptionDraft[];
+  note?: string;
+}
+
 export interface EngineActionResult {
   ok: boolean;
   output?: string;
@@ -49,7 +56,8 @@ export interface EngineAdapter {
   id: EngineId;
   run(ctx: EngineRunContext): Promise<EngineRunResult>;
   detect?(): Promise<EngineStatus>;
-  listModels?(): Promise<EngineModelList>;
+  liveModels(): Promise<LiveModelLayer>;
+  configuredModel(): ModelOptionDraft | undefined;
   install?(): Promise<EngineActionResult>;
   login?(): Promise<EngineActionResult>;
 }

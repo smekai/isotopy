@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
 import type { LimitResolution, RunSummary } from "@adhd/core";
-import { modelForEngine } from "@adhd/core";
+import { preferredRunOptions } from "@adhd/core";
 import {
   abortRun,
   approveGate,
@@ -204,12 +204,7 @@ export function App() {
   }
 
   function currentRunOptions() {
-    const { engine, permissionMode } = settings.preferences;
-    return {
-      engine,
-      model: modelForEngine(settings.preferences, engine),
-      permissionMode,
-    };
+    return preferredRunOptions(settings.preferences);
   }
 
   async function handleStartNextFeature(milestoneId: string) {

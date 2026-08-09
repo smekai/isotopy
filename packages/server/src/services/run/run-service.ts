@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import nodepath from "node:path";
 import type {
+  EngineId,
   EngineLimit,
   LimitChoice,
   LimitResolution,
@@ -29,6 +30,7 @@ import {
   createInitialRunState,
   isTerminalRunStatus,
   pipelineUsesEngine,
+  rosterAccepts,
   toRunSummary,
 } from "@adhd/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
@@ -45,6 +47,8 @@ import {
   renderRunArtifacts,
 } from "../../domain/markdown/closeout.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
+import { ModelRosterService } from "../model-roster-service.ts";
+import { unknownModelMessage } from "../../domain/rules/model-roster.ts";
 import { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
@@ -81,6 +85,7 @@ export class RunService implements RunProjection {
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly settings: SettingsStore;
+  private readonly rosters: ModelRosterService;
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
@@ -90,8 +95,10 @@ export class RunService implements RunProjection {
   constructor(
     private readonly registry: ProjectRegistry,
     settings?: SettingsStore,
+    rosters?: ModelRosterService,
   ) {
     this.settings = settings ?? new SettingsStore();
+    this.rosters = rosters ?? new ModelRosterService();
     this.store = new RunStore(registry);
     this.milestones = new MilestoneService(registry, () => this);
     this.stageOutputConsumers = [
@@ -102,6 +109,7 @@ export class RunService implements RunProjection {
       projection: this,
       registry: this.registry,
       settings: this.settings,
+      rosters: this.rosters,
       orchestration: () => this.orchestration,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
@@ -215,6 +223,7 @@ export class RunService implements RunProjection {
     return {
       ...(run?.engine === undefined ? {} : { engine: run.engine }),
       ...(run?.model === undefined ? {} : { model: run.model }),
+      ...(run?.modelTier === undefined ? {} : { modelTier: run.modelTier }),
       ...(permissionMode === undefined ? {} : { permissionMode }),
     };
   }
@@ -260,6 +269,7 @@ export class RunService implements RunProjection {
       task,
       engine,
       model,
+      modelTier,
       permissionMode,
       milestoneId,
       featureId,
@@ -314,6 +324,9 @@ export class RunService implements RunProjection {
           `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
         );
       }
+      if (model !== undefined) {
+        await this.requireOfferedModel(engineId, model);
+      }
     }
     await ensureProjectDataDir(projectPath);
     const runId = randomUUID().slice(0, 8);
@@ -340,6 +353,9 @@ export class RunService implements RunProjection {
       run.engine = engineId;
       if (model !== undefined) {
         run.model = model;
+      }
+      if (modelTier !== undefined) {
+        run.modelTier = modelTier;
       }
       run.workspacePath = await resolveWorkspace(projectPath, runId);
       this.store.enginePermissionModes.set(
@@ -622,14 +638,24 @@ export class RunService implements RunProjection {
     if (stage.status !== "blocked") throw new Error(LIMIT_ERRORS.notBlocked(stageId));
     const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
     if (!openWorkflowRunId) throw new Error(LIMIT_ERRORS.noDurableRun(runId));
-    const selection = selectionAfterLimit({ engine: run.engine, model: run.model }, resolution);
+    const current = { engine: run.engine, model: run.model, modelTier: run.modelTier };
+    const selection = selectionAfterLimit(current, resolution);
     run.engine = selection.engine;
     if (selection.model === undefined) delete run.model;
     else run.model = selection.model;
+    if (selection.modelTier === undefined) delete run.modelTier;
+    else run.modelTier = selection.modelTier;
     this.limitResolved(runId, stageId, resolution.choice);
     void this.store.flushPersist(runId);
     void this.runtimes.forProject(run.projectId).resolveLimit(runId, stageId, resolution.choice);
     return structuredClone(run);
+  }
+
+  private async requireOfferedModel(engineId: EngineId, modelId: string): Promise<void> {
+    const roster = await this.rosters.roster(engineId);
+    if (!rosterAccepts(roster, modelId)) {
+      throw new Error(unknownModelMessage(engineId, modelId));
+    }
   }
 
   gateApproved(runId: string, stageId: string): void {

@@ -15,7 +15,7 @@ import {
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
 import { FONT, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
-import { modelForEngine } from "@adhd/core";
+import { preferredRunOptions } from "@adhd/core";
 import { SCROLL_BODY } from "./run-styles";
 
 const MAX_WIDTH = 900;
@@ -358,12 +358,9 @@ export function MilestonePlanPanel({
               disabled={busy || !feedback.trim()}
               onClick={() =>
                 void act(async () => {
-                  const engine = settings.preferences.engine;
                   const revision = await reviseMilestonePlan(run.milestoneId!, {
                     feedback: feedback.trim(),
-                    engine,
-                    model: modelForEngine(settings.preferences, engine),
-                    permissionMode: settings.preferences.permissionMode,
+                    ...preferredRunOptions(settings.preferences),
                   });
                   onRunStarted(revision.id);
                 })

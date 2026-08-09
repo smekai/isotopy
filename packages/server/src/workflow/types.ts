@@ -19,6 +19,7 @@ import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
+import type { ModelRosterService } from "../services/model-roster-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 
@@ -150,6 +151,7 @@ export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
   settings: SettingsStore;
+  rosters: ModelRosterService;
   orchestration(): OrchestrationHooks | undefined;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;

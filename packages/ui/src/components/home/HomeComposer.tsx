@@ -4,7 +4,7 @@ import { Flag, FolderOpen, Play, Sparkles, SlidersHorizontal } from "lucide-reac
 import {
   ENGINES,
   HOME_PROJECT_ID,
-  modelForEngine,
+  modelChoiceLabel,
   pipelineUsesEngineById,
 } from "@adhd/core";
 import type { Project } from "@adhd/core";
@@ -250,7 +250,7 @@ export function HomeComposer({
       <div style={footerHint(d)}>
         {usesEngine ? (
           <>
-            Engine: {engine.label} · {modelForEngine(settings.preferences, engine.id)} —
+            Engine: {engine.label} · {modelChoiceLabel(settings.preferences, engine.id)} —
             change in Setup
           </>
         ) : (

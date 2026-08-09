@@ -1,8 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import { BellRing, Play, Plug, RotateCcw, Square, X } from "lucide-react";
-import { ENGINES, modelOptionsFor } from "@adhd/core";
-import type { EngineId, LimitResolution, RunLimit, RunState } from "@adhd/core";
+import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@adhd/core";
+import type {
+  EngineId,
+  EngineModelRoster,
+  LimitResolution,
+  ModelTier,
+  ModelTierDefinition,
+  RunLimit,
+  RunState,
+} from "@adhd/core";
+import { useEngineRoster } from "../hooks/useEngineRoster";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";
 import { formatCountdown, formatResetAt, remainingMs } from "../limit";
@@ -164,6 +173,41 @@ function otherEngines(current: EngineId): EngineId[] {
     .map((engine) => engine.id);
 }
 
+const PRICED_TIERS = MODEL_TIER_OPTIONS.filter((option) => option.id !== "auto");
+
+interface TierEscape {
+  tier: ModelTierDefinition;
+  model: string;
+}
+
+function cheaperTiers(
+  engineId: EngineId,
+  currentModel: string,
+  currentTier: ModelTier | undefined,
+  roster: EngineModelRoster,
+): TierEscape[] {
+  const resolved = PRICED_TIERS.map((tier) => ({ tier, ...resolveTier(engineId, tier.id, roster) }));
+  const current = currentTier === undefined
+    ? resolved.findIndex((candidate) => candidate.model === currentModel)
+    : currentTier === "auto"
+      ? 0
+      : PRICED_TIERS.findIndex((tier) => tier.id === currentTier);
+  const candidates = resolved.slice(0, current === -1 ? resolved.length : current);
+  if (currentTier !== undefined) {
+    return candidates.map(({ tier, model }) => ({ tier, model }));
+  }
+  const seen = new Set([currentModel]);
+  return candidates.flatMap(
+    ({ tier, model }) => {
+      if (seen.has(model)) {
+        return [];
+      }
+      seen.add(model);
+      return [{ tier, model }];
+    },
+  );
+}
+
 export interface LimitModalProps {
   d: Dir;
   run: RunState;
@@ -185,6 +229,14 @@ export function LimitModal({
 }: LimitModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const restoreFocusTo = useRef<Element | null>(null);
+  const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
+  const { roster } = useEngineRoster(engineId);
+  const currentTier = run.model === undefined ? run.modelTier : undefined;
+  // The countdown re-renders this modal every second for the whole reset window.
+  const escapes = useMemo(
+    () => cheaperTiers(engineId, limit.model ?? "", currentTier, roster),
+    [currentTier, engineId, limit.model, roster],
+  );
   const notification = useLimitNotification(limit);
   const now = useNow(limit.resetAt !== undefined);
   const remaining = remainingMs(limit, now);
@@ -252,23 +304,16 @@ export function LimitModal({
           <div>
             <div style={groupLabel(d)}>{LIMIT_COPY.switchModelHeading}</div>
             <div style={CHOICE_GRID}>
-              {modelOptionsFor(limit.engine)
-                .filter(
-                  (option) =>
-                    option.id !== "" &&
-                    option.id !== limit.model &&
-                    option.requiresUsageCredits !== true,
-                )
-                .map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => onResolve({ choice: "switch-model", model: option.id })}
-                    style={modelChip(d)}
-                  >
-                    <span style={optionLabel(d)}>{option.label}</span>
-                    <span style={mutedCaption(d)}>{option.hint}</span>
-                  </button>
-                ))}
+              {escapes.map(({ tier, model }) => (
+                <button
+                  key={tier.id}
+                  onClick={() => onResolve({ choice: "switch-tier", tier: tier.id })}
+                  style={modelChip(d)}
+                >
+                  <span style={optionLabel(d)}>{tier.label}</span>
+                  <span style={mutedCaption(d)}>{model || "the harness's own default"}</span>
+                </button>
+              ))}
             </div>
           </div>
 

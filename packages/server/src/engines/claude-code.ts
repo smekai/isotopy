@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineLimit, EngineStatus } from "@adhd/core";
+import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
+import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseClaudeProtocolLine } from "./claude-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
@@ -15,6 +17,7 @@ import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import type {
   EngineAdapter,
+  LiveModelLayer,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
@@ -132,6 +135,18 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
 export const claudeCodeAdapter: EngineAdapter = {
   id: "claude-code",
 
+  liveModels(): Promise<LiveModelLayer> {
+    return Promise.resolve(NO_LIVE_LISTING);
+  },
+
+  configuredModel(): ModelOptionDraft | undefined {
+    return configuredModelFrom(
+      path.join(os.homedir(), ".claude", "settings.json"),
+      claudeSettingsModel,
+      "from your ~/.claude/settings.json",
+    );
+  },
+
   async detect(): Promise<EngineStatus> {
     cachedBinary = undefined;
     let resolved: ResolvedBinary;
@@ -184,6 +199,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       ...(ctx.connection?.mode === "api-key" ? ["--bare"] : []),
       ...(ctx.resumeSessionId ? ["--resume", ctx.resumeSessionId] : []),
       ...(ctx.model ? ["--model", ctx.model] : []),
+      ...(ctx.effort ? ["--effort", ctx.effort] : []),
       ...(personaViaFlag && ctx.appendSystemPrompt
         ? ["--append-system-prompt", ctx.appendSystemPrompt]
         : []),

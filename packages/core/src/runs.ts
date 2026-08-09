@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ENGINE_IDS } from "./engines.ts";
-import type { EngineId } from "./engines.ts";
+import type { EngineId, ModelTier } from "./engines.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
 import type { RunArtifactRecord } from "./run-artifacts.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
@@ -162,14 +162,14 @@ export const DEFAULT_LIMIT_WAIT_MS = 30 * 60_000;
 
 export const MAX_LIMIT_WAIT_MS = 24 * 60 * 60_000;
 
-export const LIMIT_CHOICES = ["retry-now", "switch-model", "switch-engine"] as const;
+export const LIMIT_CHOICES = ["retry-now", "switch-tier", "switch-engine"] as const;
 
 export type LimitChoice = (typeof LIMIT_CHOICES)[number];
 
 export type LimitResolution =
   | { choice: "retry-now" }
-  | { choice: "switch-model"; model: string }
-  | { choice: "switch-engine"; engine: EngineId; model?: string };
+  | { choice: "switch-tier"; tier: ModelTier }
+  | { choice: "switch-engine"; engine: EngineId };
 
 export interface StageState {
   id: string;
@@ -200,6 +200,7 @@ export interface RunState {
   task?: string;
   engine?: EngineId;
   model?: string;
+  modelTier?: ModelTier;
   limit?: RunLimit;
   result?: string;
   stageOutputs?: Record<string, string>;

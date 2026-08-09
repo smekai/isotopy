@@ -109,7 +109,7 @@ test("single-agent mode shows the folder as read-only context, not an input", as
 
   // Assert
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
-  await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
+  await expect(page.getByText(/Engine: Claude Code · Balanced/)).toBeVisible();
 
   // The folder is the project's, so the composer states it and offers no way
   // to type another one.
@@ -134,15 +134,26 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   await expect(page.getByText("Engine status")).toBeVisible();
   await expect(page.getByRole("button", { name: /Re-check/ })).toBeVisible();
 
-  // Default engine is claude-code. The roster is resolved server-side and can
-  // come from the CLI, so assert the entries that matter rather than a count.
-  const model = page.locator("select");
+  // The model choice is an intent, not a roster: model ids turn over monthly, the
+  // ladder does not. What it resolved to on this machine is shown, never implied.
+  await expect(page.getByRole("button", { name: /Auto whatever the harness/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Fast quick and cheap/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Balanced the everyday default/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Deep more reasoning/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Max most reasoning/ })).toBeVisible();
+  await expect(page.getByText(/^→ /)).toBeVisible();
+
+  // The exact roster is still reachable, one disclosure away, for the expert case.
+  await expect(page.getByTestId("model-select")).toHaveCount(0);
+  await page.getByRole("button", { name: /Pick an exact model instead/ }).click();
+  const model = page.getByTestId("model-select");
   await expect(model).toBeVisible();
-  await expect(model).toHaveValue("sonnet");
   const offered = await model
     .locator("option")
     .evaluateAll<string[], HTMLOptionElement>((options) => options.map((option) => option.value));
-  expect(offered).toEqual(expect.arrayContaining(["", "opus", "sonnet", "haiku"]));
+  expect(offered).toEqual(expect.arrayContaining(["", "fable", "opus", "sonnet", "haiku"]));
+  await expect(model.locator("optgroup")).toHaveCount(2);
+  await expect(model.locator("optgroup").nth(1)).toHaveAttribute("label", /checked \d{4}-\d{2}-\d{2}/);
 
   await expect(page.getByRole("button", { name: /Never block \(recommended\)/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Accept edits only/ })).toBeVisible();
@@ -161,20 +172,20 @@ test("AI Harness lists the Claude connection modes inline", async ({ page }) => 
   await expect(page.getByRole("button", { name: /Anthropic API key/ })).toBeVisible();
 });
 
-test("selecting Cursor swaps the model options and connection modes", async ({ page }) => {
+test("selecting Cursor keeps the preset and re-resolves it against that harness", async ({ page }) => {
   // Arrange
   await page.goto("/");
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
+  const resolution = page.getByText(/^→ /);
+  const onClaude = await resolution.textContent();
 
   // Act
   await page.getByRole("button", { name: /Cursor Cursor CLI agent/ }).click();
 
-  // Assert — Cursor defaults to Auto (""), which lets the CLI pick. Its roster comes
-  // from `agent models` when the CLI is installed, so only Auto is guaranteed.
-  const model = page.locator("select");
-  await expect(model).toHaveValue("");
-  await expect(model.locator('option[value=""]')).toHaveText(/Auto/);
+  // Assert — a preset survives switching harness, which is the whole point of one;
+  // what it stands for is re-resolved against the new harness's own roster.
+  await expect(resolution).not.toHaveText(onClaude ?? "");
 
   // connection modes render in the same section — visibility only (clicking persists)
   await expect(page.getByRole("button", { name: /Cursor subscription/ })).toBeVisible();
@@ -182,7 +193,7 @@ test("selecting Cursor swaps the model options and connection modes", async ({ p
 
   // Cleanup: the engine is stored per project now, so restore the default.
   await page.getByRole("button", { name: /Claude Code Anthropic's agentic coding CLI/ }).click();
-  await expect(page.locator("select")).toHaveValue("sonnet");
+  await expect(resolution).toHaveText(onClaude ?? "");
 });
 
 test("pipeline, model, and permission mode persist across a reload", async ({ page }) => {
@@ -194,7 +205,7 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
 
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
-  await page.locator("select").selectOption("haiku");
+  await page.getByRole("button", { name: /Fast/ }).click();
   await page.getByRole("button", { name: /Accept edits only/ }).click();
   await page.getByRole("button", { name: "Close" }).click();
 
@@ -204,12 +215,12 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   // Assert — the pipeline composer is where a stored pipeline is visible at all.
   await openPipelineComposer(page);
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
-  await expect(page.getByText(/Engine: Claude Code · haiku/)).toBeVisible();
+  await expect(page.getByText(/Engine: Claude Code · Fast/)).toBeVisible();
 
-  // Setup select reflects the stored model
+  // Setup shows the stored preset and what it resolves to here
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
-  await expect(page.locator("select")).toHaveValue("haiku");
+  await expect(page.getByText("→ haiku · effort low")).toBeVisible();
 
   // permission mode is stored server-side (UI selection is style-only)
   expect((await readPreferences(page)).permissionMode).toBe("acceptEdits");
@@ -230,21 +241,22 @@ test("preferences survive a browser with no storage of its own", async ({ page }
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
 });
 
-test("legacy full model IDs migrate to standard-context CLI aliases", async ({ page }) => {
+// Adopting a pre-preset settings file onto a tier is covered where the fixture can
+// be honest — settings.comp.ts writes the file directly, with no `modelTier` in it.
+// Through the API this is unreachable: resetting preferences stores one.
+test("an exact model pinned in the advanced disclosure is what the composer reports", async ({ page }) => {
   // Arrange
   await page.goto("/");
-  await writePreferences(page, { engineModels: { "claude-code": "claude-sonnet-4-6" } });
+  await writePreferences(page, { engineModels: { "claude-code": "claude-3-legacy" } });
 
   // Act
   await page.reload();
 
-  // Assert
+  // Assert — a pin the ladder does not cover is honoured verbatim, not rewritten.
   await openPipelineComposer(page);
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
   await page.getByRole("option", { name: /Single agent/ }).click();
-  await expect(page.getByText(/Engine: Claude Code · sonnet/)).toBeVisible();
-  // the alias is rewritten in the active project's own stored preferences
-  expect((await readPreferences(page)).engineModels["claude-code"]).toBe("sonnet");
+  await expect(page.getByText(/Engine: Claude Code · claude-3-legacy/)).toBeVisible();
 });
 
 test("a preference left in localStorage by an older build is adopted once", async ({ page }) => {

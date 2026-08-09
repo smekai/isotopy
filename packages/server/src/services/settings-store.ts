@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ENGINES, defaultConnectionMode } from "@adhd/core";
+import { ENGINES, defaultConnectionMode, withoutClearedOverrides } from "@adhd/core";
 import type {
   EngineId,
   ProjectPreferences,
@@ -147,7 +147,10 @@ function mergedPreferenceOverride(
 ): ProjectPreferencesUpdate {
   const merged: ProjectPreferencesUpdate = { ...current, ...update };
   if (update.engineModels) {
-    merged.engineModels = { ...current?.engineModels, ...update.engineModels };
+    merged.engineModels = withoutClearedOverrides({
+      ...current?.engineModels,
+      ...update.engineModels,
+    });
   }
   return merged;
 }

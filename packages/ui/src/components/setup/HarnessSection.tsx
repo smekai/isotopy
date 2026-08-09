@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import type { EngineId } from "@adhd/core";
-import { ENGINES, PERMISSION_MODES, modelForEngine } from "@adhd/core";
+import type { EngineId, ModelTier } from "@adhd/core";
+import { ENGINES, PERMISSION_MODES, modelOverrideFor } from "@adhd/core";
 import type { SettingsController } from "../../hooks/useSettings";
 import { SPACE } from "../../theme";
 import type { Dir } from "../../theme";
@@ -40,7 +40,6 @@ export interface HarnessSectionProps {
 export function HarnessSection({ d, projectName, settings }: HarnessSectionProps) {
   const { preferences } = settings;
   const harness = preferences.engine;
-  const model = modelForEngine(preferences, harness);
   const permissionMode = preferences.permissionMode;
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -52,7 +51,11 @@ export function HarnessSection({ d, projectName, settings }: HarnessSectionProps
     settings.update({ engine: engineId });
   }
 
-  function selectModel(modelId: string) {
+  function selectTier(tier: ModelTier) {
+    settings.update({ modelTier: tier, engineModels: { [harness]: null } });
+  }
+
+  function selectModelOverride(modelId: string) {
     settings.update({ engineModels: { [harness]: modelId } });
   }
 
@@ -80,7 +83,13 @@ export function HarnessSection({ d, projectName, settings }: HarnessSectionProps
       </div>
       <EngineStatusCard d={d} engine={harness} refreshKey={refreshKey} onRefresh={refreshEngine} />
       <EngineConnection d={d} projectName={projectName} engine={harness} settings={settings} />
-      <EngineModelPicker d={d} engine={harness} model={model} refreshKey={refreshKey} onSelect={selectModel} />
+      <EngineModelPicker d={d}
+        engine={harness}
+        tier={preferences.modelTier}
+        modelOverride={modelOverrideFor(preferences, harness)}
+        refreshKey={refreshKey}
+        onSelectTier={selectTier}
+        onSelectModel={selectModelOverride} />
       <div style={fieldLabel(d)}>Permissions</div>
       <div style={OPTION_STACK}>
         {PERMISSION_MODES.map((opt) => {

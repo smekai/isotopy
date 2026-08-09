@@ -1,5 +1,6 @@
 import {
   ENGINE_IDS,
+  MODEL_TIERS,
   PERMISSION_MODE_IDS,
   RUN_STATUSES,
   pipelineDefinitionSchema,
@@ -59,6 +60,7 @@ const runStateSchema = z
     task: z.string().optional(),
     engine: z.enum(ENGINE_IDS).optional(),
     model: z.string().optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     limit: runLimitSchema.optional(),
     result: z.string().optional(),
     stageOutputs: z.record(z.string(), z.string()).optional(),

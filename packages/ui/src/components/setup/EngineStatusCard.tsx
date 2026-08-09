@@ -5,10 +5,15 @@ import type { EngineId, EngineStatus } from "@adhd/core";
 import { fetchEngineStatus, installEngine, loginEngine } from "../../api";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
-import { ERROR_RED, OK_GREEN, WHITE, fieldLabel, mutedBody } from "./setup-styles";
-
-const ERROR_BORDER = "rgba(220,38,38,0.35)";
-const ERROR_TINT = "rgba(220,38,38,0.06)";
+import {
+  ERROR_BORDER,
+  ERROR_RED,
+  ERROR_TINT,
+  OK_GREEN,
+  WHITE,
+  fieldLabel,
+  mutedBody,
+} from "./setup-styles";
 
 const COPY_FEEDBACK_MS = 2000;
 

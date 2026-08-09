@@ -14,8 +14,9 @@ result is somewhere on disk, and you have to already know where.
 **Scope:** `TASK-126` (show what was built), `TASK-092` (project automation and preview
 deploy — the dependency under 126's second half), `TASK-124` (permission modes and blast
 radius), `TASK-127` (a stage must not pass on output nothing could use), `TASK-129` (model
-rosters that do not offer ids the plan rejects), `TASK-116` (README "How it works"), and
-`TASK-128` (the closing dogfood).
+presets rather than ids the plan rejects), `TASK-115` (per-role presets, pulled out of
+Milestone H once `TASK-129` made a stage's model something an agent can reason about),
+`TASK-116` (README "How it works"), and `TASK-128` (the closing dogfood).
 
 Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
 research spikes belong to no milestone at all.
@@ -47,31 +48,6 @@ because an agent left a dev server running.
 
 Cross-platform: opening a folder and starting a process differ per OS; go through
 `runSubprocess` with executable-plus-argument arrays, never a shell string.
-
----
-
-## TASK-129: Model rosters must not offer ids the user's plan rejects
-**Priority:** P1 | **Tags:** core, engine, server, milestone-f
-**Updated:** 2026-08-07 11:40
-
-`TASK-117` hit this on the first Codex run: the shipped list offered `gpt-5-mini`, and a
-ChatGPT-account login answered `400 — not supported when using Codex with a ChatGPT
-account`. Those two ids were retired, but the shape of the problem was not.
-
-- **Cursor** resolves its roster live from the CLI, and its static fallback still lists
-  ids the CLI no longer has. The fallback only shows when the CLI is missing, so it is
-  low-harm — but it is still wrong.
-- **Codex** has no `models` subcommand, so its roster is static plus whatever
-  `~/.codex/config.toml` names. It will drift again.
-- The failure lands as a raw provider `400` in the stage log, mid-run, after the user has
-  waited.
-
-**Scope:** decide per engine how a roster stays true — resolve live where the CLI allows
-it, and where it does not, make Auto the honest default and mark unverified entries as
-such rather than presenting them as offers. Validate the chosen model *before* a run
-starts, so a rejection is a Setup-time message and not a failed stage.
-
-Cross-platform: model probes go through `probeCommand`; no shell-only invocations.
 
 ---
 
@@ -271,16 +247,29 @@ Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell ass
 
 ---
 
-## TASK-115: Per-role engine/model configuration
-**Priority:** P3 | **Tags:** core, server, engine, milestone-h
-**Updated:** 2026-08-07 11:40
+## TASK-115: Per-role model presets, chosen by the Orchestrator
+**Priority:** P2 | **Tags:** core, server, ui, engine, milestone-f
+**Updated:** 2026-08-09 00:00
 
-**Milestone H — Harmonic. Build only if feedback asks for it.** Watch for the user who
-wants a cheap model doing the typing and an expensive one deciding.
+**Moved out of Milestone H by `TASK-129`.** It was parked as "build only if feedback asks
+for it" because per-stage *model ids* meant asking a user, or an agent, to track ids that
+turn over monthly. Presets removed that objection: a stage carrying `fast` or `deep` is
+something both a person and the Orchestrator can reason about, and getting it wrong costs
+a rung rather than a failed run.
 
-Extend workflow input / run state so each stage can select its own engine+model (allowing the orchestrator to run on a stronger model than team agents). Include settings surface and correct limit-park handling per stage.
+**Most of the server work is already done.** `ModelTier` exists, and
+`stage-execution.ts` resolves the run's tier **per stage** rather than at run start —
+that seam was built for this task. What remains:
 
-Cross-platform: n/a — engine/model selection integrates with existing engine adapter registry.
+- a per-stage tier on the workflow input / stage state, falling back to the run's;
+- the Orchestrator assigning one per role at team-composition time — a
+  `team-composition.ts` schema field plus the prompt work to make the choice reasoned
+  (cheap model doing the typing, expensive one deciding);
+- the team-review UI showing and letting the user change each role's rung before approval;
+- limit-park handling per stage: a rung that hits a plan limit must drop that stage, not
+  the whole run.
+
+Cross-platform: n/a — resolution and the effort flags already go through the adapters.
 
 ---
 

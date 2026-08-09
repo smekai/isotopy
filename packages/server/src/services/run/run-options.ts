@@ -1,6 +1,9 @@
+import type { ModelTier } from "@adhd/core";
+
 export interface InheritedRunOptions {
   engine?: string;
   model?: string;
+  modelTier?: ModelTier;
   permissionMode?: string;
 }
 

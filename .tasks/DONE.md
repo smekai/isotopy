@@ -1,5 +1,50 @@
 # Done
 
+## TASK-129: Model rosters must not offer ids the user's plan rejects
+**Priority:** P1 | **Tags:** core, engine, server, milestone-f
+**Updated:** 2026-08-09 20:55
+
+`TASK-117` hit this on the first Codex run: the shipped list offered `gpt-5-mini`, and a
+ChatGPT-account login answered `400 — not supported when using Codex with a ChatGPT
+account`. The failure landed mid-run, in a stage log, after the user had waited.
+
+**What shipped.** The first pass made rosters honest — three layers per engine
+(`live` CLI listing → `config` the engine's own config file → `static` bundled), merged
+first-wins, cached, with unverified entries marked and an unoffered id refused at run
+start. Driving the app then showed honesty was not enough: **Cursor's live roster is 194
+entries**, and every id turns over monthly. So the surface changed.
+
+**What a user picks is now a preset** — `auto · fast · balanced · deep · max`, one effort
+ladder borrowed from the CLIs' own vocabulary — resolved to a concrete `(model, effort)`
+pair per engine at stage-execution time. Effort is a real second axis: `--effort` on
+Claude, `-c model_reasoning_effort` on Codex, baked into the id on Cursor. A preset that
+cannot be satisfied degrades to Auto rather than failing, because an intent can be
+substituted where an id cannot. Setup always shows what it resolved to. A preset is
+engine-independent and survives switching harness; an exact id remains available as a
+per-engine override behind a disclosure, still validated at run start and on limit
+resolution. A stored id the ladder covers is adopted onto that preset on read.
+
+Verified live on all three CLIs: `opus` promoted to `origin: "config"` from the real
+`~/.claude/settings.json`, `gpt-5.6-sol` deduped to one `config` entry from the real
+`config.toml`, cached roster read 47 ms against a 1.4 s re-probe, and the same **Deep**
+preset resolving to `opus · effort high` on Claude and `gpt-5.3-codex-high` on Cursor.
+`POST /runs` with `gpt-5-mini` answers 400 naming Setup, with no run created.
+
+**Review follow-up.** Setup no longer claims a preset degraded when its roster request
+failed. Limit recovery uses a tier-driven run's tier as the cutoff, so lower intents stay
+available even when they resolve to the same model; pinned and legacy runs retain their
+model-based fallback. Parser and resolver tests now assert stable format and selection
+contracts instead of copying the current model catalogue.
+
+Gates green: lint, typecheck, 614 tests, build, 59 e2e. Decisions in `docs/decisions.md`;
+roster, effort and migration behaviour in `docs/implementation-notes.md`. Version 0.9.28.
+
+**Follow-on:** `TASK-115` (per-role engine/model configuration) moved out of Milestone H
+into Milestone F's scope — presets are its precondition, and the tier is already resolved
+per stage, so a per-stage preset is the remaining work.
+
+---
+
 ## TASK-127: A stage must not pass on output no consumer could use
 **Priority:** P1 | **Tags:** server, core, testing, milestone-f
 **Updated:** 2026-08-07 11:40

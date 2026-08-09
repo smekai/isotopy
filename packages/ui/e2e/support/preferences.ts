@@ -6,7 +6,8 @@ import type { ProjectPreferences, ProjectPreferencesUpdate, SettingsView } from 
 
 export const DEFAULT_PREFERENCES: ProjectPreferencesUpdate = {
   engine: "claude-code",
-  engineModels: { "claude-code": "sonnet", cursor: "", codex: "" },
+  modelTier: "balanced",
+  engineModels: { "claude-code": null, cursor: null, codex: null },
   permissionMode: "skip",
   pipelineId: "pm-dev-test",
 };

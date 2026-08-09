@@ -54,6 +54,13 @@ describe("projectPreferencesUpdateSchema", () => {
     });
   });
 
+  test("a Cursor model the CLI has retired is migrated to Auto rather than refusing a run", () => {
+    expect(parse({ engineModels: { cursor: "composer-1" } })).toEqual({
+      ok: true,
+      update: { engineModels: { cursor: "" } },
+    });
+  });
+
   test("unknown top-level fields are rejected", () => {
     expect(parse({ pipelineId: "solo", typo: true }).ok).toBe(false);
   });

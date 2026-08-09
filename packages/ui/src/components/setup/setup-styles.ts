@@ -5,6 +5,8 @@ import type { Dir } from "../../theme";
 export const WHITE = "#FFF";
 export const OK_GREEN = "#059669";
 export const ERROR_RED = "#DC2626";
+export const ERROR_BORDER = "rgba(220,38,38,0.35)";
+export const ERROR_TINT = "rgba(220,38,38,0.06)";
 
 export interface Accent {
   accent: string;

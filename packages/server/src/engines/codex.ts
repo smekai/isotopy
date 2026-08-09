@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { CODEX_MODEL_OPTIONS } from "@adhd/core";
-import type { EngineLimit, EngineModelList, EngineStatus } from "@adhd/core";
+import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import { codexConfigModel } from "../schemas/engine-cli-config.ts";
+import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseCodexProtocolLine } from "./codex-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
@@ -17,6 +18,7 @@ import type { EngineProtocolUpdate } from "./protocol-validation.ts";
 import type {
   EngineActionResult,
   EngineAdapter,
+  LiveModelLayer,
   EngineConnection,
   EngineRunContext,
   EngineRunResult,
@@ -123,8 +125,13 @@ function buildArgs(ctx: EngineRunContext): string[] {
       ? ["--sandbox", "workspace-write"]
       : ["--dangerously-bypass-approvals-and-sandbox"]),
     ...(ctx.model ? ["--model", ctx.model] : []),
+    ...reasoningEffortArgs(ctx),
     "-",
   ];
+}
+
+function reasoningEffortArgs(ctx: EngineRunContext): string[] {
+  return ctx.effort ? ["-c", `model_reasoning_effort="${ctx.effort}"`] : [];
 }
 
 function buildResumeArgs(ctx: EngineRunContext, sessionId: string): string[] {
@@ -138,6 +145,7 @@ function buildResumeArgs(ctx: EngineRunContext, sessionId: string): string[] {
       ? []
       : ["--dangerously-bypass-approvals-and-sandbox"]),
     ...(ctx.model ? ["--model", ctx.model] : []),
+    ...reasoningEffortArgs(ctx),
     "-",
   ];
 }
@@ -146,50 +154,19 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function readCodexConfigModel(): string | undefined {
-  const configPath = path.join(os.homedir(), ".codex", "config.toml");
-  let text: string;
-  try {
-    text = readFileSync(configPath, "utf8");
-  } catch {
-    return undefined;
-  }
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("[")) {
-      break;
-    }
-    const match = /^model\s*=\s*["']([^"']+)["']/.exec(trimmed);
-    if (match) {
-      return match[1];
-    }
-  }
-  return undefined;
-}
-
 export const codexAdapter: EngineAdapter = {
   id: "codex",
 
-  async listModels(): Promise<EngineModelList> {
-    const configured = readCodexConfigModel();
-    if (!configured) {
-      return {
-        options: CODEX_MODEL_OPTIONS,
-        source: "static",
-        note: "No model set in ~/.codex/config.toml — Auto uses the CLI's built-in default.",
-      };
-    }
-    const known = CODEX_MODEL_OPTIONS.some((option) => option.id === configured);
-    return {
-      options: known
-        ? CODEX_MODEL_OPTIONS
-        : [
-            ...CODEX_MODEL_OPTIONS,
-            { id: configured, label: configured, hint: "from your ~/.codex/config.toml" },
-          ],
-      source: "config",
-      note: `Your Codex CLI is configured for "${configured}" — Auto uses it.`,
-    };
+  liveModels(): Promise<LiveModelLayer> {
+    return Promise.resolve(NO_LIVE_LISTING);
+  },
+
+  configuredModel(): ModelOptionDraft | undefined {
+    return configuredModelFrom(
+      path.join(os.homedir(), ".codex", "config.toml"),
+      codexConfigModel,
+      "from your ~/.codex/config.toml",
+    );
   },
 
   async detect(): Promise<EngineStatus> {

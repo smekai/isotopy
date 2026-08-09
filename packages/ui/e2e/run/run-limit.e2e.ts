@@ -123,7 +123,7 @@ test("the rail shows BLOCKED so a parked run is visible without opening it", asy
   ).toContainText("BLOCKED");
 });
 
-test("choosing a cheaper model posts that model to the resolve endpoint", async ({ page }) => {
+test("dropping to a cheaper preset posts the model it stands for", async ({ page }) => {
   // Anticipate — the seeded run, plus a recording route for the resolve call.
 
   const posted: Request[] = [];
@@ -139,12 +139,12 @@ test("choosing a cheaper model posts that model to the resolve endpoint", async 
   await openBlockedRun(page);
 
   // Act
-  await page.getByRole("button", { name: /Haiku/ }).click();
+  await page.getByRole("button", { name: /Fast/ }).click();
 
   // Assert
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0]?.method()).toBe("POST");
-  expect(posted[0]?.postDataJSON()).toEqual({ choice: "switch-model", model: "haiku" });
+  expect(posted[0]?.postDataJSON()).toEqual({ choice: "switch-tier", tier: "fast" });
 });
 
 test("Escape dismisses the popup and leaves the run parked, not resolved", async ({ page }) => {

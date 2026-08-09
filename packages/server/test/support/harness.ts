@@ -10,6 +10,7 @@ import { RUN_SUMMARY_EVENT } from "@adhd/core";
 import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
+import { ModelRosterService } from "../../src/services/model-roster-service.ts";
 import { OrchestrationService } from "../../src/services/orchestration-service.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunService } from "../../src/services/run/run-service.ts";
@@ -26,6 +27,7 @@ export interface TestApp {
   registry: ProjectRegistry;
   settings: SettingsStore;
   engine: FakeEngine;
+  rosters: ModelRosterService;
   /** Temp `ADHD_HOME` for this test — the home project's data root. */
   home: string;
   /** Temp `ADHD_USER_HOME` — the project registry and credentials land here. */
@@ -49,7 +51,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
-  const orchestrator = new RunService(registry, settings);
+  const rosters = new ModelRosterService();
+  const orchestrator = new RunService(registry, settings, rosters);
   const orchestrations = new OrchestrationService(registry, orchestrator);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
@@ -60,6 +63,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     orchestrations,
     registry,
     settings,
+    rosters,
   });
 
   return {
@@ -69,6 +73,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     registry,
     settings,
     engine,
+    rosters,
     home,
     userHome,
     dispose: async () => {
@@ -110,7 +115,8 @@ export interface RestartedApp {
 export async function restartApp(): Promise<RestartedApp> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
-  const orchestrator = new RunService(registry, settings);
+  const rosters = new ModelRosterService();
+  const orchestrator = new RunService(registry, settings, rosters);
   const orchestrations = new OrchestrationService(registry, orchestrator);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
@@ -123,6 +129,7 @@ export async function restartApp(): Promise<RestartedApp> {
       orchestrations,
       registry,
       settings,
+      rosters,
     }),
     orchestrator,
     orchestrations,
