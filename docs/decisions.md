@@ -15,6 +15,43 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-10 — Blast radius is delegated to each CLI's own reviewer, not brokered by the Orchestrator
+
+**Context:** every engine ran effectively unrestricted, and the one alternative,
+`acceptEdits`, degraded back to unrestricted on two of three engines. `TASK-138`
+is about to start long-lived processes on a stranger's machine, so the system
+needed an opinion about blast radius first.
+
+**Decision:** a third permission tier, `autoReview`, asks each CLI to use **its own**
+auto-review mode — Claude's `--permission-mode auto`, Codex's `--approve-for-me`
+— and falls back to today's `skip` behaviour, with a stage-log notice, on a build
+that has none. Support is a **runtime probe of the installed binary**, because the
+flag's existence is a property of the build rather than of the engine.
+
+**Rejected — routing approvals to the Orchestrator**, which is what the task
+originally asked for. Only Claude offers a live channel (`--permission-prompt-tool`,
+which requires bidirectional stream-json); `codex exec` has no approval channel at
+all, and `runSubprocess` writes stdin once and closes it. Delivering it would mean
+a new park/resume state and a rewritten subprocess seam inside the milestone whose
+rule is *stop adding*. The channel remains buildable later; nothing here forecloses it.
+
+**Rejected — falling back to `--sandbox workspace-write` on Codex.** It is already
+what `acceptEdits` emits, so two tiers would be byte-identical while hiding the fact
+that auto-review was unavailable; and `workspace-write` denies escalation rather
+than queueing it, so silently degrading a user into it turns a run that needed to
+install a dependency into a failed one. Degrading to the mode the user would
+otherwise have chosen is the honest default.
+
+**Rejected — reaching Cursor's Auto-review.** It is real, but selected by the
+`approvalMode` key in `~/.cursor/cli-config.json` rather than by a flag. Writing it
+would break the standing rule that CLI config files are read, never written, and
+would **persist past the run** — a crash mid-run leaves the user's global Cursor CLI
+reconfigured by ADHD. Relocating `CURSOR_CONFIG_DIR` instead risks relocating stored
+auth, which cannot be verified without the CLI installed. Cursor reports
+`unsupported` as a constant and says so.
+
+---
+
 ## 2026-08-10 — What a run changed is measured, not reported by the agent
 
 **Context:** a finished run said what it did in prose and left the files somewhere on

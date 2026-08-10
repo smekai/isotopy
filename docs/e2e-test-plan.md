@@ -61,7 +61,8 @@ on Windows and macOS.
 3. **Setup → AI Harness** — all three harnesses listed and selectable (none is
    behind a `SOON` pill any more); the model roster is resolved server-side and
    can come from the CLI, so specs assert the entries that matter rather than a
-   count; permission modes "Never block (recommended)" / "Accept edits only".
+   count; permission modes "Never block (recommended)" / "Auto-review" /
+   "Accept edits only".
 4. **Persistence across reload** (server-side, asserted through `/settings`) —
    pipeline, engine model and permission mode survive a reload; they also
    survive a browser whose storage was wiped, a legacy model id is migrated on

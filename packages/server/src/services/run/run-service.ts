@@ -369,10 +369,7 @@ export class RunService implements RunProjection {
         run.modelTier = modelTier;
       }
       run.workspacePath = await resolveWorkspace(projectPath, runId);
-      this.store.enginePermissionModes.set(
-        runId,
-        permissionMode === "acceptEdits" ? "acceptEdits" : DEFAULT_PERMISSION_MODE,
-      );
+      this.store.enginePermissionModes.set(runId, permissionMode ?? DEFAULT_PERMISSION_MODE);
     }
     this.store.runs.set(runId, run);
     await this.changes.recordBaseline(projectPath, runId, run.workspacePath);

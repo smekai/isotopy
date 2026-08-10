@@ -864,7 +864,9 @@ lets an agent stop mid-stage and ask a question.
 Model choice is a **preset** on one effort ladder (`auto`·`fast`·`balanced`·`deep`·`max`),
 resolved per engine to a concrete model-and-effort pair against a roster the
 adapters build from the live CLI, the CLI’s own config file, and a bundled list.
-Permission modes are `skip` (default, fully autonomous) and `acceptEdits`. See
+Permission modes are `skip` (default, fully autonomous), `autoReview` — the CLI's
+own reviewer decides, degrading to `skip` on a build that has none — and
+`acceptEdits`. See
 [`implementation-notes.md`](./implementation-notes.md) for the adapter quirks and
 the legacy-alias migration.
 

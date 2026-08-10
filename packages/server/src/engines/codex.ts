@@ -4,11 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import type { PermissionPlan, PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { codexConfigModel } from "../schemas/engine-cli-config.ts";
+import { helpAdvertisesFlag } from "../schemas/engine-cli-help.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseCodexProtocolLine } from "./codex-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
+import {
+  clearAutoReviewCache,
+  probeAutoReview,
+  resolvePermissionPlan,
+} from "./permission-mode.ts";
+import type { AutoReviewProbe } from "./permission-mode.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
 import {
   applyProtocolUpdate,
@@ -37,6 +45,19 @@ interface ResolvedBinary {
 }
 
 let cachedBinary: ResolvedBinary | undefined;
+
+const AUTO_REVIEW_FLAG = "--approve-for-me";
+
+const AUTO_REVIEW_PROBES: Record<"exec" | "resume", AutoReviewProbe> = {
+  exec: {
+    helpArgs: ["exec", "--help"],
+    advertised: (help) => helpAdvertisesFlag(help, AUTO_REVIEW_FLAG),
+  },
+  resume: {
+    helpArgs: ["exec", "resume", "--help"],
+    advertised: (help) => helpAdvertisesFlag(help, AUTO_REVIEW_FLAG),
+  },
+};
 
 function pickBinaryLine(output: string): string | undefined {
   const lines = output
@@ -113,17 +134,34 @@ function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
   return env;
 }
 
-function buildArgs(ctx: EngineRunContext): string[] {
+function permissionArgs(strategy: PermissionStrategy): string[] {
+  switch (strategy) {
+    case "unrestricted":
+      return ["--dangerously-bypass-approvals-and-sandbox"];
+    case "autoReview":
+      return [AUTO_REVIEW_FLAG];
+    case "acceptEdits":
+      return ["--sandbox", "workspace-write"];
+    default: {
+      const unreachable: never = strategy;
+      return unreachable;
+    }
+  }
+}
+
+function resumePermissionArgs(strategy: PermissionStrategy): string[] {
+  return strategy === "acceptEdits" ? [] : permissionArgs(strategy);
+}
+
+function buildArgs(ctx: EngineRunContext, plan: PermissionPlan): string[] {
   if (ctx.resumeSessionId) {
-    return buildResumeArgs(ctx, ctx.resumeSessionId);
+    return buildResumeArgs(ctx, ctx.resumeSessionId, plan);
   }
   return [
     "exec",
     "--json",
     "--skip-git-repo-check",
-    ...(ctx.permissionMode === "acceptEdits"
-      ? ["--sandbox", "workspace-write"]
-      : ["--dangerously-bypass-approvals-and-sandbox"]),
+    ...permissionArgs(plan.strategy),
     ...(ctx.model ? ["--model", ctx.model] : []),
     ...reasoningEffortArgs(ctx),
     "-",
@@ -134,16 +172,18 @@ function reasoningEffortArgs(ctx: EngineRunContext): string[] {
   return ctx.effort ? ["-c", `model_reasoning_effort="${ctx.effort}"`] : [];
 }
 
-function buildResumeArgs(ctx: EngineRunContext, sessionId: string): string[] {
+function buildResumeArgs(
+  ctx: EngineRunContext,
+  sessionId: string,
+  plan: PermissionPlan,
+): string[] {
   return [
     "exec",
     "resume",
     sessionId,
     "--json",
     "--skip-git-repo-check",
-    ...(ctx.permissionMode === "acceptEdits"
-      ? []
-      : ["--dangerously-bypass-approvals-and-sandbox"]),
+    ...resumePermissionArgs(plan.strategy),
     ...(ctx.model ? ["--model", ctx.model] : []),
     ...reasoningEffortArgs(ctx),
     "-",
@@ -171,6 +211,7 @@ export const codexAdapter: EngineAdapter = {
 
   async detect(): Promise<EngineStatus> {
     cachedBinary = undefined;
+    clearAutoReviewCache();
     let resolved: ResolvedBinary;
     try {
       resolved = resolveCodexBinary();
@@ -224,6 +265,7 @@ export const codexAdapter: EngineAdapter = {
     });
     if (result.success) {
       cachedBinary = undefined;
+      clearAutoReviewCache();
       return {
         ok: true,
         output: firstLine(result.stdout),
@@ -246,9 +288,12 @@ export const codexAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
-    if (ctx.permissionMode === "acceptEdits") {
-      ctx.onLog({ level: "info", message: "Codex has no accept-edits-only headless mode — running with --sandbox workspace-write" });
-    }
+    const plan = await resolvePermissionPlan("codex", ctx, () =>
+      probeAutoReview(
+        binary,
+        ctx.resumeSessionId ? AUTO_REVIEW_PROBES.resume : AUTO_REVIEW_PROBES.exec,
+      ),
+    );
 
     const runCtx = withPersonaPrompt(ctx);
 
@@ -258,7 +303,7 @@ export const codexAdapter: EngineAdapter = {
     };
     const result = await runSubprocess({
       command: binary,
-      args: buildArgs(runCtx),
+      args: buildArgs(runCtx, plan),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection),
       input: runCtx.prompt,

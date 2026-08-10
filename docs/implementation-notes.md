@@ -77,6 +77,23 @@ without a server restart:
 Cursor detection also flags when the **Cursor IDE** is installed but its headless
 **Agent CLI** (a separate tool) is not — otherwise "not found" surprises users.
 
+## Engines — capability probes (`engines/permission-mode.ts`)
+
+Whether a CLI can do auto-review is a property of the *installed build*, not of
+the engine: `--approve-for-me` exists in newer Codex releases and not in 0.144.6,
+and a version comparison would have to track each vendor's release history. So
+the answer is asked of the binary — one `--help` parse, memoised in a map keyed
+by **binary path plus help arguments**. Keying on the path makes an
+`ADHD_<ENGINE>_PATH` switch invalidate itself; keying on the arguments is what
+lets Codex hold separate answers for `exec` and `exec resume`, whose option sets
+genuinely differ. `detect()`/`install()` clear it alongside the binary cache.
+
+The probe runs **only** when a run actually asks for `autoReview`, so nobody pays
+a subprocess for a mode they did not choose. A probe that fails or times out
+answers `unknown` rather than throwing, and `unknown` degrades exactly like
+`unsupported` — with a different notice, because "the CLI said no" and "we could
+not ask" are different things to tell a user.
+
 ## Engines — billing safety (`buildChildEnv` in each adapter)
 
 The provider's API-key env var is **stripped from the child environment** so a
@@ -100,7 +117,13 @@ that path Claude also falls back to prompt-folding via stdin.
 ## Engines — CLI-specific quirks
 
 **Cursor (`engines/cursor.ts`).** Headless runs must not stop for confirmation;
-Cursor has no accept-edits-only mode, so both permission modes use `--force`.
+Cursor has no accept-edits-only mode, so every permission mode uses `--force`.
+Its **Auto-review** run mode is real but is selected by the `approvalMode` key in
+`~/.cursor/cli-config.json`, not by a flag, so ADHD cannot ask for it without
+writing a file it has no business writing (see `decisions.md`). Cursor therefore
+reports `unsupported` as a constant and runs no probe — which is why its `run()`
+calls `resolvePermissionPlan` for the notice alone and discards the plan: no
+strategy changes its argv.
 `--trust` is on by default (fresh scratch workspaces would otherwise hit the
 workspace-trust prompt and hang). **The prompt goes on stdin whenever the binary
 is a Windows `.cmd` shim**, which is what `cursor-agent` always resolves to on
@@ -118,7 +141,8 @@ Cursor's own `auto` router model is distinct from our **Auto** (which sends no
 **Codex (`engines/codex.ts`).** `codex exec --json` emits newline-delimited JSON
 events. `--skip-git-repo-check` lets it run in a non-git scratch workspace.
 Permission modes: `acceptEdits` → `--sandbox workspace-write` (writes confined to
-the workspace; escalation is denied, not queued); otherwise
+the workspace; escalation is denied, not queued); `autoReview` → `--approve-for-me`
+where the build advertises it; otherwise
 `--dangerously-bypass-approvals-and-sandbox`. The prompt is read from stdin via
 `-` to sidestep the Windows arg-length limit. The CLI has no `models` subcommand,
 so `configuredModel` reads the top-level `model = "…"` key from `~/.codex/config.toml`
@@ -126,6 +150,16 @@ so `configuredModel` reads the top-level `model = "…"` key from `~/.codex/conf
 the global default). **`codex exec resume` does not accept `--sandbox`** — only
 `--dangerously-bypass-approvals-and-sandbox` — so a resumed turn under
 `acceptEdits` runs on Codex's own default sandbox rather than `workspace-write`.
+`exec` and `exec resume` carry genuinely different option sets, so each is probed
+for `--approve-for-me` separately; assuming the two agree is a live bug, not a
+hypothetical one.
+
+**Claude Code (`engines/claude-code.ts`).** `--permission-mode` advertises its
+modes as a `(choices: …)` list that **wraps across four lines** of `--help`
+output, so the parser reads across newlines rather than line by line, and the
+match is bounded to the flag's own block — an unbounded search would pick up a
+later option's choices when a build stops offering any. Windows `.cmd` shims
+print CRLF, so no line anchors.
 
 **Auth probes (detect).** Cursor `status` and Codex `login status` are best-effort:
 Cursor's exits 0 either way so the answer is in the text; Codex's exit code is the
