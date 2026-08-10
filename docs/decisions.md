@@ -15,13 +15,62 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-10 — What a run changed is measured, not reported by the agent
+
+**Context:** a finished run said what it did in prose and left the files somewhere on
+disk. Nothing in the system tracked file changes — no git integration, no watcher — and
+the only file data was `listWorkspaceFiles`, a capped snapshot of *everything* in the
+workspace, three clicks deep behind the Artifacts tab. `TASK-126`'s bar is that this works
+for **every run, on every engine, with no project configuration**.
+
+**Decision:** the change set is **measured by the server**. A snapshot of the project —
+path, size and modification time — is taken when a run starts and again when it settles,
+and the difference is what the run created, edited and deleted. When the project is a git
+repository the snapshot baseline is kept but git answers instead, because it respects
+`.gitignore` and, crucially, sees work the agent **committed**: a status-only reading of a
+repository where the agent committed everything reports nothing at all. Both layers are
+captured at baseline and the git one wins at read time — the same first-wins shape as the
+model roster's `live → config → static`.
+
+**Rejected: engine tool logs.** `StageActivity` already carries `Write`/`Edit` paths and
+costs nothing to read, but only Claude's protocol adapter is known to emit them. "Every
+engine" would have been a claim about Codex and Cursor that nobody had checked.
+
+**Rejected: asking the agent to declare the files.** The `adhd-run-artifacts` fence is
+optional, is only produced for orchestration runs, and is prose. A run's own account of
+itself is the thing being replaced, not the thing to build on.
+
+**This does not reopen "the run view is derived from the log."** That rule governs the
+*conversation* — prose, tool rows and notices all come from one derived ordering, and
+nothing appends agent text to a second store. A change set is a run-level record like
+`closeout`, `release` and `deployment`: measured once when the run settles, written where
+those are written, and never re-derived from a log line.
+
+**Consequence for the run lifecycle:** `runCompleted` became asynchronous and captures the
+change set *before* it emits `run.completed`, because the UI stops the run's event stream
+on that event. The client refetches the run once when it lands — a change set cannot arrive
+through the event-sourced projection, and capturing after the emit would race the refetch.
+Abort and interrupt keep their synchronous emit and capture during settle, so an aborted
+run shows its changes when reopened rather than instantly.
+
+**Revealing the folder is a server capability.** "One click away" is literal: `POST
+/runs/:id/reveal` opens the run's workspace in Explorer, Finder or the freedesktop opener
+through `runSubprocess` with an argument array. The endpoint takes **no path** — it
+resolves the folder from the run it is scoped to, so no client-supplied path, absolute or
+relative, ever reaches an OS shell.
+
 ## 2026-08-10 — Deploying a preview is ADHD's job, not an agent's
 
 **Context:** Full Delivery carried an SRE box whose step task told an agent to find the
 project's deployment configuration, run it, verify it, and report. There was no such
-configuration to find, so the box existed to end in `SKIP`. `TASK-126` then needed a start
-command, readiness check and port strategy in order to show a user what a run built, and
-those are the same kind of fact: commands the *project* owns.
+configuration to find, so the box existed to end in `SKIP`. Milestone D had accepted that
+deliberately — **ship the seam, not the automation**: keep the `release` and `deploy`
+stages, let them report `VERDICT: SKIP` when nothing is configured so the pipeline
+degrades honestly, and render no capability the product does not have (no deploy-URL panel
+that is always empty). Removing the two stages until automation landed was rejected then;
+this entry is where that seam was finally filled. Showing a user the product a run
+built needs the same kind of fact — a start command, a readiness check, a port strategy —
+which is why `TASK-138` will read the `ui` block rather than inventing its own.
 
 **Decision:** project-owned commands live in `.adhd/automation.json` — validation, UI
 start, preview and production deployment — as executable-plus-argument arrays with
@@ -649,21 +698,6 @@ on a false positive with no way out.
 **Rejected:** widening `StageStatus` in `@adhd/core` so the colour could differ. The
 persisted status is what the durable workflow branches on, and every runtime consumer
 would have to handle a case that exists only for presentation.
-
----
-
-## 2026-07-31 — Ship the seam, not the automation (TASK-092)
-
-**Context:** Full Delivery carries `release` and `deploy` stages, but project deployment
-automation was cut from Milestone D.
-
-**Decision:** the stages stay and report `VERDICT: SKIP` when nothing is configured, so
-the pipeline degrades honestly and the missing piece is a configuration follow-up rather
-than a pipeline rewrite. Nothing in the UI renders a capability the product does not
-have — no deploy-URL panel that is always empty, no evidence gallery for files no stage
-writes.
-
-**Rejected:** removing the two stages until automation lands.
 
 ---
 

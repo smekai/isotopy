@@ -4,6 +4,7 @@ import type { EngineId, ModelTier } from "./engines.ts";
 import type { DeploymentResult, RunReleaseRecord } from "./automation.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
 import type { RunArtifactRecord } from "./run-artifacts.ts";
+import type { RunChangeSet } from "./run-changes.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { findPipeline, flattenPipelineStages } from "./pipelines.ts";
 import { requiredText, timestamp } from "./schema.ts";
@@ -196,6 +197,7 @@ export interface RunState {
   release?: RunReleaseRecord;
   deployment?: DeploymentResult;
   artifacts?: RunArtifactRecord;
+  changes?: RunChangeSet;
   pipelineId: string;
   pipelineName: string;
   pipeline?: PipelineDefinition;

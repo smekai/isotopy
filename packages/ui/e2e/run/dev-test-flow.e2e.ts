@@ -119,9 +119,43 @@ test.describe("the seeded, already-finished two-box run", () => {
     // …but the result does stay: a verdict is not machinery.
     await expect(thread).toContainText("VERDICT: PASS");
 
-    // A finished run cannot be messaged, and says so instead of offering a box.
+    // A finished run cannot be messaged; it reports what it built instead.
     await expect(page.getByTestId("chat-composer")).toHaveCount(0);
-    await expect(page.getByText(/This run has finished/)).toBeVisible();
+    await expect(page.getByTestId("run-result")).toContainText("1 created · 1 edited");
+  });
+
+  test("see what was built takes the user from the finished run to the files", async ({ page }) => {
+    // Act
+    await page.getByRole("button", { name: "See what was built" }).click();
+
+    // Assert
+    const changed = page.getByTestId("artifact-changes");
+    await expect(changed).toContainText("greet.js");
+    await expect(changed).toContainText("index.js");
+  });
+
+  test("a changed file is read without leaving the run", async ({ page }) => {
+    await page.getByRole("button", { name: "See what was built" }).click();
+
+    // Act
+    await page.getByText("greet.js", { exact: true }).click();
+
+    // Assert
+    await expect(page.getByText(GREET_SOURCE)).toBeVisible();
+  });
+
+  test("opening the project folder asks the server to reveal it", async ({ page }) => {
+    // Arrange
+    const revealed = page.waitForRequest(
+      (request) =>
+        request.url().endsWith(`/runs/${RUN_ID}/reveal`) && request.method() === "POST",
+    );
+
+    // Act
+    await page.getByTestId("open-project-folder").first().click();
+
+    // Assert
+    expect((await revealed).method()).toBe("POST");
   });
 
   test("the log holds the machinery the chat leaves out", async ({ page }) => {
@@ -140,9 +174,11 @@ test.describe("the seeded, already-finished two-box run", () => {
     await expect(page.getByTestId("run-cost")).toHaveText("$0.25");
   });
 
-  test("the Artifacts tab opens on the first box's own handoff.md", async ({ page }) => {
-    // Act
+  test("the Handoffs view opens on the first box's own handoff.md", async ({ page }) => {
     await page.getByTestId("run-tab-artifacts").click();
+
+    // Act
+    await page.getByTestId("artifact-view-workflow").click();
 
     // Assert — regression guard for TASK-047: every stage used to show
     // run.result, which holds only the last box's output.
@@ -153,6 +189,7 @@ test.describe("the seeded, already-finished two-box run", () => {
 
   test("picking the other box's handoff swaps the preview to its output", async ({ page }) => {
     await page.getByTestId("run-tab-artifacts").click();
+    await page.getByTestId("artifact-view-workflow").click();
 
     // Act
     await page.getByText("test/handoff.md").click();
@@ -198,6 +235,9 @@ const TESTER_PROSE = "I ran the suite; every case passes.";
 const STARTED_AT = "2026-07-20T10:00:00.000Z";
 const FINISHED_AT = "2026-07-20T10:02:30.000Z";
 
+/** What the seeded run left behind, and the body of the file it created. */
+const GREET_SOURCE = "export const greet = () => 'hi';";
+
 /**
  * A completed two-box run as the server would report it. `result` deliberately
  * holds only the *last* box's output — that is the trap TASK-047 fell into, and
@@ -216,6 +256,15 @@ const SEEDED_RUN: RunState = {
   result: TESTER_OUTPUT,
   stageOutputs: { implementation: DEV_OUTPUT, test: TESTER_OUTPUT },
   workspacePath: "/seeded/workspace",
+  changes: {
+    source: "snapshot",
+    files: [
+      { path: "greet.js", kind: "created" },
+      { path: "index.js", kind: "edited" },
+    ],
+    truncated: false,
+    capturedAt: FINISHED_AT,
+  },
   messages: [],
   createdAt: STARTED_AT,
   completedAt: FINISHED_AT,
@@ -270,6 +319,17 @@ async function anticipateCompletedRun(page: Page): Promise<void> {
   await page.route(
     (url) => url.pathname === `/runs/${RUN_ID}/files`,
     (route) => route.fulfill({ json: { files: [] } }),
+  );
+  await page.route(
+    (url) => url.pathname === `/runs/${RUN_ID}/files/content`,
+    (route) =>
+      route.fulfill({
+        json: { path: "greet.js", size: 32, content: GREET_SOURCE, truncated: false },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === `/runs/${RUN_ID}/reveal`,
+    (route) => route.fulfill({ json: { path: "/seeded/workspace" } }),
   );
   // The run is terminal, so the app closes this stream as soon as the initial
   // state lands — an empty event-stream response is enough.

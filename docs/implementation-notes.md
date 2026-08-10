@@ -551,6 +551,49 @@ These back read-only UI views and every path from the client is untrusted.
   drive letters `A:`–`Z:` (no cross-platform drive-enumeration API); POSIX uses
   the single `/` root.
 
+## What a run changed (`services/run-change-collector.ts`, `domain/rules/run-changes.ts`)
+
+Two independent baselines are taken when a run starts, and the richer one answers
+when it settles. Why each piece is the way it is:
+
+- **The snapshot walk is its own function**, not `listWorkspaceFiles` with a bigger
+  cap. The Solution-folder browser is a different contract — a *bounded* list for a
+  reading pane — and raising its `MAX_ENTRIES` to suit a whole-project baseline
+  would change what that view shows. `snapshotWorkspace` keeps its own depth and
+  entry ceilings and reports `truncated` so the UI can admit a partial list.
+- **`.adhd` is excluded from the snapshot walk.** Every run writes its own logs,
+  handoffs and change set under the project's `.adhd/`, so without the exclusion a
+  run would report its own bookkeeping as work it did. Git never sees it either —
+  `ensureProjectDataDir` writes `.adhd/.gitignore` containing `*` — but
+  `reportableChanges` filters both sources anyway, because the git path also has to
+  survive a project that never called that function.
+- **`git status` alone is not enough.** An agent that commits its work leaves a clean
+  tree, and a status-only reading would report nothing. The collector diffs the
+  baseline `HEAD` against the current one as well, and merges: what was committed,
+  plus what is dirty now, minus what was *already* dirty at baseline with the same
+  kind (that dirt is the user's, not the run's).
+- **The empty-tree object `4b825dc642cb6eb9a060e54bf8d69288fbee4904`** is git's
+  well-known hash for an empty tree. It stands in as the diff base when the
+  repository had no commits when the run started — the case where an agent makes the
+  *first* commit, which is exactly what a fresh project does.
+- **A rename is a creation plus a deletion**, not an edit, on both the porcelain and
+  the `--name-status` path. The file at the new path did not exist before; saying
+  "edited" would name a path the user never had.
+- **`--porcelain=v1 -z` puts a rename's original path in the *next* NUL field**, and
+  `diff --name-status -z` splits the status code and the path into separate fields
+  (three of them for a rename). That asymmetry is why there are two parsers rather
+  than one.
+
+## Revealing a folder (`utils/reveal-folder.ts`)
+
+**`explorer.exe` exits 1 on success.** It returns a non-zero code even when it
+opened the window, so on Windows the *exit code* is ignored — but only the exit
+code. A process that never started (`exitCode: null` with a spawn error) or one
+that hung past its timeout still fails, because those are not the quirk. Off
+Windows, `open` and `xdg-open` are trusted to report failure the ordinary way. The
+path is always a single argument in an array — never spliced into a shell string —
+and the route resolves it from the run rather than accepting one from the client.
+
 ## Skills / personas (`services/skills.ts`, `domain/skills/`)
 
 Personas ("skills") are Markdown on disk so they can be edited and re-run

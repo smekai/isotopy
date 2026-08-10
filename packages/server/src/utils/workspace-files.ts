@@ -1,4 +1,5 @@
 import { readFile, readdir, realpath, stat } from "node:fs/promises";
+import type { Stats } from "node:fs";
 import path from "node:path";
 
 const IGNORED_DIRECTORIES = new Set([
@@ -15,11 +16,25 @@ const IGNORED_DIRECTORIES = new Set([
 const MAX_DEPTH = 8;
 const MAX_ENTRIES = 500;
 
+export const SNAPSHOT_IGNORED_DIRECTORIES = new Set([...IGNORED_DIRECTORIES, ".adhd"]);
+const SNAPSHOT_MAX_DEPTH = 12;
+const SNAPSHOT_MAX_ENTRIES = 20_000;
+
 export const MAX_PREVIEW_BYTES = 256 * 1024;
 
 export interface WorkspaceFile {
   path: string;
   size: number;
+}
+
+export interface FileStamp {
+  mtimeMs: number;
+  size: number;
+}
+
+export interface WorkspaceSnapshot {
+  files: Map<string, FileStamp>;
+  truncated: boolean;
 }
 
 export interface WorkspaceFileContent {
@@ -54,12 +69,35 @@ export async function resolveInsideWorkspace(
   return real;
 }
 
-export async function listWorkspaceFiles(workspacePath: string): Promise<WorkspaceFile[]> {
-  const root = await realpath(workspacePath);
-  const files: WorkspaceFile[] = [];
+interface WalkLimits {
+  maxDepth: number;
+  maxEntries: number;
+  ignored: Set<string>;
+}
+
+const LIST_LIMITS: WalkLimits = {
+  maxDepth: MAX_DEPTH,
+  maxEntries: MAX_ENTRIES,
+  ignored: IGNORED_DIRECTORIES,
+};
+
+const SNAPSHOT_LIMITS: WalkLimits = {
+  maxDepth: SNAPSHOT_MAX_DEPTH,
+  maxEntries: SNAPSHOT_MAX_ENTRIES,
+  ignored: SNAPSHOT_IGNORED_DIRECTORIES,
+};
+
+async function walkWorkspace(
+  root: string,
+  limits: WalkLimits,
+  visit: (relativePath: string, stats: Stats) => void,
+): Promise<boolean> {
+  let visited = 0;
+  let truncated = false;
 
   async function walk(dir: string, depth: number): Promise<void> {
-    if (depth > MAX_DEPTH || files.length >= MAX_ENTRIES) {
+    if (visited >= limits.maxEntries || depth > limits.maxDepth) {
+      truncated = true;
       return;
     }
     let entries;
@@ -69,25 +107,44 @@ export async function listWorkspaceFiles(workspacePath: string): Promise<Workspa
       return;
     }
     for (const entry of entries) {
-      if (files.length >= MAX_ENTRIES) {
+      if (visited >= limits.maxEntries) {
+        truncated = true;
         return;
       }
       const absolute = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) {
+        if (!limits.ignored.has(entry.name)) {
           await walk(absolute, depth + 1);
         }
       } else if (entry.isFile()) {
         try {
-          const { size } = await stat(absolute);
-          files.push({ path: toPosix(path.relative(root, absolute)), size });
+          visit(toPosix(path.relative(root, absolute)), await stat(absolute));
+          visited += 1;
         } catch {}
       }
     }
   }
 
   await walk(root, 0);
+  return truncated;
+}
+
+export async function listWorkspaceFiles(workspacePath: string): Promise<WorkspaceFile[]> {
+  const root = await realpath(workspacePath);
+  const files: WorkspaceFile[] = [];
+  await walkWorkspace(root, LIST_LIMITS, (relativePath, stats) => {
+    files.push({ path: relativePath, size: stats.size });
+  });
   return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function snapshotWorkspace(workspacePath: string): Promise<WorkspaceSnapshot> {
+  const root = await realpath(workspacePath);
+  const files = new Map<string, FileStamp>();
+  const truncated = await walkWorkspace(root, SNAPSHOT_LIMITS, (relativePath, stats) => {
+    files.set(relativePath, { mtimeMs: stats.mtimeMs, size: stats.size });
+  });
+  return { files, truncated };
 }
 
 export async function readWorkspaceFile(

@@ -43,6 +43,7 @@ import {
   persistRunArtifacts,
   persistRunDeploymentArtifacts,
 } from "../run-evidence.ts";
+import { RunChangeCollector } from "../run-change-collector.ts";
 import { renderDeploymentResult } from "../../domain/markdown/release.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
@@ -92,6 +93,7 @@ export class RunService implements RunProjection {
   private readonly rosters: ModelRosterService;
   private readonly automation = new AutomationConfigStore();
   private readonly deployment = new DeploymentRunner();
+  private readonly changes = new RunChangeCollector();
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
@@ -177,7 +179,7 @@ export class RunService implements RunProjection {
     } else if (status === "failed") {
       this.markInterrupted(run.id);
     } else {
-      this.runCompleted(run.id, "completed");
+      await this.runCompleted(run.id, "completed");
     }
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.milestones.completeMilestoneRun(run);
@@ -373,6 +375,7 @@ export class RunService implements RunProjection {
       );
     }
     this.store.runs.set(runId, run);
+    await this.changes.recordBaseline(projectPath, runId, run.workspacePath);
     if (planningRun && linkedMilestone) {
       await this.milestones.recordPlanningRun(linkedMilestone, runId);
     }
@@ -800,9 +803,10 @@ export class RunService implements RunProjection {
     run.result = output;
   }
 
-  runCompleted(runId: string, status: RunCompletionStatus): void {
+  async runCompleted(runId: string, status: RunCompletionStatus): Promise<void> {
     const run = this.live(runId);
     if (!run) return;
+    await this.captureRunChanges(run);
     run.status = status;
     run.completedAt = nowIso();
     this.emit({
@@ -909,8 +913,15 @@ export class RunService implements RunProjection {
 
   private async settleCompletedRun(run: RunState): Promise<void> {
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
+    await this.captureRunChanges(run);
     await this.milestones.completeMilestoneRun(run);
     await this.orchestration?.settle(run.id);
+  }
+
+  private async captureRunChanges(run: RunState): Promise<void> {
+    if (await this.changes.attach(this.registry.resolve(run.projectId), run)) {
+      await this.store.flushPersist(run.id);
+    }
   }
 
   private async launch(

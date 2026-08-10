@@ -14,11 +14,12 @@ import {
   orchestration,
   team,
 } from "../support/orchestration-fixtures";
-import { log, run, started } from "../support/run-fixtures";
+import { changes, log, run, started } from "../support/run-fixtures";
 
 vi.mock("../../src/api", () => ({
   fetchRunFiles: vi.fn(() => Promise.resolve({ files: [] })),
   fetchRunFileContent: vi.fn(() => Promise.resolve(null)),
+  revealRunFolder: vi.fn(() => Promise.resolve({ path: "C:/work/run-1" })),
 }));
 
 const d = DIRS.indigo;
@@ -184,6 +185,59 @@ test("the Orchestrator opens even though its orchestration lands after the run d
   expect(screen.getByTestId("orchestrator-panel")).toBeDefined();
 });
 
+test("a finished run says what it changed where the composer used to apologise", () => {
+  // Act
+  render(<RunTabs {...tabsProps({ run: changedRun() })} />);
+
+  // Assert
+  const result = screen.getByTestId("run-result");
+  expect(result.textContent).toContain("1 created · 1 edited");
+  expect(result.textContent).not.toContain("start a new run to say more");
+});
+
+test("a run that touched nothing keeps the plain finished sentence", () => {
+  // Act
+  render(<RunTabs {...tabsProps()} />);
+
+  // Assert
+  expect(screen.getByTestId("run-result").textContent).toContain(
+    "start a new run to say more",
+  );
+});
+
+test("see what was built opens the changed files without hunting through tabs", () => {
+  // Arrange
+  render(<RunTabs {...tabsProps({ run: changedRun() })} />);
+
+  // Act
+  fireEvent.click(screen.getByText("See what was built"));
+
+  // Assert
+  expect(screen.getByTestId("artifact-changes")).toBeDefined();
+});
+
+test("the artifacts of a finished run open on what changed, not on the handoffs", () => {
+  // Arrange
+  render(<RunTabs {...tabsProps({ run: changedRun() })} />);
+
+  // Act
+  fireEvent.click(screen.getByTestId("run-tab-artifacts"));
+
+  // Assert
+  expect(screen.getByTestId("artifact-changes")).toBeDefined();
+});
+
+test("a run with no change set is offered no What changed view", () => {
+  // Arrange
+  render(<RunTabs {...tabsProps()} />);
+
+  // Act
+  fireEvent.click(screen.getByTestId("run-tab-artifacts"));
+
+  // Assert
+  expect(screen.queryByTestId("artifact-view-changes")).toBeNull();
+});
+
 test("an ordinary run is given no Orchestrator tab to open", () => {
   // Act
   render(<RunTabs {...tabsProps()} />);
@@ -215,6 +269,10 @@ function runWithTwoStages(): RunState {
   );
   state.stageOutputs = { implementation: "DEV HANDOFF", test: "TESTER HANDOFF" };
   return state;
+}
+
+function changedRun(): RunState {
+  return { ...runWithTwoStages(), workspacePath: "C:/work/run-1", changes: changes() };
 }
 
 function orchestrationOverrides(): Partial<RunTabsProps> {

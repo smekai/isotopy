@@ -3,10 +3,12 @@
 // under the project data dir, not the workspace, so this panel is the only
 // surface that shows them — and a section quietly rendering empty would hide a
 // finding the run meant to escalate.
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { RunCloseoutRecord, RunState } from "@adhd/core";
 import { ArtifactsPanel } from "../../src/components/run/ArtifactsPanel";
+import type { ArtifactView } from "../../src/components/run/ArtifactsPanel";
 import { CloseoutPanel } from "../../src/components/run/CloseoutPanel";
 import { DIRS } from "../../src/theme";
 import { run, stage } from "../support/run-fixtures";
@@ -14,9 +16,23 @@ import { run, stage } from "../support/run-fixtures";
 vi.mock("../../src/api", () => ({
   fetchRunFiles: vi.fn(() => Promise.resolve({ files: [] })),
   fetchRunFileContent: vi.fn(() => Promise.resolve(null)),
+  revealRunFolder: vi.fn(() => Promise.resolve({ path: "C:/work/run-1" })),
 }));
 
 const d = DIRS.indigo;
+
+function Artifacts({ subject }: { subject: RunState }) {
+  const [view, setView] = useState<ArtifactView>("workflow");
+  return (
+    <ArtifactsPanel
+      run={subject}
+      focusedStageId={null}
+      view={view}
+      d={d}
+      onViewChange={setView}
+    />
+  );
+}
 
 
 
@@ -123,7 +139,7 @@ test("empty sections are omitted entirely, so nothing reads as an empty promise"
 
 test("Artifacts hides the Closeout view for a run that never produced one", () => {
   // Act
-  render(<ArtifactsPanel run={completedRun()} focusedStageId={null} d={d} />);
+  render(<Artifacts subject={completedRun()} />);
 
   // Assert
   expect(screen.queryByTestId("artifact-view-closeout")).toBeNull();
@@ -131,13 +147,7 @@ test("Artifacts hides the Closeout view for a run that never produced one", () =
 
 test("opening the Closeout view from Artifacts shows the report", () => {
   // Arrange
-  render(
-    <ArtifactsPanel
-      run={completedRun({ closeout: closeout() })}
-      focusedStageId={null}
-      d={d}
-    />,
-  );
+  render(<Artifacts subject={completedRun({ closeout: closeout() })} />);
 
   // Act
   fireEvent.click(screen.getByTestId("artifact-view-closeout"));

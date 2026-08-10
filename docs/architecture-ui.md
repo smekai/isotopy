@@ -122,9 +122,12 @@ The split as it stands:
   `HomeComposer`, and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state,
   no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
-  `run/ArtifactsPanel`, and inside `setup/` — `EngineStatusCard`,
-  `EngineConnection`, `EngineModelPicker` — call `api.ts` themselves. `SetupModal`
-  and `RunTabs` are chrome: they switch between surfaces and own nothing else.
+  `run/ArtifactsPanel`, `run/ChangedFilesPanel`, `run/OpenProjectFolder`, and inside
+  `setup/` — `EngineStatusCard`, `EngineConnection`, `EngineModelPicker` — call
+  `api.ts` themselves. `SetupModal` and `RunTabs` are chrome: they switch between
+  surfaces and own nothing else — with the one exception that `RunTabs` owns which
+  `ArtifactView` is open, because the finished-run footer in `ChatPanel` has to be
+  able to open **What changed** from another surface.
 
 `RunRail` is worth noting as the pattern for new surfaces: it fetches nothing. The
 list, its loading state and its live updates all arrive as props from `useRunList`,
@@ -496,7 +499,8 @@ list card. The current roster:
 `project-drawer` · `project-root` · `run-status` · `run-cost` ·
 `run-tab-<chat|team|plan|logs|artifacts>` · `stage-node-<stageId>` · `stage-profession` ·
 `stage-persona` · `stage-verdict` · `stage-scroll` · `artifact-preview` ·
-`artifact-view-<workflow|closeout|files>` · `artifact-files` · `run-card` ·
+`artifact-view-<changes|workflow|closeout|files>` · `artifact-files` ·
+`artifact-changes` · `run-result` · `open-project-folder` · `run-card` ·
 `run-resume` · `run-restart` · `run-rerun` · `chat-thread` · `chat-composer` ·
 `chat-question` · `plan-milestone` · `milestone-plan-editor` ·
 `approve-milestone-plan` · `milestone-card` · `milestone-dashboard` ·

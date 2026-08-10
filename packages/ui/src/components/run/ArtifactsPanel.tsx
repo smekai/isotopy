@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { ClipboardCheck, FileText, FolderOpen } from "lucide-react";
+import { ClipboardCheck, FileDiff, FileText, FolderOpen } from "lucide-react";
 import { agentForStage } from "@adhd/core";
 import type { RunState } from "@adhd/core";
-import { fetchRunFileContent, fetchRunFiles } from "../../api";
-import type { WorkspaceFile, WorkspaceFileContent } from "../../api";
+import { fetchRunFiles } from "../../api";
+import type { WorkspaceFile } from "../../api";
+import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";
+import { ChangedFilesPanel } from "./ChangedFilesPanel";
 import { CloseoutPanel, RunArtifactsPanel } from "./CloseoutPanel";
+import { FileReadingPane } from "./FileReadingPane";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
@@ -23,9 +26,10 @@ import {
   sidebar,
 } from "./run-styles";
 
-type ArtifactView = "workflow" | "closeout" | "files";
+export type ArtifactView = "changes" | "workflow" | "closeout" | "files";
 
 const VIEW_LABEL: Record<ArtifactView, string> = {
+  changes: "What changed",
   workflow: "Handoffs",
   closeout: "Closeout",
   files: "Solution folder",
@@ -88,10 +92,6 @@ function viewToggle(active: boolean, d: Dir): CSSProperties {
   };
 }
 
-function bodyNote(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md };
-}
-
 interface HandoffListProps {
   handoffs: Handoff[];
   selectedId: string | null;
@@ -142,8 +142,7 @@ interface WorkspaceBrowserProps {
 function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [content, setContent] = useState<WorkspaceFileContent | null>(null);
+  const reading = useWorkspaceFile(runId);
 
   useEffect(() => {
     let cancelled = false;
@@ -164,28 +163,6 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
     };
   }, [runId, runStatus]);
 
-  useEffect(() => {
-    if (!selectedPath) {
-      setContent(null);
-      return;
-    }
-    let cancelled = false;
-    fetchRunFileContent(runId, selectedPath)
-      .then((result) => {
-        if (!cancelled) {
-          setContent(result);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setContent(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [runId, selectedPath]);
-
   return (
     <div style={SPLIT_PANE} data-testid="artifact-files">
       <div style={sidebar(FILE_SIDEBAR_WIDTH, d)}>
@@ -195,11 +172,11 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
           <div style={emptyNote(d)}>No files in the workspace yet.</div>
         ) : (
           files.map((file) => {
-            const active = file.path === selectedPath;
+            const active = file.path === reading.selectedPath;
             return (
               <button
                 key={file.path}
-                onClick={() => setSelectedPath(file.path)}
+                onClick={() => reading.select(file.path)}
                 title={file.path}
                 style={listButton(active, d)}
               >
@@ -213,13 +190,7 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
           })
         )}
       </div>
-      <div style={READING_PANE}>
-        {content?.truncated ? (
-          <div style={bodyNote(d)}>File is too large to preview ({formatBytes(content.size)}).</div>
-        ) : (
-          content && <pre style={{ ...filePreview, color: d.text }}>{content.content}</pre>
-        )}
-      </div>
+      <FileReadingPane file={reading.content} error={null} placeholder="" d={d} />
     </div>
   );
 }
@@ -227,20 +198,29 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
 export interface ArtifactsPanelProps {
   run: RunState;
   focusedStageId: string | null;
+  view: ArtifactView;
   d: Dir;
+  onViewChange: (view: ArtifactView) => void;
 }
 
 function viewIcon(view: ArtifactView) {
+  if (view === "changes") return <FileDiff size={ICON.sm} />;
   if (view === "workflow") return <FileText size={ICON.sm} />;
   if (view === "closeout") return <ClipboardCheck size={ICON.sm} />;
   return <FolderOpen size={ICON.sm} />;
 }
 
-export function ArtifactsPanel({ run, focusedStageId, d }: ArtifactsPanelProps) {
-  const [view, setView] = useState<ArtifactView>("workflow");
+export function ArtifactsPanel({
+  run,
+  focusedStageId,
+  view,
+  d,
+  onViewChange,
+}: ArtifactsPanelProps) {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const handoffs = handoffsOf(run);
   const views: ArtifactView[] = [
+    ...(run.changes ? (["changes"] as const) : []),
     "workflow",
     ...(run.closeout || run.artifacts ? (["closeout"] as const) : []),
     ...(run.workspacePath != null ? (["files"] as const) : []),
@@ -254,7 +234,7 @@ export function ArtifactsPanel({ run, focusedStageId, d }: ArtifactsPanelProps) 
           {views.map((option) => (
             <button
               key={option}
-              onClick={() => setView(option)}
+              onClick={() => onViewChange(option)}
               data-testid={`artifact-view-${option}`}
               style={viewToggle(active === option, d)}
             >
@@ -265,7 +245,9 @@ export function ArtifactsPanel({ run, focusedStageId, d }: ArtifactsPanelProps) 
         </div>
       )}
 
-      {active === "closeout" && run.closeout ? (
+      {active === "changes" && run.changes ? (
+        <ChangedFilesPanel runId={run.id} changes={run.changes} d={d} />
+      ) : active === "closeout" && run.closeout ? (
         <CloseoutPanel closeout={run.closeout} d={d} />
       ) : active === "closeout" && run.artifacts ? (
         <RunArtifactsPanel artifacts={run.artifacts} d={d} />

@@ -36,6 +36,13 @@ export function useRunEvents(runId: string | null, resubscribeKey = 0) {
       setRun((current) => (current ? applyEvent(current, event) : current));
       if (event.type === "run.completed") {
         stop();
+        void fetchRun(runId)
+          .then((settled) => {
+            if (!cancelled) {
+              setRun(settled);
+            }
+          })
+          .catch(() => {});
       }
     });
 
