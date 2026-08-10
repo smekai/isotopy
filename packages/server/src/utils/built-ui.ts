@@ -17,7 +17,7 @@ function runningCompiled(): boolean {
   return path.basename(path.dirname(hereDir())) === COMPILED_DIR;
 }
 
-export function builtUiRoot(): string | undefined {
+function builtUiRoot(): string | undefined {
   const configured = process.env.ADHD_UI_DIR?.trim();
   if (configured === undefined && !runningCompiled()) {
     return undefined;
@@ -26,7 +26,7 @@ export function builtUiRoot(): string | undefined {
   return existsSync(path.join(root, ENTRY_FILE)) ? root : undefined;
 }
 
-export function uiRootRelativeToCwd(root: string): string | undefined {
+function uiRootRelativeToCwd(root: string): string | undefined {
   const relative = path.relative(process.cwd(), root);
   if (relative === "" || path.isAbsolute(relative)) {
     return undefined;
