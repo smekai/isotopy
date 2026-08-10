@@ -76,10 +76,10 @@ export function defaultUiAutomation(): UiAutomation {
   };
 }
 
-export function defaultValidationCommand(index: number): ValidationCommand {
+export function defaultValidationCommand(taken: ValidationCommand[]): ValidationCommand {
   const args = ["test"];
   return {
-    id: `check-${index + 1}`,
+    id: unusedValidationId(taken),
     label: "Tests",
     command: {
       executable: "npm",
@@ -88,6 +88,15 @@ export function defaultValidationCommand(index: number): ValidationCommand {
       windows: { executable: "npm.cmd", args },
     },
   };
+}
+
+function unusedValidationId(taken: ValidationCommand[]): string {
+  const used = new Set(taken.map((command) => command.id));
+  let ordinal = 1;
+  while (used.has(`check-${ordinal}`)) {
+    ordinal += 1;
+  }
+  return `check-${ordinal}`;
 }
 
 export function argumentsText(args: string[]): string {
@@ -110,6 +119,34 @@ export function withCommand(
     delete next.cwd;
   }
   return next;
+}
+
+export function withArguments(
+  command: AutomationCommand,
+  args: string[],
+): AutomationCommand {
+  const { windows } = command;
+  return windows === undefined || !sameArguments(windows.args, command.args)
+    ? withCommand(command, { args })
+    : withCommand(command, { args, windows: { executable: windows.executable, args } });
+}
+
+export function withWindowsExecutable(
+  command: AutomationCommand,
+  value: string,
+): AutomationCommand {
+  const executable = optionalText(value);
+  const next = withCommand(command, {});
+  if (executable === undefined) {
+    delete next.windows;
+    return next;
+  }
+  next.windows = { executable, args: command.windows?.args ?? command.args };
+  return next;
+}
+
+function sameArguments(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, at) => value === right[at]);
 }
 
 export function optionalText(value: string): string | undefined {

@@ -140,6 +140,69 @@ test("confirming the prompt deploys production and reports the URL it returned",
   ).toBeTruthy();
 });
 
+test("a Windows override that already differs survives an edit to the base arguments", async () => {
+  // Arrange — arguments that only make sense on their own platform, as a hand-edited
+  // automation.json would carry them.
+  served(automationConfig({ preview: divergentTarget() }));
+  saveConfig.mockImplementation((config) => Promise.resolve(config));
+  render(<AutomationSection {...sectionProps()} />);
+  await screen.findByText("Deploy targets");
+  fireEvent.change(screen.getByLabelText("preview deploy arguments"), {
+    target: { value: "deploy\n--prod" },
+  });
+
+  // Act
+  fireEvent.click(screen.getByText("Save automation"));
+
+  // Assert
+  await waitFor(() => expect(saveConfig).toHaveBeenCalledTimes(1));
+  expect(saveConfig.mock.calls[0]?.[0].preview?.command).toMatchObject({
+    args: ["deploy", "--prod"],
+    windows: { executable: "deploy.cmd", args: ["deploy", "/prod"] },
+  });
+});
+
+test("a Windows override that mirrors the base command follows it when the arguments change", async () => {
+  // Arrange
+  served(automationConfig());
+  saveConfig.mockImplementation((config) => Promise.resolve(config));
+  render(<AutomationSection {...sectionProps()} />);
+  await screen.findByText("Deploy targets");
+  fireEvent.click(screen.getByLabelText("preview Vercel"));
+
+  // Act
+  fireEvent.change(screen.getByLabelText("preview deploy arguments"), {
+    target: { value: "vercel\ndeploy" },
+  });
+
+  // Assert
+  fireEvent.click(screen.getByText("Save automation"));
+  await waitFor(() => expect(saveConfig).toHaveBeenCalledTimes(1));
+  expect(saveConfig.mock.calls[0]?.[0].preview?.command.windows).toEqual({
+    executable: "npx.cmd",
+    args: ["vercel", "deploy"],
+  });
+});
+
+test("adding a validation command after a deletion does not reuse an id the server would reject", async () => {
+  // Arrange — the id the old counter would hand out is the one still in use.
+  served(automationConfig({ validation: [validationCommand("check-2")] }));
+  saveConfig.mockImplementation((config) => Promise.resolve(config));
+  render(<AutomationSection {...sectionProps()} />);
+  await screen.findByText("Validation commands");
+
+  // Act
+  fireEvent.click(screen.getByText("Add a validation command"));
+
+  // Assert
+  fireEvent.click(screen.getByText("Save automation"));
+  await waitFor(() => expect(saveConfig).toHaveBeenCalledTimes(1));
+  expect(saveConfig.mock.calls[0]?.[0].validation.map((command) => command.id)).toEqual([
+    "check-2",
+    "check-1",
+  ]);
+});
+
 function sectionProps(overrides: Partial<AutomationSectionProps> = {}): AutomationSectionProps {
   return {
     d: overrides.d ?? DIRS.indigo,
@@ -169,6 +232,28 @@ function vercelTarget() {
     command: { executable: "npx", args: ["vercel", "deploy"], timeoutMs: 60_000 },
     healthTimeoutMs: 60_000,
     healthIntervalMs: 1_000,
+  };
+}
+
+function divergentTarget() {
+  return {
+    provider: "custom" as const,
+    command: {
+      executable: "./deploy.sh",
+      args: ["deploy"],
+      timeoutMs: 60_000,
+      windows: { executable: "deploy.cmd", args: ["deploy", "/prod"] },
+    },
+    healthTimeoutMs: 60_000,
+    healthIntervalMs: 1_000,
+  };
+}
+
+function validationCommand(id: string) {
+  return {
+    id,
+    label: "Tests",
+    command: { executable: "npm", args: ["test"], timeoutMs: 900_000 },
   };
 }
 

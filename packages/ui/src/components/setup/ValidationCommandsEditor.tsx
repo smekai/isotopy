@@ -66,7 +66,7 @@ export function ValidationCommandsEditor({
       ))}
       <div style={BLOCK_ROW}>
         <button
-          onClick={() => onChange([...commands, defaultValidationCommand(commands.length)])}
+          onClick={() => onChange([...commands, defaultValidationCommand(commands)])}
           style={toggleButton(false, d)}
         >
           Add a validation command

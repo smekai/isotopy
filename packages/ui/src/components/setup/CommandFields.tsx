@@ -1,7 +1,14 @@
 import type { AutomationCommand } from "@adhd/core";
 import type { Dir } from "../../theme";
 import { fieldLabel } from "./setup-styles";
-import { argumentsFromText, argumentsText, optionalText, withCommand } from "./automation-config";
+import {
+  argumentsFromText,
+  argumentsText,
+  optionalText,
+  withArguments,
+  withCommand,
+  withWindowsExecutable,
+} from "./automation-config";
 import { FIELD_STACK, inputStyle } from "./automation-styles";
 
 export interface CommandFieldsProps {
@@ -13,29 +20,6 @@ export interface CommandFieldsProps {
 
 export function CommandFields({ d, name, command, onChange }: CommandFieldsProps) {
   const windowsExecutable = command.windows?.executable ?? "";
-
-  function changeArguments(value: string) {
-    const args = argumentsFromText(value);
-    onChange(
-      withCommand(command, {
-        args,
-        ...(command.windows === undefined
-          ? {}
-          : { windows: { executable: command.windows.executable, args } }),
-      }),
-    );
-  }
-
-  function changeWindowsExecutable(value: string) {
-    const executable = optionalText(value);
-    const next = withCommand(command, {});
-    if (executable === undefined) {
-      delete next.windows;
-    } else {
-      next.windows = { executable, args: command.args };
-    }
-    onChange(next);
-  }
 
   return (
     <div style={FIELD_STACK}>
@@ -53,7 +37,7 @@ export function CommandFields({ d, name, command, onChange }: CommandFieldsProps
         <textarea
           aria-label={`${name} arguments`}
           value={argumentsText(command.args)}
-          onChange={(event) => changeArguments(event.target.value)}
+          onChange={(event) => onChange(withArguments(command, argumentsFromText(event.target.value)))}
           rows={4}
           style={inputStyle(d)}
         />
@@ -64,7 +48,7 @@ export function CommandFields({ d, name, command, onChange }: CommandFieldsProps
           aria-label={`${name} Windows executable`}
           placeholder="Same as above"
           value={windowsExecutable}
-          onChange={(event) => changeWindowsExecutable(event.target.value)}
+          onChange={(event) => onChange(withWindowsExecutable(command, event.target.value))}
           style={inputStyle(d)}
         />
       </label>

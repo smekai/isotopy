@@ -20,7 +20,9 @@ its project-relative working directory and timeout stay shared. The common case
 is a Node shim — `npx` on POSIX, `npx.cmd` on Windows — and the Setup form edits
 that as a single "Windows executable" field, reusing the same arguments. Two
 platforms needing genuinely *different* arguments is rare enough that it is
-edited in `automation.json` directly.
+edited in `automation.json` directly, and the form then leaves those arguments
+alone: it only keeps an override in step with the base command while the two
+already agree.
 
 Absolute working directories, and any path that climbs out of the project, are
 refused when the configuration is saved — not when the command runs. Child
