@@ -83,6 +83,11 @@ tests drive it. `serveStatic` rejects absolute roots, so the path is made
 relative to `process.cwd()`; if that is impossible (a different drive on
 Windows) the server logs and stays a plain API rather than failing to start.
 
+Because the default e2e suite boots `pnpm dev`, it never exercises any of this;
+the built tier (`ADHD_E2E_BUILT=1`, see
+[`e2e-test-plan.md`](./e2e-test-plan.md)) is what drives the compiled artifact in
+a real browser.
+
 ## Engines — binary resolution (all adapters)
 
 Each adapter resolves its CLI in a fixed order and caches the result, clearing

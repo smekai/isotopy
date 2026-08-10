@@ -1,7 +1,12 @@
 // `pnpm build` used to produce an API server and a static UI bundle with nothing
 // serving the bundle, so there was no way to run the built app at all — the gap
-// a first-time installer hits first. These cover the two halves of the fix: the
-// app serves the bundle when it is there, and stays a plain API when it is not.
+// a first-time installer hits first.
+//
+// That the bundle reaches a *browser* is the built e2e tier's job
+// (`packages/ui/e2e/built-app.e2e.ts`, ADHD_E2E_BUILT=1); asserting a 200 here
+// would only restate it. What is left are the two cases a browser suite covers
+// badly, because both need a server that was started differently: a build that
+// is not there at all, and an API route the static middleware must not swallow.
 //
 // The mount lives in the compiled entrypoint rather than in `createApp`, because
 // importing `@hono/node-server/serve-static` into the app module wedges
@@ -30,37 +35,8 @@ afterEach(async () => {
   rmSync(uiDir, { recursive: true, force: true, maxRetries: 3 });
 });
 
-test("a built UI bundle is served from the same origin as the API it calls", async () => {
-  // Arrange
-  writeBundle();
-  process.env.ADHD_UI_DIR = uiDir;
-  ctx = await createTestApp();
-  await mountBuiltUi(ctx.app);
-
-  // Act
-  const response = await ctx.app.request("/");
-
-  // Assert
-  expect(response.status).toBe(200);
-  expect(await response.text()).toContain("built ui");
-});
-
-test("an asset the bundle references is served, not only its entry page", async () => {
-  // Arrange
-  writeBundle();
-  process.env.ADHD_UI_DIR = uiDir;
-  ctx = await createTestApp();
-  await mountBuiltUi(ctx.app);
-
-  // Act
-  const response = await ctx.app.request("/assets/app.js");
-
-  // Assert
-  expect(response.status).toBe(200);
-});
-
-test("serving the bundle never shadows an API route", async () => {
-  // Arrange
+test("serving the bundle never swallows an API route", async () => {
+  // Arrange — the static middleware matches "/*", so this is the collision case.
   writeBundle();
   process.env.ADHD_UI_DIR = uiDir;
   ctx = await createTestApp();

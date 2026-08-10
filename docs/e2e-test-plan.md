@@ -119,6 +119,29 @@ behind an enabled **Approve & start**; an `awaiting_user` initiative reads
 "Needs your answer" and offers no team; and the run timeline carries the
 initiative's runs on `data-run-id`.
 
+## Built tier (opt-in)
+
+Every other tier boots `pnpm dev` — Vite serves the UI and proxies the API — so
+none of them can see the compiled server serving its own bundle, which is inert
+outside a build. That is how `pnpm build` came to emit an API and an unserved
+bundle with nothing noticing. Free, no tokens, but it rebuilds first:
+
+```bash
+ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
+```
+
+`ADHD_E2E_BUILT=1` swaps the Playwright web server to `pnpm build && pnpm start`
+and points `baseURL` at the server port — one process, one origin, no Vite. The
+rebuild is deliberate: a stale `dist` passing for current source is the whole
+hazard of testing a build artifact.
+
+Three tests, and what they buy over
+[`built-ui.comp.ts`](../packages/server/test/built-ui.comp.ts) is a browser that
+actually *executes* the bundle — MIME types, hashed asset paths, React mounting,
+and same-origin API calls with no proxy in front. The comp test keeps only what
+a browser suite covers badly: a build that is absent entirely, and an API route
+the `/*` static middleware must not swallow.
+
 ## Live tier (opt-in)
 
 One thin real `dev-test` run on haiku, ≈ a cent. Skipped unless enabled:
