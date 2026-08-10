@@ -1,22 +1,18 @@
-import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { FileText } from "lucide-react";
 import { FILE_CHANGE_KINDS, summariseChanges } from "@adhd/core";
 import type { FileChange, FileChangeKind, RunChangeSet } from "@adhd/core";
-import { fetchRunFileContent } from "../../api";
-import type { WorkspaceFileContent } from "../../api";
+import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";
+import { FileReadingPane } from "./FileReadingPane";
 import { OpenProjectFolder } from "./OpenProjectFolder";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
-  FAIL_RED,
   PASS_GREEN,
-  READING_PANE,
   SPLIT_PANE,
   SKIP_AMBER,
+  FAIL_RED,
   emptyNote,
-  filePreview,
-  formatBytes,
   listButton,
   listItemIcon,
   listItemName,
@@ -64,10 +60,6 @@ function kindBadge(kind: FileChangeKind): CSSProperties {
   };
 }
 
-function bodyNote(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md };
-}
-
 function orderedChanges(changes: RunChangeSet): FileChange[] {
   return FILE_CHANGE_KINDS.flatMap((kind) =>
     changes.files.filter((file) => file.kind === kind),
@@ -82,33 +74,7 @@ export interface ChangedFilesPanelProps {
 
 export function ChangedFilesPanel({ runId, changes, d }: ChangedFilesPanelProps) {
   const files = orderedChanges(changes);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [content, setContent] = useState<WorkspaceFileContent | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (selectedPath === null) {
-      setContent(null);
-      return;
-    }
-    let cancelled = false;
-    fetchRunFileContent(runId, selectedPath)
-      .then((result) => {
-        if (!cancelled) {
-          setContent(result);
-          setError(null);
-        }
-      })
-      .catch((failure: unknown) => {
-        if (!cancelled) {
-          setContent(null);
-          setError(failure instanceof Error ? failure.message : "Failed to read file");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [runId, selectedPath]);
+  const reading = useWorkspaceFile(runId);
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -130,11 +96,11 @@ export function ChangedFilesPanel({ runId, changes, d }: ChangedFilesPanelProps)
             <div style={emptyNote(d)}>This run did not change any files.</div>
           ) : (
             files.map((file) => {
-              const active = file.path === selectedPath;
+              const active = file.path === reading.selectedPath;
               return (
                 <button
                   key={file.path}
-                  onClick={() => setSelectedPath(file.path)}
+                  onClick={() => reading.select(file.path)}
                   title={file.path}
                   disabled={file.kind === "deleted"}
                   style={listButton(active, d)}
@@ -151,21 +117,12 @@ export function ChangedFilesPanel({ runId, changes, d }: ChangedFilesPanelProps)
             })
           )}
         </div>
-        <div style={READING_PANE}>
-          {error !== null ? (
-            <div style={{ ...bodyNote(d), color: FAIL_RED }}>{error}</div>
-          ) : content?.truncated ? (
-            <div style={bodyNote(d)}>
-              File is too large to preview ({formatBytes(content.size)}).
-            </div>
-          ) : content ? (
-            <pre style={{ ...filePreview, color: d.text }}>{content.content}</pre>
-          ) : (
-            <div style={bodyNote(d)}>
-              {files.length === 0 ? "" : "Pick a file to read what the run wrote."}
-            </div>
-          )}
-        </div>
+        <FileReadingPane
+          file={reading.content}
+          error={reading.error}
+          placeholder={files.length === 0 ? "" : "Pick a file to read what the run wrote."}
+          d={d}
+        />
       </div>
     </div>
   );

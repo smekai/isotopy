@@ -3,10 +3,12 @@ import type { CSSProperties } from "react";
 import { ClipboardCheck, FileDiff, FileText, FolderOpen } from "lucide-react";
 import { agentForStage } from "@adhd/core";
 import type { RunState } from "@adhd/core";
-import { fetchRunFileContent, fetchRunFiles } from "../../api";
-import type { WorkspaceFile, WorkspaceFileContent } from "../../api";
+import { fetchRunFiles } from "../../api";
+import type { WorkspaceFile } from "../../api";
+import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";
 import { ChangedFilesPanel } from "./ChangedFilesPanel";
 import { CloseoutPanel, RunArtifactsPanel } from "./CloseoutPanel";
+import { FileReadingPane } from "./FileReadingPane";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
@@ -90,10 +92,6 @@ function viewToggle(active: boolean, d: Dir): CSSProperties {
   };
 }
 
-function bodyNote(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.md };
-}
-
 interface HandoffListProps {
   handoffs: Handoff[];
   selectedId: string | null;
@@ -144,8 +142,7 @@ interface WorkspaceBrowserProps {
 function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [content, setContent] = useState<WorkspaceFileContent | null>(null);
+  const reading = useWorkspaceFile(runId);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,28 +163,6 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
     };
   }, [runId, runStatus]);
 
-  useEffect(() => {
-    if (!selectedPath) {
-      setContent(null);
-      return;
-    }
-    let cancelled = false;
-    fetchRunFileContent(runId, selectedPath)
-      .then((result) => {
-        if (!cancelled) {
-          setContent(result);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setContent(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [runId, selectedPath]);
-
   return (
     <div style={SPLIT_PANE} data-testid="artifact-files">
       <div style={sidebar(FILE_SIDEBAR_WIDTH, d)}>
@@ -197,11 +172,11 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
           <div style={emptyNote(d)}>No files in the workspace yet.</div>
         ) : (
           files.map((file) => {
-            const active = file.path === selectedPath;
+            const active = file.path === reading.selectedPath;
             return (
               <button
                 key={file.path}
-                onClick={() => setSelectedPath(file.path)}
+                onClick={() => reading.select(file.path)}
                 title={file.path}
                 style={listButton(active, d)}
               >
@@ -215,13 +190,7 @@ function WorkspaceBrowser({ runId, runStatus, d }: WorkspaceBrowserProps) {
           })
         )}
       </div>
-      <div style={READING_PANE}>
-        {content?.truncated ? (
-          <div style={bodyNote(d)}>File is too large to preview ({formatBytes(content.size)}).</div>
-        ) : (
-          content && <pre style={{ ...filePreview, color: d.text }}>{content.content}</pre>
-        )}
-      </div>
+      <FileReadingPane file={reading.content} error={null} placeholder="" d={d} />
     </div>
   );
 }
