@@ -320,7 +320,7 @@ export function ChatPanel({ run, d, sending, onSend, onShowChanges }: ChatPanelP
                 This run has finished — start a new run to say more.
               </span>
             )}
-            {run.workspacePath !== undefined && <OpenProjectFolder runId={run.id} d={d} />}
+            <OpenProjectFolder runId={run.id} d={d} />
           </div>
         ) : (
           <div style={composerInner(d)}>

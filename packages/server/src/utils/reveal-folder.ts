@@ -37,10 +37,14 @@ export async function revealFolder(
     cwd: target,
     timeoutMs: REVEAL_TIMEOUT_MS,
   });
-  if (platform === "win32" || result.success) {
+  if (result.success || (platform === "win32" && exitedOnItsOwn(result))) {
     return;
   }
   throw new Error(
     result.errorMessage ?? `${command.executable} could not open the folder`,
   );
+}
+
+function exitedOnItsOwn(result: SubprocessResult): boolean {
+  return result.exitCode !== null && !result.timedOut && !result.aborted;
 }

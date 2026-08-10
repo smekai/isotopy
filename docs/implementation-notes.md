@@ -586,12 +586,13 @@ when it settles. Why each piece is the way it is:
 
 ## Revealing a folder (`utils/reveal-folder.ts`)
 
-**`explorer.exe` exits 1 on success.** It is documented to return a non-zero code
-even when it opened the window, so the Windows branch does not check the exit code
-at all; only `open` (macOS) and `xdg-open` (elsewhere) are trusted to report
-failure. The path is always a single argument in an array — never spliced into a
-shell string — and the route resolves it from the run rather than accepting one
-from the client.
+**`explorer.exe` exits 1 on success.** It returns a non-zero code even when it
+opened the window, so on Windows the *exit code* is ignored — but only the exit
+code. A process that never started (`exitCode: null` with a spawn error) or one
+that hung past its timeout still fails, because those are not the quirk. Off
+Windows, `open` and `xdg-open` are trusted to report failure the ordinary way. The
+path is always a single argument in an array — never spliced into a shell string —
+and the route resolves it from the run rather than accepting one from the client.
 
 ## Skills / personas (`services/skills.ts`, `domain/skills/`)
 

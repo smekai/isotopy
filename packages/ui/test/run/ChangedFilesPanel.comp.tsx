@@ -63,6 +63,26 @@ test("picking a file reads it out of the workspace", async () => {
   );
 });
 
+test("switching files does not leave the previous file's text on screen", async () => {
+  // Arrange
+  fetchRunFileContent.mockResolvedValueOnce({
+    path: "src/app.ts",
+    size: 24,
+    content: "export const app = 1;",
+    truncated: false,
+  });
+  render(<ChangedFilesPanel runId={RUN_ID} changes={changes()} d={d} />);
+  fireEvent.click(screen.getByText("src/app.ts"));
+  await waitFor(() => expect(screen.getByText("export const app = 1;")).toBeDefined());
+  fetchRunFileContent.mockReturnValueOnce(new Promise(() => {}));
+
+  // Act
+  fireEvent.click(screen.getByText("README.md"));
+
+  // Assert
+  expect(screen.queryByText("export const app = 1;")).toBeNull();
+});
+
 test("a deleted file offers no preview, because there is nothing left to read", () => {
   // Arrange
   const deleted = changes({ files: [{ path: "old.ts", kind: "deleted" }] });

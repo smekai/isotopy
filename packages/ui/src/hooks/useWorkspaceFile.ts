@@ -15,8 +15,9 @@ export function useWorkspaceFile(runId: string): WorkspaceFileController {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setContent(null);
+    setError(null);
     if (selectedPath === null) {
-      setContent(null);
       return;
     }
     let cancelled = false;
