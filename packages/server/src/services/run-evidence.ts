@@ -1,8 +1,9 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   DeploymentResult,
   RunArtifactRecord,
+  RunChangeSet,
   RunReleaseRecord,
 } from "@adhd/core";
 import {
@@ -13,6 +14,9 @@ import {
   renderDeploymentResult,
   renderReleaseManifest,
 } from "../domain/markdown/release.ts";
+import { renderRunChanges } from "../domain/markdown/run-changes.ts";
+import { parseRunChangeBaseline } from "../schemas/run-change-baseline.ts";
+import type { RunChangeBaseline } from "../schemas/run-change-baseline.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 
@@ -29,6 +33,53 @@ export async function persistRunArtifacts(
       `${JSON.stringify(record, null, 2)}\n`,
     ),
     writeFile(path.join(directory, "artifacts.md"), renderRunArtifacts(record.report)),
+  ]);
+}
+
+function changesDir(project: ProjectPath, runId: string): string {
+  return path.join(runsDir(project), runId, "changes");
+}
+
+export async function persistRunChangeBaseline(
+  project: ProjectPath,
+  runId: string,
+  baseline: RunChangeBaseline,
+): Promise<void> {
+  const directory = changesDir(project, runId);
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    path.join(directory, "baseline.json"),
+    `${JSON.stringify(baseline)}\n`,
+  );
+}
+
+export async function readRunChangeBaseline(
+  project: ProjectPath,
+  runId: string,
+): Promise<RunChangeBaseline | undefined> {
+  let content: string;
+  try {
+    content = await readFile(path.join(changesDir(project, runId), "baseline.json"), "utf8");
+  } catch {
+    return undefined;
+  }
+  const parsed = parseRunChangeBaseline(content);
+  return parsed.ok ? parsed.value : undefined;
+}
+
+export async function persistRunChanges(
+  project: ProjectPath,
+  runId: string,
+  changes: RunChangeSet,
+): Promise<void> {
+  const directory = changesDir(project, runId);
+  await mkdir(directory, { recursive: true });
+  await Promise.all([
+    writeFile(
+      path.join(directory, "changes.json"),
+      `${JSON.stringify(changes, null, 2)}\n`,
+    ),
+    writeFile(path.join(directory, "changes.md"), renderRunChanges(changes)),
   ]);
 }
 

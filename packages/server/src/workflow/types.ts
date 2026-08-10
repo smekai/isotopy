@@ -104,7 +104,7 @@ export interface RunProjection {
     logLines: string[],
   ): Promise<void>;
   captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void>;
-  runCompleted(runId: string, status: RunCompletionStatus): void;
+  runCompleted(runId: string, status: RunCompletionStatus): Promise<void>;
 }
 
 export interface QuestionMediationRequest {

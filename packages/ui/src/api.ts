@@ -304,6 +304,10 @@ export function fetchRunFileContent(
   );
 }
 
+export function revealRunFolder(runId: string): Promise<{ path: string }> {
+  return postJson<{ path: string }>(`/runs/${runId}/reveal`);
+}
+
 export function postRunMessage(runId: string, text: string): Promise<RunMessage> {
   return postJson<RunMessage>(`/runs/${runId}/messages`, { text });
 }

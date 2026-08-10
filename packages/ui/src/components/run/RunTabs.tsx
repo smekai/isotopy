@@ -7,6 +7,7 @@ import type { Dir } from "../../theme";
 import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, SANS, SPACE, WEIGHT } from "../../theme";
 import { ArtifactsPanel } from "./ArtifactsPanel";
+import type { ArtifactView } from "./ArtifactsPanel";
 import { ChatPanel } from "./ChatPanel";
 import { LogsPanel } from "./LogsPanel";
 import { MilestonePlanPanel } from "./MilestonePlanPanel";
@@ -128,8 +129,20 @@ export function RunTabs({
       setTab("team");
     }
   }, [orchestrating, run.id]);
+  const changed = run.changes !== undefined;
+  const [artifactView, setArtifactView] = useState<ArtifactView>(
+    changed ? "changes" : "workflow",
+  );
+  useEffect(() => {
+    setArtifactView(changed ? "changes" : "workflow");
+  }, [changed, run.id]);
   const focusedStage = run.stages.find((stage) => stage.id === focusedStageId);
   const filtered = tab !== "chat" && focusedStage !== undefined;
+
+  function showChanges() {
+    setArtifactView("changes");
+    setTab("artifacts");
+  }
 
   return (
     <div style={PANEL}>
@@ -153,7 +166,15 @@ export function RunTabs({
         )}
       </div>
 
-      {tab === "chat" && <ChatPanel run={run} d={d} sending={sending} onSend={onSend} />}
+      {tab === "chat" && (
+        <ChatPanel
+          run={run}
+          d={d}
+          sending={sending}
+          onSend={onSend}
+          onShowChanges={showChanges}
+        />
+      )}
       {tab === "team" && orchestrator && <OrchestratorPanel {...orchestrator} d={d} />}
       {tab === "plan" && planning && settings && onRunStarted && (
         <MilestonePlanPanel
@@ -167,7 +188,13 @@ export function RunTabs({
         <LogsPanel run={run} focusedStageId={focusedStageId} d={d} />
       )}
       {tab === "artifacts" && (
-        <ArtifactsPanel run={run} focusedStageId={focusedStageId} d={d} />
+        <ArtifactsPanel
+          run={run}
+          focusedStageId={focusedStageId}
+          view={artifactView}
+          d={d}
+          onViewChange={setArtifactView}
+        />
       )}
     </div>
   );

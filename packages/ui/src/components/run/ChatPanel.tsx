@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Send } from "lucide-react";
-import { formatUsage, isTerminalRunStatus } from "@adhd/core";
+import { formatUsage, isTerminalRunStatus, summariseChanges } from "@adhd/core";
 import type { LogLevel, RunState, StageState, StageStatus } from "@adhd/core";
+import { OpenProjectFolder } from "./OpenProjectFolder";
 import { renderInlineMarkdown } from "../../inline-md";
 import { buildTranscript, conversationOnly } from "../../transcript";
 import type { ConversationItem } from "../../transcript";
@@ -175,6 +176,34 @@ function closedHint(d: Dir): CSSProperties {
   };
 }
 
+function resultRow(d: Dir): CSSProperties {
+  return {
+    maxWidth: THREAD_MAX_WIDTH,
+    margin: "0 auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: SPACE.lg,
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+  };
+}
+
+function showChangesButton(d: Dir): CSSProperties {
+  return {
+    border: "none",
+    background: "none",
+    padding: 0,
+    cursor: "pointer",
+    color: d.accent,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.bold,
+  };
+}
+
 interface TranscriptRowProps {
   item: ConversationItem;
   spend?: string;
@@ -223,9 +252,10 @@ export interface ChatPanelProps {
   d: Dir;
   sending: boolean;
   onSend: (text: string) => void;
+  onShowChanges?: () => void;
 }
 
-export function ChatPanel({ run, d, sending, onSend }: ChatPanelProps) {
+export function ChatPanel({ run, d, sending, onSend, onShowChanges }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const items = conversationOnly(buildTranscript(run));
@@ -275,7 +305,23 @@ export function ChatPanel({ run, d, sending, onSend }: ChatPanelProps) {
 
       <div style={composerBar(d)}>
         {closed ? (
-          <div style={closedHint(d)}>This run has finished — start a new run to say more.</div>
+          <div style={resultRow(d)} data-testid="run-result">
+            {run.changes ? (
+              <>
+                <span>{summariseChanges(run.changes)}</span>
+                {onShowChanges && (
+                  <button type="button" onClick={onShowChanges} style={showChangesButton(d)}>
+                    See what was built
+                  </button>
+                )}
+              </>
+            ) : (
+              <span style={closedHint(d)}>
+                This run has finished — start a new run to say more.
+              </span>
+            )}
+            {run.workspacePath !== undefined && <OpenProjectFolder runId={run.id} d={d} />}
+          </div>
         ) : (
           <div style={composerInner(d)}>
             <textarea

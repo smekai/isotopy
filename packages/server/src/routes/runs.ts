@@ -12,6 +12,7 @@ import {
 } from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import { listWorkspaceFiles, readWorkspaceFile } from "../utils/workspace-files.ts";
+import { revealFolder } from "../utils/reveal-folder.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
 
@@ -174,6 +175,21 @@ export function createRunRoutes(
         return c.json({ files: await listWorkspaceFiles(run.workspacePath) });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to list workspace";
+        return c.json({ error: message }, 500);
+      }
+    })
+
+    .post("/:id/reveal", async (c) => {
+      const run = runs.getRun(c.req.param("id"));
+      if (!run) {
+        return c.json({ error: "Run not found" }, 404);
+      }
+      const target = run.workspacePath ?? registry.resolve(run.projectId).root;
+      try {
+        await revealFolder(target);
+        return c.json({ path: target });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to open the folder";
         return c.json({ error: message }, 500);
       }
     })

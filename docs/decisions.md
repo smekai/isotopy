@@ -15,6 +15,44 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-10 — What a run changed is measured, not reported by the agent
+
+**Context:** a finished run said what it did in prose and left the files somewhere on
+disk. Nothing in the system tracked file changes — no git integration, no watcher — and
+the only file data was `listWorkspaceFiles`, a capped snapshot of *everything* in the
+workspace, three clicks deep behind the Artifacts tab. `TASK-126`'s bar is that this works
+for **every run, on every engine, with no project configuration**.
+
+**Decision:** the change set is **measured by the server**. A snapshot of the project —
+path, size and modification time — is taken when a run starts and again when it settles,
+and the difference is what the run created, edited and deleted. When the project is a git
+repository the snapshot baseline is kept but git answers instead, because it respects
+`.gitignore` and, crucially, sees work the agent **committed**: a status-only reading of a
+repository where the agent committed everything reports nothing at all. Both layers are
+captured at baseline and the git one wins at read time — the same first-wins shape as the
+model roster's `live → config → static`.
+
+**Rejected: engine tool logs.** `StageActivity` already carries `Write`/`Edit` paths and
+costs nothing to read, but only Claude's protocol adapter is known to emit them. "Every
+engine" would have been a claim about Codex and Cursor that nobody had checked.
+
+**Rejected: asking the agent to declare the files.** The `adhd-run-artifacts` fence is
+optional, is only produced for orchestration runs, and is prose. A run's own account of
+itself is the thing being replaced, not the thing to build on.
+
+**Consequence for the run lifecycle:** `runCompleted` became asynchronous and captures the
+change set *before* it emits `run.completed`, because the UI stops the run's event stream
+on that event. The client refetches the run once when it lands — a change set cannot arrive
+through the event-sourced projection, and capturing after the emit would race the refetch.
+Abort and interrupt keep their synchronous emit and capture during settle, so an aborted
+run shows its changes when reopened rather than instantly.
+
+**Revealing the folder is a server capability.** "One click away" is literal: `POST
+/runs/:id/reveal` opens the run's workspace in Explorer, Finder or the freedesktop opener
+through `runSubprocess` with an argument array. The endpoint takes **no path** — it
+resolves the folder from the run it is scoped to, so no client-supplied path, absolute or
+relative, ever reaches an OS shell.
+
 ## 2026-08-10 — Deploying a preview is ADHD's job, not an agent's
 
 **Context:** Full Delivery carried an SRE box whose step task told an agent to find the

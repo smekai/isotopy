@@ -579,8 +579,8 @@ export function createPipelineWorkflow(
         );
       }
 
-      await step.run({ name: "run:completed" }, () => {
-        deps.projection.runCompleted(runId, status);
+      await step.run({ name: "run:completed" }, async () => {
+        await deps.projection.runCompleted(runId, status);
         return null;
       });
       return { status };

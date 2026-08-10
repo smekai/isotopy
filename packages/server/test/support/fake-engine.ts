@@ -6,6 +6,8 @@
 //
 // Registered via `setEngineAdapter()` (packages/server/src/engines/registry.ts),
 // which is what keeps a component test from ever spawning a real CLI.
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { assert, expect } from "vitest";
 import type {
   EngineId,
@@ -73,6 +75,12 @@ export interface AnticipationOutcome {
    * optional for the same reason it is on `asks`.
    */
   parks(result: string, sessionId?: string, usage?: StageUsage): FakeEngine;
+  /**
+   * The box writes a file into the workspace before reporting — the only way a
+   * scripted engine leaves behind what a real agent would, which is what the
+   * run's change set is measured from.
+   */
+  writes(files: Record<string, string>, result: string): FakeEngine;
 }
 
 /** What the Orchestrator's post-run review returns; both halves default. */
@@ -97,6 +105,17 @@ const DEFAULT_REVIEW_DECISION: OrchestratorDecision = {
 
 export function fencedBlock(fence: string, payload: unknown): string {
   return `\`\`\`${fence}\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+}
+
+async function writeIntoWorkspace(
+  cwd: string,
+  files: Record<string, string>,
+): Promise<void> {
+  for (const [relative, contents] of Object.entries(files)) {
+    const target = path.join(cwd, relative);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, contents);
+  }
 }
 
 function describeMatcher(matcher: Matcher): string {
@@ -180,6 +199,11 @@ QUESTION: ${question}`,
           if (sessionId !== undefined) response.sessionId = sessionId;
           if (usage !== undefined) response.usage = usage;
           return Promise.resolve(response);
+        }),
+      writes: (files, result) =>
+        push(async (ctx) => {
+          await writeIntoWorkspace(ctx.cwd, files);
+          return { success: true, exitCode: 0, result };
         }),
       hangsUntilAborted: () =>
         push(

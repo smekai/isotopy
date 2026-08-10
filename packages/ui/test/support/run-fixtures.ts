@@ -3,6 +3,7 @@ import { HOME_PROJECT_ID, toRunSummary } from "@adhd/core";
 import type {
   LogLevel,
   MessageRole,
+  RunChangeSet,
   RunEvent,
   RunEventType,
   RunLimit,
@@ -49,6 +50,19 @@ export function run(stages: StageState[], status: RunStatus = "running"): RunSta
     stages,
     messages: [],
     createdAt: CREATED_AT,
+  };
+}
+
+export function changes(overrides: Partial<RunChangeSet> = {}): RunChangeSet {
+  return {
+    source: "snapshot",
+    files: [
+      { path: "src/app.ts", kind: "created" },
+      { path: "README.md", kind: "edited" },
+    ],
+    truncated: false,
+    capturedAt: EVENT_TS,
+    ...overrides,
   };
 }
 

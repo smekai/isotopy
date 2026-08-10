@@ -15,11 +15,25 @@ const IGNORED_DIRECTORIES = new Set([
 const MAX_DEPTH = 8;
 const MAX_ENTRIES = 500;
 
+export const SNAPSHOT_IGNORED_DIRECTORIES = new Set([...IGNORED_DIRECTORIES, ".adhd"]);
+const SNAPSHOT_MAX_DEPTH = 12;
+const SNAPSHOT_MAX_ENTRIES = 20_000;
+
 export const MAX_PREVIEW_BYTES = 256 * 1024;
 
 export interface WorkspaceFile {
   path: string;
   size: number;
+}
+
+export interface FileStamp {
+  mtimeMs: number;
+  size: number;
+}
+
+export interface WorkspaceSnapshot {
+  files: Map<string, FileStamp>;
+  truncated: boolean;
 }
 
 export interface WorkspaceFileContent {
@@ -88,6 +102,52 @@ export async function listWorkspaceFiles(workspacePath: string): Promise<Workspa
 
   await walk(root, 0);
   return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function snapshotWorkspace(workspacePath: string): Promise<WorkspaceSnapshot> {
+  const root = await realpath(workspacePath);
+  const files = new Map<string, FileStamp>();
+  let truncated = false;
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (files.size >= SNAPSHOT_MAX_ENTRIES) {
+      truncated = true;
+      return;
+    }
+    if (depth > SNAPSHOT_MAX_DEPTH) {
+      truncated = true;
+      return;
+    }
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (files.size >= SNAPSHOT_MAX_ENTRIES) {
+        truncated = true;
+        return;
+      }
+      const absolute = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SNAPSHOT_IGNORED_DIRECTORIES.has(entry.name)) {
+          await walk(absolute, depth + 1);
+        }
+      } else if (entry.isFile()) {
+        try {
+          const stats = await stat(absolute);
+          files.set(toPosix(path.relative(root, absolute)), {
+            mtimeMs: stats.mtimeMs,
+            size: stats.size,
+          });
+        } catch {}
+      }
+    }
+  }
+
+  await walk(root, 0);
+  return { files, truncated };
 }
 
 export async function readWorkspaceFile(
