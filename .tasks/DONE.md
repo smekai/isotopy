@@ -30,10 +30,12 @@ on the far side of that flip. And the UI refetches the run once on `run.complete
 change set cannot reach an event-sourced projection any other way.
 
 **Split in half, decided with the user.** "When the project declares how to start itself,
-run it and show it" left Milestone F and became `TASK-138` in Milestone H — doing it
-honestly means an embedded browser that Playwright and the engines' own browser
-capabilities can drive, not a link to a dev server. `TASK-092`'s `ui` automation block
-waits there, still stored and unconsumed.
+run it and show it" became `TASK-138` — doing it honestly means an embedded browser that
+Playwright and the engines' own browser capabilities can drive, not a link to a dev server.
+It left Milestone F for H on 2026-08-10 and was pulled back into F the same day, sequenced
+after `TASK-124`, because F's bar is what a first-time user sees and this task delivered
+only the weaker reading of it. `TASK-092`'s `ui` automation block waits there, still stored
+and unconsumed.
 
 **Rejected on the way:** engine tool logs (only Claude's adapter is known to emit
 `Write`/`Edit` paths, so "every engine" would have been a claim nobody had checked) and an

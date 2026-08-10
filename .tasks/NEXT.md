@@ -11,19 +11,25 @@ stop adding, and make what exists hold still and hold up.
 and *sees the thing that was built*. Today the last step barely exists. A run ends and the
 result is somewhere on disk, and you have to already know where.
 
-**Scope:** `TASK-126` (a finished run names what it changed), `TASK-124` (permission modes
-and blast radius), `TASK-115` (per-role presets, pulled out of Milestone H once `TASK-129`
-made a stage's model something an agent can reason about), `TASK-116` (README "How it
-works"), `TASK-137` (one dialog with the Orchestrator, last before the dogfood), and
-`TASK-128` (the closing dogfood). Already closed: `TASK-092` (project automation and
-preview deploy), `TASK-127` (a stage must not pass on output nothing could use), and
-`TASK-129` (model presets rather than ids the plan rejects).
+**Scope, in order:** `TASK-126` (a finished run names what it changed), `TASK-124`
+(permission modes and blast radius), `TASK-138` (run the built product and show it),
+`TASK-115` (per-role presets, pulled out of Milestone H once `TASK-129` made a stage's
+model something an agent can reason about), `TASK-116` (README "How it works"), `TASK-137`
+(one dialog with the Orchestrator, last before the dogfood), and `TASK-128` (the closing
+dogfood). Already closed: `TASK-092` (project automation and preview deploy), `TASK-127`
+(a stage must not pass on output nothing could use), and `TASK-129` (model presets rather
+than ids the plan rejects).
 
-**What left F on 2026-08-10:** the second half of `TASK-126` — starting the product and
-putting it in front of the user — became `TASK-138` in Milestone H. Doing it honestly
-means an embedded browser that Playwright and the engines' own browser capabilities can
-drive, and that is a new capability rather than a stabilisation. F's bar is met by naming
-what was built and opening the folder that holds it.
+**Why `TASK-138` is here, decided with the user on 2026-08-10:** the second half of
+`TASK-126` — starting the product and putting it in front of the user — was split into
+Milestone H that morning and pulled back into F the same day. `TASK-126` delivered the
+weaker reading of F's bar: a run *names* what it built. Seeing it run is the reading a
+first-time user will have, and the demo cannot route around it. It sits after `TASK-124`
+because it starts long-lived processes on someone else's machine, and that is exactly what
+`TASK-124` gives the system an opinion about.
+
+That is the **only** capability admitted after the "nothing else" rule below was written,
+and admitting it is not licence for a second.
 
 Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
 research spikes belong to no milestone at all. `TASK-137` is here because a user asked for
@@ -51,6 +57,64 @@ Post-MVP, add a **controlled** mode per engine (Claude's `acceptEdits`/auto, Cod
 The brokering policy is the point: **prefer the bounded option over the metered one** — a fixed-price host over pay-per-use credits, reversible over irreversible, and never enter credentials. That is what makes a controlled mode worth the stalls it costs.
 
 Cross-platform: mode flags differ per CLI, not per OS; verify the Windows and macOS argument arrays through `runSubprocess` without shell-only commands.
+
+---
+
+## TASK-138: Run the built product and show it in an embedded browser
+**Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-f
+**Updated:** 2026-08-10 18:20
+
+**Milestone F, immediately after `TASK-124`** — decided with the user on 2026-08-10, having
+first been split out of `TASK-126` into Milestone H the same day and then pulled back. The
+reasoning for pulling it back: F's bar is *sees the thing that was built*, and `TASK-126`
+delivered the weaker half of that — a run names its files. A demo of a product that builds
+products should show the product running.
+
+**The order is not negotiable.** `TASK-124` first. This task exists to start long-lived
+processes on someone else's machine, which is precisely the blast radius `TASK-124` gives
+the system an opinion about; building the capability before the policy that governs it is
+backwards, and `TASK-117` is the standing evidence — a Developer agent started a dev server
+on ADHD's own UI port and left it running, and nothing had a view on whether that was
+acceptable.
+
+**The ask.** When a project declares how to start itself, offer to run it — start the
+product, wait for readiness, and show it inside ADHD. The surface is an **embedded
+browser**, not an anchor, because the same surface is what lets Playwright and the engines'
+own browser capabilities (Claude, Codex, Cursor) drive the running product and report what
+they saw. Showing the user and letting an agent look are the same seam.
+
+**What already exists.** `TASK-092` shipped `.adhd/automation.json`'s `ui` block —
+`start` (an executable-plus-argument array with per-platform overrides), `healthUrl`,
+`readyTimeoutMs` — stored, editable in Setup via `ProductStartEditor`, and read by nothing.
+`config.ui` has exactly one reader in the whole repo, and it is that editor.
+
+**What does not exist:**
+
+- A long-lived process. `runSubprocess` is run-to-completion only — it resolves on exit.
+  `killProcessTree` is the reusable piece; a handle-returning start is not.
+- A readiness poller for `ui`. `DeploymentRunner.checkHealth` is the template, but it is
+  `private` and typed to `DeploymentAutomation`, and `UiAutomation` has no
+  `healthIntervalMs` — a poller must pick its own interval.
+- Any embedding precedent. The UI's only external-link hit is the plain anchor in
+  `EngineStatusCard`; there is no iframe anywhere, and dev servers commonly refuse framing.
+  Decide the surface deliberately and fail visibly rather than into a blank box.
+
+**Stop what was started.** Do not start anything the user did not ask to start, and stop it
+when they are done looking. Server shutdown, project switch and run switch all have to
+reach the kill.
+
+**Absorbs `TASK-095`** (agent-native browser testing for QA) — the same capability from the
+QA side, and the reason this is not two tasks. `TASK-095` stays in Milestone H only as the
+QA policy question it also asks: when a native browser is unavailable, Playwright remains
+the complete fallback and CI authority. Reject it if this task answers that too.
+
+**Guard against the milestone's own rule.** F means *stop adding*. This is the one
+capability admitted after that rule was written, and it is admitted because the demo cannot
+route around it — not as licence for anything else.
+
+Cross-platform: starting and killing a process differ per OS; go through `runSubprocess`
+with executable-plus-argument arrays, never a shell string, and reuse `killProcessTree`'s
+process-group kill on POSIX and `taskkill /T /F` on Windows.
 
 ---
 
@@ -161,9 +225,10 @@ Milestones D and E both closed on a live dogfood rather than on tests, and F clo
 same way — but from a *clean* state, because F's bar is a first-time user.
 
 Start from an empty `ADHD_USER_HOME`, install as the README instructs, register a fresh
-project, and drive one goal end to end: build, evolve, and **see the result** through
-`TASK-126`. Record what a newcomer would hit — every place the app assumes knowledge the
-person does not have. Fix what is small; file what is not.
+project, and drive one goal end to end: build, evolve, and **see the result** — the files
+it changed through `TASK-126`, and the product running through `TASK-138`. Record what a
+newcomer would hit — every place the app assumes knowledge the person does not have. Fix
+what is small; file what is not.
 
 Record a release verdict for Milestone F.
 

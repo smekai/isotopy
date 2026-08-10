@@ -100,14 +100,15 @@ that — rather than what we guessed while building it.
 collects the feedback; what follows is decided by what it says.
 
 **Parked here pending that evidence:** `TASK-111` (reusable teams), `TASK-113` (per-persona
-accumulated context), `TASK-138` (run the built product and show it in an embedded
-browser), `TASK-095` (agent-native browser testing for QA). Each was written as post-MVP by
-whoever deferred it, and none has a user behind it yet. Build the ones feedback asks for;
-reject the rest rather than letting them age in the backlog.
+accumulated context), `TASK-095` (agent-native browser testing for QA). Each was written as
+post-MVP by whoever deferred it, and none has a user behind it yet. Build the ones feedback
+asks for; reject the rest rather than letting them age in the backlog.
 
-`TASK-138` and `TASK-095` are the same capability seen from two sides — an embedded browser
-the product shows the user, and an embedded browser QA drives. Whichever feedback claims
-first should absorb the other rather than both being built.
+`TASK-095` is now likely to be **rejected rather than built**: `TASK-138` moved into
+Milestone F on 2026-08-10 and is the same capability seen from the other side — an embedded
+browser the product shows the user is an embedded browser QA can drive. What would survive
+is its policy half alone: where no native browser capability exists, Playwright stays the
+complete fallback and CI authority. Decide once `TASK-138` has shipped.
 
 Also unclaimed: the **full Orchestrator UI** beyond the MVP slice `TASK-114` shipped. No
 task exists for it on purpose — write one when someone says what is missing. The first
@@ -134,51 +135,6 @@ and where answers land so they are quotable in a task later.
 The bar for a useful answer is a sentence naming something they wanted and could not do.
 
 Cross-platform: n/a — process, not code.
-
----
-
-## TASK-138: Run the built product and show it in an embedded browser
-**Priority:** P2 | **Tags:** ui, server, engine, testing, milestone-h
-**Updated:** 2026-08-10 14:10
-
-**Milestone H — Harmonic. Build only if feedback asks for it.** Split out of `TASK-126` on
-2026-08-10: naming what a run changed is Milestone F's bar and shipped there; *starting*
-the product and putting it in front of the user is a capability, and doing it honestly is
-much larger than a link to a dev server.
-
-**The ask.** When a project declares how to start itself, offer to run it — start the
-product, wait for readiness, and show it inside ADHD. The surface is an **embedded
-browser**, not an anchor, because the same surface is what lets Playwright and the engines'
-own browser capabilities (Claude, Codex, Cursor) drive the running product and report what
-they saw. Showing the user and letting an agent look are the same seam.
-
-**What already exists.** `TASK-092` shipped `.adhd/automation.json`'s `ui` block —
-`start` (an executable-plus-argument array with per-platform overrides), `healthUrl`,
-`readyTimeoutMs` — stored, editable in Setup via `ProductStartEditor`, and read by nothing.
-`config.ui` has exactly one reader in the whole repo, and it is that editor.
-
-**What does not exist:**
-
-- A long-lived process. `runSubprocess` is run-to-completion only — it resolves on exit.
-  `killProcessTree` is the reusable piece; a handle-returning start is not.
-- A readiness poller for `ui`. `DeploymentRunner.checkHealth` is the template, but it is
-  `private` and typed to `DeploymentAutomation`, and `UiAutomation` has no
-  `healthIntervalMs` — a poller must pick its own interval.
-- Any embedding precedent. The UI's only external-link hit is the plain anchor in
-  `EngineStatusCard`; there is no iframe anywhere, and dev servers commonly refuse framing.
-  Decide the surface deliberately and fail visibly rather than into a blank box.
-
-**Stop what was started.** Do not start anything the user did not ask to start, and stop it
-when they are done looking — `TASK-117` closed a stage that hung for its whole engine
-timeout because an agent left a dev server running. Server shutdown, project switch and run
-switch all have to reach the kill.
-
-**Overlaps `TASK-095`** (agent-native browser testing for QA) — the same capability from
-the QA side. Whichever of the two feedback claims first should absorb the other.
-
-Cross-platform: starting and killing a process differ per OS; go through `runSubprocess`
-with executable-plus-argument arrays, never a shell string, and reuse `killProcessTree`'s
-process-group kill on POSIX and `taskkill /T /F` on Windows.
 
 ---
 
