@@ -16,10 +16,13 @@ deploy — the dependency under 126's second half), `TASK-124` (permission modes
 radius), `TASK-127` (a stage must not pass on output nothing could use), `TASK-129` (model
 presets rather than ids the plan rejects), `TASK-115` (per-role presets, pulled out of
 Milestone H once `TASK-129` made a stage's model something an agent can reason about),
-`TASK-116` (README "How it works"), and `TASK-128` (the closing dogfood).
+`TASK-116` (README "How it works"), `TASK-137` (one dialog with the Orchestrator, last
+before the dogfood), and `TASK-128` (the closing dogfood).
 
 Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
-research spikes belong to no milestone at all.
+research spikes belong to no milestone at all. `TASK-137` is here because a user asked for
+it and because F's bar is a first-time user meeting the Orchestrator — the one surface the
+demo cannot route around.
 
 Cross-platform: every task here is verified on Windows and reasoned through for macOS,
 and `TASK-092`'s process handling is where that bites hardest.
@@ -48,6 +51,64 @@ because an agent left a dev server running.
 
 Cross-platform: opening a folder and starting a process differ per OS; go through
 `runSubprocess` with executable-plus-argument arrays, never a shell string.
+
+---
+
+## TASK-137: One dialog with the Orchestrator, not two tabs
+**Priority:** P1 | **Tags:** ui, milestone-f
+**Updated:** 2026-08-10 12:41
+
+**Last piece of work in Milestone F**, after `TASK-116` and immediately before the closing
+dogfood `TASK-128` — the dogfood is where a first-time user meets the Orchestrator, so it
+should meet the merged dialog rather than the two tabs.
+
+An orchestration run opens on `Orchestrator` and puts `Chat` next to it, and the user has
+to keep both in their head: the team proposal, the latest decision and the child runs live
+on one tab, and the conversation those decisions are about lives on the other. The seam is
+already visible in the product's own copy — `LatestDecision` tells the user to *"Answer in
+the Chat tab to continue."* A panel that has to point at another tab to be usable is one
+panel too many. The Orchestrator is who you talk to for most of an initiative; talking to
+it should be one thread.
+
+**The ask (from a user, which is what `TASK-134` said to wait for):** an orchestration run
+has a single dialog. No `Orchestrator` tab.
+
+**Fold into the thread.** Everything on `OrchestratorPanel` is either a message, a control
+that belongs to a message, or run chrome:
+
+- *Team proposal* — an inline card in the thread where the Orchestrator proposed it,
+  carrying its own **Approve & start** / **Stop**. It is a turn in the conversation, not a
+  standing panel; once approved it stays in the scrollback as what was agreed.
+- *Latest decision* — a turn in the thread. An `ask_user` decision renders as the question
+  it is, answered by the composer already sitting below it. The "Answer in the Chat tab"
+  sentence is then deletable, which is the test that this worked.
+- *Child runs* — each appears in the thread at the point the Orchestrator started it,
+  linked, so the initiative reads chronologically instead of as a sidebar list. Decide
+  whether the flat "Runs in this initiative" list still earns its place anywhere; if the
+  rail already answers "what else is in this initiative", it does not.
+- *Goal, status pill, stop reason, decision error, Stop* — run chrome. `RunStatusBar` and
+  the pipeline row above the tabs are where a run already says what it is and how it is
+  doing; the Orchestrator's goal and status are the same question asked about the
+  initiative and belong with them, not in a scroll region.
+
+**Keep the interleaving honest.** The thread is `buildTranscript(run)` over one run, and
+orchestration state arrives from a different load (`useOrchestration`) that can land before
+or after it — `RunTabs.comp.tsx` already pins that ordering hazard. The merged view needs a
+defined order for orchestration turns against transcript turns, and must not jump or
+duplicate when the second source arrives late.
+
+**What falls out.** `RunTab` loses `"team"`; `tabsFor` loses its orchestration branch and
+the effect that force-opens it; an orchestration run then has the same three tabs as any
+other. `run-tab-team` disappears from the testid list. Update `docs/architecture-ui.md` —
+"Two pipelines earn a fourth tab" becomes one pipeline (milestone planning keeps `Plan`;
+this task does not touch it) — and `docs/decisions.md` gets the dated entry for why the
+Orchestrator stopped being a tab. `RunTabs.comp.tsx` and `orchestrator-flow.e2e.ts` both
+drive the tab today and both need rewriting against the single thread.
+
+**Not in scope:** the `Plan` tab, the composer, and anything about *what* the Orchestrator
+decides. This is where its output is shown, not how it thinks.
+
+Cross-platform: n/a — pure UI, no paths, processes or shelling out.
 
 ---
 
@@ -175,7 +236,9 @@ it, and none has a user behind it yet. Build the ones feedback asks for; reject 
 rather than letting them age in the backlog.
 
 Also unclaimed: the **full Orchestrator UI** beyond the MVP slice `TASK-114` shipped. No
-task exists for it on purpose — write one when someone says what is missing.
+task exists for it on purpose — write one when someone says what is missing. The first
+such claim arrived and went to Milestone F, not here: `TASK-137` (one dialog instead of
+an `Orchestrator` tab beside a `Chat` tab), because the demo cannot route around it.
 
 Cross-platform: whatever this milestone builds carries the same Windows and macOS bar as
 everything else.
