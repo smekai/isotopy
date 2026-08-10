@@ -1,8 +1,66 @@
 # Backlog
 
+## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
+**Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
+**Updated:** 2026-08-07 11:40
+
+A fixed point is where a system stops changing under its own operation. That is the goal:
+stop adding, and make what exists hold still and hold up.
+
+**The bar:** someone who is not us installs it, points it at a folder, describes a goal —
+and *sees the thing that was built*. Today the last step barely exists. A run ends and the
+result is somewhere on disk, and you have to already know where.
+
+**Scope:** `TASK-126` (show what was built), `TASK-092` (project automation and preview
+deploy — the dependency under 126's second half), `TASK-124` (permission modes and blast
+radius), `TASK-127` (a stage must not pass on output nothing could use), `TASK-129` (model
+presets rather than ids the plan rejects), `TASK-115` (per-role presets, pulled out of
+Milestone H once `TASK-129` made a stage's model something an agent can reason about),
+`TASK-116` (README "How it works"), `TASK-137` (one dialog with the Orchestrator, last
+before the dogfood), and `TASK-128` (the closing dogfood).
+
+Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
+research spikes belong to no milestone at all. `TASK-137` is here because a user asked for
+it and because F's bar is a first-time user meeting the Orchestrator — the one surface the
+demo cannot route around.
+
+Cross-platform: every task here is verified on Windows and reasoned through for macOS,
+and `TASK-092`'s process handling is where that bites hardest.
+
+---
+
+## TASK-126: Show the user what was built
+**Priority:** P0 | **Tags:** ui, server, milestone-f
+**Updated:** 2026-08-07 11:40
+
+There is no clear way to look at the product ADHD just built. A finished run leaves files
+somewhere and says so in prose; the user is left to find them.
+
+**Always:** a finished run ends by naming what changed — the files it created and edited,
+linked, with the project folder one click away. This must work for every run, on every
+engine, with no project configuration at all.
+
+**When the project declares how to start itself:** additionally offer to run it and show
+it — start the product, wait for readiness, and put it in front of the user. That half
+depends on `TASK-092`'s automation config for the start command, readiness check and port
+strategy, and must degrade honestly to the always-half when no such config exists.
+
+Do not start anything the user did not ask to start, and stop whatever was started when
+they are done looking — `TASK-117` closed a stage that hung for its whole engine timeout
+because an agent left a dev server running.
+
+Cross-platform: opening a folder and starting a process differ per OS; go through
+`runSubprocess` with executable-plus-argument arrays, never a shell string.
+
+---
+
 ## TASK-137: One dialog with the Orchestrator, not two tabs
-**Priority:** P2 | **Tags:** ui, milestone-h
-**Updated:** 2026-08-10 12:26
+**Priority:** P1 | **Tags:** ui, milestone-f
+**Updated:** 2026-08-10 12:41
+
+**Last piece of work in Milestone F**, after `TASK-116` and immediately before the closing
+dogfood `TASK-128` — the dogfood is where a first-time user meets the Orchestrator, so it
+should meet the merged dialog rather than the two tabs.
 
 An orchestration run opens on `Orchestrator` and puts `Chat` next to it, and the user has
 to keep both in their head: the team proposal, the latest decision and the child runs live
@@ -51,57 +109,6 @@ drive the tab today and both need rewriting against the single thread.
 decides. This is where its output is shown, not how it thinks.
 
 Cross-platform: n/a — pure UI, no paths, processes or shelling out.
-
----
-
-## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
-**Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
-**Updated:** 2026-08-07 11:40
-
-A fixed point is where a system stops changing under its own operation. That is the goal:
-stop adding, and make what exists hold still and hold up.
-
-**The bar:** someone who is not us installs it, points it at a folder, describes a goal —
-and *sees the thing that was built*. Today the last step barely exists. A run ends and the
-result is somewhere on disk, and you have to already know where.
-
-**Scope:** `TASK-126` (show what was built), `TASK-092` (project automation and preview
-deploy — the dependency under 126's second half), `TASK-124` (permission modes and blast
-radius), `TASK-127` (a stage must not pass on output nothing could use), `TASK-129` (model
-presets rather than ids the plan rejects), `TASK-115` (per-role presets, pulled out of
-Milestone H once `TASK-129` made a stage's model something an agent can reason about),
-`TASK-116` (README "How it works"), and `TASK-128` (the closing dogfood).
-
-Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
-research spikes belong to no milestone at all.
-
-Cross-platform: every task here is verified on Windows and reasoned through for macOS,
-and `TASK-092`'s process handling is where that bites hardest.
-
----
-
-## TASK-126: Show the user what was built
-**Priority:** P0 | **Tags:** ui, server, milestone-f
-**Updated:** 2026-08-07 11:40
-
-There is no clear way to look at the product ADHD just built. A finished run leaves files
-somewhere and says so in prose; the user is left to find them.
-
-**Always:** a finished run ends by naming what changed — the files it created and edited,
-linked, with the project folder one click away. This must work for every run, on every
-engine, with no project configuration at all.
-
-**When the project declares how to start itself:** additionally offer to run it and show
-it — start the product, wait for readiness, and put it in front of the user. That half
-depends on `TASK-092`'s automation config for the start command, readiness check and port
-strategy, and must degrade honestly to the always-half when no such config exists.
-
-Do not start anything the user did not ask to start, and stop whatever was started when
-they are done looking — `TASK-117` closed a stage that hung for its whole engine timeout
-because an agent left a dev server running.
-
-Cross-platform: opening a folder and starting a process differ per OS; go through
-`runSubprocess` with executable-plus-argument arrays, never a shell string.
 
 ---
 
@@ -229,7 +236,9 @@ it, and none has a user behind it yet. Build the ones feedback asks for; reject 
 rather than letting them age in the backlog.
 
 Also unclaimed: the **full Orchestrator UI** beyond the MVP slice `TASK-114` shipped. No
-task exists for it on purpose — write one when someone says what is missing.
+task exists for it on purpose — write one when someone says what is missing. The first
+such claim arrived and went to Milestone F, not here: `TASK-137` (one dialog instead of
+an `Orchestrator` tab beside a `Chat` tab), because the demo cannot route around it.
 
 Cross-platform: whatever this milestone builds carries the same Windows and macOS bar as
 everything else.
