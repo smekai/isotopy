@@ -27,11 +27,3 @@ export function claudePermissionModeChoices(help: string): string[] {
   }
   return [...choices[1]!.matchAll(QUOTED)].map((match) => match[1]!);
 }
-
-function escapeForRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-export function helpAdvertisesFlag(help: string, flag: string): boolean {
-  return new RegExp(`(^|\\s)${escapeForRegExp(flag)}(?![\\w-])`).test(help);
-}

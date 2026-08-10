@@ -60,6 +60,29 @@ grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
 does drain. The grace window is the whole trade: too short truncates a chatty
 CLI's last lines, too long re-introduces the stall.
 
+## Serving the built UI (`utils/built-ui.ts`)
+
+`pnpm build` emits an API server and a static UI bundle; `pnpm start` runs the
+compiled server, which serves that bundle itself, so the whole app is on one
+port with no Vite process. The UI's `API_BASE` is `""`, so same-origin needs no
+UI change.
+
+**The mount lives in `index.ts`, never in `createApp`, and the import is
+dynamic.** Importing `@hono/node-server/serve-static` at the top of `app.ts`
+wedges the dev server: under `pnpm dev`, `concurrently` runs `tsx watch`, and the
+server process then prints its banner and never binds — `pnpm dev` and the whole
+Playwright suite hang for their full timeout while Vite comes up fine. Standalone
+`tsx watch` is unaffected, which is what makes it easy to reintroduce by mistake.
+Keeping it out of `createApp` also keeps every component test on a plain API app.
+
+Mounting is additionally gated on **actually running the compiled build** — the
+module checks that its own directory sits under `dist/` — so a developer who has
+built once does not start silently serving a stale bundle from `pnpm dev`.
+`ADHD_UI_DIR` overrides the location and bypasses that gate, which is how the
+tests drive it. `serveStatic` rejects absolute roots, so the path is made
+relative to `process.cwd()`; if that is impossible (a different drive on
+Windows) the server logs and stays a plain API rather than failing to start.
+
 ## Engines — binary resolution (all adapters)
 
 Each adapter resolves its CLI in a fixed order and caches the result, clearing
@@ -79,20 +102,29 @@ Cursor detection also flags when the **Cursor IDE** is installed but its headles
 
 ## Engines — capability probes (`engines/permission-mode.ts`)
 
-Whether a CLI can do auto-review is a property of the *installed build*, not of
-the engine: `--approve-for-me` exists in newer Codex releases and not in 0.144.6,
-and a version comparison would have to track each vendor's release history. So
-the answer is asked of the binary — one `--help` parse, memoised in a map keyed
-by **binary path plus help arguments**. Keying on the path makes an
-`ADHD_<ENGINE>_PATH` switch invalidate itself; keying on the arguments is what
-lets Codex hold separate answers for `exec` and `exec resume`, whose option sets
-genuinely differ. `detect()`/`install()` clear it alongside the binary cache.
+Each engine answers "can you auto-review?" the cheapest way that is actually
+sound for it, and the three answers are deliberately different:
 
-The probe runs **only** when a run actually asks for `autoReview`, so nobody pays
-a subprocess for a mode they did not choose. A probe that fails or times out
-answers `unknown` rather than throwing, and `unknown` degrades exactly like
-`unsupported` — with a different notice, because "the CLI said no" and "we could
-not ask" are different things to tell a user.
+- **Claude is probed**, because its auto-review is a *flag value*
+  (`--permission-mode auto`) and passing a value the build does not know is a
+  hard CLI error that fails the run. So the mode list is read from `--help`,
+  memoised in a map keyed by **binary path plus help arguments** — keying on the
+  path makes an `ADHD_<ENGINE>_PATH` switch invalidate itself — and
+  `detect()`/`install()` clear it alongside the binary cache. The probe runs
+  **only** when a run asks for `autoReview`, so nobody pays a subprocess for a
+  mode they did not choose. A probe that fails or times out answers `unknown`
+  rather than throwing, and `unknown` degrades like `unsupported` with a
+  different notice, because "the CLI said no" and "we could not ask" are
+  different things to tell a user.
+- **Codex is not probed**, because its auto-review is *configuration*
+  (`approvals_reviewer`), passed with `-c`. There is no `--help` listing of
+  config keys to read, and an unrecognised `-c` key is tolerated rather than
+  fatal (`--strict-config`, which ADHD does not pass, exists precisely to opt
+  into the strict behaviour). Crucially the fallback is safe by construction: a
+  build that ignores the key still runs under `sandbox_mode="workspace-write"`,
+  so the worst case is escalations denied rather than reviewed — never a wider
+  blast radius than was asked for.
+- **Cursor is not probed** — see the CLI-specific note below.
 
 ## Engines — billing safety (`buildChildEnv` in each adapter)
 
@@ -141,18 +173,22 @@ Cursor's own `auto` router model is distinct from our **Auto** (which sends no
 **Codex (`engines/codex.ts`).** `codex exec --json` emits newline-delimited JSON
 events. `--skip-git-repo-check` lets it run in a non-git scratch workspace.
 Permission modes: `acceptEdits` → `--sandbox workspace-write` (writes confined to
-the workspace; escalation is denied, not queued); `autoReview` → `--approve-for-me`
-where the build advertises it; otherwise
-`--dangerously-bypass-approvals-and-sandbox`. The prompt is read from stdin via
+the workspace; escalation is denied, not queued); `autoReview` → the same sandbox
+**plus** `-c approval_policy="on-request" -c approvals_reviewer="auto_review"`,
+which is Codex's documented Auto-review — escalations (sandbox escapes, blocked
+network, MCP prompts) go to a reviewer subagent instead of to a human who is not
+there; `skip` → `--dangerously-bypass-approvals-and-sandbox`. There is **no
+`--approve-for-me` flag** — it appears in third-party write-ups but not in the
+CLI reference and not in the 0.144.6 binary, whose own help text documents
+`approvals_reviewer` instead. The prompt is read from stdin via
 `-` to sidestep the Windows arg-length limit. The CLI has no `models` subcommand,
 so `configuredModel` reads the top-level `model = "…"` key from `~/.codex/config.toml`
 (matched before the first `[section]` so a nested profile key isn't mistaken for
-the global default). **`codex exec resume` does not accept `--sandbox`** — only
-`--dangerously-bypass-approvals-and-sandbox` — so a resumed turn under
-`acceptEdits` runs on Codex's own default sandbox rather than `workspace-write`.
-`exec` and `exec resume` carry genuinely different option sets, so each is probed
-for `--approve-for-me` separately; assuming the two agree is a live bug, not a
-hypothetical one.
+the global default). **`codex exec resume` does not accept `--sandbox`** — the
+flag is simply absent from that subcommand's option set. The sandbox therefore
+goes through `-c sandbox_mode="workspace-write"` on resumed turns, which every
+`codex exec` form accepts. That is also what closed the older hole where a
+resumed `acceptEdits` turn quietly fell back to Codex's default sandbox.
 
 **Claude Code (`engines/claude-code.ts`).** `--permission-mode` advertises its
 modes as a `(choices: …)` list that **wraps across four lines** of `--help`

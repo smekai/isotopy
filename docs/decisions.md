@@ -23,10 +23,26 @@ is about to start long-lived processes on a stranger's machine, so the system
 needed an opinion about blast radius first.
 
 **Decision:** a third permission tier, `autoReview`, asks each CLI to use **its own**
-auto-review mode — Claude's `--permission-mode auto`, Codex's `--approve-for-me`
-— and falls back to today's `skip` behaviour, with a stage-log notice, on a build
-that has none. Support is a **runtime probe of the installed binary**, because the
-flag's existence is a property of the build rather than of the engine.
+auto-review mode — Claude's `--permission-mode auto`, Codex's documented
+`approvals_reviewer = "auto_review"` over a `workspace-write` sandbox — and falls
+back to today's `skip` behaviour, with a stage-log notice, only where a CLI has no
+such mode at all.
+
+**How support is decided differs per engine, on purpose.** Claude's auto-review is
+a *flag value*, and an unknown value is a hard CLI error, so it is probed from
+`--help`. Codex's is *configuration* passed with `-c`, which has no help listing to
+read and is tolerated when unrecognised — and its fallback is safe by construction,
+because a build that ignores the key still runs sandboxed. Probing where a wrong
+guess breaks the run, and relying on graceful config degradation where it cannot,
+is the rule; a uniform mechanism would have meant either a needless subprocess or
+an unsound guess.
+
+**Rejected — gating Codex on a `--approve-for-me` flag**, which is what this change
+originally shipped. The flag appears in third-party write-ups but is in neither the
+CLI reference nor the 0.144.6 binary; the binary's own help text documents
+`approvals_reviewer` and its `auto_review` subagent. Gating on it meant a requested
+*safety* mode silently became `--dangerously-bypass-approvals-and-sandbox` — strictly
+wider blast radius than the user asked for. Caught in review on PR #38.
 
 **Rejected — routing approvals to the Orchestrator**, which is what the task
 originally asked for. Only Claude offers a live channel (`--permission-prompt-tool`,
@@ -35,12 +51,11 @@ all, and `runSubprocess` writes stdin once and closes it. Delivering it would me
 a new park/resume state and a rewritten subprocess seam inside the milestone whose
 rule is *stop adding*. The channel remains buildable later; nothing here forecloses it.
 
-**Rejected — falling back to `--sandbox workspace-write` on Codex.** It is already
-what `acceptEdits` emits, so two tiers would be byte-identical while hiding the fact
-that auto-review was unavailable; and `workspace-write` denies escalation rather
-than queueing it, so silently degrading a user into it turns a run that needed to
-install a dependency into a failed one. Degrading to the mode the user would
-otherwise have chosen is the honest default.
+**On degrading to `skip`:** it remains the fallback where a CLI genuinely has no
+auto-review, because it is the mode the user would otherwise have chosen. It is
+*not* used where a safer expressible option exists — the Codex correction above is
+exactly that case, and the rule it settles is that a degradation must never widen
+the blast radius beyond what was requested.
 
 **Rejected — reaching Cursor's Auto-review.** It is real, but selected by the
 `approvalMode` key in `~/.cursor/cli-config.json` rather than by a flag. Writing it

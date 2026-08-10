@@ -29,11 +29,6 @@ const CLAUDE_HELP_WITHOUT_AUTO = [
   '                                        (choices: "acceptEdits", "plan")',
 ].join("\n");
 
-const CODEX_HELP_WITH_AUTO_REVIEW = "      --approve-for-me\n          Auto-review approvals\n";
-
-const CODEX_HELP_WITHOUT_AUTO_REVIEW =
-  "      --dangerously-bypass-approvals-and-sandbox\n          Skip all prompts\n";
-
 const PATH_ENV: Record<EngineId, string> = {
   "claude-code": "ADHD_CLAUDE_PATH",
   codex: "ADHD_CODEX_PATH",
@@ -124,28 +119,39 @@ describe("claude-code", () => {
 });
 
 describe("codex", () => {
-  test("passes the auto-review flag when its exec help offers it", async () => {
-    // Arrange
-    writeHelp(HELP_FILE, CODEX_HELP_WITH_AUTO_REVIEW);
-
+  test("routes escalations to Codex's own reviewer instead of denying them", async () => {
     // Act
     await runAdapter("codex", "autoReview");
 
     // Assert
-    expect(runArgv()).toContain("--approve-for-me");
+    expect(runArgv()).toContain('approvals_reviewer="auto_review"');
+    expect(runArgv()).toContain('approval_policy="on-request"');
   });
 
-  test("a resumed turn probes `exec resume`, so a flag only `exec` offers never reaches it", async () => {
-    // Arrange — the two subcommands carry genuinely different option sets.
-    writeHelp(HELP_FILE, CODEX_HELP_WITH_AUTO_REVIEW);
-    writeHelp(RESUME_HELP_FILE, CODEX_HELP_WITHOUT_AUTO_REVIEW);
+  test("auto-review keeps a real sandbox rather than trading safety for a reviewer", async () => {
+    // Act
+    await runAdapter("codex", "autoReview");
 
+    // Assert
+    expect(runArgv()).toContain("--sandbox workspace-write");
+    expect(runArgv()).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+  });
+
+  test("a resumed turn still gets a sandbox, which `exec resume` refuses as a flag", async () => {
     // Act
     await runAdapter("codex", "autoReview", "session-42");
 
+    // Assert — `--sandbox` is rejected on resume, so the boundary goes via config.
+    expect(runArgv()).toContain('sandbox_mode="workspace-write"');
+    expect(runArgv()).not.toContain("--sandbox workspace-write");
+  });
+
+  test("a resumed accept-edits turn no longer drops to Codex's default sandbox", async () => {
+    // Act
+    await runAdapter("codex", "acceptEdits", "session-43");
+
     // Assert
-    expect(runArgv()).not.toContain("--approve-for-me");
-    expect(runArgv()).toContain("--dangerously-bypass-approvals-and-sandbox");
+    expect(runArgv()).toContain('sandbox_mode="workspace-write"');
   });
 });
 

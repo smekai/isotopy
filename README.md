@@ -120,6 +120,14 @@ pnpm --filter @adhd/server dev   # API only
 pnpm --filter @adhd/ui dev       # UI only
 ```
 
+To run the built app instead of the dev servers, build once and start it — the
+server serves the compiled UI itself, so the whole app is on **one** port
+(http://localhost:9477) with no Vite process:
+
+```bash
+pnpm build && pnpm start
+```
+
 Other commands:
 
 ```bash

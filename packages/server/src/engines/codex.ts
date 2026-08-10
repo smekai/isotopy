@@ -2,21 +2,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
+import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import type { PermissionPlan, PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { codexConfigModel } from "../schemas/engine-cli-config.ts";
-import { helpAdvertisesFlag } from "../schemas/engine-cli-help.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseCodexProtocolLine } from "./codex-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
-import {
-  clearAutoReviewCache,
-  probeAutoReview,
-  resolvePermissionPlan,
-} from "./permission-mode.ts";
-import type { AutoReviewProbe } from "./permission-mode.ts";
+import { resolvePermissionPlan } from "./permission-mode.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
 import {
   applyProtocolUpdate,
@@ -46,18 +40,18 @@ interface ResolvedBinary {
 
 let cachedBinary: ResolvedBinary | undefined;
 
-const AUTO_REVIEW_FLAG = "--approve-for-me";
+const WORKSPACE_SANDBOX = ["--sandbox", "workspace-write"];
 
-const AUTO_REVIEW_PROBES: Record<"exec" | "resume", AutoReviewProbe> = {
-  exec: {
-    helpArgs: ["exec", "--help"],
-    advertised: (help) => helpAdvertisesFlag(help, AUTO_REVIEW_FLAG),
-  },
-  resume: {
-    helpArgs: ["exec", "resume", "--help"],
-    advertised: (help) => helpAdvertisesFlag(help, AUTO_REVIEW_FLAG),
-  },
-};
+const WORKSPACE_SANDBOX_CONFIG = ["-c", 'sandbox_mode="workspace-write"'];
+
+const AUTO_REVIEW_CONFIG = [
+  "-c",
+  'approval_policy="on-request"',
+  "-c",
+  'approvals_reviewer="auto_review"',
+];
+
+const AUTO_REVIEW_CONFIGURABLE = (): Promise<AutoReviewSupport> => Promise.resolve("available");
 
 function pickBinaryLine(output: string): string | undefined {
   const lines = output
@@ -139,9 +133,9 @@ function permissionArgs(strategy: PermissionStrategy): string[] {
     case "unrestricted":
       return ["--dangerously-bypass-approvals-and-sandbox"];
     case "autoReview":
-      return [AUTO_REVIEW_FLAG];
+      return [...WORKSPACE_SANDBOX, ...AUTO_REVIEW_CONFIG];
     case "acceptEdits":
-      return ["--sandbox", "workspace-write"];
+      return WORKSPACE_SANDBOX;
     default: {
       const unreachable: never = strategy;
       return unreachable;
@@ -150,7 +144,18 @@ function permissionArgs(strategy: PermissionStrategy): string[] {
 }
 
 function resumePermissionArgs(strategy: PermissionStrategy): string[] {
-  return strategy === "acceptEdits" ? [] : permissionArgs(strategy);
+  switch (strategy) {
+    case "unrestricted":
+      return ["--dangerously-bypass-approvals-and-sandbox"];
+    case "autoReview":
+      return [...WORKSPACE_SANDBOX_CONFIG, ...AUTO_REVIEW_CONFIG];
+    case "acceptEdits":
+      return WORKSPACE_SANDBOX_CONFIG;
+    default: {
+      const unreachable: never = strategy;
+      return unreachable;
+    }
+  }
 }
 
 function buildArgs(ctx: EngineRunContext, plan: PermissionPlan): string[] {
@@ -211,7 +216,6 @@ export const codexAdapter: EngineAdapter = {
 
   async detect(): Promise<EngineStatus> {
     cachedBinary = undefined;
-    clearAutoReviewCache();
     let resolved: ResolvedBinary;
     try {
       resolved = resolveCodexBinary();
@@ -265,7 +269,6 @@ export const codexAdapter: EngineAdapter = {
     });
     if (result.success) {
       cachedBinary = undefined;
-      clearAutoReviewCache();
       return {
         ok: true,
         output: firstLine(result.stdout),
@@ -288,12 +291,7 @@ export const codexAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
-    const plan = await resolvePermissionPlan("codex", ctx, () =>
-      probeAutoReview(
-        binary,
-        ctx.resumeSessionId ? AUTO_REVIEW_PROBES.resume : AUTO_REVIEW_PROBES.exec,
-      ),
-    );
+    const plan = await resolvePermissionPlan("codex", ctx, AUTO_REVIEW_CONFIGURABLE);
 
     const runCtx = withPersonaPrompt(ctx);
 
