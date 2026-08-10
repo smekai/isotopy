@@ -78,8 +78,9 @@ Keeping it out of `createApp` also keeps every component test on a plain API app
 Mounting is additionally gated on **actually running the compiled build** — the
 module checks that its own directory sits under `dist/` — so a developer who has
 built once does not start silently serving a stale bundle from `pnpm dev`.
-`ADHD_UI_DIR` overrides the location and bypasses that gate, which is how the
-tests drive it. `serveStatic` rejects absolute roots, so the path is made
+`ADHD_UI_DIR` overrides the location and bypasses that gate, which is what lets
+a bundle live somewhere other than the sibling `ui` package.
+`serveStatic` rejects absolute roots, so the path is made
 relative to `process.cwd()`; if that is impossible (a different drive on
 Windows) the server logs and stays a plain API rather than failing to start.
 

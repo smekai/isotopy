@@ -135,12 +135,12 @@ and points `baseURL` at the server port — one process, one origin, no Vite. Th
 rebuild is deliberate: a stale `dist` passing for current source is the whole
 hazard of testing a build artifact.
 
-Three tests, and what they buy over
-[`built-ui.comp.ts`](../packages/server/test/built-ui.comp.ts) is a browser that
-actually *executes* the bundle — MIME types, hashed asset paths, React mounting,
-and same-origin API calls with no proxy in front. The comp test keeps only what
-a browser suite covers badly: a build that is absent entirely, and an API route
-the `/*` static middleware must not swallow.
+Three tests, and this is the **only** coverage of the compiled artifact. A comp
+test over the same code could assert the server answers with the bundle, but not
+the part that actually breaks: whether a browser *executes* it — MIME types,
+hashed asset paths, React mounting, same-origin API calls with no proxy in
+front. Asserting status codes a layer down only restates the server's answer, so
+that layer was removed rather than kept alongside this one.
 
 ## Live tier (opt-in)
 

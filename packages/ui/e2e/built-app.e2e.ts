@@ -11,10 +11,10 @@ import { collectConsoleErrors } from "./support/console-errors";
 // `pnpm build && pnpm start` produces something a person can open. It used to
 // produce an API and an unserved bundle, and no test noticed.
 //
-// The cheaper layer (packages/server/test/built-ui.comp.ts) asserts the server
-// answers with the bundle. What no cheaper layer can tell us is whether a real
-// browser *executes* it: correct MIME types, hashed asset paths resolving, the
-// SPA mounting, and same-origin API calls succeeding with no Vite proxy in front.
+// This is the only coverage of that path, and deliberately so: a cheaper layer
+// could assert the server answers with the bundle, but not that a real browser
+// *executes* it — correct MIME types, hashed asset paths resolving, the SPA
+// mounting, and same-origin API calls succeeding with no Vite proxy in front.
 //
 //   ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
 
