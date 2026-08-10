@@ -292,10 +292,21 @@ test("a proposal whose feature has no acceptance criteria is refused", async () 
 });
 
 /**
- * Nine reports, one per Full Delivery stage. The gate after intake is approved
- * separately; every stage here reports a PASS so the run reaches closeout.
+ * One report per Full Delivery stage that reaches an engine — the deploy box
+ * does not, because ADHD runs the preview deployment itself. The gate after
+ * intake is approved separately; every stage here reports a PASS so the run
+ * reaches closeout.
  */
 function anticipateFullDelivery(label: string): void {
+  const release = {
+    summary: "Feature is ready to release",
+    changes: ["Delivered the feature"],
+    changelogFragment: "Delivered the feature",
+    checklist: ["Confirm the feature works"],
+    compatibilityNotes: [],
+    deploymentInputs: [],
+    rollbackNotes: [],
+  };
   const closeout = {
     summary: "Feature delivered",
     deliveredScope: [],
@@ -315,8 +326,9 @@ function anticipateFullDelivery(label: string): void {
   ctx.engine.anticipate({ as: `${label} implementation` }).reports("Built it");
   ctx.engine.anticipate({ as: `${label} review` }).reports("Fine\n\nVERDICT: PASS");
   ctx.engine.anticipate({ as: `${label} test` }).reports("Checked\n\nVERDICT: PASS");
-  ctx.engine.anticipate({ as: `${label} release` }).reports("Ready\n\nVERDICT: PASS");
-  ctx.engine.anticipate({ as: `${label} deploy` }).reports("No target\n\nVERDICT: SKIP");
+  ctx.engine
+    .anticipate({ as: `${label} release` })
+    .reports(`\`\`\`adhd-release\n${JSON.stringify(release)}\n\`\`\`\n\nVERDICT: PASS`);
   ctx.engine
     .anticipate({ as: `${label} closeout` })
     .reports(

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ENGINE_IDS } from "./engines.ts";
 import type { EngineId, ModelTier } from "./engines.ts";
+import type { DeploymentResult, RunReleaseRecord } from "./automation.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
 import type { RunArtifactRecord } from "./run-artifacts.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
@@ -192,6 +193,8 @@ export interface RunState {
   orchestrationId?: string;
   sourceTaskIds?: string[];
   closeout?: RunCloseoutRecord;
+  release?: RunReleaseRecord;
+  deployment?: DeploymentResult;
   artifacts?: RunArtifactRecord;
   pipelineId: string;
   pipelineName: string;

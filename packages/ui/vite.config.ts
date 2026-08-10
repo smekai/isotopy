@@ -15,6 +15,7 @@ const API_PROXY_PATHS = [
   "/health",
   "/settings",
   "/engines",
+  "/automation",
   "/fs",
 ];
 

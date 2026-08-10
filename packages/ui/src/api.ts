@@ -1,6 +1,8 @@
 import type {
+  DeploymentRecord,
   Milestone,
   MilestonePlan,
+  ProjectAutomationConfig,
   EngineModelRoster,
   EngineStatus,
   LimitResolution,
@@ -18,6 +20,7 @@ import type {
 import {
   DEFAULT_PIPELINE_ID,
   HOME_PROJECT_ID,
+  PRODUCTION_DEPLOYMENT_CONFIRMATION,
   RUN_EVENT_TYPES,
   RUN_SUMMARY_EVENT,
 } from "@adhd/core";
@@ -94,6 +97,26 @@ export function updatePreferences(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
+  });
+}
+
+export function fetchAutomationConfig(): Promise<ProjectAutomationConfig> {
+  return requestJson<ProjectAutomationConfig>("/automation");
+}
+
+export function updateAutomationConfig(
+  config: ProjectAutomationConfig,
+): Promise<ProjectAutomationConfig> {
+  return requestJson<ProjectAutomationConfig>("/automation", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
+export function deployProduction(): Promise<DeploymentRecord> {
+  return postJson<DeploymentRecord>("/automation/deploy/production", {
+    confirmation: PRODUCTION_DEPLOYMENT_CONFIRMATION,
   });
 }
 

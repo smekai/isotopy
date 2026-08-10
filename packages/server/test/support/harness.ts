@@ -10,6 +10,8 @@ import { RUN_SUMMARY_EVENT } from "@adhd/core";
 import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
+import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
+import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { ModelRosterService } from "../../src/services/model-roster-service.ts";
 import { OrchestrationService } from "../../src/services/orchestration-service.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
@@ -64,6 +66,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     registry,
     settings,
     rosters,
+    automation: new AutomationConfigStore(),
+    deployment: new DeploymentRunner(),
   });
 
   return {
@@ -130,6 +134,8 @@ export async function restartApp(): Promise<RestartedApp> {
       registry,
       settings,
       rosters,
+      automation: new AutomationConfigStore(),
+      deployment: new DeploymentRunner(),
     }),
     orchestrator,
     orchestrations,

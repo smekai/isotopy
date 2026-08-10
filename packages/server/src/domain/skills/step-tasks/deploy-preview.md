@@ -1,14 +1,14 @@
 # Assignment: Deploy the preview environment
 
-Inspect the project deployment configuration. If no preview or staging target
-is configured, record that fact and end with exactly `VERDICT: SKIP`.
+ADHD runs this assignment itself, from the project's automation configuration —
+no agent is started for it. When no preview target is configured the stage ends
+with `SKIP` rather than spending an engine turn on it.
 
-Otherwise deploy only the configured preview or staging target, verify its
-health, and report the URL, executed command, relevant logs, operational risk,
-and rollback instructions. Use explicit executable and argument arrays with
-the correct Windows or POSIX override. Clean up only processes and temporary
-resources started by this run.
+When a preview target is configured, ADHD runs its configured executable and
+argument array with the correct Windows or POSIX override, reads back a single
+`ADHD_DEPLOY_URL=https://…` line if the command prints one, verifies the
+resulting URL against the configured health check, and stores the command, URL,
+logs, and verdict as run evidence.
 
-Never deploy production, improvise a shell command, or deploy with unresolved
-blocking findings. End with exactly `VERDICT: PASS` when preview verification
-succeeds, otherwise `VERDICT: FAIL`.
+Production is never deployed here. It is a separate, explicitly confirmed action
+in Setup.

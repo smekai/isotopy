@@ -15,6 +15,35 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-10 — Deploying a preview is ADHD's job, not an agent's
+
+**Context:** Full Delivery carried an SRE box whose step task told an agent to find the
+project's deployment configuration, run it, verify it, and report. There was no such
+configuration to find, so the box existed to end in `SKIP`. `TASK-126` then needed a start
+command, readiness check and port strategy in order to show a user what a run built, and
+those are the same kind of fact: commands the *project* owns.
+
+**Decision:** project-owned commands live in `.adhd/automation.json` — validation, UI
+start, preview and production deployment — as executable-plus-argument arrays with
+per-platform overrides, never shell strings. ADHD executes the preview deployment itself:
+any stage whose step task is `deploy-preview` runs deterministically from that
+configuration, and no engine turn is spent. Keying on the **step task** rather than on
+`pipelineId === "full-delivery"` is deliberate — an Orchestrator-composed team that gives
+a role the same assignment gets the same deterministic behaviour, which is what makes the
+step task the unit of meaning rather than the pipeline.
+
+**Rejected:** letting the agent run the deploy command. It reads a configuration it did
+not write, in a stage that costs money to reach, to do something with a blast radius —
+and every failure mode becomes a prompt-engineering problem instead of a typed one.
+
+**Rejected:** re-implementing a quality gate for deployment. The `delivery` execution
+policy already suppresses `release` and `deploy` unless the run is whole; a second gate
+would be a second thing to keep true.
+
+**Production stays human-gated:** outside Full Delivery, outside milestone autorun, behind
+a browser confirmation *and* a literal `DEPLOY PRODUCTION` string in the request body.
+Preview automation is only safe to turn on because production cannot be reached this way.
+
 ## 2026-08-09 — A model choice is an intent, resolved per engine, not an id
 
 **Context:** `TASK-117` lost a run to a model the account rejected — the shipped Codex

@@ -8,6 +8,7 @@ import {
   resolveTier,
 } from "@adhd/core";
 import type {
+  DeploymentAutomation,
   EffortLevel,
   EngineId,
   OrchestratorBrokerDecision,
@@ -16,6 +17,7 @@ import type {
   RunArtifacts,
   RunState,
   StageDefinition,
+  StageVerdict,
 } from "@adhd/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
@@ -87,6 +89,125 @@ function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
 
 function engineLabel(run: RunState): string {
   return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
+}
+
+export const PREVIEW_DEPLOY_STEP_TASK = "deploy-preview";
+
+function isDeterministicPreviewDeploy(stageDef: StageDefinition, turn: StageTurn): boolean {
+  return stageDef.stepTask === PREVIEW_DEPLOY_STEP_TASK && turn.index === 0;
+}
+
+async function previewTarget(
+  deps: WorkflowDeps,
+  run: RunState,
+): Promise<DeploymentAutomation | undefined> {
+  return (await deps.automation.get(deps.registry.resolve(run.projectId))).preview;
+}
+
+async function runPreviewDeployment(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+  startedAt: string,
+): Promise<StageResult> {
+  const { projection } = deps;
+  projection.stageStarted(run.id, stageDef.id);
+  projection.log(run.id, stageDef.id, {
+    level: "run",
+    message: `${agentForStage(stageDef.id).profession} deploying the preview from project automation`,
+  });
+
+  let target: DeploymentAutomation | undefined;
+  try {
+    target = await previewTarget(deps, run);
+  } catch (error) {
+    return failedDeployment(deps, run, stageDef, startedAt, messageOf(error));
+  }
+
+  if (target === undefined) {
+    projection.log(run.id, stageDef.id, {
+      level: "warn",
+      message: "No preview deployment target is configured — nothing to deploy",
+    });
+    projection.setVerdict(run.id, stageDef.id, STAGE_VERDICTS.SKIP);
+    projection.stageSkipped(run.id, stageDef.id);
+    return {
+      outcome: STAGE_OUTCOMES.SKIPPED,
+      verdict: STAGE_VERDICTS.SKIP,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
+
+  const controller = deps.beginEngineStage(run.id);
+  const logLines: string[] = [];
+  try {
+    const result = await deps.deployment.run({
+      project: deps.registry.resolve(run.projectId),
+      environment: "preview",
+      target,
+      signal: controller.signal,
+      onLine: (stream, line) => {
+        logLines.push(`[${stream}] ${line}`);
+        projection.log(run.id, stageDef.id, {
+          level: stream === "stderr" ? "warn" : "info",
+          message: line,
+        });
+      },
+    });
+    if (deps.isCancelled(run.id)) {
+      return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };
+    }
+    await projection.captureDeployment(run.id, stageDef, result, logLines);
+    if (result.verdict === "fail") {
+      return failedDeployment(
+        deps,
+        run,
+        stageDef,
+        startedAt,
+        result.failureMessage ?? "Preview deployment failed",
+        STAGE_VERDICTS.FAIL,
+      );
+    }
+    projection.setVerdict(run.id, stageDef.id, STAGE_VERDICTS.PASS);
+    projection.log(run.id, stageDef.id, {
+      level: "pass",
+      message: result.url === undefined
+        ? "Preview deployment verified"
+        : `Preview deployment verified — ${result.url}`,
+    });
+    projection.stagePassed(run.id, stageDef.id);
+    return {
+      outcome: STAGE_OUTCOMES.PASSED,
+      verdict: STAGE_VERDICTS.PASS,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  } catch (error) {
+    return failedDeployment(deps, run, stageDef, startedAt, messageOf(error));
+  } finally {
+    deps.endEngineStage(run.id);
+  }
+}
+
+function failedDeployment(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+  startedAt: string,
+  message: string,
+  verdict?: StageVerdict,
+): StageResult {
+  if (verdict !== undefined) {
+    deps.projection.setVerdict(run.id, stageDef.id, verdict);
+  }
+  deps.projection.stageFailed(run.id, stageDef.id, message);
+  return {
+    outcome: STAGE_OUTCOMES.FAILED,
+    ...(verdict === undefined ? {} : { verdict }),
+    startedAt,
+    completedAt: nowIso(),
+  };
 }
 
 async function runAdapter(
@@ -379,7 +500,13 @@ export async function runStageWork(
   const { runId } = input;
   const startedAt = nowIso();
   const run = projection.getRun(runId);
-  if (!run || !run.engine) {
+  if (!run) {
+    return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
+  }
+  if (isDeterministicPreviewDeploy(stageDef, turn)) {
+    return runPreviewDeployment(deps, run, stageDef, startedAt);
+  }
+  if (!run.engine) {
     return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
   }
   const profession = agentForStage(stageDef.id).profession;

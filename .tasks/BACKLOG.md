@@ -367,23 +367,6 @@ Cross-platform: support Windows and macOS capability detection and degrade to Pl
 
 ---
 
-## TASK-092: Release management and preview deployment automation
-**Priority:** P0 | **Tags:** server, adapters, setup, infra, milestone-f
-**Updated:** 2026-08-07 11:40
-
-**Milestone F — Fixpoint, and no longer deferrable.** `TASK-126` needs the start command,
-readiness check and port strategy this task defines in order to run a built product and
-show it. Deferred through Milestones D and E on the grounds that the seam degraded
-honestly without it — that reasoning ends where "see what was built" begins.
-
-Add typed project automation configuration for validation, UI startup, health checks, preview deployment, and production deployment. Make Setup deploy cards functional. Release Manager produces a manifest and checklist; SRE deploys preview only after quality passes and keeps production explicitly human-gated.
-
-**Deliberately outside the Milestone D MVP.** The Full Delivery pipeline already carries the `release` and `deploy` stages, and their step-tasks end with `VERDICT: SKIP` when no target is configured — so the seam exists and degrades honestly without this task. Deferring it is also why TASK-093 presents neither deploy URLs nor QA screenshot/trace evidence.
-
-Cross-platform: use executable-plus-argument arrays, `runSubprocess`, and Windows/POSIX overrides without shell-only commands.
-
----
-
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P3 | **Tags:** server, engine, infra
 **Updated:** 2026-08-07 11:40

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import nodepath from "node:path";
 import type {
+  DeploymentResult,
   EngineId,
   EngineLimit,
   LimitChoice,
@@ -35,17 +34,22 @@ import {
 } from "@adhd/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
+import { ReleaseConsumer } from "../consumers/release-consumer.ts";
 import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
+import { AutomationConfigStore } from "../automation-config-store.ts";
+import { DeploymentRunner } from "../deployment-runner.ts";
+import {
+  cleanupCancelledRun,
+  persistRunArtifacts,
+  persistRunDeploymentArtifacts,
+} from "../run-evidence.ts";
+import { renderDeploymentResult } from "../../domain/markdown/release.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
 import { OrchestratorRequiredError } from "../../domain/orchestrator-required-error.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
-import { ensureProjectDataDir, resolveWorkspace, runsDir } from "../../paths.ts";
+import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
-import {
-  renderCancelledCleanupReport,
-  renderRunArtifacts,
-} from "../../domain/markdown/closeout.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { ModelRosterService } from "../model-roster-service.ts";
 import { unknownModelMessage } from "../../domain/rules/model-roster.ts";
@@ -86,6 +90,8 @@ export class RunService implements RunProjection {
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly settings: SettingsStore;
   private readonly rosters: ModelRosterService;
+  private readonly automation = new AutomationConfigStore();
+  private readonly deployment = new DeploymentRunner();
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
@@ -103,6 +109,7 @@ export class RunService implements RunProjection {
     this.milestones = new MilestoneService(registry, () => this);
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
+      new ReleaseConsumer(this.registry),
       new CloseoutConsumer(this.registry),
     ];
     const deps: WorkflowDeps = {
@@ -110,6 +117,8 @@ export class RunService implements RunProjection {
       registry: this.registry,
       settings: this.settings,
       rosters: this.rosters,
+      automation: this.automation,
+      deployment: this.deployment,
       orchestration: () => this.orchestration,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
@@ -756,6 +765,25 @@ export class RunService implements RunProjection {
     return rejection;
   }
 
+  async captureDeployment(
+    runId: string,
+    stageDef: StageDefinition,
+    result: DeploymentResult,
+    logLines: string[],
+  ): Promise<void> {
+    const run = this.live(runId);
+    if (!run) return;
+    run.deployment = result;
+    await this.captureStageOutput(runId, stageDef, renderDeploymentResult(result));
+    await persistRunDeploymentArtifacts(
+      this.registry.resolve(run.projectId),
+      runId,
+      result,
+      logLines,
+    );
+    void this.store.flushPersist(runId);
+  }
+
   async captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void> {
     const run = this.live(runId);
     if (!run) return;
@@ -950,35 +978,3 @@ type RunSummaryListener = (summary: RunSummary) => void;
 const ORCHESTRATION_PIPELINE_ID = "orchestration";
 const UNKNOWN_ENGINE_LABEL = "unknown";
 
-async function persistRunArtifacts(
-  projectPath: ProjectPath,
-  runId: string,
-  record: RunArtifactRecord,
-): Promise<void> {
-  const artifactsDir = nodepath.join(runsDir(projectPath), runId, "artifacts");
-  await mkdir(artifactsDir, { recursive: true });
-  await Promise.all([
-    writeFile(
-      nodepath.join(artifactsDir, "artifacts.json"),
-      `${JSON.stringify(record, null, 2)}\n`,
-    ),
-    writeFile(
-      nodepath.join(artifactsDir, "artifacts.md"),
-      renderRunArtifacts(record.report),
-    ),
-  ]);
-}
-
-async function cleanupCancelledRun(
-  projectPath: ProjectPath,
-  runId: string,
-): Promise<void> {
-  const tempRoot = nodepath.join(runsDir(projectPath), runId, "tmp");
-  await rm(tempRoot, { recursive: true, force: true, maxRetries: 3 });
-  const closeoutDir = nodepath.join(runsDir(projectPath), runId, "closeout");
-  await mkdir(closeoutDir, { recursive: true });
-  await writeFile(
-    nodepath.join(closeoutDir, "cleanup-report.md"),
-    renderCancelledCleanupReport(),
-  );
-}
