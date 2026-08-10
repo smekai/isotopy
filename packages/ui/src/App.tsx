@@ -531,6 +531,7 @@ export function App() {
       {setupSection && (
         <SetupModal
           d={d}
+          projectId={projectId}
           projectName={projects.active?.name ?? "Home"}
           settings={settings}
           section={setupSection}

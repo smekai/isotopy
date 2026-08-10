@@ -1,4 +1,5 @@
 import type {
+  DeploymentResult,
   EngineId,
   EngineLimit,
   EnginePermissionMode,
@@ -19,6 +20,8 @@ import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
+import type { AutomationConfigStore } from "../services/automation-config-store.ts";
+import type { DeploymentRunner } from "../services/deployment-runner.ts";
 import type { ModelRosterService } from "../services/model-roster-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
@@ -94,6 +97,12 @@ export interface RunProjection {
     output: string,
   ): Promise<StageOutputRejection | undefined>;
   applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void;
+  captureDeployment(
+    runId: string,
+    stageDef: StageDefinition,
+    result: DeploymentResult,
+    logLines: string[],
+  ): Promise<void>;
   captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void>;
   runCompleted(runId: string, status: RunCompletionStatus): void;
 }
@@ -152,6 +161,8 @@ export interface WorkflowDeps {
   registry: ProjectRegistry;
   settings: SettingsStore;
   rosters: ModelRosterService;
+  automation: AutomationConfigStore;
+  deployment: DeploymentRunner;
   orchestration(): OrchestrationHooks | undefined;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;

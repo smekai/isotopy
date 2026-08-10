@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { config } from "./config.ts";
+import { createAutomationRoutes } from "./routes/automation.ts";
 import { createEngineRoutes } from "./routes/engines.ts";
 import { fsRoutes } from "./routes/fs.ts";
 import { healthRoutes } from "./routes/health.ts";
@@ -10,6 +11,8 @@ import { createOrchestrationRoutes } from "./routes/orchestrations.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
 import { createRunRoutes } from "./routes/runs.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
+import type { AutomationConfigStore } from "./services/automation-config-store.ts";
+import type { DeploymentRunner } from "./services/deployment-runner.ts";
 import type { MilestoneService } from "./services/milestone-service.ts";
 import type { ModelRosterService } from "./services/model-roster-service.ts";
 import type { OrchestrationService } from "./services/orchestration-service.ts";
@@ -24,6 +27,8 @@ export interface AppDependencies {
   registry: ProjectRegistry;
   settings: SettingsStore;
   rosters: ModelRosterService;
+  automation: AutomationConfigStore;
+  deployment: DeploymentRunner;
 }
 
 export function createApp({
@@ -33,6 +38,8 @@ export function createApp({
   registry,
   settings,
   rosters,
+  automation,
+  deployment,
 }: AppDependencies): Hono {
   const app = new Hono();
 
@@ -50,6 +57,7 @@ export function createApp({
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", createEngineRoutes(rosters));
   app.route("/settings", createSettingsRoutes(registry, settings));
+  app.route("/automation", createAutomationRoutes(registry, automation, deployment));
   app.route("/runs", createRunRoutes(runs, registry));
   app.route("/fs", fsRoutes);
 

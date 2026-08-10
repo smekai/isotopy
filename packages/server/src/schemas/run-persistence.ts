@@ -1,4 +1,5 @@
 import {
+  deploymentResultSchema,
   ENGINE_IDS,
   MODEL_TIERS,
   PERMISSION_MODE_IDS,
@@ -10,6 +11,7 @@ import {
   runArtifactRecordSchema,
   runCloseoutRecordSchema,
   runEventSchema,
+  runReleaseRecordSchema,
   stageUsageSchema,
   requiredTexts,
   runLimitSchema,
@@ -52,6 +54,8 @@ const runStateSchema = z
     orchestrationId: text.optional(),
     sourceTaskIds: strings.optional(),
     closeout: runCloseoutRecordSchema.optional(),
+    release: runReleaseRecordSchema.optional(),
+    deployment: deploymentResultSchema.optional(),
     artifacts: runArtifactRecordSchema.optional(),
     pipelineId: text,
     pipelineName: text,

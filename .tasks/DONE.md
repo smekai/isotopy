@@ -1,5 +1,52 @@
 # Done
 
+## TASK-092: Release management and preview deployment automation
+**Priority:** P0 | **Tags:** server, adapters, setup, infra, milestone-f
+**Updated:** 2026-08-10 12:30
+
+**What shipped.** A project's own commands now live in `.adhd/automation.json` —
+`validation`, `ui` (start command + readiness URL), `preview` and `production` — as
+executable-plus-argument arrays with per-platform overrides, never shell strings. A
+working directory that is absolute or climbs out of the project is refused when the
+configuration is *saved*, not when the command runs.
+
+The Setup screen's mock "Deploy Target" card became a real **Automation** section: start
+command, validation commands, and a deploy target per environment, each editing the
+command through one shared field set including the Windows executable override.
+
+**The `deploy` box no longer starts an agent.** Any stage whose step task is
+`deploy-preview` is executed by ADHD itself — no target configured ends `SKIP` without
+spending an engine turn; a configured one runs the command, streams its output into the
+stage log, reads back the last `ADHD_DEPLOY_URL=…` line it printed, health-checks the
+resulting URL, and passes only if both the command and the check pass. Keying on the step
+task rather than the pipeline id means an Orchestrator-composed team gets the same
+behaviour. The quality gate was **not** re-implemented: the `delivery` execution policy
+already suppresses `release` and `deploy` unless the run is whole.
+
+The Release Manager's fenced `adhd-release` block became a `ReleaseConsumer` on the
+`TASK-127` stage-output seam, so a handoff written as prose fails the stage instead of
+passing something nothing downstream can read. Production sits outside Full Delivery and
+milestone autorun, behind a browser confirmation *and* a literal `DEPLOY PRODUCTION`
+string in the request body.
+
+**Ported by hand from `feature/release-preview-automation`**, an unmerged branch 92
+commits behind main. Its design survived; its layering did not — boundary parsing moved to
+`schemas/`, pure deployment rules to `domain/rules/`, and the fabricated fallback manifest
+was dropped in favour of the rejection seam that did not exist when it was written. While
+fixing the 1000-line gate on `run-service.ts`, its two evidence writers joined the new
+ones in `services/run-evidence.ts` — one place that knows the on-disk layout of a run.
+
+Verified against the real server and UI: `/automation` proxied and answering, an escaping
+`cwd` refused with a path-aware issue, the Vercel preset populating `npx` plus the
+`npx.cmd` Windows override. Gates green: lint, typecheck, 645 tests (31 new), build,
+59 e2e. Decisions in `docs/decisions.md`; the contract in `docs/project-automation.md`.
+Version 0.9.29.
+
+**Follow-on:** the `ui` block is stored and editable but nothing consumes it yet —
+`TASK-126` is what turns it into "run the product and show it".
+
+---
+
 ## TASK-129: Model rosters must not offer ids the user's plan rejects
 **Priority:** P1 | **Tags:** core, engine, server, milestone-f
 **Updated:** 2026-08-09 20:55

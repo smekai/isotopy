@@ -5,18 +5,18 @@ import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, RADIUS, SANS, SPACE, WEIGHT, Z } from "../../theme";
 import type { Dir } from "../../theme";
 import { AppearanceSection } from "./AppearanceSection";
-import { DeploySection } from "./DeploySection";
+import { AutomationSection } from "./AutomationSection";
 import { GatesSection } from "./GatesSection";
 import { HarnessSection } from "./HarnessSection";
 import { FLEX_FILL, WHITE, mutedCaption } from "./setup-styles";
 
-export type SetupSection = "harness" | "gates" | "appearance" | "deploy";
+export type SetupSection = "harness" | "gates" | "appearance" | "automation";
 
 const SECTIONS: { id: SetupSection; label: string }[] = [
   { id: "harness", label: "AI Harness" },
   { id: "gates", label: "Gates" },
   { id: "appearance", label: "Appearance" },
-  { id: "deploy", label: "Deploy Target" },
+  { id: "automation", label: "Automation" },
 ];
 
 const SCRIM = "rgba(30,27,75,0.20)";
@@ -103,6 +103,7 @@ const BODY: CSSProperties = { flex: 1, overflowY: "auto", padding: SPACE.x4l };
 
 export interface SetupModalProps {
   d: Dir;
+  projectId: string;
   projectName: string;
   settings: SettingsController;
   section?: SetupSection;
@@ -111,6 +112,7 @@ export interface SetupModalProps {
 
 export function SetupModal({
   d,
+  projectId,
   projectName,
   settings,
   section = "harness",
@@ -143,7 +145,7 @@ export function SetupModal({
           {sec === "harness" && (
             <HarnessSection d={d} projectName={projectName} settings={settings} />
           )}
-          {sec === "deploy" && <DeploySection d={d} />}
+          {sec === "automation" && <AutomationSection d={d} projectId={projectId} />}
         </div>
       </div>
     </div>
