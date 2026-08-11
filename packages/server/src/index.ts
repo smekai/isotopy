@@ -8,7 +8,6 @@ import { OrchestrationService } from "./services/orchestration-service.ts";
 import { ProjectRegistry } from "./services/project-registry.ts";
 import { RunService } from "./services/run/run-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
-import { mountBuiltUi } from "./utils/built-ui.ts";
 
 const registry = new ProjectRegistry();
 const settings = new SettingsStore();
@@ -23,22 +22,18 @@ runs.registerOrchestration(orchestrations);
 await orchestrations.init();
 await runs.init();
 
-const app = createApp({
-  runs,
-  milestones: runs.milestones,
-  orchestrations,
-  registry,
-  settings,
-  rosters,
-  automation,
-  deployment,
-});
-
-await mountBuiltUi(app);
-
 serve(
   {
-    fetch: app.fetch,
+    fetch: createApp({
+      runs,
+      milestones: runs.milestones,
+      orchestrations,
+      registry,
+      settings,
+      rosters,
+      automation,
+      deployment,
+    }).fetch,
     hostname: config.host,
     port: config.port,
   },

@@ -121,26 +121,24 @@ initiative's runs on `data-run-id`.
 
 ## Built tier (opt-in)
 
-Every other tier boots `pnpm dev` — Vite serves the UI and proxies the API — so
-none of them can see the compiled server serving its own bundle, which is inert
-outside a build. That is how `pnpm build` came to emit an API and an unserved
-bundle with nothing noticing. Free, no tokens, but it rebuilds first:
+Every other tier boots `pnpm dev`, so none of them sees the compiled artifact at
+all — which is how `pnpm build` came to emit a server and a UI bundle that
+nothing served, with no test noticing. Free, no tokens, but it rebuilds first:
 
 ```bash
 ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
 ```
 
-`ADHD_E2E_BUILT=1` swaps the Playwright web server to `pnpm build && pnpm start`
-and points `baseURL` at the server port — one process, one origin, no Vite. The
-rebuild is deliberate: a stale `dist` passing for current source is the whole
-hazard of testing a build artifact.
+`ADHD_E2E_BUILT=1` swaps the Playwright web server to `pnpm build && pnpm start`,
+which runs `vite preview` over `dist/` in place of the dev server. Ports and
+proxy are unchanged, so `baseURL` is the same as every other tier. The rebuild is
+deliberate: a stale `dist` passing for current source is the whole hazard of
+testing a build artifact.
 
-Three tests, and this is the **only** coverage of the compiled artifact. A comp
-test over the same code could assert the server answers with the bundle, but not
-the part that actually breaks: whether a browser *executes* it — MIME types,
-hashed asset paths, React mounting, same-origin API calls with no proxy in
-front. Asserting status codes a layer down only restates the server's answer, so
-that layer was removed rather than kept alongside this one.
+Three tests, and this is the **only** coverage of the compiled artifact. A
+component test could assert that a bundle is answered with, but not the part that
+actually breaks: whether a browser *executes* it — MIME types, hashed asset
+paths, React mounting, and the proxied API answering the built page.
 
 ## Live tier (opt-in)
 

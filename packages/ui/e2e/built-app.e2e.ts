@@ -5,16 +5,15 @@ import { collectConsoleErrors } from "./support/console-errors";
 // dev stack. Skipped unless ADHD_E2E_BUILT=1, so `pnpm e2e` keeps testing what
 // developers actually run and needs no build step.
 //
-// Everything else in this suite boots `pnpm dev`: Vite serves the UI and proxies
-// the API. That arrangement can never see the server's own static serving, which
-// is deliberately inert outside a compiled build — so nothing here proved that
-// `pnpm build && pnpm start` produces something a person can open. It used to
-// produce an API and an unserved bundle, and no test noticed.
+// `pnpm build` used to emit a server and a UI bundle that nothing served, so
+// there was no way to run the built app at all — the gap a first-time installer
+// hits first, and one no other tier could see, because every other tier boots
+// the dev server.
 //
-// This is the only coverage of that path, and deliberately so: a cheaper layer
-// could assert the server answers with the bundle, but not that a real browser
-// *executes* it — correct MIME types, hashed asset paths resolving, the SPA
-// mounting, and same-origin API calls succeeding with no Vite proxy in front.
+// No cheaper layer can replace this. A component test could assert that a
+// bundle is answered with, but not the part that actually breaks: that a real
+// browser *executes* it — MIME types, hashed asset paths resolving, the SPA
+// mounting, and the proxied API answering the built page.
 //
 //   ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
 
@@ -23,7 +22,9 @@ const BUILT = process.env.ADHD_E2E_BUILT === "1";
 test.describe("the compiled app", () => {
   test.skip(!BUILT, "built tier — set ADHD_E2E_BUILT=1 to run (rebuilds first)");
 
-  test("boots from the server's own bundle, with no Vite in front of it", async ({ page }) => {
+  test("boots from the built bundle, not from a dev server compiling on the fly", async ({
+    page,
+  }) => {
     // Arrange
     const failures = collectConsoleErrors(page);
 
@@ -35,7 +36,9 @@ test.describe("the compiled app", () => {
     expect(failures).toEqual([]);
   });
 
-  test("serves the API on the same origin, so the built UI needs no proxy", async ({ page }) => {
+  test("reaches the API through the preview proxy, exactly as the dev server does", async ({
+    page,
+  }) => {
     // Act
     const response = await page.request.get("/health");
 

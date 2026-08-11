@@ -60,34 +60,26 @@ grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
 does drain. The grace window is the whole trade: too short truncates a chatty
 CLI's last lines, too long re-introduces the stall.
 
-## Serving the built UI (`utils/built-ui.ts`)
+## Running the build (`pnpm start`)
 
-`pnpm build` emits an API server and a static UI bundle; `pnpm start` runs the
-compiled server, which serves that bundle itself, so the whole app is on one
-port with no Vite process. The UI's `API_BASE` is `""`, so same-origin needs no
-UI change.
+`pnpm build` emits a compiled server and a static UI bundle. `pnpm start` mirrors
+`pnpm dev` exactly — the same two processes on the same two ports — except the UI
+side runs `vite preview` over `dist/` instead of the dev server. The API proxy is
+one `proxy` object in `vite.config.ts`, shared by `server` and `preview`, so the
+browser reaches the API the way it always does and the server stays a pure API
+with no knowledge of the frontend.
 
-**The mount lives in `index.ts`, never in `createApp`, and the import is
-dynamic.** Importing `@hono/node-server/serve-static` at the top of `app.ts`
-wedges the dev server: under `pnpm dev`, `concurrently` runs `tsx watch`, and the
-server process then prints its banner and never binds — `pnpm dev` and the whole
-Playwright suite hang for their full timeout while Vite comes up fine. Standalone
-`tsx watch` is unaffected, which is what makes it easy to reintroduce by mistake.
-Keeping it out of `createApp` also keeps every component test on a plain API app.
+An earlier attempt had the server serve the bundle itself. That needed it to
+locate a sibling package's `dist`, detect whether it was running compiled,
+convert the result to a cwd-relative path because `serveStatic` rejects absolute
+ones, and import `serve-static` dynamically — a top-level import wedged
+`tsx watch` under `concurrently`, so `pnpm dev` never bound and the whole
+Playwright suite hung on its timeout. Four workarounds for a job the frontend
+already does. Recorded so it is not attempted again.
 
-Mounting is additionally gated on **actually running the compiled build** — the
-module checks that its own directory sits under `dist/` — so a developer who has
-built once does not start silently serving a stale bundle from `pnpm dev`.
-`ADHD_UI_DIR` overrides the location and bypasses that gate, which is what lets
-a bundle live somewhere other than the sibling `ui` package.
-`serveStatic` rejects absolute roots, so the path is made
-relative to `process.cwd()`; if that is impossible (a different drive on
-Windows) the server logs and stays a plain API rather than failing to start.
-
-Because the default e2e suite boots `pnpm dev`, it never exercises any of this;
-the built tier (`ADHD_E2E_BUILT=1`, see
-[`e2e-test-plan.md`](./e2e-test-plan.md)) is what drives the compiled artifact in
-a real browser.
+Because the default e2e suite boots `pnpm dev`, it never exercises the build; the
+built tier (`ADHD_E2E_BUILT=1`, see [`e2e-test-plan.md`](./e2e-test-plan.md)) is
+what drives it in a real browser.
 
 ## Engines — binary resolution (all adapters)
 
