@@ -52,12 +52,26 @@ telling QA to start servers and pick ports, which is the failure `TASK-117` hit
 from the other side.
 
 **Consequence for the lifecycle:** the product is **project**-scoped, not
-run-scoped. A run switch does not kill it, so an initiative's child runs share one
-process rather than each killing the preview the user is watching; a completed run
-that changed files *restarts* it instead, so the preview is never the previous
-build. It dies on explicit stop, on exiting by itself, on a start for another
-project, on project switch, and on the `SIGINT`/`SIGTERM` hook this added to
-`index.ts` — which had no shutdown path at all before.
+run-scoped. This deliberately overrides `TASK-138`'s own wording, which asked for a
+run switch to reach the kill: an initiative's child runs would then each kill the
+preview the user was watching. They share one process instead, and a completed run
+that changed files *restarts* it, so the preview is never the previous build. It
+dies on explicit stop, on exiting by itself, on a start for another project, on
+project switch, and on the `SIGINT`/`SIGTERM` hook this added to `index.ts` — which
+had no shutdown path at all before.
+
+**Project switch is enforced on the server, not in the browser.** `POST
+/projects/:id/activate` stops a product belonging to any other project, and
+`DELETE /projects/:id` stops one belonging to the project being removed. A client
+that crashes, is closed, or never runs cannot leak a process this way, which a
+cleanup living in a React effect could.
+
+**Every lifecycle operation is serialized.** Start, stop, restart and the
+post-run refresh run through one promise queue, because two of them interleaving
+at any `await` can each conclude that nothing is running and launch a second
+process that then holds the port invisibly. This is also what makes the
+idempotent-start promise in the QA prompt true under concurrency rather than only
+when the UI happens to disable its button.
 
 ---
 

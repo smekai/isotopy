@@ -83,6 +83,29 @@ the first. It is not run-scoped: an initiative's child runs would each kill the
 preview the user was watching. A completed run that changed files calls
 `refreshFor`, which restarts rather than stops, so the preview is the new build.
 
+**One promise queue owns every lifecycle operation.** `start`, `stop`, `restart`,
+the project-switch stops and the post-run refresh all go through `serialize`, and
+the public methods are thin wrappers over unsynchronized `launchFor`/`terminate`
+so a composite operation cannot deadlock on its own queue. Without it, two
+operations interleaving at any `await` — reading the config, waiting out a kill —
+can each see `current` as undefined and launch, and only the last handle is
+retained: the other process keeps running and keeps the port, invisible to
+everything. The idempotent start the QA prompt promises is only true because of
+this.
+
+**The post-run refresh must not reject.** `RunService.runCompleted` fires it
+without awaiting, so a rejection would surface as an unhandled rejection and take
+the server down — and the trigger is ordinary: a run that removed or broke
+`.adhd/automation.json`. `refreshLocked` catches, and the reason is kept in
+`abandonedError` so the stopped status still explains itself instead of going
+quiet.
+
+**Liveness is re-checked after the framing probe.** The probe is an `await`, and
+a product can exit during it. `noteExit` marks the record `exited`, and the
+continuation would then overwrite that with `ready` — advertising a dead product
+behind a blank iframe. The probe also carries the stop signal and a 5s timeout,
+or shutdown could wait on a product that accepts the connection and never answers.
+
 **`stop()` must not wait out the readiness poll.** The poll runs for up to
 `readyTimeoutMs` (a minute by default), and `stop()` awaits the watcher so callers
 know the kill finished. Each launch therefore carries its own `AbortController`,

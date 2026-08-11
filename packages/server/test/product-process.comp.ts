@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { ProductProcessStatus, ProjectAutomationConfig, UiAutomation } from "@adhd/core";
+import type { ProductResponseHeaders } from "../src/domain/rules/product-preview.ts";
+import type { ProjectPath } from "../src/paths.ts";
 import { AutomationConfigStore } from "../src/services/automation-config-store.ts";
 import { ProductProcessService } from "../src/services/product-process-service.ts";
 import type { ProductProcessDependencies } from "../src/services/product-process-service.ts";
@@ -8,6 +10,9 @@ import { addTestProject, createTestApp, get, post, put } from "./support/harness
 import type { TestApp } from "./support/harness.ts";
 
 const HEALTH_URL = "http://127.0.0.1:59999/";
+
+/** Serialization means a second caller never arrives, so the gate must also open on its own. */
+const GATE_FALLBACK_MS = 50;
 
 let ctx: TestApp;
 
@@ -78,6 +83,67 @@ test("a second start reuses the running product rather than spawning a rival for
   // Assert
   expect(stub.starts()).toBe(1);
   await product.shutdown();
+});
+
+test("two starts racing each other spawn one product, not two fighting over the port", async () => {
+  // Arrange — the injected QA prompt calls start idempotent, so a second caller
+  // arriving while the first is still reading the config must not spawn a rival.
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  const stub = stubProcess();
+  const product = new ProductProcessService(new GatedConfigStore(), {
+    ...stub.deps,
+    probe: () => Promise.resolve({ ok: true }),
+  });
+  const project = ctx.registry.resolve();
+
+  // Act
+  await Promise.all([product.start(project), product.start(project)]);
+
+  // Assert
+  expect(stub.starts()).toBe(1);
+  await product.shutdown();
+});
+
+test("a refresh whose start command vanished reports why instead of rejecting into the run loop", async () => {
+  // Arrange — `runCompleted` fires this without awaiting it, so a rejection here
+  // would surface as an unhandled rejection and take the server down.
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  const stub = stubProcess();
+  const product = new ProductProcessService(new AutomationConfigStore(), {
+    ...stub.deps,
+    probe: () => Promise.resolve({ ok: true }),
+  });
+  const project = ctx.registry.resolve();
+  await product.start(project);
+  await product.settle();
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", { version: 1, validation: [] });
+
+  // Act
+  await product.refreshFor(project.id);
+
+  // Assert
+  const status = await product.status(project);
+  expect(status.state).toBe("stopped");
+  expect(status.lastError).toContain("Could not restart the product");
+});
+
+test("a product that dies while its headers are being read is not then announced as ready", async () => {
+  // Arrange
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  const stub = stubProcess();
+  const product = new ProductProcessService(new AutomationConfigStore(), {
+    ...stub.deps,
+    probe: () => Promise.resolve({ ok: true }),
+    headers: () => dyingDuringProbe(stub),
+  });
+  const project = ctx.registry.resolve();
+
+  // Act
+  await product.start(project);
+
+  // Assert
+  await product.settle();
+  expect((await product.status(project)).state).toBe("exited");
 });
 
 test("a product that exits on its own is reported as exited rather than left looking ready", async () => {
@@ -186,6 +252,24 @@ test("stopping waits for the process to actually go, so a shutting-down server d
   expect(stub.gone()).toBe(true);
 });
 
+test("switching project stops the product on the server, so a closed browser cannot leak it", async () => {
+  // Arrange — asked about the project that owns it, not the one just switched to,
+  // which reads as stopped either way.
+  const owner = ctx.registry.resolve().id;
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  await post<ProductProcessStatus>(ctx.app, "/automation/product/start");
+  const elsewhere = await addTestProject(ctx.registry, "elsewhere");
+
+  // Act
+  await post(ctx.app, `/projects/${elsewhere.id}/activate`);
+
+  // Assert
+  const { body } = await get<ProductProcessStatus>(ctx.app, "/automation/product", {
+    "X-ADHD-Project": owner,
+  });
+  expect(body.state).toBe("stopped");
+});
+
 test("a project with no start command reports the preview as unconfigured rather than stopped-and-startable", async () => {
   // Act
   const { status, body } = await get<ProductProcessStatus>(ctx.app, "/automation/product");
@@ -275,6 +359,38 @@ function stubProcess(): StubProcess {
     exit: (overrides: Partial<SubprocessResult> = {}) => settle?.(subprocessResult(overrides)),
     emitStderr: (line: string) => emit?.("stderr", line),
   };
+}
+
+/**
+ * Reading the config is the await both racing callers park on. A plain delay
+ * does not reproduce the race: the two resume across a timer boundary, and Node
+ * drains microtasks in between, so the first caller finishes launching before
+ * the second wakes. This releases both from a single resolution instead, which
+ * is what two requests landing together actually look like.
+ */
+class GatedConfigStore extends AutomationConfigStore {
+  private arrived = 0;
+  private release = (): void => {};
+  private readonly opened = new Promise<void>((resolve) => {
+    this.release = resolve;
+    setTimeout(resolve, GATE_FALLBACK_MS).unref();
+  });
+
+  override async get(project: ProjectPath): Promise<ProjectAutomationConfig> {
+    const config = await super.get(project);
+    this.arrived += 1;
+    if (this.arrived >= 2) {
+      this.release();
+    }
+    await this.opened;
+    return config;
+  }
+}
+
+async function dyingDuringProbe(stub: StubProcess): Promise<ProductResponseHeaders> {
+  stub.exit({ exitCode: 0, errorMessage: "Stopped with exit code 0" });
+  await Promise.resolve();
+  return {};
 }
 
 interface LingeringProcess {

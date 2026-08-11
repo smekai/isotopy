@@ -4,6 +4,7 @@ import { isProductLive } from "@adhd/core";
 import { fetchProductStatus, startProduct, stopProduct } from "../api";
 
 const STARTING_POLL_MS = 1000;
+const RUNNING_POLL_MS = 5000;
 
 export interface ProductController {
   status: ProductProcessStatus | null;
@@ -23,7 +24,6 @@ export function useProduct(projectId: string): ProductController {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const live = useRef(true);
-  const runningFor = useRef<string | null>(null);
 
   useEffect(() => {
     live.current = true;
@@ -31,12 +31,6 @@ export function useProduct(projectId: string): ProductController {
       live.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (status !== null && isProductLive(status.state) && status.projectId !== undefined) {
-      runningFor.current = status.projectId;
-    }
-  }, [status]);
 
   const load = useCallback(async () => {
     try {
@@ -52,21 +46,17 @@ export function useProduct(projectId: string): ProductController {
   }, []);
 
   useEffect(() => {
-    const abandoned = runningFor.current;
-    if (abandoned !== null && abandoned !== projectId) {
-      runningFor.current = null;
-      void stopProduct();
-    }
     setStatus(null);
     setError(null);
     void load();
   }, [projectId, load]);
 
   useEffect(() => {
-    if (status?.state !== "starting") {
+    if (status === null || !isProductLive(status.state)) {
       return;
     }
-    const timer = setTimeout(() => void load(), STARTING_POLL_MS);
+    const delay = status.state === "starting" ? STARTING_POLL_MS : RUNNING_POLL_MS;
+    const timer = setTimeout(() => void load(), delay);
     return () => clearTimeout(timer);
   }, [status, load]);
 

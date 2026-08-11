@@ -22,6 +22,15 @@ stage prompt and drives it with its own browser capability.
 capability exists, Playwright is the complete fallback and the CI authority — so `TASK-095`
 should be **rejected** rather than built.
 
+**One requirement was changed with the user's approval, on 2026-08-11, before implementation.**
+As written this task said *"Server shutdown, project switch and run switch all have to reach
+the kill."* Asked directly, the user chose one process per project that **survives a run
+switch**, because an initiative's child runs would otherwise each kill the preview the user
+was watching — the case they raised themselves. A completed run that changed files restarts
+it instead, so the preview is never the previous build. Shutdown and project switch still
+reach the kill, and project switch is enforced **server-side** on `POST /projects/:id/activate`
+rather than by the browser. The reasoning is in `docs/decisions.md`.
+
 **Delivered:**
 
 - `startSubprocess` returns a handle (`pid`, `kill`, `exited`); `runSubprocess` is now

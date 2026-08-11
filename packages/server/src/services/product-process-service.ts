@@ -17,6 +17,7 @@ import type { AutomationConfigStore } from "./automation-config-store.ts";
 
 const STDERR_TAIL_LINES = 10;
 const KILL_SETTLE_MS = 5000;
+const HEADER_PROBE_MS = 5000;
 
 export class ProductNotConfiguredError extends Error {
   constructor() {
@@ -27,7 +28,10 @@ export class ProductNotConfiguredError extends Error {
 
 type SubprocessStarter = (spec: SubprocessSpec) => SubprocessHandle;
 
-type HeaderProbe = (url: string) => Promise<ProductResponseHeaders>;
+type HeaderProbe = (
+  url: string,
+  init: { signal: AbortSignal },
+) => Promise<ProductResponseHeaders>;
 
 export interface ProductProcessDependencies {
   platform: NodeJS.Platform;
@@ -51,8 +55,11 @@ interface RunningProduct {
   stderrTail: string[];
 }
 
-async function readHeaders(url: string): Promise<ProductResponseHeaders> {
-  const { headers } = await fetch(url, { redirect: "manual" });
+async function readHeaders(
+  url: string,
+  init: { signal: AbortSignal },
+): Promise<ProductResponseHeaders> {
+  const { headers } = await fetch(url, { redirect: "manual", signal: init.signal });
   const xFrameOptions = headers.get("x-frame-options");
   const contentSecurityPolicy = headers.get("content-security-policy");
   return {
@@ -104,6 +111,8 @@ export class ProductProcessService {
   private readonly deps: ProductProcessDependencies;
   private current?: RunningProduct;
   private pending?: Promise<void>;
+  private abandonedError?: string;
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly automation: AutomationConfigStore,
@@ -114,39 +123,45 @@ export class ProductProcessService {
 
   async status(project: ProjectPath): Promise<ProductProcessStatus> {
     const configured = (await this.automation.get(project)).ui !== undefined;
-    return this.current?.project.id === project.id
-      ? statusOf(this.current)
-      : { state: "stopped", configured };
+    if (this.current?.project.id === project.id) {
+      return statusOf(this.current);
+    }
+    return {
+      state: "stopped",
+      configured,
+      ...(this.abandonedError === undefined ? {} : { lastError: this.abandonedError }),
+    };
   }
 
-  async start(project: ProjectPath): Promise<ProductProcessStatus> {
-    const ui = (await this.automation.get(project)).ui;
-    if (ui === undefined) {
-      throw new ProductNotConfiguredError();
-    }
-    const current = this.current;
-    if (current !== undefined && current.project.id === project.id && isProductLive(current.state)) {
-      return statusOf(current);
-    }
-    await this.stop();
-    return this.launch(project, ui);
+  start(project: ProjectPath): Promise<ProductProcessStatus> {
+    return this.serialize(() => this.launchFor(project));
   }
 
-  async restart(project: ProjectPath): Promise<ProductProcessStatus> {
-    await this.stop();
-    return this.start(project);
+  restart(project: ProjectPath): Promise<ProductProcessStatus> {
+    return this.serialize(async () => {
+      await this.terminate();
+      return this.launchFor(project);
+    });
   }
 
-  async stop(): Promise<void> {
-    const current = this.current;
-    if (current === undefined) {
-      return;
-    }
-    this.current = undefined;
-    current.stopping.abort();
-    current.handle.kill();
-    await this.settle();
-    await exitedWithin(current.handle, KILL_SETTLE_MS);
+  stop(): Promise<void> {
+    return this.serialize(() => this.terminate());
+  }
+
+  stopUnless(projectId: string): Promise<void> {
+    return this.serialize(async () => {
+      if (this.current !== undefined && this.current.project.id !== projectId) {
+        await this.terminate();
+      }
+    });
+  }
+
+  stopFor(projectId: string): Promise<void> {
+    return this.serialize(async () => {
+      if (this.current?.project.id === projectId) {
+        await this.terminate();
+      }
+    });
   }
 
   urlFor(projectId: string): string | undefined {
@@ -156,20 +171,66 @@ export class ProductProcessService {
       : undefined;
   }
 
-  async refreshFor(projectId: string): Promise<void> {
+  refreshFor(projectId: string): Promise<void> {
+    return this.serialize(() => this.refreshLocked(projectId));
+  }
+
+  async settle(): Promise<void> {
+    await this.queue;
+    await this.pending;
+  }
+
+  shutdown(): Promise<void> {
+    return this.serialize(() => this.terminate());
+  }
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(operation, operation);
+    this.queue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  private async refreshLocked(projectId: string): Promise<void> {
     const current = this.current;
     if (current === undefined || current.project.id !== projectId || !isProductLive(current.state)) {
       return;
     }
-    await this.restart(current.project);
+    const { project } = current;
+    await this.terminate();
+    try {
+      await this.launchFor(project);
+    } catch (error) {
+      this.abandonedError = `Could not restart the product: ${messageOf(error)}`;
+    }
   }
 
-  async settle(): Promise<void> {
+  private async launchFor(project: ProjectPath): Promise<ProductProcessStatus> {
+    const ui = (await this.automation.get(project)).ui;
+    if (ui === undefined) {
+      throw new ProductNotConfiguredError();
+    }
+    const current = this.current;
+    if (current !== undefined && current.project.id === project.id && isProductLive(current.state)) {
+      return statusOf(current);
+    }
+    await this.terminate();
+    this.abandonedError = undefined;
+    return this.launch(project, ui);
+  }
+
+  private async terminate(): Promise<void> {
+    const current = this.current;
+    if (current === undefined) {
+      return;
+    }
+    this.current = undefined;
+    current.stopping.abort();
+    current.handle.kill();
     await this.pending;
-  }
-
-  async shutdown(): Promise<void> {
-    await this.stop();
+    await exitedWithin(current.handle, KILL_SETTLE_MS);
   }
 
   private launch(project: ProjectPath, ui: UiAutomation): ProductProcessStatus {
@@ -197,7 +258,7 @@ export class ProductProcessService {
       stderrTail,
     };
     this.current = current;
-    this.pending = this.watch(current);
+    this.pending = this.watch(current).catch(() => undefined);
     return statusOf(current);
   }
 
@@ -209,7 +270,7 @@ export class ProductProcessService {
       intervalMs: readyPollIntervalMs(current.ui.readyTimeoutMs),
       signal: current.stopping.signal,
     });
-    if (this.current !== current || current.state === "exited") {
+    if (this.abandoned(current)) {
       return;
     }
     if (!healthy) {
@@ -218,18 +279,31 @@ export class ProductProcessService {
       current.handle.kill();
       return;
     }
-    current.framing = await this.framingOf(current.ui.healthUrl);
+    const framing = await this.framingOf(current.ui.healthUrl, current.stopping.signal);
+    if (this.abandoned(current)) {
+      return;
+    }
+    current.framing = framing;
     current.state = "ready";
     current.readyAt = this.deps.now().toISOString();
   }
 
-  private async framingOf(url: string): Promise<ProductFraming> {
+  private abandoned(current: RunningProduct): boolean {
+    return this.current !== current || current.state === "exited";
+  }
+
+  private async framingOf(url: string, stopping: AbortSignal): Promise<ProductFraming> {
+    const attempt = AbortSignal.any([stopping, AbortSignal.timeout(HEADER_PROBE_MS)]);
     try {
-      return framingVerdict(await this.deps.headers(url));
+      return framingVerdict(await this.deps.headers(url, { signal: attempt }));
     } catch {
       return { allowed: true };
     }
   }
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function noteExit(current: RunningProduct, result: SubprocessResult): void {

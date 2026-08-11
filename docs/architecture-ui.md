@@ -238,11 +238,16 @@ a tab that can only disappoint. Unlike the two above, the product is **project**
 survives switching between runs, and an initiative's child runs share one process.
 
 **The product's state polls, and deliberately does not become a third SSE channel.**
-`useProduct` refetches once a second while the state is `starting`, and stops at every other
-state. The two channels above are both run-scoped, and the rule against widening
-`/runs/events` into a second copy of `RunState` applies just as much to widening it into
-something that is not a run at all. A poll bounded by a transitional state costs one request
-a second for a few seconds; a third channel would cost a channel forever.
+`useProduct` refetches every second while `starting` and every five seconds while `ready` —
+it must keep watching past readiness, because a product that dies afterwards would otherwise
+leave the tab showing a live iframe and a Stop button for a process that is gone. It stops at
+every settled state. The two channels above are both run-scoped, and the rule against
+widening `/runs/events` into a second copy of `RunState` applies just as much to widening it
+into something that is not a run at all. A poll bounded by liveness costs one request every
+five seconds while a preview is open; a third channel would cost a channel forever.
+
+Stopping the product on a **project switch** is the server's job, not this hook's — `POST
+/projects/:id/activate` does it — so a closed or crashed browser cannot leak a process.
 
 **Neither default can live in the `useState` initialiser alone**, and the Orchestrator is the
 sharper case. `App` feeds `RunTabs` from two independent loads — the run over its own SSE

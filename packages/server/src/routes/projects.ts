@@ -1,10 +1,14 @@
 import { Hono } from "hono";
 import { addProjectSchema } from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
+import type { ProductProcessService } from "../services/product-process-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { parseRequestBody } from "./request-body.ts";
 
-export function createProjectRoutes(registry: ProjectRegistry): Hono {
+export function createProjectRoutes(
+  registry: ProjectRegistry,
+  product: ProductProcessService,
+): Hono {
   return new Hono()
     .get("/", (c) => c.json(registry.list()))
 
@@ -22,18 +26,22 @@ export function createProjectRoutes(registry: ProjectRegistry): Hono {
       }
     })
 
-    .post("/:id/activate", (c) => {
+    .post("/:id/activate", async (c) => {
       try {
-        return c.json(registry.activate(c.req.param("id")));
+        const projects = registry.activate(c.req.param("id"));
+        await product.stopUnless(c.req.param("id"));
+        return c.json(projects);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to switch project";
         return c.json({ error: message }, 404);
       }
     })
 
-    .delete("/:id", (c) => {
+    .delete("/:id", async (c) => {
       try {
-        return c.json(registry.unregister(c.req.param("id")));
+        const projects = registry.unregister(c.req.param("id"));
+        await product.stopFor(c.req.param("id"));
+        return c.json(projects);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to remove project";
         return c.json({ error: message }, 400);
