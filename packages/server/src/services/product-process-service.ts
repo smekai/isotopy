@@ -63,8 +63,8 @@ async function readHeaders(
   const xFrameOptions = headers.get("x-frame-options");
   const contentSecurityPolicy = headers.get("content-security-policy");
   return {
-    ...(xFrameOptions === null ? {} : { xFrameOptions }),
-    ...(contentSecurityPolicy === null ? {} : { contentSecurityPolicy }),
+    xFrameOptions: xFrameOptions ?? undefined,
+    contentSecurityPolicy: contentSecurityPolicy ?? undefined,
   };
 }
 

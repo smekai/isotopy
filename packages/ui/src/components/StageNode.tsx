@@ -120,7 +120,7 @@ function statusDot(running: boolean, st: StatusColor): CSSProperties {
     height: STATUS_DOT_SIZE,
     borderRadius: RADIUS.round,
     background: st.dot,
-    ...(running ? { animation: `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite` } : {}),
+    animation: running ? `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite` : undefined,
   };
 }
 

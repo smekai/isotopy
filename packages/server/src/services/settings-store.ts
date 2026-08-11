@@ -54,7 +54,7 @@ export class SettingsStore {
     const stored = resolvedEntry(this.read(), projectId, engineId);
     return {
       mode: stored?.connectionMode ?? defaultConnectionMode(engineId),
-      ...(stored?.apiKey ? { apiKey: stored.apiKey } : {}),
+      apiKey: stored?.apiKey || undefined,
     };
   }
 

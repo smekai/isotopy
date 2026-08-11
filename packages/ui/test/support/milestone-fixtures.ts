@@ -18,7 +18,7 @@ export function finding(
   severity: MilestoneFinding["severity"],
   evidence?: string,
 ): MilestoneFinding {
-  return { id, title, severity, sourceRunId: "r1", ...(evidence ? { evidence } : {}) };
+  return { id, title, severity, sourceRunId: "r1", evidence };
 }
 
 export function feature(

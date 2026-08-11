@@ -1,5 +1,37 @@
 # Rejected
 
+## TASK-095: Agent-native browser testing for QA
+**Priority:** P3 | **Tags:** testing, adapters, engine, milestone-h
+**Updated:** 2026-08-11 17:30
+
+**Rejected as answered by:** TASK-138, 2026-08-11.
+
+`TASK-138` built this from the other side. The embedded browser it added to show a user the
+running product needed the product's process and URL to be owned by ADHD — and once they are,
+an agent driving that same URL needs nothing further from ADHD. The research behind that task
+([`docs/embedded-preview.md`](../docs/embedded-preview.md)) is the reason: Cursor, Codex and
+Claude Code all already drive a page over CDP, so the "vendor-neutral seam for browser-control
+capabilities exposed by Codex, Cursor, Claude" this task asked for is a seam each vendor
+already owns. Building an abstraction over it would have been ADHD's third copy of something
+that turns over faster than we could track it, which is the same objection `TASK-129` raised
+about model ids.
+
+**Its policy half survived, as policy rather than as a task.** "When no compatible capability
+exists, Playwright remains the complete fallback and CI authority" is now written into
+`packages/server/src/domain/skills/personas/tester.md` (via the `gen:` blocks in
+`docs/testing.md`), `step-tasks/verify-feature.md`, and `.agents/skills/qa-testing/SKILL.md`.
+The persona's old boundary — *"Do not use or depend on an agent-native browser in the MVP;
+that work is deferred to TASK-095"* — is gone, replaced by the rule that a browser capability
+may be used but must never become a precondition, because CI has none.
+
+Original scope follows, for the record:
+
+Add a vendor-neutral testing seam for browser-control capabilities exposed by Codex, Cursor, Claude, or another active harness. QA may use an available native browser first for exploratory and visual checks, then promote stable behaviour into repository-owned Playwright tests. When no compatible capability exists, Playwright remains the complete fallback and CI authority.
+
+Cross-platform: support Windows and macOS capability detection and degrade to Playwright with an accurate recorded reason.
+
+---
+
 ## TASK-097: Post-MVP — compose delivery workflows from the persona catalog
 **Priority:** P2 | **Tags:** core, server, ui, engine
 **Updated:** 2026-07-29 08:56

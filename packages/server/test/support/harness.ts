@@ -215,7 +215,7 @@ export async function post<T>(
   const response = await app.request(route, {
     method: "POST",
     headers: { ...JSON_HEADERS, ...headers },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: response.status, body: (await response.json()) as T };
 }

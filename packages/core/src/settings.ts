@@ -77,7 +77,7 @@ export function preferredRunOptions(preferences: ProjectPreferences): PreferredR
   return {
     engine: preferences.engine,
     modelTier: preferences.modelTier,
-    ...(model === undefined ? {} : { model }),
+    model,
     permissionMode: preferences.permissionMode,
   };
 }

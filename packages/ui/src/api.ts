@@ -55,7 +55,7 @@ function postJson<T>(path: string, body?: unknown): Promise<T> {
   return requestJson<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
 

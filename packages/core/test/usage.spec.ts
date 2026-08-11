@@ -12,7 +12,7 @@ function stageWith(id: string, usage?: StageUsage): StageState {
     label: id,
     status: "passed",
     logs: [],
-    ...(usage ? { usage } : {}),
+    usage,
   };
 }
 

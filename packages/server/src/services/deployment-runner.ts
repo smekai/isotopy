@@ -65,8 +65,8 @@ export class DeploymentRunner {
       args: command.args,
       cwd,
       timeoutMs: target.command.timeoutMs,
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-      ...(input.onLine === undefined ? {} : { onLine: input.onLine }),
+      signal: input.signal,
+      onLine: input.onLine,
     });
     const url = reportedDeploymentUrl(execution.stdout, target.url);
     const healthUrl = target.healthUrl ?? url;
@@ -84,10 +84,10 @@ export class DeploymentRunner {
       cwd,
       exitCode: execution.exitCode,
       durationMs: this.deps.now().getTime() - startedAt.getTime(),
-      ...(url === undefined ? {} : { url }),
-      ...(healthUrl === undefined ? {} : { healthUrl }),
+      url,
+      healthUrl,
       healthStatus,
-      ...(failureMessage === undefined ? {} : { failureMessage }),
+      failureMessage,
       startedAt: startedAt.toISOString(),
       finishedAt: this.deps.now().toISOString(),
     };
@@ -106,7 +106,7 @@ export class DeploymentRunner {
       url: healthUrl,
       timeoutMs: target.healthTimeoutMs,
       intervalMs: target.healthIntervalMs,
-      ...(signal === undefined ? {} : { signal }),
+      signal,
     });
     return healthy ? "passed" : "failed";
   }

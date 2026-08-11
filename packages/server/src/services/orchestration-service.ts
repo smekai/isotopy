@@ -473,7 +473,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     return this.runs.milestones.startNextMilestoneRun(projectPath, milestone.id, {
       ...options,
-      ...(featureId === undefined ? {} : { featureId }),
+      featureId,
     });
   }
 

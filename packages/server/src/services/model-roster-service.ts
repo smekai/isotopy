@@ -30,7 +30,7 @@ export class ModelRosterService {
       live: live.options,
       configured: configuredModel(adapter),
       bundled: staticModelsFor(engineId),
-      ...(live.note === undefined ? {} : { note: live.note }),
+      note: live.note,
     });
   }
 }

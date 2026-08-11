@@ -195,7 +195,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
   field directly (`{ framing: current.framing }`) and never assemble it
   conditionally (`...(framing === undefined ? {} : { framing })`). That spread
   protects no invariant; it is a vestige of the flag, and copying it from a file
-  that still has one spreads it further. Runtime schemas own untrusted HTTP, persisted JSON,
+  that still has one spreads it further, which is why ESLint bans it rather than
+  this paragraph alone. Spreading a *group* — `...(cond ? { a, b } : {})` — is a
+  different thing and stays: unrolling it would repeat the condition per field.
+  Where a conditional guarded a falsy value rather than an absent one, keep that
+  meaning explicit (`apiKey: stored?.apiKey || undefined`) rather than letting an
+  empty string through. Runtime schemas own untrusted HTTP, persisted JSON,
   settings, project-registry, TaskPlanner, and engine-protocol input. Routes and
   adapters receive only parsed values; services and repositories do not rebuild
   types through hand-written record traversal. ADHD-owned records reject
