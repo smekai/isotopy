@@ -60,6 +60,27 @@ grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
 does drain. The grace window is the whole trade: too short truncates a chatty
 CLI's last lines, too long re-introduces the stall.
 
+## Running the build (`pnpm start`)
+
+`pnpm build` emits a compiled server and a static UI bundle. `pnpm start` mirrors
+`pnpm dev` exactly — the same two processes on the same two ports — except the UI
+side runs `vite preview` over `dist/` instead of the dev server. The API proxy is
+one `proxy` object in `vite.config.ts`, shared by `server` and `preview`, so the
+browser reaches the API the way it always does and the server stays a pure API
+with no knowledge of the frontend.
+
+An earlier attempt had the server serve the bundle itself. That needed it to
+locate a sibling package's `dist`, detect whether it was running compiled,
+convert the result to a cwd-relative path because `serveStatic` rejects absolute
+ones, and import `serve-static` dynamically — a top-level import wedged
+`tsx watch` under `concurrently`, so `pnpm dev` never bound and the whole
+Playwright suite hung on its timeout. Four workarounds for a job the frontend
+already does. Recorded so it is not attempted again.
+
+Because the default e2e suite boots `pnpm dev`, it never exercises the build; the
+built tier (`ADHD_E2E_BUILT=1`, see [`e2e-test-plan.md`](./e2e-test-plan.md)) is
+what drives it in a real browser.
+
 ## Engines — binary resolution (all adapters)
 
 Each adapter resolves its CLI in a fixed order and caches the result, clearing
@@ -76,6 +97,32 @@ without a server restart:
 
 Cursor detection also flags when the **Cursor IDE** is installed but its headless
 **Agent CLI** (a separate tool) is not — otherwise "not found" surprises users.
+
+## Engines — capability probes (`engines/permission-mode.ts`)
+
+Each engine answers "can you auto-review?" the cheapest way that is actually
+sound for it, and the three answers are deliberately different:
+
+- **Claude is probed**, because its auto-review is a *flag value*
+  (`--permission-mode auto`) and passing a value the build does not know is a
+  hard CLI error that fails the run. So the mode list is read from `--help`,
+  memoised in a map keyed by **binary path plus help arguments** — keying on the
+  path makes an `ADHD_<ENGINE>_PATH` switch invalidate itself — and
+  `detect()`/`install()` clear it alongside the binary cache. The probe runs
+  **only** when a run asks for `autoReview`, so nobody pays a subprocess for a
+  mode they did not choose. A probe that fails or times out answers `unknown`
+  rather than throwing, and `unknown` degrades like `unsupported` with a
+  different notice, because "the CLI said no" and "we could not ask" are
+  different things to tell a user.
+- **Codex is not probed**, because its auto-review is *configuration*
+  (`approvals_reviewer`), passed with `-c`. There is no `--help` listing of
+  config keys to read, and an unrecognised `-c` key is tolerated rather than
+  fatal (`--strict-config`, which ADHD does not pass, exists precisely to opt
+  into the strict behaviour). Crucially the fallback is safe by construction: a
+  build that ignores the key still runs under `sandbox_mode="workspace-write"`,
+  so the worst case is escalations denied rather than reviewed — never a wider
+  blast radius than was asked for.
+- **Cursor is not probed** — see the CLI-specific note below.
 
 ## Engines — billing safety (`buildChildEnv` in each adapter)
 
@@ -100,7 +147,13 @@ that path Claude also falls back to prompt-folding via stdin.
 ## Engines — CLI-specific quirks
 
 **Cursor (`engines/cursor.ts`).** Headless runs must not stop for confirmation;
-Cursor has no accept-edits-only mode, so both permission modes use `--force`.
+Cursor has no accept-edits-only mode, so every permission mode uses `--force`.
+Its **Auto-review** run mode is real but is selected by the `approvalMode` key in
+`~/.cursor/cli-config.json`, not by a flag, so ADHD cannot ask for it without
+writing a file it has no business writing (see `decisions.md`). Cursor therefore
+reports `unsupported` as a constant and runs no probe — which is why its `run()`
+calls `resolvePermissionPlan` for the notice alone and discards the plan: no
+strategy changes its argv.
 `--trust` is on by default (fresh scratch workspaces would otherwise hit the
 workspace-trust prompt and hang). **The prompt goes on stdin whenever the binary
 is a Windows `.cmd` shim**, which is what `cursor-agent` always resolves to on
@@ -118,14 +171,29 @@ Cursor's own `auto` router model is distinct from our **Auto** (which sends no
 **Codex (`engines/codex.ts`).** `codex exec --json` emits newline-delimited JSON
 events. `--skip-git-repo-check` lets it run in a non-git scratch workspace.
 Permission modes: `acceptEdits` → `--sandbox workspace-write` (writes confined to
-the workspace; escalation is denied, not queued); otherwise
-`--dangerously-bypass-approvals-and-sandbox`. The prompt is read from stdin via
+the workspace; escalation is denied, not queued); `autoReview` → the same sandbox
+**plus** `-c approval_policy="on-request" -c approvals_reviewer="auto_review"`,
+which is Codex's documented Auto-review — escalations (sandbox escapes, blocked
+network, MCP prompts) go to a reviewer subagent instead of to a human who is not
+there; `skip` → `--dangerously-bypass-approvals-and-sandbox`. There is **no
+`--approve-for-me` flag** — it appears in third-party write-ups but not in the
+CLI reference and not in the 0.144.6 binary, whose own help text documents
+`approvals_reviewer` instead. The prompt is read from stdin via
 `-` to sidestep the Windows arg-length limit. The CLI has no `models` subcommand,
 so `configuredModel` reads the top-level `model = "…"` key from `~/.codex/config.toml`
 (matched before the first `[section]` so a nested profile key isn't mistaken for
-the global default). **`codex exec resume` does not accept `--sandbox`** — only
-`--dangerously-bypass-approvals-and-sandbox` — so a resumed turn under
-`acceptEdits` runs on Codex's own default sandbox rather than `workspace-write`.
+the global default). **`codex exec resume` does not accept `--sandbox`** — the
+flag is simply absent from that subcommand's option set. The sandbox therefore
+goes through `-c sandbox_mode="workspace-write"` on resumed turns, which every
+`codex exec` form accepts. That is also what closed the older hole where a
+resumed `acceptEdits` turn quietly fell back to Codex's default sandbox.
+
+**Claude Code (`engines/claude-code.ts`).** `--permission-mode` advertises its
+modes as a `(choices: …)` list that **wraps across four lines** of `--help`
+output, so the parser reads across newlines rather than line by line, and the
+match is bounded to the flag's own block — an unbounded search would pick up a
+later option's choices when a build stops offering any. Windows `.cmd` shims
+print CRLF, so no line anchors.
 
 **Auth probes (detect).** Cursor `status` and Codex `login status` are best-effort:
 Cursor's exits 0 either way so the answer is in the text; Codex's exit code is the

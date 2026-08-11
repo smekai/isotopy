@@ -4,11 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import type { PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
+import { claudePermissionModeChoices } from "../schemas/engine-cli-help.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseClaudeProtocolLine } from "./claude-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
+import {
+  clearAutoReviewCache,
+  probeAutoReview,
+  resolvePermissionPlan,
+} from "./permission-mode.ts";
+import type { AutoReviewProbe } from "./permission-mode.ts";
 import {
   applyProtocolUpdate,
   protocolProblemMessage,
@@ -33,6 +41,26 @@ interface ResolvedBinary {
 }
 
 let cachedBinary: ResolvedBinary | undefined;
+
+const AUTO_REVIEW_PROBE: AutoReviewProbe = {
+  helpArgs: ["--help"],
+  advertised: (help) => claudePermissionModeChoices(help).includes("auto"),
+};
+
+function permissionArgs(strategy: PermissionStrategy): string[] {
+  switch (strategy) {
+    case "unrestricted":
+      return ["--dangerously-skip-permissions"];
+    case "autoReview":
+      return ["--permission-mode", "auto"];
+    case "acceptEdits":
+      return ["--permission-mode", "acceptEdits"];
+    default: {
+      const unreachable: never = strategy;
+      return unreachable;
+    }
+  }
+}
 
 function findIdeExtensionBinary(): string | undefined {
   const binaryName = process.platform === "win32" ? "claude.exe" : "claude";
@@ -149,6 +177,7 @@ export const claudeCodeAdapter: EngineAdapter = {
 
   async detect(): Promise<EngineStatus> {
     cachedBinary = undefined;
+    clearAutoReviewCache();
     let resolved: ResolvedBinary;
     try {
       resolved = resolveClaudeBinary();
@@ -187,6 +216,10 @@ export const claudeCodeAdapter: EngineAdapter = {
       return { success: false, exitCode: null, errorMessage: message };
     }
 
+    const plan = await resolvePermissionPlan("claude-code", ctx, () =>
+      probeAutoReview(binary, AUTO_REVIEW_PROBE),
+    );
+
     const personaViaFlag =
       ctx.appendSystemPrompt !== undefined && !commandNeedsWindowsShell(binary);
     const runCtx = personaViaFlag ? ctx : withPersonaPrompt(ctx);
@@ -203,9 +236,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       ...(personaViaFlag && ctx.appendSystemPrompt
         ? ["--append-system-prompt", ctx.appendSystemPrompt]
         : []),
-      ...(ctx.permissionMode === "acceptEdits"
-        ? ["--permission-mode", "acceptEdits"]
-        : ["--dangerously-skip-permissions"]),
+      ...permissionArgs(plan.strategy),
     ];
 
     const capture: EngineProtocolUpdate = {

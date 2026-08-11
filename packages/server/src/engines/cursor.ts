@@ -2,13 +2,14 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
+import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { cursorCliConfigModel, parseCursorModels } from "../schemas/engine-cli-config.ts";
 import { configuredModelFrom } from "./cli-config.ts";
 import { parseCursorProtocolLine } from "./cursor-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { withPersonaPrompt } from "./persona.ts";
+import { resolvePermissionPlan } from "./permission-mode.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import {
   applyProtocolUpdate,
@@ -25,6 +26,9 @@ import type {
 } from "./types.ts";
 
 const PATH_CANDIDATES = ["cursor-agent", "agent"];
+
+const AUTO_REVIEW_UNREACHABLE = (): Promise<AutoReviewSupport> =>
+  Promise.resolve("unsupported");
 
 const INSTALL_COMMAND = "irm 'https://cursor.com/install?win32=true' | iex";
 const DOCS_URL = "https://cursor.com/docs/cli/installation";
@@ -317,9 +321,7 @@ export const cursorAdapter: EngineAdapter = {
     const runCtx = withPersonaPrompt(ctx);
 
     const promptViaArg = promptGoesInArgs(binary);
-    if (ctx.permissionMode === "acceptEdits") {
-      ctx.onLog({ level: "info", message: "Cursor has no accept-edits-only headless mode — running with --force" });
-    }
+    await resolvePermissionPlan("cursor", ctx, AUTO_REVIEW_UNREACHABLE);
     if (promptViaArg && runCtx.prompt.length > PROMPT_ARG_WARN_LENGTH) {
       ctx.onLog({ level: "warn", message: "Prompt near the command-line length limit — set ADHD_CURSOR_PROMPT_VIA=stdin" });
     }

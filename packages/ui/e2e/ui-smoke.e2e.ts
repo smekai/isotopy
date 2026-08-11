@@ -156,6 +156,7 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   await expect(model.locator("optgroup").nth(1)).toHaveAttribute("label", /checked \d{4}-\d{2}-\d{2}/);
 
   await expect(page.getByRole("button", { name: /Never block \(recommended\)/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Auto-review/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Accept edits only/ })).toBeVisible();
 });
 

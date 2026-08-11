@@ -120,6 +120,14 @@ pnpm --filter @adhd/server dev   # API only
 pnpm --filter @adhd/ui dev       # UI only
 ```
 
+To run the built app instead of the dev servers, build once and start it. Same
+two URLs as above — `pnpm start` serves the compiled UI with `vite preview`
+rather than the dev server:
+
+```bash
+pnpm build && pnpm start
+```
+
 Other commands:
 
 ```bash

@@ -62,7 +62,7 @@ export const startRunSchema = z
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    permissionMode: optionalText,
+    permissionMode: permissionModeSchema.optional(),
     milestoneId: optionalText,
     featureId: optionalText,
     sourceTaskIds: strings.optional(),
@@ -122,7 +122,7 @@ export const startMilestonePlanningSchema = z
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    permissionMode: optionalText,
+    permissionMode: permissionModeSchema.optional(),
   })
   .strict();
 
@@ -132,7 +132,7 @@ export const reviseMilestonePlanSchema = z
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    permissionMode: optionalText,
+    permissionMode: permissionModeSchema.optional(),
   })
   .strict();
 
@@ -142,7 +142,7 @@ export const startOrchestrationSchema = z
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    permissionMode: optionalText,
+    permissionMode: permissionModeSchema.optional(),
   })
   .strict();
 
@@ -151,7 +151,7 @@ export const approveTeamSchema = z
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    permissionMode: optionalText,
+    permissionMode: permissionModeSchema.optional(),
   })
   .strict();
 
@@ -160,7 +160,7 @@ export const startNextMilestoneRunSchema = z
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    permissionMode: optionalText,
+    permissionMode: permissionModeSchema.optional(),
   })
   .strict();
 

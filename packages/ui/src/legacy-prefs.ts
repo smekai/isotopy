@@ -1,10 +1,14 @@
 // Preferences used to live in localStorage under `adhd.<projectId>.<name>`
 // (TASK-065 moved them to the server). This module adopts whatever a browser
 // still holds, once, and is deletable once no installation predates that move.
-import { ENGINES, findPipeline } from "@adhd/core";
-import type { EngineId, ProjectPreferencesUpdate } from "@adhd/core";
+import { ENGINES, PERMISSION_MODE_IDS, findPipeline } from "@adhd/core";
+import type { EngineId, EnginePermissionMode, ProjectPreferencesUpdate } from "@adhd/core";
 
 const ENGINE_IDS = Object.keys(ENGINES) as EngineId[];
+
+function isPermissionMode(value: string | null): value is EnginePermissionMode {
+  return value !== null && (PERMISSION_MODE_IDS as readonly string[]).includes(value);
+}
 
 function legacyKey(projectId: string, name: string): string {
   return `adhd.${projectId}.${name}`;
@@ -43,7 +47,7 @@ export function readLegacyPreferences(projectId: string): ProjectPreferencesUpda
   }
 
   const permissionMode = readKey(legacyKey(projectId, "permissionMode"));
-  if (permissionMode === "skip" || permissionMode === "acceptEdits") {
+  if (isPermissionMode(permissionMode)) {
     update.permissionMode = permissionMode;
   }
 

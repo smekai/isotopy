@@ -26,6 +26,8 @@ export default defineConfig(({ mode }) => {
   const serverUrl = env.ADHD_SERVER_URL ?? `http://localhost:${serverPort}`;
   const uiPort = Number(env.ADHD_UI_PORT ?? 5173);
 
+  const proxy = Object.fromEntries(API_PROXY_PATHS.map((prefix) => [prefix, serverUrl]));
+
   return {
     plugins: [react()],
     resolve: {
@@ -35,7 +37,13 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: uiPort,
-      proxy: Object.fromEntries(API_PROXY_PATHS.map((prefix) => [prefix, serverUrl])),
+      proxy,
+    },
+    // `pnpm start` serves the build from here, so the API is reached exactly as
+    // it is in development and the server stays a pure API.
+    preview: {
+      port: uiPort,
+      proxy,
     },
   };
 });

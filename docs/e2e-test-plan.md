@@ -61,7 +61,8 @@ on Windows and macOS.
 3. **Setup → AI Harness** — all three harnesses listed and selectable (none is
    behind a `SOON` pill any more); the model roster is resolved server-side and
    can come from the CLI, so specs assert the entries that matter rather than a
-   count; permission modes "Never block (recommended)" / "Accept edits only".
+   count; permission modes "Never block (recommended)" / "Auto-review" /
+   "Accept edits only".
 4. **Persistence across reload** (server-side, asserted through `/settings`) —
    pipeline, engine model and permission mode survive a reload; they also
    survive a browser whose storage was wiped, a legacy model id is migrated on
@@ -117,6 +118,27 @@ cheaper tier that can render one. Three tests: a proposed team lists its roles
 behind an enabled **Approve & start**; an `awaiting_user` initiative reads
 "Needs your answer" and offers no team; and the run timeline carries the
 initiative's runs on `data-run-id`.
+
+## Built tier (opt-in)
+
+Every other tier boots `pnpm dev`, so none of them sees the compiled artifact at
+all — which is how `pnpm build` came to emit a server and a UI bundle that
+nothing served, with no test noticing. Free, no tokens, but it rebuilds first:
+
+```bash
+ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
+```
+
+`ADHD_E2E_BUILT=1` swaps the Playwright web server to `pnpm build && pnpm start`,
+which runs `vite preview` over `dist/` in place of the dev server. Ports and
+proxy are unchanged, so `baseURL` is the same as every other tier. The rebuild is
+deliberate: a stale `dist` passing for current source is the whole hazard of
+testing a build artifact.
+
+Three tests, and this is the **only** coverage of the compiled artifact. A
+component test could assert that a bundle is answered with, but not the part that
+actually breaks: whether a browser *executes* it — MIME types, hashed asset
+paths, React mounting, and the proxied API answering the built page.
 
 ## Live tier (opt-in)
 

@@ -1,5 +1,53 @@
 # Done
 
+## TASK-124: Orchestrator-brokered permission modes for the harnesses
+**Priority:** P1 | **Tags:** core, server, engine, adapters, milestone-f
+**Updated:** 2026-08-10 21:05
+
+**What shipped.** A third permission tier, `autoReview`, that delegates blast-radius
+judgement to each CLI's **own** auto-review mode — Claude's `--permission-mode auto`,
+Codex's `--approve-for-me` — and degrades to today's `skip` behaviour, with a stage-log
+notice, on a build that has none. Support is a runtime `--help` probe of the installed
+binary, memoised per binary-plus-subcommand and cleared on `detect()`/`install()`, because
+the flag's existence is a property of the build rather than of the engine: Codex 0.144.6
+rejects `--approve-for-me` while newer releases ship it.
+
+`permissionPlan()` (`domain/rules/permission-plan.ts`) is the one place that turns mode
+plus support into a strategy and decides whether to speak; it absorbed the two ad-hoc
+caveat logs that lived in the Codex and Cursor adapters. The HTTP boundary now validates
+`permissionMode` against the enum in all six run-start schemas, which removed the
+coercion in `run-service.ts` that had been collapsing every unrecognised value to `skip`.
+
+**Scope, renegotiated with the user.** The task as written asked to route approval
+requests to the Orchestrator. That was rejected for Milestone F and the reasoning is in
+`docs/decisions.md`: only Claude offers a live channel (`--permission-prompt-tool`, needing
+bidirectional stream-json), `codex exec` has no approval channel at all, and
+`runSubprocess` writes stdin once and closes it — a new park/resume state and a rewritten
+subprocess seam inside the milestone whose rule is *stop adding*. Nothing here forecloses
+building it later.
+
+**Cursor is deliberately untouched.** Its Auto-review is real but selected by the
+`approvalMode` key in `~/.cursor/cli-config.json`, not by a flag. Writing it would break
+the standing rule that CLI config files are read, never written, and would persist past
+the run; relocating `CURSOR_CONFIG_DIR` risks relocating stored auth and cannot be verified
+without the CLI installed. Cursor reports `unsupported` as a constant and says so in the
+stage log. A test asserts no `.cursor` file is written and no `CURSOR_CONFIG_DIR` reaches
+the child.
+
+**Not verified, and not claimed:** that `codex exec --approve-for-me` behaves as expected
+on a newer CLI (0.144.6 is what is installed), and that Cursor's Auto-review would work if
+adopted. The probe means an unverified flag is never passed to a CLI that does not
+advertise it.
+
+**Verification.** lint, typecheck, 722 tests, build, 62 e2e, `gen:skills` (no drift). The
+two help parsers were additionally run against the real `claude --help`, `codex exec --help`
+and `codex exec resume --help` on this machine: Claude reports `auto` available, Codex
+reports unsupported on both subcommands, and a `--sandbox` control confirms `exec` and
+`exec resume` genuinely carry different option sets — which is why each is probed
+separately.
+
+---
+
 ## TASK-126: Show the user what was built
 **Priority:** P0 | **Tags:** ui, server, milestone-f
 **Updated:** 2026-08-10 17:30

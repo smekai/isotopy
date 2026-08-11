@@ -10,6 +10,11 @@ const HERE = import.meta.dirname;
 const E2E_HOME = path.join(os.tmpdir(), "adhd-e2e");
 const SERVER_PORT = process.env.ADHD_PORT ?? "9499";
 const UI_PORT = process.env.ADHD_UI_PORT ?? "5199";
+
+// Built tier (ADHD_E2E_BUILT=1) drives the compiled artifact instead of the dev
+// stack — `vite preview` over `dist` in place of the dev server, same ports and
+// same proxy. It rebuilds first so a stale `dist` cannot pass for the source.
+const BUILT = process.env.ADHD_E2E_BUILT === "1";
 const BASE_URL = process.env.ADHD_UI_URL ?? `http://localhost:${UI_PORT}`;
 
 // Free + seeded tiers run by default — no engine spend, no claude CLI required.
@@ -30,7 +35,7 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
   },
   webServer: {
-    command: "pnpm dev",
+    command: BUILT ? "pnpm build && pnpm start" : "pnpm dev",
     cwd: path.resolve(HERE, "../.."),
     // /health is proxied to the API server, so this waits for both processes.
     url: `${BASE_URL}/health`,
@@ -42,6 +47,6 @@ export default defineConfig({
     },
     // The isolation above is only real on a server this config started.
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: BUILT ? 240_000 : 120_000,
   },
 });

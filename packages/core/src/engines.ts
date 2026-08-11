@@ -4,11 +4,15 @@ export type EngineId = (typeof ENGINE_IDS)[number];
 
 export const DEFAULT_ENGINE_ID: EngineId = "claude-code";
 
-export const PERMISSION_MODE_IDS = ["skip", "acceptEdits"] as const;
+export const PERMISSION_MODE_IDS = ["skip", "acceptEdits", "autoReview"] as const;
 
 export type EnginePermissionMode = (typeof PERMISSION_MODE_IDS)[number];
 
 export const DEFAULT_PERMISSION_MODE: EnginePermissionMode = "skip";
+
+export const AUTO_REVIEW_SUPPORT_LEVELS = ["available", "unsupported", "unknown"] as const;
+
+export type AutoReviewSupport = (typeof AUTO_REVIEW_SUPPORT_LEVELS)[number];
 
 export interface EnginePermissionModeDefinition {
   id: EnginePermissionMode;
@@ -23,6 +27,12 @@ export const PERMISSION_MODES: EnginePermissionModeDefinition[] = [
     label: "Never block",
     description: "The engine runs fully autonomously — no permission prompts.",
     recommended: true,
+  },
+  {
+    id: "autoReview",
+    label: "Auto-review",
+    description:
+      "The CLI's own reviewer decides what is safe to run. Falls back to Never block on a CLI that has no such mode.",
   },
   {
     id: "acceptEdits",

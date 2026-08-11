@@ -1,7 +1,7 @@
 {
   "name": "adhd",
   "private": true,
-  "version": "0.9.30",
+  "version": "0.9.31",
   "description": "ADHD â€” Artificial Development, Human Directed",
   "repository": {
     "type": "git",
@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "concurrently -n server,ui -c blue,green \"pnpm --filter @adhd/server dev\" \"pnpm --filter @adhd/ui dev\"",
     "build": "pnpm -r build",
+    "start": "concurrently -n server,ui -c blue,green \"pnpm --filter @adhd/server start\" \"pnpm --filter @adhd/ui preview\"",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
