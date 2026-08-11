@@ -231,7 +231,9 @@ export function LimitModal({
   const restoreFocusTo = useRef<Element | null>(null);
   const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
   const { roster } = useEngineRoster(engineId);
-  const currentTier = run.model === undefined ? run.modelTier : undefined;
+  const blockedStage = run.stages.find((stage) => stage.id === limit.stageId);
+  const currentTier =
+    run.model === undefined ? (blockedStage?.modelTier ?? run.modelTier) : undefined;
   // The countdown re-renders this modal every second for the whole reset window.
   const escapes = useMemo(
     () => cheaperTiers(engineId, limit.model ?? "", currentTier, roster),
@@ -241,7 +243,7 @@ export function LimitModal({
   const now = useNow(limit.resetAt !== undefined);
   const remaining = remainingMs(limit, now);
   const resetLabel = formatResetAt(limit.resetAt);
-  const stageLabel = run.stages.find((stage) => stage.id === limit.stageId)?.label ?? limit.stageId;
+  const stageLabel = blockedStage?.label ?? limit.stageId;
 
   useEffect(() => {
     restoreFocusTo.current = document.activeElement;

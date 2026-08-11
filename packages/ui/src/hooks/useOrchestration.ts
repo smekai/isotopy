@@ -6,7 +6,7 @@ import {
   startOrchestration,
   stopOrchestration,
 } from "../api";
-import type { OrchestrationRunOptions } from "../api";
+import type { ApproveTeamOptions, OrchestrationRunOptions } from "../api";
 
 export interface OrchestrationController {
   orchestrations: Orchestration[];
@@ -17,7 +17,7 @@ export interface OrchestrationController {
   start(goal: string, options: OrchestrationRunOptions): Promise<RunState | undefined>;
   approveTeam(
     orchestrationId: string,
-    options: OrchestrationRunOptions,
+    options: ApproveTeamOptions,
   ): Promise<RunState | undefined>;
   stop(orchestrationId: string): Promise<void>;
 }
@@ -110,7 +110,7 @@ export function useOrchestration(
   );
 
   const approveTeam = useCallback(
-    (orchestrationId: string, options: OrchestrationRunOptions) =>
+    (orchestrationId: string, options: ApproveTeamOptions) =>
       act(
         () => approveOrchestratorTeam(orchestrationId, options),
         "Failed to approve the team",

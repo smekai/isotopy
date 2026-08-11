@@ -529,6 +529,7 @@ list card. The current roster:
 `closeout-validation-errors` · `choose-pipeline` · `choose-orchestrator` ·
 `orchestrator-panel` · `orchestrator-status` · `orchestrator-team` ·
 `orchestrator-decision` · `orchestrator-run` · `approve-team` · `stop-orchestrator` ·
+`role-tier-<roleId>` ·
 `product-preview` · `product-start` · `product-stop` · `product-restart` ·
 `product-open-external`
 

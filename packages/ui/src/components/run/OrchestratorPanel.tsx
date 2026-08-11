@@ -1,11 +1,13 @@
 import type { CSSProperties } from "react";
 import { CircleStop, Users } from "lucide-react";
 import type {
+  ModelTier,
   Orchestration,
   OrchestratorDecision,
   OrchestratorRole,
   RunSummary,
 } from "@adhd/core";
+import { MODEL_TIER_OPTIONS, modelTierLabel } from "@adhd/core";
 import {
   decisionPresentation,
   orchestrationNeedsUser,
@@ -201,12 +203,30 @@ function runDate(d: Dir): CSSProperties {
   return { color: d.textMuted, fontSize: FONT.xs, flexShrink: 0 };
 }
 
-interface RoleListProps {
-  roles: OrchestratorRole[];
-  d: Dir;
+function tierSelect(d: Dir): CSSProperties {
+  return {
+    border: `1px solid ${d.border}`,
+    borderRadius: RADIUS.md,
+    background: d.surface,
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: FONT.xs,
+    padding: `${SPACE.xxs}px ${SPACE.sm}px`,
+    maxWidth: 260,
+  };
 }
 
-function RoleList({ roles, d }: RoleListProps) {
+const RUN_DEFAULT_TIER = "";
+
+interface RoleListProps {
+  roles: OrchestratorRole[];
+  roleTiers: Record<string, ModelTier>;
+  editable: boolean;
+  d: Dir;
+  onRoleTierChange: (roleId: string, tier: ModelTier | undefined) => void;
+}
+
+function RoleList({ roles, roleTiers, editable, d, onRoleTierChange }: RoleListProps) {
   return (
     <>
       {roles.map((role) => (
@@ -215,6 +235,31 @@ function RoleList({ roles, d }: RoleListProps) {
           <span style={roleSkill(d)}>
             {role.skill} · {role.stepTask}
           </span>
+          {editable ? (
+            <select
+              aria-label={`${role.label} model tier`}
+              data-testid={`role-tier-${role.id}`}
+              value={roleTiers[role.id] ?? role.modelTier ?? RUN_DEFAULT_TIER}
+              onChange={(event) =>
+                onRoleTierChange(
+                  role.id,
+                  event.target.value === RUN_DEFAULT_TIER
+                    ? undefined
+                    : (event.target.value as ModelTier),
+                )
+              }
+              style={tierSelect(d)}
+            >
+              <option value={RUN_DEFAULT_TIER}>Run default</option>
+              {MODEL_TIER_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label} — {option.hint}
+                </option>
+              ))}
+            </select>
+          ) : (
+            role.modelTier && <span style={roleSkill(d)}>{modelTierLabel(role.modelTier)}</span>
+          )}
           {role.rationale && <span style={mutedText(d)}>{role.rationale}</span>}
         </div>
       ))}
@@ -279,7 +324,9 @@ export interface OrchestratorView {
   orchestration: Orchestration;
   runs: RunSummary[];
   busy: boolean;
+  roleTiers: Record<string, ModelTier>;
   onApprove: () => void;
+  onRoleTierChange: (roleId: string, tier: ModelTier | undefined) => void;
   onStop: () => void;
   onOpenRun: (runId: string) => void;
 }
@@ -292,7 +339,9 @@ export function OrchestratorPanel({
   orchestration,
   runs,
   busy,
+  roleTiers,
   onApprove,
+  onRoleTierChange,
   onStop,
   onOpenRun,
   d,
@@ -325,7 +374,13 @@ export function OrchestratorPanel({
           <section style={card(d)} data-testid="orchestrator-team">
             <span style={cardTitle(d)}>{team.name}</span>
             <span style={mutedText(d)}>{team.summary}</span>
-            <RoleList roles={team.roles} d={d} />
+            <RoleList
+              roles={team.roles}
+              roleTiers={roleTiers}
+              editable={!busy}
+              d={d}
+              onRoleTierChange={onRoleTierChange}
+            />
             <div style={{ display: "flex", gap: SPACE.md, paddingTop: SPACE.md }}>
               <button
                 type="button"

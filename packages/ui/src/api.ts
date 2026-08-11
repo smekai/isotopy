@@ -6,6 +6,7 @@ import type {
   EngineModelRoster,
   EngineStatus,
   LimitResolution,
+  ModelTier,
   Orchestration,
   ProductProcessStatus,
   Project,
@@ -209,9 +210,13 @@ export function startOrchestration(
   return postJson<RunState>("/orchestrations", options);
 }
 
+export interface ApproveTeamOptions extends OrchestrationRunOptions {
+  roleTiers?: Record<string, ModelTier>;
+}
+
 export function approveOrchestratorTeam(
   orchestrationId: string,
-  options: OrchestrationRunOptions = {},
+  options: ApproveTeamOptions = {},
 ): Promise<RunState> {
   return postJson<RunState>(`/orchestrations/${orchestrationId}/approve`, options);
 }

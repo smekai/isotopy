@@ -177,6 +177,7 @@ export interface StageState {
   id: string;
   label: string;
   skill?: string;
+  modelTier?: ModelTier;
   verdict?: StageVerdict;
   status: StageStatus;
   usage?: StageUsage;
@@ -360,6 +361,7 @@ export function createInitialRunState({
       id: stage.id,
       label: stage.label,
       skill: stage.skill,
+      modelTier: stage.modelTier,
       status: "pending",
       logs: [],
     })),

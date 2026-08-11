@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MODEL_TIERS } from "./engines.ts";
 import { STAGE_EXECUTION_POLICIES, pipelineDefinitionSchema } from "./pipelines.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
@@ -23,6 +24,7 @@ export const orchestratorRoleSchema = z
     skill: requiredText,
     stepTask: requiredText,
     rationale: requiredText.optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     executionPolicy: z.enum(STAGE_EXECUTION_POLICIES).optional(),
     gateAfter: z.boolean().optional(),
     interactive: z.boolean().optional(),

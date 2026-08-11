@@ -1,5 +1,6 @@
 import { STAGE_EXECUTION_POLICIES } from "@adhd/core";
 import type {
+  ModelTier,
   OrchestratorRole,
   OrchestratorTeamProposal,
   PipelineDefinition,
@@ -56,6 +57,7 @@ function toStage(role: OrchestratorRole): StageDefinition {
     label: role.label,
     skill: role.skill,
     stepTask: role.stepTask,
+    modelTier: role.modelTier,
     executionPolicy: role.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD,
     gateAfter: role.gateAfter,
     interactive: role.interactive,
@@ -64,6 +66,32 @@ function toStage(role: OrchestratorRole): StageDefinition {
 
 export function composedPipelineId(orchestrationId: string): string {
   return `team-${orchestrationId}`;
+}
+
+export function withRoleTiers(
+  team: OrchestratorTeamProposal,
+  roleTiers: Record<string, ModelTier> | undefined,
+): ValidationResult<OrchestratorTeamProposal> {
+  if (roleTiers === undefined) {
+    return { ok: true, value: team };
+  }
+  const known = new Set(team.roles.map((role) => role.id));
+  const issues = Object.keys(roleTiers)
+    .filter((id) => !known.has(id))
+    .map((id) => ({ path: ["roleTiers", id], message: `Unknown role id: ${id}` }));
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+  return {
+    ok: true,
+    value: {
+      ...team,
+      roles: team.roles.map((role) => ({
+        ...role,
+        modelTier: roleTiers[role.id] ?? role.modelTier,
+      })),
+    },
+  };
 }
 
 export function composeTeamPipeline(

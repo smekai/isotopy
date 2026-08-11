@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
-import type { LimitResolution, RunSummary } from "@adhd/core";
+import type { LimitResolution, ModelTier, RunSummary } from "@adhd/core";
 import { preferredRunOptions } from "@adhd/core";
 import {
   abortRun,
@@ -156,6 +156,7 @@ export function App() {
     orchestrationRefreshKey(runs.runs),
   );
   const product = useProduct(projectId);
+  const [roleTiers, setRoleTiers] = useState<Record<string, ModelTier>>({});
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -236,13 +237,26 @@ export function App() {
   }
 
   async function handleApproveTeam(orchestrationId: string) {
-    const created = await orchestration.approveTeam(
-      orchestrationId,
-      currentRunOptions(),
-    );
+    const created = await orchestration.approveTeam(orchestrationId, {
+      ...currentRunOptions(),
+      roleTiers,
+    });
     if (created) {
+      setRoleTiers({});
       attachRun(created.id);
     }
+  }
+
+  function handleRoleTierChange(roleId: string, tier: ModelTier | undefined) {
+    setRoleTiers((current) => {
+      const next = { ...current };
+      if (tier === undefined) {
+        delete next[roleId];
+      } else {
+        next[roleId] = tier;
+      }
+      return next;
+    });
   }
 
   function handleSelectProject(id: string) {
@@ -370,7 +384,9 @@ export function App() {
     orchestration: activeOrchestration,
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
+    roleTiers,
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
+    onRoleTierChange: handleRoleTierChange,
     onStop: handleStopInitiative,
     onOpenRun: attachRun,
   };

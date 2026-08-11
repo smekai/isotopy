@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MODEL_TIERS } from "./engines.ts";
 import { requiredText } from "./schema.ts";
 
 export const STAGE_OUTPUT_PROTOCOLS = {
@@ -27,6 +28,7 @@ export const stageDefinitionSchema = z
     interactive: z.boolean().optional(),
     skill: requiredText.optional(),
     stepTask: requiredText.optional(),
+    modelTier: z.enum(MODEL_TIERS).optional(),
     executionPolicy: z.enum(STAGE_EXECUTION_POLICIES).optional(),
     outputProtocol: z.enum(STAGE_OUTPUT_PROTOCOLS).optional(),
     maxTurns: z.number().int().positive().optional(),

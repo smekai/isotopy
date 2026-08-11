@@ -5,7 +5,7 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@adhd/core";
-import { composeTeamPipeline } from "../../src/schemas/team-composition.ts";
+import { composeTeamPipeline, withRoleTiers } from "../../src/schemas/team-composition.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 test("an invented persona id is rejected, rather than degrading the stage to no persona", () => {
@@ -90,6 +90,48 @@ test("the composed pipeline is named for the orchestration that produced it", ()
   expect(valueOf(composed).id).toBe("team-abc123");
 });
 
+test("a role's model tier reaches the stage, which is the only place resolution reads it", () => {
+  const composed = composeTeamPipeline(team([role({ modelTier: "deep" })]), "abc123");
+
+  expect(stagesOf(composed)[0]).toMatchObject({ modelTier: "deep" });
+});
+
+test("a role that names no tier composes without one, so the stage falls back to the run's", () => {
+  const composed = composeTeamPipeline(team([role({})]), "abc123");
+
+  expect(stagesOf(composed)[0]?.modelTier).toBeUndefined();
+});
+
+test("the user's tier for a role replaces what the Orchestrator proposed for it", () => {
+  const proposed = team([role({ id: "build", modelTier: "max" }), role({ id: "check" })]);
+
+  const approved = withRoleTiers(proposed, { build: "fast" });
+
+  expect(rolesOf(approved).map((entry) => entry.modelTier)).toEqual(["fast", undefined]);
+});
+
+test("clearing a role back to the run default is a tier the user can choose", () => {
+  const proposed = team([role({ id: "build", modelTier: "max" })]);
+
+  const approved = withRoleTiers(proposed, {});
+
+  expect(rolesOf(approved)[0]?.modelTier).toBe("max");
+});
+
+test("a tier for a role that is not on the team is rejected rather than silently dropped", () => {
+  const proposed = team([role({ id: "build" })]);
+
+  const approved = withRoleTiers(proposed, { typo: "fast" });
+
+  assert(!approved.ok, "expected an unknown role id to be rejected");
+  expect(formatValidationIssues(approved.issues)).toBe("roleTiers.typo: Unknown role id: typo");
+});
+
+function rolesOf(approved: ReturnType<typeof withRoleTiers>): OrchestratorRole[] {
+  assert(approved.ok, "expected the approved team to be valid");
+  return approved.value.roles;
+}
+
 function role(overrides: Partial<OrchestratorRole>): OrchestratorRole {
   return {
     id: overrides.id ?? "implementation",
@@ -97,6 +139,7 @@ function role(overrides: Partial<OrchestratorRole>): OrchestratorRole {
     skill: overrides.skill ?? "developer",
     stepTask: overrides.stepTask ?? "implement-feature",
     rationale: overrides.rationale,
+    modelTier: overrides.modelTier,
     executionPolicy: overrides.executionPolicy,
     gateAfter: overrides.gateAfter,
     interactive: overrides.interactive,
