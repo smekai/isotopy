@@ -1,5 +1,51 @@
 # Done
 
+## TASK-115: Per-role model presets, chosen by the Orchestrator
+**Priority:** P2 | **Tags:** core, server, ui, engine, milestone-f
+**Updated:** 2026-08-11 22:00
+
+A run picked one tier and every stage used it, so the Product Manager restating approved scope
+reasoned as hard as the Architect choosing the design, and dropping a run to `fast` took the
+Architect down with it. The preset now belongs to the **role**: the Orchestrator proposes one
+per role, the user sees and can change each in the team-review card before approving, and a
+stage resolves `stage.modelTier ?? run.modelTier` so the run's tier stays the default.
+
+**Delivered:**
+
+- Optional `modelTier` on `orchestratorRoleSchema` and `stageDefinitionSchema` (both
+  `.strict()`, so this is what lets the value through at all), on the persisted stage schema,
+  and seeded onto `StageState` in `createInitialRunState`.
+- `selectModel` reads the stage's own tier, falling back to the run's. One call site.
+- `roleTiers` on the approve body, merged by `withRoleTiers` over the proposed roles — an id
+  matching no role is a validation issue, not a silent no-op.
+- A per-role tier control on the team card, defaulting to the Orchestrator's choice or "Run
+  default"; `LimitModal` now names the blocked stage's own rung rather than the run's.
+
+**Scope decided with the user:** composed teams only — no rung is authored into `pm-dev-test`
+or `full-delivery`. A role without one follows the run, as today.
+
+**Limits.** A limit still parks the stage and waits for the reset, and a tier changes only when
+the user asks in that dialog. Review caught that this was not enough on its own: a blocked role
+pinned to `deep` would resume on `deep` and hit the same limit again, because the fallback
+prefers the stage's preset over the run's. `resolveLimit` now writes the chosen tier to the
+blocked stage as well as the run, so the user's choice reaches the stage they are unblocking.
+For any pipeline where no stage carries a preset, this is identical to the old behaviour.
+
+**The live check earned its place.** The first real Orchestrator turn failed: the model invented
+a `rationale_tier` key and the strict schema rejected the whole decision. The prompt had said
+"say why in the role's `rationale`", which read as an invitation to add a field. Reworded to say
+a role carries exactly the keys shown and any other key rejects the decision. On the re-run the
+Orchestrator proposed, for a rate-limiting goal with a real design fork: **Software Architect
+`deep`** ("weigh token bucket vs sliding window"), **Developer run default** ("implements the
+approved design"), **QA Engineer `balanced`**. That is the intended trade, and no test could
+have found the prompt bug.
+
+774 tests (+15), 67 e2e (+1), lint, typecheck, build, no skill drift. Verified on Windows.
+
+Cross-platform: n/a — tier resolution and the effort flags already go through the adapters.
+
+---
+
 ## TASK-138: Run the built product and show it in an embedded browser
 **Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-f
 **Updated:** 2026-08-11 12:05

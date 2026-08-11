@@ -36,6 +36,18 @@ test("a proposed team is presented with its roles and can be approved", async ({
   await expect(page.getByTestId("approve-team")).toBeEnabled();
 });
 
+test("each role's model preset is on the card, so the cost is visible before approval", async ({ page }) => {
+  // Arrange
+  await anticipate(page, awaitingApproval());
+
+  // Act
+  await attachSeededRun(page);
+
+  // Assert — the Developer carries the Orchestrator's choice, QA falls back to the run's.
+  await expect(page.getByTestId("role-tier-implementation")).toHaveValue("deep");
+  await expect(page.getByTestId("role-tier-test")).toHaveValue("");
+});
+
 test("an initiative waiting on the user says so, and offers no team to approve", async ({ page }) => {
   // Arrange
   await anticipate(page, awaitingUser());
@@ -115,7 +127,13 @@ function awaitingApproval(): Orchestration {
         name: "Delivery pair",
         summary: "Build it and verify it",
         roles: [
-          { id: "implementation", label: "Developer", skill: "developer", stepTask: "implement-feature" },
+          {
+            id: "implementation",
+            label: "Developer",
+            skill: "developer",
+            stepTask: "implement-feature",
+            modelTier: "deep",
+          },
           { id: "test", label: "QA Engineer", skill: "tester", stepTask: "verify-feature" },
         ],
       },

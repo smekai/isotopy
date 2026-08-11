@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
-import type { LimitResolution, RunSummary } from "@adhd/core";
+import type { LimitResolution, ModelTier, RunSummary } from "@adhd/core";
 import { preferredRunOptions } from "@adhd/core";
 import {
   abortRun,
@@ -43,6 +43,8 @@ import {
   routeRunId,
   runRoute,
 } from "./route";
+import { pendingTiersFor, withPendingTier } from "./orchestration";
+import type { PendingRoleTiers } from "./orchestration";
 import {
   firstActiveRunId,
   milestoneRefreshKey,
@@ -156,6 +158,7 @@ export function App() {
     orchestrationRefreshKey(runs.runs),
   );
   const product = useProduct(projectId);
+  const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -236,13 +239,23 @@ export function App() {
   }
 
   async function handleApproveTeam(orchestrationId: string) {
-    const created = await orchestration.approveTeam(
-      orchestrationId,
-      currentRunOptions(),
-    );
+    const created = await orchestration.approveTeam(orchestrationId, {
+      ...currentRunOptions(),
+      roleTiers: pendingTiersFor(pendingTiers, orchestration.find(orchestrationId)),
+    });
     if (created) {
+      setPendingTiers(null);
       attachRun(created.id);
     }
+  }
+
+  function handleRoleTierChange(roleId: string, tier: ModelTier | null) {
+    if (activeOrchestration === undefined) {
+      return;
+    }
+    setPendingTiers((current) =>
+      withPendingTier(current, activeOrchestration.id, roleId, tier),
+    );
   }
 
   function handleSelectProject(id: string) {
@@ -370,7 +383,9 @@ export function App() {
     orchestration: activeOrchestration,
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
+    roleTiers: pendingTiersFor(pendingTiers, activeOrchestration),
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
+    onRoleTierChange: handleRoleTierChange,
     onStop: handleStopInitiative,
     onOpenRun: attachRun,
   };

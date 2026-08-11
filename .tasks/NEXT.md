@@ -41,32 +41,6 @@ Cross-platform: every task here is verified on Windows and reasoned through for 
 
 ---
 
-## TASK-115: Per-role model presets, chosen by the Orchestrator
-**Priority:** P2 | **Tags:** core, server, ui, engine, milestone-f
-**Updated:** 2026-08-09 00:00
-
-**Moved out of Milestone H by `TASK-129`.** It was parked as "build only if feedback asks
-for it" because per-stage *model ids* meant asking a user, or an agent, to track ids that
-turn over monthly. Presets removed that objection: a stage carrying `fast` or `deep` is
-something both a person and the Orchestrator can reason about, and getting it wrong costs
-a rung rather than a failed run.
-
-**Most of the server work is already done.** `ModelTier` exists, and
-`stage-execution.ts` resolves the run's tier **per stage** rather than at run start —
-that seam was built for this task. What remains:
-
-- a per-stage tier on the workflow input / stage state, falling back to the run's;
-- the Orchestrator assigning one per role at team-composition time — a
-  `team-composition.ts` schema field plus the prompt work to make the choice reasoned
-  (cheap model doing the typing, expensive one deciding);
-- the team-review UI showing and letting the user change each role's rung before approval;
-- limit-park handling per stage: a rung that hits a plan limit must drop that stage, not
-  the whole run.
-
-Cross-platform: n/a — resolution and the effort flags already go through the adapters.
-
----
-
 ## TASK-116: README — top-level product schema (“How it works”)
 **Priority:** P1 | **Tags:** ui, server, milestone-f
 **Updated:** 2026-08-07 11:40

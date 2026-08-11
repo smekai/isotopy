@@ -5,6 +5,7 @@ import {
   orchestrationStatusFor,
 } from "@adhd/core";
 import type {
+  ModelTier,
   Orchestration,
   OrchestrationStatus,
   OrchestratorBrokerDecision,
@@ -30,7 +31,7 @@ import {
 } from "../domain/rules/orchestration-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
-import { composeTeamPipeline } from "../schemas/team-composition.ts";
+import { composeTeamPipeline, withRoleTiers } from "../schemas/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -53,6 +54,10 @@ import type {
 import { taskBoardFor } from "./task-board-adapter.ts";
 
 export type StartOrchestrationOptions = InheritedRunOptions;
+
+export interface ApproveTeamOptions extends StartOrchestrationOptions {
+  roleTiers?: Record<string, ModelTier | null>;
+}
 
 export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
@@ -166,7 +171,7 @@ export class OrchestrationService implements StageOutputConsumer {
   async approveTeam(
     projectPath: ProjectPath,
     orchestrationId: string,
-    options: StartOrchestrationOptions,
+    options: ApproveTeamOptions,
   ): Promise<ValidationResult<RunState>> {
     const orchestration = this.orchestrations.get(orchestrationId);
     if (!orchestration || orchestration.projectId !== projectPath.id) {
@@ -179,7 +184,11 @@ export class OrchestrationService implements StageOutputConsumer {
     ) {
       throw new Error("No team is awaiting approval on this orchestration");
     }
-    const composed = composeTeamPipeline(decision.team, orchestration.id);
+    const approved = withRoleTiers(decision.team, options.roleTiers);
+    if (!approved.ok) {
+      return approved;
+    }
+    const composed = composeTeamPipeline(approved.value, orchestration.id);
     if (!composed.ok) {
       return composed;
     }
@@ -187,11 +196,11 @@ export class OrchestrationService implements StageOutputConsumer {
       ...options,
       task: renderComposedRunTask({
         goal: orchestration.goal,
-        team: decision.team,
+        team: approved.value,
       }),
       orchestrationId: orchestration.id,
     });
-    orchestration.approvedTeam = decision.team;
+    orchestration.approvedTeam = approved.value;
     orchestration.composedPipeline = composed.value;
     if (!orchestration.runIds.includes(run.id)) {
       orchestration.runIds.push(run.id);

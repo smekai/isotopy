@@ -67,6 +67,7 @@ export function createOrchestrationRoutes(
             engine: body.engine,
             model: body.model,
             modelTier: body.modelTier,
+            roleTiers: body.roleTiers,
             permissionMode: body.permissionMode,
           },
         );

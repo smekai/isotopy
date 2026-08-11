@@ -661,6 +661,7 @@ export class RunService implements RunProjection {
     else run.model = selection.model;
     if (selection.modelTier === undefined) delete run.modelTier;
     else run.modelTier = selection.modelTier;
+    if (resolution.choice === "switch-tier") stage.modelTier = resolution.tier;
     this.limitResolved(runId, stageId, resolution.choice);
     void this.store.flushPersist(runId);
     void this.runtimes.forProject(run.projectId).resolveLimit(runId, stageId, resolution.choice);

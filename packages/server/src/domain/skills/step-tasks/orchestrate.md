@@ -31,6 +31,7 @@ runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
         "skill": "developer",
         "stepTask": "implement-feature",
         "rationale": "Why this role is here",
+        "modelTier": "balanced",
         "executionPolicy": "standard",
         "gateAfter": false,
         "interactive": false
@@ -39,6 +40,30 @@ runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
   }
 }
 ```
+
+### Choosing `modelTier` per role
+
+`modelTier` is optional and buys reasoning, not capability. Every role can do its
+job at any tier; a lower one costs quality, not the run. Omit it and the role uses
+whatever tier the user picked for the run, which is the right answer whenever you
+have no reason to differ.
+
+The five tiers are `auto`, `fast`, `balanced`, `deep`, `max`.
+
+Spend on the role that **decides** and save on the role that **records**. A
+Software Architect choosing between designs, or a Developer working through a
+subtle change, is where reasoning turns into a better result. A role that mostly
+transcribes a decision already made — restating approved scope, filling in a
+release checklist — reads the same at `fast` as at `deep`.
+
+Two rules keep this honest:
+
+- Do not put the whole team on one tier. If every role carries the same value,
+  you have not made a choice and should omit the field entirely.
+- When you depart from the run's default, fold the reason into the role's
+  existing `rationale` string. There is no separate field for it: a role carries
+  exactly the keys shown above, and a decision containing any other key is
+  rejected whole.
 
 Hand a goal that needs a milestone and an ordered backlog to the Product Manager
 instead of composing a team for it:

@@ -322,6 +322,8 @@ function orchestrationOverrides(): Partial<RunTabsProps> {
         orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
       ],
       busy: false,
+      roleTiers: {},
+      onRoleTierChange: vi.fn(),
       onApprove: vi.fn(),
       onStop: vi.fn(),
       onOpenRun: vi.fn(),

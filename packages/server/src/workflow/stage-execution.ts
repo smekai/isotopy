@@ -246,7 +246,7 @@ async function runAdapter(
   const controller = deps.beginEngineStage(run.id);
   try {
     const adapter = getEngineAdapter(engine);
-    const selection = await selectModel(deps, run, engine);
+    const selection = await selectModel(deps, run, stageId, engine);
     return await adapter.run({
       runId: run.id,
       prompt,
@@ -279,15 +279,17 @@ interface ModelSelection {
 async function selectModel(
   deps: WorkflowDeps,
   run: RunState,
+  stageId: string,
   engine: EngineId,
 ): Promise<ModelSelection> {
   if (run.model !== undefined) {
     return { model: run.model };
   }
-  if (run.modelTier === undefined) {
+  const tier = run.stages.find((stage) => stage.id === stageId)?.modelTier ?? run.modelTier;
+  if (tier === undefined) {
     return {};
   }
-  const resolved = resolveTier(engine, run.modelTier, await deps.rosters.roster(engine));
+  const resolved = resolveTier(engine, tier, await deps.rosters.roster(engine));
   return {
     model: resolved.model,
     effort: resolved.effort,

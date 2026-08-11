@@ -14,6 +14,7 @@ import {
   post,
   restartApp,
   stageMessage,
+  stageOf,
   startRun,
   waitForRunStatus,
   waitForStageStatus,
@@ -51,6 +52,16 @@ const TEAM_PROPOSAL: OrchestratorDecision = {
   team: TEAM,
 };
 
+/** The Developer is where the thinking happens; QA is left on whatever the run chose. */
+const TIERED_TEAM_PROPOSAL: OrchestratorDecision = {
+  action: "propose_team",
+  rationale: "The build needs reasoning; verifying it does not",
+  team: {
+    ...TEAM,
+    roles: [{ ...DEVELOPER_ROLE, modelTier: "deep" }, QA_ROLE],
+  },
+};
+
 /** The same pair, but the Developer may stop and ask — only then is a question brokered. */
 const INTERACTIVE_TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
@@ -70,6 +81,9 @@ const REVIEW_ARTIFACTS = {
 };
 
 const STOP: OrchestratorDecision = { action: "stop", reason: "goal met" };
+
+/** The verbatim trigger from TASK-061, reused here to park a composed stage. */
+const SESSION_LIMIT = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 
 let ctx: TestApp;
 
@@ -511,6 +525,113 @@ test("approving a proposed team starts a composed run carrying its own pipeline 
     { id: "test", executionPolicy: "quality" },
   ]);
   ctx.engine.verify();
+});
+
+test("a role with its own preset runs at it while a role without one follows the run's", async () => {
+  // Anticipate — deep resolves to opus/high for this engine, the run's fast to haiku/low.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TIERED_TEAM_PROPOSAL));
+  ctx.engine
+    .anticipate({ as: "Developer", model: "opus", effort: "high" })
+    .reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({ as: "QA Engineer", model: "haiku", effort: "low" })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
+  const conversation = await proposedTeam();
+
+  // Act
+  const { status, body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code", modelTier: "fast" },
+  );
+
+  // Assert
+  expect(status, JSON.stringify(composed)).toBe(201);
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  ctx.engine.verify();
+});
+
+test("the preset the user changed at approval is what runs, not the one proposed", async () => {
+  // Anticipate — the Orchestrator asked for deep; the user overrode it down to fast.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TIERED_TEAM_PROPOSAL));
+  ctx.engine
+    .anticipate({ as: "Developer", model: "haiku", effort: "low" })
+    .reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({ as: "QA Engineer", model: "opus", effort: "high" })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
+  const conversation = await proposedTeam();
+
+  // Act
+  const { status, body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code", roleTiers: { implementation: "fast", test: "deep" } },
+  );
+
+  // Assert
+  expect(status, JSON.stringify(composed)).toBe(201);
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  ctx.engine.verify();
+});
+
+test("dropping a tier at a limit reaches the blocked role, not only the run default", async () => {
+  // Anticipate — the Developer is pinned to deep, so lowering only the run's tier
+  // would resume it on opus again and block on the same limit.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TIERED_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer", model: "opus" }).hitsLimit(SESSION_LIMIT);
+  ctx.engine
+    .anticipate({ as: "Developer on Haiku", model: "haiku" })
+    .reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({ as: "QA Engineer", model: "haiku" })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
+  const conversation = await proposedTeam();
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code", modelTier: "balanced" },
+  );
+  await waitForStageStatus(ctx.app, composed.id, "implementation", "blocked");
+
+  // Act
+  await post(ctx.app, `/runs/${composed.id}/limit/implementation/resolve`, {
+    choice: "switch-tier",
+    tier: "fast",
+  });
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, composed.id, "completed");
+  expect(stageOf(finished, "implementation").modelTier).toBe("fast");
+  ctx.engine.verify();
+});
+
+test("a preset for a role that is not on the team is refused rather than quietly ignored", async () => {
+  // Anticipate — the proposal is all that runs; approval never reaches an engine.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  const conversation = await proposedTeam();
+
+  // Act
+  const { status, body } = await post(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code", roleTiers: { developer: "fast" } },
+  );
+
+  // Assert
+  expect(status).toBe(400);
+  expect(JSON.stringify(body)).toContain("Unknown role id: developer");
 });
 
 test("approving records the team and keeps both runs on the orchestration", async () => {

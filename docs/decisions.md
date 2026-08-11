@@ -15,6 +15,43 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-11 — A model preset belongs to a role, not to a run
+
+**Context:** a run picked one tier and every stage used it, so the Product Manager
+restating approved scope reasoned as hard as the Architect choosing the design, and
+dropping a run to `fast` to save money took the Architect down with it. `TASK-129`
+made this fixable by replacing per-stage *model ids*, which turn over monthly, with
+five presets a person and an agent can both reason about.
+
+**Decision:** the preset lives on the **role** the Orchestrator proposes, travels
+into the composed pipeline as `StageDefinition.modelTier`, and is seeded onto
+`StageState` at run creation. A stage resolves `stage.modelTier ?? run.modelTier`,
+so the run's tier remains the default and every existing pipeline behaves exactly as
+before. The user sees and can change each role's preset in the team-review card
+before approving, which is the only moment the whole team is visible at once.
+
+**Rejected — a per-persona default table.** Mapping `software-architect → deep`,
+`tester → fast` would make the feature work without the Orchestrator cooperating, and
+would guess a cost trade-off on the user's behalf for personas they never configured.
+An unset role follows the run, which is what it did yesterday.
+
+**Rejected — presets on the static pipelines.** `pm-dev-test` and `full-delivery` are
+shared constants; a tier authored into one applies to every run of it forever. The
+field exists on `StageDefinition` so a static pipeline *could* carry one, but none
+does.
+
+**Consequence for limits:** a limit still parks the stage and waits for the reset,
+and a tier only ever changes when the user asks for it in that dialog — nothing is
+re-rung automatically once a run has started. But the user's choice has to reach the
+stage they are unblocking: a blocked role pinned to `deep` would otherwise resume on
+`deep` and hit the same limit again, because the fallback prefers the stage's own
+preset over the run's. `resolveLimit` therefore writes the chosen tier to the blocked
+stage as well as to the run. Later roles with their own preset keep it; later roles
+without one follow the new default. For a pipeline where no stage carries a preset —
+every static one — this is identical to the old behaviour.
+
+---
+
 ## 2026-08-11 — The product runs once per project, is shown in an iframe, and is driven by the agents' own browsers
 
 **Context:** `TASK-138` had to show a user the thing a run built. The repo had no
