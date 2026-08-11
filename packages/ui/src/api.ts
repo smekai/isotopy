@@ -7,6 +7,7 @@ import type {
   EngineStatus,
   LimitResolution,
   Orchestration,
+  ProductProcessStatus,
   Project,
   ProjectPreferencesUpdate,
   ProjectsView,
@@ -112,6 +113,18 @@ export function updateAutomationConfig(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
   });
+}
+
+export function fetchProductStatus(): Promise<ProductProcessStatus> {
+  return requestJson<ProductProcessStatus>("/automation/product");
+}
+
+export function startProduct(): Promise<ProductProcessStatus> {
+  return postJson<ProductProcessStatus>("/automation/product/start");
+}
+
+export function stopProduct(): Promise<ProductProcessStatus> {
+  return postJson<ProductProcessStatus>("/automation/product/stop");
 }
 
 export function deployProduction(): Promise<DeploymentRecord> {

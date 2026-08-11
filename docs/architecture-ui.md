@@ -230,6 +230,20 @@ the Orchestrator tab additionally requires the `orchestrator` prop — so a run 
 orchestration `App` cannot resolve falls back to the ordinary three rather than rendering
 an empty panel.
 
+**A project that says how to start itself earns a `Preview` tab**, appended after
+`Artifacts` rather than opened on — the run is still what the user came for. It appears only
+when `product.status.configured` is true, which is the server's answer about the `ui` block
+in `.adhd/automation.json`, so a project that never declared a start command is never offered
+a tab that can only disappoint. Unlike the two above, the product is **project**-scoped: it
+survives switching between runs, and an initiative's child runs share one process.
+
+**The product's state polls, and deliberately does not become a third SSE channel.**
+`useProduct` refetches once a second while the state is `starting`, and stops at every other
+state. The two channels above are both run-scoped, and the rule against widening
+`/runs/events` into a second copy of `RunState` applies just as much to widening it into
+something that is not a run at all. A poll bounded by a transitional state costs one request
+a second for a few seconds; a third channel would cost a channel forever.
+
 **Neither default can live in the `useState` initialiser alone**, and the Orchestrator is the
 sharper case. `App` feeds `RunTabs` from two independent loads — the run over its own SSE
 subscription, the orchestration over `useOrchestration`'s fetch — and the run almost always
@@ -497,7 +511,7 @@ list card. The current roster:
 
 `open-project` · `workspace-chip` · `folder-picker` · `project-switcher` ·
 `project-drawer` · `project-root` · `run-status` · `run-cost` ·
-`run-tab-<chat|team|plan|logs|artifacts>` · `stage-node-<stageId>` · `stage-profession` ·
+`run-tab-<chat|team|plan|logs|artifacts|preview>` · `stage-node-<stageId>` · `stage-profession` ·
 `stage-persona` · `stage-verdict` · `stage-scroll` · `artifact-preview` ·
 `artifact-view-<changes|workflow|closeout|files>` · `artifact-files` ·
 `artifact-changes` · `run-result` · `open-project-folder` · `run-card` ·
@@ -509,7 +523,9 @@ list card. The current roster:
 `milestone-feature-accept` · `closeout-panel` · `closeout-created-task` ·
 `closeout-validation-errors` · `choose-pipeline` · `choose-orchestrator` ·
 `orchestrator-panel` · `orchestrator-status` · `orchestrator-team` ·
-`orchestrator-decision` · `orchestrator-run` · `approve-team` · `stop-orchestrator`
+`orchestrator-decision` · `orchestrator-run` · `approve-team` · `stop-orchestrator` ·
+`product-preview` · `product-start` · `product-stop` · `product-restart` ·
+`product-open-external`
 
 `milestone-card` and `milestone-feature` also carry `data-milestone-id` /
 `data-feature-id`, which is what the e2e suite locates on: the e2e home is durable,

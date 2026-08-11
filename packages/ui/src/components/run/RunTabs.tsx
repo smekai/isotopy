@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { FileText, Flag, MessageSquare, Terminal, Users } from "lucide-react";
+import { FileText, Flag, MessageSquare, Monitor, Terminal, Users } from "lucide-react";
 import { MILESTONE_PLANNING_PIPELINE, ORCHESTRATION_PIPELINE } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import type { Dir } from "../../theme";
+import type { ProductController } from "../../hooks/useProduct";
 import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, SANS, SPACE, WEIGHT } from "../../theme";
 import { ArtifactsPanel } from "./ArtifactsPanel";
@@ -13,9 +14,10 @@ import { LogsPanel } from "./LogsPanel";
 import { MilestonePlanPanel } from "./MilestonePlanPanel";
 import { OrchestratorPanel } from "./OrchestratorPanel";
 import type { OrchestratorView } from "./OrchestratorPanel";
+import { PreviewPanel } from "./PreviewPanel";
 import { PANEL } from "./run-styles";
 
-export type RunTab = "chat" | "plan" | "team" | "logs" | "artifacts";
+export type RunTab = "chat" | "plan" | "team" | "logs" | "artifacts" | "preview";
 
 interface RunTabEntry {
   id: RunTab;
@@ -73,20 +75,28 @@ function clearFilterButton(d: Dir): CSSProperties {
   };
 }
 
-function tabsFor(planning: boolean, orchestrating: boolean): RunTabEntry[] {
+const PREVIEW_TAB: RunTabEntry = {
+  id: "preview",
+  label: "Preview",
+  icon: <Monitor size={ICON.sm} />,
+};
+
+function tabsFor(
+  planning: boolean,
+  orchestrating: boolean,
+  previewable: boolean,
+): RunTabEntry[] {
+  const standard = previewable ? [...STANDARD_TABS, PREVIEW_TAB] : STANDARD_TABS;
   if (planning) {
     return [
-      STANDARD_TABS[0]!,
+      standard[0]!,
       { id: "plan", label: "Plan", icon: <Flag size={ICON.sm} /> },
-      ...STANDARD_TABS.slice(1),
+      ...standard.slice(1),
     ];
   }
   return orchestrating
-    ? [
-        { id: "team", label: "Orchestrator", icon: <Users size={ICON.sm} /> },
-        ...STANDARD_TABS,
-      ]
-    : STANDARD_TABS;
+    ? [{ id: "team", label: "Orchestrator", icon: <Users size={ICON.sm} /> }, ...standard]
+    : standard;
 }
 
 export interface RunTabsProps {
@@ -96,6 +106,7 @@ export interface RunTabsProps {
   d: Dir;
   settings?: SettingsController;
   orchestrator?: OrchestratorView;
+  product?: ProductController;
   onSend: (text: string) => void;
   onRunStarted?: (runId: string) => void;
   onClearFocus: () => void;
@@ -108,6 +119,7 @@ export function RunTabs({
   d,
   settings,
   orchestrator,
+  product,
   onSend,
   onRunStarted,
   onClearFocus,
@@ -115,7 +127,8 @@ export function RunTabs({
   const planning = run.pipelineId === MILESTONE_PLANNING_PIPELINE.id;
   const orchestrating =
     run.pipelineId === ORCHESTRATION_PIPELINE.id && orchestrator !== undefined;
-  const tabs = tabsFor(planning, orchestrating);
+  const previewable = product?.status?.configured === true;
+  const tabs = tabsFor(planning, orchestrating, previewable);
   const [tab, setTab] = useState<RunTab>(
     planning && run.status === "completed" ? "plan" : orchestrating ? "team" : "chat",
   );
@@ -187,6 +200,7 @@ export function RunTabs({
       {tab === "logs" && (
         <LogsPanel run={run} focusedStageId={focusedStageId} d={d} />
       )}
+      {tab === "preview" && product && <PreviewPanel {...product} d={d} />}
       {tab === "artifacts" && (
         <ArtifactsPanel
           run={run}

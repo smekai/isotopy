@@ -44,14 +44,14 @@ describe("skill generation", () => {
     ).toEqual([]);
   });
 
-  test("QA stays an ordinary Playwright-only workflow step", async () => {
+  test("QA stays an ordinary workflow step that never owns the product process", async () => {
     const persona = await loadBundledPersona("tester");
     const assignment = await loadBundledStepTask("verify-feature");
 
     expect(persona).toContain("ordinary agent-backed workflow step");
-    expect(persona).toContain("Use Playwright for interactive UI verification");
-    expect(persona).toContain("Do not use or depend on an agent-native browser");
-    expect(assignment).toContain("For UI work, use Playwright only");
+    expect(persona).toContain("Playwright");
+    expect(persona).toContain("Never start, stop or kill the product yourself");
+    expect(assignment).toContain("Do not start it yourself");
     expect(assignment).not.toContain("adhd-qa-result");
   });
 });

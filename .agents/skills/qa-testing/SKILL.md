@@ -20,11 +20,12 @@ the shape of whichever file you happened to open.
 
 1. Use component or server tests for workflow semantics, persistence, API
    contracts, and state transitions.
-2. Use Playwright for repeatable UI regressions, browser exploration, and
-   visual evidence. It is the only browser mechanism in the MVP and must remain
-   runnable without an agent-specific browser tool.
-3. Do not use agent-native browser control for MVP verification. That
-   integration is deferred to TASK-095.
+2. Use Playwright for repeatable UI regressions and visual evidence. It stays
+   the authority: every rule that must hold has to be provable without any
+   agent-specific browser tool, because CI has none.
+3. Use your own browser capability for exploration and for looking at something
+   once. Anything it finds that must keep holding is promoted into a Playwright
+   test — a finding seen only through an agent browser is not covered.
 
 ## Run a UI check
 
@@ -34,6 +35,9 @@ the shape of whichever file you happened to open.
    teardown.
 3. Run Playwright headlessly with semantic locators and observable assertions.
    A successful click sequence alone is not proof of correct state.
+   Where the project under test declares a `ui` start command, ask ADHD to
+   start the product (`POST /automation/product/start`) rather than starting a
+   server yourself — it owns that process and its port.
 4. Retain screenshots for visual findings and traces when they help reproduce a
    failure. Record the commands, browser mode, and limitations.
 5. Promote stable behaviour into a Playwright test when it protects a named

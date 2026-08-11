@@ -5,6 +5,7 @@ export * from "./engines.ts";
 export * from "./milestones.ts";
 export * from "./orchestration.ts";
 export * from "./pipelines.ts";
+export * from "./product.ts";
 export * from "./projects.ts";
 export * from "./run-artifacts.ts";
 export * from "./run-changes.ts";

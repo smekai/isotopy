@@ -60,6 +60,49 @@ grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
 does drain. The grace window is the whole trade: too short truncates a chatty
 CLI's last lines, too long re-introduces the stall.
 
+**Handle-returning start (`startSubprocess`).** A dev server outlives the request
+that asked for it, so `TASK-138` needed the `ChildProcess` rather than a promise
+of its exit — `killProcessTree` takes the object, not a pid. `startSubprocess`
+returns `{ pid, kill, exited }` and does the spawning; `runSubprocess` is now
+`startSubprocess(spec).exited`, so the Windows shim rewrite and the POSIX
+`detached` group exist in exactly one place. Splitting them would have been the
+bug: a second spawn path that forgets `detached` orphans the tree on POSIX and
+nothing fails until a user's dev server survives a stop.
+
+**`timeoutMs` is optional, and omitting it means no timer.** Every other caller
+bounds a command that is expected to exit. A product process is not: it is meant
+to run until stopped, and a lifetime timeout would kill someone's dev server
+mid-demo. `UiAutomation.start.timeoutMs` therefore bounds nothing at this layer —
+readiness is bounded separately by `readyTimeoutMs` in `ProductProcessService`.
+
+## The product process (`services/product-process-service.ts`)
+
+**One process, tagged with its project.** Two instances would fight over the port
+named in `healthUrl`, so there is one, and starting one for another project stops
+the first. It is not run-scoped: an initiative's child runs would each kill the
+preview the user was watching. A completed run that changed files calls
+`refreshFor`, which restarts rather than stops, so the preview is the new build.
+
+**`stop()` must not wait out the readiness poll.** The poll runs for up to
+`readyTimeoutMs` (a minute by default), and `stop()` awaits the watcher so callers
+know the kill finished. Each launch therefore carries its own `AbortController`,
+aborted by both `stop()` and the process exiting, which is what the poll's
+`signal` is threaded to. Without it a Stop click, a project switch or a server
+shutdown would block for the rest of the readiness budget.
+
+**Framing is preflighted once, on reaching ready, and never on the client.** A
+cross-origin iframe cannot report why it failed — the browser refuses it and the
+page has no way to ask. So the server makes one request and reads
+`X-Frame-Options` and CSP `frame-ancestors` itself. See
+[`embedded-preview.md`](./embedded-preview.md) for why the answer is an iframe at
+all, and for the deliberate false-positive on a `frame-ancestors` list.
+
+**The stage prompt describes the API rather than handing over a command line.**
+`buildProductEnvironment` names the method, path and header and lets the agent
+choose its own tool. A `curl -s -X POST …` one-liner would have been shorter and
+wrong on Windows, where PowerShell aliases `curl` to `Invoke-WebRequest` and the
+flags are not the same flags.
+
 ## Running the build (`pnpm start`)
 
 `pnpm build` emits a compiled server and a static UI bundle. `pnpm start` mirrors

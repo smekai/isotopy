@@ -1,5 +1,57 @@
 # Done
 
+## TASK-138: Run the built product and show it in an embedded browser
+**Priority:** P1 | **Tags:** ui, server, engine, testing, milestone-f
+**Updated:** 2026-08-11 12:05
+
+**Milestone F** — `TASK-126` delivered the weaker half of *sees the thing that was built*: a
+run names its files. This delivers the rest. A project that declares a `ui` block in
+`.adhd/automation.json` — stored since `TASK-092` and until now read by nothing but its own
+Setup editor — gains a **Preview** tab that starts the product, waits for its health URL,
+and frames it inside ADHD.
+
+**The research that decided the design** (`docs/embedded-preview.md`): VS Code's Simple
+Browser and Cursor's Preview both frame localhost in a plain `<iframe>` with no proxy, and it
+works because dev servers do not set framing headers by default; Cursor 2.0, Codex and Claude
+Code all drive a product over **CDP**, never through the frame. So the shared seam is the
+**process and its URL**, not the rendering surface — one process, two consumers. The user
+gets an iframe; the QA agent gets the same URL through a new `## Environment` block in its
+stage prompt and drives it with its own browser capability.
+
+**Absorbs `TASK-095`.** Its policy half is now written into the persona — where no browser
+capability exists, Playwright is the complete fallback and the CI authority — so `TASK-095`
+should be **rejected** rather than built.
+
+**Delivered:**
+
+- `startSubprocess` returns a handle (`pid`, `kill`, `exited`); `runSubprocess` is now
+  `startSubprocess(spec).exited`, so the Windows `.cmd` rewrite and the POSIX process group
+  stay in one place. `timeoutMs` became optional — a product process has no lifetime bound.
+- `ProductProcessService`: one process at a time, tagged with its project, idempotent start,
+  readiness poll, one framing preflight, and a `stop` that waits for the process to actually
+  be gone. `DeploymentRunner`'s poll loop was extracted to `utils/health-poll.ts` and both
+  now share it.
+- `GET/POST /automation/product{,/start,/stop}`; the first `SIGINT`/`SIGTERM` hook the server
+  has ever had, which also finally calls `RunService.shutdown()` outside tests.
+- `Preview` tab, `PreviewPanel`, `useProduct` (polls only while starting). A framing refusal
+  names the header that refused, beside "Open in browser" — never a blank box.
+- Persona, step task and QA skill moved off Playwright-only and off starting servers
+  themselves, which is the `TASK-117` failure seen from the other side.
+
+**Verified on Windows**, live and not only in tests: ready and framing-allowed; a product
+that never answers reporting its own stderr rather than a bare timeout; `X-Frame-Options:
+DENY` detected and named; a product *and its child process* both gone after Stop. 752 tests,
+66 e2e, lint, typecheck, build, no skill drift. macOS reasoned through, untested — the kill
+path is `killProcessTree`'s existing POSIX process-group branch. `Ctrl-C` could not be driven
+from a script on Windows, so the shutdown hook is covered by test rather than by hand.
+
+Cross-platform: starting and killing go through `startSubprocess`/`killProcessTree` with
+executable-plus-argument arrays; `commandForPlatform` picks the `windows`/`posix` override.
+The stage prompt describes the HTTP call rather than handing over a `curl` one-liner, which
+would be wrong in PowerShell.
+
+---
+
 ## TASK-124: Orchestrator-brokered permission modes for the harnesses
 **Priority:** P1 | **Tags:** core, server, engine, adapters, milestone-f
 **Updated:** 2026-08-10 21:05

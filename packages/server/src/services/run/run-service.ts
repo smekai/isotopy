@@ -59,6 +59,7 @@ import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
   OrchestrationHooks,
   PipelineWorkflowInput,
+  ProductHooks,
   RunCompletionStatus,
   RunProjection,
   WorkflowDeps,
@@ -99,6 +100,7 @@ export class RunService implements RunProjection {
   private readonly listeners = new ListenerRegistry<RunEvent>();
   private readonly projectListeners = new ListenerRegistry<RunSummary>();
   private orchestration?: OrchestrationHooks;
+  private product?: ProductHooks;
 
   constructor(
     private readonly registry: ProjectRegistry,
@@ -122,6 +124,7 @@ export class RunService implements RunProjection {
       automation: this.automation,
       deployment: this.deployment,
       orchestration: () => this.orchestration,
+      product: () => this.product,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
@@ -226,6 +229,10 @@ export class RunService implements RunProjection {
 
   registerOrchestration(orchestration: OrchestrationHooks): void {
     this.orchestration = orchestration;
+  }
+
+  registerProduct(product: ProductHooks): void {
+    this.product = product;
   }
 
   inheritedRunOptions(runId: string): InheritedRunOptions {
@@ -810,6 +817,9 @@ export class RunService implements RunProjection {
       ts: nowIso(), type: "run.completed", runId, status,
       message: completionMessage(status), result: run.result,
     });
+    if (run.changes !== undefined) {
+      void this.product?.refreshFor(run.projectId);
+    }
     void this.settleCompletedRun(run);
   }
 

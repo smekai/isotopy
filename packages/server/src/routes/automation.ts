@@ -8,6 +8,8 @@ import { invalidRequest } from "../domain/validation.ts";
 import { InvalidAutomationConfigError } from "../services/automation-config-store.ts";
 import type { AutomationConfigStore } from "../services/automation-config-store.ts";
 import type { DeploymentRunner } from "../services/deployment-runner.ts";
+import { ProductNotConfiguredError } from "../services/product-process-service.ts";
+import type { ProductProcessService } from "../services/product-process-service.ts";
 import { persistProjectDeploymentArtifacts } from "../services/run-evidence.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { projectScope } from "./project-scope.ts";
@@ -24,8 +26,35 @@ export function createAutomationRoutes(
   registry: ProjectRegistry,
   automation: AutomationConfigStore,
   deployment: DeploymentRunner,
+  product: ProductProcessService,
 ): Hono {
   return new Hono()
+    .get("/product", async (c) => {
+      try {
+        return c.json(await product.status(projectScope(registry, c)));
+      } catch (error) {
+        return c.json(invalidConfig(error), 422);
+      }
+    })
+
+    .post("/product/start", async (c) => {
+      const project = projectScope(registry, c);
+      try {
+        return c.json(await product.start(project));
+      } catch (error) {
+        if (error instanceof ProductNotConfiguredError) {
+          return c.json({ error: error.message }, 409);
+        }
+        return c.json(invalidConfig(error), 422);
+      }
+    })
+
+    .post("/product/stop", async (c) => {
+      const project = projectScope(registry, c);
+      await product.stop();
+      return c.json(await product.status(project));
+    })
+
     .get("/", async (c) => {
       try {
         return c.json(await automation.get(projectScope(registry, c)));

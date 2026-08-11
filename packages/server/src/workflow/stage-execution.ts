@@ -22,6 +22,7 @@ import type {
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
+import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
 import { buildContinuationPrompt, buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
@@ -64,6 +65,7 @@ function turnPrompt(
   stageDef: StageDefinition,
   turn: StageTurn,
   stepTask: string | undefined,
+  environment: string | undefined,
 ): string {
   if (turn.resumeSessionId !== undefined) {
     return turn.answer ?? "";
@@ -71,8 +73,36 @@ function turnPrompt(
   const task = input.task ?? "";
   const upstream = upstreamFor(run, stageDef.id);
   return turn.exchanges === undefined || turn.exchanges.length === 0
-    ? buildStagePrompt(task, upstream, stepTask)
-    : buildContinuationPrompt({ task, upstream, exchanges: turn.exchanges, stepTask });
+    ? buildStagePrompt(task, upstream, stepTask, environment)
+    : buildContinuationPrompt({
+        task,
+        upstream,
+        exchanges: turn.exchanges,
+        stepTask,
+        ...(environment === undefined ? {} : { environment }),
+      });
+}
+
+export const VERIFY_FEATURE_STEP_TASK = "verify-feature";
+
+async function productEnvironment(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+): Promise<string | undefined> {
+  if (stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK) {
+    return undefined;
+  }
+  const project = deps.registry.resolve(run.projectId);
+  if ((await deps.automation.get(project)).ui === undefined) {
+    return undefined;
+  }
+  const runningUrl = deps.product()?.urlFor(run.projectId);
+  return buildProductEnvironment({
+    apiBaseUrl: `http://localhost:${config.port}`,
+    projectId: run.projectId,
+    ...(runningUrl === undefined ? {} : { runningUrl }),
+  });
 }
 
 function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
@@ -538,7 +568,8 @@ export async function runStageWork(
       message: `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
     });
   }
-  const prompt = turnPrompt(input, run, stageDef, turn, stepTask);
+  const environment = await productEnvironment(deps, run, stageDef);
+  const prompt = turnPrompt(input, run, stageDef, turn, stepTask, environment);
 
   if (deps.isCancelled(runId)) {
     return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };

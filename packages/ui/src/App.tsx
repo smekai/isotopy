@@ -30,6 +30,7 @@ import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useMilestones } from "./hooks/useMilestones";
 import { useOrchestration } from "./hooks/useOrchestration";
+import { useProduct } from "./hooks/useProduct";
 import { useProjects } from "./hooks/useProjects";
 import { useRoute } from "./hooks/useRoute";
 import { useRunEvents } from "./hooks/useRunEvents";
@@ -154,6 +155,7 @@ export function App() {
     projects.ready,
     orchestrationRefreshKey(runs.runs),
   );
+  const product = useProduct(projectId);
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -482,6 +484,7 @@ export function App() {
                 d={d}
                 settings={settings}
                 orchestrator={orchestratorView}
+                product={product}
                 onSend={(text) => void handleSend(text)}
                 onRunStarted={attachRun}
                 onClearFocus={() => setFocusedId(null)}
