@@ -223,11 +223,9 @@ function automationConfig(
   overrides: Partial<ProjectAutomationConfig> = {},
 ): ProjectAutomationConfig {
   return {
+    ...overrides,
     version: 1,
     validation: overrides.validation ?? [],
-    ...(overrides.ui === undefined ? {} : { ui: overrides.ui }),
-    ...(overrides.preview === undefined ? {} : { preview: overrides.preview }),
-    ...(overrides.production === undefined ? {} : { production: overrides.production }),
   };
 }
 
@@ -243,9 +241,9 @@ function deploymentTarget(
     },
     healthTimeoutMs: overrides.healthTimeoutMs ?? 1_000,
     healthIntervalMs: overrides.healthIntervalMs ?? 100,
-    ...(overrides.url === undefined ? {} : { url: overrides.url }),
-    ...(overrides.healthUrl === undefined ? {} : { healthUrl: overrides.healthUrl }),
-    ...(overrides.rollbackNotes === undefined ? {} : { rollbackNotes: overrides.rollbackNotes }),
+    url: overrides.url,
+    healthUrl: overrides.healthUrl,
+    rollbackNotes: overrides.rollbackNotes,
   };
 }
 

@@ -394,7 +394,7 @@ function previewAutomation(healthUrl?: string, args?: string[]) {
         args: args ?? ["-e", "console.log('deployed')"],
         timeoutMs: 30_000,
       },
-      ...(healthUrl === undefined ? {} : { url: healthUrl }),
+      url: healthUrl,
       healthTimeoutMs: 2_000,
       healthIntervalMs: 100,
     },

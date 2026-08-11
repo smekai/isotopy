@@ -12,9 +12,9 @@ function command(overrides: Partial<AutomationCommand> = {}): AutomationCommand 
     executable: overrides.executable ?? "npx",
     args: overrides.args ?? ["vercel", "deploy"],
     timeoutMs: overrides.timeoutMs ?? 60_000,
-    ...(overrides.cwd === undefined ? {} : { cwd: overrides.cwd }),
-    ...(overrides.windows === undefined ? {} : { windows: overrides.windows }),
-    ...(overrides.posix === undefined ? {} : { posix: overrides.posix }),
+    cwd: overrides.cwd,
+    windows: overrides.windows,
+    posix: overrides.posix,
   };
 }
 

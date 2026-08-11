@@ -227,7 +227,7 @@ function failedDeployment(
   deps.projection.stageFailed(run.id, stageDef.id, message);
   return {
     outcome: STAGE_OUTCOMES.FAILED,
-    ...(verdict === undefined ? {} : { verdict }),
+    verdict,
     startedAt,
     completedAt: nowIso(),
   };
@@ -290,7 +290,7 @@ async function selectModel(
   const resolved = resolveTier(engine, run.modelTier, await deps.rosters.roster(engine));
   return {
     model: resolved.model,
-    ...(resolved.effort === undefined ? {} : { effort: resolved.effort }),
+    effort: resolved.effort,
   };
 }
 

@@ -3,6 +3,21 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 
+// Every `no-restricted-syntax` block below must carry these: ESLint replaces a
+// rule's options wholesale rather than merging them, so a block that redefines
+// the rule silently drops whatever the base block banned.
+//
+// Only the single-property form is banned. Spreading a group —
+// `...(cond ? { a, b } : {})` — is a different thing, and unrolling it would
+// repeat the condition per field.
+const NO_CONDITIONAL_SPREAD = ["consequent", "alternate"].map((empty) => ({
+  selector: `SpreadElement > ConditionalExpression[${empty}.properties.length=0][${
+    empty === "consequent" ? "alternate" : "consequent"
+  }.properties.length=1]`,
+  message:
+    "exactOptionalPropertyTypes is off, so absent and undefined are the same state — assign the field directly ({ framing: x }) instead of spreading a conditional.",
+}));
+
 export default tseslint.config(
   {
     ignores: [
@@ -32,6 +47,7 @@ export default tseslint.config(
       ],
       "no-empty": ["error", { allowEmptyCatch: true }],
       eqeqeq: ["error", "smart"],
+      "no-restricted-syntax": ["error", ...NO_CONDITIONAL_SPREAD],
     },
   },
   {
@@ -39,6 +55,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": [
         "error",
+        ...NO_CONDITIONAL_SPREAD,
         {
           selector:
             "CallExpression[typeArguments][callee.property.name='json']",
@@ -60,6 +77,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": [
         "error",
+        ...NO_CONDITIONAL_SPREAD,
         ...["IfStatement", "ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "TryStatement"].map(
           (statement) => ({
             selector: `CallExpression[callee.name=/^(test|it)$/] > ArrowFunctionExpression ${statement}`,

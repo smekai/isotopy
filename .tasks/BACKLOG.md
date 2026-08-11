@@ -100,15 +100,13 @@ that — rather than what we guessed while building it.
 collects the feedback; what follows is decided by what it says.
 
 **Parked here pending that evidence:** `TASK-111` (reusable teams), `TASK-113` (per-persona
-accumulated context), `TASK-095` (agent-native browser testing for QA). Each was written as
-post-MVP by whoever deferred it, and none has a user behind it yet. Build the ones feedback
-asks for; reject the rest rather than letting them age in the backlog.
+accumulated context). Each was written as post-MVP by whoever deferred it, and none has a
+user behind it yet. Build the ones feedback asks for; reject the rest rather than letting
+them age in the backlog.
 
-`TASK-095` is now likely to be **rejected rather than built**: `TASK-138` moved into
-Milestone F on 2026-08-10 and is the same capability seen from the other side — an embedded
-browser the product shows the user is an embedded browser QA can drive. What would survive
-is its policy half alone: where no native browser capability exists, Playwright stays the
-complete fallback and CI authority. Decide once `TASK-138` has shipped.
+That rule has been applied once already: `TASK-095` (agent-native browser testing for QA)
+was **rejected on 2026-08-11**, answered by `TASK-138` rather than built. Its policy half
+lives in the tester persona now instead of in a task.
 
 Also unclaimed: the **full Orchestrator UI** beyond the MVP slice `TASK-114` shipped. No
 task exists for it on purpose — write one when someone says what is missing. The first
@@ -163,22 +161,6 @@ Distill closeout knowledge into per-persona accumulated notes under `.adhd` and 
 Also add an orchestrator-facing constraint digest so the orchestrator can reason about “must-do differently for stage X in this project” without needing deep per-agent state.
 
 Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell assumptions.
-
----
-
-## TASK-095: Agent-native browser testing for QA
-**Priority:** P3 | **Tags:** testing, adapters, engine, milestone-h
-**Updated:** 2026-08-07 11:40
-
-**Milestone H — Harmonic. Build only if feedback asks for it.** Playwright covered QA
-through Milestone E without complaint, including the live browser verification in
-`TASK-117`.
-
-**Stays parked (re-confirmed 2026-08-03):** TASK-051 closed by deliberately keeping QA on Playwright only for the MVP and deferring agent-native browser support here. This is a new capability seam, not cleanup, so it does not ride along with the Milestone D close-out.
-
-Add a vendor-neutral testing seam for browser-control capabilities exposed by Codex, Cursor, Claude, or another active harness. QA may use an available native browser first for exploratory and visual checks, then promote stable behaviour into repository-owned Playwright tests. When no compatible capability exists, Playwright remains the complete fallback and CI authority.
-
-Cross-platform: support Windows and macOS capability detection and degrade to Playwright with an accurate recorded reason. This is explicitly outside the Milestone D MVP.
 
 ---
 

@@ -36,7 +36,7 @@ export function started(
 }
 
 export function log(ts: string, level: LogLevel, text: string, activity?: StageActivity) {
-  return { ts, level, message: text, ...(activity ? { activity } : {}) };
+  return { ts, level, message: text, activity };
 }
 
 export function run(stages: StageState[], status: RunStatus = "running"): RunState {

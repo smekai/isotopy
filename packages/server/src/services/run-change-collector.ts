@@ -107,7 +107,7 @@ export class RunChangeCollector {
         files: [...snapshot.files].map(([path, stamp]) => ({ path, ...stamp })),
         truncated: snapshot.truncated,
       },
-      ...(git === undefined ? {} : { git }),
+      git,
     });
   }
 
@@ -192,7 +192,7 @@ export class RunChangeCollector {
     }
     const head = (await this.git(workspacePath, ["rev-parse", "HEAD"]))?.trim();
     return {
-      ...(head === undefined || head === "" ? {} : { head }),
+      head: head || undefined,
       dirty: parseGitStatus(status),
     };
   }

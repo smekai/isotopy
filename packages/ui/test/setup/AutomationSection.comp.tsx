@@ -218,11 +218,9 @@ function automationConfig(
   overrides: Partial<ProjectAutomationConfig> = {},
 ): ProjectAutomationConfig {
   return {
+    ...overrides,
     version: 1,
     validation: overrides.validation ?? [],
-    ...(overrides.ui === undefined ? {} : { ui: overrides.ui }),
-    ...(overrides.preview === undefined ? {} : { preview: overrides.preview }),
-    ...(overrides.production === undefined ? {} : { production: overrides.production }),
   };
 }
 

@@ -261,7 +261,7 @@ export function resolveTier(
     if (candidate.model === AUTO_MODEL_ID || offered.has(candidate.model)) {
       return {
         model: candidate.model,
-        ...(candidate.effort === undefined ? {} : { effort: candidate.effort }),
+        effort: candidate.effort,
         degraded: false,
       };
     }
@@ -296,7 +296,7 @@ export function mergeModelLayers(layers: ModelLayers): EngineModelRoster {
   return {
     options,
     staticCheckedOn: layers.bundled.checkedOn,
-    ...(layers.note === undefined ? {} : { note: layers.note }),
+    note: layers.note,
   };
 }
 

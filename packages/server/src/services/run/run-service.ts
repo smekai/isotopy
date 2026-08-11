@@ -239,10 +239,10 @@ export class RunService implements RunProjection {
     const run = this.store.runs.get(runId);
     const permissionMode = this.store.enginePermissionModes.get(runId);
     return {
-      ...(run?.engine === undefined ? {} : { engine: run.engine }),
-      ...(run?.model === undefined ? {} : { model: run.model }),
-      ...(run?.modelTier === undefined ? {} : { modelTier: run.modelTier }),
-      ...(permissionMode === undefined ? {} : { permissionMode }),
+      engine: run?.engine,
+      model: run?.model,
+      modelTier: run?.modelTier,
+      permissionMode,
     };
   }
 
