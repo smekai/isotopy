@@ -434,6 +434,6 @@ function subprocessResult(overrides: Partial<SubprocessResult> = {}): Subprocess
     stdout: overrides.stdout ?? "",
     stderrTail: overrides.stderrTail ?? [],
     durationMs: overrides.durationMs ?? 1,
-    ...(overrides.errorMessage === undefined ? {} : { errorMessage: overrides.errorMessage }),
+    errorMessage: overrides.errorMessage,
   };
 }

@@ -86,9 +86,9 @@ function statusOf(current: RunningProduct): ProductProcessStatus {
     projectId: current.project.id,
     url: current.ui.healthUrl,
     startedAt: current.startedAt,
-    ...(current.framing === undefined ? {} : { framing: current.framing }),
-    ...(current.readyAt === undefined ? {} : { readyAt: current.readyAt }),
-    ...(current.lastError === undefined ? {} : { lastError: current.lastError }),
+    framing: current.framing,
+    readyAt: current.readyAt,
+    lastError: current.lastError,
   };
 }
 
@@ -126,11 +126,7 @@ export class ProductProcessService {
     if (this.current?.project.id === project.id) {
       return statusOf(this.current);
     }
-    return {
-      state: "stopped",
-      configured,
-      ...(this.abandonedError === undefined ? {} : { lastError: this.abandonedError }),
-    };
+    return { state: "stopped", configured, lastError: this.abandonedError };
   }
 
   start(project: ProjectPath): Promise<ProductProcessStatus> {

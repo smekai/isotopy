@@ -291,11 +291,7 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
   }
   child.stdin?.end();
 
-  return {
-    ...(child.pid === undefined ? {} : { pid: child.pid }),
-    kill: () => killProcessTree(child),
-    exited,
-  };
+  return { pid: child.pid, kill: () => killProcessTree(child), exited };
 }
 
 export function runSubprocess(spec: SubprocessSpec): Promise<SubprocessResult> {

@@ -190,7 +190,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
   `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or
   `undefined`; both mean "not supplied". Reserve `null` for an explicit cleared
-  or removed value. Runtime schemas own untrusted HTTP, persisted JSON,
+  or removed value. Because those two mean the same thing,
+  `exactOptionalPropertyTypes` is deliberately **off** — so assign an optional
+  field directly (`{ framing: current.framing }`) and never assemble it
+  conditionally (`...(framing === undefined ? {} : { framing })`). That spread
+  protects no invariant; it is a vestige of the flag, and copying it from a file
+  that still has one spreads it further. Runtime schemas own untrusted HTTP, persisted JSON,
   settings, project-registry, TaskPlanner, and engine-protocol input. Routes and
   adapters receive only parsed values; services and repositories do not rebuild
   types through hand-written record traversal. ADHD-owned records reject

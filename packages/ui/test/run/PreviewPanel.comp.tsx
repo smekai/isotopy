@@ -87,14 +87,9 @@ test("a product still starting says what it is waiting for rather than showing a
 
 function productStatus(overrides: Partial<ProductProcessStatus> = {}): ProductProcessStatus {
   return {
+    ...overrides,
     state: overrides.state ?? "stopped",
     configured: overrides.configured ?? true,
-    ...(overrides.projectId === undefined ? {} : { projectId: overrides.projectId }),
-    ...(overrides.url === undefined ? {} : { url: overrides.url }),
-    ...(overrides.framing === undefined ? {} : { framing: overrides.framing }),
-    ...(overrides.startedAt === undefined ? {} : { startedAt: overrides.startedAt }),
-    ...(overrides.readyAt === undefined ? {} : { readyAt: overrides.readyAt }),
-    ...(overrides.lastError === undefined ? {} : { lastError: overrides.lastError }),
   };
 }
 

@@ -74,13 +74,7 @@ function turnPrompt(
   const upstream = upstreamFor(run, stageDef.id);
   return turn.exchanges === undefined || turn.exchanges.length === 0
     ? buildStagePrompt(task, upstream, stepTask, environment)
-    : buildContinuationPrompt({
-        task,
-        upstream,
-        exchanges: turn.exchanges,
-        stepTask,
-        ...(environment === undefined ? {} : { environment }),
-      });
+    : buildContinuationPrompt({ task, upstream, exchanges: turn.exchanges, stepTask, environment });
 }
 
 export const VERIFY_FEATURE_STEP_TASK = "verify-feature";
@@ -97,11 +91,10 @@ async function productEnvironment(
   if ((await deps.automation.get(project)).ui === undefined) {
     return undefined;
   }
-  const runningUrl = deps.product()?.urlFor(run.projectId);
   return buildProductEnvironment({
     apiBaseUrl: `http://localhost:${config.port}`,
     projectId: run.projectId,
-    ...(runningUrl === undefined ? {} : { runningUrl }),
+    runningUrl: deps.product()?.urlFor(run.projectId),
   });
 }
 

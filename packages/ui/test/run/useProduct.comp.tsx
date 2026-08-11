@@ -75,10 +75,8 @@ test("a starting product is polled quickly, because the user is waiting on it", 
 
 function productStatus(overrides: Partial<ProductProcessStatus> = {}): ProductProcessStatus {
   return {
+    ...overrides,
     state: overrides.state ?? "stopped",
     configured: overrides.configured ?? true,
-    ...(overrides.url === undefined ? {} : { url: overrides.url }),
-    ...(overrides.framing === undefined ? {} : { framing: overrides.framing }),
-    ...(overrides.lastError === undefined ? {} : { lastError: overrides.lastError }),
   };
 }
