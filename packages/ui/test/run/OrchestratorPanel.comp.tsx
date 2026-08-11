@@ -46,8 +46,8 @@ test("changing a role's preset is reported upward rather than kept inside the pa
   expect(onRoleTierChange).toHaveBeenCalledWith("implementation", "fast");
 });
 
-test("choosing the run default clears the role's preset instead of pinning a tier", () => {
-  // Arrange
+test("choosing the run default reports a cleared preset, not an absent edit", () => {
+  // Arrange — undefined would read as "unchanged" and snap back to the proposal.
   const onRoleTierChange = vi.fn();
 
   // Act
@@ -59,7 +59,15 @@ test("choosing the run default clears the role's preset instead of pinning a tie
   );
 
   // Assert
-  expect(onRoleTierChange).toHaveBeenCalledWith("design", undefined);
+  expect(onRoleTierChange).toHaveBeenCalledWith("design", null);
+});
+
+test("a cleared preset holds the control on the run default rather than the proposal", () => {
+  // Act
+  render(<OrchestratorPanel {...panelProps({ roleTiers: { design: null } })} />);
+
+  // Assert
+  expect(screen.getByTestId("role-tier-design")).toHaveProperty("value", "");
 });
 
 test("a pending edit wins over what the Orchestrator proposed, so the card shows what will run", () => {

@@ -56,7 +56,7 @@ import { taskBoardFor } from "./task-board-adapter.ts";
 export type StartOrchestrationOptions = InheritedRunOptions;
 
 export interface ApproveTeamOptions extends StartOrchestrationOptions {
-  roleTiers?: Record<string, ModelTier>;
+  roleTiers?: Record<string, ModelTier | null>;
 }
 
 export class OrchestrationService implements StageOutputConsumer {

@@ -1,4 +1,5 @@
 import type {
+  ModelTier,
   Orchestration,
   OrchestrationStatus,
   OrchestratorDecision,
@@ -29,6 +30,35 @@ export function teamAwaitingApproval(
     decision?.action === "propose_team"
     ? decision.team
     : undefined;
+}
+
+export interface PendingRoleTiers {
+  orchestrationId: string;
+  tiers: Record<string, ModelTier | null>;
+}
+
+export function pendingTiersFor(
+  pending: PendingRoleTiers | null,
+  orchestration: Orchestration | undefined,
+): Record<string, ModelTier | null> {
+  const team = orchestration && teamAwaitingApproval(orchestration);
+  if (!pending || !orchestration || pending.orchestrationId !== orchestration.id || !team) {
+    return {};
+  }
+  const proposed = new Set(team.roles.map((role) => role.id));
+  return Object.fromEntries(
+    Object.entries(pending.tiers).filter(([roleId]) => proposed.has(roleId)),
+  );
+}
+
+export function withPendingTier(
+  pending: PendingRoleTiers | null,
+  orchestrationId: string,
+  roleId: string,
+  tier: ModelTier | null,
+): PendingRoleTiers {
+  const kept = pending?.orchestrationId === orchestrationId ? pending.tiers : {};
+  return { orchestrationId, tiers: { ...kept, [roleId]: tier } };
 }
 
 export interface DecisionPresentation {

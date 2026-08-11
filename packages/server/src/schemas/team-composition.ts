@@ -70,7 +70,7 @@ export function composedPipelineId(orchestrationId: string): string {
 
 export function withRoleTiers(
   team: OrchestratorTeamProposal,
-  roleTiers: Record<string, ModelTier> | undefined,
+  roleTiers: Record<string, ModelTier | null> | undefined,
 ): ValidationResult<OrchestratorTeamProposal> {
   if (roleTiers === undefined) {
     return { ok: true, value: team };
@@ -88,10 +88,21 @@ export function withRoleTiers(
       ...team,
       roles: team.roles.map((role) => ({
         ...role,
-        modelTier: roleTiers[role.id] ?? role.modelTier,
+        modelTier: chosenTier(roleTiers, role),
       })),
     },
   };
+}
+
+function chosenTier(
+  roleTiers: Record<string, ModelTier | null>,
+  role: OrchestratorRole,
+): ModelTier | undefined {
+  const chosen = roleTiers[role.id];
+  if (chosen === undefined) {
+    return role.modelTier;
+  }
+  return chosen ?? undefined;
 }
 
 export function composeTeamPipeline(

@@ -43,6 +43,8 @@ import {
   routeRunId,
   runRoute,
 } from "./route";
+import { pendingTiersFor, withPendingTier } from "./orchestration";
+import type { PendingRoleTiers } from "./orchestration";
 import {
   firstActiveRunId,
   milestoneRefreshKey,
@@ -156,7 +158,7 @@ export function App() {
     orchestrationRefreshKey(runs.runs),
   );
   const product = useProduct(projectId);
-  const [roleTiers, setRoleTiers] = useState<Record<string, ModelTier>>({});
+  const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -239,24 +241,21 @@ export function App() {
   async function handleApproveTeam(orchestrationId: string) {
     const created = await orchestration.approveTeam(orchestrationId, {
       ...currentRunOptions(),
-      roleTiers,
+      roleTiers: pendingTiersFor(pendingTiers, orchestration.find(orchestrationId)),
     });
     if (created) {
-      setRoleTiers({});
+      setPendingTiers(null);
       attachRun(created.id);
     }
   }
 
-  function handleRoleTierChange(roleId: string, tier: ModelTier | undefined) {
-    setRoleTiers((current) => {
-      const next = { ...current };
-      if (tier === undefined) {
-        delete next[roleId];
-      } else {
-        next[roleId] = tier;
-      }
-      return next;
-    });
+  function handleRoleTierChange(roleId: string, tier: ModelTier | null) {
+    if (activeOrchestration === undefined) {
+      return;
+    }
+    setPendingTiers((current) =>
+      withPendingTier(current, activeOrchestration.id, roleId, tier),
+    );
   }
 
   function handleSelectProject(id: string) {
@@ -384,7 +383,7 @@ export function App() {
     orchestration: activeOrchestration,
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
-    roleTiers,
+    roleTiers: pendingTiersFor(pendingTiers, activeOrchestration),
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
     onRoleTierChange: handleRoleTierChange,
     onStop: handleStopInitiative,

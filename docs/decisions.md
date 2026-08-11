@@ -40,13 +40,15 @@ shared constants; a tier authored into one applies to every run of it forever. T
 field exists on `StageDefinition` so a static pipeline *could* carry one, but none
 does.
 
-**Consequence for limits:** none, which is the point. A limit still parks the stage
-and waits for the reset, and the tier only ever changes when the user asks for it in
-that dialog. Because the fallback is `stage.modelTier ?? run.modelTier`, a
-user-chosen switch writes `run.modelTier` and therefore moves only the *default*:
-roles given an explicit preset keep it, roles without one follow the new default.
-`TASK-115` asked for per-stage limit handling and the fallback rule already provides
-it.
+**Consequence for limits:** a limit still parks the stage and waits for the reset,
+and a tier only ever changes when the user asks for it in that dialog — nothing is
+re-rung automatically once a run has started. But the user's choice has to reach the
+stage they are unblocking: a blocked role pinned to `deep` would otherwise resume on
+`deep` and hit the same limit again, because the fallback prefers the stage's own
+preset over the run's. `resolveLimit` therefore writes the chosen tier to the blocked
+stage as well as to the run. Later roles with their own preset keep it; later roles
+without one follow the new default. For a pipeline where no stage carries a preset —
+every static one — this is identical to the old behaviour.
 
 ---
 

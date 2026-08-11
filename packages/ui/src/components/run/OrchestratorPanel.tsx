@@ -218,12 +218,23 @@ function tierSelect(d: Dir): CSSProperties {
 
 const RUN_DEFAULT_TIER = "";
 
+function shownTier(
+  roleTiers: Record<string, ModelTier | null>,
+  role: OrchestratorRole,
+): ModelTier | typeof RUN_DEFAULT_TIER {
+  const pending = roleTiers[role.id];
+  if (pending !== undefined) {
+    return pending ?? RUN_DEFAULT_TIER;
+  }
+  return role.modelTier ?? RUN_DEFAULT_TIER;
+}
+
 interface RoleListProps {
   roles: OrchestratorRole[];
-  roleTiers: Record<string, ModelTier>;
+  roleTiers: Record<string, ModelTier | null>;
   editable: boolean;
   d: Dir;
-  onRoleTierChange: (roleId: string, tier: ModelTier | undefined) => void;
+  onRoleTierChange: (roleId: string, tier: ModelTier | null) => void;
 }
 
 function RoleList({ roles, roleTiers, editable, d, onRoleTierChange }: RoleListProps) {
@@ -239,12 +250,12 @@ function RoleList({ roles, roleTiers, editable, d, onRoleTierChange }: RoleListP
             <select
               aria-label={`${role.label} model tier`}
               data-testid={`role-tier-${role.id}`}
-              value={roleTiers[role.id] ?? role.modelTier ?? RUN_DEFAULT_TIER}
+              value={shownTier(roleTiers, role)}
               onChange={(event) =>
                 onRoleTierChange(
                   role.id,
                   event.target.value === RUN_DEFAULT_TIER
-                    ? undefined
+                    ? null
                     : (event.target.value as ModelTier),
                 )
               }
@@ -324,9 +335,9 @@ export interface OrchestratorView {
   orchestration: Orchestration;
   runs: RunSummary[];
   busy: boolean;
-  roleTiers: Record<string, ModelTier>;
+  roleTiers: Record<string, ModelTier | null>;
   onApprove: () => void;
-  onRoleTierChange: (roleId: string, tier: ModelTier | undefined) => void;
+  onRoleTierChange: (roleId: string, tier: ModelTier | null) => void;
   onStop: () => void;
   onOpenRun: (runId: string) => void;
 }

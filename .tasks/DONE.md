@@ -24,12 +24,12 @@ stage resolves `stage.modelTier ?? run.modelTier` so the run's tier stays the de
 **Scope decided with the user:** composed teams only — no rung is authored into `pm-dev-test`
 or `full-delivery`. A role without one follows the run, as today.
 
-**The fourth bullet needed no code, which is a finding rather than a shortcut.** Limits still
-park the stage and wait for the reset, and a tier only ever changes when the user asks in that
-dialog. Because the fallback is `stage.modelTier ?? run.modelTier`, a user-chosen switch writes
-`run.modelTier` and so moves only the *default*: roles given an explicit preset keep it, roles
-without one follow the new one. That is exactly "per-stage limit handling", produced by the
-fallback rule.
+**Limits.** A limit still parks the stage and waits for the reset, and a tier changes only when
+the user asks in that dialog. Review caught that this was not enough on its own: a blocked role
+pinned to `deep` would resume on `deep` and hit the same limit again, because the fallback
+prefers the stage's preset over the run's. `resolveLimit` now writes the chosen tier to the
+blocked stage as well as the run, so the user's choice reaches the stage they are unblocking.
+For any pipeline where no stage carries a preset, this is identical to the old behaviour.
 
 **The live check earned its place.** The first real Orchestrator turn failed: the model invented
 a `rationale_tier` key and the strict schema rejected the whole decision. The prompt had said

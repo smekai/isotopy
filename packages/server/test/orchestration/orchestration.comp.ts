@@ -14,6 +14,7 @@ import {
   post,
   restartApp,
   stageMessage,
+  stageOf,
   startRun,
   waitForRunStatus,
   waitForStageStatus,
@@ -80,6 +81,9 @@ const REVIEW_ARTIFACTS = {
 };
 
 const STOP: OrchestratorDecision = { action: "stop", reason: "goal met" };
+
+/** The verbatim trigger from TASK-061, reused here to park a composed stage. */
+const SESSION_LIMIT = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 
 let ctx: TestApp;
 
@@ -574,6 +578,40 @@ test("the preset the user changed at approval is what runs, not the one proposed
   // Assert
   expect(status, JSON.stringify(composed)).toBe(201);
   await waitForRunStatus(ctx.app, composed.id, "completed");
+  ctx.engine.verify();
+});
+
+test("dropping a tier at a limit reaches the blocked role, not only the run default", async () => {
+  // Anticipate — the Developer is pinned to deep, so lowering only the run's tier
+  // would resume it on opus again and block on the same limit.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TIERED_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer", model: "opus" }).hitsLimit(SESSION_LIMIT);
+  ctx.engine
+    .anticipate({ as: "Developer on Haiku", model: "haiku" })
+    .reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({ as: "QA Engineer", model: "haiku" })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview();
+  const conversation = await proposedTeam();
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code", modelTier: "balanced" },
+  );
+  await waitForStageStatus(ctx.app, composed.id, "implementation", "blocked");
+
+  // Act
+  await post(ctx.app, `/runs/${composed.id}/limit/implementation/resolve`, {
+    choice: "switch-tier",
+    tier: "fast",
+  });
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, composed.id, "completed");
+  expect(stageOf(finished, "implementation").modelTier).toBe("fast");
   ctx.engine.verify();
 });
 

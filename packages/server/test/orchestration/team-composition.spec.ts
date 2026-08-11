@@ -110,12 +110,21 @@ test("the user's tier for a role replaces what the Orchestrator proposed for it"
   expect(rolesOf(approved).map((entry) => entry.modelTier)).toEqual(["fast", undefined]);
 });
 
-test("clearing a role back to the run default is a tier the user can choose", () => {
+test("a role the user did not touch keeps what the Orchestrator proposed", () => {
   const proposed = team([role({ id: "build", modelTier: "max" })]);
 
   const approved = withRoleTiers(proposed, {});
 
   expect(rolesOf(approved)[0]?.modelTier).toBe("max");
+});
+
+test("clearing a role back to the run default is a choice the user can express", () => {
+  // null is the cleared state; absent means untouched, and cannot say this.
+  const proposed = team([role({ id: "build", modelTier: "max" })]);
+
+  const approved = withRoleTiers(proposed, { build: null });
+
+  expect(rolesOf(approved)[0]?.modelTier).toBeUndefined();
 });
 
 test("a tier for a role that is not on the team is rejected rather than silently dropped", () => {

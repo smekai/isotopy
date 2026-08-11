@@ -211,7 +211,7 @@ export function startOrchestration(
 }
 
 export interface ApproveTeamOptions extends OrchestrationRunOptions {
-  roleTiers?: Record<string, ModelTier>;
+  roleTiers?: Record<string, ModelTier | null>;
 }
 
 export function approveOrchestratorTeam(
