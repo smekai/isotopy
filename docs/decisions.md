@@ -15,6 +15,66 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-11 — The product runs once per project, is shown in an iframe, and is driven by the agents' own browsers
+
+**Context:** `TASK-138` had to show a user the thing a run built. The repo had no
+embedding precedent — no iframe anywhere, no desktop shell — and dev servers
+commonly refuse framing. The task's premise was that one surface could serve both
+the user and an agent, since "showing the user and letting an agent look are the
+same seam."
+
+**Decision:** the shared seam is the **process and its URL**, not the rendering
+surface. `ProductProcessService` owns one product process at a time, tagged with
+its project, started only when asked. The UI frames its URL in an `<iframe>`; the
+QA stage is handed the same URL through an `## Environment` block and drives it
+with whatever browser capability its CLI has. This is what the established
+harnesses converged on, recorded in [`embedded-preview.md`](./embedded-preview.md):
+VS Code and Cursor frame localhost directly, while Cursor, Codex and Claude Code
+all drive over CDP rather than through the frame.
+
+**Rejected — a reverse proxy that strips framing headers.** It would make the
+iframe work everywhere, and nobody ships it: VS Code's own guidance is that there
+is no client-side workaround, and localhost dev servers do not set those headers
+in the first place. It would also reverse the decision below that the server stays
+a pure API. Instead the server preflights the ready URL once and reports the exact
+header that refused, so the failure is legible rather than a blank rectangle.
+
+**Rejected — ADHD hosting a Playwright Chromium and streaming it to the UI.** This
+is the one design where a single mechanism genuinely serves both consumers, and it
+costs a server runtime dependency plus a browser download at install. Milestone F's
+rule is to stop adding, and the agents already have browsers.
+
+**Consequence for QA:** the persona no longer forbids agent-native browsers, and
+`TASK-095` is answered rather than deferred — the half of it that survives is the
+policy, now written into the persona: where no browser capability exists,
+Playwright is the complete fallback and the CI authority. The step task also stops
+telling QA to start servers and pick ports, which is the failure `TASK-117` hit
+from the other side.
+
+**Consequence for the lifecycle:** the product is **project**-scoped, not
+run-scoped. This deliberately overrides `TASK-138`'s own wording, which asked for a
+run switch to reach the kill: an initiative's child runs would then each kill the
+preview the user was watching. They share one process instead, and a completed run
+that changed files *restarts* it, so the preview is never the previous build. It
+dies on explicit stop, on exiting by itself, on a start for another project, on
+project switch, and on the `SIGINT`/`SIGTERM` hook this added to `index.ts` — which
+had no shutdown path at all before.
+
+**Project switch is enforced on the server, not in the browser.** `POST
+/projects/:id/activate` stops a product belonging to any other project, and
+`DELETE /projects/:id` stops one belonging to the project being removed. A client
+that crashes, is closed, or never runs cannot leak a process this way, which a
+cleanup living in a React effect could.
+
+**Every lifecycle operation is serialized.** Start, stop, restart and the
+post-run refresh run through one promise queue, because two of them interleaving
+at any `await` can each conclude that nothing is running and launch a second
+process that then holds the port invisibly. This is also what makes the
+idempotent-start promise in the QA prompt true under concurrency rather than only
+when the UI happens to disable its button.
+
+---
+
 ## 2026-08-10 — Blast radius is delegated to each CLI's own reviewer, not brokered by the Orchestrator
 
 **Context:** every engine ran effectively unrestricted, and the one alternative,

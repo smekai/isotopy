@@ -5,6 +5,7 @@ import { AutomationConfigStore } from "./services/automation-config-store.ts";
 import { DeploymentRunner } from "./services/deployment-runner.ts";
 import { ModelRosterService } from "./services/model-roster-service.ts";
 import { OrchestrationService } from "./services/orchestration-service.ts";
+import { ProductProcessService } from "./services/product-process-service.ts";
 import { ProjectRegistry } from "./services/project-registry.ts";
 import { RunService } from "./services/run/run-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
@@ -14,7 +15,9 @@ const settings = new SettingsStore();
 const rosters = new ModelRosterService();
 const automation = new AutomationConfigStore();
 const deployment = new DeploymentRunner();
+const product = new ProductProcessService(automation);
 const runs = new RunService(registry, settings, rosters);
+runs.registerProduct(product);
 const orchestrations = new OrchestrationService(registry, runs);
 runs.registerStageOutputConsumer(orchestrations);
 runs.registerOrchestration(orchestrations);
@@ -33,6 +36,7 @@ serve(
       rosters,
       automation,
       deployment,
+      product,
     }).fetch,
     hostname: config.host,
     port: config.port,
@@ -41,3 +45,22 @@ serve(
     console.log(`ADHD server listening on http://${config.host}:${info.port}`);
   },
 );
+
+let stopping = false;
+
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (stopping) {
+    return;
+  }
+  stopping = true;
+  console.log(`ADHD server stopping on ${signal}`);
+  await product.shutdown();
+  await runs.shutdown();
+  process.exit(0);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    void shutdown(signal);
+  });
+}

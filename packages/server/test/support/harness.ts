@@ -14,6 +14,9 @@ import { AutomationConfigStore } from "../../src/services/automation-config-stor
 import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { ModelRosterService } from "../../src/services/model-roster-service.ts";
 import { OrchestrationService } from "../../src/services/orchestration-service.ts";
+import { ProductProcessService } from "../../src/services/product-process-service.ts";
+import type { ProductProcessDependencies } from "../../src/services/product-process-service.ts";
+import type { SubprocessResult } from "../../src/engines/subprocess.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunService } from "../../src/services/run/run-service.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
@@ -30,6 +33,7 @@ export interface TestApp {
   settings: SettingsStore;
   engine: FakeEngine;
   rosters: ModelRosterService;
+  product: ProductProcessService;
   /** Temp `ADHD_HOME` for this test — the home project's data root. */
   home: string;
   /** Temp `ADHD_USER_HOME` — the project registry and credentials land here. */
@@ -39,6 +43,38 @@ export interface TestApp {
 
 export interface TestAppOptions {
   engineId?: EngineId;
+}
+
+/**
+ * A component test must never spawn the project's real dev server, so the
+ * harness hands the product service a process that starts and never becomes
+ * healthy. Tests that need the ready path build their own service.
+ */
+function unspawnedProduct(): Partial<ProductProcessDependencies> {
+  return {
+    start: () => {
+      let settle: (result: SubprocessResult) => void;
+      const exited = new Promise<SubprocessResult>((resolve) => {
+        settle = resolve;
+      });
+      return { kill: () => settle(killedProcess()), exited };
+    },
+    probe: () => Promise.resolve({ ok: false }),
+    headers: () => Promise.resolve({}),
+  };
+}
+
+function killedProcess(): SubprocessResult {
+  return {
+    success: false,
+    exitCode: null,
+    termSignal: "SIGTERM",
+    timedOut: false,
+    aborted: false,
+    stdout: "",
+    stderrTail: [],
+    durationMs: 0,
+  };
 }
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
@@ -59,6 +95,9 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
+  const automation = new AutomationConfigStore();
+  const product = new ProductProcessService(automation, unspawnedProduct());
+  orchestrator.registerProduct(product);
   const app = createApp({
     runs: orchestrator,
     milestones: orchestrator.milestones,
@@ -66,8 +105,9 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     registry,
     settings,
     rosters,
-    automation: new AutomationConfigStore(),
+    automation,
     deployment: new DeploymentRunner(),
+    product,
   });
 
   return {
@@ -78,12 +118,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     settings,
     engine,
     rosters,
+    product,
     home,
     userHome,
     dispose: async () => {
       // Order matters: stop the orchestrator (which cancels in-flight runs and
       // waits for queued writes) before removing the directory those writes
       // target, or Windows fails the delete with EBUSY.
+      await product.shutdown();
       await orchestrator.shutdown();
       await orchestrations.shutdown();
       resetEngineAdapters();
@@ -126,6 +168,9 @@ export async function restartApp(): Promise<RestartedApp> {
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
+  const automation = new AutomationConfigStore();
+  const product = new ProductProcessService(automation, unspawnedProduct());
+  orchestrator.registerProduct(product);
   return {
     app: createApp({
       runs: orchestrator,
@@ -134,12 +179,14 @@ export async function restartApp(): Promise<RestartedApp> {
       registry,
       settings,
       rosters,
-      automation: new AutomationConfigStore(),
+      automation,
       deployment: new DeploymentRunner(),
+      product,
     }),
     orchestrator,
     orchestrations,
     shutdown: async () => {
+      await product.shutdown();
       await orchestrator.shutdown();
       await orchestrations.shutdown();
     },

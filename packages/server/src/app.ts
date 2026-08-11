@@ -16,6 +16,7 @@ import type { DeploymentRunner } from "./services/deployment-runner.ts";
 import type { MilestoneService } from "./services/milestone-service.ts";
 import type { ModelRosterService } from "./services/model-roster-service.ts";
 import type { OrchestrationService } from "./services/orchestration-service.ts";
+import type { ProductProcessService } from "./services/product-process-service.ts";
 import type { ProjectRegistry } from "./services/project-registry.ts";
 import type { RunService } from "./services/run/run-service.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
@@ -29,6 +30,7 @@ export interface AppDependencies {
   rosters: ModelRosterService;
   automation: AutomationConfigStore;
   deployment: DeploymentRunner;
+  product: ProductProcessService;
 }
 
 export function createApp({
@@ -40,6 +42,7 @@ export function createApp({
   rosters,
   automation,
   deployment,
+  product,
 }: AppDependencies): Hono {
   const app = new Hono();
 
@@ -51,13 +54,13 @@ export function createApp({
   );
 
   app.route("/health", healthRoutes);
-  app.route("/projects", createProjectRoutes(registry));
+  app.route("/projects", createProjectRoutes(registry, product));
   app.route("/pipelines", createPipelineRoutes(runs));
   app.route("/milestones", createMilestoneRoutes(milestones, registry));
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", createEngineRoutes(rosters));
   app.route("/settings", createSettingsRoutes(registry, settings));
-  app.route("/automation", createAutomationRoutes(registry, automation, deployment));
+  app.route("/automation", createAutomationRoutes(registry, automation, deployment, product));
   app.route("/runs", createRunRoutes(runs, registry));
   app.route("/fs", fsRoutes);
 

@@ -156,6 +156,11 @@ export interface OrchestrationHooks {
   settle(runId: string): Promise<void>;
 }
 
+export interface ProductHooks {
+  refreshFor(projectId: string): Promise<void>;
+  urlFor(projectId: string): string | undefined;
+}
+
 export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
@@ -164,6 +169,7 @@ export interface WorkflowDeps {
   automation: AutomationConfigStore;
   deployment: DeploymentRunner;
   orchestration(): OrchestrationHooks | undefined;
+  product(): ProductHooks | undefined;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;
   isCancelled(runId: string): boolean;

@@ -92,6 +92,30 @@ describe("buildStagePrompt", () => {
     expect(prompt).toContain("wrote greet.js");
   });
 
+  test("puts the environment between the task and the handoff, so it is read before the reports", () => {
+    const prompt = buildStagePrompt(
+      "verify the feature",
+      [{ label: "Developer", output: "wrote greet.js" }],
+      "Verify the approved feature.",
+      "The product is already running at http://localhost:3000.",
+    );
+
+    expect(prompt).toContain(
+      "## Environment\n\nThe product is already running at http://localhost:3000.",
+    );
+    expect(prompt.indexOf("## Task")).toBeLessThan(prompt.indexOf("## Environment"));
+    expect(prompt.indexOf("## Environment")).toBeLessThan(
+      prompt.indexOf("## Handoff from previous steps"),
+    );
+  });
+
+  test("an environment alone still earns the section headings a bare task would skip", () => {
+    const prompt = buildStagePrompt("verify the feature", [], undefined, "ADHD owns the product.");
+
+    expect(prompt).toContain("## Task\n\nverify the feature");
+    expect(prompt).toContain("## Environment\n\nADHD owns the product.");
+  });
+
   test("drops upstream boxes that produced nothing", () => {
     const prompt = buildStagePrompt("task", [
       { label: "Developer", output: "   " },

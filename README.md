@@ -47,6 +47,7 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 | [decisions.md](docs/decisions.md) | Dated decision log — context, decision, and the alternative that was rejected |
 | [implementation-notes.md](docs/implementation-notes.md) | The "why" behind non-obvious code: engine quirks, paths, persistence, personas |
 | [workflow-runtime-options.md](docs/workflow-runtime-options.md) | Durable-runtime comparison behind the OpenWorkflow choice, and the workflow seam |
+| [embedded-preview.md](docs/embedded-preview.md) | How the harnesses show a running product, and why ADHD frames it rather than proxying it |
 
 ### Testing
 
@@ -134,6 +135,16 @@ Other commands:
 pnpm build      # build all packages
 pnpm typecheck  # type-check all packages
 ```
+
+### Seeing what a run built
+
+Tell ADHD how your project starts itself — **Setup → Automation → Start the
+product** — and a run gains a **Preview** tab that starts it, waits for its health
+URL, and shows it inside ADHD. ADHD owns that process: it survives switching
+between runs, restarts when a run changes files so you are never looking at the
+previous build, and is stopped on Stop, on switching project, and when the server
+shuts down. The QA agent asks for the same product through the same mechanism
+rather than starting a server of its own.
 
 ## Project structure
 

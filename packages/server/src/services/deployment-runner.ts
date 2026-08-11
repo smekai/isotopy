@@ -17,13 +17,10 @@ import type {
   SubprocessStream,
 } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
+import { pollUntilHealthy } from "../utils/health-poll.ts";
+import type { HealthProbe } from "../utils/health-poll.ts";
 
 type SubprocessRunner = (spec: SubprocessSpec) => Promise<SubprocessResult>;
-
-type HealthProbe = (
-  url: string,
-  init: { signal: AbortSignal },
-) => Promise<{ ok: boolean }>;
 
 export interface DeploymentRunnerDependencies {
   platform: NodeJS.Platform;
@@ -105,32 +102,12 @@ export class DeploymentRunner {
     if (!processSucceeded || healthUrl === undefined) {
       return "skipped";
     }
-    const deadline = this.deps.now().getTime() + target.healthTimeoutMs;
-    while (!signal?.aborted && this.deps.now().getTime() <= deadline) {
-      if (await this.probeOnce(healthUrl, target.healthIntervalMs, signal)) {
-        return "passed";
-      }
-      if (this.deps.now().getTime() + target.healthIntervalMs > deadline) {
-        break;
-      }
-      await this.deps.sleep(target.healthIntervalMs);
-    }
-    return "failed";
-  }
-
-  private async probeOnce(
-    healthUrl: string,
-    intervalMs: number,
-    signal?: AbortSignal,
-  ): Promise<boolean> {
-    const attempt = AbortSignal.any([
-      AbortSignal.timeout(intervalMs),
-      ...(signal === undefined ? [] : [signal]),
-    ]);
-    try {
-      return (await this.deps.probe(healthUrl, { signal: attempt })).ok;
-    } catch {
-      return false;
-    }
+    const healthy = await pollUntilHealthy(this.deps, {
+      url: healthUrl,
+      timeoutMs: target.healthTimeoutMs,
+      intervalMs: target.healthIntervalMs,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    return healthy ? "passed" : "failed";
   }
 }

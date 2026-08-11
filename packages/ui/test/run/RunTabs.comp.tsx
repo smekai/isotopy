@@ -5,9 +5,10 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ORCHESTRATION_PIPELINE } from "@adhd/core";
-import type { RunState } from "@adhd/core";
+import type { ProductProcessStatus, RunState } from "@adhd/core";
 import { RunTabs } from "../../src/components/run/RunTabs";
 import type { RunTabsProps } from "../../src/components/run/RunTabs";
+import type { ProductController } from "../../src/hooks/useProduct";
 import { DIRS } from "../../src/theme";
 import {
   orchestratedRun,
@@ -45,6 +46,33 @@ test("the run opens on the chat, which carries prose but not machinery", () => {
   expect(within(thread).getByText(DEV_PROSE)).toBeDefined();
   expect(within(thread).queryByText(TOOL_ROW)).toBeNull();
   expect(within(thread).queryByText(CHATTER)).toBeNull();
+});
+
+test("a project that never said how to start itself gets no Preview tab to disappoint them with", () => {
+  // Act
+  render(
+    <RunTabs
+      {...tabsProps({ product: productController({ state: "stopped", configured: false }) })}
+    />,
+  );
+
+  // Assert
+  expect(screen.queryByTestId("run-tab-preview")).toBeNull();
+});
+
+test("a project with a start command earns a Preview tab beside the other three", () => {
+  // Arrange
+  render(
+    <RunTabs
+      {...tabsProps({ product: productController({ state: "stopped", configured: true }) })}
+    />,
+  );
+
+  // Act
+  fireEvent.click(screen.getByTestId("run-tab-preview"));
+
+  // Assert
+  expect(screen.getByTestId("product-preview")).toBeDefined();
 });
 
 test("the log holds exactly what the chat refuses to show", () => {
@@ -298,6 +326,19 @@ function orchestrationOverrides(): Partial<RunTabsProps> {
       onStop: vi.fn(),
       onOpenRun: vi.fn(),
     },
+  };
+}
+
+function productController(
+  status: ProductProcessStatus | null,
+): ProductController {
+  return {
+    status,
+    error: null,
+    busy: false,
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    restart: vi.fn().mockResolvedValue(undefined),
   };
 }
 
