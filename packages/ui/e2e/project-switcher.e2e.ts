@@ -26,7 +26,7 @@ test("the switcher lists the home project and offers to add one", async ({ page 
   await page.getByTestId("project-switcher").click();
 
   // Assert
-  await expect(page.getByRole("option").filter({ hasText: "Home" })).toBeVisible();
+  await expect(page.getByRole("listbox").getByRole("option").filter({ hasText: "Home" })).toBeVisible();
   await expect(page.getByText("Scratch runs outside any project")).toBeVisible();
   await expect(page.getByRole("button", { name: /Add project/ })).toBeVisible();
 });
@@ -44,13 +44,13 @@ test("Escape closes the switcher", async ({ page }) => {
   // Arrange
   await page.goto("/");
   await page.getByTestId("project-switcher").click();
-  await expect(page.getByRole("option").first()).toBeVisible();
+  await expect(page.getByRole("listbox").getByRole("option").first()).toBeVisible();
 
   // Act
   await page.keyboard.press("Escape");
 
   // Assert
-  await expect(page.getByRole("option")).toHaveCount(0);
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(0);
 });
 
 test("Add project opens the folder picker", async ({ page }) => {

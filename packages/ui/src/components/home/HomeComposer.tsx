@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, FolderOpen, Play, Sparkles, SlidersHorizontal } from "lucide-react";
-import { ENGINES, HOME_PROJECT_ID, pipelineUsesEngineById } from "@adhd/core";
+import { ENGINES, HOME_PROJECT_ID, modelOverrideFor, pipelineUsesEngineById } from "@adhd/core";
 import type { Project } from "@adhd/core";
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
@@ -147,6 +147,7 @@ export function HomeComposer({
   const armed = input.trim().length > 0 && !starting;
   const usesEngine = orchestrating || pipelineUsesEngineById(pipelineId);
   const engine = ENGINES[settings.preferences.engine];
+  const pinnedModel = modelOverrideFor(settings.preferences, engine.id);
 
   function start() {
     if (!armed) {
@@ -259,7 +260,14 @@ export function HomeComposer({
       )}
 
       <div style={footerHint(d)}>
-        {usesEngine ? <>Connection and gates in Setup</> : <>↵ to start · ⌘⇧V for voice</>}
+        {!usesEngine && <>↵ to start · ⌘⇧V for voice</>}
+        {usesEngine && pinnedModel === undefined && <>Connection and gates in Setup</>}
+        {usesEngine && pinnedModel !== undefined && (
+          <>
+            Engine: {engine.label} · {pinnedModel} — pinned in Setup, so the model above
+            does not apply
+          </>
+        )}
       </div>
     </div>
   );

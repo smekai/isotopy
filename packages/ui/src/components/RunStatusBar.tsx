@@ -6,6 +6,8 @@ import type { Dir } from "../theme";
 import {
   EASE,
   FONT,
+  GOLD,
+  GOLD_SOFT,
   MONO,
   MOTION,
   RADIUS,
@@ -15,10 +17,42 @@ import {
   runDot,
   runStatusLabel,
 } from "../theme";
+import { FAIL_RED } from "./run/run-styles";
 
 const BAR_HEIGHT = 36;
 const DIVIDER_HEIGHT = 14;
 const STATUS_DOT_SIZE = 7;
+
+const STACK: CSSProperties = { display: "flex", flexDirection: "column", flexShrink: 0 };
+
+function initiativePill(needsUser: boolean, d: Dir): CSSProperties {
+  return {
+    borderRadius: RADIUS.pill,
+    padding: `${SPACE.xxs}px ${SPACE.md}px`,
+    background: needsUser ? GOLD_SOFT : d.surface2,
+    border: `1px solid ${needsUser ? GOLD : d.border}`,
+    color: needsUser ? GOLD : d.textMid,
+    fontFamily: MONO,
+    fontSize: FONT.xxs,
+    fontWeight: WEIGHT.bold,
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  };
+}
+
+function noteRow(d: Dir): CSSProperties {
+  return {
+    borderBottom: `1px solid ${d.border}`,
+    padding: `${SPACE.xs}px ${SPACE.xxxl}px`,
+    color: d.textMuted,
+    fontFamily: SANS,
+    fontSize: FONT.xs,
+  };
+}
+
+function errorRow(d: Dir): CSSProperties {
+  return { ...noteRow(d), color: FAIL_RED };
+}
 
 function bar(d: Dir): CSSProperties {
   return {
@@ -81,19 +115,28 @@ function statusText(d: Dir): CSSProperties {
   return { color: d.textMid, fontFamily: MONO, fontSize: FONT.xs, fontWeight: WEIGHT.semibold };
 }
 
+export interface InitiativeChrome {
+  statusLabel: string;
+  needsUser: boolean;
+  stopReason?: string;
+  decisionError?: string;
+}
+
 export interface RunStatusBarProps {
   run: RunState;
   d: Dir;
+  initiative?: InitiativeChrome;
 }
 
-export function RunStatusBar({ run, d }: RunStatusBarProps) {
+export function RunStatusBar({ run, d, initiative }: RunStatusBarProps) {
   const elapsed = useElapsed(run.createdAt, run.completedAt);
   const running = run.status === "running";
   const dot = runDot(run.status, d);
   const spend = formatUsage(runUsage(run));
 
   return (
-    <div style={bar(d)}>
+    <div style={STACK}>
+      <div style={bar(d)}>
       <span style={metaText(d)}>RUN <span style={{ color: d.textMid }}>#{run.number}</span></span>
       <div style={divider(d)} />
       <span style={taskText(d)}>{run.task ?? run.pipelineName}</span>
@@ -114,8 +157,28 @@ export function RunStatusBar({ run, d }: RunStatusBarProps) {
         </>
       )}
       <div style={{ flex: 1 }} />
+      {initiative && (
+        <>
+          <span
+            data-testid="orchestrator-status"
+            style={initiativePill(initiative.needsUser, d)}
+          >
+            {initiative.statusLabel}
+          </span>
+          <div style={divider(d)} />
+        </>
+      )}
       <div style={statusDot(dot, running, d)} />
       <span data-testid="run-status" style={statusText(d)}>{runStatusLabel(run.status)}</span>
+      </div>
+      {initiative?.stopReason !== undefined && (
+        <div style={noteRow(d)}>{initiative.stopReason}</div>
+      )}
+      {initiative?.decisionError !== undefined && (
+        <div style={errorRow(d)} data-testid="orchestrator-decision-error">
+          {initiative.decisionError}
+        </div>
+      )}
     </div>
   );
 }

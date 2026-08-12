@@ -15,6 +15,99 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-12 — The Orchestrator is a conversation, not a tab
+
+**Context:** an orchestration run opened on an `Orchestrator` tab and put `Chat`
+beside it. The team proposal, the latest decision and the child runs lived on one;
+the conversation those decisions were about lived on the other. The product's own
+copy admitted the seam — `LatestDecision` told the user to *"Answer in the Chat tab
+to continue."* A panel that has to point at another tab to be usable is one panel
+too many.
+
+**Decision:** an orchestration run has a single dialog. `runThread` merges the
+orchestration's turns into the chat transcript on one timestamp ordering, the team
+proposal becomes an inline card carrying its own **Approve & start**, and child runs
+are linked where they were started. `RunTab` loses `"team"`; `OrchestratorPanel` is
+deleted.
+
+Two consequences worth stating, because both look like omissions:
+
+- **A decision that already reached the chat gets no card.** `ask_user` arrives as a
+  `run.messages` question answered by the composer directly beneath it. Rendering the
+  decision as well would print the question twice — so the merge deliberately emits
+  nothing for it, and nothing for `start_run`, whose child-run link already says it.
+- **One Stop, not three.** `TeamController`'s `stop-initiative` already existed and is
+  bound to the same handler the panel's button used. The inline card carries approval
+  only. The task text asked for a Stop on the card; a second control in a scroll region,
+  for an action that is always available in the bottom bar, is worse than the asymmetry.
+
+**Rejected:** keeping a slimmer panel for the run timeline. The rail is a flat list
+with no orchestration grouping, so it does not answer "what else is in this initiative"
+— but an inline, chronological link answers it better than a sidebar ever did, and
+`TASK-128`'s dogfood is where a real need for the overview would show up. If it does,
+the rail is the place, not a panel.
+
+**Interacts with `TASK-139`:** that task observed *"nothing reads `decisionError` but
+`OrchestratorPanel`"* and plans to feed it back into the model. Its UI reader moved to
+`RunStatusBar` rather than disappearing.
+
+---
+
+## 2026-08-12 — The harness and the model are asked, and default to the cheap end
+
+**Context:** neither was ever put to the user. `HomeComposer` printed
+`Engine: … — change in Setup` and posted whatever Setup held, so the two things a run
+spends money with were decided somewhere the person starting it was not looking. The
+user's report was that the Orchestrator changes harnesses; it does not — it proposes a
+per-role `modelTier` and nothing else. The real gap was the missing question.
+
+**Decision:** both are controls on the start screen, seeded from the project preference
+and written back through it, so every start path keeps reading `preferredRunOptions`
+unchanged. The default is per engine — `auto` for Cursor, whose own routing is the cheap
+path, `fast` elsewhere — because a single global default cannot express "cheapest" when
+a tier names different models per harness. Switching harness re-defaults the model for
+the same reason, and either choice clears that engine's exact-model pin, since
+`run.model` outranks a tier outright at execution and a stale pin would silently beat the
+tier just chosen. A pin set in Setup is still honoured, and the composer now says so
+rather than hiding it.
+
+**Consequence:** the `orchestrate` stage is pinned to `deep`. It reasons about every
+other stage, and an economical run default would otherwise put it on the weakest model.
+
+**Rejected:** removing the Orchestrator's per-role tiers. It proposes over the user's
+explicit choice now rather than over an invisible default, which is what `TASK-115`
+wanted in the first place.
+
+---
+
+## 2026-08-12 — A stage names an action; the persona comes from its skill
+
+**Context:** the stage box printed a persona from `agentForStage(stage.id)` — a table
+keyed by **stage id** — and a label taken straight from the pipeline, where every
+shipped label was itself a job title. The two agreed redundantly in static pipelines
+("Software Architect / Software Architect") and disagreed outright whenever the
+Orchestrator invented an id, which it does freely: it is given catalogs for `skill` and
+`stepTask` and no list of legal ids. A role of `{id: "design", skill: "product-designer"}`
+rendered as *Software Architect*, because `AGENTS["design"]` is one.
+
+**Decision:** the persona is keyed off `skill`, which `team-composition.ts` already
+validates against `PERSONA_IDS`, so an invented id can no longer rename the person. The
+label names the work — `Scoping`, `Architecting`, `Implementing`, `Verifying` — and
+`orchestrate.md` says so with an action-phrased example, because the model copies the
+example. Both directions are guarded: `pipelines.spec.ts` fails if a shipped stage names
+a persona with no `AGENTS` entry or labels itself with a job title, and
+`orchestrate-assignment.spec.ts` fails if the assignment's example ever labels a role
+after its worker again.
+
+**Accepted cost:** `architecture` and `review` share a persona and so now share a glyph.
+The action label distinguishes them, and `specColor` still keys on stage id, so they keep
+distinct colours.
+
+**Not migrated:** labels already written to disk. A run composed before this keeps the
+job title the Orchestrator gave it; only its persona is corrected.
+
+---
+
 ## 2026-08-11 — A model preset belongs to a role, not to a run
 
 **Context:** a run picked one tier and every stage used it, so the Product Manager

@@ -56,7 +56,7 @@ test("the pipeline dropdown offers every pipeline and closes on Escape", async (
   await page.getByRole("button", { name: DEFAULT_PIPELINE }).click();
 
   // Assert
-  await expect(page.getByRole("option")).toHaveCount(3);
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(3);
   await expect(page.getByRole("option", { name: /Full Delivery/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /Single agent/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /Product Manager \+ Developer \+ QA/ })).toBeVisible();
@@ -109,7 +109,8 @@ test("single-agent mode shows the folder as read-only context, not an input", as
 
   // Assert
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
-  await expect(page.getByText(/Engine: Claude Code · Balanced/)).toBeVisible();
+  await expect(page.getByTestId("start-engine")).toHaveValue("claude-code");
+  await expect(page.getByTestId("start-tier")).toHaveValue("balanced");
 
   // The folder is the project's, so the composer states it and offers no way
   // to type another one.
@@ -216,7 +217,8 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   // Assert — the pipeline composer is where a stored pipeline is visible at all.
   await openPipelineComposer(page);
   await expect(page.getByText("What should the Agent build?")).toBeVisible();
-  await expect(page.getByText(/Engine: Claude Code · Fast/)).toBeVisible();
+  await expect(page.getByTestId("start-engine")).toHaveValue("claude-code");
+  await expect(page.getByTestId("start-tier")).toHaveValue("fast");
 
   // Setup shows the stored preset and what it resolves to here
   await page.getByRole("button", { name: "Setup" }).click();
