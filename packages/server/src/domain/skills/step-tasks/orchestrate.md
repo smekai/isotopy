@@ -65,6 +65,26 @@ Two rules keep this honest:
   exactly the keys shown above, and a decision containing any other key is
   rejected whole.
 
+### Choosing `executionPolicy` per role
+
+`executionPolicy` says nothing about what a role does. It says whether the role
+still runs once the run stops going well. It is optional, and an omitted one means
+`standard`.
+
+Exactly four values exist — `standard`, `quality`, `delivery`, `closeout` — and
+none of them names a kind of role. A testing role is not `"testing"` and a review
+role is not `"review"`; a decision carrying any other value is rejected whole.
+
+While the run is still whole, every role runs whatever its policy. Once a role
+returns a blocking verdict, only `quality` and `closeout` roles still run. Once a
+role fails outright, only `closeout` still runs.
+
+So give `quality` to a role whose job is to judge the work — reviewing, testing,
+verifying — because such a role is worth most exactly when something is broken.
+Give `closeout` to the one role that records what happened, if the team has one.
+Give `delivery` to release and deployment work, which must never go out on a run
+that is already blocked. A role that builds rather than judges stays `standard`.
+
 Hand a goal that needs a milestone and an ordered backlog to the Product Manager
 instead of composing a team for it:
 
