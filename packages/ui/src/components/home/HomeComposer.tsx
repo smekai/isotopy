@@ -1,17 +1,13 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, FolderOpen, Play, Sparkles, SlidersHorizontal } from "lucide-react";
-import {
-  ENGINES,
-  HOME_PROJECT_ID,
-  modelChoiceLabel,
-  pipelineUsesEngineById,
-} from "@adhd/core";
+import { ENGINES, HOME_PROJECT_ID, pipelineUsesEngineById } from "@adhd/core";
 import type { Project } from "@adhd/core";
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import { PipelineHeader } from "./PipelineHeader";
+import { StartHarnessPicker } from "./StartHarnessPicker";
 import { PAGE, headline, linkButton, subtitle } from "./home-styles";
 
 const COMPOSER_MAX_WIDTH = 540;
@@ -247,15 +243,23 @@ export function HomeComposer({
         )}
       </div>
 
+      {usesEngine && (
+        <StartHarnessPicker
+          d={d}
+          engine={engine.id}
+          modelTier={settings.preferences.modelTier}
+          onChange={(nextEngine, nextTier) =>
+            settings.update({
+              engine: nextEngine,
+              modelTier: nextTier,
+              engineModels: { [nextEngine]: null },
+            })
+          }
+        />
+      )}
+
       <div style={footerHint(d)}>
-        {usesEngine ? (
-          <>
-            Engine: {engine.label} · {modelChoiceLabel(settings.preferences, engine.id)} —
-            change in Setup
-          </>
-        ) : (
-          <>↵ to start · ⌘⇧V for voice</>
-        )}
+        {usesEngine ? <>Connection and gates in Setup</> : <>↵ to start · ⌘⇧V for voice</>}
       </div>
     </div>
   );

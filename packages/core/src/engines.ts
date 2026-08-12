@@ -188,7 +188,17 @@ export const MODEL_TIERS = ["auto", "fast", "balanced", "deep", "max"] as const;
 
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
-export const DEFAULT_MODEL_TIER: ModelTier = "balanced";
+export const DEFAULT_MODEL_TIER_BY_ENGINE: Record<EngineId, ModelTier> = {
+  "claude-code": "fast",
+  cursor: "auto",
+  codex: "fast",
+};
+
+export function defaultModelTierFor(engineId: EngineId): ModelTier {
+  return DEFAULT_MODEL_TIER_BY_ENGINE[engineId];
+}
+
+export const DEFAULT_MODEL_TIER: ModelTier = defaultModelTierFor(DEFAULT_ENGINE_ID);
 
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 

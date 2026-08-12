@@ -56,8 +56,9 @@ so a job title there says the same thing twice and says nothing about the work.
 
 `modelTier` is optional and buys reasoning, not capability. Every role can do its
 job at any tier; a lower one costs quality, not the run. Omit it and the role uses
-whatever tier the user picked for the run, which is the right answer whenever you
-have no reason to differ.
+the tier the user chose before starting, which is the right answer whenever you
+have no reason to differ — they picked it deliberately, and the default is the
+cheap end, so departing from it spends their money.
 
 The five tiers are `auto`, `fast`, `balanced`, `deep`, `max`.
 
