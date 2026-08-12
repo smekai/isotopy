@@ -115,9 +115,26 @@ Start a run with an approved team:
   "action": "start_run",
   "rationale": "Why this is the next run",
   "task": "Decision-complete scope for this run",
-  "teamId": "optional approved team id"
+  "teamId": "optional approved team id",
+  "fromStage": "optional role id to begin at"
 }
 ```
+
+### Beginning partway through the team with `fromStage`
+
+`fromStage` names a role on the approved team, and the run begins there. Every
+role before it does not run: its output from the settled run is carried into the
+new run, so the roles that do run still see the work they depend on.
+
+Use it when only the tail of the team has anything left to do — the
+implementation stands and only verification was left unfinished. Then
+`fromStage` is the verifying role, and the task says what to verify. Asking for
+that in prose while starting at the first role re-runs the whole team, and the
+role that already finished does the same work again for nothing.
+
+Omit it to run the whole team, which is the right answer whenever the earlier
+roles have work to redo. A `fromStage` that is not a role id on the approved team
+is rejected whole.
 
 Continue a milestone by running its next feature, when the supplied milestone
 context says continuing is permitted:
@@ -177,6 +194,11 @@ Route a user message to the specialist it belongs to:
 ```
 
 ## Rules
+
+A blocker that no re-run can clear is a question, not a run. When a role reports
+that the environment it needed was missing — no browser connected, no credential,
+no tool installed, no service running — starting the same work again produces the
+same report. Say what the user must do with `ask_user` the first time you read it.
 
 Ask one high-impact question at a time. Prefer proposing a small team over asking
 for detail you can reasonably infer, but never invent a scope decision the user

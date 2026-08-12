@@ -88,6 +88,7 @@ export interface RunReviewScript {
   artifacts?: Partial<RunArtifacts>;
   decision?: OrchestratorDecision;
   as?: string;
+  prompt?: string | RegExp;
 }
 
 const DEFAULT_REVIEW_ARTIFACTS: RunArtifacts = {
@@ -231,7 +232,10 @@ QUESTION: ${question}`,
   anticipateRunReview(review: RunReviewScript = {}): FakeEngine {
     const artifacts = { ...DEFAULT_REVIEW_ARTIFACTS, ...review.artifacts };
     const decision = review.decision ?? DEFAULT_REVIEW_DECISION;
-    return this.anticipate({ as: review.as ?? "Orchestrator review" }).reports(
+    return this.anticipate({
+      as: review.as ?? "Orchestrator review",
+      prompt: review.prompt,
+    }).reports(
       [
         "Reviewed the run.",
         fencedBlock("adhd-run-artifacts", artifacts),

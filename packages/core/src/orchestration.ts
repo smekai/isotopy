@@ -100,6 +100,7 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       rationale: requiredText,
       task: requiredText,
       teamId: requiredText.optional(),
+      fromStage: requiredText.optional(),
     })
     .strict(),
   z
@@ -188,6 +189,14 @@ export function latestOrchestratorDecision(
   orchestration: Orchestration,
 ): OrchestratorDecision | undefined {
   return orchestration.turns.at(-1)?.decision;
+}
+
+export function parkedQuestion(orchestration: Orchestration): string | undefined {
+  const decision = orchestration.latestDecision;
+  return orchestration.status === "awaiting_user" &&
+    (decision?.action === "ask_user" || decision?.action === "escalate_to_user")
+    ? decision.question
+    : undefined;
 }
 
 export function orchestrationStatusFor(

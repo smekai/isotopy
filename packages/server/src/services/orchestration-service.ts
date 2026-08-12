@@ -3,6 +3,7 @@ import {
   agentForStage,
   isTerminalRunStatus,
   orchestrationStatusFor,
+  parkedQuestion,
 } from "@adhd/core";
 import type {
   ModelTier,
@@ -10,25 +11,34 @@ import type {
   OrchestrationStatus,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
+  PipelineDefinition,
   RunState,
   StageDefinition,
 } from "@adhd/core";
 import {
   renderComposedRunTask,
   renderOrchestrationContext,
+  renderOrchestrationFollowUp,
   renderQuestionMediationContext,
   renderRunReviewContext,
+  renderTaskAfterRejection,
 } from "../domain/markdown/orchestration.ts";
 import type {
+  OrchestrationContext,
   QuestionMediationArtifact,
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
 import {
   artifactDigestOf,
+  digestsOf,
   milestoneReviewContext,
   runLabel,
   stageOutputsOf,
 } from "../domain/rules/orchestration-context.ts";
+import { blockedLaunchRefusal } from "../domain/rules/orchestration-loop.ts";
+import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
+import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
+import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import { composeTeamPipeline, withRoleTiers } from "../schemas/team-composition.ts";
@@ -211,6 +221,44 @@ export class OrchestrationService implements StageOutputConsumer {
     return { ok: true, value: run };
   }
 
+  async answer(
+    projectPath: ProjectPath,
+    orchestrationId: string,
+    text: string,
+    options: StartOrchestrationOptions = {},
+  ): Promise<RunState> {
+    const orchestration = this.orchestrations.get(orchestrationId);
+    if (!orchestration || orchestration.projectId !== projectPath.id) {
+      throw new Error("Orchestration not found");
+    }
+    if (orchestration.status === "stopped") {
+      throw new Error(
+        "This Orchestrator has stopped — start a new initiative to say more",
+      );
+    }
+    const asking = this.askingRun(orchestration);
+    if (asking) {
+      this.runs.postMessage(asking.id, text);
+      return asking;
+    }
+    const question = parkedQuestion(orchestration);
+    if (question === undefined) {
+      throw new Error("The Orchestrator is not waiting on an answer");
+    }
+    const lastRunId = orchestration.runIds.at(-1);
+    const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
+      ...(lastRunId ? this.runs.inheritedRunOptions(lastRunId) : {}),
+      ...options,
+      task: await this.followUpTask(projectPath, orchestration, question, text),
+      orchestrationId: orchestration.id,
+    });
+    orchestration.runIds.push(run.id);
+    orchestration.status = "conversing";
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+    return run;
+  }
+
   async consume(
     run: RunState,
     stageDef: StageDefinition,
@@ -227,30 +275,50 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!orchestration) {
       return undefined;
     }
+    const profession = agentForStage(stageDef).profession;
     const parsed = extractOrchestratorDecision(output);
-    if (parsed.ok) {
-      orchestration.turns.push({
-        runId: run.id,
-        decision: parsed.value,
-        at: nowIso(),
-      });
-      orchestration.latestDecision = parsed.value;
-      delete orchestration.decisionError;
-      if (parsed.value.action === "stop") {
-        await this.terminate(orchestration, parsed.value.reason, run.id);
-        return undefined;
-      }
-      orchestration.status = orchestrationStatusFor(parsed.value);
-    } else {
-      orchestration.decisionError = formatValidationIssues(parsed.issues);
+    if (!parsed.ok) {
+      const cause = formatValidationIssues(parsed.issues);
+      return this.refuse(
+        orchestration,
+        cause,
+        `${profession} produced no usable decision — ${cause}`,
+      );
     }
+    const refusal = this.refusalFor(orchestration, run, run.status, parsed.value);
+    if (refusal !== undefined) {
+      return this.refuse(
+        orchestration,
+        refusal,
+        `${profession} decided something that cannot be acted on — ${refusal}`,
+      );
+    }
+    orchestration.turns.push({
+      runId: run.id,
+      decision: parsed.value,
+      at: nowIso(),
+    });
+    orchestration.latestDecision = parsed.value;
+    delete orchestration.decisionError;
+    if (parsed.value.action === "stop") {
+      await this.terminate(orchestration, parsed.value.reason, run.id);
+      return undefined;
+    }
+    orchestration.status = orchestrationStatusFor(parsed.value);
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
-    return parsed.ok
-      ? undefined
-      : {
-          reason: `${agentForStage(stageDef).profession} produced no usable decision — ${orchestration.decisionError}`,
-        };
+    return undefined;
+  }
+
+  private async refuse(
+    orchestration: Orchestration,
+    cause: string,
+    reason: string,
+  ): Promise<StageOutputRejection> {
+    orchestration.decisionError = cause;
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+    return { reason };
   }
 
   async stop(projectPath: ProjectPath, orchestrationId: string): Promise<Orchestration> {
@@ -324,6 +392,17 @@ export class OrchestrationService implements StageOutputConsumer {
     }
   }
 
+  async restartTask(run: RunState): Promise<string | undefined> {
+    const orchestration = run.orchestrationId
+      ? this.orchestrations.get(run.orchestrationId)
+      : undefined;
+    const error = orchestration?.decisionError;
+    if (run.pipelineId !== PIPELINE_ID || run.task === undefined || error === undefined) {
+      return undefined;
+    }
+    return renderTaskAfterRejection({ task: run.task, error });
+  }
+
   async reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext> {
     const run = this.runs.getRun(request.runId);
     if (!run) {
@@ -353,6 +432,7 @@ export class OrchestrationService implements StageOutputConsumer {
         closeout: run.closeout?.report,
         artifacts: stageOutputsOf(run),
         milestone: this.reviewMilestone(run),
+        rejectedDecision: orchestration.decisionError,
       }),
     };
   }
@@ -368,20 +448,22 @@ export class OrchestrationService implements StageOutputConsumer {
         "The Orchestrator stopped before it could record the run review",
       );
     }
-    if (review.decision && !this.hasTurnFor(orchestration, request.runId)) {
+    const decision = this.actionableDecision(orchestration, request, review);
+    if (decision.value && !this.hasTurnFor(orchestration, request.runId)) {
       orchestration.turns.push({
         runId: request.runId,
-        decision: review.decision,
+        decision: decision.value,
         at: nowIso(),
       });
-      orchestration.latestDecision = review.decision;
-      if (review.decision.action !== "stop") {
-        orchestration.status = orchestrationStatusFor(review.decision);
+      orchestration.latestDecision = decision.value;
+      if (decision.value.action !== "stop") {
+        orchestration.status = orchestrationStatusFor(decision.value);
       }
     }
-    if (review.errors.length > 0) {
-      orchestration.decisionError = review.errors.join("; ");
-    } else if (review.decision) {
+    const errors = [...review.errors, ...decision.errors];
+    if (errors.length > 0) {
+      orchestration.decisionError = errors.join("; ");
+    } else if (decision.value) {
       delete orchestration.decisionError;
     }
     orchestration.updatedAt = nowIso();
@@ -444,14 +526,17 @@ export class OrchestrationService implements StageOutputConsumer {
     if (decision.action === "start_run") {
       const pipeline = orchestration.composedPipeline;
       if (!pipeline) {
-        throw new Error(
-          "The Orchestrator asked to start a run before a team was approved",
-        );
+        throw new Error(NO_APPROVED_TEAM);
+      }
+      const seeded = this.seedFrom(pipeline, run, decision.fromStage);
+      if (seeded && !seeded.ok) {
+        throw new Error(formatValidationIssues(seeded.issues));
       }
       return this.runs.startComposedRun(projectPath, pipeline, {
         ...options,
         task: decision.task,
         orchestrationId: orchestration.id,
+        seeded: seeded?.value,
       });
     }
     if (decision.action === "delegate_milestone_planning") {
@@ -461,6 +546,66 @@ export class OrchestrationService implements StageOutputConsumer {
       return this.continueMilestone(projectPath, run, decision.featureId, options);
     }
     return undefined;
+  }
+
+  private actionableDecision(
+    orchestration: Orchestration,
+    request: RunReviewRequest,
+    review: RunReview,
+  ): ReviewedDecision {
+    const settled = this.runs.getRun(request.runId);
+    if (!review.decision || !settled) {
+      return { value: review.decision, errors: [] };
+    }
+    const refusal = this.refusalFor(
+      orchestration,
+      settled,
+      request.status,
+      review.decision,
+    );
+    return refusal === undefined
+      ? { value: review.decision, errors: [] }
+      : { errors: [refusal] };
+  }
+
+  private refusalFor(
+    orchestration: Orchestration,
+    settled: RunState,
+    settledStatus: RunState["status"],
+    decision: OrchestratorDecision,
+  ): string | undefined {
+    if (decision.action !== "start_run") {
+      return undefined;
+    }
+    const pipeline = orchestration.composedPipeline;
+    if (!pipeline) {
+      return NO_APPROVED_TEAM;
+    }
+    const seeded = this.seedFrom(pipeline, settled, decision.fromStage);
+    if (seeded && !seeded.ok) {
+      return formatValidationIssues(seeded.issues);
+    }
+    return blockedLaunchRefusal([
+      ...this.settledLaunches(orchestration),
+      { action: decision.action, status: settledStatus },
+    ]);
+  }
+
+  private seedFrom(
+    pipeline: PipelineDefinition,
+    settled: RunState,
+    fromStage: string | undefined,
+  ): ValidationResult<SeededStart> | undefined {
+    return fromStage === undefined
+      ? undefined
+      : seedFromSettledRun(pipeline, settled, fromStage, runLabel(settled));
+  }
+
+  private settledLaunches(orchestration: Orchestration): SettledLaunch[] {
+    return orchestration.turns.map((turn) => ({
+      action: turn.decision.action,
+      status: this.runs.getRun(turn.runId)?.status,
+    }));
   }
 
   private continueMilestone(
@@ -498,17 +643,54 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private async buildTask(projectPath: ProjectPath, goal: string): Promise<string> {
+    return renderOrchestrationContext(await this.goalContext(projectPath, goal));
+  }
+
+  private async followUpTask(
+    projectPath: ProjectPath,
+    orchestration: Orchestration,
+    question: string,
+    answer: string,
+  ): Promise<string> {
+    return renderOrchestrationFollowUp({
+      ...(await this.goalContext(projectPath, orchestration.goal)),
+      team: orchestration.approvedTeam,
+      question,
+      answer,
+      artifacts: this.priorArtifacts(orchestration),
+    });
+  }
+
+  private async goalContext(
+    projectPath: ProjectPath,
+    goal: string,
+  ): Promise<OrchestrationContext> {
     const [boardContext, closeoutContext] = await Promise.all([
       taskBoardFor(projectPath).planningContext(),
       milestoneCloseoutContext(projectPath),
     ]);
-    return renderOrchestrationContext({
+    return {
       goal,
       personas: PERSONA_CATALOG,
       stepTasks: STEP_TASK_CATALOG,
       boardContext,
       closeoutContext,
-    });
+    };
+  }
+
+  private askingRun(orchestration: Orchestration): RunState | undefined {
+    return orchestration.runIds
+      .map((runId) => this.runs.getRun(runId))
+      .find((run): run is RunState => run?.status === "asking");
+  }
+
+  private priorArtifacts(orchestration: Orchestration): QuestionMediationArtifact[] {
+    const runIds = new Set(orchestration.runIds);
+    return digestsOf(
+      this.runs
+        .listRuns(orchestration.projectId)
+        .filter((run) => runIds.has(run.id) && run.pipelineId !== PIPELINE_ID),
+    );
   }
 
   private newOrchestration(
@@ -609,6 +791,14 @@ export class OrchestrationService implements StageOutputConsumer {
     return repository;
   }
 }
+
+interface ReviewedDecision {
+  value?: OrchestratorDecision;
+  errors: string[];
+}
+
+const NO_APPROVED_TEAM =
+  "The Orchestrator asked to start a run before a team was approved";
 
 const PIPELINE_ID = "orchestration";
 

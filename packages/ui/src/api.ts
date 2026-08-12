@@ -221,6 +221,13 @@ export function approveOrchestratorTeam(
   return postJson<RunState>(`/orchestrations/${orchestrationId}/approve`, options);
 }
 
+export function answerOrchestrator(
+  orchestrationId: string,
+  text: string,
+): Promise<RunState> {
+  return postJson<RunState>(`/orchestrations/${orchestrationId}/messages`, { text });
+}
+
 export function stopOrchestration(orchestrationId: string): Promise<Orchestration> {
   return postJson<Orchestration>(`/orchestrations/${orchestrationId}/stop`);
 }

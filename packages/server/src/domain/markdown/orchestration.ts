@@ -15,6 +15,13 @@ export interface OrchestrationContext {
   closeoutContext: string;
 }
 
+export interface OrchestrationFollowUpContext extends OrchestrationContext {
+  team?: OrchestratorTeamProposal;
+  question: string;
+  answer: string;
+  artifacts: QuestionMediationArtifact[];
+}
+
 export interface ComposedRunContext {
   goal: string;
   team: OrchestratorTeamProposal;
@@ -56,6 +63,45 @@ export function renderOrchestrationContext({
     renderCatalog("Step task catalog", stepTasks),
     markdownBody(boardContext),
     markdownBody(closeoutContext),
+  ]);
+}
+
+export function renderOrchestrationFollowUp({
+  team,
+  question,
+  answer,
+  artifacts,
+  ...context
+}: OrchestrationFollowUpContext): string {
+  return markdownBlocks([
+    renderOrchestrationContext(context),
+    team === undefined
+      ? undefined
+      : `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}`,
+    renderArtifactSections("Prior run artifacts", artifacts),
+    `## The question you asked\n\n${markdownBody(question)}`,
+    `## The user's answer\n\n${markdownBody(answer)}`,
+    "Decide what happens now, in the same one fenced block. The answer above is the one you asked for — do not ask it again.",
+  ]);
+}
+
+export interface RejectedDecisionContext {
+  task: string;
+  error: string;
+}
+
+export function renderTaskAfterRejection({
+  task,
+  error,
+}: RejectedDecisionContext): string {
+  return markdownBlocks([task, renderRejectedDecision(error)]);
+}
+
+function renderRejectedDecision(error: string): string {
+  return markdownBlocks([
+    "## Your last decision was rejected",
+    markdownBody(error),
+    "Decide again, correcting exactly what the rejection names. A decision carrying an unknown field, an invented enum value, or no fenced block at all is rejected whole, and nothing runs until one parses.",
   ]);
 }
 
@@ -112,6 +158,7 @@ export interface RunReviewMarkdownContext {
   closeout?: ProductManagerCloseout;
   artifacts: QuestionMediationArtifact[];
   milestone?: RunReviewMilestoneContext;
+  rejectedDecision?: string;
 }
 
 function renderReviewMilestone(milestone: RunReviewMilestoneContext): string {
@@ -142,6 +189,7 @@ export function renderRunReviewContext({
   closeout,
   artifacts,
   milestone,
+  rejectedDecision,
 }: RunReviewMarkdownContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
@@ -154,6 +202,9 @@ export function renderRunReviewContext({
       : undefined,
     milestone ? renderReviewMilestone(milestone) : undefined,
     renderArtifactSections("Stage outputs", artifacts),
+    rejectedDecision === undefined
+      ? undefined
+      : renderRejectedDecision(rejectedDecision),
   ]);
 }
 

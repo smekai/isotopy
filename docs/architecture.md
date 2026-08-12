@@ -681,6 +681,53 @@ others, and cancelling their non-terminal owned work before durable workers star
 retains history and artifacts. A restart adopts its run into whichever Orchestrator is
 active now, so stopping one never strands the work it owned.
 
+**A rejected decision informs the next attempt.** `Orchestration.decisionError`
+holds why the last decision would not parse, and it is no longer only something the
+status bar shows. `OrchestrationHooks.restartTask` hands `restartRun` a task for the
+relaunched stage — the run's frozen `run.task` plus the rejection, rendered by
+`renderTaskAfterRejection` — and `renderRunReviewContext` carries the same rejection
+into a review. `RunState.task` itself is never rewritten: the record keeps saying what
+the run began as, and only the workflow input differs (`InputExtras.task`). There is no
+automatic retry; a rejection is terminal for the turn and informative for the next one.
+
+**`start_run` may begin partway through the approved team.** The decision's optional
+`fromStage` names a role; `seedFromSettledRun` (`domain/rules/run-seeding.ts`) validates
+it against the composed pipeline and carries the settled run's outputs and outcomes for
+every stage before it into a **fresh** run, which starts there. The settled run is left
+untouched as evidence. Two things are rejected with path-aware issues rather than started
+anyway: an id no role has, and a stage the settled run never ran — the settled run is not
+always of the composed pipeline, and seeding an absent stage would credit a role with work
+nobody did. `applySeededStage` marks a carried stage `skipped` with a log line naming the
+run it came from — but only when it is still `pending`, which is what keeps a restart's own
+upstream statuses intact.
+
+**Three blocked runs in a row stop the loop.** `blockedLaunchRefusal`
+(`domain/rules/orchestration-loop.ts`) counts the tail of `Orchestration.turns`:
+consecutive `start_run` decisions whose reviewed run ended `needs_attention` or `failed`,
+with no user-facing turn between them, plus the decision under consideration. At three it
+refuses. It is derived from the turns already stored — no counter is persisted — and a
+chain of *successful* runs never counts, so a healthy initiative is never capped.
+
+**A question asked when nothing is running can still be answered.**
+`POST /orchestrations/:id/messages` is the initiative's own answer channel, for the case
+the run-level one cannot serve: a lifecycle review parks the initiative on the user, but the
+run it reviewed is terminal, so there is no `asking` stage to release. `answer` routes to
+that stage when one exists — an answer meant for a parked specialist is not a new turn — and
+otherwise starts a fresh `orchestration` run whose task is `renderOrchestrationFollowUp`:
+the goal context, the approved team, prior run digests, the question, and the answer. The
+initiative goes back to `conversing` and the ordinary loop resumes. It does not supersede,
+which is what separates it from `POST /orchestrations`.
+
+**A decision that cannot be acted on is never accepted.** `refusalFor` runs at both places
+a decision is taken — `consume` for a conversation turn, `recordReview` for a lifecycle
+review — and covers the three reasons acting would fail: no approved team, a `fromStage`
+that does not validate, and the blocked-launch ceiling. A refused decision records
+`decisionError` and **no turn**, which is what keeps the loop open: `hasTurnFor` would
+otherwise discard the corrected decision of a re-review, and `settle` would find the run
+already spoken for. So the recovery is the ordinary one — restart the run, and the rejection
+travels into the next prompt. `launch` keeps the same two throws for what the type system
+cannot rule out; by then they are unreachable.
+
 **Specialist questions are mediated inside the specialist workflow.** The
 `OrchestrationHooks` seam (implemented by `OrchestrationService`) lets
 `PipelineWorkflow` request active aggregate context and record a narrowed broker

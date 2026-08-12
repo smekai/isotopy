@@ -4,8 +4,10 @@ import type {
   OrchestrationStatus,
   OrchestratorDecision,
   OrchestratorTeamProposal,
+  RunState,
   RunSummary,
 } from "@adhd/core";
+import { isTerminalRunStatus, parkedQuestion } from "@adhd/core";
 
 export interface OrchestratorView {
   orchestration: Orchestration;
@@ -31,6 +33,15 @@ export function orchestrationStatusLabel(status: OrchestrationStatus): string {
 
 export function orchestrationNeedsUser(status: OrchestrationStatus): boolean {
   return status === "awaiting_user" || status === "awaiting_approval";
+}
+
+export function answerableQuestion(
+  orchestration: Orchestration | undefined,
+  runStatus: RunState["status"],
+): string | undefined {
+  return orchestration && isTerminalRunStatus(runStatus)
+    ? parkedQuestion(orchestration)
+    : undefined;
 }
 
 export function teamAwaitingApproval(

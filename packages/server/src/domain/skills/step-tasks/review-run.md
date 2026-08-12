@@ -50,9 +50,16 @@ same team can do:
 {
   "action": "start_run",
   "rationale": "Why this is the next run",
-  "task": "Decision-complete scope for this run"
+  "task": "Decision-complete scope for this run",
+  "fromStage": "optional role id to begin at"
 }
 ```
+
+Name `fromStage` when the roles before it have nothing left to do — their output
+from this run is carried into the next one, and they do not run again. A run that
+verified nothing because verification was blocked needs the verifying role, not
+the whole team; re-running the role that already delivered spends the user's
+money to produce what you already have.
 
 Continue a milestone by running its next feature. Only available when the run
 belonged to a milestone whose context says continuing is permitted. Name a
@@ -79,6 +86,14 @@ Stop, because the goal is met or cannot proceed:
 ```
 
 ## Rules
+
+An unmet environment precondition is not a quality verdict. A role can report
+`FAIL` because the work is wrong, or because it could never do the work at all —
+no browser was connected, no credential was supplied, no tool was installed, no
+service was running. Read which one the findings describe. The second is not
+fixed by running the same team against the same machine again: it is an
+`ask_user` naming exactly what the user must connect, install, or start. Say it
+the first time you read it, not on the fourth run.
 
 A failed or needs-attention run is not automatically a reason to stop — decide
 from the findings whether the work can continue. Do not propose a new team here;
