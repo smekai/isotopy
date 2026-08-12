@@ -1,38 +1,47 @@
 export interface AgentDefinition {
-  stageId: string;
+  skill: string;
   profession: string;
   glyph: string;
 }
 
 export const AGENTS: Record<string, AgentDefinition> = {
-  solo: { stageId: "solo", profession: "Agent", glyph: "✦" },
-  orchestrate: { stageId: "orchestrate", profession: "Orchestrator", glyph: "❖" },
-  intake: { stageId: "intake", profession: "Product Manager", glyph: "◈" },
-  "milestone-plan": {
-    stageId: "milestone-plan",
+  solo: { skill: "solo", profession: "Agent", glyph: "✦" },
+  orchestrator: { skill: "orchestrator", profession: "Orchestrator", glyph: "❖" },
+  "project-manager": {
+    skill: "project-manager",
     profession: "Product Manager",
     glyph: "◈",
   },
-  "product-design": {
-    stageId: "product-design",
+  "product-designer": {
+    skill: "product-designer",
     profession: "Product Designer",
     glyph: "◐",
   },
-  architecture: {
-    stageId: "architecture",
+  "software-architect": {
+    skill: "software-architect",
     profession: "Software Architect",
     glyph: "◇",
   },
-  requirements: { stageId: "requirements", profession: "Business Analyst", glyph: "◉" },
-  design: { stageId: "design", profession: "Software Architect", glyph: "◇" },
-  implementation: { stageId: "implementation", profession: "Developer", glyph: "⬡" },
-  review: { stageId: "review", profession: "Software Architect", glyph: "◎" },
-  test: { stageId: "test", profession: "QA Engineer", glyph: "⊕" },
-  release: { stageId: "release", profession: "Release Manager", glyph: "◆" },
-  deploy: { stageId: "deploy", profession: "SRE", glyph: "▲" },
-  closeout: { stageId: "closeout", profession: "Product Manager", glyph: "◈" },
+  architect: { skill: "architect", profession: "Architect", glyph: "◇" },
+  developer: { skill: "developer", profession: "Developer", glyph: "⬡" },
+  tester: { skill: "tester", profession: "QA Engineer", glyph: "⊕" },
+  "release-manager": {
+    skill: "release-manager",
+    profession: "Release Manager",
+    glyph: "◆",
+  },
+  sre: { skill: "sre", profession: "SRE", glyph: "▲" },
 };
 
-export function agentForStage(stageId: string): AgentDefinition {
-  return AGENTS[stageId] ?? { stageId, profession: stageId, glyph: "◈" };
+export interface StageIdentity {
+  id: string;
+  skill?: string;
+}
+
+export function agentForSkill(skill: string): AgentDefinition {
+  return AGENTS[skill] ?? { skill, profession: skill, glyph: "◈" };
+}
+
+export function agentForStage(stage: StageIdentity): AgentDefinition {
+  return agentForSkill(stage.skill ?? stage.id);
 }

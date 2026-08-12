@@ -521,7 +521,7 @@ export class RunService implements RunProjection {
     }
     delete run.completedAt;
     void this.store.flushPersist(runId);
-    const profession = agentForStage(stageId).profession;
+    const profession = agentForStage(run.stages[startIndex] ?? { id: stageId }).profession;
     void this.launch(this.registry.resolve(run.projectId), run, {
       startedMessage: `Restarted from ${profession}`,
       seededOutputs,
@@ -581,7 +581,7 @@ export class RunService implements RunProjection {
     run.status = "awaiting";
     this.emit({
       ts: nowIso(), type: "stage.awaiting", runId, stageId, status: "awaiting",
-      message: `${agentForStage(stageId).profession} is waiting for your approval`,
+      message: `${agentForStage(stage).profession} is waiting for your approval`,
     });
   }
 
@@ -613,7 +613,7 @@ export class RunService implements RunProjection {
     run.status = "running";
     this.emit({
       ts: nowIso(), type: "stage.answered", runId, stageId, status: "running",
-      message: `${agentForStage(stageId).profession} is continuing`,
+      message: `${agentForStage(stage).profession} is continuing`,
     });
   }
 
@@ -628,7 +628,7 @@ export class RunService implements RunProjection {
       stageId, engine: run.engine, model: run.model, raw: limit.raw,
       resetAt: limit.resetAt, detectedAt: ts, attempt,
     };
-    const profession = agentForStage(stageId).profession;
+    const profession = agentForStage(stage).profession;
     const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
     this.log(runId, stageId, { level: "warn", message });
     this.emit({ ts, type: "stage.blocked", runId, stageId, status: "blocked", message, limit: run.limit });
@@ -641,7 +641,7 @@ export class RunService implements RunProjection {
     stage.status = "running";
     run.status = "running";
     delete run.limit;
-    const profession = agentForStage(stageId).profession;
+    const profession = agentForStage(stage).profession;
     const message = LIMIT_LOG.resuming(profession, choice);
     this.log(runId, stageId, { level: "run", message });
     this.emit({ ts: nowIso(), type: "stage.unblocked", runId, stageId, status: "running", message });
@@ -679,7 +679,7 @@ export class RunService implements RunProjection {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
     if (!run || !stage || stage.status !== "awaiting") return;
-    const profession = agentForStage(stageId).profession;
+    const profession = agentForStage(stage).profession;
     stage.status = "passed";
     stage.completedAt = nowIso();
     run.status = "running";
@@ -698,7 +698,7 @@ export class RunService implements RunProjection {
     stage.status = "passed";
     this.emit({
       ts: nowIso(), type: "stage.completed", runId, stageId, status: "passed",
-      message: `${agentForStage(stageId).profession} completed`,
+      message: `${agentForStage(stage).profession} completed`,
     });
   }
 
@@ -711,7 +711,7 @@ export class RunService implements RunProjection {
     stage.status = "skipped";
     this.emit({
       ts: completedAt, type: "stage.skipped", runId, stageId, status: "skipped",
-      message: `${agentForStage(stageId).profession} skipped`,
+      message: `${agentForStage(stage).profession} skipped`,
     });
   }
 
@@ -754,7 +754,7 @@ export class RunService implements RunProjection {
         formatHandoff(
           {
             stageLabel: stageDef.label,
-            profession: agentForStage(stageDef.id).profession,
+            profession: agentForStage(stageDef).profession,
             engine: this.engineLabel(run),
             model: run.model,
             completedAt: nowIso(),

@@ -104,7 +104,7 @@ const SEEDED_RUN: RunState = {
   stages: [
     {
       id: "implementation",
-      label: "Developer",
+      label: "Implementing",
       skill: "developer",
       status: "passed",
       startedAt: STARTED_AT,

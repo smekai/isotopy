@@ -419,7 +419,7 @@ async function runOneStage(
   await step.run({ name: `${stageDef.id}:gate:awaiting` }, () => {
     deps.projection.log(runId, stageDef.id, {
       level: "warn",
-      message: `${agentForStage(stageDef.id).profession} is waiting for your approval`,
+      message: `${agentForStage(stageDef).profession} is waiting for your approval`,
       });
     deps.projection.stageAwaiting(runId, stageDef.id);
     return null;
@@ -494,7 +494,7 @@ async function suppressStage(
         : "blocking quality findings";
     deps.projection.log(runId, stageDef.id, {
       level: "warn",
-      message: `${agentForStage(stageDef.id).profession} suppressed because of ${reason}`,
+      message: `${agentForStage(stageDef).profession} suppressed because of ${reason}`,
       });
     deps.projection.stageSkipped(runId, stageDef.id);
     return null;

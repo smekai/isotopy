@@ -271,7 +271,7 @@ const SEEDED_RUN: RunState = {
   stages: [
     {
       id: "implementation",
-      label: "Developer",
+      label: "Implementing",
       skill: "developer",
       status: "passed",
       startedAt: STARTED_AT,
@@ -286,7 +286,7 @@ const SEEDED_RUN: RunState = {
     },
     {
       id: "test",
-      label: "QA Engineer",
+      label: "Verifying",
       skill: "tester",
       verdict: "PASS",
       status: "passed",

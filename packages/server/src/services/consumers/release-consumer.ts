@@ -22,7 +22,7 @@ export class ReleaseConsumer implements StageOutputConsumer {
     const parsed = extractReleaseManifest(output);
     if (!parsed.ok) {
       return {
-        reason: `${agentForStage(stageDef.id).profession} produced no usable release handoff — ${formatValidationIssues(parsed.issues)}`,
+        reason: `${agentForStage(stageDef).profession} produced no usable release handoff — ${formatValidationIssues(parsed.issues)}`,
       };
     }
     run.release = { manifest: parsed.value, completedAt: nowIso() };

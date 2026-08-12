@@ -48,7 +48,7 @@ export class MilestonePlanConsumer implements StageOutputConsumer {
       return undefined;
     }
     return {
-      reason: `${agentForStage(stageDef.id).profession} produced no usable milestone plan — ${unusable}`,
+      reason: `${agentForStage(stageDef).profession} produced no usable milestone plan — ${unusable}`,
     };
   }
 }

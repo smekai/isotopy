@@ -31,8 +31,8 @@ test("a proposed team is presented with its roles and can be approved", async ({
   await expect(page.getByTestId("orchestrator-status")).toHaveText("Team awaiting approval");
   const team = page.getByTestId("orchestrator-team");
   await expect(team).toContainText("Delivery pair");
-  await expect(team).toContainText("Developer");
-  await expect(team).toContainText("QA Engineer");
+  await expect(team).toContainText("Implementing");
+  await expect(team).toContainText("Verifying");
   await expect(page.getByTestId("approve-team")).toBeEnabled();
 });
 
@@ -93,7 +93,7 @@ const SEEDED_RUN: RunState = {
   stages: [
     {
       id: "orchestrate",
-      label: "Orchestrator",
+      label: "Orchestrating",
       skill: "orchestrator",
       status: "passed",
       startedAt: CREATED_AT,
@@ -129,12 +129,12 @@ function awaitingApproval(): Orchestration {
         roles: [
           {
             id: "implementation",
-            label: "Developer",
+            label: "Implementing",
             skill: "developer",
             stepTask: "implement-feature",
             modelTier: "deep",
           },
-          { id: "test", label: "QA Engineer", skill: "tester", stepTask: "verify-feature" },
+          { id: "test", label: "Verifying", skill: "tester", stepTask: "verify-feature" },
         ],
       },
     },

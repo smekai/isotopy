@@ -1,5 +1,10 @@
 import { assert } from "vitest";
-import { HOME_PROJECT_ID, toRunSummary } from "@adhd/core";
+import {
+  DEMO_PIPELINES,
+  HOME_PROJECT_ID,
+  flattenPipelineStages,
+  toRunSummary,
+} from "@adhd/core";
 import type {
   LogLevel,
   MessageRole,
@@ -21,8 +26,12 @@ const EVENT_TS = "2026-07-21T10:00:01.000Z";
 
 export const RUN_ID = "r1";
 
+const SHIPPED_SKILLS = new Map(
+  DEMO_PIPELINES.flatMap(flattenPipelineStages).map((def) => [def.id, def.skill]),
+);
+
 export function stage(id: string, status: StageStatus = "pending"): StageState {
-  return { id, label: id, status, logs: [] };
+  return { id, label: id, skill: SHIPPED_SKILLS.get(id) ?? id, status, logs: [] };
 }
 
 /** A stage that has started, so the transcript gives it a divider. */

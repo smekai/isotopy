@@ -89,8 +89,8 @@ test("each prompt quotes every upstream report under a handoff heading", async (
   const testerPrompt = engine.callAt(2).prompt;
   expect(testerPrompt).toContain("## Task");
   expect(testerPrompt).toContain("## Handoff from previous steps");
-  expect(testerPrompt).toContain("### Product Manager");
-  expect(testerPrompt).toContain("### Developer");
+  expect(testerPrompt).toContain("### Scoping");
+  expect(testerPrompt).toContain("### Implementing");
   expect(testerPrompt).toContain(DEV_REPORT);
   // The Product Manager runs first: its prompt combines the reusable step task
   // with the user's request while its stable identity stays in the persona.
@@ -122,10 +122,10 @@ test("each box's output is stored per stage and written as its own handoff.md", 
 
   const developerHandoff = await readHandoff(home, run.id, "implementation");
   const testerHandoff = await readHandoff(home, run.id, "test");
-  expect(developerHandoff).toContain("# Developer — handoff");
+  expect(developerHandoff).toContain("# Implementing — handoff");
   expect(developerHandoff).toContain(DEV_REPORT);
   expect(developerHandoff).not.toContain("MARKER-TESTER");
-  expect(testerHandoff).toContain("# QA Engineer — handoff");
+  expect(testerHandoff).toContain("# Verifying — handoff");
   expect(testerHandoff).toContain("MARKER-TESTER");
 });
 

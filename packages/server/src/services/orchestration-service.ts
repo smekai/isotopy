@@ -249,7 +249,7 @@ export class OrchestrationService implements StageOutputConsumer {
     return parsed.ok
       ? undefined
       : {
-          reason: `${agentForStage(stageDef.id).profession} produced no usable decision — ${orchestration.decisionError}`,
+          reason: `${agentForStage(stageDef).profession} produced no usable decision — ${orchestration.decisionError}`,
         };
   }
 

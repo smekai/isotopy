@@ -79,7 +79,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
 
   for (const stage of run.stages) {
     if (stage.startedAt) {
-      const agent = agentForStage(stage.id);
+      const agent = agentForStage(stage);
       ordered.push({
         seq: seq++,
         item: {

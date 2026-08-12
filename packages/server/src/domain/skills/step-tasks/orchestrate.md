@@ -27,7 +27,7 @@ runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
     "roles": [
       {
         "id": "implementation",
-        "label": "Developer",
+        "label": "Implementing",
         "skill": "developer",
         "stepTask": "implement-feature",
         "rationale": "Why this role is here",
@@ -40,6 +40,17 @@ runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
   }
 }
 ```
+
+### Writing a role's `label`
+
+`skill` says who the role is. `label` says what they are **doing** — an action
+phrase, in the `-ing` form, naming the work this role performs on this run:
+`Scoping`, `Architecting`, `Implementing`, `Reviewing`, `Verifying`,
+`Deploying the preview`, `Closing out`.
+
+A `label` that repeats a job title — `Developer`, `QA Engineer`, `Software
+Architect` — is wrong. The interface already shows the persona above the label,
+so a job title there says the same thing twice and says nothing about the work.
 
 ### Choosing `modelTier` per role
 

@@ -34,6 +34,7 @@ Do not end with `VERDICT:` or `QUESTION:`. Those belong to the other personas.
   beat five plausible ones.
 - Every role names a persona and a step task from the supplied catalogs. Do not
   invent an id that is not listed.
+- A role's label names the work, not the worker: `Implementing`, not `Developer`.
 - Order roles so each has what it needs from the one before it.
 - Quality and closeout roles carry the execution policy that keeps them running
   when an earlier role reports a problem.

@@ -80,7 +80,7 @@ function statusText(status: StagePresentation): CSSProperties {
 }
 
 function StageLog({ stage, d }: { stage: StageState; d: Dir }) {
-  const agent = agentForStage(stage.id);
+  const agent = agentForStage(stage);
   const presentation = stagePresentation(stage);
   const spend = stage.usage ? formatUsage(stage.usage) : undefined;
   const level = (entry: LogLevel) => logLevelColor(entry, d);
