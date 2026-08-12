@@ -1,5 +1,56 @@
 # Done
 
+## TASK-137: One dialog, an honest label, and a choice at the start
+**Priority:** P1 | **Tags:** ui, core, server, milestone-f
+**Updated:** 2026-08-12 15:10
+
+**Closed at 0.9.36.** Three complaints with one root: the product decided things silently
+and then showed them in the wrong place. Widened from the original two-tabs task on
+2026-08-12 with the user, who asked for all three at once because they land on the same
+screens.
+
+**1. One dialog.** `runThread` merges the orchestration's turns into
+`conversationOnly(buildTranscript(run))` on one timestamp ordering. A `propose_team` turn
+is an inline `TeamProposalCard` carrying **Approve & start**, read-only once approved;
+child runs are linked where they were started, minus the thread's own run. Goal, status,
+stop reason and decision error moved to `RunStatusBar`. `RunTab` lost `"team"`,
+`OrchestratorPanel` was deleted, and *"Answer in the Chat tab to continue"* is gone from
+the product — the test the task named for whether this worked.
+
+Two calls that read as omissions: an `ask_user` decision gets **no** card, because it is
+already a `run.messages` question with the composer beneath it and a card would print it
+twice; and there is **one** Stop, `TeamController`'s existing `stop-initiative`, rather
+than the second one the task text asked to put on the card.
+
+**2. Engine and model asked at the start.** The premise in the report — that the
+Orchestrator changes harnesses — was wrong: it proposes a per-role `modelTier` and nothing
+else. The real gap was that neither was ever *asked*. `StartHarnessPicker` puts both on the
+start screen, seeded from the project preference. Defaults are economical per engine
+(`auto` for Cursor, `fast` elsewhere); switching harness re-defaults the model, and either
+choice clears that engine's exact-model pin, since `run.model` outranks a tier at
+execution. The `orchestrate` stage is pinned to `deep` so the economical default does not
+put the Orchestrator itself on the weakest model. `TASK-115` stayed as shipped.
+
+**3. Who is acting, and what they are doing.** `StageNode` read the persona from a table
+keyed by **stage id**, which the Orchestrator invents freely — `{id:"design",
+skill:"product-designer"}` rendered as *Software Architect*. Keyed off `skill` instead,
+which `team-composition.ts` already validates against `PERSONA_IDS`. Labels became actions
+(Scoping, Architecting, Implementing, Verifying, …), and `orchestrate.md` now says a label
+names the work with an action-phrased example. Verified on the dogfood project's own
+`verification` stage, which previously rendered its raw id as the profession. Labels
+already on disk are not migrated; only the persona is corrected.
+
+**Guards:** `pipelines.spec.ts` fails if a shipped stage names a persona with no `AGENTS`
+entry or labels itself with a job title; `orchestrate-assignment.spec.ts` fails if the
+assignment's example ever labels a role after its worker again; `run-thread.spec.ts` pins
+the merge ordering, the no-duplicate-question rule and stability under a late second load.
+
+Gates: lint, typecheck, 817 unit/component tests, build, 69 e2e, `gen:skills` — all green.
+Decisions recorded in `docs/decisions.md` (three dated entries); `docs/architecture-ui.md`
+rewritten for one fourth tab instead of two.
+
+---
+
 ## TASK-115: Per-role model presets, chosen by the Orchestrator
 **Priority:** P2 | **Tags:** core, server, ui, engine, milestone-f
 **Updated:** 2026-08-11 22:00
