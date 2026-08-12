@@ -44,21 +44,6 @@ Cross-platform: every task here is verified on Windows and reasoned through for 
 
 ---
 
-## TASK-116: README — top-level product schema (“How it works”)
-**Priority:** P1 | **Tags:** ui, server, milestone-f
-**Updated:** 2026-08-07 11:40
-
-**Milestone F — Fixpoint.** Comprehension before exposure: the README still explains the
-static pipelines and not the Orchestrator that now sits above them.
-
-Add a “How it works” section to `README.md` with a mermaid diagram of the whole product flow: user → orchestrator conversation → team composition/approval → composed runs (personas + step-tasks + engines) → closeout artifacts → orchestrator decision loop → milestones/task board.
-
-Update this section as part of the milestone so it reflects the orchestrator rather than only today’s static pipelines.
-
-Cross-platform: n/a — docs only.
-
----
-
 ## TASK-128: Closing dogfood for Milestone F
 **Priority:** P1 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-07 11:40

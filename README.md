@@ -18,6 +18,103 @@ Most hosted and local app builders excel at getting to a first version quickly. 
 
 **Tradeoff:** you bring more project context (specs, repo history, acceptance criteria). In return you get pre-configured agents you can adjust, artifacts stored in git, built-in task backlog, stage restart, Playwright E2E testing, and deployment adapters for any platform.
 
+## How it works
+
+You describe a goal. An **Orchestrator** talks it through, proposes a team, and — once you
+approve that team — runs it, reads what came back, and decides what happens next. It keeps
+deciding until the goal is met or it has a reason to stop.
+
+```mermaid
+flowchart TB
+    You(["You — a goal in plain language"])
+
+    subgraph initiative ["One initiative, one Orchestrator"]
+        direction TB
+        Conv["Orchestrator conversation<br/>clarifies the goal"]
+        Team["Team proposal<br/>roles · personas · step tasks · engine · model"]
+        Approve{"You approve or edit"}
+        Decide{"Decision<br/>start_run · plan_milestone · continue_milestone<br/>ask_user · stop"}
+    end
+
+    subgraph composed ["A composed run — the approved team, stage by stage"]
+        direction TB
+        Stage["Stage<br/>persona + step task + upstream handoffs"]
+        Harness["Harness adapter<br/>Claude Code · Cursor · Codex"]
+        Handoff["Handoff + VERDICT"]
+        Stage --> Harness --> Handoff
+        Handoff -->|"next stage"| Stage
+    end
+
+    subgraph after ["What a run leaves behind"]
+        direction TB
+        Changes["Changed files · the product, running"]
+        Closeout["Closeout report · blocking findings"]
+        Backlog["Your task backlog · milestone dashboard"]
+        Closeout --> Backlog
+    end
+
+    You --> Conv --> Team --> Approve
+    Approve -->|"approved"| Decide
+    Decide -->|"start_run"| Stage
+    Handoff --> Changes
+    Handoff --> Closeout
+    Changes --> Review["Orchestrator reviews the settled run"]
+    Closeout --> Review
+    Review --> Decide
+    Decide -->|"ask_user · stop"| You
+
+    Stage -.->|"waits at a human gate"| You
+    Stage -.->|"asks"| Broker["Orchestrator mediates the question"]
+    Broker -.->|"escalates to you"| You
+    Broker -.->|"or answers the agent"| Stage
+```
+
+**The conversation.** One initiative is one goal and one Orchestrator. It asks what it
+needs before proposing anything, and its first questions are the ones the rest depends on —
+which harness to run and which model.
+
+**The team.** A proposal is a list of roles: for each one a **persona** (who is acting), a
+**step task** (what they are doing this time), and the engine that will carry it. You edit
+it or approve it. An approved team is compiled into a real pipeline — every persona and
+step task is checked against the catalog, and the run carries the pipeline it was composed
+from, so it survives a restart even though it exists in no constant.
+
+**The run.** Stages execute in order on a durable workflow runtime backed by SQLite. Each
+stage gets its persona, its assignment, and the handoffs of every stage before it. When a
+stage finishes it writes a handoff and a `VERDICT:` line. A stage that finds a blocking
+problem does not kill the run — it marks it **needs attention**, and closeout still runs
+and still writes follow-up tasks to your backlog. Kill the server mid-run and it resumes
+without re-running what already finished.
+
+**Questions.** A specialist never interrupts you directly. It asks the Orchestrator, which
+either answers from what it knows or escalates a rewritten question to you and routes your
+answer back. Only the Orchestrator's own conversation talks to you unmediated.
+
+**The decision.** When a run settles, the Orchestrator reads it — outputs, verdicts,
+findings, changed files — and picks one action: start another run (optionally partway
+through the same team), plan or continue a milestone, ask you something, or stop with a
+reason. Three blocked runs in a row stop the loop rather than spinning.
+
+### The four layers
+
+Underneath, the system is four layers, each leaning only on the one below it.
+
+```mermaid
+flowchart TB
+    L1["1 · Orchestrator — decides<br/>goal → team → run → review → next"]
+    L2["2 · Personas — who is acting<br/>markdown, overridable per user and per project"]
+    L3["3 · Workflow runtime — keeps it alive<br/>durable steps, gates, questions, restart, resume"]
+    L4["4 · Harness adapters — do the work<br/>Claude Code · Cursor · Codex"]
+
+    L1 --> L2 --> L3 --> L4
+    L4 -.->|"output"| L3
+    L3 -.->|"handoff · verdict · question"| L1
+```
+
+ADHD never calls a model API itself. Layer 4 spawns a coding CLI you already have logged
+in, so your models and your auth stay yours. See
+[architecture.md](docs/architecture.md#core-components) for the seams by name.
+
 ## Does This Product Make Sense?
 
 **Yes — but the wedge is not "no competitors exist."** The market has:
@@ -81,7 +178,9 @@ OpenWorkflow runtime backed by SQLite, so a run survives a server restart and re
 without re-running completed stages. Three pipelines ship: **Single agent**,
 **Product Manager + Developer + QA**, and **Full Delivery** — Product Manager gate →
 Product Designer → Software Architect → Developer → independent review → QA Engineer →
-Release Manager → SRE → Product Manager closeout.
+Release Manager → SRE → Product Manager closeout. These three are still selectable
+directly as presets; the Orchestrator path composes a team per goal instead, and both end
+up as the same kind of run.
 
 **Milestones** group the runs that deliver one body of work. A Product Manager
 conversation plans a milestone, you edit and approve the proposal, and its features
@@ -94,8 +193,12 @@ tasks to your backlog. A feature left needing attention is resolved from the das
 with **Accept findings & complete**, which records who accepted it over which open
 findings rather than silently flipping a status.
 
-**Not yet automated:** release and deploy. The `release` and `deploy` stages exist and
-report `VERDICT: SKIP` until project deployment automation lands (TASK-092).
+**Release and deploy are automated as of 0.9.29.** A project's own commands live in
+`.adhd/automation.json` — validation, how the product starts, and a deploy target per
+environment. The `deploy` stage is run by ADHD itself rather than by an agent: no target
+configured reports `VERDICT: SKIP` without spending an engine turn; a configured one runs
+the command, health-checks the URL it printed, and passes only if both succeed. Production
+sits outside Full Delivery and milestone autorun, behind an explicit confirmation.
 
 ## Prerequisites
 
