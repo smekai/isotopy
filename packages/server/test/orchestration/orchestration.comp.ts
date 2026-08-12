@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import type {
   EngineId,
   Orchestration,
+  OrchestrationStatus,
   OrchestratorDecision,
   OrchestratorTeamProposal,
   RunState,
@@ -1267,6 +1268,112 @@ test("a fourth run is refused once three in a row ended blocked with nothing ask
   expect(orchestration.runIds).toHaveLength(4);
   ctx.engine.verify();
 }, 20_000);
+
+test("a question asked after the run was over is answered on the initiative, not lost with it", async () => {
+  // Anticipate — QA was blocked by the environment, the review asks the user,
+  // and the answer opens the Orchestrator's next turn with the answer in it.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(BLOCKED_REPORT);
+  ctx.engine.anticipateRunReview({
+    as: "review parking on the user",
+    decision: {
+      action: "ask_user",
+      question: "Connect a browser under Settings → Computer use, then say when it is ready",
+    },
+  });
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator turn carrying the answer",
+      persona: /# Role: Orchestrator/,
+      prompt: /The user's answer[\s\S]*Connected the browser/,
+    })
+    .reports(fenced(STOP));
+  const conversation = await proposedTeam();
+  const orchestrationId = conversation.orchestrationId ?? "";
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+
+  // Act
+  const { status, body: resumed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/messages`,
+    { text: "Connected the browser" },
+  );
+
+  // Assert — a new conversation turn on the same initiative, which then settles it.
+  expect(status).toBe(201);
+  expect(resumed.pipelineId).toBe("orchestration");
+  await waitForRunStatus(ctx.app, resumed.id, "completed");
+  const settled = await waitForOrchestrationStatus(orchestrationId, "stopped");
+  expect(settled.runIds).toEqual([conversation.id, composed.id, resumed.id]);
+  ctx.engine.verify();
+});
+
+test("an answer sent to the initiative reaches the stage that is still asking", async () => {
+  // Anticipate — the conversation itself is parked, so the answer belongs to
+  // that session rather than to a new turn.
+  ctx.engine
+    .anticipate({ as: "Orchestrator question", persona: /# Role: Orchestrator/ })
+    .parks(fenced({ action: "ask_user", question: "Which database?" }), "orchestration-session");
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator proposal",
+      resumeSessionId: "orchestration-session",
+      prompt: /Postgres/,
+    })
+    .reports(fenced(TEAM_PROPOSAL));
+  const conversation = await startOrchestration();
+  await waitForStageStatus(ctx.app, conversation.id, "orchestrate", "asking");
+
+  // Act
+  const { status, body: answered } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/messages`,
+    { text: "Postgres" },
+  );
+
+  // Assert — no second run: the parked stage took the answer.
+  expect(status).toBe(201);
+  expect(answered.id).toBe(conversation.id);
+  await waitForRunStatus(ctx.app, conversation.id, "completed");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}`,
+  );
+  expect(orchestration.runIds).toEqual([conversation.id]);
+  ctx.engine.verify();
+});
+
+async function waitForOrchestrationStatus(
+  orchestrationId: string,
+  status: OrchestrationStatus,
+): Promise<Orchestration> {
+  const deadline = Date.now() + 10_000;
+  let orchestration: Orchestration | undefined;
+  while (orchestration?.status !== status && Date.now() < deadline) {
+    const { body } = await get<Orchestration>(
+      ctx.app,
+      `/orchestrations/${orchestrationId}`,
+    );
+    orchestration = body;
+    if (orchestration.status !== status) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  expect(
+    orchestration?.status,
+    `Orchestration ${orchestrationId} never reached ${status}`,
+  ).toBe(status);
+  return orchestration ?? ({} as Orchestration);
+}
 
 async function waitForDecisionError(orchestrationId: string): Promise<string> {
   const deadline = Date.now() + 10_000;

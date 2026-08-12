@@ -5,6 +5,7 @@ import { formatUsage, isTerminalRunStatus, summariseChanges } from "@adhd/core";
 import type { LogLevel, RunState, RunSummary, StageState, StageStatus } from "@adhd/core";
 import { OpenProjectFolder } from "./OpenProjectFolder";
 import { TeamProposalCard } from "./TeamProposalCard";
+import { answerableQuestion } from "../../orchestration";
 import type { OrchestratorView } from "../../orchestration";
 import { renderInlineMarkdown } from "../../inline-md";
 import { runThread } from "../../run-thread";
@@ -129,6 +130,8 @@ function composerBar(d: Dir): CSSProperties {
     background: d.surface,
     padding: `${SPACE.lg}px ${SPACE.x4l}px`,
     flexShrink: 0,
+    display: "grid",
+    gap: SPACE.lg,
   };
 }
 
@@ -434,14 +437,16 @@ export function ChatPanel({
   const items = runThread(run, orchestrator?.orchestration, orchestrator?.runs ?? []);
   const closed = isTerminalRunStatus(run.status);
   const asking = run.status === "asking";
+  const answering =
+    answerableQuestion(orchestrator?.orchestration, run.status) !== undefined;
 
   useEffect(() => {
-    if (asking) {
+    if (asking || answering) {
       inputRef.current?.focus();
     }
-  }, [asking]);
+  }, [asking, answering]);
   const follow = useFollowScroll({ length: items.length, resetKey: run.id });
-  const canSend = draft.trim() !== "" && !sending && !closed;
+  const canSend = draft.trim() !== "" && !sending && (!closed || answering);
 
   function send() {
     if (!canSend) {
@@ -478,7 +483,7 @@ export function ChatPanel({
       </div>
 
       <div style={composerBar(d)}>
-        {closed ? (
+        {closed && (
           <div style={resultRow(d)} data-testid="run-result">
             {run.changes ? (
               <>
@@ -491,12 +496,15 @@ export function ChatPanel({
               </>
             ) : (
               <span style={closedHint(d)}>
-                This run has finished — start a new run to say more.
+                {answering
+                  ? "This run has finished — the Orchestrator is waiting on your answer."
+                  : "This run has finished — start a new run to say more."}
               </span>
             )}
             <OpenProjectFolder runId={run.id} d={d} />
           </div>
-        ) : (
+        )}
+        {(!closed || answering) && (
           <div style={composerInner(d)}>
             <textarea
               ref={inputRef}
@@ -504,7 +512,9 @@ export function ChatPanel({
               rows={COMPOSER_MIN_ROWS}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={asking ? "Answer the question…" : "Message the team…"}
+              placeholder={
+                asking || answering ? "Answer the question…" : "Message the team…"
+              }
               aria-label="Message the team"
               data-testid="chat-composer"
               style={composerInput(d)}

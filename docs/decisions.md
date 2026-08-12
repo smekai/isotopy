@@ -62,6 +62,19 @@ acceptance points, `consume` and `recordReview`, and a refusal records the reaso
 turn**. Recovery is then the ordinary one: restart the run, and the rejection rides into the
 next prompt.
 
+**Decision — an initiative parked on the user gets its own answer channel.** Fix 3 tells the
+Orchestrator to ask rather than re-run, which made an existing gap load-bearing: a question
+raised by a lifecycle review reached the user as read-only text, because the run it reviewed
+was terminal and `POST /runs/:id/messages` refuses a finished run. The only response
+available was starting a new initiative, which supersedes the old one — the goal, the
+approved team and every artifact discarded to answer a question. `POST
+/orchestrations/:id/messages` answers the *initiative*: it routes to an `asking` stage when
+one exists, and otherwise opens a fresh conversation turn carrying the goal context, the
+approved team, prior run digests, the question and the answer. Rejected: keeping the
+reviewed run alive in `asking` so the run-level channel could serve it — the run is over,
+and holding a durable park open for a question about work that already finished puts the
+lifecycle at odds with the record.
+
 **Decision — a carried stage must exist in the settled run.** The run a decision is taken
 against is not always of the composed pipeline: a conversation turn, a solo run, or a
 milestone run can all be the settled run when a team is already approved. Seeding a stage

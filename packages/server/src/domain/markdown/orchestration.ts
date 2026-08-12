@@ -15,6 +15,13 @@ export interface OrchestrationContext {
   closeoutContext: string;
 }
 
+export interface OrchestrationFollowUpContext extends OrchestrationContext {
+  team?: OrchestratorTeamProposal;
+  question: string;
+  answer: string;
+  artifacts: QuestionMediationArtifact[];
+}
+
 export interface ComposedRunContext {
   goal: string;
   team: OrchestratorTeamProposal;
@@ -56,6 +63,25 @@ export function renderOrchestrationContext({
     renderCatalog("Step task catalog", stepTasks),
     markdownBody(boardContext),
     markdownBody(closeoutContext),
+  ]);
+}
+
+export function renderOrchestrationFollowUp({
+  team,
+  question,
+  answer,
+  artifacts,
+  ...context
+}: OrchestrationFollowUpContext): string {
+  return markdownBlocks([
+    renderOrchestrationContext(context),
+    team === undefined
+      ? undefined
+      : `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}`,
+    renderArtifactSections("Prior run artifacts", artifacts),
+    `## The question you asked\n\n${markdownBody(question)}`,
+    `## The user's answer\n\n${markdownBody(answer)}`,
+    "Decide what happens now, in the same one fenced block. The answer above is the one you asked for — do not ask it again.",
   ]);
 }
 

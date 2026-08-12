@@ -36,6 +36,16 @@ with nothing asked of the user in between, and the third is refused with a state
 `decisionError`. Derived from the turns already stored — no persisted counter. It counts
 `start_run` alone, so an auto-running milestone's fourth feature is not capped.
 
+**4. A parked initiative can be answered.** Raised in review, and load-bearing for fix 3: a
+question from a lifecycle review reached the user as read-only text, because the reviewed
+run was terminal and `POST /runs/:id/messages` refuses a finished run — so "ask instead of
+re-running" had nowhere to land. `POST /orchestrations/:id/messages` answers the initiative:
+it routes to an `asking` stage when one exists, and otherwise opens a fresh conversation
+turn carrying the goal context, the approved team, prior run digests, the question and the
+answer, without superseding the initiative. `answerableQuestion` is the one rule both
+`ChatPanel` and `App.handleSend` read, so a finished run offers a composer exactly when the
+Orchestrator is waiting, and the text goes where the composer implied.
+
 **Refusals happen before a decision is accepted.** `refusalFor` runs at both acceptance
 points — `consume` and `recordReview` — for all three reasons acting would fail: no approved
 team, an invalid `fromStage`, the launch ceiling. A refusal records the reason and **no
@@ -50,7 +60,7 @@ no run launched; a fourth blocked run never starts. `orchestrate-assignment.spec
 sweeps the `start_run` schema's own field names, so a field added without documentation
 fails.
 
-Gates: lint, typecheck, 831 unit/component tests, build, 69 e2e, `gen:skills` — all green.
+Gates: lint, typecheck, 837 unit/component tests, build, 69 e2e, `gen:skills` — all green.
 Server boot re-checked on the running app (`/health`, `/pipelines`). The loop itself is
 covered by the component tests rather than a live run: every shipped pipeline drives a real
 engine, so a live reproduction would have spent tokens to re-observe what is already

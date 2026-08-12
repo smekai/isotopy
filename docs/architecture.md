@@ -708,6 +708,16 @@ with no user-facing turn between them, plus the decision under consideration. At
 refuses. It is derived from the turns already stored — no counter is persisted — and a
 chain of *successful* runs never counts, so a healthy initiative is never capped.
 
+**A question asked when nothing is running can still be answered.**
+`POST /orchestrations/:id/messages` is the initiative's own answer channel, for the case
+the run-level one cannot serve: a lifecycle review parks the initiative on the user, but the
+run it reviewed is terminal, so there is no `asking` stage to release. `answer` routes to
+that stage when one exists — an answer meant for a parked specialist is not a new turn — and
+otherwise starts a fresh `orchestration` run whose task is `renderOrchestrationFollowUp`:
+the goal context, the approved team, prior run digests, the question, and the answer. The
+initiative goes back to `conversing` and the ordinary loop resumes. It does not supersede,
+which is what separates it from `POST /orchestrations`.
+
 **A decision that cannot be acted on is never accepted.** `refusalFor` runs at both places
 a decision is taken — `consume` for a conversation turn, `recordReview` for a lifecycle
 review — and covers the three reasons acting would fail: no approved team, a `fromStage`

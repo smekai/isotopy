@@ -295,6 +295,16 @@ the stage resumes its CLI session with that text as the prompt (TASK-079). If no
 the message is stored and shown, and nothing reads it — that is still true for
 ordinary mid-run steering.
 
+**A finished run still shows a composer when the initiative is waiting on an answer.**
+A question raised by a *lifecycle review* belongs to no live stage: the run it reviewed is
+terminal, so there is nothing to park and nothing to resume. `answerableQuestion`
+(`orchestration.ts`) is the single rule — a terminal run plus an initiative whose latest
+decision is a `parkedQuestion` — and both `ChatPanel` (whether to offer the composer) and
+`App.handleSend` (where the text goes) read it, so the two can never disagree. The answer
+goes to `POST /orchestrations/:id/messages`, which opens the Orchestrator's next turn and
+returns it; `App` navigates there. The finished-run result row stays above the composer,
+because "see what was built" is still true while a question is open.
+
 **`asking` is not `awaiting`, and neither is `blocked`.** `awaiting` is a human
 *gate* (gold, "Approve"); `asking` is a human *answer* (violet, the composer);
 `blocked` is a *clock* — a plan limit the run is waiting out (cyan, `LimitModal`).

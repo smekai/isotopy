@@ -5,6 +5,7 @@ import type { LimitResolution, ModelTier, RunSummary } from "@adhd/core";
 import { preferredRunOptions } from "@adhd/core";
 import {
   abortRun,
+  answerOrchestrator,
   approveGate,
   postRunMessage,
   resolveLimit,
@@ -44,6 +45,7 @@ import {
   runRoute,
 } from "./route";
 import {
+  answerableQuestion,
   orchestrationNeedsUser,
   orchestrationStatusLabel,
   pendingTiersFor,
@@ -299,13 +301,18 @@ export function App() {
   }
 
   async function handleSend(text: string) {
-    if (!activeRunId) {
+    if (!activeRunId || !run) {
       return;
     }
+    const parked = answerableQuestion(activeOrchestration, run.status);
     setError(null);
     setSending(true);
     try {
-      await postRunMessage(activeRunId, text);
+      if (parked !== undefined && activeOrchestration) {
+        attachRun((await answerOrchestrator(activeOrchestration.id, text)).id);
+      } else {
+        await postRunMessage(activeRunId, text);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {

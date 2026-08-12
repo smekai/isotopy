@@ -31,6 +31,12 @@ export function artifactDigestOf(run: RunState): QuestionMediationArtifact[] {
     : stageOutputsOf(run);
 }
 
+export function digestsOf(runs: RunState[]): QuestionMediationArtifact[] {
+  return [...runs]
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .flatMap(artifactDigestOf);
+}
+
 export function milestoneReviewContext(
   milestone: Milestone,
   settlingFeatureId?: string,

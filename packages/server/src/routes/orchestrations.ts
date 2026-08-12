@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   approveTeamSchema,
+  postRunMessageSchema,
   startOrchestrationSchema,
 } from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
@@ -74,6 +75,25 @@ export function createOrchestrationRoutes(
         return started.ok
           ? c.json(started.value, 201)
           : c.json(invalidRequest(started.issues), 400);
+      } catch (error) {
+        return c.json({ error: messageOf(error) }, 400);
+      }
+    })
+    .post("/:id/messages", async (c) => {
+      const parsed = await parseRequestBody(c.req, postRunMessageSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      const project = projectScope(registry, c);
+      const orchestration = orchestrations.get(c.req.param("id"));
+      if (!orchestration || orchestration.projectId !== project.id) {
+        return c.json({ error: "Orchestration not found" }, 404);
+      }
+      try {
+        return c.json(
+          await orchestrations.answer(project, orchestration.id, parsed.value.text),
+          201,
+        );
       } catch (error) {
         return c.json({ error: messageOf(error) }, 400);
       }

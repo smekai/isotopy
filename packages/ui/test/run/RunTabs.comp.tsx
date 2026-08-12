@@ -230,6 +230,29 @@ test("a finished run says what it changed where the composer used to apologise",
   expect(result.textContent).not.toContain("start a new run to say more");
 });
 
+test("a question the Orchestrator asked after the run ended can still be answered", () => {
+  // Arrange — the run is over, so the only composer the user has is this one.
+  const props = tabsProps(awaitingAnswerOverrides());
+  render(<RunTabs {...props} />);
+  fireEvent.change(screen.getByTestId("chat-composer"), {
+    target: { value: "Connected the browser" },
+  });
+
+  // Act
+  fireEvent.click(screen.getByLabelText("Send message"));
+
+  // Assert
+  expect(props.onSend).toHaveBeenCalledWith("Connected the browser");
+});
+
+test("a finished run whose initiative is not waiting on anything offers no composer", () => {
+  // Act
+  render(<RunTabs {...tabsProps()} />);
+
+  // Assert
+  expect(screen.queryByTestId("chat-composer")).toBeNull();
+});
+
 test("a run that touched nothing keeps the plain finished sentence", () => {
   // Act
   render(<RunTabs {...tabsProps()} />);
@@ -330,6 +353,29 @@ function orchestrationOverrides(): Partial<RunTabsProps> {
         orchestratedRun("earlier", "2026-08-01T09:00:00.000Z"),
         orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
       ],
+      busy: false,
+      roleTiers: {},
+      onRoleTierChange: vi.fn(),
+      onApprove: vi.fn(),
+      onOpenRun: vi.fn(),
+    },
+  };
+}
+
+function awaitingAnswerOverrides(): Partial<RunTabsProps> {
+  const question: OrchestratorDecision = {
+    action: "ask_user",
+    question: "Connect a browser under Settings → Computer use?",
+  };
+  return {
+    orchestrator: {
+      orchestration: orchestration({
+        status: "awaiting_user",
+        runIds: ["earlier"],
+        turns: [{ runId: "earlier", decision: question, at: "2026-08-01T10:00:00.000Z" }],
+        latestDecision: question,
+      }),
+      runs: [orchestratedRun("earlier", "2026-08-01T09:00:00.000Z")],
       busy: false,
       roleTiers: {},
       onRoleTierChange: vi.fn(),

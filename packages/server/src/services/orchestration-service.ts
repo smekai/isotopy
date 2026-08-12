@@ -3,6 +3,7 @@ import {
   agentForStage,
   isTerminalRunStatus,
   orchestrationStatusFor,
+  parkedQuestion,
 } from "@adhd/core";
 import type {
   ModelTier,
@@ -17,16 +18,19 @@ import type {
 import {
   renderComposedRunTask,
   renderOrchestrationContext,
+  renderOrchestrationFollowUp,
   renderQuestionMediationContext,
   renderRunReviewContext,
   renderTaskAfterRejection,
 } from "../domain/markdown/orchestration.ts";
 import type {
+  OrchestrationContext,
   QuestionMediationArtifact,
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
 import {
   artifactDigestOf,
+  digestsOf,
   milestoneReviewContext,
   runLabel,
   stageOutputsOf,
@@ -215,6 +219,44 @@ export class OrchestrationService implements StageOutputConsumer {
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return { ok: true, value: run };
+  }
+
+  async answer(
+    projectPath: ProjectPath,
+    orchestrationId: string,
+    text: string,
+    options: StartOrchestrationOptions = {},
+  ): Promise<RunState> {
+    const orchestration = this.orchestrations.get(orchestrationId);
+    if (!orchestration || orchestration.projectId !== projectPath.id) {
+      throw new Error("Orchestration not found");
+    }
+    if (orchestration.status === "stopped") {
+      throw new Error(
+        "This Orchestrator has stopped — start a new initiative to say more",
+      );
+    }
+    const asking = this.askingRun(orchestration);
+    if (asking) {
+      this.runs.postMessage(asking.id, text);
+      return asking;
+    }
+    const question = parkedQuestion(orchestration);
+    if (question === undefined) {
+      throw new Error("The Orchestrator is not waiting on an answer");
+    }
+    const lastRunId = orchestration.runIds.at(-1);
+    const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
+      ...(lastRunId ? this.runs.inheritedRunOptions(lastRunId) : {}),
+      ...options,
+      task: await this.followUpTask(projectPath, orchestration, question, text),
+      orchestrationId: orchestration.id,
+    });
+    orchestration.runIds.push(run.id);
+    orchestration.status = "conversing";
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+    return run;
   }
 
   async consume(
@@ -601,17 +643,54 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private async buildTask(projectPath: ProjectPath, goal: string): Promise<string> {
+    return renderOrchestrationContext(await this.goalContext(projectPath, goal));
+  }
+
+  private async followUpTask(
+    projectPath: ProjectPath,
+    orchestration: Orchestration,
+    question: string,
+    answer: string,
+  ): Promise<string> {
+    return renderOrchestrationFollowUp({
+      ...(await this.goalContext(projectPath, orchestration.goal)),
+      team: orchestration.approvedTeam,
+      question,
+      answer,
+      artifacts: this.priorArtifacts(orchestration),
+    });
+  }
+
+  private async goalContext(
+    projectPath: ProjectPath,
+    goal: string,
+  ): Promise<OrchestrationContext> {
     const [boardContext, closeoutContext] = await Promise.all([
       taskBoardFor(projectPath).planningContext(),
       milestoneCloseoutContext(projectPath),
     ]);
-    return renderOrchestrationContext({
+    return {
       goal,
       personas: PERSONA_CATALOG,
       stepTasks: STEP_TASK_CATALOG,
       boardContext,
       closeoutContext,
-    });
+    };
+  }
+
+  private askingRun(orchestration: Orchestration): RunState | undefined {
+    return orchestration.runIds
+      .map((runId) => this.runs.getRun(runId))
+      .find((run): run is RunState => run?.status === "asking");
+  }
+
+  private priorArtifacts(orchestration: Orchestration): QuestionMediationArtifact[] {
+    const runIds = new Set(orchestration.runIds);
+    return digestsOf(
+      this.runs
+        .listRuns(orchestration.projectId)
+        .filter((run) => runIds.has(run.id) && run.pipelineId !== PIPELINE_ID),
+    );
   }
 
   private newOrchestration(
