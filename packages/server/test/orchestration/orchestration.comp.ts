@@ -82,6 +82,35 @@ const REVIEW_ARTIFACTS = {
 
 const STOP: OrchestratorDecision = { action: "stop", reason: "goal met" };
 
+/** The verbatim dead end from TASK-139 — a policy the model invented, rejected whole. */
+const INVENTED_POLICY_PROPOSAL = {
+  action: "propose_team",
+  rationale: "One Developer and one QA Engineer cover this",
+  team: {
+    ...TEAM,
+    roles: [DEVELOPER_ROLE, { ...QA_ROLE, executionPolicy: "testing" }],
+  },
+};
+
+/** One role, so a spinning loop costs two engine turns a run instead of three. */
+const SOLO_TEAM_PROPOSAL: OrchestratorDecision = {
+  action: "propose_team",
+  rationale: "One Developer covers this",
+  team: {
+    name: "Solo build",
+    summary: "Build the search endpoint",
+    roles: [DEVELOPER_ROLE],
+  },
+};
+
+const BLOCKED_REPORT = "No browser was available, so nothing was verified.\n\nVERDICT: FAIL";
+
+const RETRY: OrchestratorDecision = {
+  action: "start_run",
+  rationale: "Try the verification again",
+  task: "Verify the search endpoint",
+};
+
 /** The verbatim trigger from TASK-061, reused here to park a composed stage. */
 const SESSION_LIMIT = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 
@@ -986,6 +1015,174 @@ test("a later question is brokered against the prior run's digest, not its raw o
   await waitForRunStatus(ctx.app, second, "completed");
   ctx.engine.verify();
 }, 20_000);
+
+test("a rejected decision is quoted back on the restart, so the second attempt can correct it", async () => {
+  // Anticipate — the dead end from TASK-139: a policy value the model invented.
+  // The retry only knows what was wrong because the restart carries the rejection.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(INVENTED_POLICY_PROPOSAL));
+  ctx.engine
+    .anticipate({
+      as: "second Orchestrator turn",
+      prompt: /Your last decision was rejected[\s\S]*executionPolicy/,
+    })
+    .reports(fenced(TEAM_PROPOSAL));
+  const conversation = await startOrchestration();
+  await waitForRunStatus(ctx.app, conversation.id, "needs_attention");
+
+  // Act
+  const { status } = await post<RunState>(
+    ctx.app,
+    `/runs/${conversation.id}/restart`,
+    { stageId: "orchestrate" },
+  );
+
+  // Assert — the initiative that died on one string reaches a proposed team.
+  expect(status).toBe(200);
+  await waitForRunStatus(ctx.app, conversation.id, "completed");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}`,
+  );
+  expect(orchestration.status).toBe("awaiting_approval");
+  expect(orchestration.decisionError).toBeUndefined();
+  ctx.engine.verify();
+});
+
+test("a start_run naming a stage begins there and carries the roles before it, which do not run again", async () => {
+  // Anticipate — QA was blocked, the Developer's work stands, so only QA runs
+  // again. A second Developer turn would fail verify().
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine
+    .anticipate({ as: "Developer" })
+    .reports("MARKER-DEVELOPER built it.\n\nVERDICT: PASS");
+  ctx.engine
+    .anticipate({ as: "QA Engineer" })
+    .reports("No browser was available.\n\nVERDICT: FAIL");
+  ctx.engine.anticipateRunReview({
+    as: "review asking QA alone to run again",
+    decision: {
+      action: "start_run",
+      rationale: "The implementation stands; only verification is left",
+      task: "Verify the search endpoint against a connected browser",
+      fromStage: "test",
+    },
+  });
+  ctx.engine
+    .anticipate({ as: "second QA Engineer", prompt: /MARKER-DEVELOPER/ })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the second run" });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert — the second run holds the Developer's output without a Developer turn.
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  const second = await waitForOrchestrationRuns(conversation.orchestrationId ?? "", 3);
+  const finished = await waitForRunStatus(ctx.app, second, "completed");
+  expect(stageOf(finished, "implementation").status).toBe("skipped");
+  expect(finished.stageOutputs?.implementation).toContain("MARKER-DEVELOPER");
+  ctx.engine.verify();
+});
+
+test("a start_run naming a stage nobody was hired for is refused, not quietly started from the top", async () => {
+  // Anticipate — no second run: the decision names a role the team does not have.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({
+    as: "review naming a stage that does not exist",
+    decision: {
+      action: "start_run",
+      rationale: "Security should look at it",
+      task: "Review the endpoint for injection",
+      fromStage: "security",
+    },
+  });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  const orchestrationId = conversation.orchestrationId ?? "";
+  expect(await waitForDecisionError(orchestrationId)).toContain(
+    "Unknown stage id: security",
+  );
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}`,
+  );
+  expect(orchestration.runIds).toEqual([conversation.id, composed.id]);
+  ctx.engine.verify();
+});
+
+test("a fourth run is refused once three in a row ended blocked with nothing asked of the user", async () => {
+  // Anticipate — the spin from TASK-139: the same team, the same blocker, again.
+  // The engine is anticipated for three runs; a fourth would fail verify().
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(SOLO_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports(BLOCKED_REPORT);
+  ctx.engine.anticipateRunReview({ as: "review after the first run", decision: RETRY });
+  ctx.engine.anticipate({ as: "second Developer" }).reports(BLOCKED_REPORT);
+  ctx.engine.anticipateRunReview({ as: "review after the second run", decision: RETRY });
+  ctx.engine.anticipate({ as: "third Developer" }).reports(BLOCKED_REPORT);
+  ctx.engine.anticipateRunReview({ as: "review after the third run", decision: RETRY });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert — four runs on the orchestration, not five, and a stated reason.
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  const orchestrationId = conversation.orchestrationId ?? "";
+  const third = await waitForOrchestrationRuns(orchestrationId, 4);
+  await waitForRunStatus(ctx.app, third, "needs_attention");
+  expect(await waitForDecisionError(orchestrationId)).toContain("runs in a row");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}`,
+  );
+  expect(orchestration.runIds).toHaveLength(4);
+  ctx.engine.verify();
+}, 20_000);
+
+async function waitForDecisionError(orchestrationId: string): Promise<string> {
+  const deadline = Date.now() + 10_000;
+  let error: string | undefined;
+  while (error === undefined && Date.now() < deadline) {
+    const { body } = await get<Orchestration>(
+      ctx.app,
+      `/orchestrations/${orchestrationId}`,
+    );
+    error = body.decisionError;
+    if (error === undefined) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  expect(error, `Orchestration ${orchestrationId} recorded no decision error`).toBeDefined();
+  return error ?? "";
+}
 
 async function waitForOrchestrationRuns(
   orchestrationId: string,

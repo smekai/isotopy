@@ -10,6 +10,7 @@ import type {
   OrchestrationStatus,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
+  PipelineDefinition,
   RunState,
   StageDefinition,
 } from "@adhd/core";
@@ -18,6 +19,7 @@ import {
   renderOrchestrationContext,
   renderQuestionMediationContext,
   renderRunReviewContext,
+  renderTaskAfterRejection,
 } from "../domain/markdown/orchestration.ts";
 import type {
   QuestionMediationArtifact,
@@ -29,6 +31,10 @@ import {
   runLabel,
   stageOutputsOf,
 } from "../domain/rules/orchestration-context.ts";
+import { blockedLaunchRefusal } from "../domain/rules/orchestration-loop.ts";
+import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
+import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
+import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import { composeTeamPipeline, withRoleTiers } from "../schemas/team-composition.ts";
@@ -324,6 +330,17 @@ export class OrchestrationService implements StageOutputConsumer {
     }
   }
 
+  async restartTask(run: RunState): Promise<string | undefined> {
+    const orchestration = run.orchestrationId
+      ? this.orchestrations.get(run.orchestrationId)
+      : undefined;
+    const error = orchestration?.decisionError;
+    if (run.pipelineId !== PIPELINE_ID || run.task === undefined || error === undefined) {
+      return undefined;
+    }
+    return renderTaskAfterRejection({ task: run.task, error });
+  }
+
   async reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext> {
     const run = this.runs.getRun(request.runId);
     if (!run) {
@@ -353,6 +370,7 @@ export class OrchestrationService implements StageOutputConsumer {
         closeout: run.closeout?.report,
         artifacts: stageOutputsOf(run),
         milestone: this.reviewMilestone(run),
+        rejectedDecision: orchestration.decisionError,
       }),
     };
   }
@@ -448,10 +466,15 @@ export class OrchestrationService implements StageOutputConsumer {
           "The Orchestrator asked to start a run before a team was approved",
         );
       }
+      const refusal = blockedLaunchRefusal(this.settledLaunches(orchestration));
+      if (refusal) {
+        throw new Error(refusal);
+      }
       return this.runs.startComposedRun(projectPath, pipeline, {
         ...options,
         task: decision.task,
         orchestrationId: orchestration.id,
+        seeded: this.seedFor(pipeline, run, decision.fromStage),
       });
     }
     if (decision.action === "delegate_milestone_planning") {
@@ -461,6 +484,28 @@ export class OrchestrationService implements StageOutputConsumer {
       return this.continueMilestone(projectPath, run, decision.featureId, options);
     }
     return undefined;
+  }
+
+  private seedFor(
+    pipeline: PipelineDefinition,
+    settled: RunState,
+    fromStage: string | undefined,
+  ): SeededStart | undefined {
+    if (fromStage === undefined) {
+      return undefined;
+    }
+    const seeded = seedFromSettledRun(pipeline, settled, fromStage, runLabel(settled));
+    if (!seeded.ok) {
+      throw new Error(formatValidationIssues(seeded.issues));
+    }
+    return seeded.value;
+  }
+
+  private settledLaunches(orchestration: Orchestration): SettledLaunch[] {
+    return orchestration.turns.map((turn) => ({
+      action: turn.decision.action,
+      status: this.runs.getRun(turn.runId)?.status,
+    }));
   }
 
   private continueMilestone(

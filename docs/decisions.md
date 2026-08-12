@@ -15,6 +15,55 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-12 — A rejected decision informs the next attempt; a blocked one stops the loop
+
+**Context:** two failures of the decision loop, observed the same day in the `dogfood`
+project. An invented `executionPolicy` was rejected whole and the initiative died on one
+string — `decisionError` was written and read by nobody but the status bar, and a restart
+re-ran the stage against the frozen `run.task`, which never mentioned the rejection. And
+runs `#10`–`#13` re-ran one composed pipeline four times, every one blocked because no
+browser was available to QA, costing 3.44M input tokens: the Orchestrator was asking for a
+verification-only re-run *in prose* each time, because `start_run` could not name a stage
+and `launch` always began at the pipeline's first.
+
+**Decision — the injection point is the workflow input, not the run record.**
+`InputExtras.task` overrides `run.task` when `buildInput` assembles the workflow input, and
+`OrchestrationHooks.restartTask` is what supplies it. `run.task` stays frozen: it is the
+record of what the run began as, and rewriting it would make the stored history depend on
+how many times a decision was rejected. The review context carries the same rejection, so a
+re-reviewed run does not repeat the mistake either.
+
+**Decision — a stage-targeted `start_run` starts a fresh run seeded from the settled one**,
+rather than restarting the settled run in place. Restarting in place was the cheaper reach
+(`restartRun` already seeds upstream outcomes and outputs) but it overwrites the very
+evidence that justified the decision — the logs and outputs of the run that failed — and it
+refuses a cleanly completed run, which is exactly the verification-only case. A fresh run
+also gives the rail an honest second entry. The cost is that a carried stage would sit
+`pending` forever, so `applySeededStage` marks a still-`pending` carried stage `skipped`
+with a log line naming its source; the `pending` guard is what keeps a restart's real
+upstream statuses untouched.
+
+**Decision — the spin guard is derived, not persisted, and counts only blocked runs.**
+`blockedLaunchRefusal` reads the tail of `Orchestration.turns` for consecutive `start_run`
+decisions whose reviewed run ended `needs_attention` or `failed`. Three is the ceiling.
+Counting *every* auto-launch would have capped a healthy initiative at three runs and broken
+`continue_milestone` on an auto-running milestone at its fourth feature — the observed spin
+was `start_run` against an unchanged environment, and that is what the rule names. The
+prompts carry the primary fix (an unmet environment precondition is an `ask_user`, not a
+verdict to re-run); the cap is the backstop for when the model does not follow them.
+
+**Rejected:** an automatic retry of a rejected decision — it spends a turn and hides a real
+prompt bug behind it, and what it buys collapses once the next attempt is informed anyway.
+A distinct stage outcome for "blocked on the environment" — it would touch `STAGE_OUTCOMES`,
+the verdict parser, the UI and every step task that can be blocked, to express something the
+review prompt can already state. Folding `interpretDecision` into `consume` — the two sites
+are explained in the 2026-08-07 entry below; the rule kept is that no third site builds that
+sentence. And loosening the decision schema: `.strict()` and the closed enums are what stop
+an invented persona or a stage id that escapes the run directory. An invalid decision stays
+invalid — it just stops being terminal.
+
+---
+
 ## 2026-08-12 — The Orchestrator is a conversation, not a tab
 
 **Context:** an orchestration run opened on an `Orchestrator` tab and put `Chat`

@@ -508,22 +508,21 @@ async function runGroup(
   group: PipelineGroup,
   walk: WalkState,
 ): Promise<boolean> {
-  const seeded = input.seededOutputs ?? {};
-  const seededOutcomes = input.seededOutcomes ?? {};
+  const seeded = input.seeded;
 
   for (const stageDef of group.stages) {
     if (!walk.reached) {
-      if (stageDef.id === input.startStageId) {
+      if (stageDef.id === seeded?.startStageId) {
         walk.reached = true;
       } else {
-        const seededOutput = seeded[stageDef.id];
-        if (seededOutput !== undefined) {
-          await step.run({ name: `${stageDef.id}:seeded` }, () => {
-            deps.projection.applySeededOutput(input.runId, stageDef, seededOutput);
-            return null;
+        await step.run({ name: `${stageDef.id}:seeded` }, () => {
+          deps.projection.applySeededStage(input.runId, stageDef, {
+            output: seeded?.outputs[stageDef.id],
+            from: seeded?.from,
           });
-        }
-        const seededOutcome = seededOutcomes[stageDef.id];
+          return null;
+        });
+        const seededOutcome = seeded?.outcomes[stageDef.id];
         if (seededOutcome !== undefined) {
           walk.status = mergeOutcome(walk.status, seededOutcome);
         }
@@ -557,7 +556,7 @@ export function createPipelineWorkflow(
       });
 
       const walk: WalkState = {
-        reached: input.startStageId == null,
+        reached: input.seeded === undefined,
         status: "completed",
       };
 

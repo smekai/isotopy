@@ -1,4 +1,5 @@
 import type { EnginePermissionMode, ModelTier } from "@adhd/core";
+import type { SeededStart } from "../../domain/rules/run-seeding.ts";
 
 export interface InheritedRunOptions {
   engine?: string;
@@ -13,4 +14,5 @@ export interface StartRunOptions extends InheritedRunOptions {
   featureId?: string;
   orchestrationId?: string;
   sourceTaskIds?: string[];
+  seeded?: SeededStart;
 }

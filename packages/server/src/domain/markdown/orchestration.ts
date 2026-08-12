@@ -59,6 +59,26 @@ export function renderOrchestrationContext({
   ]);
 }
 
+export interface RejectedDecisionContext {
+  task: string;
+  error: string;
+}
+
+export function renderTaskAfterRejection({
+  task,
+  error,
+}: RejectedDecisionContext): string {
+  return markdownBlocks([task, renderRejectedDecision(error)]);
+}
+
+function renderRejectedDecision(error: string): string {
+  return markdownBlocks([
+    "## Your last decision was rejected",
+    markdownBody(error),
+    "Decide again, correcting exactly what the rejection names. A decision carrying an unknown field, an invented enum value, or no fenced block at all is rejected whole, and nothing runs until one parses.",
+  ]);
+}
+
 function renderRoles(team: OrchestratorTeamProposal): string {
   return team.roles
     .map((role) =>
@@ -112,6 +132,7 @@ export interface RunReviewMarkdownContext {
   closeout?: ProductManagerCloseout;
   artifacts: QuestionMediationArtifact[];
   milestone?: RunReviewMilestoneContext;
+  rejectedDecision?: string;
 }
 
 function renderReviewMilestone(milestone: RunReviewMilestoneContext): string {
@@ -142,6 +163,7 @@ export function renderRunReviewContext({
   closeout,
   artifacts,
   milestone,
+  rejectedDecision,
 }: RunReviewMarkdownContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
@@ -154,6 +176,9 @@ export function renderRunReviewContext({
       : undefined,
     milestone ? renderReviewMilestone(milestone) : undefined,
     renderArtifactSections("Stage outputs", artifacts),
+    rejectedDecision === undefined
+      ? undefined
+      : renderRejectedDecision(rejectedDecision),
   ]);
 }
 

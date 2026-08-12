@@ -15,7 +15,6 @@ import type {
   RunSummary,
   StageDefinition,
   StageLogDraft,
-  StageOutcome,
   StageState,
   StageUsage,
   StageVerdict,
@@ -77,8 +76,13 @@ import { formatHandoff } from "../../domain/markdown/stage.ts";
 import {
   TERMINAL_OPENWORKFLOW_STATUSES,
   completionMessage,
-  outcomeForRestart,
 } from "../../domain/rules/run-lifecycle.ts";
+import {
+  carriedOverMessage,
+  resetStagesForRestart,
+  seedFromRestart,
+} from "../../domain/rules/run-seeding.ts";
+import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 import { RunStore } from "./run-store.ts";
@@ -293,6 +297,7 @@ export class RunService implements RunProjection {
       featureId,
       orchestrationId: requestedOrchestrationId,
       sourceTaskIds,
+      seeded,
     } = options;
     const activeOrchestrationId = await this.owningOrchestrationId(
       projectPath,
@@ -390,7 +395,10 @@ export class RunService implements RunProjection {
     if (activeOrchestrationId && this.orchestration) {
       await this.orchestration.attachRun(projectPath.id, runId);
     }
-    await this.launch(projectPath, run, { startedMessage: `Started pipeline: ${pipeline.name}` });
+    await this.launch(projectPath, run, {
+      startedMessage: `Started pipeline: ${pipeline.name}`,
+      seeded,
+    });
     return structuredClone(run);
   }
 
@@ -494,26 +502,9 @@ export class RunService implements RunProjection {
     if (startIndex === -1) {
       throw new Error(`Stage not found: ${stageId}`);
     }
-    const outputs = { ...run.stageOutputs };
-    const seededOutputs: Record<string, string> = {};
-    const seededOutcomes: Record<string, StageOutcome> = {};
-    for (const stage of run.stages.slice(0, startIndex)) {
-      seededOutcomes[stage.id] = outcomeForRestart(stage);
-      const output = outputs[stage.id];
-      if (output !== undefined) {
-        seededOutputs[stage.id] = output;
-      }
-    }
+    const seeded = seedFromRestart(run, stageId);
     this.cancelled.delete(runId);
-    for (const stage of run.stages.slice(startIndex)) {
-      stage.status = "pending";
-      stage.logs = [];
-      delete stage.startedAt;
-      delete stage.completedAt;
-      delete stage.verdict;
-      delete outputs[stage.id];
-    }
-    run.stageOutputs = outputs;
+    run.stageOutputs = resetStagesForRestart(run.stages.slice(startIndex), run.stageOutputs);
     run.status = "running";
     if (orchestrationId !== undefined && this.orchestration) {
       run.orchestrationId = orchestrationId;
@@ -522,11 +513,12 @@ export class RunService implements RunProjection {
     delete run.completedAt;
     void this.store.flushPersist(runId);
     const profession = agentForStage(run.stages[startIndex] ?? { id: stageId }).profession;
+    const task = await this.orchestration?.restartTask(run);
     void this.launch(this.registry.resolve(run.projectId), run, {
       startedMessage: `Restarted from ${profession}`,
-      seededOutputs,
-      seededOutcomes,
-      startStageId: stageId,
+      seeded,
+      task,
+      readmit: true,
     });
     return structuredClone(run);
   }
@@ -800,12 +792,18 @@ export class RunService implements RunProjection {
     void this.store.flushPersist(runId);
   }
 
-  applySeededOutput(runId: string, stageDef: StageDefinition, output: string): void {
+  applySeededStage(runId: string, stageDef: StageDefinition, seeded: SeededStage): void {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageDef.id);
     if (!run || !stage) return;
-    run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
-    run.result = output;
+    if (seeded.output !== undefined) {
+      run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: seeded.output };
+      run.result = seeded.output;
+    }
+    if (stage.status !== "pending") return;
+    const message = carriedOverMessage(agentForStage(stageDef).profession, seeded.from);
+    this.log(runId, stageDef.id, { level: "warn", message });
+    this.stageSkipped(runId, stageDef.id);
   }
 
   async runCompleted(runId: string, status: RunCompletionStatus): Promise<void> {
@@ -941,7 +939,7 @@ export class RunService implements RunProjection {
     if (!pipeline) {
       throw new Error(`Unknown pipeline: ${run.pipelineId}`);
     }
-    if (extras.startStageId !== undefined) {
+    if (extras.readmit) {
       const admitted = await this.store.repositoryFor(projectPath).admitRun(run.id);
       if (!admitted) {
         this.markInterrupted(run.id);
@@ -964,24 +962,22 @@ export class RunService implements RunProjection {
       runId: run.id,
       projectId: run.projectId,
       pipeline,
-      task: run.task,
+      task: extras.task ?? run.task,
       engine: run.engine,
       model: run.model,
       permissionMode: this.store.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
       workspacePath: run.workspacePath,
       startedMessage: extras.startedMessage,
-      seededOutputs: extras.seededOutputs,
-      seededOutcomes: extras.seededOutcomes,
-      startStageId: extras.startStageId,
+      seeded: extras.seeded,
     };
   }
 }
 
 interface InputExtras {
   startedMessage: string;
-  seededOutputs?: Record<string, string>;
-  seededOutcomes?: Record<string, StageOutcome>;
-  startStageId?: string;
+  task?: string;
+  seeded?: SeededStart;
+  readmit?: boolean;
 }
 
 interface MessageDraft {

@@ -100,6 +100,7 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       rationale: requiredText,
       task: requiredText,
       teamId: requiredText.optional(),
+      fromStage: requiredText.optional(),
     })
     .strict(),
   z

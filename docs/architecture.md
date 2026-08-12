@@ -681,6 +681,32 @@ others, and cancelling their non-terminal owned work before durable workers star
 retains history and artifacts. A restart adopts its run into whichever Orchestrator is
 active now, so stopping one never strands the work it owned.
 
+**A rejected decision informs the next attempt.** `Orchestration.decisionError`
+holds why the last decision would not parse, and it is no longer only something the
+status bar shows. `OrchestrationHooks.restartTask` hands `restartRun` a task for the
+relaunched stage — the run's frozen `run.task` plus the rejection, rendered by
+`renderTaskAfterRejection` — and `renderRunReviewContext` carries the same rejection
+into a review. `RunState.task` itself is never rewritten: the record keeps saying what
+the run began as, and only the workflow input differs (`InputExtras.task`). There is no
+automatic retry; a rejection is terminal for the turn and informative for the next one.
+
+**`start_run` may begin partway through the approved team.** The decision's optional
+`fromStage` names a role; `seedFromSettledRun` (`domain/rules/run-seeding.ts`) validates
+it against the composed pipeline and carries the settled run's outputs and outcomes for
+every stage before it into a **fresh** run, which starts there. The settled run is left
+untouched as evidence. An unknown id is rejected with path-aware issues rather than
+silently starting from the top. `applySeededStage` marks a carried stage `skipped` with a
+log line naming the run it came from — but only when it is still `pending`, which is what
+keeps a restart's own upstream statuses intact.
+
+**Three blocked runs in a row stop the loop.** `blockedLaunchRefusal`
+(`domain/rules/orchestration-loop.ts`) counts the tail of `Orchestration.turns`:
+consecutive `start_run` decisions whose reviewed run ended `needs_attention` or `failed`,
+with no user-facing turn between them. At three, `launch` refuses and the reason is
+recorded on `decisionError`. It is derived from the turns already stored — no counter is
+persisted — and a chain of *successful* runs never counts, so a healthy initiative is
+never capped.
+
 **Specialist questions are mediated inside the specialist workflow.** The
 `OrchestrationHooks` seam (implemented by `OrchestrationService`) lets
 `PipelineWorkflow` request active aggregate context and record a narrowed broker

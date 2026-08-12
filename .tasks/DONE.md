@@ -1,5 +1,61 @@
 # Done
 
+## TASK-139: The Orchestrator's decision loop must not dead-end or spin
+**Priority:** P1 | **Tags:** server, engine, testing, milestone-f
+**Updated:** 2026-08-12 17:20
+
+**Closed at 0.9.37.** Two observed failures on 2026-08-12 in the `dogfood` project: an
+invented `executionPolicy` killed an initiative on one string, and runs `#10`–`#13` re-ran
+one composed pipeline four times against the same missing browser for 3.44M input tokens.
+
+**1. A rejected decision informs the next attempt.** `InputExtras.task` overrides
+`run.task` when `buildInput` assembles the workflow input, and `OrchestrationHooks.restartTask`
+supplies it — `renderTaskAfterRejection` appends the rejection to the run's own task.
+`run.task` stays frozen, so the record still says what the run began as. The same rejection
+rides into `renderRunReviewContext`. No automatic retry: a rejection is terminal for the
+turn and informative for the next one. `interpretDecision` and `consume` were left as the
+two sites they were; the rule kept is that no third one builds that sentence.
+
+**2. `start_run` may target a stage.** The decision gains an optional `fromStage`.
+`seedFromSettledRun` (`domain/rules/run-seeding.ts`) validates it against the composed
+pipeline — an unknown id is rejected with path-aware issues, never silently started from
+the top — and carries the settled run's outputs and outcomes into a **fresh** run that
+begins there. Decided with the user: a fresh seeded run rather than an in-place
+`restartRun`, so the evidence that justified the decision survives and a cleanly completed
+run can still be re-entered. `applySeededOutput` became `applySeededStage`, marking a
+carried stage `skipped` with a log line naming its source — but only while it is still
+`pending`, which is what leaves a restart's real upstream statuses alone. `SeededStart`
+replaced the three loose seed fields on the workflow input and the run options.
+
+**3. An unmet precondition is not a quality verdict.** `review-run.md` and `orchestrate.md`
+now say that a blocker no re-run can clear — no browser, no credential, no tool, no running
+service — is an `ask_user` naming what the user must do, said the first time it is read.
+The backstop is `blockedLaunchRefusal` (`domain/rules/orchestration-loop.ts`): three
+consecutive `start_run` decisions whose reviewed run ended `needs_attention` or `failed`,
+with nothing asked of the user in between, and the fourth launch is refused with a stated
+reason on `decisionError`. Derived from the turns already stored — no persisted counter.
+It counts `start_run` alone, so an auto-running milestone's fourth feature is not capped.
+
+**Guards:** four component tests in `orchestration.comp.ts` — the rejection is quoted back
+on the restart and the second attempt composes; a `fromStage` run begins at QA with the
+Developer's output carried and no second Developer turn; an unknown stage is refused with
+no run launched; a fourth blocked run never starts. `orchestrate-assignment.spec.ts` now
+sweeps the `start_run` schema's own field names, so a field added without documentation
+fails.
+
+Gates: lint, typecheck, 831 unit/component tests, build, 69 e2e, `gen:skills` — all green.
+Server boot re-checked on the running app (`/health`, `/pipelines`). The loop itself is
+covered by the component tests rather than a live run: every shipped pipeline drives a real
+engine, so a live reproduction would have spent tokens to re-observe what is already
+asserted. Decision recorded in `docs/decisions.md`; `docs/architecture.md` §2c gained the
+three paragraphs.
+
+Cross-platform: n/a — prompt composition, decision schema and in-memory run state; no paths,
+processes, binaries or shelled commands. Verified on Windows; nothing added is
+platform-conditional.
+
+---
+
 ## TASK-137: One dialog, an honest label, and a choice at the start
 **Priority:** P1 | **Tags:** ui, core, server, milestone-f
 **Updated:** 2026-08-12 15:10
