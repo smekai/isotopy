@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { FileText, Flag, MessageSquare, Monitor, Terminal, Users } from "lucide-react";
-import { MILESTONE_PLANNING_PIPELINE, ORCHESTRATION_PIPELINE } from "@adhd/core";
+import { FileText, Flag, MessageSquare, Monitor, Terminal } from "lucide-react";
+import { MILESTONE_PLANNING_PIPELINE } from "@adhd/core";
 import type { RunState } from "@adhd/core";
 import type { Dir } from "../../theme";
 import type { ProductController } from "../../hooks/useProduct";
@@ -12,12 +12,11 @@ import type { ArtifactView } from "./ArtifactsPanel";
 import { ChatPanel } from "./ChatPanel";
 import { LogsPanel } from "./LogsPanel";
 import { MilestonePlanPanel } from "./MilestonePlanPanel";
-import { OrchestratorPanel } from "./OrchestratorPanel";
-import type { OrchestratorView } from "./OrchestratorPanel";
+import type { OrchestratorView } from "../../orchestration";
 import { PreviewPanel } from "./PreviewPanel";
 import { PANEL } from "./run-styles";
 
-export type RunTab = "chat" | "plan" | "team" | "logs" | "artifacts" | "preview";
+export type RunTab = "chat" | "plan" | "logs" | "artifacts" | "preview";
 
 interface RunTabEntry {
   id: RunTab;
@@ -81,11 +80,7 @@ const PREVIEW_TAB: RunTabEntry = {
   icon: <Monitor size={ICON.sm} />,
 };
 
-function tabsFor(
-  planning: boolean,
-  orchestrating: boolean,
-  previewable: boolean,
-): RunTabEntry[] {
+function tabsFor(planning: boolean, previewable: boolean): RunTabEntry[] {
   const standard = previewable ? [...STANDARD_TABS, PREVIEW_TAB] : STANDARD_TABS;
   if (planning) {
     return [
@@ -94,9 +89,7 @@ function tabsFor(
       ...standard.slice(1),
     ];
   }
-  return orchestrating
-    ? [{ id: "team", label: "Orchestrator", icon: <Users size={ICON.sm} /> }, ...standard]
-    : standard;
+  return standard;
 }
 
 export interface RunTabsProps {
@@ -125,23 +118,16 @@ export function RunTabs({
   onClearFocus,
 }: RunTabsProps) {
   const planning = run.pipelineId === MILESTONE_PLANNING_PIPELINE.id;
-  const orchestrating =
-    run.pipelineId === ORCHESTRATION_PIPELINE.id && orchestrator !== undefined;
   const previewable = product?.status?.configured === true;
-  const tabs = tabsFor(planning, orchestrating, previewable);
+  const tabs = tabsFor(planning, previewable);
   const [tab, setTab] = useState<RunTab>(
-    planning && run.status === "completed" ? "plan" : orchestrating ? "team" : "chat",
+    planning && run.status === "completed" ? "plan" : "chat",
   );
   useEffect(() => {
     if (planning && run.status === "completed") {
       setTab("plan");
     }
   }, [planning, run.id, run.status]);
-  useEffect(() => {
-    if (orchestrating) {
-      setTab("team");
-    }
-  }, [orchestrating, run.id]);
   const changed = run.changes !== undefined;
   const [artifactView, setArtifactView] = useState<ArtifactView>(
     changed ? "changes" : "workflow",
@@ -184,11 +170,11 @@ export function RunTabs({
           run={run}
           d={d}
           sending={sending}
+          orchestrator={orchestrator}
           onSend={onSend}
           onShowChanges={showChanges}
         />
       )}
-      {tab === "team" && orchestrator && <OrchestratorPanel {...orchestrator} d={d} />}
       {tab === "plan" && planning && settings && onRunStarted && (
         <MilestonePlanPanel
           run={run}

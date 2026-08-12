@@ -42,7 +42,7 @@ export function GatesSection({ d }: GatesSectionProps) {
               <div style={accentBadge(d)}>ENABLED</div>
             </div>
             <div style={mutedBody(d)}>
-              The {agentForStage(stage.id).profession}'s output needs your approval before the team continues.
+              The {agentForStage(stage).profession}'s output needs your approval before the team continues.
             </div>
           </div>
         ))}

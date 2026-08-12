@@ -20,7 +20,7 @@ import { ProjectDrawer } from "./components/ProjectDrawer";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunRail } from "./components/RunRail";
 import { RunStatusBar } from "./components/RunStatusBar";
-import type { OrchestratorView } from "./components/run/OrchestratorPanel";
+import type { InitiativeChrome } from "./components/RunStatusBar";
 import { RunTabs } from "./components/run/RunTabs";
 import { SetupModal } from "./components/setup/SetupModal";
 import type { SetupSection } from "./components/setup/SetupModal";
@@ -43,8 +43,13 @@ import {
   routeRunId,
   runRoute,
 } from "./route";
-import { pendingTiersFor, withPendingTier } from "./orchestration";
-import type { PendingRoleTiers } from "./orchestration";
+import {
+  orchestrationNeedsUser,
+  orchestrationStatusLabel,
+  pendingTiersFor,
+  withPendingTier,
+} from "./orchestration";
+import type { OrchestratorView, PendingRoleTiers } from "./orchestration";
 import {
   firstActiveRunId,
   milestoneRefreshKey,
@@ -386,8 +391,13 @@ export function App() {
     roleTiers: pendingTiersFor(pendingTiers, activeOrchestration),
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
     onRoleTierChange: handleRoleTierChange,
-    onStop: handleStopInitiative,
     onOpenRun: attachRun,
+  };
+  const initiativeChrome: InitiativeChrome | undefined = activeOrchestration && {
+    statusLabel: orchestrationStatusLabel(activeOrchestration.status),
+    needsUser: orchestrationNeedsUser(activeOrchestration.status),
+    stopReason: activeOrchestration.stopReason,
+    decisionError: activeOrchestration.decisionError,
   };
   const liveInitiative: LiveInitiative | undefined =
     activeOrchestration && activeOrchestration.status !== "stopped"
@@ -484,7 +494,7 @@ export function App() {
             />
           ) : run ? (
             <>
-              <RunStatusBar run={run} d={d} />
+              <RunStatusBar run={run} d={d} initiative={initiativeChrome} />
               <PipelineRow
                 run={run}
                 d={d}

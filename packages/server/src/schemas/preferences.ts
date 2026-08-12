@@ -2,6 +2,7 @@ import {
   ENGINE_IDS,
   LEGACY_MODEL_ALIASES,
   MODEL_TIERS,
+  defaultModelTierFor,
   defaultProjectPreferences,
   tierLadderFor,
   withoutClearedOverrides,
@@ -30,7 +31,7 @@ export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
   const preTierFile = stored.modelTier === undefined;
   return {
     engine,
-    modelTier: stored.modelTier ?? adoptedTier(engine, pinned) ?? defaults.modelTier,
+    modelTier: stored.modelTier ?? adoptedTier(engine, pinned) ?? defaultModelTierFor(engine),
     engineModels: Object.fromEntries(preTierFile ? unladderedPins(pinned) : pinned),
     permissionMode: stored.permissionMode ?? defaults.permissionMode,
     pipelineId: stored.pipelineId ?? defaults.pipelineId,

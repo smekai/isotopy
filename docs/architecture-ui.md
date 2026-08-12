@@ -221,14 +221,39 @@ land. **The chat is a projection of the log, never a second source.** `RunTabs`
 owns which tab is open, so `App` does not; a stage-node click sets `focusedId`,
 which filters Logs and Artifacts rather than opening a pane.
 
-**Two pipelines earn a fourth tab, and each opens on it.** A `milestone-planning` run
+**One pipeline earns a fourth tab, and opens on it.** A `milestone-planning` run
 gains `Plan` and switches to it once the run completes — the proposal is not editable
-before then. An `orchestration` run gains `Orchestrator` and opens on it immediately,
-because the decision waiting there is usually why the user came. Both tabs are added by
-`tabsFor`, keyed on `run.pipelineId` against the pipeline definition in `@adhd/core`, and
-the Orchestrator tab additionally requires the `orchestrator` prop — so a run whose
-orchestration `App` cannot resolve falls back to the ordinary three rather than rendering
-an empty panel.
+before then. The tab is added by `tabsFor`, keyed on `run.pipelineId` against the pipeline
+definition in `@adhd/core`.
+
+**An orchestration run earns no tab at all: the initiative *is* the conversation.**
+`runThread(run, orchestration, runs)` layers the orchestration's turns over
+`conversationOnly(buildTranscript(run))` and sorts the union by timestamp, breaking ties
+by kind. A `propose_team` turn becomes an inline `TeamProposalCard` carrying its own
+**Approve & start**, and stays in the scrollback afterwards as what was agreed — read-only
+once approved. Each of `orchestration.runIds` becomes a link at the point that run was
+started, minus the thread's own run, which would otherwise link to itself.
+
+**A question is suppressed only where it already reached this thread.** A turn carries the
+`runId` that produced it. When that is the thread's own run — the `ask_user` case — the
+question is already a `run.messages` turn answered by the composer directly below it, so
+rendering the decision too would print it twice. When it is *another* run — an
+`escalate_to_user` raised while brokering a child run's question — the question is appended
+to **that** run, and the initiative goes `awaiting_user` with nothing here to act on; it
+therefore renders as a link to the run that can answer it. `start_run` still returns
+nothing, because the child-run link already says it. The switch is exhaustive against
+`never`, so a new decision action is a compile error rather than a silently dropped turn.
+
+**An approved proposal shows the team that was approved.** Approval merges the user's tier
+edits into `orchestration.approvedTeam`, while the turn keeps the team as originally
+proposed — so a settled card reading `decision.team` would claim a tier the run is not
+using. The most recent `propose_team` turn renders `approvedTeam` once it is no longer
+awaiting approval, and the proposal itself while it still is.
+
+**Run chrome belongs to `RunStatusBar`, not to a scroll region.** The initiative's status
+pill, stop reason and decision error are the same question asked about the initiative that
+the bar already asks about the run. Stopping an initiative lives once, on `TeamController`'s
+`stop-initiative`.
 
 **A project that says how to start itself earns a `Preview` tab**, appended after
 `Artifacts` rather than opened on — the run is still what the user came for. It appears only
@@ -249,14 +274,19 @@ five seconds while a preview is open; a third channel would cost a channel forev
 Stopping the product on a **project switch** is the server's job, not this hook's — `POST
 /projects/:id/activate` does it — so a closed or crashed browser cannot leak a process.
 
-**Neither default can live in the `useState` initialiser alone**, and the Orchestrator is the
-sharper case. `App` feeds `RunTabs` from two independent loads — the run over its own SSE
-subscription, the orchestration over `useOrchestration`'s fetch — and the run almost always
-wins, so the component mounts with `orchestrator` still `undefined`. A first-render-only
-default would leave every orchestration run sitting on Chat with a live Orchestrator tab
-beside it. Both defaults are therefore effects: `plan` on `planning && completed`, `team` on
-`orchestrating` becoming true. Keyed on `run.id`, so a *new* run re-opens on its tab while a
-user who has since clicked Logs is left alone.
+**The `Plan` default cannot live in the `useState` initialiser alone.** The run is still
+loading when `RunTabs` mounts, so a first-render-only default would strand a completed
+planning run on Chat. It is therefore an effect on `planning && completed`, keyed on
+`run.id`, so a *new* run re-opens on its tab while a user who has since clicked Logs is
+left alone.
+
+**The same two-load race is now a merge problem rather than a tab-default problem.** `App`
+feeds the thread from two independent loads — the run over its own SSE subscription, the
+orchestration over `useOrchestration`'s fetch — and the run almost always wins. `runThread`
+therefore has to be stable under a late second source: orchestration items carry keys
+derived from their position in `turns` and from the run id (`orch:turn:<i>`,
+`orch:run:<id>`), which cannot collide with `stage:` / `log:` / `msg:`, so the turns
+already rendered keep their identity when the proposal splices in above them.
 
 **A message posted from the composer either answers a question or is just
 recorded.** `POST /runs/:id/messages` appends to `run.messages` and emits
@@ -516,7 +546,7 @@ list card. The current roster:
 
 `open-project` · `workspace-chip` · `folder-picker` · `project-switcher` ·
 `project-drawer` · `project-root` · `run-status` · `run-cost` ·
-`run-tab-<chat|team|plan|logs|artifacts|preview>` · `stage-node-<stageId>` · `stage-profession` ·
+`run-tab-<chat|plan|logs|artifacts|preview>` · `stage-node-<stageId>` · `stage-profession` ·
 `stage-persona` · `stage-verdict` · `stage-scroll` · `artifact-preview` ·
 `artifact-view-<changes|workflow|closeout|files>` · `artifact-files` ·
 `artifact-changes` · `run-result` · `open-project-folder` · `run-card` ·
@@ -527,9 +557,10 @@ list card. The current roster:
 `milestone-finalize` · `milestone-feature` · `milestone-feature-run` ·
 `milestone-feature-accept` · `closeout-panel` · `closeout-created-task` ·
 `closeout-validation-errors` · `choose-pipeline` · `choose-orchestrator` ·
-`orchestrator-panel` · `orchestrator-status` · `orchestrator-team` ·
-`orchestrator-decision` · `orchestrator-run` · `approve-team` · `stop-orchestrator` ·
-`role-tier-<roleId>` ·
+`orchestrator-status` · `orchestrator-team` · `orchestrator-verdict` ·
+`orchestrator-run` · `orchestrator-question-elsewhere` ·
+`orchestrator-decision-error` · `approve-team` · `stop-initiative` ·
+`role-tier-<roleId>` · `start-engine` · `start-tier` ·
 `product-preview` · `product-start` · `product-stop` · `product-restart` ·
 `product-open-external`
 

@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { formatUsage, isTerminalRunStatus, summariseChanges } from "@adhd/core";
-import type { LogLevel, RunState, StageState, StageStatus } from "@adhd/core";
+import type { LogLevel, RunState, RunSummary, StageState, StageStatus } from "@adhd/core";
 import { OpenProjectFolder } from "./OpenProjectFolder";
+import { TeamProposalCard } from "./TeamProposalCard";
+import type { OrchestratorView } from "../../orchestration";
 import { renderInlineMarkdown } from "../../inline-md";
-import { buildTranscript, conversationOnly } from "../../transcript";
-import type { ConversationItem } from "../../transcript";
+import { runThread } from "../../run-thread";
+import type { ThreadItem } from "../../run-thread";
+import { formatDateTime } from "../../format";
 import { useFollowScroll } from "../../hooks/useFollowScroll";
 import type { Dir } from "../../theme";
 import {
@@ -14,11 +17,14 @@ import {
   FONT,
   ICON,
   RADIUS,
+  RUN_PILL,
   SANS,
   SPACE,
   WEIGHT,
   MONO,
   logLevelColor,
+  runDot,
+  runStatusLabel,
   statusClr,
 } from "../../theme";
 import { PANEL, SCROLL_BODY, stageGlyph, stageHeadingText, stageSpendText } from "./run-styles";
@@ -27,6 +33,7 @@ const BUBBLE_MAX_WIDTH = "76%";
 const THREAD_MAX_WIDTH = 860;
 const GLYPH_SIZE = 22;
 const COMPOSER_MIN_ROWS = 1;
+const CHILD_RUN_DOT_SIZE = 7;
 
 const THREAD: CSSProperties = {
   maxWidth: THREAD_MAX_WIDTH,
@@ -204,13 +211,171 @@ function showChangesButton(d: Dir): CSSProperties {
   };
 }
 
-interface TranscriptRowProps {
-  item: ConversationItem;
-  spend?: string;
+function verdictRow(d: Dir): CSSProperties {
+  return {
+    display: "grid",
+    gap: SPACE.xxs,
+    borderLeft: `2px solid ${d.border}`,
+    paddingLeft: SPACE.lg,
+    color: d.textMuted,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    lineHeight: 1.5,
+  };
+}
+
+function verdictTitle(d: Dir): CSSProperties {
+  return { color: d.textMid, fontWeight: WEIGHT.semibold };
+}
+
+function elsewhereBlock(d: Dir): CSSProperties {
+  return {
+    display: "grid",
+    gap: SPACE.sm,
+    textAlign: "left",
+    width: "100%",
+    border: `1px solid ${ASK_VIOLET}`,
+    borderRadius: RADIUS.lg,
+    background: d.surface,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    lineHeight: 1.5,
+    cursor: "pointer",
+  };
+}
+
+function elsewhereLead(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.xs };
+}
+
+function childRunButton(d: Dir): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: SPACE.md,
+    width: "100%",
+    textAlign: "left",
+    border: `1px solid ${d.border}`,
+    borderRadius: RADIUS.md,
+    background: d.surface,
+    padding: `${SPACE.md}px ${SPACE.lg}px`,
+    cursor: "pointer",
+    fontFamily: SANS,
+    color: d.text,
+  };
+}
+
+function childRunDot(color: string): CSSProperties {
+  return {
+    width: CHILD_RUN_DOT_SIZE,
+    height: CHILD_RUN_DOT_SIZE,
+    borderRadius: RADIUS.round,
+    background: color,
+    flexShrink: 0,
+  };
+}
+
+function childRunNumber(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: MONO, fontSize: FONT.xs, flexShrink: 0 };
+}
+
+const CHILD_RUN_NAME: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: FONT.md,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+function childRunStatusText(pill: { text: string }): CSSProperties {
+  return {
+    color: pill.text,
+    fontFamily: MONO,
+    fontSize: FONT.xxs,
+    fontWeight: WEIGHT.bold,
+    flexShrink: 0,
+  };
+}
+
+function childRunDate(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontSize: FONT.xs, flexShrink: 0 };
+}
+
+interface ChildRunLinkProps {
+  run: RunSummary;
+  onOpen: () => void;
   d: Dir;
 }
 
-function TranscriptRow({ item, spend, d }: TranscriptRowProps) {
+function ChildRunLink({ run, onOpen, d }: ChildRunLinkProps) {
+  const pill = RUN_PILL[run.status];
+  return (
+    <button
+      data-testid="orchestrator-run"
+      data-run-id={run.id}
+      onClick={onOpen}
+      style={childRunButton(d)}
+    >
+      <span style={childRunDot(runDot(run.status, d))} />
+      <span style={childRunNumber(d)}>#{run.number}</span>
+      <span style={CHILD_RUN_NAME}>{run.pipelineName}</span>
+      <span style={childRunStatusText(pill)}>{runStatusLabel(run.status)}</span>
+      <span style={childRunDate(d)}>{formatDateTime(run.createdAt)}</span>
+    </button>
+  );
+}
+
+interface TranscriptRowProps {
+  item: ThreadItem;
+  spend?: string;
+  orchestrator?: OrchestratorView;
+  d: Dir;
+}
+
+function TranscriptRow({ item, spend, orchestrator, d }: TranscriptRowProps) {
+  if (item.kind === "proposal") {
+    return (
+      <TeamProposalCard
+        team={item.team}
+        awaitingApproval={item.awaitingApproval}
+        busy={orchestrator?.busy ?? false}
+        roleTiers={orchestrator?.roleTiers ?? {}}
+        d={d}
+        onApprove={() => orchestrator?.onApprove()}
+        onRoleTierChange={(roleId, tier) => orchestrator?.onRoleTierChange(roleId, tier)}
+      />
+    );
+  }
+  if (item.kind === "child-run") {
+    return (
+      <ChildRunLink run={item.run} onOpen={() => orchestrator?.onOpenRun(item.run.id)} d={d} />
+    );
+  }
+  if (item.kind === "elsewhere") {
+    return (
+      <button
+        data-testid="orchestrator-question-elsewhere"
+        data-run-id={item.runId}
+        onClick={() => orchestrator?.onOpenRun(item.runId)}
+        style={elsewhereBlock(d)}
+      >
+        <span style={elsewhereLead(d)}>A question is waiting on another run</span>
+        <span>{item.question}</span>
+        <span style={elsewhereLead(d)}>Open that run to answer it →</span>
+      </button>
+    );
+  }
+  if (item.kind === "verdict") {
+    return (
+      <div style={verdictRow(d)} data-testid="orchestrator-verdict">
+        <span style={verdictTitle(d)}>{item.title}</span>
+        <span>{item.detail}</span>
+      </div>
+    );
+  }
   if (item.kind === "stage") {
     return (
       <div style={stageRow(d)}>
@@ -251,14 +416,22 @@ export interface ChatPanelProps {
   run: RunState;
   d: Dir;
   sending: boolean;
+  orchestrator?: OrchestratorView;
   onSend: (text: string) => void;
   onShowChanges?: () => void;
 }
 
-export function ChatPanel({ run, d, sending, onSend, onShowChanges }: ChatPanelProps) {
+export function ChatPanel({
+  run,
+  d,
+  sending,
+  orchestrator,
+  onSend,
+  onShowChanges,
+}: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const items = conversationOnly(buildTranscript(run));
+  const items = runThread(run, orchestrator?.orchestration, orchestrator?.runs ?? []);
   const closed = isTerminalRunStatus(run.status);
   const asking = run.status === "asking";
 
@@ -297,6 +470,7 @@ export function ChatPanel({ run, d, sending, onSend, onShowChanges }: ChatPanelP
               key={item.key}
               item={item}
               spend={item.kind === "stage" ? spendOf(run.stages, item.stageId) : undefined}
+              orchestrator={orchestrator}
               d={d}
             />
           ))}

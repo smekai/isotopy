@@ -2,9 +2,25 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "adhd-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--config.verify-deps-before-run=false",
+        "--filter",
+        "@adhd/server",
+        "dev"
+      ],
+      "port": 9477
+    },
+    {
       "name": "adhd-ui",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@adhd/ui", "dev"],
+      "runtimeArgs": [
+        "--config.verify-deps-before-run=false",
+        "--filter",
+        "@adhd/ui",
+        "dev"
+      ],
       "port": 5173
     }
   ]

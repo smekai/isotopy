@@ -125,7 +125,7 @@ export function PipelineHeader({
     <>
       <div style={GLYPH_STRIP}>
         {stages.map((stage, index) => {
-          const agent = agentForStage(stage.id);
+          const agent = agentForStage(stage);
           const spec = specColor(stage.id);
           return (
             <div

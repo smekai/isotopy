@@ -4,7 +4,18 @@ import type {
   OrchestrationStatus,
   OrchestratorDecision,
   OrchestratorTeamProposal,
+  RunSummary,
 } from "@adhd/core";
+
+export interface OrchestratorView {
+  orchestration: Orchestration;
+  runs: RunSummary[];
+  busy: boolean;
+  roleTiers: Record<string, ModelTier | null>;
+  onApprove: () => void;
+  onRoleTierChange: (roleId: string, tier: ModelTier | null) => void;
+  onOpenRun: (runId: string) => void;
+}
 
 const STATUS_LABELS: Record<OrchestrationStatus, string> = {
   conversing: "Thinking",

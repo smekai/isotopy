@@ -56,6 +56,7 @@ export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: Pipel
           const node = (
             <StageNode
               stageId={stage.id}
+              skill={stage.skill}
               label={stage.label}
               status={stagePresentation(stage)}
               d={d}

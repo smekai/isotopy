@@ -50,7 +50,7 @@ export class CloseoutConsumer implements StageOutputConsumer {
       return undefined;
     }
     return {
-      reason: `${agentForStage(stageDef.id).profession} produced no usable closeout — ${applied.reportErrors.join("; ")}`,
+      reason: `${agentForStage(stageDef).profession} produced no usable closeout — ${applied.reportErrors.join("; ")}`,
     };
   }
 }

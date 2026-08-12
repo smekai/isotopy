@@ -62,7 +62,7 @@ export const SOLO_PIPELINE: PipelineDefinition = {
     "One box that does everything, and may stop to ask you a clarifying question.",
   groups: [
     {
-      stages: [{ id: "solo", label: "Agent", skill: "solo", interactive: true }],
+      stages: [{ id: "solo", label: "Working", skill: "solo", interactive: true }],
     },
   ],
 };
@@ -78,7 +78,7 @@ export const PM_DEV_TEST_PIPELINE: PipelineDefinition = {
       stages: [
         {
           id: "intake",
-          label: "Product Manager",
+          label: "Scoping",
           skill: "project-manager",
           stepTask: "plan-feature",
           interactive: true,
@@ -86,13 +86,13 @@ export const PM_DEV_TEST_PIPELINE: PipelineDefinition = {
         },
         {
           id: "implementation",
-          label: "Developer",
+          label: "Implementing",
           skill: "developer",
           stepTask: "implement-feature",
         },
         {
           id: "test",
-          label: "QA Engineer",
+          label: "Verifying",
           skill: "tester",
           stepTask: "verify-feature",
         },
@@ -112,7 +112,7 @@ export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
       stages: [
         {
           id: "intake",
-          label: "Product Manager",
+          label: "Scoping",
           skill: "project-manager",
           stepTask: "plan-feature",
           interactive: true,
@@ -120,53 +120,53 @@ export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
         },
         {
           id: "product-design",
-          label: "Product Designer",
+          label: "Designing the experience",
           skill: "product-designer",
           stepTask: "design-experience",
         },
         {
           id: "architecture",
-          label: "Software Architect",
+          label: "Architecting",
           skill: "software-architect",
           stepTask: "design-architecture",
         },
         {
           id: "implementation",
-          label: "Developer",
+          label: "Implementing",
           skill: "developer",
           stepTask: "implement-feature",
         },
         {
           id: "review",
-          label: "Software Architect",
+          label: "Reviewing",
           skill: "software-architect",
           stepTask: "review-implementation",
           executionPolicy: STAGE_EXECUTION_POLICIES.QUALITY,
         },
         {
           id: "test",
-          label: "QA Engineer",
+          label: "Verifying",
           skill: "tester",
           stepTask: "verify-feature",
           executionPolicy: STAGE_EXECUTION_POLICIES.QUALITY,
         },
         {
           id: "release",
-          label: "Release Manager",
+          label: "Preparing the release",
           skill: "release-manager",
           stepTask: "prepare-release",
           executionPolicy: STAGE_EXECUTION_POLICIES.DELIVERY,
         },
         {
           id: "deploy",
-          label: "SRE",
+          label: "Deploying the preview",
           skill: "sre",
           stepTask: "deploy-preview",
           executionPolicy: STAGE_EXECUTION_POLICIES.DELIVERY,
         },
         {
           id: "closeout",
-          label: "Product Manager",
+          label: "Closing out",
           skill: "project-manager",
           stepTask: "closeout-feature",
           executionPolicy: STAGE_EXECUTION_POLICIES.CLOSEOUT,
@@ -187,7 +187,7 @@ export const MILESTONE_PLANNING_PIPELINE: PipelineDefinition = {
       stages: [
         {
           id: "milestone-plan",
-          label: "Product Manager",
+          label: "Planning the milestone",
           skill: "project-manager",
           stepTask: "plan-milestone",
           interactive: true,
@@ -210,9 +210,10 @@ export const ORCHESTRATION_PIPELINE: PipelineDefinition = {
       stages: [
         {
           id: "orchestrate",
-          label: "Orchestrator",
+          label: "Orchestrating",
           skill: "orchestrator",
           stepTask: "orchestrate",
+          modelTier: "deep",
           interactive: true,
           outputProtocol: STAGE_OUTPUT_PROTOCOLS.DECISION,
           maxTurns: ORCHESTRATION_MAX_TURNS,

@@ -57,7 +57,7 @@ function handoffsOf(run: RunState): Handoff[] {
       {
         stageId: stage.id,
         name: `${stage.id}/handoff.md`,
-        profession: agentForStage(stage.id).profession,
+        profession: agentForStage(stage).profession,
         size: formatBytes(new Blob([body]).size),
         body,
       },

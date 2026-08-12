@@ -136,6 +136,7 @@ function statusLabel(st: StatusColor): CSSProperties {
 
 export interface StageNodeProps {
   stageId: string;
+  skill?: string;
   label: string;
   status: StagePresentation;
   d: Dir;
@@ -143,8 +144,16 @@ export interface StageNodeProps {
   onClick: () => void;
 }
 
-export function StageNode({ stageId, label, status, d, focused, onClick }: StageNodeProps) {
-  const agent = agentForStage(stageId);
+export function StageNode({
+  stageId,
+  skill,
+  label,
+  status,
+  d,
+  focused,
+  onClick,
+}: StageNodeProps) {
+  const agent = agentForStage({ id: stageId, skill });
   const sc = specColor(stageId);
   const st = statusClr(status);
   const running = status === "running";

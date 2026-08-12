@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ORCHESTRATION_PIPELINE } from "@adhd/core";
-import type { ProductProcessStatus, RunState } from "@adhd/core";
+import type { OrchestratorDecision, ProductProcessStatus, RunState } from "@adhd/core";
 import { RunTabs } from "../../src/components/run/RunTabs";
 import type { RunTabsProps } from "../../src/components/run/RunTabs";
 import type { ProductController } from "../../src/hooks/useProduct";
@@ -164,22 +164,30 @@ test("a run with no workspace offers no solution folder toggle", () => {
   expect(screen.queryByTestId("artifact-view-files")).toBeNull();
 });
 
-test("an orchestration run opens on the Orchestrator, not the chat", () => {
+test("an orchestration run is one dialog — the initiative has no tab of its own", () => {
   // Act
   render(<RunTabs {...tabsProps(orchestrationOverrides())} />);
 
   // Assert
-  expect(screen.getByTestId("orchestrator-panel")).toBeDefined();
-  expect(screen.queryByTestId("chat-thread")).toBeNull();
+  expect(screen.queryByTestId("run-tab-team")).toBeNull();
+  expect(screen.getByTestId("chat-thread")).toBeDefined();
 });
 
-test("the awaited team is offered for approval alongside the initiative's runs", () => {
+test("the awaited team is offered for approval inside the thread that proposed it", () => {
   // Act
   render(<RunTabs {...tabsProps(orchestrationOverrides())} />);
 
   // Assert
-  expect(screen.getByTestId("orchestrator-team").textContent).toContain("Delivery trio");
-  expect(screen.getByTestId("approve-team")).toBeDefined();
+  const thread = screen.getByTestId("chat-thread");
+  expect(within(thread).getByTestId("orchestrator-team").textContent).toContain("Delivery trio");
+  expect(within(thread).getByTestId("approve-team")).toBeDefined();
+});
+
+test("each child run is linked in the thread at the point it was started", () => {
+  // Act
+  render(<RunTabs {...tabsProps(orchestrationOverrides())} />);
+
+  // Assert
   expect(screen.getAllByTestId("orchestrator-run").map((el) => el.dataset.runId)).toEqual([
     "earlier",
     "later",
@@ -198,11 +206,10 @@ test("approving the team reports the decision rather than acting on it", () => {
   expect(props.orchestrator?.onApprove).toHaveBeenCalledTimes(1);
 });
 
-test("the Orchestrator opens even though its orchestration lands after the run does", () => {
+test("the proposal joins a thread already rendered, without remounting the turns above it", () => {
   // Arrange — App feeds RunTabs from two independent loads: the run arrives on
   // its own SSE subscription, the orchestration on a separate fetch. The run
-  // almost always wins, so the tab is mounted before there is anything to put
-  // in it.
+  // almost always wins, so the thread renders before the proposal exists.
   const { orchestrator, ...runOnly } = orchestrationOverrides();
   const { rerender } = render(<RunTabs {...tabsProps(runOnly)} />);
 
@@ -210,7 +217,7 @@ test("the Orchestrator opens even though its orchestration lands after the run d
   rerender(<RunTabs {...tabsProps({ ...runOnly, orchestrator })} />);
 
   // Assert
-  expect(screen.getByTestId("orchestrator-panel")).toBeDefined();
+  expect(screen.getByTestId("orchestrator-team")).toBeDefined();
 });
 
 test("a finished run says what it changed where the composer used to apologise", () => {
@@ -304,14 +311,16 @@ function changedRun(): RunState {
 }
 
 function orchestrationOverrides(): Partial<RunTabsProps> {
+  const proposal: OrchestratorDecision = {
+    action: "propose_team",
+    rationale: "Small scope.",
+    team: team({ name: "Delivery trio" }),
+  };
   const awaiting = orchestration({
     status: "awaiting_approval",
     runIds: ["earlier", "later"],
-    latestDecision: {
-      action: "propose_team",
-      rationale: "Small scope.",
-      team: team({ name: "Delivery trio" }),
-    },
+    turns: [{ runId: "r1", decision: proposal, at: "2026-08-01T10:00:00.000Z" }],
+    latestDecision: proposal,
   });
   return {
     run: { ...runWithTwoStages(), pipelineId: ORCHESTRATION_PIPELINE.id },
@@ -325,7 +334,6 @@ function orchestrationOverrides(): Partial<RunTabsProps> {
       roleTiers: {},
       onRoleTierChange: vi.fn(),
       onApprove: vi.fn(),
-      onStop: vi.fn(),
       onOpenRun: vi.fn(),
     },
   };

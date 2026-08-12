@@ -65,7 +65,7 @@ const BLOCKED_RUN: RunState = {
   stages: [
     {
       id: "intake",
-      label: "Project Manager",
+      label: "Scoping",
       skill: "project-manager",
       status: "passed",
       startedAt: STARTED_AT,
@@ -74,7 +74,7 @@ const BLOCKED_RUN: RunState = {
     },
     {
       id: "implementation",
-      label: "Developer",
+      label: "Implementing",
       skill: "developer",
       status: "blocked",
       startedAt: "2026-07-27T09:00:10.000Z",
@@ -86,7 +86,7 @@ const BLOCKED_RUN: RunState = {
         },
       ],
     },
-    { id: "test", label: "QA Engineer", skill: "tester", status: "pending", logs: [] },
+    { id: "test", label: "Verifying", skill: "tester", status: "pending", logs: [] },
   ],
 };
 
