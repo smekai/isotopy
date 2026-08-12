@@ -234,12 +234,21 @@ by kind. A `propose_team` turn becomes an inline `TeamProposalCard` carrying its
 once approved. Each of `orchestration.runIds` becomes a link at the point that run was
 started, minus the thread's own run, which would otherwise link to itself.
 
-**A decision that already reached the chat gets no card.** `ask_user` and
-`escalate_to_user` arrive as `run.messages` question turns answered by the composer
-directly below them, so rendering the decision too would print the question twice. That is
-why `itemForDecision` returns nothing for them, and why `start_run` returns nothing — the
-child-run link already says it. The switch is exhaustive against `never`, so a new decision
-action is a compile error rather than a silently dropped turn.
+**A question is suppressed only where it already reached this thread.** A turn carries the
+`runId` that produced it. When that is the thread's own run — the `ask_user` case — the
+question is already a `run.messages` turn answered by the composer directly below it, so
+rendering the decision too would print it twice. When it is *another* run — an
+`escalate_to_user` raised while brokering a child run's question — the question is appended
+to **that** run, and the initiative goes `awaiting_user` with nothing here to act on; it
+therefore renders as a link to the run that can answer it. `start_run` still returns
+nothing, because the child-run link already says it. The switch is exhaustive against
+`never`, so a new decision action is a compile error rather than a silently dropped turn.
+
+**An approved proposal shows the team that was approved.** Approval merges the user's tier
+edits into `orchestration.approvedTeam`, while the turn keeps the team as originally
+proposed — so a settled card reading `decision.team` would claim a tier the run is not
+using. The most recent `propose_team` turn renders `approvedTeam` once it is no longer
+awaiting approval, and the proposal itself while it still is.
 
 **Run chrome belongs to `RunStatusBar`, not to a scroll region.** The initiative's status
 pill, stop reason and decision error are the same question asked about the initiative that
@@ -549,8 +558,9 @@ list card. The current roster:
 `milestone-feature-accept` · `closeout-panel` · `closeout-created-task` ·
 `closeout-validation-errors` · `choose-pipeline` · `choose-orchestrator` ·
 `orchestrator-status` · `orchestrator-team` · `orchestrator-verdict` ·
-`orchestrator-run` · `orchestrator-decision-error` · `approve-team` ·
-`stop-initiative` · `role-tier-<roleId>` · `start-engine` · `start-tier` ·
+`orchestrator-run` · `orchestrator-question-elsewhere` ·
+`orchestrator-decision-error` · `approve-team` · `stop-initiative` ·
+`role-tier-<roleId>` · `start-engine` · `start-tier` ·
 `product-preview` · `product-start` · `product-stop` · `product-restart` ·
 `product-open-external`
 

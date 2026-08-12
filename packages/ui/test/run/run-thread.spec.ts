@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 import type { OrchestratorDecision } from "@adhd/core";
 import { runThread } from "../../src/run-thread";
 import { RUN_ID, log, run, started } from "../support/run-fixtures";
-import { orchestratedRun, orchestration, team } from "../support/orchestration-fixtures";
+import { orchestratedRun, orchestration, role, team } from "../support/orchestration-fixtures";
 
 const STAGE_AT = "2026-08-01T09:00:00.000Z";
 const SPOKE_AT = "2026-08-01T09:00:01.000Z";
@@ -69,6 +69,65 @@ test("only the newest proposal is still open, so an earlier one cannot be approv
   expect(
     items.map((item) => item.kind === "proposal" && item.awaitingApproval),
   ).toEqual([false, true]);
+});
+
+test("an approved proposal reads back as the team approved, not the team proposed", () => {
+  // Arrange — approval merges the user's tier edits into approvedTeam, so the
+  // original decision.team would show Deep for a role the user dropped to Fast.
+  const proposed = team({ roles: [role({ id: "implementation", modelTier: "deep" })] });
+  const approved = team({ roles: [role({ id: "implementation", modelTier: "fast" })] });
+  const live = orchestration({
+    status: "running",
+    turns: [turn({ action: "propose_team", rationale: "Small scope", team: proposed }, PROPOSED_AT)],
+    approvedTeam: approved,
+  });
+
+  // Act
+  const items = runThread(run([]), live, []);
+
+  // Assert
+  expect(items.map((item) => item.kind === "proposal" && item.team.roles[0]?.modelTier)).toEqual([
+    "fast",
+  ]);
+});
+
+test("a proposal still open shows what was proposed, because approval has not merged yet", () => {
+  // Arrange — a stale approvedTeam from an earlier round must not leak forward.
+  const live = orchestration({
+    status: "awaiting_approval",
+    latestDecision: proposeTeam(),
+    turns: [turn(proposeTeam(), PROPOSED_AT)],
+    approvedTeam: team({ roles: [role({ id: "implementation", modelTier: "max" })] }),
+  });
+
+  // Act
+  const items = runThread(run([]), live, []);
+
+  // Assert
+  expect(items.map((item) => item.kind === "proposal" && item.team.roles[0]?.modelTier)).toEqual([
+    undefined,
+  ]);
+});
+
+test("a question escalated from a child run stays reachable instead of vanishing", () => {
+  // Arrange — escalate_to_user sets the initiative to awaiting_user, but the
+  // question is appended to the run that asked it, not to this thread.
+  const live = orchestration({
+    status: "awaiting_user",
+    turns: [
+      {
+        runId: "child-1",
+        decision: { action: "escalate_to_user", question: "Which database?", originStageId: "test" },
+        at: ASKED_AT,
+      },
+    ],
+  });
+
+  // Act
+  const items = runThread(run([]), live, []);
+
+  // Assert
+  expect(items.map((item) => item.kind === "elsewhere" && item.runId)).toEqual(["child-1"]);
 });
 
 test("a child run appears at the point it was started, keyed by run rather than position", () => {

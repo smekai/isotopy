@@ -2,11 +2,27 @@
 // independent fields, returns a partial update of only what was sent, and
 // rewrites legacy model ids on the way in. That branching is what this covers.
 //
-// `normalizeProjectPreferences` is deliberately not covered here — it is four
-// `isValid(x) ? x : default` ternaries, and its one piece of real logic (the
-// legacy alias rewrite in `readEngineModels`) is shared with the parser below.
+// `normalizeProjectPreferences` is covered only where it stopped being a
+// ternary: the tier fallback now depends on the stored engine, because the
+// economical default differs per harness.
 import { describe, expect, test } from "vitest";
+import { normalizeProjectPreferences } from "../src/schemas/preferences.ts";
 import { projectPreferencesUpdateSchema } from "../src/schemas/request-schemas.ts";
+
+describe("normalizeProjectPreferences", () => {
+  test("a pre-tier file adopts its own engine's economical default, not Claude Code's", () => {
+    // A settings file written before presets existed has an engine and no tier.
+    // Falling back to the default engine's tier hands Cursor `fast`, when the
+    // cheap path on Cursor is its own routing.
+    expect(normalizeProjectPreferences({ engine: "cursor" }).modelTier).toBe("auto");
+  });
+
+  test("a stored tier still wins over the engine's default", () => {
+    expect(normalizeProjectPreferences({ engine: "cursor", modelTier: "max" }).modelTier).toBe(
+      "max",
+    );
+  });
+});
 
 function parse(input: unknown) {
   const result = projectPreferencesUpdateSchema.safeParse(input);

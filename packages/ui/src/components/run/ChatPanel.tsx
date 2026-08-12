@@ -228,6 +228,28 @@ function verdictTitle(d: Dir): CSSProperties {
   return { color: d.textMid, fontWeight: WEIGHT.semibold };
 }
 
+function elsewhereBlock(d: Dir): CSSProperties {
+  return {
+    display: "grid",
+    gap: SPACE.sm,
+    textAlign: "left",
+    width: "100%",
+    border: `1px solid ${ASK_VIOLET}`,
+    borderRadius: RADIUS.lg,
+    background: d.surface,
+    padding: `${SPACE.lg}px ${SPACE.xl}px`,
+    color: d.text,
+    fontFamily: SANS,
+    fontSize: FONT.md,
+    lineHeight: 1.5,
+    cursor: "pointer",
+  };
+}
+
+function elsewhereLead(d: Dir): CSSProperties {
+  return { color: d.textMuted, fontFamily: SANS, fontSize: FONT.xs };
+}
+
 function childRunButton(d: Dir): CSSProperties {
   return {
     display: "flex",
@@ -330,6 +352,20 @@ function TranscriptRow({ item, spend, orchestrator, d }: TranscriptRowProps) {
   if (item.kind === "child-run") {
     return (
       <ChildRunLink run={item.run} onOpen={() => orchestrator?.onOpenRun(item.run.id)} d={d} />
+    );
+  }
+  if (item.kind === "elsewhere") {
+    return (
+      <button
+        data-testid="orchestrator-question-elsewhere"
+        data-run-id={item.runId}
+        onClick={() => orchestrator?.onOpenRun(item.runId)}
+        style={elsewhereBlock(d)}
+      >
+        <span style={elsewhereLead(d)}>A question is waiting on another run</span>
+        <span>{item.question}</span>
+        <span style={elsewhereLead(d)}>Open that run to answer it →</span>
+      </button>
     );
   }
   if (item.kind === "verdict") {
