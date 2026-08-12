@@ -18,9 +18,9 @@ two sites they were; the rule kept is that no third one builds that sentence.
 
 **2. `start_run` may target a stage.** The decision gains an optional `fromStage`.
 `seedFromSettledRun` (`domain/rules/run-seeding.ts`) validates it against the composed
-pipeline — an unknown id is rejected with path-aware issues, never silently started from
-the top — and carries the settled run's outputs and outcomes into a **fresh** run that
-begins there. Decided with the user: a fresh seeded run rather than an in-place
+pipeline — an unknown id, or a stage the settled run never ran, is rejected with path-aware
+issues rather than silently started from the top or credited to a role that never worked —
+and carries the settled run's outputs and outcomes into a **fresh** run that begins there. Decided with the user: a fresh seeded run rather than an in-place
 `restartRun`, so the evidence that justified the decision survives and a cleanly completed
 run can still be re-entered. `applySeededOutput` became `applySeededStage`, marking a
 carried stage `skipped` with a log line naming its source — but only while it is still
@@ -32,9 +32,16 @@ now say that a blocker no re-run can clear — no browser, no credential, no too
 service — is an `ask_user` naming what the user must do, said the first time it is read.
 The backstop is `blockedLaunchRefusal` (`domain/rules/orchestration-loop.ts`): three
 consecutive `start_run` decisions whose reviewed run ended `needs_attention` or `failed`,
-with nothing asked of the user in between, and the fourth launch is refused with a stated
-reason on `decisionError`. Derived from the turns already stored — no persisted counter.
-It counts `start_run` alone, so an auto-running milestone's fourth feature is not capped.
+with nothing asked of the user in between, and the third is refused with a stated reason on
+`decisionError`. Derived from the turns already stored — no persisted counter. It counts
+`start_run` alone, so an auto-running milestone's fourth feature is not capped.
+
+**Refusals happen before a decision is accepted.** `refusalFor` runs at both acceptance
+points — `consume` and `recordReview` — for all three reasons acting would fail: no approved
+team, an invalid `fromStage`, the launch ceiling. A refusal records the reason and **no
+turn**, because a recorded turn makes `hasTurnFor` discard the corrected decision of a
+re-review and leaves the initiative unable to recover from its own refusal. Raised in review
+on the PR, and it is the same dead end the task was written about.
 
 **Guards:** four component tests in `orchestration.comp.ts` — the rejection is quoted back
 on the restart and the second attempt composes; a `fromStage` run begins at QA with the

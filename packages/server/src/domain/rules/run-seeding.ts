@@ -59,25 +59,30 @@ export function seedFromSettledRun(
 ): ValidationResult<SeededStart> {
   const stages = flattenPipelineStages(pipeline);
   if (!stages.some((stage) => stage.id === startStageId)) {
-    return {
-      ok: false,
-      issues: [
-        {
-          path: ["fromStage"],
-          message: `Unknown stage id: ${startStageId} — the approved team has ${stages.map((stage) => stage.id).join(", ")}`,
-        },
-      ],
-    };
+    return issue(
+      `Unknown stage id: ${startStageId} — the approved team has ${stages.map((stage) => stage.id).join(", ")}`,
+    );
   }
-  const carried = stagesBefore(stages, startStageId).map((stage) => {
-    const settledStage = settled.stages.find((candidate) => candidate.id === stage.id);
-    return {
-      id: stage.id,
-      outcome: settledStage ? outcomeForRestart(settledStage) : STAGE_OUTCOMES.PASSED,
-      output: settled.stageOutputs?.[stage.id],
-    };
-  });
+  const preceding = stagesBefore(stages, startStageId).map((stage) => ({
+    id: stage.id,
+    settled: settled.stages.find((candidate) => candidate.id === stage.id),
+  }));
+  const missing = preceding.filter((stage) => stage.settled === undefined);
+  if (missing.length > 0) {
+    return issue(
+      `${from} never ran ${missing.map((stage) => stage.id).join(", ")}, so a run starting at ${startStageId} would claim work nobody did`,
+    );
+  }
+  const carried = preceding.map((stage) => ({
+    id: stage.id,
+    outcome: stage.settled ? outcomeForRestart(stage.settled) : STAGE_OUTCOMES.PASSED,
+    output: settled.stageOutputs?.[stage.id],
+  }));
   return { ok: true, value: { ...seedStages(carried, startStageId), from } };
+}
+
+function issue(message: string): ValidationResult<SeededStart> {
+  return { ok: false, issues: [{ path: ["fromStage"], message }] };
 }
 
 interface CarriedStage {

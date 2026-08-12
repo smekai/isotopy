@@ -52,6 +52,23 @@ was `start_run` against an unchanged environment, and that is what the rule name
 prompts carry the primary fix (an unmet environment precondition is an `ask_user`, not a
 verdict to re-run); the cap is the backstop for when the model does not follow them.
 
+**Decision — a decision that cannot be acted on is refused before it is accepted.** The
+first cut validated at launch time, inside the `act` catch that already recorded
+`decisionError`. That is a dead end: `recordReview` has stored the decision as a turn by
+then, so `hasTurnFor` discards the corrected decision of any re-review and `settledRuns`
+declines to settle the run again — the initiative cannot recover from a refusal at all,
+which is the failure this task exists to remove. `refusalFor` therefore runs at both
+acceptance points, `consume` and `recordReview`, and a refusal records the reason with **no
+turn**. Recovery is then the ordinary one: restart the run, and the rejection rides into the
+next prompt.
+
+**Decision — a carried stage must exist in the settled run.** The run a decision is taken
+against is not always of the composed pipeline: a conversation turn, a solo run, or a
+milestone run can all be the settled run when a team is already approved. Seeding a stage
+that run never had would mark a role `passed` with no output and let the roles after it
+proceed as though the work were done, which is a worse failure than the one `fromStage`
+exists to fix. Missing stages are named in the rejection.
+
 **Rejected:** an automatic retry of a rejected decision — it spends a turn and hides a real
 prompt bug behind it, and what it buys collapses once the next attempt is informed anyway.
 A distinct stage outcome for "blocked on the environment" — it would touch `STAGE_OUTCOMES`,

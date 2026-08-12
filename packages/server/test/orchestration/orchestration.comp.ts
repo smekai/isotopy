@@ -1132,6 +1132,107 @@ test("a start_run naming a stage nobody was hired for is refused, not quietly st
   ctx.engine.verify();
 });
 
+test("a start_run cannot carry a stage the settled run never had, so no role is credited with work nobody did", async () => {
+  // Anticipate — the settled run is a Single agent run, which has no
+  // `implementation` stage to carry into a team run starting at `test`.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({
+    as: "review of the composed run",
+    decision: { action: "ask_user", question: "Anything else?" },
+  });
+  ctx.engine.anticipate({ as: "Single agent" }).reports("Poked at it.");
+  ctx.engine.anticipateRunReview({
+    as: "review carrying a stage the solo run never had",
+    decision: {
+      action: "start_run",
+      rationale: "QA should look at what the solo run did",
+      task: "Verify the endpoint",
+      fromStage: "test",
+    },
+  });
+  const conversation = await proposedTeam();
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+
+  // Act
+  const solo = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Poke at the endpoint",
+    engine: "claude-code",
+  });
+
+  // Assert
+  await waitForRunStatus(ctx.app, solo.id, "completed");
+  const orchestrationId = conversation.orchestrationId ?? "";
+  expect(await waitForDecisionError(orchestrationId)).toContain("never ran implementation");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}`,
+  );
+  expect(orchestration.runIds).toEqual([conversation.id, composed.id, solo.id]);
+  ctx.engine.verify();
+});
+
+test("a refused decision leaves the run re-reviewable, so the corrected decision still lands", async () => {
+  // Anticipate — the first review names a stage the team does not have and is
+  // refused; the re-review is shown the rejection and settles the initiative.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Broken.\n\nVERDICT: FAIL");
+  ctx.engine.anticipateRunReview({
+    as: "review naming a stage that does not exist",
+    decision: {
+      action: "start_run",
+      rationale: "Security should look at it",
+      task: "Review the endpoint for injection",
+      fromStage: "security",
+    },
+  });
+  ctx.engine.anticipate({ as: "second QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({
+    as: "re-review shown why the last decision was refused",
+    prompt: /Your last decision was rejected[\s\S]*security/,
+    decision: STOP,
+  });
+  const conversation = await proposedTeam();
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  await waitForDecisionError(conversation.orchestrationId ?? "");
+
+  // Act
+  const { status } = await post<RunState>(ctx.app, `/runs/${composed.id}/restart`, {
+    stageId: "test",
+  });
+
+  // Assert — the refused decision recorded no turn, so this one is not discarded.
+  expect(status).toBe(200);
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}`,
+  );
+  expect(orchestration.turns.at(-1)).toMatchObject({
+    runId: composed.id,
+    decision: { action: "stop" },
+  });
+  expect(orchestration.decisionError).toBeUndefined();
+  ctx.engine.verify();
+});
+
 test("a fourth run is refused once three in a row ended blocked with nothing asked of the user", async () => {
   // Anticipate — the spin from TASK-139: the same team, the same blocker, again.
   // The engine is anticipated for three runs; a fourth would fail verify().

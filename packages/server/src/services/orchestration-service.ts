@@ -233,30 +233,50 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!orchestration) {
       return undefined;
     }
+    const profession = agentForStage(stageDef).profession;
     const parsed = extractOrchestratorDecision(output);
-    if (parsed.ok) {
-      orchestration.turns.push({
-        runId: run.id,
-        decision: parsed.value,
-        at: nowIso(),
-      });
-      orchestration.latestDecision = parsed.value;
-      delete orchestration.decisionError;
-      if (parsed.value.action === "stop") {
-        await this.terminate(orchestration, parsed.value.reason, run.id);
-        return undefined;
-      }
-      orchestration.status = orchestrationStatusFor(parsed.value);
-    } else {
-      orchestration.decisionError = formatValidationIssues(parsed.issues);
+    if (!parsed.ok) {
+      const cause = formatValidationIssues(parsed.issues);
+      return this.refuse(
+        orchestration,
+        cause,
+        `${profession} produced no usable decision — ${cause}`,
+      );
     }
+    const refusal = this.refusalFor(orchestration, run, run.status, parsed.value);
+    if (refusal !== undefined) {
+      return this.refuse(
+        orchestration,
+        refusal,
+        `${profession} decided something that cannot be acted on — ${refusal}`,
+      );
+    }
+    orchestration.turns.push({
+      runId: run.id,
+      decision: parsed.value,
+      at: nowIso(),
+    });
+    orchestration.latestDecision = parsed.value;
+    delete orchestration.decisionError;
+    if (parsed.value.action === "stop") {
+      await this.terminate(orchestration, parsed.value.reason, run.id);
+      return undefined;
+    }
+    orchestration.status = orchestrationStatusFor(parsed.value);
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
-    return parsed.ok
-      ? undefined
-      : {
-          reason: `${agentForStage(stageDef).profession} produced no usable decision — ${orchestration.decisionError}`,
-        };
+    return undefined;
+  }
+
+  private async refuse(
+    orchestration: Orchestration,
+    cause: string,
+    reason: string,
+  ): Promise<StageOutputRejection> {
+    orchestration.decisionError = cause;
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+    return { reason };
   }
 
   async stop(projectPath: ProjectPath, orchestrationId: string): Promise<Orchestration> {
@@ -386,20 +406,22 @@ export class OrchestrationService implements StageOutputConsumer {
         "The Orchestrator stopped before it could record the run review",
       );
     }
-    if (review.decision && !this.hasTurnFor(orchestration, request.runId)) {
+    const decision = this.actionableDecision(orchestration, request, review);
+    if (decision.value && !this.hasTurnFor(orchestration, request.runId)) {
       orchestration.turns.push({
         runId: request.runId,
-        decision: review.decision,
+        decision: decision.value,
         at: nowIso(),
       });
-      orchestration.latestDecision = review.decision;
-      if (review.decision.action !== "stop") {
-        orchestration.status = orchestrationStatusFor(review.decision);
+      orchestration.latestDecision = decision.value;
+      if (decision.value.action !== "stop") {
+        orchestration.status = orchestrationStatusFor(decision.value);
       }
     }
-    if (review.errors.length > 0) {
-      orchestration.decisionError = review.errors.join("; ");
-    } else if (review.decision) {
+    const errors = [...review.errors, ...decision.errors];
+    if (errors.length > 0) {
+      orchestration.decisionError = errors.join("; ");
+    } else if (decision.value) {
       delete orchestration.decisionError;
     }
     orchestration.updatedAt = nowIso();
@@ -462,19 +484,17 @@ export class OrchestrationService implements StageOutputConsumer {
     if (decision.action === "start_run") {
       const pipeline = orchestration.composedPipeline;
       if (!pipeline) {
-        throw new Error(
-          "The Orchestrator asked to start a run before a team was approved",
-        );
+        throw new Error(NO_APPROVED_TEAM);
       }
-      const refusal = blockedLaunchRefusal(this.settledLaunches(orchestration));
-      if (refusal) {
-        throw new Error(refusal);
+      const seeded = this.seedFrom(pipeline, run, decision.fromStage);
+      if (seeded && !seeded.ok) {
+        throw new Error(formatValidationIssues(seeded.issues));
       }
       return this.runs.startComposedRun(projectPath, pipeline, {
         ...options,
         task: decision.task,
         orchestrationId: orchestration.id,
-        seeded: this.seedFor(pipeline, run, decision.fromStage),
+        seeded: seeded?.value,
       });
     }
     if (decision.action === "delegate_milestone_planning") {
@@ -486,19 +506,57 @@ export class OrchestrationService implements StageOutputConsumer {
     return undefined;
   }
 
-  private seedFor(
+  private actionableDecision(
+    orchestration: Orchestration,
+    request: RunReviewRequest,
+    review: RunReview,
+  ): ReviewedDecision {
+    const settled = this.runs.getRun(request.runId);
+    if (!review.decision || !settled) {
+      return { value: review.decision, errors: [] };
+    }
+    const refusal = this.refusalFor(
+      orchestration,
+      settled,
+      request.status,
+      review.decision,
+    );
+    return refusal === undefined
+      ? { value: review.decision, errors: [] }
+      : { errors: [refusal] };
+  }
+
+  private refusalFor(
+    orchestration: Orchestration,
+    settled: RunState,
+    settledStatus: RunState["status"],
+    decision: OrchestratorDecision,
+  ): string | undefined {
+    if (decision.action !== "start_run") {
+      return undefined;
+    }
+    const pipeline = orchestration.composedPipeline;
+    if (!pipeline) {
+      return NO_APPROVED_TEAM;
+    }
+    const seeded = this.seedFrom(pipeline, settled, decision.fromStage);
+    if (seeded && !seeded.ok) {
+      return formatValidationIssues(seeded.issues);
+    }
+    return blockedLaunchRefusal([
+      ...this.settledLaunches(orchestration),
+      { action: decision.action, status: settledStatus },
+    ]);
+  }
+
+  private seedFrom(
     pipeline: PipelineDefinition,
     settled: RunState,
     fromStage: string | undefined,
-  ): SeededStart | undefined {
-    if (fromStage === undefined) {
-      return undefined;
-    }
-    const seeded = seedFromSettledRun(pipeline, settled, fromStage, runLabel(settled));
-    if (!seeded.ok) {
-      throw new Error(formatValidationIssues(seeded.issues));
-    }
-    return seeded.value;
+  ): ValidationResult<SeededStart> | undefined {
+    return fromStage === undefined
+      ? undefined
+      : seedFromSettledRun(pipeline, settled, fromStage, runLabel(settled));
   }
 
   private settledLaunches(orchestration: Orchestration): SettledLaunch[] {
@@ -654,6 +712,14 @@ export class OrchestrationService implements StageOutputConsumer {
     return repository;
   }
 }
+
+interface ReviewedDecision {
+  value?: OrchestratorDecision;
+  errors: string[];
+}
+
+const NO_APPROVED_TEAM =
+  "The Orchestrator asked to start a run before a team was approved";
 
 const PIPELINE_ID = "orchestration";
 
