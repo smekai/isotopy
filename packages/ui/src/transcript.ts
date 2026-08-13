@@ -134,7 +134,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
 export type ConversationItem = Exclude<TranscriptItem, { kind: "tool" }>;
 
 // Trailing `$` alternative catches a fence still streaming in, which has no closer yet.
-const MACHINERY_FENCE = /```adhd-[a-z-]+[\s\S]*?(?:```|$)/g;
+const MACHINERY_FENCE = /```isotopy-[a-z-]+[\s\S]*?(?:```|$)/g;
 
 function withoutMachinery(text: string): string {
   return text.replace(MACHINERY_FENCE, "").replace(/\n{3,}/g, "\n\n").trim();

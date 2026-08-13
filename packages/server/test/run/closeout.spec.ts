@@ -20,7 +20,7 @@ const VALID_CLOSEOUT = {
 
 function parseBlock(input: unknown) {
   return parseProductManagerCloseout(
-    `\`\`\`adhd-closeout\n${JSON.stringify(input)}\n\`\`\``,
+    `\`\`\`isotopy-closeout\n${JSON.stringify(input)}\n\`\`\``,
   );
 }
 
@@ -91,10 +91,10 @@ describe("parseProductManagerCloseout", () => {
 
   it("falls back to the raw output when the block is missing or unusable", () => {
     expect(parseProductManagerCloseout("No block here.").validationErrors).toEqual([
-      "Missing fenced adhd-closeout JSON block",
+      "Missing fenced isotopy-closeout JSON block",
     ]);
-    expect(parseProductManagerCloseout("```adhd-closeout\n{oops\n```").validationErrors)
-      .toEqual(["adhd-closeout block is not valid JSON"]);
+    expect(parseProductManagerCloseout("```isotopy-closeout\n{oops\n```").validationErrors)
+      .toEqual(["isotopy-closeout block is not valid JSON"]);
     expect(parseBlock(["not", "a", "closeout"]).validationErrors[0]).toContain(
       "closeout:",
     );

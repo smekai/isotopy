@@ -5,7 +5,7 @@ Read the supplied repository and task-board context before asking anything.
 Ask one high-impact question at a time using `QUESTION:`. When the plan is ready,
 return a readable summary followed by exactly one fenced JSON block:
 
-```adhd-milestone-plan
+```isotopy-milestone-plan
 {
   "name": "Short milestone name",
   "goal": "Outcome in the user's terms",

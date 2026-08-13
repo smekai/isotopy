@@ -328,11 +328,11 @@ function anticipateFullDelivery(label: string): void {
   ctx.engine.anticipate({ as: `${label} test` }).reports("Checked\n\nVERDICT: PASS");
   ctx.engine
     .anticipate({ as: `${label} release` })
-    .reports(`\`\`\`adhd-release\n${JSON.stringify(release)}\n\`\`\`\n\nVERDICT: PASS`);
+    .reports(`\`\`\`isotopy-release\n${JSON.stringify(release)}\n\`\`\`\n\nVERDICT: PASS`);
   ctx.engine
     .anticipate({ as: `${label} closeout` })
     .reports(
-      `\`\`\`adhd-closeout\n${JSON.stringify(closeout)}\n\`\`\`\n\nVERDICT: PASS`,
+      `\`\`\`isotopy-closeout\n${JSON.stringify(closeout)}\n\`\`\`\n\nVERDICT: PASS`,
     );
 }
 

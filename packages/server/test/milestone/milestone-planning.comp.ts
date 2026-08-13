@@ -107,7 +107,7 @@ test("invalid existing task links leave the proposal as a retryable draft", asyn
   ctx.engine
     .anticipate({ as: "Product Manager" })
     .reports(
-      `\`\`\`adhd-milestone-plan\n${JSON.stringify(invalidLinkPlan)}\n\`\`\``,
+      `\`\`\`isotopy-milestone-plan\n${JSON.stringify(invalidLinkPlan)}\n\`\`\``,
     );
   ctx.engine.anticipateRunReview();
   const { body: run } = await post<RunState>(ctx.app, "/milestones/plan", {
@@ -153,7 +153,7 @@ test("a plan with no fenced block leaves the run needing attention and the miles
   );
   expect(stageMessage(finished)).toContain("no usable milestone plan");
   expect(draft.approvalError).toContain(
-    "Missing fenced adhd-milestone-plan JSON block",
+    "Missing fenced isotopy-milestone-plan JSON block",
   );
   expect(draft.proposal).toBeUndefined();
   ctx.engine.verify();
@@ -203,13 +203,13 @@ function anticipatePlanningConversation(): void {
       prompt: /Yes, include the UI/,
     })
     .reports(
-      `Recommended plan\n\n\`\`\`adhd-milestone-plan\n${JSON.stringify(PLAN)}\n\`\`\``,
+      `Recommended plan\n\n\`\`\`isotopy-milestone-plan\n${JSON.stringify(PLAN)}\n\`\`\``,
     );
   ctx.engine.anticipateRunReview();
 }
 
 function fenced(decision: unknown): string {
-  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+  return `\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }
 
 /** Drive the anticipated conversation through its parked question to a draft. */

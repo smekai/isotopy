@@ -622,7 +622,7 @@ rather than hardcoded to a name.
 
 **A stage declares how its output is read.** `StageDefinition.outputProtocol` is
 `verdict` (absent, the default — prose plus a `VERDICT:` line) or `decision` (one
-fenced `adhd-orchestrator-decision` block). Under `decision`, `ask_user` drives the
+fenced `isotopy-orchestrator-decision` block). Under `decision`, `ask_user` drives the
 same durable park that `QUESTION:` drives elsewhere, so nothing new was needed in
 the workflow — and a turn that produces no valid decision ends `needs_attention`
 with the reason recorded, rather than passing quietly. `maxTurns` on the same

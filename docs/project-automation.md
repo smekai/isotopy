@@ -53,7 +53,7 @@ The quality gate is not re-implemented here: `release` and `deploy` carry the
 `delivery` execution policy, and `canRunStage` already suppresses a delivery
 stage unless the run is still whole.
 
-The Release Manager's fenced `adhd-release` block is what the release stage is
+The Release Manager's fenced `isotopy-release` block is what the release stage is
 *for*; a stage that answers in prose fails rather than passing a handoff nothing
 downstream can read.
 

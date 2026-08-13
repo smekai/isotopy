@@ -1,5 +1,32 @@
 # Done
 
+## TASK-133: Rename the model protocol surface to Isotopy
+**Priority:** P1 | **Tags:** server, core, engine, testing, milestone-g
+**Updated:** 2026-08-13 19:46
+
+Rename model-facing fenced protocols as one producer/consumer contract:
+
+- `adhd-orchestrator-decision` → `isotopy-orchestrator-decision`.
+- `adhd-run-artifacts` → `isotopy-run-artifacts`.
+- `adhd-milestone-plan` → `isotopy-milestone-plan`.
+- Rename any other emitted or parsed fence discovered by the protocol inventory.
+
+Update bundled step tasks, generated skills, examples, fixtures, schema extractors, and error messages in the same change. Add focused producer/consumer round-trip tests so a prompt/parser mismatch cannot report a successful run.
+
+No dual parsing: old persisted model outputs stop being readable, which is accepted for this pre-release clean break.
+
+Verify the full automated suite plus real runs on at least two available engines; each engine must emit the new fence and each extractor must accept it. Record engines and platform actually tested.
+
+Cross-platform: n/a — protocol parsing is pure text logic and line handling must continue to accept both LF and CRLF.
+
+### Plan
+
+Completed 2026-08-13, including review correction: directly renamed all five active model-output contracts to `isotopy-closeout`, `isotopy-milestone-plan`, `isotopy-orchestrator-decision`, `isotopy-release`, and `isotopy-run-artifacts`. Parsers, prompts, bundled persona/step tasks, fixtures, errors, current documentation, and transcript filtering now use only direct Isotopy literals. Removed the temporary shared `model-protocol` module and all former-fence compatibility/rejection fixtures; there are no aliases, fallbacks, migration paths, or active old-protocol occurrences. Bumped all workspace packages to 0.10.3 for the follow-up commit.
+
+Verification on Windows after simplification: frozen install, generated-skill freshness, lint, all TypeScript projects, 93 Vitest files / 840 tests, and recursive production build passed. The earlier free Playwright run passed 69 tests with 4 opt-in tiers skipped. Real Codex and Claude Code canaries each emitted `isotopy-orchestrator-decision` and its direct extractor accepted it; Cursor was attempted and skipped because its external monthly quota is exhausted until 2026-09-03. macOS/POSIX was not run locally; protocol parsing is platform-neutral and the existing Windows/macOS CI matrix remains authoritative.
+
+---
+
 ## TASK-132: Rename the code and integration surface to Isotopy
 **Priority:** P1 | **Tags:** core, server, ui, testing, milestone-g
 **Updated:** 2026-08-13 18:23

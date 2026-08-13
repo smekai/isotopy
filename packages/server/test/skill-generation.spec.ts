@@ -10,6 +10,15 @@ import {
 
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
+const PROTOCOL_ASSIGNMENTS = [
+  ["closeout-feature", "isotopy-closeout"],
+  ["mediate-question", "isotopy-orchestrator-decision"],
+  ["orchestrate", "isotopy-orchestrator-decision"],
+  ["plan-milestone", "isotopy-milestone-plan"],
+  ["prepare-release", "isotopy-release"],
+  ["review-run", "isotopy-run-artifacts"],
+  ["review-run", "isotopy-orchestrator-decision"],
+] as const;
 
 describe("skill generation", () => {
   test("committed outputs are in sync with their sources (gen:skills --check)", () => {
@@ -44,6 +53,21 @@ describe("skill generation", () => {
     ).toEqual([]);
   });
 
+  test.each(PROTOCOL_ASSIGNMENTS)(
+    "%s emits the %s fence its consumer expects",
+    async (stepTask, fence) => {
+      const assignment = await loadBundledStepTask(stepTask);
+
+      expect(assignment).toContain(fence);
+    },
+  );
+
+  test("the Orchestrator persona requires the decision fence its consumer expects", async () => {
+    const persona = await loadBundledPersona("orchestrator");
+
+    expect(persona).toContain("isotopy-orchestrator-decision");
+  });
+
   test("QA stays an ordinary workflow step that never owns the product process", async () => {
     const persona = await loadBundledPersona("tester");
     const assignment = await loadBundledStepTask("verify-feature");
@@ -52,6 +76,6 @@ describe("skill generation", () => {
     expect(persona).toContain("Playwright");
     expect(persona).toContain("Never start, stop or kill the product yourself");
     expect(assignment).toContain("Do not start it yourself");
-    expect(assignment).not.toContain("adhd-qa-result");
+    expect(assignment).not.toContain("isotopy-qa-result");
   });
 });

@@ -26,7 +26,7 @@ const VALID_PLAN = {
 };
 
 function fenced(plan: unknown): string {
-  return `\`\`\`adhd-milestone-plan\n${JSON.stringify(plan)}\n\`\`\``;
+  return `\`\`\`isotopy-milestone-plan\n${JSON.stringify(plan)}\n\`\`\``;
 }
 
 describe("extractMilestonePlan", () => {
@@ -45,12 +45,12 @@ describe("extractMilestonePlan", () => {
 
     expect(parsed.ok).toBe(false);
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "Missing fenced adhd-milestone-plan JSON block",
+      "Missing fenced isotopy-milestone-plan JSON block",
     );
   });
 
   it("reports a block that is not valid JSON", () => {
-    const parsed = extractMilestonePlan("```adhd-milestone-plan\n{ nope }\n```");
+    const parsed = extractMilestonePlan("```isotopy-milestone-plan\n{ nope }\n```");
 
     expect(parsed.ok).toBe(false);
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(

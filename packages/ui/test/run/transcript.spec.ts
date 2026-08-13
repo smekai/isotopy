@@ -220,7 +220,7 @@ describe("conversationOnly", () => {
 
   test("a protocol block an agent wrote for the server never reaches the chat", () => {
     const decision =
-      '```adhd-orchestrator-decision\n{"action":"ask_user","question":"Which database?"}\n```';
+      '```isotopy-orchestrator-decision\n{"action":"ask_user","question":"Which database?"}\n```';
     const state = run([
       started("orchestrate", "asking", "2026-07-27T10:00:00.000Z", [
         log("2026-07-27T10:00:01.000Z", "info", `I need one thing from you.\n\n${decision}`),
@@ -245,7 +245,7 @@ describe("conversationOnly", () => {
         log(
           "2026-07-27T10:00:01.000Z",
           "info",
-          'Here it is.\n\n```adhd-orchestrator-decision\n{"action":"propo',
+          'Here it is.\n\n```isotopy-orchestrator-decision\n{"action":"propo',
         ),
       ]),
     ]);

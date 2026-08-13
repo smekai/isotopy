@@ -10,7 +10,7 @@ import {
 } from "@isotopy/core";
 import { z } from "zod";
 
-const CLOSEOUT_BLOCK = /```adhd-closeout\s*([\s\S]*?)```/i;
+const CLOSEOUT_BLOCK = /```isotopy-closeout\s*([\s\S]*?)```/i;
 const closeoutRecordSchema = z.record(z.string(), z.unknown());
 
 // Everything below normalizes what an agent wrote. Core's shape is the contract
@@ -209,7 +209,7 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
       report: emptyCloseout(
         output.trim() || "Product Manager produced no closeout text.",
       ),
-      validationErrors: ["Missing fenced adhd-closeout JSON block"],
+      validationErrors: ["Missing fenced isotopy-closeout JSON block"],
     };
   }
 
@@ -219,7 +219,7 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
   } catch {
     return {
       report: emptyCloseout(output.trim()),
-      validationErrors: ["adhd-closeout block is not valid JSON"],
+      validationErrors: ["isotopy-closeout block is not valid JSON"],
     };
   }
 

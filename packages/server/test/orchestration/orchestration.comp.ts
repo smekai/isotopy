@@ -405,7 +405,7 @@ test("a turn with no decision block needs attention and records why, rather than
   expect(stageMessage(finished)).toContain("no usable decision");
   expect(orchestration).toMatchObject({ status: "conversing", turns: [] });
   expect(orchestration.decisionError).toContain(
-    "Missing fenced adhd-orchestrator-decision JSON block",
+    "Missing fenced isotopy-orchestrator-decision JSON block",
   );
   ctx.engine.verify();
 });
@@ -928,8 +928,8 @@ test("a malformed review leaves the run terminal and records why it was unusable
     ctx.app,
     `/orchestrations/${run.orchestrationId}`,
   );
-  expect(orchestration.decisionError).toContain("adhd-run-artifacts");
-  expect(orchestration.decisionError).toContain("adhd-orchestrator-decision");
+  expect(orchestration.decisionError).toContain("isotopy-run-artifacts");
+  expect(orchestration.decisionError).toContain("isotopy-orchestrator-decision");
   expect(orchestration.turns).toEqual([]);
   ctx.engine.verify();
 });
@@ -1494,7 +1494,7 @@ async function startOrchestration(engine: EngineId = "claude-code"): Promise<Run
 }
 
 function fenced(decision: unknown): string {
-  return `Here is what I propose.\n\n\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+  return `Here is what I propose.\n\n\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }
 
 function readArtifacts(home: string, runId: string): Promise<string> {
@@ -1502,5 +1502,5 @@ function readArtifacts(home: string, runId: string): Promise<string> {
 }
 
 function artifactsBlock(report: unknown): string {
-  return `\`\`\`adhd-run-artifacts\n${JSON.stringify(report)}\n\`\`\``;
+  return `\`\`\`isotopy-run-artifacts\n${JSON.stringify(report)}\n\`\`\``;
 }

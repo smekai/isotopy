@@ -2,7 +2,7 @@ import { runArtifactsSchema, type RunArtifacts } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 
-const ARTIFACTS_BLOCK = /```adhd-run-artifacts\s*([\s\S]*?)```/i;
+const ARTIFACTS_BLOCK = /```isotopy-run-artifacts\s*([\s\S]*?)```/i;
 
 export function extractRunArtifacts(
   output: string,
@@ -11,7 +11,7 @@ export function extractRunArtifacts(
   if (!block) {
     return {
       ok: false,
-      issues: [{ path: [], message: "Missing fenced adhd-run-artifacts JSON block" }],
+      issues: [{ path: [], message: "Missing fenced isotopy-run-artifacts JSON block" }],
     };
   }
 

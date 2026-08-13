@@ -2,7 +2,7 @@ import { orchestratorDecisionSchema, type OrchestratorDecision } from "@isotopy/
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 
-const DECISION_BLOCK = /```adhd-orchestrator-decision\s*([\s\S]*?)```/i;
+const DECISION_BLOCK = /```isotopy-orchestrator-decision\s*([\s\S]*?)```/i;
 
 export function extractOrchestratorDecision(
   output: string,
@@ -12,7 +12,7 @@ export function extractOrchestratorDecision(
     return {
       ok: false,
       issues: [
-        { path: [], message: "Missing fenced adhd-orchestrator-decision JSON block" },
+        { path: [], message: "Missing fenced isotopy-orchestrator-decision JSON block" },
       ],
     };
   }

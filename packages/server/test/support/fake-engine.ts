@@ -238,8 +238,8 @@ QUESTION: ${question}`,
     }).reports(
       [
         "Reviewed the run.",
-        fencedBlock("adhd-run-artifacts", artifacts),
-        fencedBlock("adhd-orchestrator-decision", decision),
+        fencedBlock("isotopy-run-artifacts", artifacts),
+        fencedBlock("isotopy-orchestrator-decision", decision),
       ].join("\n\n"),
     );
   }
