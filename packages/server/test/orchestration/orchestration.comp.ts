@@ -1317,6 +1317,68 @@ test("a question asked after the run was over is answered on the initiative, not
   ctx.engine.verify();
 });
 
+test("an initiative answer starts partway through the team from the last work run", async () => {
+  // Anticipate — the follow-up conversation chooses a partial retry, whose
+  // carried implementation must come from the composed run it discussed.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine
+    .anticipate({ as: "Developer" })
+    .reports("MARKER-DEVELOPER built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(BLOCKED_REPORT);
+  ctx.engine.anticipateRunReview({
+    as: "review parking on the user",
+    decision: {
+      action: "ask_user",
+      question: "Connect a browser, then say when it is ready",
+    },
+  });
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator turn carrying the answer",
+      persona: /# Role: Orchestrator/,
+      prompt: /The user's answer[\s\S]*Connected the browser/,
+    })
+    .reports(
+      fenced({
+        action: "start_run",
+        rationale: "The implementation stands; only verification is left",
+        task: "Verify the search endpoint against the connected browser",
+        fromStage: "test",
+      }),
+    );
+  ctx.engine
+    .anticipate({ as: "resumed QA Engineer", prompt: /MARKER-DEVELOPER/ })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the resumed run" });
+  const conversation = await proposedTeam();
+  const orchestrationId = conversation.orchestrationId ?? "";
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+
+  // Act
+  const { status, body: followUp } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/messages`,
+    { text: "Connected the browser" },
+  );
+
+  // Assert
+  expect(status).toBe(201);
+  await waitForRunStatus(ctx.app, followUp.id, "completed");
+  const resumedId = await waitForOrchestrationRuns(orchestrationId, 4);
+  const resumed = await waitForRunStatus(ctx.app, resumedId, "completed");
+  expect(stageOf(resumed, "implementation").status).toBe("skipped");
+  expect(resumed.stageOutputs?.implementation).toContain("MARKER-DEVELOPER");
+  ctx.engine.verify();
+});
+
 test("an answer sent to the initiative reaches the stage that is still asking", async () => {
   // Anticipate — the conversation itself is parked, so the answer belongs to
   // that session rather than to a new turn.
@@ -1442,4 +1504,3 @@ function readArtifacts(home: string, runId: string): Promise<string> {
 function artifactsBlock(report: unknown): string {
   return `\`\`\`adhd-run-artifacts\n${JSON.stringify(report)}\n\`\`\``;
 }
-

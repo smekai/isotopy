@@ -1,5 +1,41 @@
 # Done
 
+## TASK-128: Closing dogfood for Milestone F
+**Priority:** P1 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-13 12:35
+
+Closed the 2026-08-13 execution with release verdict **SKIP**: the clean Codex path passed,
+while Cursor could not begin its Orchestrator proposal because the external monthly usage
+limit was exhausted. Milestone F remains open in TASK-125; TASK-141 and TASK-142 carry the
+requested Claude Code and Cursor reruns.
+
+**Codex evidence.** From clean target commit `4175c97` and isolated ADHD state, the user
+approved a four-role team (Product Designer, Developer, QA Engineer, Product Manager).
+The team implemented configurable 1–120 minute durations, reload persistence, automatic
+Focus/Break alternation, focus-only history, preserved controls, accessible status, and a
+DOM live-region regression. The embedded Preview passed real one-minute Focus→Break→Focus
+transitions, boundary persistence, keyboard Start/Pause/Reset, focus-only history, and
+meaningful labels/status. The final replay completed in 3m08s, all executed roles passed,
+27 target tests and its production build passed, ADHD measured one created and two edited
+files, and the Orchestrator stopped normally. No standalone screen-reader application ran.
+
+**Product finding fixed and replayed.** A user answer creates a one-stage Orchestration run;
+partial retry seeding incorrectly validated `fromStage` against that conversation instead
+of the newest composed work run. The service now selects the newest non-Orchestration run,
+with component regression coverage. A fresh live replay proved the valid partial retry and
+clean stop.
+
+**Cursor evidence.** ADHD detected Cursor `2026.08.04-aaa8809` as installed and logged in,
+but its first clean Orchestrator turn exited with `ActionRequiredError` before proposing a
+team or changing files. Cursor reported that its monthly cycle resets on 2026-09-03.
+
+README now matches the package contract at Node 22.5+ and documents `pnpm.cmd` for Windows
+execution-policy environments. Windows was tested; the documented macOS path was reviewed
+for Node/pnpm commands, POSIX executable selection, path handling, and cleanup but was not
+run live. Ports 4173, 5173, and 9477 were released after each harness.
+
+---
+
 ## TASK-116: README — top-level product schema (“How it works”)
 **Priority:** P1 | **Tags:** ui, server, milestone-f
 **Updated:** 2026-08-12 12:40
