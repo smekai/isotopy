@@ -21,7 +21,7 @@ still costs **zero tokens**.
 
 ```bash
 pnpm e2e                        # free + seeded; live is skipped
-pnpm --filter @adhd/ui e2e      # the same thing, from the package
+pnpm --filter @isotopy/ui e2e      # the same thing, from the package
 ```
 
 Playwright auto-starts `pnpm dev` and waits on `/health` (which is proxied to
@@ -30,7 +30,7 @@ purpose: every spec drives the same server and the same in-memory run store.
 
 **The suite gets its own machine state.** Since preferences became server-side
 (TASK-065), a spec that picks a pipeline writes to `~/.adhd/settings.json` — so
-Playwright starts the server with `ADHD_USER_HOME` and `ADHD_HOME` pointed at
+Playwright starts the server with `ISOTOPY_USER_HOME` and `ISOTOPY_HOME` pointed at
 `<tmp>/adhd-e2e` and its own ports (`9499`/`5199`), and does **not** reuse an
 already-running dev server: the isolation is only real on a server this config
 started. Your own settings, projects and run history are never touched, and
@@ -66,8 +66,7 @@ on Windows and macOS.
 4. **Persistence across reload** (server-side, asserted through `/settings`) —
    pipeline, engine model and permission mode survive a reload; they also
    survive a browser whose storage was wiped, a legacy model id is migrated on
-   read, and a preference an older build left in `localStorage` is adopted once
-   and its key removed.
+   read, and the retired `adhd.*` localStorage contract is ignored.
 5. **History drawer** — "No runs yet." on a fresh server, otherwise run cards.
 6. **Run view wiring** (simulated `sequential`, driven through the API with
    `minDurationMs`/`maxDurationMs`/`failProbability: 0` so it finishes in
@@ -101,7 +100,7 @@ on Windows and macOS.
 A completed two-box `RunState` is served to the app via Playwright route
 interception (`/runs`, `/runs/:id`, `/runs/:id/files`, `/runs/:id/events`), so
 per-stage rendering is asserted with no engine and no server state. The fixture
-is typed as `RunState` from `@adhd/core`, so a change to the run model breaks
+is typed as `RunState` from `@isotopy/core`, so a change to the run model breaks
 `pnpm typecheck` rather than rotting silently.
 
 1. Both stage nodes render as **Developer** and **Tester**.
@@ -126,10 +125,10 @@ all — which is how `pnpm build` came to emit a server and a UI bundle that
 nothing served, with no test noticing. Free, no tokens, but it rebuilds first:
 
 ```bash
-ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
+ISOTOPY_E2E_BUILT=1 pnpm --filter @isotopy/ui e2e built-app
 ```
 
-`ADHD_E2E_BUILT=1` swaps the Playwright web server to `pnpm build && pnpm start`,
+`ISOTOPY_E2E_BUILT=1` swaps the Playwright web server to `pnpm build && pnpm start`,
 which runs `vite preview` over `dist/` in place of the dev server. Ports and
 proxy are unchanged, so `baseURL` is the same as every other tier. The rebuild is
 deliberate: a stale `dist` passing for current source is the whole hazard of
@@ -145,7 +144,7 @@ paths, React mounting, and the proxied API answering the built page.
 One thin real `dev-test` run on haiku, ≈ a cent. Skipped unless enabled:
 
 ```bash
-ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test
+ISOTOPY_E2E_LIVE=1 pnpm --filter @isotopy/ui e2e live-dev-test
 ```
 
 Requires an authenticated `claude` CLI, and a dev server started **outside** a

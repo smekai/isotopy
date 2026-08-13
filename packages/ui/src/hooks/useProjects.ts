@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { Project, ProjectsView } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { Project, ProjectsView } from "@isotopy/core";
 import {
   activateProject,
   addProject,

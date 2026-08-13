@@ -3,7 +3,7 @@
 // the merge wrong is how a reply ends up above the question that prompted it, so
 // ordering across the two sources is what this covers.
 import { describe, expect, test } from "vitest";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import { buildTranscript, conversationOnly } from "../../src/transcript";
 import { log, message, run, stage, started } from "../support/run-fixtures";
 

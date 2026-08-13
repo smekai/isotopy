@@ -4,7 +4,7 @@ import type {
   DeploymentProvider,
   UiAutomation,
   ValidationCommand,
-} from "@adhd/core";
+} from "@isotopy/core";
 
 const DEPLOY_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 60_000;

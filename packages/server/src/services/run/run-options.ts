@@ -1,4 +1,4 @@
-import type { EnginePermissionMode, ModelTier } from "@adhd/core";
+import type { EnginePermissionMode, ModelTier } from "@isotopy/core";
 import type { SeededStart } from "../../domain/rules/run-seeding.ts";
 
 export interface InheritedRunOptions {

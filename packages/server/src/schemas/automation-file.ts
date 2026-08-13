@@ -4,7 +4,7 @@ import {
   DEPLOYMENT_PROVIDERS,
   PRODUCTION_DEPLOYMENT_CONFIRMATION,
   requiredText,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   AutomationCommand,
   DeploymentAutomation,
@@ -12,7 +12,7 @@ import type {
   ProjectAutomationConfig,
   UiAutomation,
   ValidationCommand,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { z } from "zod";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";

@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { defaultProjectPreferences, mergeProjectPreferences } from "@adhd/core";
+import { useCallback, useEffect, useState } from "react";
+import { defaultProjectPreferences, mergeProjectPreferences } from "@isotopy/core";
 import type {
   EngineId,
   ProjectPreferences,
   ProjectPreferencesUpdate,
   SettingsView,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { fetchSettings, updateEngineConnection, updatePreferences } from "../api";
 import type { EngineConnectionUpdate } from "../api";
-import { clearLegacyPreferences, readLegacyPreferences } from "../legacy-prefs";
 
 export interface SettingsController {
   view: SettingsView | null;
@@ -24,8 +23,6 @@ export function useSettings(projectId: string): SettingsController {
   const [preferences, setPreferences] = useState<ProjectPreferences>(defaultProjectPreferences);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const adoptedProjects = useRef(new Set<string>());
-
   const apply = useCallback((next: SettingsView) => {
     setView(next);
     setPreferences(next.preferences);
@@ -53,21 +50,6 @@ export function useSettings(projectId: string): SettingsController {
     [apply, reload],
   );
 
-  const adoptLegacyPreferences = useCallback(
-    async (target: string) => {
-      if (adoptedProjects.current.has(target)) {
-        return;
-      }
-      adoptedProjects.current.add(target);
-      const legacy = readLegacyPreferences(target);
-      if (legacy) {
-        await push(legacy);
-        clearLegacyPreferences(target);
-      }
-    },
-    [push],
-  );
-
   useEffect(() => {
     let stale = false;
     setReady(false);
@@ -75,7 +57,6 @@ export function useSettings(projectId: string): SettingsController {
       .then((next) => {
         if (!stale) {
           apply(next);
-          void adoptLegacyPreferences(projectId);
         }
       })
       .catch(() => {
@@ -91,7 +72,7 @@ export function useSettings(projectId: string): SettingsController {
     return () => {
       stale = true;
     };
-  }, [projectId, apply, adoptLegacyPreferences]);
+  }, [projectId, apply]);
 
   const updateConnection = useCallback(
     async (engineId: EngineId, update: EngineConnectionUpdate) => {

@@ -2,7 +2,7 @@ import type {
   OrchestratorBrokerPhase,
   OrchestratorTeamProposal,
   ProductManagerCloseout,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
 import { renderCloseoutBody } from "./closeout.ts";
 import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";

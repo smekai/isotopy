@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ModelOptionDraft } from "@adhd/core";
+import type { ModelOptionDraft } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 
 const CURSOR_ROUTED_MODEL_ID = "default";

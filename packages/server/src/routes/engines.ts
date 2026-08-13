@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { ENGINES } from "@adhd/core";
-import type { EngineId, EngineStatus } from "@adhd/core";
+import { ENGINES } from "@isotopy/core";
+import type { EngineId, EngineStatus } from "@isotopy/core";
 import { findEngineAdapter } from "../engines/registry.ts";
 import type { ModelRosterService } from "../services/model-roster-service.ts";
 

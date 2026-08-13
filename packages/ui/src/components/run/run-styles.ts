@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { STAGE_VERDICTS } from "@adhd/core";
-import type { StageVerdict } from "@adhd/core";
+import { STAGE_VERDICTS } from "@isotopy/core";
+import type { StageVerdict } from "@isotopy/core";
 import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
 

@@ -7,7 +7,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import { createTestApp, get, startRun, waitForRunStatus } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 

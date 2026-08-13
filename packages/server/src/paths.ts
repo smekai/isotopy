@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { Project } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { Project } from "@isotopy/core";
 
 export const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -16,31 +16,31 @@ export interface ProjectPath {
   dataDir: string;
 }
 
-export function userAdhdDir(): string {
-  const override = process.env.ADHD_USER_HOME;
+export function userIsotopyDir(): string {
+  const override = process.env.ISOTOPY_USER_HOME;
   return override && override.trim() !== ""
     ? path.resolve(override.trim())
     : path.join(os.homedir(), ".adhd");
 }
 
 export function projectsFilePath(): string {
-  return path.join(userAdhdDir(), "projects.json");
+  return path.join(userIsotopyDir(), "projects.json");
 }
 
 export function userSettingsPath(): string {
-  return path.join(userAdhdDir(), "settings.json");
+  return path.join(userIsotopyDir(), "settings.json");
 }
 
 export function userSkillsDir(): string {
-  return path.join(userAdhdDir(), "skills");
+  return path.join(userIsotopyDir(), "skills");
 }
 
 export function homeProjectPaths(): ProjectPath {
-  const override = process.env.ADHD_HOME;
+  const override = process.env.ISOTOPY_HOME;
   const dataDir =
     override && override.trim() !== ""
       ? path.resolve(override.trim())
-      : path.join(userAdhdDir(), "home");
+      : path.join(userIsotopyDir(), "home");
   return { id: HOME_PROJECT_ID, root: dataDir, dataDir };
 }
 

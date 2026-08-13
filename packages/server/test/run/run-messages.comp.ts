@@ -3,7 +3,7 @@
 // TASK-078 records and broadcasts it — nothing consumes it until TASK-079 gives
 // an asking stage something to resume from.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunMessage, RunState } from "@adhd/core";
+import type { RunMessage, RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,

@@ -11,7 +11,7 @@ import {
 import type { StagePresentation } from "../run-utils";
 import { EASE, ICON, MOTION, statusClr } from "../theme";
 
-const SPIN = `adhd-spin ${MOTION.spin} ${EASE.linear} infinite`;
+const SPIN = `isotopy-spin ${MOTION.spin} ${EASE.linear} infinite`;
 
 export interface StatusIconProps {
   s: StagePresentation;

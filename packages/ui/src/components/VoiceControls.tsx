@@ -27,7 +27,7 @@ function pulseRing(listening: boolean, d: Dir): CSSProperties {
     inset: -SPACE.xs,
     borderRadius: RADIUS.round,
     border: `2px solid ${listening ? LISTENING_RED : d.accent}`,
-    animation: `adhd-ring ${MOTION.ring} ${EASE.out} infinite`,
+    animation: `isotopy-ring ${MOTION.ring} ${EASE.out} infinite`,
     opacity: 0.5,
   };
 }
@@ -96,7 +96,7 @@ const LISTENING_LABEL: CSSProperties = {
   fontFamily: SANS,
   fontSize: FONT.md,
   fontWeight: WEIGHT.semibold,
-  animation: `adhd-fade-pulse ${MOTION.shimmer} ${EASE.inOut} infinite`,
+  animation: `isotopy-fade-pulse ${MOTION.shimmer} ${EASE.inOut} infinite`,
 };
 
 function transcribingLabel(d: Dir): CSSProperties {

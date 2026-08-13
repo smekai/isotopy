@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { agentForStage } from "@adhd/core";
+import { agentForStage } from "@isotopy/core";
 import type { StagePresentation } from "../run-utils";
 import type { Dir } from "../theme";
 import { EASE, FONT, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, focusRing, sLabel, specColor, statusClr } from "../theme";
@@ -55,7 +55,7 @@ const SHIMMER: CSSProperties = {
   position: "absolute",
   inset: 0,
   background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)",
-  animation: `adhd-shimmer ${MOTION.shimmer} ${EASE.linear} infinite`,
+  animation: `isotopy-shimmer ${MOTION.shimmer} ${EASE.linear} infinite`,
 };
 
 const BODY: CSSProperties = {
@@ -120,7 +120,7 @@ function statusDot(running: boolean, st: StatusColor): CSSProperties {
     height: STATUS_DOT_SIZE,
     borderRadius: RADIUS.round,
     background: st.dot,
-    animation: running ? `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite` : undefined,
+    animation: running ? `isotopy-pulse ${MOTION.pulse} ${EASE.inOut} infinite` : undefined,
   };
 }
 

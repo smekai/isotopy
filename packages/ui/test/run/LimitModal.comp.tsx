@@ -7,7 +7,7 @@
 // so the spies live on the generated props and a test names the one it asserts on.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { bundledRosterFor, resolveTier } from "@adhd/core";
+import { bundledRosterFor, resolveTier } from "@isotopy/core";
 import { LimitModal } from "../../src/components/LimitModal";
 import type { LimitModalProps } from "../../src/components/LimitModal";
 import { LIMIT_COPY } from "../../src/limit-copy";

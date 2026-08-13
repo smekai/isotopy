@@ -1,5 +1,5 @@
 import { afterEach, assert, beforeEach, expect, test } from "vitest";
-import type { Milestone, Orchestration, RunState } from "@adhd/core";
+import type { Milestone, Orchestration, RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,
@@ -293,7 +293,7 @@ test("a proposal whose feature has no acceptance criteria is refused", async () 
 
 /**
  * One report per Full Delivery stage that reaches an engine — the deploy box
- * does not, because ADHD runs the preview deployment itself. The gate after
+ * does not, because Isotopy runs the preview deployment itself. The gate after
  * intake is approved separately; every stage here reports a PASS so the run
  * reaches closeout.
  */

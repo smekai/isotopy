@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { Milestone, RunState } from "@adhd/core";
+import type { Milestone, RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,
@@ -86,7 +86,7 @@ test("approving a draft mints the task its feature only proposed", async () => {
   });
   const backlog = await readFile(path.join(ctx.home, "tasks", "BACKLOG.md"), "utf8");
   expect(backlog).toContain("## TASK-001: Build milestone planner");
-  expect(backlog).toContain("ADHD-MILESTONE-TASK:");
+  expect(backlog).toContain("ISOTOPY-MILESTONE-TASK:");
   ctx.engine.verify();
 });
 

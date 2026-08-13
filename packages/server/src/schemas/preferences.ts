@@ -6,13 +6,13 @@ import {
   defaultProjectPreferences,
   tierLadderFor,
   withoutClearedOverrides,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   EngineId,
   ModelTier,
   ProjectPreferences,
   ProjectPreferencesUpdate,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { z } from "zod";
 import { projectPreferencesUpdateSchema } from "./request-schemas.ts";
 

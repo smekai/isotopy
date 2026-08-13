@@ -1,5 +1,5 @@
-import { ENGINES, ENGINE_IDS } from "@adhd/core";
-import type { EngineId } from "@adhd/core";
+import { ENGINES, ENGINE_IDS } from "@isotopy/core";
+import type { EngineId } from "@isotopy/core";
 import { z } from "zod";
 import { projectPreferencesUpdateSchema } from "./request-schemas.ts";
 

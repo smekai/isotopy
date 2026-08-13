@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { defaultProjectPreferences } from "@adhd/core";
-import type { ProjectsView, SettingsView } from "@adhd/core";
+import { defaultProjectPreferences } from "@isotopy/core";
+import type { ProjectsView, SettingsView } from "@isotopy/core";
 import { boardConfigSchema } from "../src/schemas/task-board-config.ts";
 import type { InvalidInput } from "../src/domain/validation.ts";
 import {

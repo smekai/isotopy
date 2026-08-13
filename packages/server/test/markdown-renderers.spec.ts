@@ -1,4 +1,4 @@
-import type { ProductManagerCloseout } from "@adhd/core";
+import type { ProductManagerCloseout } from "@isotopy/core";
 import { describe, expect, it } from "vitest";
 import {
   renderCancelledCleanupReport,

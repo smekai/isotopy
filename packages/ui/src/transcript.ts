@@ -1,5 +1,5 @@
-import { agentForStage } from "@adhd/core";
-import type { LogLevel, RunState, StageActivity, StageStatus } from "@adhd/core";
+import { agentForStage } from "@isotopy/core";
+import type { LogLevel, RunState, StageActivity, StageStatus } from "@isotopy/core";
 
 export type TranscriptItem =
   | {

@@ -1,13 +1,13 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { agentForStage } from "@adhd/core";
+import { agentForStage } from "@isotopy/core";
 import type {
   CleanupResult,
   ProductManagerCloseout,
   RunCloseoutRecord,
   RunState,
   StageDefinition,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   parseProductManagerCloseout,
   validateSourceTaskOutcome,

@@ -1,4 +1,4 @@
-import type { StageLogDraft, StageUsage } from "@adhd/core";
+import type { StageLogDraft, StageUsage } from "@isotopy/core";
 import type { ZodType } from "zod";
 import { validationIssues } from "../domain/validation.ts";
 

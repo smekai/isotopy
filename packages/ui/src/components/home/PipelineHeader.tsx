@@ -5,8 +5,8 @@ import {
   agentForStage,
   findPipeline,
   flattenPipelineStages,
-} from "@adhd/core";
-import type { EngineId } from "@adhd/core";
+} from "@isotopy/core";
+import type { EngineId } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { FONT, RADIUS, SANS, SPACE, WEIGHT, specColor } from "../../theme";
 import { PipelineDropdown } from "../PipelineDropdown";

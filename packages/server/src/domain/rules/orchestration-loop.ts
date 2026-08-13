@@ -1,4 +1,4 @@
-import type { OrchestratorAction, RunState } from "@adhd/core";
+import type { OrchestratorAction, RunState } from "@isotopy/core";
 
 export interface SettledLaunch {
   action: OrchestratorAction;

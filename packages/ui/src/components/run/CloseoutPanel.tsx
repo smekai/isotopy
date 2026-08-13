@@ -5,7 +5,7 @@ import type {
   RunArtifactRecord,
   RunArtifacts,
   RunCloseoutRecord,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT, WARN_AMBER } from "../../theme";
 import { FAIL_RED, SCROLL_BODY } from "./run-styles";
@@ -14,7 +14,7 @@ const CONTENT_MAX_WIDTH = 820;
 
 const BACKEND_LABEL: Record<CreatedTaskReference["backend"], string> = {
   taskplanner: "TaskPlanner",
-  adhd: "Isotopy",
+  isotopy: "Isotopy",
 };
 
 const CONTENT: CSSProperties = {

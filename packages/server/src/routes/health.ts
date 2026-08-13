@@ -1,5 +1,5 @@
 import { Hono } from "hono";
 
 export const healthRoutes = new Hono().get("/", (c) =>
-  c.json({ ok: true, service: "adhd-server" }),
+  c.json({ ok: true, service: "isotopy-server" }),
 );

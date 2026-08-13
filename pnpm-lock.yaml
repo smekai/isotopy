@@ -44,7 +44,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@adhd/core':
+      '@isotopy/core':
         specifier: workspace:*
         version: link:../core
       '@hono/node-server':
@@ -69,7 +69,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@adhd/core':
+      '@isotopy/core':
         specifier: workspace:*
         version: link:../core
       lucide-react:

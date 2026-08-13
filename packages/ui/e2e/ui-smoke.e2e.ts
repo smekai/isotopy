@@ -262,7 +262,7 @@ test("an exact model pinned in the advanced disclosure is what the composer repo
   await expect(page.getByText(/Engine: Claude Code · claude-3-legacy/)).toBeVisible();
 });
 
-test("a preference left in localStorage by an older build is adopted once", async ({ page }) => {
+test("a preference left in the former localStorage contract is ignored", async ({ page }) => {
   // Arrange
   await page.goto("/");
   await writePreferences(page, { pipelineId: "pm-dev-test" });
@@ -277,15 +277,12 @@ test("a preference left in localStorage by an older build is adopted once", asyn
   await page.reload();
 
   // Assert
-  await openPipelineComposer(page);
-  await expect(page.getByText("What should the Agent build?")).toBeVisible();
   await expect
     .poll(async () => (await readPreferences(page)).pipelineId)
-    .toBe("solo");
-  // adopted once: the key is gone, so a later server-side change is not undone
+    .toBe("pm-dev-test");
   expect(
     await page.evaluate((id) => localStorage.getItem(`adhd.${id}.pipelineId`), activeProjectId),
-  ).toBeNull();
+  ).toBe("solo");
 });
 
 test("the run rail is always present and offers a new run", async ({ page }) => {

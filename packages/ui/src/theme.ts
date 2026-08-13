@@ -1,4 +1,4 @@
-import type { LogLevel, RunStatus } from "@adhd/core";
+import type { LogLevel, RunStatus } from "@isotopy/core";
 import type { StagePresentation } from "./run-utils";
 
 export const SPACE = {

@@ -1,4 +1,4 @@
-import type { FileChange, FileChangeKind } from "@adhd/core";
+import type { FileChange, FileChangeKind } from "@isotopy/core";
 import { SNAPSHOT_IGNORED_DIRECTORIES } from "../../utils/workspace-files.ts";
 import type { WorkspaceSnapshot } from "../../utils/workspace-files.ts";
 

@@ -8,7 +8,7 @@
     "moduleResolution": "Bundler",
     "types": ["vite/client"],
     "paths": {
-      "@adhd/core": ["../core/src/index.ts"]
+      "@isotopy/core": ["../core/src/index.ts"]
     }
   },
   // test/ holds unit specs for the pure helpers in src/. Safe to include here:

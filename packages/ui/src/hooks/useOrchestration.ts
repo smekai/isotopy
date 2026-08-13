@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Orchestration, RunState } from "@adhd/core";
+import type { Orchestration, RunState } from "@isotopy/core";
 import {
   approveOrchestratorTeam,
   fetchOrchestrations,

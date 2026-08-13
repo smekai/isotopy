@@ -1,5 +1,30 @@
 # Done
 
+## TASK-132: Rename the code and integration surface to Isotopy
+**Priority:** P1 | **Tags:** core, server, ui, testing, milestone-g
+**Updated:** 2026-08-13 18:23
+
+Rename technical identifiers that code, configuration, and HTTP clients consume:
+
+- `@adhd/core`, `@adhd/server`, and `@adhd/ui` → `@isotopy/*` across package manifests, imports, TypeScript paths, workspace filters, CI, and tests.
+- `ADHD_*` environment variables → `ISOTOPY_*`, including home, ports, timeout, live-E2E, and per-engine path/argument overrides.
+- `X-ADHD-Project` → `X-Isotopy-Project` in the server, UI network boundary, product-environment prompt, and test harness.
+- Rename remaining code-owned service ids, test ids, CSS/keyframe identifiers, fixtures, and generated constants where the old product name is part of the contract.
+
+This is a clean break: rename every reader and writer together, with no aliases or fallback reads. Leave physical filenames and directories for `TASK-143`, and leave model-output fences for `TASK-133`.
+
+Verify typecheck, lint, unit/component tests, build, and Playwright from the existing checkout path.
+
+Cross-platform: environment names are case-sensitive on POSIX and not on Windows. Update every producer and consumer atomically; npm scripts must remain shell-neutral and displayed commands must be correct for both PowerShell and bash.
+
+### Plan
+
+Completed 2026-08-13: Renamed workspace packages to `@isotopy/*`, all active configuration variables to `ISOTOPY_*`, the shared project header to `X-Isotopy-Project`, deployment/task-board/workflow/service/UI identifiers to Isotopy contracts, and removed the retired `adhd.*` localStorage adoption path. Updated current documentation and regenerated bundled skills; model fences remain for TASK-133 and physical `.adhd`/repository/icon paths remain for TASK-143.
+
+Verification on Windows: frozen pnpm install passed; generated-skill check, lint, all TypeScript projects, 93 Vitest files / 832 tests, recursive production build, and free Playwright passed (69 passed, 4 intentionally skipped opt-in tiers). macOS/POSIX was not run locally; environment names are updated atomically, commands remain shell-neutral, CRLF parsing is covered, and the existing CI matrix retains Windows/macOS checks.
+
+---
+
 ## TASK-131: Set the Isotopy brand contract and rename visible surfaces
 **Priority:** P1 | **Tags:** ui, infra, milestone-g
 **Updated:** 2026-08-13 11:28

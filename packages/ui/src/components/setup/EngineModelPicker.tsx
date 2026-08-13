@@ -6,8 +6,8 @@ import {
   resolveTier,
   rosterAccepts,
   rosterOrigins,
-} from "@adhd/core";
-import type { EngineId, EngineModelOption, ModelTier, SelectableModelOrigin } from "@adhd/core";
+} from "@isotopy/core";
+import type { EngineId, EngineModelOption, ModelTier, SelectableModelOrigin } from "@isotopy/core";
 import { useEngineRoster } from "../../hooks/useEngineRoster";
 import { FONT, GOLD, MONO, RADIUS, SANS, SPACE } from "../../theme";
 import type { Dir } from "../../theme";

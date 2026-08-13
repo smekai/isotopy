@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import type { FileChange, RunChangeSet, RunState } from "@adhd/core";
+import type { FileChange, RunChangeSet, RunState } from "@isotopy/core";
 import {
   diffSnapshots,
   mergeGitChanges,

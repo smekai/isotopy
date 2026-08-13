@@ -1,12 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ENGINES, defaultConnectionMode, withoutClearedOverrides } from "@adhd/core";
+import { ENGINES, defaultConnectionMode, withoutClearedOverrides } from "@isotopy/core";
 import type {
   EngineId,
   ProjectPreferences,
   ProjectPreferencesUpdate,
   SettingsView,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { normalizeProjectPreferences } from "../schemas/preferences.ts";
 import type { EngineConnectionUpdate } from "../schemas/request-schemas.ts";
 import { settingsFileSchema } from "../schemas/settings-file.ts";

@@ -4,8 +4,8 @@
 // to see that, because the filter and the tab switch meet in the markup.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { ORCHESTRATION_PIPELINE } from "@adhd/core";
-import type { OrchestratorDecision, ProductProcessStatus, RunState } from "@adhd/core";
+import { ORCHESTRATION_PIPELINE } from "@isotopy/core";
+import type { OrchestratorDecision, ProductProcessStatus, RunState } from "@isotopy/core";
 import { RunTabs } from "../../src/components/run/RunTabs";
 import type { RunTabsProps } from "../../src/components/run/RunTabs";
 import type { ProductController } from "../../src/hooks/useProduct";

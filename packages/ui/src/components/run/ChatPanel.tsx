@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Send } from "lucide-react";
-import { formatUsage, isTerminalRunStatus, summariseChanges } from "@adhd/core";
-import type { LogLevel, RunState, RunSummary, StageState, StageStatus } from "@adhd/core";
+import { formatUsage, isTerminalRunStatus, summariseChanges } from "@isotopy/core";
+import type { LogLevel, RunState, RunSummary, StageState, StageStatus } from "@isotopy/core";
 import { OpenProjectFolder } from "./OpenProjectFolder";
 import { TeamProposalCard } from "./TeamProposalCard";
 import { answerableQuestion } from "../../orchestration";

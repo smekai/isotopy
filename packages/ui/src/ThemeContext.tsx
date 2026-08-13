@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { DIRS } from "./theme";
 import type { Dir, DirId } from "./theme";
 
-const STORAGE_KEY = "adhd.direction";
+const STORAGE_KEY = "isotopy.direction";
 
 interface ThemeValue {
   dirId: DirId;

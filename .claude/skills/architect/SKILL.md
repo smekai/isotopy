@@ -206,7 +206,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
   types through hand-written record traversal. Isotopy-owned records reject
   unknown fields. TaskPlanner and engine codecs permit unrelated external
   fields while validating every consumed field. Relative imports use `.ts`
-  extensions (like `@adhd/core`); `rewriteRelativeImportExtensions` rewrites
+  extensions (like `@isotopy/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 
 **Verify a change** (from the repo root, shell-neutral):
@@ -215,6 +215,6 @@ of the source. When you strip or avoid a comment, that is where its content goes
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-For UI structural changes, also `pnpm --filter @adhd/ui e2e`. If you touched the
+For UI structural changes, also `pnpm --filter @isotopy/ui e2e`. If you touched the
 `gen:` blocks in `architecture.md`, run `pnpm gen:skills` and commit the
 regenerated files.

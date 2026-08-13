@@ -4,7 +4,7 @@ import type {
   OrchestratorTeamProposal,
   PipelineDefinition,
   StageDefinition,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { composeTeamPipeline, withRoleTiers } from "../../src/schemas/team-composition.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 

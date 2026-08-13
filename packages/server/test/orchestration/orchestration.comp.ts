@@ -8,7 +8,7 @@ import type {
   OrchestratorDecision,
   OrchestratorTeamProposal,
   RunState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   createTestApp,
   get,

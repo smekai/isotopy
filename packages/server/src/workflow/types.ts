@@ -15,7 +15,7 @@ import type {
   StageOutcome,
   StageUsage,
   StageVerdict,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -42,7 +42,7 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
-export type { StageOutcome } from "@adhd/core";
+export type { StageOutcome } from "@isotopy/core";
 
 export interface StageResult {
   outcome: StageOutcome;

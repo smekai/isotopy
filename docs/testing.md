@@ -212,7 +212,7 @@ indirect, and harder to diagnose when it breaks.
 | **Component (render)** | `packages/ui/test/**/*.comp.tsx` | Vitest (`jsdom`) | `pnpm test` | The same, for React code that must render — hooks and components, deps mocked. |
 | **Spec** | `packages/*/test/**/*.spec.ts` | Vitest (`node`) | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
 | **E2E** | `packages/ui/e2e/**/*.e2e.ts` | Playwright | `pnpm e2e` | Only what needs a browser: rendering, focus, tab wiring. |
-| **Live** | `e2e/run/live-dev-test.e2e.ts` | Playwright | `ADHD_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
+| **Live** | `e2e/run/live-dev-test.e2e.ts` | Playwright | `ISOTOPY_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
 
 **`.spec.ts` means one thing: a Vitest unit spec over a pure function.** A
 browser test is `.e2e.ts` (Playwright's `testMatch`), because one extension
@@ -290,7 +290,7 @@ Exactly two things on the server. Everything else is the real code.
 | Dependency | Substituted with | Why |
 | --- | --- | --- |
 | Engine adapter (spawns a CLI) | `FakeEngine` via `setEngineAdapter()` | Otherwise the test costs money and needs an authenticated CLI. |
-| `.adhd` data root | temp dir via `ADHD_HOME` | Otherwise tests write into the developer's real run history. |
+| `.adhd` data root | temp dir via `ISOTOPY_HOME` | Otherwise tests write into the developer's real run history. |
 
 The UI's substituted boundary is [`api.ts`](../packages/ui/src/api.ts) — the only
 module that talks to the network — mocked with `vi.mock("../src/api")`. In `e2e/`
@@ -395,8 +395,8 @@ honouring `--model`, emitting parseable output, writing files where expected.
 ## Forcing a plan limit by hand
 
 A limit is the one behaviour you cannot wait for on demand, so every adapter
-takes a binary override — `ADHD_CLAUDE_PATH`, `ADHD_CODEX_PATH`,
-`ADHD_CURSOR_PATH`. Point one at a stub that prints a limit line to **stderr**
+takes a binary override — `ISOTOPY_CLAUDE_PATH`, `ISOTOPY_CODEX_PATH`,
+`ISOTOPY_CURSOR_PATH`. Point one at a stub that prints a limit line to **stderr**
 and exits non-zero, and the real adapter, the real subprocess harness and the
 real detection patterns all run. No code change, no test hook.
 
@@ -409,7 +409,7 @@ echo "You've hit your session limit · resets 4:30pm (Europe/Tallinn)" >&2
 exit 1
 EOF
 chmod +x /tmp/fake-claude
-ADHD_CLAUDE_PATH=/tmp/fake-claude pnpm dev
+ISOTOPY_CLAUDE_PATH=/tmp/fake-claude pnpm dev
 ```
 
 Windows (PowerShell) — it must be `.cmd` or `.bat`, which is what
@@ -421,7 +421,7 @@ Windows (PowerShell) — it must be `.cmd` or `.bat`, which is what
 echo You've hit your session limit - resets 4:30pm (Europe/Tallinn) 1>&2
 exit /b 1
 '@ | Out-File -Encoding ascii $env:TEMP\fake-claude.cmd
-$env:ADHD_CLAUDE_PATH = "$env:TEMP\fake-claude.cmd"; pnpm dev
+$env:ISOTOPY_CLAUDE_PATH = "$env:TEMP\fake-claude.cmd"; pnpm dev
 ```
 
 Start any run: the stage goes `blocked`, the popup names the reset in your own

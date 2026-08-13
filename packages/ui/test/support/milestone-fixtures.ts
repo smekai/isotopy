@@ -1,4 +1,4 @@
-import { HOME_PROJECT_ID } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
 import type {
   Milestone,
   MilestoneFeature,
@@ -6,7 +6,7 @@ import type {
   MilestoneFinding,
   RunStatus,
   RunSummary,
-} from "@adhd/core";
+} from "@isotopy/core";
 
 const AT = "2026-07-31T00:00:00.000Z";
 

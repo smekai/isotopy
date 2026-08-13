@@ -4,8 +4,8 @@
 // did not expect, so every test here is about what the choice actually resolves to.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { resolveTier } from "@adhd/core";
-import type { EngineModelRoster } from "@adhd/core";
+import { resolveTier } from "@isotopy/core";
+import type { EngineModelRoster } from "@isotopy/core";
 import { EngineModelPicker } from "../../src/components/setup/EngineModelPicker";
 import type { EngineModelPickerProps } from "../../src/components/setup/EngineModelPicker";
 import { DIRS } from "../../src/theme";

@@ -1,3 +1,5 @@
+import { PROJECT_HEADER } from "@isotopy/core";
+
 export interface ProductEnvironmentInput {
   apiBaseUrl: string;
   projectId: string;
@@ -13,7 +15,7 @@ export function buildProductEnvironment({
     "Isotopy owns this project's product process. Do not start, stop or kill it yourself,",
     "and do not choose a port — ask Isotopy instead.",
     "",
-    `Its API is at ${apiBaseUrl}, and every call needs the header \`X-ADHD-Project: ${projectId}\`.`,
+    `Its API is at ${apiBaseUrl}, and every call needs the header \`${PROJECT_HEADER}: ${projectId}\`.`,
     "",
     "- `POST /automation/product/start` — starts the product, or returns the one already",
     "  running. Safe to call more than once.",

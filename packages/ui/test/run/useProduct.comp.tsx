@@ -4,7 +4,7 @@
 // showing a live iframe and a Stop button for a process that is gone.
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { ProductProcessStatus } from "@adhd/core";
+import type { ProductProcessStatus } from "@isotopy/core";
 import { useProduct } from "../../src/hooks/useProduct";
 
 const fetchProductStatus = vi.fn();

@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { Project, ProjectsView } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { Project, ProjectsView } from "@isotopy/core";
 import {
   registryFileSchema,
   type RegistryFile,

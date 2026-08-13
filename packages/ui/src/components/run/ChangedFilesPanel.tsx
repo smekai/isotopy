@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { FileText } from "lucide-react";
-import { FILE_CHANGE_KINDS, summariseChanges } from "@adhd/core";
-import type { FileChange, FileChangeKind, RunChangeSet } from "@adhd/core";
+import { FILE_CHANGE_KINDS, summariseChanges } from "@isotopy/core";
+import type { FileChange, FileChangeKind, RunChangeSet } from "@isotopy/core";
 import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";
 import { FileReadingPane } from "./FileReadingPane";
 import { OpenProjectFolder } from "./OpenProjectFolder";

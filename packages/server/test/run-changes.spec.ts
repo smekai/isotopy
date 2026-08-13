@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { FileChange } from "@adhd/core";
+import type { FileChange } from "@isotopy/core";
 import {
   diffSnapshots,
   mergeGitChanges,
@@ -130,7 +130,7 @@ test("a file created in a commit and edited afterwards is created, not edited", 
   ).toEqual([change("src/app.ts", "created")]);
 });
 
-test("ADHD's own run bookkeeping is never reported as something the run built", () => {
+test("Isotopy's own run bookkeeping is never reported as something the run built", () => {
   expect(
     reportableChanges([change(".adhd/runs/abc/changes.json", "created"), change("a.ts", "created")]),
   ).toEqual([change("a.ts", "created")]);

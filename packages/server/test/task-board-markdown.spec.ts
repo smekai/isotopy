@@ -21,7 +21,7 @@ describe("Task board Markdown", () => {
         updatedAt: "2026-07-29 16:00",
         description: "\r\nFirst paragraph.\r\n\r\n- keep this list\r\n",
         source: "milestone  one\n feature two",
-        marker: "<!-- ADHD-FINDING:abc -->",
+        marker: "<!-- ISOTOPY-FINDING:abc -->",
       }),
     ).toBe(
       [
@@ -34,7 +34,7 @@ describe("Task board Markdown", () => {
         "- keep this list",
         "",
         "**Isotopy source:** milestone one feature two",
-        "<!-- ADHD-FINDING:abc -->",
+        "<!-- ISOTOPY-FINDING:abc -->",
         "",
         "---",
         "",
@@ -53,7 +53,7 @@ describe("Task board Markdown", () => {
       updatedAt: "2026-07-29 16:00",
       description: "Body",
       source: "run one",
-      marker: "<!-- ADHD-FINDING:def -->",
+      marker: "<!-- ISOTOPY-FINDING:def -->",
     });
     const result = insertTaskSection(original, section, "top");
 
@@ -78,13 +78,13 @@ describe("Task board Markdown", () => {
 
   it("discovers tasks, markers, and the next available number", () => {
     const first =
-      "# Backlog\n\n## TASK-004: Existing\n<!-- ADHD-FINDING:abc -->\n\n---\n";
+      "# Backlog\n\n## TASK-004: Existing\n<!-- ISOTOPY-FINDING:abc -->\n\n---\n";
     const second = "# Done\n\n## TASK-009: Finished\n\n---\n";
 
     expect(taskIdsIn([first, second])).toEqual(
       new Set(["TASK-004", "TASK-009"]),
     );
-    expect(existingTaskIdForMarker(first, "<!-- ADHD-FINDING:abc -->")).toBe(
+    expect(existingTaskIdForMarker(first, "<!-- ISOTOPY-FINDING:abc -->")).toBe(
       "TASK-004",
     );
     expect(nextTaskNumber("TASK", 7, `${first}\n${second}`)).toBe(10);

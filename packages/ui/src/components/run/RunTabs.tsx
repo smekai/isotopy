@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { FileText, Flag, MessageSquare, Monitor, Terminal } from "lucide-react";
-import { MILESTONE_PLANNING_PIPELINE } from "@adhd/core";
-import type { RunState } from "@adhd/core";
+import { MILESTONE_PLANNING_PIPELINE } from "@isotopy/core";
+import type { RunState } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import type { ProductController } from "../../hooks/useProduct";
 import type { SettingsController } from "../../hooks/useSettings";

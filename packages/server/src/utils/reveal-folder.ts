@@ -1,4 +1,4 @@
-import type { PlatformCommand } from "@adhd/core";
+import type { PlatformCommand } from "@isotopy/core";
 import { runSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts";
 

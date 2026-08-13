@@ -1,4 +1,4 @@
-import type { Milestone } from "@adhd/core";
+import type { Milestone } from "@isotopy/core";
 import { Database } from "../db/database.ts";
 import { MilestonesTable } from "../db/milestones-table.ts";
 import { parsePersistedMilestone } from "../schemas/milestone.ts";

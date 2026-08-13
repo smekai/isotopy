@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import type { EngineId, ModelTier } from "@adhd/core";
-import { ENGINES, PERMISSION_MODES, modelOverrideFor } from "@adhd/core";
+import type { EngineId, ModelTier } from "@isotopy/core";
+import { ENGINES, PERMISSION_MODES, modelOverrideFor } from "@isotopy/core";
 import type { SettingsController } from "../../hooks/useSettings";
 import { SPACE } from "../../theme";
 import type { Dir } from "../../theme";

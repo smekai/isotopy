@@ -1,4 +1,4 @@
-// Component test: every ADHD prompt is multi-line (the persona and the stage
+// Component test: every Isotopy prompt is multi-line (the persona and the stage
 // context are separated by blank lines), and on Windows every CLI resolves to a
 // `.cmd` shim, which cmd.exe cannot carry a multi-line argument through. An
 // adapter that puts the prompt in argv therefore never runs at all on Windows —
@@ -11,7 +11,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { EngineId } from "@adhd/core";
+import type { EngineId } from "@isotopy/core";
 import { claudeCodeAdapter } from "../../src/engines/claude-code.ts";
 import { codexAdapter } from "../../src/engines/codex.ts";
 import { cursorAdapter } from "../../src/engines/cursor.ts";
@@ -22,9 +22,9 @@ const SHIM_REFUSAL = "Multi-line argument";
 const MULTI_LINE_PROMPT = "You are the Orchestrator.\n\n---\n\nCompose a team.";
 
 const PATH_ENV: Record<EngineId, string> = {
-  "claude-code": "ADHD_CLAUDE_PATH",
-  codex: "ADHD_CODEX_PATH",
-  cursor: "ADHD_CURSOR_PATH",
+  "claude-code": "ISOTOPY_CLAUDE_PATH",
+  codex: "ISOTOPY_CODEX_PATH",
+  cursor: "ISOTOPY_CURSOR_PATH",
 };
 
 const ADAPTERS: Record<EngineId, EngineAdapter> = {

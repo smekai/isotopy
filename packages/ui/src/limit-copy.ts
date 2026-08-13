@@ -1,5 +1,5 @@
-import { DEFAULT_LIMIT_WAIT_MS, ENGINES } from "@adhd/core";
-import type { RunLimit } from "@adhd/core";
+import { DEFAULT_LIMIT_WAIT_MS, ENGINES } from "@isotopy/core";
+import type { RunLimit } from "@isotopy/core";
 
 const FALLBACK_WAIT_MINUTES = DEFAULT_LIMIT_WAIT_MS / 60_000;
 

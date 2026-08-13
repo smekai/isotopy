@@ -1,4 +1,4 @@
-import { runArtifactsSchema, type RunArtifacts } from "@adhd/core";
+import { runArtifactsSchema, type RunArtifacts } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 

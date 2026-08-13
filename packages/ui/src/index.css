@@ -14,7 +14,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-@keyframes adhd-wave {
+@keyframes isotopy-wave {
   from {
     transform: scaleY(0.2);
   }
@@ -23,7 +23,7 @@ body {
   }
 }
 
-@keyframes adhd-pulse {
+@keyframes isotopy-pulse {
   0%,
   100% {
     opacity: 1;
@@ -35,7 +35,7 @@ body {
   }
 }
 
-@keyframes adhd-ring {
+@keyframes isotopy-ring {
   0% {
     transform: scale(1);
     opacity: 0.6;
@@ -46,7 +46,7 @@ body {
   }
 }
 
-@keyframes adhd-shimmer {
+@keyframes isotopy-shimmer {
   0% {
     transform: translateX(-100%);
   }
@@ -55,7 +55,7 @@ body {
   }
 }
 
-@keyframes adhd-spin {
+@keyframes isotopy-spin {
   from {
     transform: rotate(0deg);
   }
@@ -64,7 +64,7 @@ body {
   }
 }
 
-@keyframes adhd-fade-pulse {
+@keyframes isotopy-fade-pulse {
   0%,
   100% {
     opacity: 1;

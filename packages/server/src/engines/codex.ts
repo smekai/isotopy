@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
+import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import type { PermissionPlan, PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { codexConfigModel } from "../schemas/engine-cli-config.ts";
@@ -31,7 +31,7 @@ const DOCS_URL = "https://developers.openai.com/codex/cli";
 
 const INSTALL_HINT =
   `Codex CLI not found. Install it (${INSTALL_COMMAND}), then run \`codex login\` once. ` +
-  "Or set ADHD_CODEX_PATH to the codex executable.";
+  "Or set ISOTOPY_CODEX_PATH to the codex executable.";
 
 interface ResolvedBinary {
   path: string;
@@ -71,11 +71,11 @@ function resolveCodexBinary(): ResolvedBinary {
   if (cachedBinary) {
     return cachedBinary;
   }
-  const fromEnv = process.env.ADHD_CODEX_PATH;
+  const fromEnv = process.env.ISOTOPY_CODEX_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
     const envPath = fromEnv.trim();
     if (!existsSync(envPath)) {
-      throw new Error(`ADHD_CODEX_PATH points to a missing file: ${envPath}`);
+      throw new Error(`ISOTOPY_CODEX_PATH points to a missing file: ${envPath}`);
     }
     cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;

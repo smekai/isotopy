@@ -4,7 +4,7 @@
 // deferred promises, the listener bookkeeping and the act() wrapping live here.
 import { act } from "@testing-library/react";
 import { vi } from "vitest";
-import type { RunEvent, RunState } from "@adhd/core";
+import type { RunEvent, RunState } from "@isotopy/core";
 import { fetchRun, subscribeRunEvents } from "../../src/api";
 import { deferred, last } from "./deferred";
 import type { Deferred } from "./deferred";

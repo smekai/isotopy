@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,

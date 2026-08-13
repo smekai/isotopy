@@ -18,7 +18,7 @@ import type {
   StageState,
   StageUsage,
   StageVerdict,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
@@ -30,7 +30,7 @@ import {
   pipelineUsesEngine,
   rosterAccepts,
   toRunSummary,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
 import { ReleaseConsumer } from "../consumers/release-consumer.ts";

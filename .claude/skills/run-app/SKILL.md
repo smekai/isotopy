@@ -6,7 +6,7 @@ description: Launch and drive the Isotopy app (Hono server :9477 + Vite UI :5173
 # Running the Isotopy app
 
 Monorepo: `pnpm dev` at the repo root starts both processes via
-concurrently — `@adhd/server` (Hono, port **9477**) and `@adhd/ui`
+concurrently — `@isotopy/server` (Hono, port **9477**) and `@isotopy/ui`
 (Vite + React, port **5173**). The UI proxies `/pipelines`, `/projects`,
 `/runs`, `/milestones`, `/health`, `/settings`, `/engines`, `/fs` to the
 server, so `http://localhost:5173/health` proves both are up. The proxy
@@ -29,7 +29,7 @@ owning processes).
 
 The server spawns the coding-agent CLI for every stage that has a skill
 (`packages/server/src/engines/claude-code.ts`; PATH lookup, else the
-VS Code extension's native binary, else `ADHD_CLAUDE_PATH`). If
+VS Code extension's native binary, else `ISOTOPY_CLAUDE_PATH`). If
 `pnpm dev` was started from a **sandboxed** agent shell, the spawned
 `claude.exe` exits instantly with code 3221225794 (0xC0000142,
 STATUS_DLL_INIT_FAILED) and the run fails. Start the dev server
@@ -55,7 +55,7 @@ substitute the engine adapter.
   stored user-level in `~/.adhd/settings.json` keyed by project, key never
   echoed back. `PUT /settings/preferences` holds engine, model, permission
   mode and the selected pipeline — these are **server** state, not
-  localStorage. Scope any call to a project with `-H "X-ADHD-Project: <id>"`.
+  localStorage. Scope any call to a project with `-H "X-Isotopy-Project: <id>"`.
 - Projects: `GET /projects` → the registry (`home` always present);
   `POST /projects` (`{"root":"C:/some/dir"}`) registers one and creates its
   self-ignoring `.adhd/`; `POST /projects/<id>/activate`; `DELETE /projects/<id>`
@@ -71,9 +71,9 @@ substitute the engine adapter.
 - Backend behaviour without a browser or a server: `pnpm test`
   (Vitest, mocks the engine adapter). Reach for this before driving the UI.
 - E2E, free + seeded tiers (no engine spend, auto-starts its own dev
-  server on 9499/5199 against a temp `ADHD_USER_HOME`): `pnpm e2e`.
+  server on 9499/5199 against a temp `ISOTOPY_USER_HOME`): `pnpm e2e`.
   The live tier is opt-in:
-  `ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test`.
+  `ISOTOPY_E2E_LIVE=1 pnpm --filter @isotopy/ui e2e live-dev-test`.
 - Which layer a check belongs in: `docs/testing.md`.
 
 ## Driving the UI headlessly
@@ -103,7 +103,7 @@ which is what the e2e suite locates on.
 
 ```bash
 curl -s -X POST http://localhost:9477/runs -H "content-type: application/json" \
-  -H "X-ADHD-Project: <projectId>" \
+  -H "X-Isotopy-Project: <projectId>" \
   -d '{"pipelineId":"full-delivery","task":"...","engine":"claude-code","model":"haiku"}'
 # then stream: curl -N http://localhost:9477/runs/<id>/events
 ```
@@ -112,7 +112,7 @@ curl -s -X POST http://localhost:9477/runs -H "content-type: application/json" \
 (`one-box`, `dev-test`, `gated-dev-test`) is rejected at the boundary.
 The working directory is **not** a request field: a run works in its
 project's folder, and a `home` run gets `~/.adhd/home/runs/<id>/workspace`.
-Target a folder by targeting its project (`X-ADHD-Project`, or activate
+Target a folder by targeting its project (`X-Isotopy-Project`, or activate
 it first). `model` takes standard-context CLI aliases (`opus`/`sonnet`/
 `haiku`); full model IDs resolve to 1M-context variants that
 subscription plans reject ("Usage credits required for 1M context").

@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { CircleStop, Play, RotateCcw, Square, UserCheck } from "lucide-react";
-import { isTerminalRunStatus } from "@adhd/core";
-import type { RunState } from "@adhd/core";
+import { isTerminalRunStatus } from "@isotopy/core";
+import type { RunState } from "@isotopy/core";
 import { useElapsed } from "../hooks/useElapsed";
 import { resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";
@@ -82,7 +82,7 @@ function statusDot(status: RunState["status"], d: Dir): CSSProperties {
     ...(running
       ? {
           boxShadow: `0 0 6px ${d.accent}`,
-          animation: `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite`,
+          animation: `isotopy-pulse ${MOTION.pulse} ${EASE.inOut} infinite`,
         }
       : {}),
   };

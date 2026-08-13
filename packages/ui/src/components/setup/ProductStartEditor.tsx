@@ -1,4 +1,4 @@
-import type { ProjectAutomationConfig, UiAutomation } from "@adhd/core";
+import type { ProjectAutomationConfig, UiAutomation } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { fieldLabel, mutedCaption } from "./setup-styles";
 import { defaultUiAutomation } from "./automation-config";

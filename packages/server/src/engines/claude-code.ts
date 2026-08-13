@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
+import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import type { PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
@@ -33,7 +33,7 @@ import type {
 
 const INSTALL_HINT =
   "Claude Code CLI not found. Install it (npm i -g @anthropic-ai/claude-code) " +
-  "or set ADHD_CLAUDE_PATH to the claude executable.";
+  "or set ISOTOPY_CLAUDE_PATH to the claude executable.";
 
 interface ResolvedBinary {
   path: string;
@@ -90,11 +90,11 @@ function resolveClaudeBinary(): ResolvedBinary {
   if (cachedBinary) {
     return cachedBinary;
   }
-  const fromEnv = process.env.ADHD_CLAUDE_PATH;
+  const fromEnv = process.env.ISOTOPY_CLAUDE_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
     const envPath = fromEnv.trim();
     if (!existsSync(envPath)) {
-      throw new Error(`ADHD_CLAUDE_PATH points to a missing file: ${envPath}`);
+      throw new Error(`ISOTOPY_CLAUDE_PATH points to a missing file: ${envPath}`);
     }
     cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;

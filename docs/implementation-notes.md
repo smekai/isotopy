@@ -144,7 +144,7 @@ Playwright suite hung on its timeout. Four workarounds for a job the frontend
 already does. Recorded so it is not attempted again.
 
 Because the default e2e suite boots `pnpm dev`, it never exercises the build; the
-built tier (`ADHD_E2E_BUILT=1`, see [`e2e-test-plan.md`](./e2e-test-plan.md)) is
+built tier (`ISOTOPY_E2E_BUILT=1`, see [`e2e-test-plan.md`](./e2e-test-plan.md)) is
 what drives it in a real browser.
 
 ## Engines — binary resolution (all adapters)
@@ -153,7 +153,7 @@ Each adapter resolves its CLI in a fixed order and caches the result, clearing
 the cache on `detect()`/`install()` so a freshly installed CLI is picked up
 without a server restart:
 
-1. `ADHD_<ENGINE>_PATH` env override (validated to exist).
+1. `ISOTOPY_<ENGINE>_PATH` env override (validated to exist).
 2. `where`/`which` on PATH. **On Windows, prefer the `.cmd`/`.exe`/`.bat` shim
    over an extensionless shell shim** — only the former can be spawned directly
    (npm global installs drop both).
@@ -173,7 +173,7 @@ sound for it, and the three answers are deliberately different:
   (`--permission-mode auto`) and passing a value the build does not know is a
   hard CLI error that fails the run. So the mode list is read from `--help`,
   memoised in a map keyed by **binary path plus help arguments** — keying on the
-  path makes an `ADHD_<ENGINE>_PATH` switch invalidate itself — and
+  path makes an `ISOTOPY_<ENGINE>_PATH` switch invalidate itself — and
   `detect()`/`install()` clear it alongside the binary cache. The probe runs
   **only** when a run asks for `autoReview`, so nobody pays a subprocess for a
   mode they did not choose. A probe that fails or times out answers `unknown`
@@ -227,8 +227,8 @@ Windows: cmd.exe cannot carry a multi-line argument, and every Isotopy prompt is
 multi-line, so passing it positionally made the run fail before it spawned.
 `cursor-agent -p` with no positional prompt reads it from stdin (verified against
 the real CLI). Experimentation knobs, since the CLI's headless behavior on Windows
-is still being mapped: `ADHD_CURSOR_TRUST=0` drops `--trust`, `ADHD_CURSOR_ARGS`
-appends args verbatim, `ADHD_CURSOR_PROMPT_VIA=stdin` pipes the prompt on
+is still being mapped: `ISOTOPY_CURSOR_TRUST=0` drops `--trust`, `ISOTOPY_CURSOR_ARGS`
+appends args verbatim, `ISOTOPY_CURSOR_PROMPT_VIA=stdin` pipes the prompt on
 platforms where it would otherwise be positional (arg limit ≈ 32K). That knob
 cannot force the *opposite* — a shim always uses stdin.
 Cursor's own `auto` router model is distinct from our **Auto** (which sends no
@@ -481,11 +481,11 @@ the workspace is the source of truth, the reports only add what a box *said*.
   `ProjectPaths` (`id`, `root`, `dataDir`): a project's data lives in
   `<root>/.adhd/`, so history sits beside the code it belongs to instead of
   inside the Isotopy checkout. See [`decisions.md`](./decisions.md) (2026-07-23).
-- **`homeProjectPaths()` and `userAdhdDir()` are functions, not constants.** A
-  constant would freeze `ADHD_HOME` / `ADHD_USER_HOME` at import time; as
+- **`homeProjectPaths()` and `userIsotopyDir()` are functions, not constants.** A
+  constant would freeze `ISOTOPY_HOME` / `ISOTOPY_USER_HOME` at import time; as
   functions, a test can point both roots at temp directories regardless of module
-  load order. That is the seam the component tests use — `ADHD_HOME` isolates the
-  home project's data, `ADHD_USER_HOME` the registry and credentials.
+  load order. That is the seam the component tests use — `ISOTOPY_HOME` isolates the
+  home project's data, `ISOTOPY_USER_HOME` the registry and credentials.
 - **The `.env` loader fills gaps only.** Values already in `process.env` win, so
   `PORT=1234 pnpm dev` still overrides the file. Every config value has an env
   override and a sensible default; nothing is hardcoded.
@@ -503,14 +503,14 @@ the workspace is the source of truth, the reports only add what a box *said*.
 ## UI
 
 **Project scoping (`ui/src/api.ts`, `hooks/useProjects.ts`, `settings.ts`).**
-`api.ts` stamps `X-ADHD-Project` onto every request from module state that
+`api.ts` stamps `X-Isotopy-Project` onto every request from module state that
 `useProjects` keeps in step; the server still falls back to its own active
 project, so the browser copy is never the sole source of truth. `useProjects`
 exposes `ready`, and `App` loads nothing project-scoped until it flips — the
 switcher shows a placeholder name for that first tick, which is why an
 assertion on it has to wait for the list rather than reading the trigger
-immediately. Preferences are keyed `adhd.<projectId>.<name>` so two projects
-can hold different pipelines, models and permission modes at once.
+immediately. Preferences are keyed by project in the user-level settings store,
+so two projects can hold different pipelines, models and permission modes at once.
 
 **Limit notifications (`ui/src/hooks/useLimitNotification.ts`).** Permission is
 requested at the moment the *first* limit lands, never on load — asking a user
@@ -595,11 +595,11 @@ and [`decisions.md`](./decisions.md) for why the home project is not `REPO_ROOT`
   on platform rather than lowercasing unconditionally.
 - **The home project is synthesised, never persisted.** It always exists, so the
   registry is never empty and `resolve()` always has an answer; persisting it
-  would let a stale entry point somewhere that no longer matches `ADHD_HOME`.
+  would let a stale entry point somewhere that no longer matches `ISOTOPY_HOME`.
 - **`unregister` is deliberately not called `remove`.** It drops the registry
   entry and never touches the folder — a user's code and run history outlive
   their interest in seeing the project in a dropdown.
-- **Requests resolve their project per call** via the `X-ADHD-Project` header,
+- **Requests resolve their project per call** via the `X-Isotopy-Project` header,
   falling back to the registry's active project. Run-scoped routes
   (`/runs/:id/...`) need no project because run ids are globally unique — which
   is also why SSE works, since `EventSource` cannot send headers.

@@ -19,10 +19,10 @@ import {
   runMessageSchema,
   stageLogEntrySchema,
   timestamp,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   RunEvent,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { z } from "zod";
 
 import { parseJson } from "../domain/validation.ts";

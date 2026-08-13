@@ -3,7 +3,7 @@
 // invisible from the outside — only the render sequence shows them.
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { Milestone } from "@adhd/core";
+import type { Milestone } from "@isotopy/core";
 import {
   fetchMilestones,
   finalizeMilestone,

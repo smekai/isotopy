@@ -27,7 +27,7 @@ Then, conditionally:
 
 | Run this | When |
 |---|---|
-| `pnpm --filter @adhd/ui e2e` | any UI structural change |
+| `pnpm --filter @isotopy/ui e2e` | any UI structural change |
 | `pnpm gen:skills` (commit the output) | you edited a `gen:` block in `docs/architecture.md` or a persona under `domain/skills/personas/` |
 | the `run-app` skill | the change is only provable in the running app — a new endpoint, a screen, a storage path |
 
@@ -44,7 +44,7 @@ Rules about the gates:
   for Playwright.
 - **Watch what a test writes.** A test that touches the developer's real
   `~/.adhd` or the repo's `.adhd/` is a broken test even when it passes. Point
-  `ADHD_HOME` and `ADHD_USER_HOME` at temp directories (`createTestApp` in
+  `ISOTOPY_HOME` and `ISOTOPY_USER_HOME` at temp directories (`createTestApp` in
   `test/support/harness.ts` already does).
 
 ---

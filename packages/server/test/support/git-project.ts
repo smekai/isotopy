@@ -6,9 +6,9 @@ const GIT_TIMEOUT_MS = 15_000;
 
 const IDENTITY = [
   "-c",
-  "user.email=test@adhd.invalid",
+  "user.email=test@isotopy.invalid",
   "-c",
-  "user.name=ADHD Test",
+  "user.name=Isotopy Test",
   "-c",
   "commit.gpgsign=false",
 ];

@@ -2,8 +2,8 @@
 // through this route. These tests drive it over the real service and merge, with
 // the engine itself scripted — the one thing a component test must never spawn.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { staticModelsFor } from "@adhd/core";
-import type { EngineModelRoster } from "@adhd/core";
+import { staticModelsFor } from "@isotopy/core";
+import type { EngineModelRoster } from "@isotopy/core";
 import { createTestApp, get } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 

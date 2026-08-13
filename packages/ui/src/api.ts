@@ -18,17 +18,17 @@ import type {
   RunSummary,
   SettingsView,
   UpdateMilestoneInput,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   DEFAULT_PIPELINE_ID,
   HOME_PROJECT_ID,
+  PROJECT_HEADER,
   PRODUCTION_DEPLOYMENT_CONFIRMATION,
   RUN_EVENT_TYPES,
   RUN_SUMMARY_EVENT,
-} from "@adhd/core";
+} from "@isotopy/core";
 
 const API_BASE = "";
-const PROJECT_HEADER = "X-ADHD-Project";
 
 let activeProjectId = HOME_PROJECT_ID;
 

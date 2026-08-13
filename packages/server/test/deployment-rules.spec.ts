@@ -1,6 +1,6 @@
 import path from "node:path";
 import { expect, test } from "vitest";
-import type { AutomationCommand } from "@adhd/core";
+import type { AutomationCommand } from "@isotopy/core";
 import {
   commandForPlatform,
   deploymentWorkingDirectory,
@@ -56,16 +56,16 @@ test("a nested working directory resolves against the project root", () => {
 
 test("the last reported URL wins, because a deploy tool prints its progress before its result", () => {
   const stdout = [
-    "ADHD_DEPLOY_URL=https://old.example.test",
+    "ISOTOPY_DEPLOY_URL=https://old.example.test",
     "building…",
-    "ADHD_DEPLOY_URL=https://new.example.test",
+    "ISOTOPY_DEPLOY_URL=https://new.example.test",
   ].join("\n");
 
   expect(reportedDeploymentUrl(stdout)).toBe("https://new.example.test/");
 });
 
 test("a marker that is not http keeps the configured URL rather than trusting the output", () => {
-  expect(reportedDeploymentUrl("ADHD_DEPLOY_URL=file:///etc/passwd", "https://fixed.test")).toBe(
+  expect(reportedDeploymentUrl("ISOTOPY_DEPLOY_URL=file:///etc/passwd", "https://fixed.test")).toBe(
     "https://fixed.test",
   );
 });
@@ -76,8 +76,14 @@ test("output with no marker at all keeps the configured URL", () => {
   );
 });
 
+test("the former deployment marker is ignored", () => {
+  expect(
+    reportedDeploymentUrl("ADHD_DEPLOY_URL=https://old.example.test", "https://fixed.test"),
+  ).toBe("https://fixed.test");
+});
+
 test("a marker in a CRLF log is read without the carriage return", () => {
-  expect(reportedDeploymentUrl("done\r\nADHD_DEPLOY_URL=https://crlf.test\r\n")).toBe(
+  expect(reportedDeploymentUrl("done\r\nISOTOPY_DEPLOY_URL=https://crlf.test\r\n")).toBe(
     "https://crlf.test/",
   );
 });

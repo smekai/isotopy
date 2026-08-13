@@ -1,4 +1,4 @@
-import type { Milestone, RunState } from "@adhd/core";
+import type { Milestone, RunState } from "@isotopy/core";
 import { renderRunArtifactsBody } from "../markdown/closeout.ts";
 import type {
   QuestionMediationArtifact,

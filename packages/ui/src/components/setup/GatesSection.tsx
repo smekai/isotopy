@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { DEMO_PIPELINES, agentForStage, flattenPipelineStages } from "@adhd/core";
+import { DEMO_PIPELINES, agentForStage, flattenPipelineStages } from "@isotopy/core";
 import { RADIUS, SPACE } from "../../theme";
 import type { Dir } from "../../theme";
 import { accentBadge, mutedBody, optionLabel, sectionSubtitle, sectionTitle } from "./setup-styles";

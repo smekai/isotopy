@@ -6,7 +6,7 @@ import type {
   DeploymentRecord,
   ProjectAutomationConfig,
   ValidationCommand,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { createTestApp, get, post, put } from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
 import { startHealthServer } from "./support/health-server.ts";
@@ -251,7 +251,7 @@ function reportingTarget(url: string): DeploymentAutomation {
   return deploymentTarget({
     command: {
       executable: process.execPath,
-      args: ["-e", `console.log("ADHD_DEPLOY_URL=${url}")`],
+      args: ["-e", `console.log("ISOTOPY_DEPLOY_URL=${url}")`],
       timeoutMs: 30_000,
     },
     healthTimeoutMs: 2_000,

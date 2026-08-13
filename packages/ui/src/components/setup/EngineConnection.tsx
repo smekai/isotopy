@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import type { EngineId } from "@adhd/core";
-import { ENGINES, defaultConnectionMode } from "@adhd/core";
+import type { EngineId } from "@isotopy/core";
+import { ENGINES, defaultConnectionMode } from "@isotopy/core";
 import type { EngineConnectionUpdate } from "../../api";
 import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";

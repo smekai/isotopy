@@ -6,7 +6,7 @@ import {
   STAGE_VERDICTS,
   agentForStage,
   resolveTier,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   DeploymentAutomation,
   EffortLevel,
@@ -18,7 +18,7 @@ import type {
   RunState,
   StageDefinition,
   StageVerdict,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";

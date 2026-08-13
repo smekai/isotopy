@@ -1,4 +1,4 @@
-import { milestonePlanSchema, type MilestonePlan } from "@adhd/core";
+import { milestonePlanSchema, type MilestonePlan } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 

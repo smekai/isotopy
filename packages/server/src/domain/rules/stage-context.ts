@@ -1,11 +1,11 @@
-import { STAGE_OUTCOMES, STAGE_OUTPUT_PROTOCOLS, STAGE_VERDICTS } from "@adhd/core";
+import { STAGE_OUTCOMES, STAGE_OUTPUT_PROTOCOLS, STAGE_VERDICTS } from "@isotopy/core";
 import type {
   EngineLimit,
   OrchestratorDecision,
   StageOutcome,
   StageOutputProtocol,
   StageVerdict,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type { EngineRunResult } from "../../engines/types.ts";
 import { extractOrchestratorDecision } from "../../schemas/orchestrator-decision.ts";
 import { formatValidationIssues } from "../validation.ts";

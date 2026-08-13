@@ -1,4 +1,4 @@
-import { fileChangeSchema, requiredText, timestamp } from "@adhd/core";
+import { fileChangeSchema, requiredText, timestamp } from "@isotopy/core";
 import { z } from "zod";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";

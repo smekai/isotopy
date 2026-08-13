@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request } from "@playwright/test";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import { resetPreferences } from "../support/preferences";
 
 // The parked-question half of the conversational loop, without running an engine.

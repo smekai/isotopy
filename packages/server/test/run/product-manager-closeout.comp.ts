@@ -6,7 +6,7 @@ import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promise
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
-import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@adhd/core";
+import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@isotopy/core";
 import type { ProjectPath } from "../../src/paths.ts";
 import { applyProductManagerCloseout } from "../../src/services/consumers/closeout-consumer.ts";
 
@@ -154,7 +154,7 @@ test("closing the same run out twice does not file the follow-up task again", as
   // Assert
   expect(second.createdTasks).toEqual([]);
   const backlog = await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8");
-  expect(backlog.match(/ADHD-FINDING:/g)).toHaveLength(1);
+  expect(backlog.match(/ISOTOPY-FINDING:/g)).toHaveLength(1);
 });
 
 test("keeps findings and follow-up tasks when the agent writes a hyphenated severity", async () => {

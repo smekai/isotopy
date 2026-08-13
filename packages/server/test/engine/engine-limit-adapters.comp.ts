@@ -2,7 +2,7 @@
 // adapter? `limit-pause.comp.ts` fakes the engine, so it proves the workflow but
 // says nothing about whether claude-code/codex/cursor recognise a limit in the
 // text their CLI really prints. This runs each adapter against a stub binary
-// installed through the documented ADHD_*_PATH override, so the subprocess
+// installed through the documented ISOTOPY_*_PATH override, so the subprocess
 // harness, the failure ladder and the detection patterns are all real code.
 //
 // The stub prints the limit to stderr and exits non-zero, which is the shape all
@@ -11,7 +11,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { EngineId } from "@adhd/core";
+import type { EngineId } from "@isotopy/core";
 import { claudeCodeAdapter } from "../../src/engines/claude-code.ts";
 import { codexAdapter } from "../../src/engines/codex.ts";
 import { cursorAdapter } from "../../src/engines/cursor.ts";
@@ -23,9 +23,9 @@ const CODEX_LINE = "stream error: rate limit reached; try again in 45 minutes";
 const CURSOR_LINE = "Usage limit reached - resets at 16:30";
 
 const PATH_ENV: Record<EngineId, string> = {
-  "claude-code": "ADHD_CLAUDE_PATH",
-  codex: "ADHD_CODEX_PATH",
-  cursor: "ADHD_CURSOR_PATH",
+  "claude-code": "ISOTOPY_CLAUDE_PATH",
+  codex: "ISOTOPY_CODEX_PATH",
+  cursor: "ISOTOPY_CURSOR_PATH",
 };
 
 const ADAPTERS: Record<EngineId, EngineAdapter> = {

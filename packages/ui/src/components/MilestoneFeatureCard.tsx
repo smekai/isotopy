@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
-import { canAcceptMilestoneFeature } from "@adhd/core";
+import { canAcceptMilestoneFeature } from "@isotopy/core";
 import type {
   MilestoneFeature,
   MilestoneFeatureStatus,
   MilestoneFinding,
   RunSummary,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { formatDateTime } from "../format";
 import { runsForFeature } from "../run-list";
 import type { Dir } from "../theme";

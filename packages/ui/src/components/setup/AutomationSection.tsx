@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { DeploymentAutomation, DeploymentEnvironment } from "@adhd/core";
-import { DEPLOYMENT_ENVIRONMENTS, withDeploymentTarget } from "@adhd/core";
+import type { DeploymentAutomation, DeploymentEnvironment } from "@isotopy/core";
+import { DEPLOYMENT_ENVIRONMENTS, withDeploymentTarget } from "@isotopy/core";
 import { useAutomation } from "../../hooks/useAutomation";
 import type { Dir } from "../../theme";
 import {

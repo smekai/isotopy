@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { ExternalLink, Play, RotateCw, Square } from "lucide-react";
-import { isProductEmbeddable } from "@adhd/core";
-import type { ProductProcessStatus } from "@adhd/core";
+import { isProductEmbeddable } from "@isotopy/core";
+import type { ProductProcessStatus } from "@isotopy/core";
 import type { ProductController } from "../../hooks/useProduct";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";

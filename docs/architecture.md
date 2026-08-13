@@ -234,7 +234,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
   types through hand-written record traversal. Isotopy-owned records reject
   unknown fields. TaskPlanner and engine codecs permit unrelated external
   fields while validating every consumed field. Relative imports use `.ts`
-  extensions (like `@adhd/core`); `rewriteRelativeImportExtensions` rewrites
+  extensions (like `@isotopy/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 
 **Verify a change** (from the repo root, shell-neutral):
@@ -243,7 +243,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-For UI structural changes, also `pnpm --filter @adhd/ui e2e`. If you touched the
+For UI structural changes, also `pnpm --filter @isotopy/ui e2e`. If you touched the
 `gen:` blocks in `architecture.md`, run `pnpm gen:skills` and commit the
 regenerated files.
 <!-- gen:skill:end -->
@@ -381,7 +381,7 @@ The frontend tier is documented in full — module map, the network seam, run da
 
 - **No hardcoded hosts/ports.** Everything comes from env vars with sensible defaults — see [`.env.example`](../.env.example). Copy it to `.env` (gitignored) for local overrides.
 - The server loads the root `.env` itself (`src/config.ts`), Vite reads the same file via `loadEnv`, so one file drives both processes.
-- Named constants over magic numbers: timeouts, poll intervals, and status lists are declared at the top of the module that owns them (or in `@adhd/core` when shared, e.g. `TERMINAL_RUN_STATUSES`).
+- Named constants over magic numbers: timeouts, poll intervals, and status lists are declared at the top of the module that owns them (or in `@isotopy/core` when shared, e.g. `TERMINAL_RUN_STATUSES`).
 - Secrets (API keys) never go in code or `.env.example`; runtime secrets live in the user-level `~/.adhd/settings.json` (mode `0600`) or real env vars — **never** in a project's `.adhd/`, which sits in the user's git working tree.
 
 ## Subsystem review: Developer→Tester flow (TASK-049)
@@ -395,7 +395,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 | `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
 | `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
 
-Conventions upheld: `@adhd/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
+Conventions upheld: `@isotopy/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
 
 **Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunService` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunService` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
 
@@ -409,7 +409,7 @@ Already in place:
 - **`import type`** for type-only imports (enforced by lint).
 - **UI-safe views**: the server never serializes secrets to the client (`SettingsView`).
 - **Layered tests** — component tests (Vitest, `pnpm test`) are the primary level; specs cover complicated pure functions; Playwright covers only the browser; one opt-in live canary. See [`testing.md`](./testing.md) for the policy and the AAAAA convention (TASK-062).
-- **Testable seams** — `ADHD_HOME` and `ADHD_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, and `createApp({ runs, milestones, registry, settings })` injects services instead of routes reaching for a module singleton.
+- **Testable seams** — `ISOTOPY_HOME` and `ISOTOPY_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, and `createApp({ runs, milestones, registry, settings })` injects services instead of routes reaching for a module singleton.
 
 Recommended next steps, in rough priority order:
 
@@ -577,7 +577,7 @@ is what lets a run be traced back to the feature it was started for.
 
 | Layer | Where |
 | --- | --- |
-| Models and pure predicates | `@adhd/core` `milestones.ts` — `canStartNextFeature` mirrors the guards `MilestoneService.startNextMilestoneRun` throws on, so the UI can disable the control instead of letting the request be rejected. Change one, change both. |
+| Models and pure predicates | `@isotopy/core` `milestones.ts` — `canStartNextFeature` mirrors the guards `MilestoneService.startNextMilestoneRun` throws on, so the UI can disable the control instead of letting the request be rejected. Change one, change both. |
 | Persistence | `server/src/repository/milestone-repository.ts` over `db/milestones-table.ts` |
 | API | `server/src/routes/milestones.ts` — plan, revise, approve, CRUD, start-next, finalize |
 | Lifecycle | `MilestoneService` — the single writer for milestones; `RunService` remains the single writer for runs |
@@ -608,7 +608,7 @@ to the conversation that asked for it.
 
 | Layer | Where |
 | --- | --- |
-| Models, the decision union, and pure predicates | `@adhd/core` `orchestration.ts` — `orchestrationStatusFor` maps a decision to the state the conversation is left in, so the status is never assigned by hand at a call site |
+| Models, the decision union, and pure predicates | `@isotopy/core` `orchestration.ts` — `orchestrationStatusFor` maps a decision to the state the conversation is left in, so the status is never assigned by hand at a call site |
 | Boundary schema | `server/src/schemas/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunService` is for runs |
@@ -1099,11 +1099,11 @@ nothing is written to user or project data on read, so improvements to a
 bundled persona keep reaching every project.
 
 **Resolving the active project:** the registry names one, and any request may
-override it with an `X-ADHD-Project` header. Run-scoped routes (`/runs/:id/...`)
+override it with an `X-Isotopy-Project` header. Run-scoped routes (`/runs/:id/...`)
 need no project — run ids are globally unique, which is also why SSE works
 without a header.
 
-`ADHD_HOME` overrides the home project's data directory and `ADHD_USER_HOME` the
+`ISOTOPY_HOME` overrides the home project's data directory and `ISOTOPY_USER_HOME` the
 user-level root; both exist so tests get isolated roots.
 
 ### Promotion
@@ -1152,7 +1152,7 @@ user-level root; both exist so tests get isolated roots.
 └──────────────────────────────────────────────────┘
 ```
 
-Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow owns `.adhd/workflow.db`, and Isotopy's run/event/milestone/orchestration tables live in `.adhd/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
+Every request carries an `X-Isotopy-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ISOTOPY_PORT`, `ISOTOPY_UI_PORT`). There is no external database — OpenWorkflow owns `.adhd/workflow.db`, and Isotopy's run/event/milestone/orchestration tables live in `.adhd/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 

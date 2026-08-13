@@ -1,5 +1,5 @@
-import { mergeModelLayers, staticModelsFor } from "@adhd/core";
-import type { EngineId, EngineModelRoster } from "@adhd/core";
+import { mergeModelLayers, staticModelsFor } from "@isotopy/core";
+import type { EngineId, EngineModelRoster } from "@isotopy/core";
 import { findEngineAdapter } from "../engines/registry.ts";
 import type { EngineAdapter, LiveModelLayer } from "../engines/types.ts";
 

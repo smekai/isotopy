@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { FollowUpTaskDraft, RunState } from "@adhd/core";
+import type { FollowUpTaskDraft, RunState } from "@isotopy/core";
 import { TaskBoardAdapter } from "../src/services/task-board-adapter.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
@@ -41,14 +41,14 @@ test("a .tasks board appearing after the built-in one is already in use does not
   // it would outrank the built-in board.
   const adapter = new TaskBoardAdapter(project);
   const first = await adapter.createFollowUpTasks(run(), [draft("f1")]);
-  expect(first.map((task) => task.backend)).toEqual(["adhd"]);
+  expect(first.map((task) => task.backend)).toEqual(["isotopy"]);
   await writeTaskPlannerBoard(1);
 
   // Act
   const created = await adapter.createFollowUpTasks(run(), [draft("f2")]);
 
   // Assert
-  expect(created.map((task) => task.backend)).toEqual(["adhd"]);
+  expect(created.map((task) => task.backend)).toEqual(["isotopy"]);
 });
 
 test("a board created after a lookup that found none is picked up — an absent board is not remembered as absent", async () => {

@@ -8,7 +8,7 @@ import type {
   MilestoneProposal,
   MilestoneTaskDraft,
   RunState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   boardHeading,
   existingTaskIdForMarker,
@@ -34,7 +34,7 @@ import type { ProjectPath } from "../paths.ts";
 import { nowIso } from "../utils/time.ts";
 
 export interface ApprovedTaskLinks {
-  backend: "taskplanner" | "adhd";
+  backend: "taskplanner" | "isotopy";
   featureTaskIds: Record<string, string[]>;
 }
 
@@ -156,7 +156,7 @@ export class TaskBoardAdapter {
     const created: CreatedTaskReference[] = [];
 
     for (const task of tasks) {
-      const sourceMarker = `<!-- ADHD-FINDING:${findingFingerprint(run, task.findingId)} -->`;
+      const sourceMarker = `<!-- ISOTOPY-FINDING:${findingFingerprint(run, task.findingId)} -->`;
       const existingId = existingTaskIdForMarker(allText, sourceMarker);
       if (existingId) {
         continue;
@@ -257,7 +257,7 @@ export class TaskBoardAdapter {
     );
     if (await readText(builtInConfig)) {
       return {
-        backend: "adhd",
+        backend: "isotopy",
         dir: path.dirname(builtInConfig),
         configPath: builtInConfig,
       };
@@ -274,7 +274,7 @@ export class TaskBoardAdapter {
 }
 
 interface BoardLocation {
-  backend: "taskplanner" | "adhd";
+  backend: "taskplanner" | "isotopy";
   dir: string;
   configPath: string;
 }
@@ -309,7 +309,7 @@ async function createBuiltInBoard(
   const dir = path.join(projectPath.dataDir, "tasks");
   const configPath = path.join(dir, "config.json");
   await mkdir(dir, { recursive: true });
-  const location: BoardLocation = { backend: "adhd", dir, configPath };
+  const location: BoardLocation = { backend: "isotopy", dir, configPath };
   if (await readText(configPath)) {
     return location;
   }
@@ -359,7 +359,7 @@ function fingerprint(
 }
 
 function marker(value: string): string {
-  return `<!-- ADHD-MILESTONE-TASK:${value} -->`;
+  return `<!-- ISOTOPY-MILESTONE-TASK:${value} -->`;
 }
 
 function backlogState(board: Board): StateConfig {

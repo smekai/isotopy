@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { DEFAULT_LIMIT_WAIT_MS } from "@adhd/core";
+import { DEFAULT_LIMIT_WAIT_MS } from "@isotopy/core";
 import {
   detectEngineLimit,
   formatLimitWait,

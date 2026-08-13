@@ -1,12 +1,12 @@
 // Project preferences are server state (TASK-065): what one browser sets, every
 // other browser — and the next server process — must see. These tests drive the
 // same API the UI does, so "another browser" is a second app over the same
-// ADHD_USER_HOME.
+// ISOTOPY_USER_HOME.
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { defaultProjectPreferences } from "@adhd/core";
-import type { SettingsView } from "@adhd/core";
+import { defaultProjectPreferences } from "@isotopy/core";
+import type { SettingsView } from "@isotopy/core";
 import {
   addTestProject,
   createTestApp,
@@ -135,6 +135,20 @@ test("preferences do not cross projects", async () => {
 
   // Act
   const { body } = await get<SettingsView>(ctx.app, "/settings", beta.headers);
+
+  // Assert
+  expect(body.preferences.pipelineId).toBe(defaultProjectPreferences().pipelineId);
+});
+
+test("the former project header no longer selects a project", async () => {
+  // Arrange
+  const alpha = await addTestProject(ctx.registry, "old-header");
+  await put<SettingsView>(ctx.app, "/settings/preferences", { pipelineId: "solo" }, alpha.headers);
+
+  // Act
+  const { body } = await get<SettingsView>(ctx.app, "/settings", {
+    "X-ADHD-Project": alpha.id,
+  });
 
   // Assert
   expect(body.preferences.pipelineId).toBe(defaultProjectPreferences().pipelineId);

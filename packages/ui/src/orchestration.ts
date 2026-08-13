@@ -6,8 +6,8 @@ import type {
   OrchestratorTeamProposal,
   RunState,
   RunSummary,
-} from "@adhd/core";
-import { isTerminalRunStatus, parkedQuestion } from "@adhd/core";
+} from "@isotopy/core";
+import { isTerminalRunStatus, parkedQuestion } from "@isotopy/core";
 
 export interface OrchestratorView {
   orchestration: Orchestration;

@@ -1,4 +1,4 @@
-import type { RunEvent, RunState, StageEvent } from "@adhd/core";
+import type { RunEvent, RunState, StageEvent } from "@isotopy/core";
 
 export function applyEvent(run: RunState, event: RunEvent): RunState {
   const next = structuredClone(run);

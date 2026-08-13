@@ -1,5 +1,5 @@
-import { agentForStage } from "@adhd/core";
-import type { RunState, StageDefinition } from "@adhd/core";
+import { agentForStage } from "@isotopy/core";
+import type { RunState, StageDefinition } from "@isotopy/core";
 import { extractReleaseManifest } from "../../schemas/release-manifest.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
 import { nowIso } from "../../utils/time.ts";

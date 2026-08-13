@@ -6,7 +6,7 @@ description: Launch and drive the Isotopy app (Hono server :9477 + Vite UI :5173
 # Running the Isotopy app
 
 Monorepo: `pnpm dev` at the repo root starts both processes via
-concurrently — `@adhd/server` (Hono, port **9477**) and `@adhd/ui`
+concurrently — `@isotopy/server` (Hono, port **9477**) and `@isotopy/ui`
 (Vite + React, port **5173**). The UI proxies `/pipelines`, `/runs`,
 `/health`, `/settings`, `/engines` to the server, so
 `http://localhost:5173/health` proves both are up.
@@ -27,7 +27,7 @@ owning processes).
 
 The server spawns the Codex CLI for `one-box` runs
 (`packages/server/src/engines/Codex.ts`; PATH lookup, else the
-VS Code extension's native binary, else `ADHD_CLAUDE_PATH`). If
+VS Code extension's native binary, else `ISOTOPY_CLAUDE_PATH`). If
 `pnpm dev` was started from a **sandboxed** agent shell, the spawned
 `Codex.exe` exits instantly with code 3221225794 (0xC0000142,
 STATUS_DLL_INIT_FAILED) and the run fails. Start the dev server
@@ -46,7 +46,7 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
   stored in gitignored `.adhd/settings.json`, key never echoed back.
 - E2E, free + seeded tiers (no engine spend, auto-starts the dev
   server): `pnpm e2e`. The live tier is opt-in:
-  `ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test`.
+  `ISOTOPY_E2E_LIVE=1 pnpm --filter @isotopy/ui e2e live-dev-test`.
 - Full plan and what each tier proves: `docs/e2e-test-plan.md`.
 
 ## Driving the UI headlessly

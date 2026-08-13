@@ -12,7 +12,7 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    // @adhd/core is consumed as TypeScript source (its exports map points at
+    // @isotopy/core is consumed as TypeScript source (its exports map points at
     // src/), so its relative imports carry real .ts extensions — Node's
     // type-stripping and Vite resolve them as-is, and tsc rewrites them to .js
     // when emitting dist. Harmless for packages using .js-extension imports.

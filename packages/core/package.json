@@ -1,6 +1,6 @@
 {
-  "name": "@adhd/core",
-  "version": "0.10.0",
+  "name": "@isotopy/core",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

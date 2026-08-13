@@ -20,7 +20,7 @@ React 19 + Vite 6, TypeScript strict. The full dependency list is four entries:
 | --- | --- |
 | `react` / `react-dom` | ^19.1.0 |
 | `lucide-react` | The only icon set. Do not add a second. |
-| `@adhd/core` | Shared types **and** pure logic, consumed as TypeScript *source* |
+| `@isotopy/core` | Shared types **and** pure logic, consumed as TypeScript *source* |
 
 That is the entire runtime surface. The absences are decisions, not omissions —
 each is listed with the trigger that would reverse it, so nobody re-litigates them
@@ -32,7 +32,7 @@ by accident and nobody defends them past their usefulness.
 | **State library** | State is either server state (three hooks) or one screen's view state. | State shared between siblings that are not both children of `App`. |
 | **CSS framework** | Theme switching is runtime, driven by a JS token object. | See §7 — the token gap is the real problem, not the absence of Tailwind. |
 | **Data-fetching library** | Every read is one call and one owner; SSE carries updates, so there is no cache to invalidate. | Refetch-on-focus, retries, or two components needing the same request. |
-| **Codegen for API types** | Types are *imported* from `@adhd/core`, which is stronger than generation — client and server reference one declaration. | Nothing. Keep it. |
+| **Codegen for API types** | Types are *imported* from `@isotopy/core`, which is stronger than generation — client and server reference one declaration. | Nothing. Keep it. |
 
 **Rule.** Adding a dependency to `packages/ui` needs a dated entry in
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
@@ -61,11 +61,10 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
-| [`index.css`](../packages/ui/src/index.css) | The only stylesheet: reset, body font, `@keyframes adhd-*`, scrollbar. |
+| [`index.css`](../packages/ui/src/index.css) | The only stylesheet: reset, body font, `@keyframes isotopy-*`, scrollbar. |
 | [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`, `stagePresentation`). Unit-tested. |
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
-| [`legacy-prefs.ts`](../packages/ui/src/legacy-prefs.ts) | One-shot migration of pre-TASK-065 `localStorage` preferences to the server. Deletable once no user can still hold them. |
 | `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
 | `components/` | 14 flat component files, plus three feature folders — `setup/`, `run/` and `home/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
@@ -162,19 +161,19 @@ What that seam guarantees:
   component ever knows a host or port.
 - **Project scoping is automatic.** A module-level `activeProjectId`, kept current by
   `useProjects` via `setActiveProjectId`, is stamped onto every request as
-  `X-ADHD-Project`. Callers never pass a project id. The server still falls back to
+  `X-Isotopy-Project`. Callers never pass a project id. The server still falls back to
   its own active project, so the browser copy is never the sole source of truth.
 - **Errors are `Error`s.** `requestJson` unwraps a `{ error }` body into a thrown
   `Error` with the server's message. Callers `catch` and surface a string; they never
   inspect status codes.
 - **Types are shared, not mirrored.** `RunState`, `RunEvent`, `Project`,
   `SettingsView`, `StageStatus`, `EngineId` and the rest are imported from
-  `@adhd/core`. A handful of response shapes are declared in `api.ts` itself
+  `@isotopy/core`. A handful of response shapes are declared in `api.ts` itself
   (`DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult`) —
   these are hand-mirrored from the Hono handlers and **can drift**. Prefer moving a
-  shape into `@adhd/core` when both sides need it.
+  shape into `@isotopy/core` when both sides need it.
 
-`@adhd/core` is consumed as TypeScript **source** (a Vite alias plus a tsconfig
+`@isotopy/core` is consumed as TypeScript **source** (a Vite alias plus a tsconfig
 `paths` entry), not as built output — so a core change is visible to the UI without
 a build step. It follows that **core must stay browser-safe**: no `node:` imports,
 ever.
@@ -224,7 +223,7 @@ which filters Logs and Artifacts rather than opening a pane.
 **One pipeline earns a fourth tab, and opens on it.** A `milestone-planning` run
 gains `Plan` and switches to it once the run completes — the proposal is not editable
 before then. The tab is added by `tabsFor`, keyed on `run.pipelineId` against the pipeline
-definition in `@adhd/core`.
+definition in `@isotopy/core`.
 
 **An orchestration run earns no tab at all: the initiative *is* the conversation.**
 `runThread(run, orchestration, runs)` layers the orchestration's turns over
@@ -444,7 +443,7 @@ dot-grid background) and `elevation: { sm, md, lg }` — the shadows are palette
 which is why they live on the palette rather than in the shared scale below.
 
 The palette is selected in Setup → Appearance and persisted by `ThemeContext` under
-`localStorage["adhd.direction"]`.
+`localStorage["isotopy.direction"]`.
 
 ### The non-colour scales
 
@@ -467,7 +466,7 @@ a redesign.
 | `ELEVATION` | `barUp` | the one *untinted* shadow (`TeamController`'s top edge). Tinted shadows are `d.elevation.*`. |
 | `focusRing(soft)` | — | the repeated `0 0 0 3px <accentSoft>` ring. |
 
-`index.css` holds only the six `@keyframes adhd-*` — **no durations**. A component
+`index.css` holds only the six `@keyframes isotopy-*` — **no durations**. A component
 applies one with the `animation` shorthand and a `MOTION` token, so `theme.ts` is the
 single source for timing.
 
@@ -521,7 +520,7 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
-| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `legacy-prefs`, `run-events`, `route`, `run-list`, `transcript` |
+| Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `run-events`, `route`, `run-list`, `transcript` |
 | Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList`, `useMilestones`, `RunTabs` (including the Orchestrator tab), `MilestoneDashboard`, `MilestonePlanPanel`, `CloseoutPanel` |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
@@ -545,8 +544,8 @@ The Playwright suite runs in three tiers, deliberately: **free** (`ui-smoke`,
 (`dev-test-flow` and `run-question` — a fabricated `RunState` injected by route
 interception, so per-stage rendering and the parked-question UI are asserted at
 zero cost), and **live** (`live-dev-test`, skipped
-unless `ADHD_E2E_LIVE=1`, described in-file as "a canary, not a proof"). It runs
-against an isolated `ADHD_USER_HOME` under `os.tmpdir()` on its own ports
+unless `ISOTOPY_E2E_LIVE=1`, described in-file as "a canary, not a proof"). It runs
+against an isolated `ISOTOPY_USER_HOME` under `os.tmpdir()` on its own ports
 (9499 / 5199) — **a test must never touch the real `~/.adhd`**. Because preferences
 are server state, every spec calls `resetPreferences(page)` in `beforeEach`.
 
@@ -595,7 +594,7 @@ actionable rather than merely noted.
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click) and `Waveform` are visual placeholders. (`SteerChat` was the third and was deleted by TASK-078, replaced by `ChatPanel` over a real endpoint.) | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
 | 9 | **An answer resumes a parked stage; an unprompted message still goes nowhere.** TASK-079 wired the `asking` path end to end. A message sent while no stage is asking is recorded and displayed only. | Decide whether mid-run steering should reach the *next* stage's prompt, or be refused. | — |
 | 10 | **Cursor is `conversational: false`.** The CLI is not installed on the machine that built TASK-079, so its session-id emission is unverified; claiming the capability from docs alone would fail silently at runtime. | Verify `cursor-agent --resume` and its stream-json session id, then flip the flag. | — |
-| 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@adhd/core` when its shape stabilises. | — |
+| 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@isotopy/core` when its shape stabilises. | — |
 | 8 | **Theme is light-only.** No dark values, no `prefers-color-scheme`. | A decision, not a bug — recorded so it is not discovered mid-redesign. | — |
 
 Minor: `packages/ui/tmp-devtest.png` is a committed scratch screenshot;

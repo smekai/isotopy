@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { AlertTriangle, CheckCircle2, Copy, Download, LogIn, RefreshCw } from "lucide-react";
-import type { EngineId, EngineStatus } from "@adhd/core";
+import type { EngineId, EngineStatus } from "@isotopy/core";
 import { fetchEngineStatus, installEngine, loginEngine } from "../../api";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
@@ -18,8 +18,8 @@ import {
 const COPY_FEEDBACK_MS = 2000;
 
 const INSTALLERS: Partial<Record<EngineId, { label: string; loginCmd: string; envVar: string }>> = {
-  cursor: { label: "Install Cursor CLI", loginCmd: "agent login", envVar: "ADHD_CURSOR_PATH" },
-  codex: { label: "Install Codex CLI", loginCmd: "codex login", envVar: "ADHD_CODEX_PATH" },
+  cursor: { label: "Install Cursor CLI", loginCmd: "agent login", envVar: "ISOTOPY_CURSOR_PATH" },
+  codex: { label: "Install Codex CLI", loginCmd: "codex login", envVar: "ISOTOPY_CODEX_PATH" },
 };
 
 const MONO_TEXT: CSSProperties = { fontFamily: MONO };

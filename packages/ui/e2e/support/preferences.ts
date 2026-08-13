@@ -2,7 +2,7 @@
 // a pipeline chosen in one spec file is still chosen in the next. Every spec
 // resets them first — the isolation a fresh `localStorage` used to give free.
 import type { Page } from "@playwright/test";
-import type { ProjectPreferences, ProjectPreferencesUpdate, SettingsView } from "@adhd/core";
+import type { ProjectPreferences, ProjectPreferencesUpdate, SettingsView } from "@isotopy/core";
 
 export const DEFAULT_PREFERENCES: ProjectPreferencesUpdate = {
   engine: "claude-code",

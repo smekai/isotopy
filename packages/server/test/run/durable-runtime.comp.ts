@@ -115,10 +115,10 @@ describe("durable runtime", () => {
     await waitForRunStatus(ctx.app, third.id, "completed");
   });
 
-  test("the durable runtime keeps its own database, so it never waits on a lock ADHD holds", async () => {
+  test("the durable runtime keeps its own database, so it never waits on a lock Isotopy holds", async () => {
     // Arrange — OpenWorkflow's connection sets no busy_timeout and claims work
     // with BEGIN IMMEDIATE, and `BackendSqliteOptions` exposes no way to change
-    // that. Sharing a file with ADHD's own writer means SQLITE_BUSY on contention,
+    // that. Sharing a file with Isotopy's own writer means SQLITE_BUSY on contention,
     // so the two must never be the same file.
     const project = await addTestProject(ctx.registry, "split-db");
     ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);

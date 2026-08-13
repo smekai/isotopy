@@ -99,7 +99,7 @@ afterEach(async () => {
 
 test("the revised persona team completes one Full Delivery run", async () => {
   // Anticipate — every box that reaches an engine, in order, keyed to its own
-  // persona. The SRE box is not one of them: ADHD deploys the preview itself.
+  // persona. The SRE box is not one of them: Isotopy deploys the preview itself.
   anticipatePlanningAndImplementation();
   ctx.engine
     .anticipate({
@@ -268,7 +268,7 @@ test("a closeout stage that returns nothing at all needs attention rather than p
   ctx.engine.verify();
 });
 
-test("a configured preview target is deployed by ADHD itself, without an SRE engine turn", async () => {
+test("a configured preview target is deployed by Isotopy itself, without an SRE engine turn", async () => {
   // Arrange
   healthy = await startHealthServer(200);
   await put(ctx.app, "/automation", previewAutomation(healthy.url));
