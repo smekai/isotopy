@@ -1,5 +1,49 @@
 # Next
 
+## TASK-141: Run the Milestone F dogfood with Claude Code
+**Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-13 12:35
+
+Repeat TASK-128's clean newcomer focus-timer path with Claude Code after the user's plan
+limit is available, expected on 2026-08-14. Start from refreshed `main`, a clean target at
+the agreed dogfood baseline, and isolated `ADHD_USER_HOME`/`ADHD_HOME`; require product
+onboarding, user-approved team composition, real execution, measured changed files,
+embedded Preview verification, and a clean post-run Orchestrator stop. Preserve the exact
+TASK-128 goal and evidence protocol so the result is comparable with Codex and Cursor.
+
+External authentication, quota, or service unavailability is `SKIP`; a product defect is
+`FAIL`. Record questions, decisions, team roles and tiers, usage, screenshots, Preview
+checks, and every undocumented intervention. Do not close Milestone F from this task alone;
+TASK-142's Cursor rerun remains required.
+
+Cross-platform: run live on Windows. Audit Node 22.5+, pnpm/POSIX executable selection,
+path handling, and process cleanup for macOS, recording macOS as reasoned-through and
+untested unless a live Mac is actually used.
+
+---
+
+## TASK-142: Rerun the Milestone F dogfood with Cursor after quota reset
+**Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-13 12:35
+
+Repeat TASK-128's clean newcomer focus-timer path with Cursor after the account's monthly
+usage limit resets on 2026-09-03, or earlier if the user makes Cursor capacity available.
+Start from refreshed `main`, a clean target at the agreed dogfood baseline, and isolated
+`ADHD_USER_HOME`/`ADHD_HOME`; require product onboarding, user-approved team composition,
+real execution, measured changed files, embedded Preview verification, and a clean
+post-run Orchestrator stop. Preserve the exact TASK-128 goal and evidence protocol.
+
+Confirm Cursor install/login through ADHD before spending a run. External authentication,
+quota, or service unavailability is `SKIP`; a product defect is `FAIL`. On `PASS`, combine
+the result with TASK-128's Codex evidence and TASK-141's Claude evidence to make the final
+Milestone F release decision and update TASK-125 accordingly.
+
+Cross-platform: run live on Windows. Audit Cursor binary lookup, Node 22.5+, pnpm/POSIX
+executable selection, path handling, and process cleanup for macOS, recording macOS as
+reasoned-through and untested unless a live Mac is actually used.
+
+---
+
 ## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
 **Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
 **Updated:** 2026-08-10 14:10
@@ -41,24 +85,5 @@ demo cannot route around.
 
 Cross-platform: every task here is verified on Windows and reasoned through for macOS, and
 `TASK-126`'s folder reveal and `TASK-124`'s per-CLI mode flags are where that bites.
-
----
-
-## TASK-128: Closing dogfood for Milestone F
-**Priority:** P1 | **Tags:** testing, engine, ui, milestone-f
-**Updated:** 2026-08-07 11:40
-
-Milestones D and E both closed on a live dogfood rather than on tests, and F closes the
-same way — but from a *clean* state, because F's bar is a first-time user.
-
-Start from an empty `ADHD_USER_HOME`, install as the README instructs, register a fresh
-project, and drive one goal end to end: build, evolve, and **see the result** — the files
-it changed through `TASK-126`, and the product running through `TASK-138`. Record what a
-newcomer would hit — every place the app assumes knowledge the person does not have. Fix
-what is small; file what is not.
-
-Record a release verdict for Milestone F.
-
-Cross-platform: run on Windows; confirm every documented command is valid on macOS.
 
 ---

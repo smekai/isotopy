@@ -694,12 +694,14 @@ automatic retry; a rejection is terminal for the turn and informative for the ne
 `fromStage` names a role; `seedFromSettledRun` (`domain/rules/run-seeding.ts`) validates
 it against the composed pipeline and carries the settled run's outputs and outcomes for
 every stage before it into a **fresh** run, which starts there. The settled run is left
-untouched as evidence. Two things are rejected with path-aware issues rather than started
-anyway: an id no role has, and a stage the settled run never ran — the settled run is not
-always of the composed pipeline, and seeding an absent stage would credit a role with work
-nobody did. `applySeededStage` marks a carried stage `skipped` with a log line naming the
-run it came from — but only when it is still `pending`, which is what keeps a restart's own
-upstream statuses intact.
+untouched as evidence. When a user answer opens a separate Orchestration conversation,
+the source is the newest non-Orchestration run the initiative discussed rather than that
+one-stage conversation. Two things are rejected with path-aware issues rather than
+started anyway: an id no role has, and a stage the source run never ran — that source is
+not always of the composed pipeline, and seeding an absent stage would credit a role with
+work nobody did. `applySeededStage` marks a carried stage `skipped` with a log line naming
+the run it came from — but only when it is still `pending`, which is what keeps a restart's
+own upstream statuses intact.
 
 **Three blocked runs in a row stop the loop.** `blockedLaunchRefusal`
 (`domain/rules/orchestration-loop.ts`) counts the tail of `Orchestration.turns`:

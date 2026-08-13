@@ -528,7 +528,12 @@ export class OrchestrationService implements StageOutputConsumer {
       if (!pipeline) {
         throw new Error(NO_APPROVED_TEAM);
       }
-      const seeded = this.seedFrom(pipeline, run, decision.fromStage);
+      const seeded = this.seedFrom(
+        pipeline,
+        orchestration,
+        run,
+        decision.fromStage,
+      );
       if (seeded && !seeded.ok) {
         throw new Error(formatValidationIssues(seeded.issues));
       }
@@ -581,7 +586,12 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!pipeline) {
       return NO_APPROVED_TEAM;
     }
-    const seeded = this.seedFrom(pipeline, settled, decision.fromStage);
+    const seeded = this.seedFrom(
+      pipeline,
+      orchestration,
+      settled,
+      decision.fromStage,
+    );
     if (seeded && !seeded.ok) {
       return formatValidationIssues(seeded.issues);
     }
@@ -593,12 +603,29 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private seedFrom(
     pipeline: PipelineDefinition,
+    orchestration: Orchestration,
     settled: RunState,
     fromStage: string | undefined,
   ): ValidationResult<SeededStart> | undefined {
+    const source = this.seedSource(orchestration, settled);
     return fromStage === undefined
       ? undefined
-      : seedFromSettledRun(pipeline, settled, fromStage, runLabel(settled));
+      : seedFromSettledRun(pipeline, source, fromStage, runLabel(source));
+  }
+
+  private seedSource(orchestration: Orchestration, settled: RunState): RunState {
+    if (settled.pipelineId !== PIPELINE_ID) {
+      return settled;
+    }
+    return (
+      [...orchestration.runIds]
+        .reverse()
+        .map((runId) => this.runs.getRun(runId))
+        .find(
+          (candidate): candidate is RunState =>
+            candidate !== undefined && candidate.pipelineId !== PIPELINE_ID,
+        ) ?? settled
+    );
   }
 
   private settledLaunches(orchestration: Orchestration): SettledLaunch[] {

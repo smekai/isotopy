@@ -135,7 +135,7 @@ in, so your models and your auth stay yours. See
 
 ## Prerequisites
 
-- **Node.js 20+**
+- **Node.js 22.5+**
 - **pnpm** — install via `npm install -g pnpm`, [Corepack](https://pnpm.io/installation#using-corepack), or `winget install pnpm.pnpm`
 
 ## Quick start (prototype)
@@ -144,6 +144,9 @@ in, so your models and your auth stay yours. See
 pnpm install
 pnpm dev
 ```
+
+On Windows, if PowerShell blocks the `pnpm.ps1` shim under its execution policy,
+use `pnpm.cmd install` and `pnpm.cmd dev`; do not weaken the machine's policy.
 
 | Service | URL |
 |---------|-----|
