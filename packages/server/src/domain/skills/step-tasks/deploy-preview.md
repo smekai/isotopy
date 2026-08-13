@@ -6,7 +6,7 @@ with `SKIP` rather than spending an engine turn on it.
 
 When a preview target is configured, Isotopy runs its configured executable and
 argument array with the correct Windows or POSIX override, reads back a single
-`ADHD_DEPLOY_URL=https://…` line if the command prints one, verifies the
+`ISOTOPY_DEPLOY_URL=https://…` line if the command prints one, verifies the
 resulting URL against the configured health check, and stores the command, URL,
 logs, and verdict as run evidence.
 

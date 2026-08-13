@@ -3,8 +3,8 @@
 // reconstructed from the project's run repository (a SQLite DB under .adhd/) —
 // this suite is what proves that round trip.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { RunState } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { RunState } from "@isotopy/core";
 import { RunRepository } from "../../src/repository/run-repository.ts";
 import {
   approveIntake,

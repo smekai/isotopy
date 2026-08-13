@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import type { Orchestration, OrchestratorDecision, RunState } from "@adhd/core";
+import type { Orchestration, OrchestratorDecision, RunState } from "@isotopy/core";
 import { resetPreferences } from "../support/preferences";
 
 // The Orchestrator's dialog, without running an engine.
@@ -10,7 +10,7 @@ import { resetPreferences } from "../support/preferences";
 // interception — the same trick `run/dev-test-flow.e2e.ts` uses for a run.
 //
 // Both fixtures are typed (`Orchestration`, `RunState`), so a change to either
-// model breaks `pnpm --filter @adhd/ui typecheck` rather than rotting here.
+// model breaks `pnpm --filter @isotopy/ui typecheck` rather than rotting here.
 
 test.beforeEach(async ({ page }) => {
   await resetPreferences(page);

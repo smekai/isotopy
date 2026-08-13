@@ -15,7 +15,7 @@ import type {
   OrchestratorDecision,
   RunArtifacts,
   StageUsage,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { detectEngineLimit } from "../../src/domain/rules/engine-limit.ts";
 import type {
   EngineAdapter,

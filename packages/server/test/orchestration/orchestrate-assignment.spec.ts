@@ -3,7 +3,7 @@ import {
   MODEL_TIERS,
   STAGE_EXECUTION_POLICIES,
   orchestratorDecisionSchema,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { expect, test } from "vitest";
 import { loadBundledStepTask } from "../../src/services/skills.ts";
 

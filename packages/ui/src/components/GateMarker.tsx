@@ -15,7 +15,7 @@ function diamond(awaiting: boolean): CSSProperties {
     transform: "rotate(45deg)",
     borderRadius: RADIUS.sm,
     boxShadow: awaiting ? `0 0 10px ${GOLD_SOFT}, 0 0 20px ${GOLD_SOFT}` : "none",
-    animation: awaiting ? `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite` : "none",
+    animation: awaiting ? `isotopy-pulse ${MOTION.pulse} ${EASE.inOut} infinite` : "none",
     transition: `all ${MOTION.slow}`,
     flexShrink: 0,
   };

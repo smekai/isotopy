@@ -4,7 +4,7 @@ import {
   HOME_PROJECT_ID,
   flattenPipelineStages,
   toRunSummary,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   LogLevel,
   MessageRole,
@@ -19,7 +19,7 @@ import type {
   StageActivity,
   StageState,
   StageStatus,
-} from "@adhd/core";
+} from "@isotopy/core";
 
 const CREATED_AT = "2026-07-21T10:00:00.000Z";
 const EVENT_TS = "2026-07-21T10:00:01.000Z";

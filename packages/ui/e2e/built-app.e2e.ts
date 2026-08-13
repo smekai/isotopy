@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { collectConsoleErrors } from "./support/console-errors";
 
 // Built tier — the only test that drives the *compiled* artifact rather than the
-// dev stack. Skipped unless ADHD_E2E_BUILT=1, so `pnpm e2e` keeps testing what
+// dev stack. Skipped unless ISOTOPY_E2E_BUILT=1, so `pnpm e2e` keeps testing what
 // developers actually run and needs no build step.
 //
 // `pnpm build` used to emit a server and a UI bundle that nothing served, so
@@ -15,12 +15,12 @@ import { collectConsoleErrors } from "./support/console-errors";
 // browser *executes* it — MIME types, hashed asset paths resolving, the SPA
 // mounting, and the proxied API answering the built page.
 //
-//   ADHD_E2E_BUILT=1 pnpm --filter @adhd/ui e2e built-app
+//   ISOTOPY_E2E_BUILT=1 pnpm --filter @isotopy/ui e2e built-app
 
-const BUILT = process.env.ADHD_E2E_BUILT === "1";
+const BUILT = process.env.ISOTOPY_E2E_BUILT === "1";
 
 test.describe("the compiled app", () => {
-  test.skip(!BUILT, "built tier — set ADHD_E2E_BUILT=1 to run (rebuilds first)");
+  test.skip(!BUILT, "built tier — set ISOTOPY_E2E_BUILT=1 to run (rebuilds first)");
 
   test("boots from the built bundle, not from a dev server compiling on the fly", async ({
     page,

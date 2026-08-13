@@ -1,5 +1,5 @@
-import { STAGE_OUTCOMES } from "@adhd/core";
-import type { StageOutcome, StageState } from "@adhd/core";
+import { STAGE_OUTCOMES } from "@isotopy/core";
+import type { StageOutcome, StageState } from "@isotopy/core";
 
 export type RunCompletionStatus = "completed" | "needs_attention" | "failed";
 

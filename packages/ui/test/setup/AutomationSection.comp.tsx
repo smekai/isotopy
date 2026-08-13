@@ -3,7 +3,7 @@
 // saved — and that production never deploys without an explicit confirmation.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import type { ProjectAutomationConfig } from "@adhd/core";
+import type { ProjectAutomationConfig } from "@isotopy/core";
 import { AutomationSection } from "../../src/components/setup/AutomationSection";
 import type { AutomationSectionProps } from "../../src/components/setup/AutomationSection";
 import { DIRS } from "../../src/theme";

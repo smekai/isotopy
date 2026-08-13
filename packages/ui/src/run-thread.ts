@@ -4,7 +4,7 @@ import type {
   OrchestratorTeamProposal,
   RunState,
   RunSummary,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { teamAwaitingApproval } from "./orchestration.ts";
 import type { ConversationItem } from "./transcript.ts";
 import { buildTranscript, conversationOnly } from "./transcript.ts";

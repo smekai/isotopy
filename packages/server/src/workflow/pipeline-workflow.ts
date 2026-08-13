@@ -5,7 +5,7 @@ import {
   STAGE_EXECUTION_POLICIES,
   STAGE_OUTCOMES,
   agentForStage,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   EngineLimit,
   LimitChoice,
@@ -13,7 +13,7 @@ import type {
   PipelineGroup,
   StageDefinition,
   StageExecutionPolicy,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { limitWaitMs } from "../domain/rules/engine-limit.ts";
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import {
@@ -31,7 +31,7 @@ import type {
 } from "./types.ts";
 import type { QuestionMediationRequest } from "./types.ts";
 
-export const PIPELINE_WORKFLOW_NAME = "adhd-pipeline";
+export const PIPELINE_WORKFLOW_NAME = "isotopy-pipeline";
 
 const STAGE_RETRY = { maximumAttempts: 1 } as const;
 

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import { openPipelineComposer } from "../support/composer";
 import { resetPreferences } from "../support/preferences";
 
@@ -13,7 +13,7 @@ import { resetPreferences } from "../support/preferences";
 //            each box's own handoff) is asserted for zero tokens.
 //
 // The fixture is typed as `RunState`, so a change to the run model breaks
-// `pnpm --filter @adhd/ui typecheck` rather than rotting silently here.
+// `pnpm --filter @isotopy/ui typecheck` rather than rotting silently here.
 
 test.beforeEach(async ({ page }) => {
   await resetPreferences(page);

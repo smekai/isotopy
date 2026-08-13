@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { toRunSummary } from "@adhd/core";
-import type { RunSummary } from "@adhd/core";
+import { toRunSummary } from "@isotopy/core";
+import type { RunSummary } from "@isotopy/core";
 import { fetchRuns, subscribeRunSummaries } from "../api";
 import { mergeSummaries, mergeSummary } from "../run-list";
 

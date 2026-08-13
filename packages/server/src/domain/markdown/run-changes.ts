@@ -1,4 +1,4 @@
-import type { FileChangeKind, RunChangeSet } from "@adhd/core";
+import type { FileChangeKind, RunChangeSet } from "@isotopy/core";
 import { bullet, markdownBlocks, structuralText } from "./format.ts";
 
 const KIND_TITLE: Record<FileChangeKind, string> = {

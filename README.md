@@ -156,8 +156,8 @@ use `pnpm.cmd install` and `pnpm.cmd dev`; do not weaken the machine's policy.
 Run packages individually:
 
 ```bash
-pnpm --filter @adhd/server dev   # API only
-pnpm --filter @adhd/ui dev       # UI only
+pnpm --filter @isotopy/server dev   # API only
+pnpm --filter @isotopy/ui dev       # UI only
 ```
 
 To run the built app instead of the dev servers, build once and start it. Same

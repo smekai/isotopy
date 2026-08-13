@@ -2,7 +2,7 @@ import path from "node:path";
 import { OpenWorkflow } from "openworkflow";
 import type { Worker, Workflow } from "openworkflow";
 import { BackendSqlite } from "openworkflow/sqlite";
-import type { LimitChoice } from "@adhd/core";
+import type { LimitChoice } from "@isotopy/core";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";

@@ -1,4 +1,4 @@
-import { milestoneSchema, type Milestone } from "@adhd/core";
+import { milestoneSchema, type Milestone } from "@isotopy/core";
 
 export function parsePersistedMilestone(data: string): Milestone | undefined {
   try {

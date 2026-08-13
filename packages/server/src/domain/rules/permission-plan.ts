@@ -1,4 +1,4 @@
-import type { AutoReviewSupport, EngineId, EnginePermissionMode } from "@adhd/core";
+import type { AutoReviewSupport, EngineId, EnginePermissionMode } from "@isotopy/core";
 
 export const PERMISSION_STRATEGIES = ["unrestricted", "autoReview", "acceptEdits"] as const;
 

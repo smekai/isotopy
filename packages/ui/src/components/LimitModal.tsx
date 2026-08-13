@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import { BellRing, Play, Plug, RotateCcw, Square, X } from "lucide-react";
-import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@adhd/core";
+import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@isotopy/core";
 import type {
   EngineId,
   EngineModelRoster,
@@ -10,7 +10,7 @@ import type {
   ModelTierDefinition,
   RunLimit,
   RunState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { useEngineRoster } from "../hooks/useEngineRoster";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";

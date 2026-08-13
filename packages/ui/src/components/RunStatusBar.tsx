@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import type { RunState } from "@adhd/core";
-import { ENGINES, formatUsage, runUsage } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
+import { ENGINES, formatUsage, runUsage } from "@isotopy/core";
 import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
 import {
@@ -105,7 +105,7 @@ function statusDot(dot: string, running: boolean, d: Dir): CSSProperties {
     ...(running
       ? {
           boxShadow: `0 0 7px ${d.accent}`,
-          animation: `adhd-pulse ${MOTION.pulse} ${EASE.inOut} infinite`,
+          animation: `isotopy-pulse ${MOTION.pulse} ${EASE.inOut} infinite`,
         }
       : {}),
   };

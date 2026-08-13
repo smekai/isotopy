@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ProductProcessStatus } from "@adhd/core";
-import { isProductLive } from "@adhd/core";
+import type { ProductProcessStatus } from "@isotopy/core";
+import { isProductLive } from "@isotopy/core";
 import { fetchProductStatus, startProduct, stopProduct } from "../api";
 
 const STARTING_POLL_MS = 1000;

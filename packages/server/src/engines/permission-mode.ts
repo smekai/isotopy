@@ -1,4 +1,4 @@
-import type { AutoReviewSupport, EngineId } from "@adhd/core";
+import type { AutoReviewSupport, EngineId } from "@isotopy/core";
 import { permissionPlan } from "../domain/rules/permission-plan.ts";
 import type { PermissionPlan } from "../domain/rules/permission-plan.ts";
 import { probeCommand } from "./subprocess.ts";

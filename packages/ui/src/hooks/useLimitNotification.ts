@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { RunLimit } from "@adhd/core";
+import type { RunLimit } from "@isotopy/core";
 import { formatResetAt } from "../limit";
 import { APP_TITLE, LIMIT_COPY } from "../limit-copy";
 
@@ -17,7 +17,7 @@ function currentAccess(): NotificationAccess {
 function notifyLimit(limit: RunLimit): void {
   const body = LIMIT_COPY.notificationBody(formatResetAt(limit.resetAt));
   try {
-    new Notification(LIMIT_COPY.headline(limit), { body, tag: `adhd-limit-${limit.stageId}` });
+    new Notification(LIMIT_COPY.headline(limit), { body, tag: `isotopy-limit-${limit.stageId}` });
   } catch {}
 }
 

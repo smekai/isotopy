@@ -50,7 +50,7 @@ the shape of whichever file you happened to open.
 - Run `pnpm e2e` for the free and seeded suite. It starts an isolated server and
   never spends engine tokens.
 - Do not enable the live tier unless the task explicitly authorizes its cost:
-  `ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test`.
+  `ISOTOPY_E2E_LIVE=1 pnpm --filter @isotopy/ui e2e live-dev-test`.
 - Keep UI assertions in Playwright and workflow behaviour in component tests;
   do not duplicate the same rule at both layers.
 - Use existing typed seeded-run fixtures for rendering coverage. Add a test only

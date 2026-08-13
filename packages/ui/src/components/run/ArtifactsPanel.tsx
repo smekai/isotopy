@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { ClipboardCheck, FileDiff, FileText, FolderOpen } from "lucide-react";
-import { agentForStage } from "@adhd/core";
-import type { RunState } from "@adhd/core";
+import { agentForStage } from "@isotopy/core";
+import type { RunState } from "@isotopy/core";
 import { fetchRunFiles } from "../../api";
 import type { WorkspaceFile } from "../../api";
 import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";

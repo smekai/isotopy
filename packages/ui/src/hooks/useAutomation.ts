@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DeploymentResult, ProjectAutomationConfig } from "@adhd/core";
+import type { DeploymentResult, ProjectAutomationConfig } from "@isotopy/core";
 import {
   deployProduction,
   fetchAutomationConfig,

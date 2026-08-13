@@ -46,16 +46,16 @@ function envNumber(name: string, fallback: number): number {
 
 loadEnvFile(path.join(REPO_ROOT, ".env"));
 
-const port = envNumber("ADHD_PORT", envNumber("PORT", 9477));
-const uiPort = envNumber("ADHD_UI_PORT", 5173);
+const port = envNumber("ISOTOPY_PORT", envNumber("PORT", 9477));
+const uiPort = envNumber("ISOTOPY_UI_PORT", 5173);
 
 export const config = {
-  host: process.env.ADHD_HOST ?? "localhost",
+  host: process.env.ISOTOPY_HOST ?? "localhost",
   port,
-  corsOrigins: process.env.ADHD_CORS_ORIGINS
-    ? process.env.ADHD_CORS_ORIGINS.split(",")
+  corsOrigins: process.env.ISOTOPY_CORS_ORIGINS
+    ? process.env.ISOTOPY_CORS_ORIGINS.split(",")
         .map((origin) => origin.trim())
         .filter(Boolean)
     : [`http://localhost:${uiPort}`, `http://localhost:${port}`],
-  engineTimeoutMs: envNumber("ADHD_ENGINE_TIMEOUT_MS", 600_000),
+  engineTimeoutMs: envNumber("ISOTOPY_ENGINE_TIMEOUT_MS", 600_000),
 } as const;

@@ -1,4 +1,4 @@
-import { milestonePlanSchema } from "@adhd/core";
+import { milestonePlanSchema } from "@isotopy/core";
 import { Hono } from "hono";
 import {
   createMilestoneSchema,

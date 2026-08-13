@@ -1,4 +1,4 @@
-import type { Orchestration } from "@adhd/core";
+import type { Orchestration } from "@isotopy/core";
 import { Database } from "../db/database.ts";
 import { OrchestrationsTable } from "../db/orchestrations-table.ts";
 import { parsePersistedOrchestration } from "../schemas/orchestration.ts";

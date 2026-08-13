@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { ENGINES, MODEL_TIER_OPTIONS, defaultModelTierFor } from "@adhd/core";
-import type { EngineId, ModelTier } from "@adhd/core";
+import { ENGINES, MODEL_TIER_OPTIONS, defaultModelTierFor } from "@isotopy/core";
+import type { EngineId, ModelTier } from "@isotopy/core";
 import { FONT, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
 

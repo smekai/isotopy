@@ -4,7 +4,7 @@
 // bookkeeping and the act() wrapping live here.
 import { act } from "@testing-library/react";
 import { vi } from "vitest";
-import type { RunState, RunSummary } from "@adhd/core";
+import type { RunState, RunSummary } from "@isotopy/core";
 import { fetchRuns, subscribeRunSummaries } from "../../src/api";
 import { deferred, last } from "./deferred";
 import type { Deferred } from "./deferred";

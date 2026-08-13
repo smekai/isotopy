@@ -1,5 +1,5 @@
-import { ENGINES } from "@adhd/core";
-import type { EngineId } from "@adhd/core";
+import { ENGINES } from "@isotopy/core";
+import type { EngineId } from "@isotopy/core";
 
 export function unknownModelMessage(engineId: EngineId, modelId: string): string {
   return (

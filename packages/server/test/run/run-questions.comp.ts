@@ -3,7 +3,7 @@
 // parks in `asking` (its own status, never the gate's `awaiting`), and the answer
 // resumes rather than re-running, which is what `resumeSessionId` proves.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,

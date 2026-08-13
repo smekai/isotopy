@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { ModelOptionDraft } from "@adhd/core";
+import type { ModelOptionDraft } from "@isotopy/core";
 import type { LiveModelLayer } from "./types.ts";
 
 export const NO_LIVE_LISTING: LiveModelLayer = {

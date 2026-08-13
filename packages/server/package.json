@@ -1,6 +1,6 @@
 {
-  "name": "@adhd/server",
-  "version": "0.10.0",
+  "name": "@isotopy/server",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "@adhd/core": "workspace:*",
+    "@isotopy/core": "workspace:*",
     "@hono/node-server": "^1.14.1",
     "hono": "^4.7.6",
     "openworkflow": "^0.9.2",

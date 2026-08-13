@@ -6,7 +6,7 @@ describe("framingVerdict", () => {
     expect(framingVerdict({})).toEqual({ allowed: true });
   });
 
-  test("SAMEORIGIN blocks ADHD, which is never the same origin as the product", () => {
+  test("SAMEORIGIN blocks Isotopy, which is never the same origin as the product", () => {
     expect(framingVerdict({ xFrameOptions: "SAMEORIGIN" })).toEqual({
       allowed: false,
       blockedBy: "X-Frame-Options: SAMEORIGIN",

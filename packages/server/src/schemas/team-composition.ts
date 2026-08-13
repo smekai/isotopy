@@ -1,11 +1,11 @@
-import { STAGE_EXECUTION_POLICIES } from "@adhd/core";
+import { STAGE_EXECUTION_POLICIES } from "@isotopy/core";
 import type {
   ModelTier,
   OrchestratorRole,
   OrchestratorTeamProposal,
   PipelineDefinition,
   StageDefinition,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import type { ValidationIssue, ValidationResult } from "../domain/validation.ts";
 

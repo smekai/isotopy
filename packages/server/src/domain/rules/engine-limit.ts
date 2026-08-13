@@ -1,5 +1,5 @@
-import { DEFAULT_LIMIT_WAIT_MS, MAX_LIMIT_WAIT_MS } from "@adhd/core";
-import type { EngineId, EngineLimit, LimitResolution, ModelTier } from "@adhd/core";
+import { DEFAULT_LIMIT_WAIT_MS, MAX_LIMIT_WAIT_MS } from "@isotopy/core";
+import type { EngineId, EngineLimit, LimitResolution, ModelTier } from "@isotopy/core";
 
 export interface RunEngineSelection {
   engine?: EngineId;

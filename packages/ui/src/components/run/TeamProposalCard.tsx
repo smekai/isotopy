@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { Users } from "lucide-react";
-import type { ModelTier, OrchestratorRole, OrchestratorTeamProposal } from "@adhd/core";
-import { MODEL_TIER_OPTIONS, modelTierLabel } from "@adhd/core";
+import type { ModelTier, OrchestratorRole, OrchestratorTeamProposal } from "@isotopy/core";
+import { MODEL_TIER_OPTIONS, modelTierLabel } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 

@@ -1,4 +1,4 @@
-import type { LimitChoice } from "@adhd/core";
+import type { LimitChoice } from "@isotopy/core";
 
 const CHOICE_REASONS: Record<LimitChoice, string> = {
   "retry-now": "you asked to retry now",

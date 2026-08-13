@@ -6,8 +6,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { Hono } from "hono";
-import { RUN_SUMMARY_EVENT } from "@adhd/core";
-import type { EngineId, RunEvent, RunState, RunSummary } from "@adhd/core";
+import { PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
+import type { EngineId, RunEvent, RunState, RunSummary } from "@isotopy/core";
 import { createApp } from "../../src/app.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
@@ -34,9 +34,9 @@ export interface TestApp {
   engine: FakeEngine;
   rosters: ModelRosterService;
   product: ProductProcessService;
-  /** Temp `ADHD_HOME` for this test — the home project's data root. */
+  /** Temp `ISOTOPY_HOME` for this test — the home project's data root. */
   home: string;
-  /** Temp `ADHD_USER_HOME` — the project registry and credentials land here. */
+  /** Temp `ISOTOPY_USER_HOME` — the project registry and credentials land here. */
   userHome: string;
   dispose(): Promise<void>;
 }
@@ -81,8 +81,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const engineId = options.engineId ?? "claude-code";
   const home = await mkdtemp(path.join(os.tmpdir(), "adhd-comp-"));
   const userHome = await mkdtemp(path.join(os.tmpdir(), "adhd-user-"));
-  process.env.ADHD_HOME = home;
-  process.env.ADHD_USER_HOME = userHome;
+  process.env.ISOTOPY_HOME = home;
+  process.env.ISOTOPY_USER_HOME = userHome;
 
   const engine = new FakeEngine(engineId);
   setEngineAdapter(engineId, engine);
@@ -129,8 +129,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       await orchestrator.shutdown();
       await orchestrations.shutdown();
       resetEngineAdapters();
-      delete process.env.ADHD_HOME;
-      delete process.env.ADHD_USER_HOME;
+      delete process.env.ISOTOPY_HOME;
+      delete process.env.ISOTOPY_USER_HOME;
       // maxRetries covers the Windows case where a handle is still closing.
       // A temp directory that survives is untidy, never a test failure.
       await Promise.all(
@@ -199,7 +199,7 @@ export async function addTestProject(
 ): Promise<{ id: string; root: string; headers: Record<string, string> }> {
   const root = await mkdtemp(path.join(os.tmpdir(), `adhd-${label}-`));
   const project = await registry.add(root);
-  return { id: project.id, root, headers: { "X-ADHD-Project": project.id } };
+  return { id: project.id, root, headers: { [PROJECT_HEADER]: project.id } };
 }
 
 export type TestHeaders = Record<string, string>;

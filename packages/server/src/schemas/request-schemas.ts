@@ -6,12 +6,12 @@ import {
   MODEL_TIERS,
   PERMISSION_MODE_IDS,
   findPipeline,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   EngineId,
   LimitResolution,
   ProjectPreferencesUpdate,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { z } from "zod";
 
 const text = z.string().trim().min(1);

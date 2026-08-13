@@ -7,7 +7,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 import {
   approveIntake,
   createTestApp,

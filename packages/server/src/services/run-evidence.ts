@@ -5,7 +5,7 @@ import type {
   RunArtifactRecord,
   RunChangeSet,
   RunReleaseRecord,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   renderCancelledCleanupReport,
   renderRunArtifacts,

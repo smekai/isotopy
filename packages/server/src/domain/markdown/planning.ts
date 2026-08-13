@@ -1,4 +1,4 @@
-import type { MilestoneProposal } from "@adhd/core";
+import type { MilestoneProposal } from "@isotopy/core";
 import type { MilestoneSummaryContext } from "../../schemas/milestone-summary.ts";
 import {
   bullet,

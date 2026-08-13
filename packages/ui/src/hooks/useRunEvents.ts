@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { isTerminalRunStatus } from "@adhd/core";
-import type { RunEvent, RunState } from "@adhd/core";
+import { isTerminalRunStatus } from "@isotopy/core";
+import type { RunEvent, RunState } from "@isotopy/core";
 import { fetchRun, subscribeRunEvents } from "../api";
 import { applyEvent } from "../run-events";
 

@@ -1,4 +1,4 @@
-import type { RunLimit } from "@adhd/core";
+import type { RunLimit } from "@isotopy/core";
 
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;

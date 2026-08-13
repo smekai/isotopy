@@ -5,12 +5,12 @@ import type {
   MilestonePlan,
   UpdateMilestoneInput,
   RunState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   canAcceptMilestoneFeature,
   requestedMilestoneFeature,
   toMilestoneProposal,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   CreateMilestoneFeatureInput,
   CreateMilestoneInput,

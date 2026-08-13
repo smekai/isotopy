@@ -3,8 +3,8 @@ import type {
   OrchestratorRole,
   OrchestratorTeamProposal,
   RunSummary,
-} from "@adhd/core";
-import { HOME_PROJECT_ID } from "@adhd/core";
+} from "@isotopy/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
 import { summary } from "./run-fixtures";
 
 const CREATED_AT = "2026-08-01T09:00:00.000Z";

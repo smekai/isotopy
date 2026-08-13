@@ -4,9 +4,9 @@ import type {
   DeploymentResult,
   HealthCheckStatus,
   PlatformCommand,
-} from "@adhd/core";
+} from "@isotopy/core";
 
-const DEPLOY_URL_MARKER = /^ADHD_DEPLOY_URL=(https?:\/\/\S+)$/;
+const DEPLOY_URL_MARKER = /^ISOTOPY_DEPLOY_URL=(https?:\/\/\S+)$/;
 
 export function commandForPlatform(
   command: AutomationCommand,

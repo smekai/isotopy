@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { ProductProcessStatus, ProjectAutomationConfig, UiAutomation } from "@adhd/core";
+import { PROJECT_HEADER } from "@isotopy/core";
+import type { ProductProcessStatus, ProjectAutomationConfig, UiAutomation } from "@isotopy/core";
 import type { ProductResponseHeaders } from "../src/domain/rules/product-preview.ts";
 import type { ProjectPath } from "../src/paths.ts";
 import { AutomationConfigStore } from "../src/services/automation-config-store.ts";
@@ -265,7 +266,7 @@ test("switching project stops the product on the server, so a closed browser can
 
   // Assert
   const { body } = await get<ProductProcessStatus>(ctx.app, "/automation/product", {
-    "X-ADHD-Project": owner,
+    [PROJECT_HEADER]: owner,
   });
   expect(body.state).toBe("stopped");
 });

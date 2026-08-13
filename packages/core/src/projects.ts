@@ -1,4 +1,5 @@
 export const HOME_PROJECT_ID = "home";
+export const PROJECT_HEADER = "X-Isotopy-Project";
 
 export interface Project {
   id: string;

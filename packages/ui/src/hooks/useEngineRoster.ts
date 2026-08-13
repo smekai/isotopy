@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { bundledRosterFor } from "@adhd/core";
-import type { EngineId, EngineModelRoster } from "@adhd/core";
+import { bundledRosterFor } from "@isotopy/core";
+import type { EngineId, EngineModelRoster } from "@isotopy/core";
 import { fetchEngineModels } from "../api";
 
 export interface EngineRosterState {

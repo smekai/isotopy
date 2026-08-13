@@ -1,5 +1,5 @@
-import { agentForStage, toMilestoneProposal } from "@adhd/core";
-import type { RunState, StageDefinition } from "@adhd/core";
+import { agentForStage, toMilestoneProposal } from "@isotopy/core";
+import type { RunState, StageDefinition } from "@isotopy/core";
 import { extractMilestonePlan } from "../../schemas/milestone-plan.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
 import { nowIso } from "../../utils/time.ts";

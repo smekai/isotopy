@@ -2,23 +2,23 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "adhd-server",
+      "name": "isotopy-server",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--config.verify-deps-before-run=false",
         "--filter",
-        "@adhd/server",
+        "@isotopy/server",
         "dev"
       ],
       "port": 9477
     },
     {
-      "name": "adhd-ui",
+      "name": "isotopy-ui",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--config.verify-deps-before-run=false",
         "--filter",
-        "@adhd/ui",
+        "@isotopy/ui",
         "dev"
       ],
       "port": 5173

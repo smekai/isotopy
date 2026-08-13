@@ -3,7 +3,7 @@
 // wrong is how a decision lands above the turn that produced it, or how the
 // Orchestrator's question appears twice because it is already a chat message.
 import { expect, test } from "vitest";
-import type { OrchestratorDecision } from "@adhd/core";
+import type { OrchestratorDecision } from "@isotopy/core";
 import { runThread } from "../../src/run-thread";
 import { RUN_ID, log, run, started } from "../support/run-fixtures";
 import { orchestratedRun, orchestration, role, team } from "../support/orchestration-fixtures";

@@ -5,8 +5,8 @@
 // carrying the edits currently on screen.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { defaultProjectPreferences } from "@adhd/core";
-import type { Milestone, RunState } from "@adhd/core";
+import { defaultProjectPreferences } from "@isotopy/core";
+import type { Milestone, RunState } from "@isotopy/core";
 import {
   approveMilestonePlan,
   fetchMilestone,

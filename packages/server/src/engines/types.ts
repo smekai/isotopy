@@ -7,7 +7,7 @@ import type {
   ModelOptionDraft,
   StageLogDraft,
   StageUsage,
-} from "@adhd/core";
+} from "@isotopy/core";
 
 export interface EngineConnection {
   mode: string;

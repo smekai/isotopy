@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
-import type { LimitResolution, ModelTier, RunSummary } from "@adhd/core";
-import { preferredRunOptions } from "@adhd/core";
+import type { LimitResolution, ModelTier, RunSummary } from "@isotopy/core";
+import { preferredRunOptions } from "@isotopy/core";
 import {
   abortRun,
   answerOrchestrator,

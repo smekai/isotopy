@@ -1,4 +1,4 @@
-import type { AutomationCommand } from "@adhd/core";
+import type { AutomationCommand } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { fieldLabel } from "./setup-styles";
 import {

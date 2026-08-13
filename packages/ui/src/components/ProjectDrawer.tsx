@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, FolderOpen, Lock, X } from "lucide-react";
-import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, modelChoiceLabel, permissionModeLabel } from "@adhd/core";
-import type { Project, RunState } from "@adhd/core";
+import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, modelChoiceLabel, permissionModeLabel } from "@isotopy/core";
+import type { Project, RunState } from "@isotopy/core";
 import type { SettingsController } from "../hooks/useSettings";
 import { childPath, isScratchWorkspace } from "../run-utils";
 import type { Dir } from "../theme";

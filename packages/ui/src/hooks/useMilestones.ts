@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Milestone, RunState } from "@adhd/core";
+import type { Milestone, RunState } from "@isotopy/core";
 import {
   acceptMilestoneFeature,
   fetchMilestones,

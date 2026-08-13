@@ -1,6 +1,6 @@
 {
-  "name": "@adhd/ui",
-  "version": "0.10.0",
+  "name": "@isotopy/ui",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@adhd/core": "workspace:*",
+    "@isotopy/core": "workspace:*",
     "lucide-react": "^0.487.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

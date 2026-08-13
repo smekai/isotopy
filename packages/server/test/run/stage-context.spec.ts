@@ -110,10 +110,10 @@ describe("buildStagePrompt", () => {
   });
 
   test("an environment alone still earns the section headings a bare task would skip", () => {
-    const prompt = buildStagePrompt("verify the feature", [], undefined, "ADHD owns the product.");
+    const prompt = buildStagePrompt("verify the feature", [], undefined, "Isotopy owns the product.");
 
     expect(prompt).toContain("## Task\n\nverify the feature");
-    expect(prompt).toContain("## Environment\n\nADHD owns the product.");
+    expect(prompt).toContain("## Environment\n\nIsotopy owns the product.");
   });
 
   test("drops upstream boxes that produced nothing", () => {

@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import nodepath from "node:path";
-import type { RunEvent } from "@adhd/core";
+import type { RunEvent } from "@isotopy/core";
 import { ActiveRunsTable } from "../db/active-runs-table.ts";
 import { Database } from "../db/database.ts";
 import { EventsTable } from "../db/events-table.ts";

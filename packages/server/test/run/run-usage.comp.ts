@@ -3,7 +3,7 @@
 // behaviour is that a stage's turns *accumulate* — a question loop runs the same
 // stage several times, and the second turn must not erase the first turn's spend.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { runUsage } from "@adhd/core";
+import { runUsage } from "@isotopy/core";
 import {
   approveIntake,
   createTestApp,
@@ -16,7 +16,7 @@ import {
   waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
-import type { RunState } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
 
 const TASK = "add a settings page";
 const SESSION = "sess-cost";

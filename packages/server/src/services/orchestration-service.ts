@@ -4,7 +4,7 @@ import {
   isTerminalRunStatus,
   orchestrationStatusFor,
   parkedQuestion,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type {
   ModelTier,
   Orchestration,
@@ -14,7 +14,7 @@ import type {
   PipelineDefinition,
   RunState,
   StageDefinition,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   renderComposedRunTask,
   renderOrchestrationContext,

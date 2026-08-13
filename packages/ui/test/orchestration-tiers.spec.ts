@@ -3,7 +3,7 @@
 // superseded proposal can override a team the user never looked at, or send a
 // role id that no longer exists and have the approval rejected.
 import { expect, test } from "vitest";
-import type { Orchestration } from "@adhd/core";
+import type { Orchestration } from "@isotopy/core";
 import { pendingTiersFor, withPendingTier } from "../src/orchestration";
 import { orchestration, role, team } from "./support/orchestration-fixtures";
 

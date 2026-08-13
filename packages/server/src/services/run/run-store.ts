@@ -3,7 +3,7 @@ import type {
   RunEvent,
   RunState,
   StageLogEntry,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { RunRepository } from "../../repository/run-repository.ts";

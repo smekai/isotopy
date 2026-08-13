@@ -60,7 +60,7 @@ export const createdTaskReferenceSchema = z
   .object({
     id: requiredText,
     title: requiredText,
-    backend: z.enum(["taskplanner", "adhd"]),
+    backend: z.enum(["taskplanner", "isotopy"]),
   })
   .strict();
 

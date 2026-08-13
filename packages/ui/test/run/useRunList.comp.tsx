@@ -7,7 +7,7 @@
 // which owns the deferred promises and the act() wrapping so no test body does.
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { HOME_PROJECT_ID } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
 import { useRunList } from "../../src/hooks/useRunList";
 import { fakeRunListStream } from "../support/fake-run-list-stream";
 import type { FakeRunListStream } from "../support/fake-run-list-stream";

@@ -1,4 +1,4 @@
-import type { DeploymentResult, ReleaseManifest } from "@adhd/core";
+import type { DeploymentResult, ReleaseManifest } from "@isotopy/core";
 import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";
 
 function listSection(title: string, items: string[]): string | undefined {

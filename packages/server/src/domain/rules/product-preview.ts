@@ -1,4 +1,4 @@
-import type { ProductFraming } from "@adhd/core";
+import type { ProductFraming } from "@isotopy/core";
 
 const MIN_POLL_INTERVAL_MS = 250;
 const MAX_POLL_INTERVAL_MS = 2000;

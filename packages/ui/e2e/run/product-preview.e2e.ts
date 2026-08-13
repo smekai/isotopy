@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import type { ProductProcessStatus, RunState } from "@adhd/core";
+import type { ProductProcessStatus, RunState } from "@isotopy/core";
 import { resetPreferences } from "../support/preferences";
 
 // The Preview tab, without starting anybody's dev server.
@@ -12,7 +12,7 @@ import { resetPreferences } from "../support/preferences";
 // interception, the same trick `run/dev-test-flow.e2e.ts` uses for a run.
 //
 // The fixtures are typed (`ProductProcessStatus`, `RunState`), so a change to
-// either model breaks `pnpm --filter @adhd/ui typecheck` rather than rotting.
+// either model breaks `pnpm --filter @isotopy/ui typecheck` rather than rotting.
 
 test.beforeEach(async ({ page }) => {
   await resetPreferences(page);

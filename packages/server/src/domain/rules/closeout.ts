@@ -7,7 +7,7 @@ import {
   type FollowUpTaskDraft,
   type ProductManagerCloseout,
   type RunState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import { z } from "zod";
 
 const CLOSEOUT_BLOCK = /```adhd-closeout\s*([\s\S]*?)```/i;

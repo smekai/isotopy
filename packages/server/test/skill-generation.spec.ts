@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { DEMO_PIPELINES, flattenPipelineStages } from "@adhd/core";
+import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
 import { REPO_ROOT } from "../src/paths.ts";
 import {
   loadBundledPersona,

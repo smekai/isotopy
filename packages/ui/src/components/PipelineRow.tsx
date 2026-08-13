@@ -1,5 +1,5 @@
-import type { RunState } from "@adhd/core";
-import { findPipeline, flattenPipelineStages } from "@adhd/core";
+import type { RunState } from "@isotopy/core";
+import { findPipeline, flattenPipelineStages } from "@isotopy/core";
 import type { CSSProperties } from "react";
 import { stagePresentation } from "../run-utils";
 import type { Dir } from "../theme";

@@ -1,10 +1,10 @@
-import { STAGE_OUTCOMES, flattenPipelineStages } from "@adhd/core";
+import { STAGE_OUTCOMES, flattenPipelineStages } from "@isotopy/core";
 import type {
   PipelineDefinition,
   RunState,
   StageOutcome,
   StageState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import type { ValidationResult } from "../validation.ts";
 import { outcomeForRestart } from "./run-lifecycle.ts";
 

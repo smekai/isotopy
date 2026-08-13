@@ -1,7 +1,7 @@
 {
   "name": "adhd",
   "private": true,
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Isotopy — The last mile for your ideas, turning them into working businesses",
   "repository": {
     "type": "git",
@@ -12,13 +12,13 @@
     "url": "https://github.com/smekai/adhd/issues"
   },
   "scripts": {
-    "dev": "concurrently -n server,ui -c blue,green \"pnpm --filter @adhd/server dev\" \"pnpm --filter @adhd/ui dev\"",
+    "dev": "concurrently -n server,ui -c blue,green \"pnpm --filter @isotopy/server dev\" \"pnpm --filter @isotopy/ui dev\"",
     "build": "pnpm -r build",
-    "start": "concurrently -n server,ui -c blue,green \"pnpm --filter @adhd/server start\" \"pnpm --filter @adhd/ui preview\"",
+    "start": "concurrently -n server,ui -c blue,green \"pnpm --filter @isotopy/server start\" \"pnpm --filter @isotopy/ui preview\"",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "pnpm --filter @adhd/ui e2e",
+    "e2e": "pnpm --filter @isotopy/ui e2e",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "gen:skills": "node scripts/generate-skills.mjs"

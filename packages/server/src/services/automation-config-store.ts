@@ -1,7 +1,7 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { EMPTY_AUTOMATION_CONFIG } from "@adhd/core";
-import type { ProjectAutomationConfig } from "@adhd/core";
+import { EMPTY_AUTOMATION_CONFIG } from "@isotopy/core";
+import type { ProjectAutomationConfig } from "@isotopy/core";
 import {
   automationConfigSchema,
   parseAutomationConfig,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, FolderPlus, Home, Trash2 } from "lucide-react";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { Project } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { Project } from "@isotopy/core";
 import type { Dir } from "../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT, Z } from "../theme";
 import { FolderPicker } from "./FolderPicker";

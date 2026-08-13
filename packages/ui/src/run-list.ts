@@ -1,5 +1,5 @@
-import { isTerminalRunStatus } from "@adhd/core";
-import type { Orchestration, RunSummary } from "@adhd/core";
+import { isTerminalRunStatus } from "@isotopy/core";
+import type { Orchestration, RunSummary } from "@isotopy/core";
 
 export function mergeSummary(runs: RunSummary[], summary: RunSummary): RunSummary[] {
   const index = runs.findIndex((run) => run.id === summary.id);

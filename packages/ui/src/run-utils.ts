@@ -1,5 +1,5 @@
-import { STAGE_VERDICTS } from "@adhd/core";
-import type { StageState, StageStatus } from "@adhd/core";
+import { STAGE_VERDICTS } from "@isotopy/core";
+import type { StageState, StageStatus } from "@isotopy/core";
 
 export interface StageProgress {
   id: string;

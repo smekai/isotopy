@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@adhd/core";
+import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { cursorCliConfigModel, parseCursorModels } from "../schemas/engine-cli-config.ts";
 import { configuredModelFrom } from "./cli-config.ts";
@@ -35,7 +35,7 @@ const DOCS_URL = "https://cursor.com/docs/cli/installation";
 
 const INSTALL_HINT =
   `Install it (PowerShell: ${INSTALL_COMMAND}), ` +
-  "then run `agent login` once. Or set ADHD_CURSOR_PATH to the executable.";
+  "then run `agent login` once. Or set ISOTOPY_CURSOR_PATH to the executable.";
 
 function isCursorIdeInstalled(): boolean {
   if (existsSync(path.join("C:", "Program Files", "cursor"))) {
@@ -85,11 +85,11 @@ function resolveCursorBinary(): ResolvedBinary {
   if (cachedBinary) {
     return cachedBinary;
   }
-  const fromEnv = process.env.ADHD_CURSOR_PATH;
+  const fromEnv = process.env.ISOTOPY_CURSOR_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
     const envPath = fromEnv.trim();
     if (!existsSync(envPath)) {
-      throw new Error(`ADHD_CURSOR_PATH points to a missing file: ${envPath}`);
+      throw new Error(`ISOTOPY_CURSOR_PATH points to a missing file: ${envPath}`);
     }
     cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;
@@ -113,7 +113,7 @@ function resolveCursorBinary(): ResolvedBinary {
     return cachedBinary;
   }
   throw new Error(
-    "Cursor CLI not found (tried ADHD_CURSOR_PATH, " +
+    "Cursor CLI not found (tried ISOTOPY_CURSOR_PATH, " +
       `${PATH_CANDIDATES.join("/")} on PATH, ${installDirs().join(", ")}). ` +
       INSTALL_HINT,
   );
@@ -143,8 +143,8 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /unknown (?:option|argument)|unrecognized (?:option|argument)/i,
     message:
-      "Your Cursor CLI doesn't recognize a flag we pass. Try ADHD_CURSOR_TRUST=0, " +
-      "adjust ADHD_CURSOR_ARGS, or update the CLI (`agent update`).",
+      "Your Cursor CLI doesn't recognize a flag we pass. Try ISOTOPY_CURSOR_TRUST=0, " +
+      "adjust ISOTOPY_CURSOR_ARGS, or update the CLI (`agent update`).",
   },
 ];
 
@@ -165,17 +165,17 @@ function promptGoesInArgs(binary: string): boolean {
   if (commandNeedsWindowsShell(binary)) {
     return false;
   }
-  return process.env.ADHD_CURSOR_PROMPT_VIA !== "stdin";
+  return process.env.ISOTOPY_CURSOR_PROMPT_VIA !== "stdin";
 }
 
 function buildArgs(ctx: EngineRunContext, promptViaArg: boolean): string[] {
-  const extra = (process.env.ADHD_CURSOR_ARGS ?? "").split(/\s+/).filter(Boolean);
+  const extra = (process.env.ISOTOPY_CURSOR_ARGS ?? "").split(/\s+/).filter(Boolean);
   return [
     "-p",
     "--output-format",
     "stream-json",
     "--force",
-    ...(process.env.ADHD_CURSOR_TRUST === "0" ? [] : ["--trust"]),
+    ...(process.env.ISOTOPY_CURSOR_TRUST === "0" ? [] : ["--trust"]),
     ...(ctx.model ? ["--model", ctx.model] : []),
     ...extra,
     ...(promptViaArg ? [ctx.prompt] : []),
@@ -323,7 +323,7 @@ export const cursorAdapter: EngineAdapter = {
     const promptViaArg = promptGoesInArgs(binary);
     await resolvePermissionPlan("cursor", ctx, AUTO_REVIEW_UNREACHABLE);
     if (promptViaArg && runCtx.prompt.length > PROMPT_ARG_WARN_LENGTH) {
-      ctx.onLog({ level: "warn", message: "Prompt near the command-line length limit — set ADHD_CURSOR_PROMPT_VIA=stdin" });
+      ctx.onLog({ level: "warn", message: "Prompt near the command-line length limit — set ISOTOPY_CURSOR_PROMPT_VIA=stdin" });
     }
 
     const capture: EngineProtocolUpdate = { logs: [] };

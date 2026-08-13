@@ -4,7 +4,7 @@
 // also have used.
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
-import type { Milestone } from "@adhd/core";
+import type { Milestone } from "@isotopy/core";
 import { resetPreferences } from "../support/preferences";
 
 // Every test needs one seeded milestone, so it is created once per test rather

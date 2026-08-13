@@ -1,4 +1,4 @@
-import type { StageLogDraft } from "@adhd/core";
+import type { StageLogDraft } from "@isotopy/core";
 import { z } from "zod";
 import { truncate } from "./log-text.ts";
 import {

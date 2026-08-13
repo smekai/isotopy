@@ -5,7 +5,7 @@ import type {
   MilestoneFeatureProposal,
   MilestoneProposal,
   RunState,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   approveMilestonePlan,
   fetchMilestone,
@@ -15,7 +15,7 @@ import {
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
 import { FONT, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
-import { preferredRunOptions } from "@adhd/core";
+import { preferredRunOptions } from "@isotopy/core";
 import { SCROLL_BODY } from "./run-styles";
 
 const MAX_WIDTH = 900;

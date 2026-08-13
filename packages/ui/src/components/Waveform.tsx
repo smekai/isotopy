@@ -16,7 +16,7 @@ export function Waveform({ color, height = DEFAULT_HEIGHT }: WaveformProps) {
         <div key={i} style={{
           background: color, width: BAR_WIDTH, borderRadius: RADIUS.xs,
           height: `${h * height}px`,
-          animation: `adhd-wave ${0.38 + i * 0.07}s ${EASE.inOut} ${i * 0.05}s infinite alternate`,
+          animation: `isotopy-wave ${0.38 + i * 0.07}s ${EASE.inOut} ${i * 0.05}s infinite alternate`,
         }} />
       ))}
     </div>

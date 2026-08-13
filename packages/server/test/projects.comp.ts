@@ -4,8 +4,8 @@
 import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { HOME_PROJECT_ID } from "@adhd/core";
-import type { ProjectsView, RunState, SettingsView } from "@adhd/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { ProjectsView, RunState, SettingsView } from "@isotopy/core";
 import {
   addTestProject,
   createTestApp,

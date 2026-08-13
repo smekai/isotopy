@@ -2,7 +2,7 @@
 // (TASK-060 shipped a Restart button that actually resumed), and the scratch
 // check has to hold on both path separators.
 import { describe, expect, test } from "vitest";
-import type { RunState, StageState } from "@adhd/core";
+import type { RunState, StageState } from "@isotopy/core";
 import {
   childPath,
   isScratchWorkspace,

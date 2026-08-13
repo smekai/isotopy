@@ -3,10 +3,10 @@ import { defineConfig } from "vitest/config";
 
 const HERE = import.meta.dirname;
 
-// @adhd/core is consumed as TypeScript source; mirror packages/ui/vite.config.ts.
+// @isotopy/core is consumed as TypeScript source; mirror packages/ui/vite.config.ts.
 const RESOLVE = {
   alias: {
-    "@adhd/core": path.resolve(HERE, "packages/core/src/index.ts"),
+    "@isotopy/core": path.resolve(HERE, "packages/core/src/index.ts"),
   },
 };
 

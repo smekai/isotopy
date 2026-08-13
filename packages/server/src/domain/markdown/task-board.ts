@@ -1,4 +1,4 @@
-import type { TaskPriority } from "@adhd/core";
+import type { TaskPriority } from "@isotopy/core";
 
 export type BoardInsertPosition = "top" | "bottom";
 

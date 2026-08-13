@@ -1,5 +1,5 @@
-import { AUTO_MODEL_OPTION, staticModelsFor } from "@adhd/core";
-import type { EngineModelOption, EngineModelRoster } from "@adhd/core";
+import { AUTO_MODEL_OPTION, staticModelsFor } from "@isotopy/core";
+import type { EngineModelOption, EngineModelRoster } from "@isotopy/core";
 
 export function modelOption(overrides: Partial<EngineModelOption> = {}): EngineModelOption {
   return { id: "sonnet", label: "Sonnet", hint: "balanced", origin: "static", ...overrides };

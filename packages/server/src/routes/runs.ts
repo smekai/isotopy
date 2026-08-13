@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@adhd/core";
-import type { RunEvent } from "@adhd/core";
+import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@isotopy/core";
+import type { RunEvent } from "@isotopy/core";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunService } from "../services/run/run-service.ts";
 import {

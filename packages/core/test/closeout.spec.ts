@@ -1,6 +1,6 @@
 // Core's closeout schema is the strict half of a deliberate pair: the agent
 // boundary in the server salvages what an LLM wrote, and this one governs what
-// ADHD itself persists. If core ever starts normalising, the two collapse into
+// Isotopy itself persists. If core ever starts normalising, the two collapse into
 // one lenient codec and the strict-on-the-way-to-disk guarantee is gone.
 import { describe, expect, it } from "vitest";
 import { productManagerCloseoutSchema } from "../src/closeout.ts";

@@ -1,4 +1,4 @@
-import type { RunEvent, RunStatus } from "@adhd/core";
+import type { RunEvent, RunStatus } from "@isotopy/core";
 import type { PersistedRun } from "../../src/repository/run-repository.ts";
 
 export function makePersistedRun(id: string, status: RunStatus): PersistedRun {

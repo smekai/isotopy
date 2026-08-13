@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { agentForStage, formatUsage } from "@adhd/core";
-import type { LogLevel, RunState, StageState } from "@adhd/core";
+import { agentForStage, formatUsage } from "@isotopy/core";
+import type { LogLevel, RunState, StageState } from "@isotopy/core";
 import { renderInlineMarkdown } from "../../inline-md";
 import { useFollowScroll } from "../../hooks/useFollowScroll";
 import type { Dir } from "../../theme";
@@ -63,7 +63,7 @@ function caret(d: Dir): CSSProperties {
     color: d.accent,
     fontFamily: MONO,
     fontSize: FONT.md,
-    animation: `adhd-fade-pulse ${MOTION.shimmer} ${EASE.inOut} infinite`,
+    animation: `isotopy-fade-pulse ${MOTION.shimmer} ${EASE.inOut} infinite`,
   };
 }
 

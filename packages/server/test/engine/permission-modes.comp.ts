@@ -2,7 +2,7 @@
 // `permission-plan.spec.ts` proves the rule in isolation; this proves the wiring
 // — the probe, the cache, the argv builders and the degradation notice — by
 // running each adapter against a stub binary installed through the documented
-// ADHD_*_PATH override.
+// ISOTOPY_*_PATH override.
 //
 // The stub records every argv it is called with and answers `--help` from a
 // fixture the test wrote, so a Codex build that advertises auto-review on `exec`
@@ -11,13 +11,13 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
-import type { EngineId, EnginePermissionMode } from "@adhd/core";
+import type { EngineId, EnginePermissionMode } from "@isotopy/core";
 import { claudeCodeAdapter } from "../../src/engines/claude-code.ts";
 import { codexAdapter } from "../../src/engines/codex.ts";
 import { cursorAdapter } from "../../src/engines/cursor.ts";
 import { clearAutoReviewCache } from "../../src/engines/permission-mode.ts";
 import type { EngineAdapter } from "../../src/engines/types.ts";
-import type { StageLogDraft } from "@adhd/core";
+import type { StageLogDraft } from "@isotopy/core";
 
 const CLAUDE_HELP_WITH_AUTO = [
   "  --permission-mode <mode>              Permission mode to use for the session",
@@ -30,9 +30,9 @@ const CLAUDE_HELP_WITHOUT_AUTO = [
 ].join("\n");
 
 const PATH_ENV: Record<EngineId, string> = {
-  "claude-code": "ADHD_CLAUDE_PATH",
-  codex: "ADHD_CODEX_PATH",
-  cursor: "ADHD_CURSOR_PATH",
+  "claude-code": "ISOTOPY_CLAUDE_PATH",
+  codex: "ISOTOPY_CODEX_PATH",
+  cursor: "ISOTOPY_CURSOR_PATH",
 };
 
 const ADAPTERS: Record<EngineId, EngineAdapter> = {

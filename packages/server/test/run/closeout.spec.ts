@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { productManagerCloseoutSchema } from "@adhd/core";
-import type { ProductManagerCloseout, RunState } from "@adhd/core";
+import { productManagerCloseoutSchema } from "@isotopy/core";
+import type { ProductManagerCloseout, RunState } from "@isotopy/core";
 import {
   parseProductManagerCloseout,
   validateSourceTaskOutcome,

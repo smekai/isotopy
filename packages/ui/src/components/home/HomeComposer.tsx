@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, FolderOpen, Play, Sparkles, SlidersHorizontal } from "lucide-react";
-import { ENGINES, HOME_PROJECT_ID, modelOverrideFor, pipelineUsesEngineById } from "@adhd/core";
-import type { Project } from "@adhd/core";
+import { ENGINES, HOME_PROJECT_ID, modelOverrideFor, pipelineUsesEngineById } from "@isotopy/core";
+import type { Project } from "@isotopy/core";
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";

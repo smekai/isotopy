@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import type { RunCloseoutRecord, RunState } from "@adhd/core";
+import type { RunCloseoutRecord, RunState } from "@isotopy/core";
 import { ArtifactsPanel } from "../../src/components/run/ArtifactsPanel";
 import type { ArtifactView } from "../../src/components/run/ArtifactsPanel";
 import { CloseoutPanel } from "../../src/components/run/CloseoutPanel";
@@ -48,7 +48,7 @@ test("created tasks show their id, title and which backend wrote them", () => {
       closeout={closeout({
         createdTasks: [
           { id: "TASK-101", title: "Cover the milestone e2e gap", backend: "taskplanner" },
-          { id: "adhd-3", title: "Chase the flaky teardown", backend: "adhd" },
+          { id: "isotopy-3", title: "Chase the flaky teardown", backend: "isotopy" },
         ],
       })}
       d={d}

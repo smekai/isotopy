@@ -1,4 +1,4 @@
-import { releaseManifestSchema, type ReleaseManifest } from "@adhd/core";
+import { releaseManifestSchema, type ReleaseManifest } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 

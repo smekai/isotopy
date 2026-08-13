@@ -19,14 +19,14 @@ let project: ProjectPath;
 beforeEach(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), "adhd-skills-"));
   userHome = await mkdtemp(path.join(os.tmpdir(), "adhd-skills-user-"));
-  process.env.ADHD_HOME = home;
-  process.env.ADHD_USER_HOME = userHome;
+  process.env.ISOTOPY_HOME = home;
+  process.env.ISOTOPY_USER_HOME = userHome;
   project = homeProjectPaths();
 });
 
 afterEach(async () => {
-  delete process.env.ADHD_HOME;
-  delete process.env.ADHD_USER_HOME;
+  delete process.env.ISOTOPY_HOME;
+  delete process.env.ISOTOPY_USER_HOME;
   await Promise.all(
     [home, userHome].map((dir) =>
       rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(

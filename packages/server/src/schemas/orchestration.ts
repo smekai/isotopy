@@ -1,4 +1,4 @@
-import { orchestrationSchema, type Orchestration } from "@adhd/core";
+import { orchestrationSchema, type Orchestration } from "@isotopy/core";
 
 export function parsePersistedOrchestration(data: string): Orchestration | undefined {
   try {

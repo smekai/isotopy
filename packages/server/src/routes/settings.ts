@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { ENGINES } from "@adhd/core";
-import type { EngineId } from "@adhd/core";
+import { ENGINES } from "@isotopy/core";
+import type { EngineId } from "@isotopy/core";
 import {
   engineConnectionUpdateSchema,
   projectPreferencesUpdateSchema,

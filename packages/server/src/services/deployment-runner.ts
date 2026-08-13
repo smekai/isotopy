@@ -3,7 +3,7 @@ import type {
   DeploymentEnvironment,
   DeploymentResult,
   HealthCheckStatus,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   commandForPlatform,
   deploymentVerdict,

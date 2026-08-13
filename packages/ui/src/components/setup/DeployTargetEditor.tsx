@@ -1,5 +1,5 @@
 import { Check, Server } from "lucide-react";
-import type { DeploymentAutomation, DeploymentEnvironment } from "@adhd/core";
+import type { DeploymentAutomation, DeploymentEnvironment } from "@isotopy/core";
 import { ICON, SANS, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
 import {

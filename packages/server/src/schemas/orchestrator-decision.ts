@@ -1,4 +1,4 @@
-import { orchestratorDecisionSchema, type OrchestratorDecision } from "@adhd/core";
+import { orchestratorDecisionSchema, type OrchestratorDecision } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 

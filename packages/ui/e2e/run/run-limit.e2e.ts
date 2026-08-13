@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request } from "@playwright/test";
-import type { RunLimit, RunState } from "@adhd/core";
+import type { RunLimit, RunState } from "@isotopy/core";
 import { LIMIT_COPY } from "../../src/limit-copy";
 import { resetPreferences } from "../support/preferences";
 

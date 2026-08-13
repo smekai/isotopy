@@ -4,8 +4,8 @@ import {
   canFinalizeMilestone,
   canStartNextFeature,
   milestoneProgress,
-} from "@adhd/core";
-import type { Milestone, RunSummary } from "@adhd/core";
+} from "@isotopy/core";
+import type { Milestone, RunSummary } from "@isotopy/core";
 import { MilestoneFeatureCard } from "./MilestoneFeatureCard";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";

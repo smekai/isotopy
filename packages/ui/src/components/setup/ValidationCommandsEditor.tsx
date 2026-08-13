@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import type { ValidationCommand } from "@adhd/core";
+import type { ValidationCommand } from "@isotopy/core";
 import { ICON } from "../../theme";
 import type { Dir } from "../../theme";
 import { fieldLabel, mutedCaption } from "./setup-styles";

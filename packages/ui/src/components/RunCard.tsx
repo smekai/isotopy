@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { PlayCircle, Repeat, RotateCcw } from "lucide-react";
-import type { RunSummary } from "@adhd/core";
+import type { RunSummary } from "@isotopy/core";
 import { formatDateTime } from "../format";
 import { firstStageId, resumeStageId } from "../run-utils";
 import type { Dir } from "../theme";

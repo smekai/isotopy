@@ -3,7 +3,7 @@ import type {
   CloseoutFinding,
   ProductManagerCloseout,
   RunArtifacts,
-} from "@adhd/core";
+} from "@isotopy/core";
 import {
   bullet,
   markdownBlocks,

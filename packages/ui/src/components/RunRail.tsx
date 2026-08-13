@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { Flag, Plus } from "lucide-react";
-import type { Milestone, RunSummary } from "@adhd/core";
-import { milestoneProgress } from "@adhd/core";
+import type { Milestone, RunSummary } from "@isotopy/core";
+import { milestoneProgress } from "@isotopy/core";
 import { RunCard } from "./RunCard";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";

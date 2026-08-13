@@ -3,8 +3,8 @@ import type {
   ProductProcessState,
   ProductProcessStatus,
   UiAutomation,
-} from "@adhd/core";
-import { isProductLive } from "@adhd/core";
+} from "@isotopy/core";
+import { isProductLive } from "@isotopy/core";
 import { commandForPlatform, deploymentWorkingDirectory } from "../domain/rules/deployment.ts";
 import { framingVerdict, readyPollIntervalMs } from "../domain/rules/product-preview.ts";
 import type { ProductResponseHeaders } from "../domain/rules/product-preview.ts";

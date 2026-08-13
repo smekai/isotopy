@@ -205,7 +205,7 @@ indirect, and harder to diagnose when it breaks.
 | **Component (render)** | `packages/ui/test/**/*.comp.tsx` | Vitest (`jsdom`) | `pnpm test` | The same, for React code that must render — hooks and components, deps mocked. |
 | **Spec** | `packages/*/test/**/*.spec.ts` | Vitest (`node`) | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
 | **E2E** | `packages/ui/e2e/**/*.e2e.ts` | Playwright | `pnpm e2e` | Only what needs a browser: rendering, focus, tab wiring. |
-| **Live** | `e2e/run/live-dev-test.e2e.ts` | Playwright | `ADHD_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
+| **Live** | `e2e/run/live-dev-test.e2e.ts` | Playwright | `ISOTOPY_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
 
 **`.spec.ts` means one thing: a Vitest unit spec over a pure function.** A
 browser test is `.e2e.ts` (Playwright's `testMatch`), because one extension
@@ -283,7 +283,7 @@ Exactly two things on the server. Everything else is the real code.
 | Dependency | Substituted with | Why |
 | --- | --- | --- |
 | Engine adapter (spawns a CLI) | `FakeEngine` via `setEngineAdapter()` | Otherwise the test costs money and needs an authenticated CLI. |
-| `.adhd` data root | temp dir via `ADHD_HOME` | Otherwise tests write into the developer's real run history. |
+| `.adhd` data root | temp dir via `ISOTOPY_HOME` | Otherwise tests write into the developer's real run history. |
 
 The UI's substituted boundary is [`api.ts`](../packages/ui/src/api.ts) — the only
 module that talks to the network — mocked with `vi.mock("../src/api")`. In `e2e/`

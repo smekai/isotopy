@@ -1,4 +1,4 @@
-import type { Orchestration } from "@adhd/core";
+import type { Orchestration } from "@isotopy/core";
 import { OrchestrationRepository } from "../../src/repository/orchestration-repository.ts";
 import type { ProjectRegistry } from "../../src/services/project-registry.ts";
 

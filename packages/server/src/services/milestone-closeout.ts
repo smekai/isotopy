@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Milestone, RunArtifacts, RunState } from "@adhd/core";
+import type { Milestone, RunArtifacts, RunState } from "@isotopy/core";
 import { renderMilestoneSummary } from "../domain/markdown/closeout.ts";
 import { renderPriorMilestoneCloseouts } from "../domain/markdown/planning.ts";
 import { parseMilestoneSummary } from "../schemas/milestone-summary.ts";

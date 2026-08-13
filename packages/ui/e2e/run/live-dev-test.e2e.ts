@@ -3,7 +3,7 @@ import { openPipelineComposer } from "../support/composer";
 
 // Live tier — the ONLY test in the repo that spends money.
 //
-// Skipped unless ADHD_E2E_LIVE=1, so `pnpm e2e` stays free and fast.
+// Skipped unless ISOTOPY_E2E_LIVE=1, so `pnpm e2e` stays free and fast.
 //
 // This is now a **canary, not a proof**. That the two boxes chain — the Tester
 // handed the Developer's report, both working in one shared workspace, a FAIL
@@ -21,9 +21,9 @@ import { openPipelineComposer } from "../support/composer";
 //
 // Cost: one haiku run, roughly a cent.
 //
-//   ADHD_E2E_LIVE=1 pnpm --filter @adhd/ui e2e live-dev-test
+//   ISOTOPY_E2E_LIVE=1 pnpm --filter @isotopy/ui e2e live-dev-test
 
-const LIVE = process.env.ADHD_E2E_LIVE === "1";
+const LIVE = process.env.ISOTOPY_E2E_LIVE === "1";
 
 /** Deliberately tiny: the point is the handoff, not the coding. */
 const TASK =
@@ -34,7 +34,7 @@ const TASK =
 // runs to learn the same thing. Each phase is still bannered, and the assertions
 // read in the order the run reaches them.
 test("the real Claude Code CLI still drives a two-box run end to end", async ({ page }) => {
-  test.skip(!LIVE, "live tier — set ADHD_E2E_LIVE=1 to run (spends real tokens)");
+  test.skip(!LIVE, "live tier — set ISOTOPY_E2E_LIVE=1 to run (spends real tokens)");
   // A real two-box run is minutes, not seconds.
   test.setTimeout(10 * 60_000);
 
