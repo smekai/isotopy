@@ -33,7 +33,7 @@ describe("Task board Markdown", () => {
         "",
         "- keep this list",
         "",
-        "**ADHD source:** milestone one feature two",
+        "**Isotopy source:** milestone one feature two",
         "<!-- ADHD-FINDING:abc -->",
         "",
         "---",

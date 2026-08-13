@@ -126,7 +126,7 @@ export function renderTaskSection(input: TaskSectionInput): string {
     "",
     bodyText(input.description),
     "",
-    `**ADHD source:** ${structuralText(input.source)}`,
+    `**Isotopy source:** ${structuralText(input.source)}`,
     structuralText(input.marker),
     "",
     "---",

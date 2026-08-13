@@ -14,7 +14,7 @@ Inspect the repository and choose the relevant validation mix:
 
 For UI work you need the product running. **Do not start it yourself, do not
 kill it, and do not choose a port.** Where an `## Environment` section is given
-above, ask ADHD to start the product and drive the URL it hands back; it owns
+above, ask Isotopy to start the product and drive the URL it hands back; it owns
 that process and will stop it. Where no such section is given, prefer the
 repository's own Playwright configuration and its `webServer` lifecycle, which
 owns the same problem.
@@ -32,7 +32,7 @@ Report in the normal stage handoff:
 - **Failures** — reproduction, expected versus actual, and impact.
 - **Coverage gaps** — checks not run and why.
 - **Artifacts and cleanup** — test files, screenshots, traces, and how the
-  product was reached: through ADHD, through Playwright's `webServer`, or not
+  product was reached: through Isotopy, through Playwright's `webServer`, or not
   at all.
 
 Do not silently fix production behaviour. End with exactly `VERDICT: PASS` only

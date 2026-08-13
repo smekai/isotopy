@@ -10,7 +10,7 @@ How this repo is tested, and — more usefully — **how a test here must be wri
 > Four blocks — `testing-shared`, `testing-skill`, `tester-persona-head`,
 > `tester-persona-tail` — delimited by `<!-- gen:NAME:start -->` /
 > `<!-- gen:NAME:end -->`. `testing-shared` is reused **verbatim** by the persona,
-> which runs inside arbitrary repositories: nothing ADHD-specific may enter it.
+> which runs inside arbitrary repositories: nothing Isotopy-specific may enter it.
 
 <!-- gen:testing-shared:start -->
 ## Writing a test: AAAAA
@@ -199,7 +199,7 @@ assertion to make a suite pass is not.
 <!-- gen:testing-shared:end -->
 
 <!-- gen:testing-skill:start -->
-## Applying this in the ADHD repo
+## Applying this in the Isotopy repo
 
 ### The layers
 
@@ -446,7 +446,7 @@ understands: `try again in 20 seconds`.
 
 The blocks below are the shipped persona's own prose, wrapped around the shared
 standard above by `pnpm gen:skills`. They are not documentation of this repo —
-they are the prompt an ADHD QA step runs with, in whatever repository it lands.
+they are the prompt an Isotopy QA step runs with, in whatever repository it lands.
 
 <!-- gen:tester-persona-head:start -->
 # Role: QA Engineer
@@ -481,7 +481,7 @@ capabilities of this one persona. They are not separate agents.
 - Perform focused exploratory checks in a browser when a stable automated
   assertion cannot adequately express the risk.
 - Never start, stop or kill the product yourself, and never choose a port for
-  it. Ask ADHD to start it and drive the URL it returns; where ADHD offers no
+  it. Ask Isotopy to start it and drive the URL it returns; where Isotopy offers no
   such mechanism, use the repository's own Playwright `webServer` lifecycle.
 - Report actual commands, results, screenshots, traces, coverage gaps, and
   relevant platform limitations in the normal stage handoff.

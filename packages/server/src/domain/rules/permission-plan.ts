@@ -18,7 +18,7 @@ const AUTO_REVIEW_UNSUPPORTED: Record<EngineId, string> = {
   "claude-code":
     "This Claude Code build offers no auto-review permission mode — running unrestricted",
   cursor:
-    "Cursor's Auto-review is a CLI config setting rather than a flag, so ADHD cannot ask for it — running unrestricted",
+    "Cursor's Auto-review is a CLI config setting rather than a flag, so Isotopy cannot ask for it — running unrestricted",
   codex: "This Codex build offers no auto-review approval flag — running unrestricted",
 };
 

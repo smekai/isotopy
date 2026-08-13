@@ -1,9 +1,9 @@
 ---
 name: qa-testing
-description: Validate ADHD changes with repository tests and Playwright. Use for QA, browser testing, Playwright scenarios, visual checks, regression coverage, and release verdicts.
+description: Validate Isotopy changes with repository tests and Playwright. Use for QA, browser testing, Playwright scenarios, visual checks, regression coverage, and release verdicts.
 ---
 
-# QA testing for ADHD
+# QA testing for Isotopy
 
 Read `docs/testing.md`, `docs/e2e-test-plan.md`, and the `run-app` skill before
 testing a UI flow. Use the lowest-cost test layer that can prove the
@@ -35,7 +35,7 @@ the shape of whichever file you happened to open.
    teardown.
 3. Run Playwright headlessly with semantic locators and observable assertions.
    A successful click sequence alone is not proof of correct state.
-   Where the project under test declares a `ui` start command, ask ADHD to
+   Where the project under test declares a `ui` start command, ask Isotopy to
    start the product (`POST /automation/product/start`) rather than starting a
    server yourself — it owns that process and its port.
 4. Retain screenshots for visual findings and traces when they help reproduce a

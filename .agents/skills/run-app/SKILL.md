@@ -1,9 +1,9 @@
 ---
 name: run-app
-description: Launch and drive the ADHD app (Hono server :9477 + Vite UI :5173) — dev command, health checks, headless-Chromium driving, and the sandbox gotcha for real engine runs
+description: Launch and drive the Isotopy app (Hono server :9477 + Vite UI :5173) — dev command, health checks, headless-Chromium driving, and the sandbox gotcha for real engine runs
 ---
 
-# Running the ADHD app
+# Running the Isotopy app
 
 Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@adhd/server` (Hono, port **9477**) and `@adhd/ui`

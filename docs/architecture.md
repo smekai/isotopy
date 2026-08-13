@@ -35,7 +35,7 @@ Text outside those blocks (like this preamble) is for human readers only.
 ## The rules
 
 Nine rules, each with a stable id. They are stated to transfer to any
-codebase — the ADHD Architect persona applies them in whatever repository it is
+codebase — the Isotopy Architect persona applies them in whatever repository it is
 dropped into, and this repo is just the first place they are enforced.
 
 ### A1 — Comments are a smell
@@ -115,8 +115,8 @@ and narrow them (`typeof`, a type guard) instead of re-casting. Confine `unknown
 to a focused boundary codec backed by a runtime schema. Reject a malformed
 record as a whole with path-aware issues; do not recover a plausible partial
 object by dropping bad fields. The codec hands typed values to everything
-downstream. ADHD-owned formats are strict about unknown fields. External
-protocols may preserve unknown fields and event types, but every field ADHD
+downstream. Isotopy-owned formats are strict about unknown fields. External
+protocols may preserve unknown fields and event types, but every field Isotopy
 consumes is validated before it leaves the codec.
 
 ### A8 — Evidence lives in Markdown, not code comments
@@ -167,7 +167,7 @@ lifecycle → `services/`.
 ---
 
 <!-- gen:skill:start -->
-## Applying this in the ADHD repo
+## Applying this in the Isotopy repo
 
 Concrete anchors for the rules above, specific to this codebase. Read
 [`architecture.md`](../docs/architecture.md) for the full layout reference,
@@ -231,7 +231,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
   empty string through. Runtime schemas own untrusted HTTP, persisted JSON,
   settings, project-registry, TaskPlanner, and engine-protocol input. Routes and
   adapters receive only parsed values; services and repositories do not rebuild
-  types through hand-written record traversal. ADHD-owned records reject
+  types through hand-written record traversal. Isotopy-owned records reject
   unknown fields. TaskPlanner and engine codecs permit unrelated external
   fields while validating every consumed field. Relative imports use `.ts`
   extensions (like `@adhd/core`); `rewriteRelativeImportExtensions` rewrites
@@ -418,12 +418,12 @@ Recommended next steps, in rough priority order:
 3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
 4. **Structured logger** — replace `console.*` (tracked as TASK-022; `LOG_LEVEL` should join `config.ts`).
 5. **Request validation** — zod (or Hono's validator) at route boundaries instead of hand-rolled `body.x !== undefined` checks; the parsed types then flow into services for free.
-6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because ADHD intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
+6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because Isotopy intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).
 
 ---
 
-# Technical Architecture: ADHD
+# Technical Architecture: Isotopy
 
 **Version:** 0.1 draft  
 **Stack recommendation:** TypeScript (CLI + API + UI) on Node.js; pnpm workspaces monorepo; Hono API; React/Vite dashboard; file-based persistence. Python acceptable for agent subprocess glue. Optional future Tauri desktop shell — not MVP.
@@ -843,7 +843,7 @@ see `workflow-runtime-options.md` §4):
 
 ```
 ┌─────────────────────────────────────────┐
-│  ADHD-owned                             │
+│  Isotopy-owned                             │
 │  definitions, agents, artifacts,        │
 │  engine adapters, subprocess kill (G4)  │
 ├─────────────────────────────────────────┤
@@ -859,9 +859,9 @@ see `workflow-runtime-options.md` §4):
 
 Each pipeline **stage** is a durable step; a `gateAfter` stage parks on
 `waitForSignal` and `approveGate` sends the matching signal. Semantic restart
-(S2) and one-active-run-per-project (S5) are ADHD-owned on top (a seeded fresh
+(S2) and one-active-run-per-project (S5) are Isotopy-owned on top (a seeded fresh
 run, and a project-keyed admission guard). Subprocess-tree kill on cancel (G4)
-stays ADHD-owned; `cancelWorkflowRun` only marks durable state.
+stays Isotopy-owned; `cancelWorkflowRun` only marks durable state.
 
 **Fallback (not taken):** if the runtime had failed to embed in-process, the
 same six capabilities were to be built on the same `node:sqlite` substrate behind
@@ -915,7 +915,7 @@ a workspace.
 
 `ENGINE_IDS` in [`core/engines.ts`](../packages/core/src/engines.ts) is the roster —
 `claude-code`, `cursor`, `codex` — with `claude-code` the default. Each is a CLI
-spawned in the run's workspace by an adapter under `server/src/engines/`; ADHD
+spawned in the run's workspace by an adapter under `server/src/engines/`; Isotopy
 does not call model APIs itself, so an engine brings **its own model selection**
 and its own auth. A `conversational` engine can resume its session, which is what
 lets an agent stop mid-stage and ask a question.
@@ -1063,7 +1063,7 @@ harness:
 
 A **project** is a directory that owns its own `.adhd/`, the way a repository
 owns its `.git/`. History travels with the code and is isolated by construction.
-Nothing is anchored to the ADHD checkout: `paths.ts` exports a `ProjectPaths`
+Nothing is anchored to the Isotopy checkout: `paths.ts` exports a `ProjectPaths`
 value (`id`, `root`, `dataDir`) that callers receive, and `REPO_ROOT` survives
 only for loading the tool's own `.env`.
 
@@ -1152,7 +1152,7 @@ user-level root; both exist so tests get isolated roots.
 └──────────────────────────────────────────────────┘
 ```
 
-Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow owns `.adhd/workflow.db`, and ADHD's run/event/milestone/orchestration tables live in `.adhd/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
+Every request carries an `X-ADHD-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ADHD_PORT`, `ADHD_UI_PORT`). There is no external database — OpenWorkflow owns `.adhd/workflow.db`, and Isotopy's run/event/milestone/orchestration tables live in `.adhd/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 
@@ -1260,7 +1260,7 @@ adhd/
 | UI | React + Vite | Fast dev, aligns with dashboard needs |
 | Persistence | SQLite (`node:sqlite`) in `<project>/.adhd/` | Sole run store behind a layered repository; no server, no native build |
 | Desktop packaging | Defer (Tauri later) | Server + Web UI sufficient; Tauri can wrap same stack |
-| LLM abstraction | None — engines are coding CLIs | ADHD spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
+| LLM abstraction | None — engines are coding CLIs | Isotopy spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
 | Worktree at run start vs impl stage | At implementation | Spec stages don't need branch |
 | Commit specs automatically | Opt-in on gate approve | Keeps git clean |
 | Workflow runtime | OpenWorkflow (`node:sqlite`, in-process) | Durable execution, gates, retries, crash recovery; embedded file DB, no server |

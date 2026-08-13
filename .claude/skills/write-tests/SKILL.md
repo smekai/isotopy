@@ -192,7 +192,7 @@ change drags it along, and that a red suite stops meaning something is broken.
 Deleting a test is therefore a legitimate outcome of writing one. Weakening an
 assertion to make a suite pass is not.
 
-## Applying this in the ADHD repo
+## Applying this in the Isotopy repo
 
 ### The layers
 

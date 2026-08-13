@@ -1,4 +1,4 @@
-// Component test: this section writes the commands ADHD will later execute on
+// Component test: this section writes the commands Isotopy will later execute on
 // the user's machine, so what matters is that what the form shows is what gets
 // saved — and that production never deploys without an explicit confirmation.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";

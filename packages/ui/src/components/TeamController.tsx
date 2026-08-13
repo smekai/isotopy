@@ -181,7 +181,7 @@ export function TeamController({
     <div style={bar(d)}>
       <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
         <img src="/adhd-icon.png" alt="" width={LOGO_SIZE} height={LOGO_SIZE} style={appLogo()} />
-        <span style={wordmark(d)}>ADHD</span>
+        <span style={wordmark(d)}>Isotopy</span>
       </div>
 
       <div style={divider(d)} />

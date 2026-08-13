@@ -61,7 +61,7 @@ test("created tasks show their id, title and which backend wrote them", () => {
   expect(chips[0]?.textContent).toContain("TASK-101");
   expect(chips[0]?.textContent).toContain("Cover the milestone e2e gap");
   expect(chips[0]?.textContent).toContain("TaskPlanner");
-  expect(chips[1]?.textContent).toContain("ADHD");
+  expect(chips[1]?.textContent).toContain("Isotopy");
 });
 
 test("a blocking finding is labelled as such and keeps its evidence", () => {

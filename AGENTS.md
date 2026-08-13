@@ -124,7 +124,7 @@ number in this file drifts on the very next commit, which is why one is no longe
 - Derive runtime value lists and TypeScript unions from one exported `as const`
   tuple.
 - Use `field?: T` when a property may be absent or `undefined`; those states have
-  the same meaning in ADHD contracts. Use `null` only when the contract needs an
+  the same meaning in Isotopy contracts. Use `null` only when the contract needs an
   explicit cleared or removed value.
 
 ## Comments — default to zero

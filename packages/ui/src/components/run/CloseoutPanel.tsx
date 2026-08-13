@@ -14,7 +14,7 @@ const CONTENT_MAX_WIDTH = 820;
 
 const BACKEND_LABEL: Record<CreatedTaskReference["backend"], string> = {
   taskplanner: "TaskPlanner",
-  adhd: "ADHD",
+  adhd: "Isotopy",
 };
 
 const CONTENT: CSSProperties = {

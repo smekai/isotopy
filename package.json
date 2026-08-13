@@ -1,8 +1,8 @@
 {
   "name": "adhd",
   "private": true,
-  "version": "0.9.39",
-  "description": "ADHD â€” Artificial Development, Human Directed",
+  "version": "0.10.0",
+  "description": "Isotopy — The last mile for your ideas, turning them into working businesses",
   "repository": {
     "type": "git",
     "url": "https://github.com/smekai/adhd"

@@ -34,7 +34,7 @@ export function ProductStartEditor({ d, config, onChange }: ProductStartEditorPr
     <div>
       <div style={blockTitle(d)}>Start the product</div>
       <div style={mutedCaption(d)}>
-        How ADHD starts what your project builds, so a finished run can show it.
+        How Isotopy starts what your project builds, so a finished run can show it.
       </div>
       <div style={{ ...BLOCK_ROW, marginTop: 12 }}>
         <button
