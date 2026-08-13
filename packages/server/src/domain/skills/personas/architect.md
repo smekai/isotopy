@@ -13,7 +13,7 @@ should be traceable to one of them.
 ## The rules
 
 Nine rules, each with a stable id. They are stated to transfer to any
-codebase — the ADHD Architect persona applies them in whatever repository it is
+codebase — the Isotopy Architect persona applies them in whatever repository it is
 dropped into, and this repo is just the first place they are enforced.
 
 ### A1 — Comments are a smell
@@ -93,8 +93,8 @@ and narrow them (`typeof`, a type guard) instead of re-casting. Confine `unknown
 to a focused boundary codec backed by a runtime schema. Reject a malformed
 record as a whole with path-aware issues; do not recover a plausible partial
 object by dropping bad fields. The codec hands typed values to everything
-downstream. ADHD-owned formats are strict about unknown fields. External
-protocols may preserve unknown fields and event types, but every field ADHD
+downstream. Isotopy-owned formats are strict about unknown fields. External
+protocols may preserve unknown fields and event types, but every field Isotopy
 consumes is validated before it leaves the codec.
 
 ### A8 — Evidence lives in Markdown, not code comments

@@ -6,14 +6,14 @@
 here. Every interface and method name proposed below is a *conceptual recommendation*, not an
 existing or committed contract.
 
-This document decides how ADHD executes long-running workflows. It also corrects a standing
+This document decides how Isotopy executes long-running workflows. It also corrects a standing
 architectural claim — then carried by `architect-standards.md`, `implementation-notes.md` and
 `code-quality.md`, the first and last of which are now sections of
 [`architecture.md`](architecture.md) — that a durable runtime replaces `executeStage()` alone.
 
 **Recommendation in one line:** adopt **OpenWorkflow** — TypeScript, Apache-2.0, durable execution
 on an embedded SQLite file with no server and no native dependencies — keep the workflow
-*definition* layer ADHD-owned, and treat semantic stage restart (**S2**) and per-project
+*definition* layer Isotopy-owned, and treat semantic stage restart (**S2**) and per-project
 concurrency (**S5**) as the two things we build or contribute upstream.
 
 > **REVISION — 2026-07-23 (same day)**
@@ -33,7 +33,7 @@ concurrency (**S5**) as the two things we build or contribute upstream.
 >
 > - **DBOS TypeScript is Postgres-only.** `pg` is the sole DB driver in its `package.json`. The
 >   SQLite support widely attributed to DBOS is in its *Python* port, where it is the default.
-> - **OpenWorkflow ran ADHD's exact shape end to end** on a SQLite file: Developer → durable gate →
+> - **OpenWorkflow ran Isotopy's exact shape end to end** on a SQLite file: Developer → durable gate →
 >   Tester, surviving a hard process kill at the gate, resuming in a fresh process, and *not*
 >   re-running the completed stage.
 >
@@ -67,7 +67,7 @@ Two consequences are worth stating plainly, because they shape the whole compari
 
 ---
 
-## 2. Where ADHD is today
+## 2. Where Isotopy is today
 
 The workflow engine is [`RunOrchestrator`](../packages/server/src/services/run-orchestrator.ts) —
 an in-memory `Map<string, RunState>` with debounced JSON persistence through
@@ -105,8 +105,8 @@ unit of restart under S2.
 | **Start a run** | `startRun()` validates the engine/connection, allocates a run number per project, resolves a workspace, persists an initial snapshot, then fires `void this.simulateRun(...)`. | **Works, not durable.** The run is an un-awaited floating promise owned by the process. There is no queue, no admission control, and no record that a run *should* be running beyond its `state.json` status. |
 | **Recovery after restart** | `init()` → `loadProject()` → `reconcileInterrupted()`. | **Not recovery — bereavement.** Any stage found `running` or `awaiting` is rewritten to `failed` with `"✗ Interrupted by server restart"`, and the run is marked `failed`. The user then manually clicks Resume. Nothing resumes itself. |
 | **Retries** | None. | **Absent.** A flaky engine invocation fails the stage and the run. There is no retry policy, backoff, or attempt counter anywhere in the orchestrator. |
-| **Definition copying** | None. Definitions are the frozen constants `SEQUENTIAL_PIPELINE`, `ONE_BOX_PIPELINE`, `DEV_TEST_PIPELINE` in `DEMO_PIPELINES`. | **Absent (S3 unmet).** There are no user-owned definitions, therefore nothing to copy. This is ADHD product work regardless of runtime. |
-| **Artifacts** | `writeHandoff()` → `.adhd/runs/<id>/<stageId>/handoff.md`; `stageOutputs` in `state.json`; workspace files listed and previewed via `GET /runs/:id/files` (TASK-055). | **Works.** No manifest, no content addressing, no retention policy — but the capability is real and stays ADHD-owned. |
+| **Definition copying** | None. Definitions are the frozen constants `SEQUENTIAL_PIPELINE`, `ONE_BOX_PIPELINE`, `DEV_TEST_PIPELINE` in `DEMO_PIPELINES`. | **Absent (S3 unmet).** There are no user-owned definitions, therefore nothing to copy. This is Isotopy product work regardless of runtime. |
+| **Artifacts** | `writeHandoff()` → `.adhd/runs/<id>/<stageId>/handoff.md`; `stageOutputs` in `state.json`; workspace files listed and previewed via `GET /runs/:id/files` (TASK-055). | **Works.** No manifest, no content addressing, no retention policy — but the capability is real and stays Isotopy-owned. |
 | **Durable user waits (gates)** | `stage.status = "awaiting"`, then `await new Promise(resolve => this.gateWaiters.set(key, resolve))`. | **Not durable.** The wait is a resolve callback in a `Map` in heap memory. Kill the process while a gate is open and the promise dies with it; the run is reconciled to `failed` on next boot. A gate that survives a restart is the single clearest thing the current engine cannot do. |
 | **Durable external waits (e.g. TASK-061 limit reset)** | None. | **Absent.** "Subscription limit reached, wait until 16:30 and continue" requires a timer that survives restart. `setTimeout` does not. |
 | **Optional stages** | `disabledStages: string[]` on the run; disabled stages start `skipped`; `restartRun()` refuses to target one. | **Works** for the run-start case, and is correctly frozen into the run — a partial instance of S4. |
@@ -197,7 +197,7 @@ custom ids, and scheduled runs.
 - **For:** TypeScript-native with an ergonomic model, and the feature list maps well onto S1/S2 and
   onto gates. Versioning is a genuinely good fit for S4. It is the incumbent recommendation in
   [`architecture.md`](architecture.md), so choosing it costs no narrative rewrite.
-- **The decisive advantage — ADHD has a contributor on the project.** Aiki's public API already
+- **The decisive advantage — Isotopy has a contributor on the project.** Aiki's public API already
   exposes a provider seam (`server({ db: database({ provider: "pg", url }) })`) and SQLite is a
   declared roadmap item, so the missing pieces are reachable rather than hypothetical. Uniquely
   among the candidates, its gaps are ours to close.
@@ -237,7 +237,7 @@ Mapped against our list:
   sleeping, it still wakes up on schedule."
 - **Semantic stage restart (S2):** `DBOS.forkWorkflow(workflowID, startStep)` — "start a new
   execution of a workflow by forking it from a specific step", copying inputs and preceding steps
-  and resuming from the chosen one. This is the closest match in any candidate to ADHD's
+  and resuming from the chosen one. This is the closest match in any candidate to Isotopy's
   Resume/Restart semantics from TASK-060.
 - **Project concurrency (S5):** `DBOS.registerQueue(name, { concurrency: 1 })` — global concurrency
   caps concurrent workflows across processes, and `concurrency: 1` is documented to "guarantee
@@ -280,7 +280,7 @@ framework for durable, resumable workflows (v0.9.2, 1279★, actively pushed 202
 state in **PostgreSQL *or* SQLite** and states that a *"database as source of truth avoids a
 separate orchestration service"* — so there is no daemon, matching **S1**.
 
-**Why it wins: it was measured doing ADHD's exact job.** Full detail in
+**Why it wins: it was measured doing Isotopy's exact job.** Full detail in
 [`decisions.md`](./decisions.md) (2026-07-23); the headline results, on
 Windows 11 / Node 24:
 
@@ -305,9 +305,9 @@ Mapped to the capability list:
 - **Parallel branches (S6):** `Promise.all` / `Promise.allSettled` over durable steps.
 - **Versioning (S4):** `version?` on the workflow spec.
 
-- **Against — two real gaps, both ADHD-owned or upstream contributions:**
+- **Against — two real gaps, both Isotopy-owned or upstream contributions:**
   - **No restart-from-a-chosen-stage (S2).** Nothing matching `fork` / `restartFrom` / `resumeFrom`
-    exists in the shipped types; recovery is automatic-from-last-completed only. ADHD's
+    exists in the shipped types; recovery is automatic-from-last-completed only. Isotopy's
     Resume/Restart split (TASK-060) would have to be built on top or contributed upstream. **This is
     the one place DBOS was genuinely better.**
   - **No per-key concurrency (S5).** `concurrency` is a worker pool size, not a per-project limit;
@@ -346,7 +346,7 @@ provides no durability without that server. **Screened out on packaging, not cap
 [Restate](https://github.com/restatedev/restate) is otherwise a serious candidate, but its
 [installation docs](https://docs.restate.dev/installation) list pre-built server and CLI binaries
 for **macOS (x64, arm64) and Linux (x64, arm64) only** — no official Windows binary; Windows means
-Docker. ADHD is a locally installed Windows-and-macOS product, so a Docker prerequisite on half the
+Docker. Isotopy is a locally installed Windows-and-macOS product, so a Docker prerequisite on half the
 target platforms is disqualifying. **Screened out on packaging, not on capability** — worth
 revisiting only if official Windows binaries appear.
 
@@ -354,7 +354,7 @@ revisiting only if official Windows binaries appear.
 
 ## 6. Matrix 1 — capability coverage
 
-**Legend:** **Native** = the runtime provides it · **ADHD-owned** = stays our product code by design,
+**Legend:** **Native** = the runtime provides it · **Isotopy-owned** = stays our product code by design,
 regardless of runtime · **Custom** = must be built on top of the runtime · **Unsupported/undoc.** =
 not supported, or not documented as of 2026-07-23.
 
@@ -368,19 +368,19 @@ not supported, or not documented as of 2026-07-23.
 | Durable external wait / timer (TASK-061) | Custom | **Native** (durable sleep) | **Native** (`DBOS.sleep`) | **Native** (`step.sleep`) |
 | Semantic restart from a *chosen* earlier stage (S2) | Custom | Unsupported/undoc. | **Native** (`forkWorkflow(id, startStep)`) | **Unsupported/undoc.** — the one real gap |
 | Cancellation (durable state) | Custom | Native | **Native** (`cancelWorkflow`) | **Native** (`cancelWorkflowRun`) |
-| Cancellation → immediate subprocess-tree kill | ADHD-owned | ADHD-owned | **ADHD-owned** — DBOS interrupts "at the beginning of its next step" | **ADHD-owned** — same reason |
+| Cancellation → immediate subprocess-tree kill | Isotopy-owned | Isotopy-owned | **Isotopy-owned** — DBOS interrupts "at the beginning of its next step" | **Isotopy-owned** — same reason |
 | One active run per project, parallel across projects (S5) | Custom | Custom | **Native** (one queue per project, `concurrency: 1`) | **Custom** — worker-level concurrency only |
 | Declared parallel branches + join (S6) | Custom | **Native** (child workflows) | **Native** (`startWorkflow` + `Promise.allSettled`) | **Native** (`Promise.all` over durable steps) |
 | Definition versioning for in-flight runs (S4) | Custom | **Native** | Native | Native (`version?` on spec) |
 | Project-local, human-readable execution history | **Native** | Custom (projection) | Custom (projection) | Native-ish — a SQLite file **inside the project**, plus a projection |
-| **Workflow definitions (authoring, storage, schema)** | ADHD-owned | ADHD-owned | ADHD-owned | ADHD-owned |
-| **"Copy workflow" — duplicate a definition (S3)** | ADHD-owned | ADHD-owned | ADHD-owned | ADHD-owned |
-| **Enabled-component snapshot frozen at start (S4)** | ADHD-owned | ADHD-owned | ADHD-owned | ADHD-owned |
-| **Artifacts + manifest (`handoff.md`, workspace files)** | ADHD-owned | ADHD-owned | ADHD-owned | ADHD-owned |
-| **Generated code / files in the project workspace** | ADHD-owned | ADHD-owned | ADHD-owned | ADHD-owned |
-| **Engine adapters, personas, prompt & handoff composition** | ADHD-owned | ADHD-owned | ADHD-owned | ADHD-owned |
+| **Workflow definitions (authoring, storage, schema)** | Isotopy-owned | Isotopy-owned | Isotopy-owned | Isotopy-owned |
+| **"Copy workflow" — duplicate a definition (S3)** | Isotopy-owned | Isotopy-owned | Isotopy-owned | Isotopy-owned |
+| **Enabled-component snapshot frozen at start (S4)** | Isotopy-owned | Isotopy-owned | Isotopy-owned | Isotopy-owned |
+| **Artifacts + manifest (`handoff.md`, workspace files)** | Isotopy-owned | Isotopy-owned | Isotopy-owned | Isotopy-owned |
+| **Generated code / files in the project workspace** | Isotopy-owned | Isotopy-owned | Isotopy-owned | Isotopy-owned |
+| **Engine adapters, personas, prompt & handoff composition** | Isotopy-owned | Isotopy-owned | Isotopy-owned | Isotopy-owned |
 
-The six ADHD-owned rows are the point of the exercise: **no candidate reduces them**, and no
+The six Isotopy-owned rows are the point of the exercise: **no candidate reduces them**, and no
 candidate should be allowed to absorb them. Choosing a runtime buys durability primitives — not
 product semantics.
 
@@ -423,7 +423,7 @@ Postgres would have moved execution history to a machine-level database and brok
 
 ## 8. Competitor landscape
 
-Compact read of what shipping coding agents already do, and where ADHD's semantics remain distinct.
+Compact read of what shipping coding agents already do, and where Isotopy's semantics remain distinct.
 
 | Product | Persistence & resume | Checkpoints | Approvals | Parallel / isolation |
 |---|---|---|---|---|
@@ -435,7 +435,7 @@ Compact read of what shipping coding agents already do, and where ADHD's semanti
 
 **Baseline, not differentiator (three of five or better):** session persistence and resume,
 checkpoint/rollback of some kind, human approval before risky actions, and isolated parallel agents.
-ADHD should stop treating these as selling points — Devin and Cursor ship VM-per-agent isolation,
+Isotopy should stop treating these as selling points — Devin and Cursor ship VM-per-agent isolation,
 Cline ships file-level checkpoints via shadow git, OpenHands ships resumable conversations with a
 risk-scored confirmation policy.
 
@@ -451,7 +451,7 @@ risk-scored confirmation policy.
    always-on infrastructure; local products simply lose the run.
 3. **Multi-persona pipelines over one shared workspace**, with typed handoffs between boxes
    (TASK-043–046) and a user-owned, copyable definition (S3). Competitors are session-shaped;
-   ADHD is pipeline-shaped.
+   Isotopy is pipeline-shaped.
 4. **Local-first ownership** — history and artifacts beside the code (TASK-059), no cloud account
    for the orchestration layer.
 
@@ -466,7 +466,7 @@ cloud competitors to copy. §9 addresses this directly.
 **Adopt OpenWorkflow, on SQLite via `node:sqlite`.** It is the only candidate that satisfies both
 hard constraints — an embedded file database and Windows support — while already providing crash
 recovery, durable approval gates, durable sleep, retries, cancellation and parallel steps. It was
-measured running ADHD's exact two-stage shape with a gate, surviving a hard kill, and resuming in a
+measured running Isotopy's exact two-stage shape with a gate, surviving a hard kill, and resuming in a
 fresh process without re-running the completed stage. Apache-2.0, 1279★, zero dependencies.
 
 **The honest trade against the superseded DBOS recommendation:** DBOS has a native
@@ -476,7 +476,7 @@ server, and **we already implement S2 ourselves** — `restartRun(runId, stageId
 [`run-orchestrator.ts`](../packages/server/src/services/run-orchestrator.ts) resets stages from a
 chosen point and clears their outputs. That logic ports onto durable steps; it is not new design.
 
-**Keep ADHD-owned, without exception:** workflow definitions and their schema, definition copying
+**Keep Isotopy-owned, without exception:** workflow definitions and their schema, definition copying
 (S3), the enabled-component snapshot frozen at run start (S4), artifact manifests, engine adapters
 and personas, and all code and files generated into the project workspace. The runtime supplies
 durability primitives; it does not get to define the product's vocabulary.
@@ -488,7 +488,7 @@ local-first differentiator survives. Project-local `state.json` and `events.json
 integration rule: **two independently advancing state machines is the failure mode to design out.**
 The current file store must stop being a second writer of truth and become a derived read model.
 
-**Second choice — Aiki, if steering the dependency matters more than shipping sooner.** ADHD has a
+**Second choice — Aiki, if steering the dependency matters more than shipping sooner.** Isotopy has a
 contributor there, so its gaps are ours to close; but closing them means writing the SQLite provider
 *and* fork-from-step, against an alpha API on a 34-star project, to reach where OpenWorkflow already
 is. Choose it only as a deliberate bet on influence over readiness.
@@ -501,10 +501,10 @@ measured passing. What remains is what the probe did *not* cover.
 
 | # | Gate | Why it is in doubt |
 |---|------|--------------------|
-| G1 | **Semantic restart from a chosen stage (S2)** | The one capability OpenWorkflow does not provide and DBOS did. Prove that ADHD's existing `restartRun(runId, stageId)` semantics can be rebuilt on durable steps — most likely by starting a fresh run seeded with the retained outputs of stages before the restart point. Decide then whether to contribute it upstream as a fork primitive. |
-| G2 | **One active run per project, concurrent runs across projects (S5)** | `concurrency` is a worker pool size, not a per-key cap, so this is ADHD-owned. Prove an admission check keyed by project id — `idempotencyKey` plus a project-scoped guard — that survives restart and cannot be bypassed via the API, which it currently can be. |
+| G1 | **Semantic restart from a chosen stage (S2)** | The one capability OpenWorkflow does not provide and DBOS did. Prove that Isotopy's existing `restartRun(runId, stageId)` semantics can be rebuilt on durable steps — most likely by starting a fresh run seeded with the retained outputs of stages before the restart point. Decide then whether to contribute it upstream as a fork primitive. |
+| G2 | **One active run per project, concurrent runs across projects (S5)** | `concurrency` is a worker pool size, not a per-key cap, so this is Isotopy-owned. Prove an admission check keyed by project id — `idempotencyKey` plus a project-scoped guard — that survives restart and cannot be bypassed via the API, which it currently can be. |
 | G3 | **Per-project database placement and portability** | Prove a SQLite file under each project's `.adhd/` works with a per-project backend instance, that copying the folder carries history, and that `state.json`/`events.jsonl` can be rebuilt idempotently as a projection with no code path writing both stores. |
-| G4 | **Immediate subprocess-tree termination on cancel** | `cancelWorkflowRun()` marks state durably, but a stage *is* a long-running CLI. Killing the process tree stays ADHD-owned and must be immediate on Windows and macOS — unchanged from the original analysis. |
+| G4 | **Immediate subprocess-tree termination on cancel** | `cancelWorkflowRun()` marks state durably, but a stage *is* a long-running CLI. Killing the process tree stays Isotopy-owned and must be immediate on Windows and macOS — unchanged from the original analysis. |
 | G5 | **Declared parallel branches sharing one project folder (S6)** | `Promise.all` over durable steps is documented and simple; prove fan-in, per-branch failure policy, and that the shared-workspace assumption holds under real concurrent agents. |
 | G6 | **`node:sqlite` under sustained use** | It is an experimental Node API. Prove WAL behaviour under concurrent readers plus the writer, that the `ExperimentalWarning` can be suppressed or accepted in a shipped product, and pin the `engines.node` floor to `>=22.5`. |
 
@@ -520,7 +520,7 @@ wasted either way.
 
 ### Second choice and re-evaluation triggers
 
-**Aiki — the standing second choice, not a watch-list item.** ADHD has a contributor on the project,
+**Aiki — the standing second choice, not a watch-list item.** Isotopy has a contributor on the project,
 which no other candidate can say, and its `database({ provider })` seam plus a declared SQLite
 roadmap make the gap closable rather than hypothetical. It is not recommended today only because
 closing it means writing the SQLite provider *and* fork-from-step against an alpha API on a 34-star

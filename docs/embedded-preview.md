@@ -1,6 +1,6 @@
-# Showing a running product inside ADHD
+# Showing a running product inside Isotopy
 
-Research done 2026-08-11 for `TASK-138`, because ADHD had no embedding precedent
+Research done 2026-08-11 for `TASK-138`, because Isotopy had no embedding precedent
 of any kind — no iframe anywhere in the repo, no Electron or Tauri shell — and
 dev servers commonly refuse to be framed. This records what the established
 harnesses actually do, so the choice is not re-litigated from first principles
@@ -29,7 +29,7 @@ back no DOM, no console and no network. Every harness that lets an agent look at
 a page drives a real browser over the Chrome DevTools Protocol, separately from
 whatever the human is looking at.
 
-## What ADHD builds
+## What Isotopy builds
 
 The task's premise was that *"showing the user and letting an agent look are the
 same seam."* That is true of the **process and its URL**, and false of the
@@ -46,7 +46,7 @@ rendering surface. So: one process, one URL, two consumers.
   fallback and stays the authority for anything that must hold in CI — which is
   the whole of `TASK-095` that survived.
 
-ADHD hosting its own Playwright Chromium and streaming screenshots to the UI
+Isotopy hosting its own Playwright Chromium and streaming screenshots to the UI
 would have made one mechanism serve both, and was rejected: it makes
 `playwright` a server runtime dependency plus a browser download on install, and
 Milestone F's rule is to stop adding.
@@ -54,7 +54,7 @@ Milestone F's rule is to stop adding.
 ## The limitation worth knowing
 
 `framingVerdict` treats any `frame-ancestors` that is not `*` as a refusal,
-because the server cannot know which origin the user's browser is serving ADHD
+because the server cannot know which origin the user's browser is serving Isotopy
 from. A dev server that explicitly allows `http://localhost:5173` is therefore
 reported as refusing when it would in fact have framed. The failure is visible
 and recoverable — the card names the directive and offers the external link — so

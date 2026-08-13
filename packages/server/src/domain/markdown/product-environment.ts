@@ -10,8 +10,8 @@ export function buildProductEnvironment({
   runningUrl,
 }: ProductEnvironmentInput): string {
   return [
-    "ADHD owns this project's product process. Do not start, stop or kill it yourself,",
-    "and do not choose a port — ask ADHD instead.",
+    "Isotopy owns this project's product process. Do not start, stop or kill it yourself,",
+    "and do not choose a port — ask Isotopy instead.",
     "",
     `Its API is at ${apiBaseUrl}, and every call needs the header \`X-ADHD-Project: ${projectId}\`.`,
     "",

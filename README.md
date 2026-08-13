@@ -1,33 +1,33 @@
 <div align="center">
-  <img src="packages/ui/public/adhd-icon.png" alt="ADHD" width="128" height="128" />
+  <img src="packages/ui/public/adhd-icon.png" alt="Isotopy" width="128" height="128" />
 </div>
 
-# ADHD — Artificial Development, Human Directed
+# Isotopy
 
-**ADHD** is an open-source, local-running AI development team, human directed: you describe
+**Isotopy** is an open-source, local-running AI development team, human directed: you describe
 what you want, approve the team it proposes, and real coding agents — your own Claude Code,
 Cursor, or Codex — build it, test it, deploy it, and show it to you running.
 
-> **The last mile for your ideas.** Most tools stop where the code generates. ADHD is
-> pointed at the distance between generated code and a working business — a product that
-> starts, survives its tenth change, deploys where you want, and keeps evolving. Not just
-> built. Running.
+> **The last mile for your ideas — turning them into working businesses.** Most tools stop
+> where the code generates. Isotopy is pointed at the distance between generated code and a
+> working business — a product that starts, survives its tenth change, deploys where you
+> want, and keeps evolving. Not just built. Running.
 
-And yes, the name is on purpose: a team of agents hyperfocused on your product, with a
-human directing where the attention goes.
+Isotopy is the complete name, not a backronym. It describes one idea taking new working
+forms without losing its identity.
 
 ## Why this exists
 
 Getting to a first version has never been easier. The hard part is everything after:
 unpredictable changes, lost context, fragile debugging loops, and infrastructure you don't
-fully control. ADHD targets **ongoing evolution** — the same prepared agents that build v1
+fully control. Isotopy targets **ongoing evolution** — the same prepared agents that build v1
 keep improving the product with predictable, restartable stages, a task backlog stored in
 your repo, end-to-end tests, and deployment to any platform.
 
 **Tradeoff:** you bring more project context (specs, repo history, acceptance criteria). In
 return you get pre-configured agents you can adjust, artifacts stored in git, a built-in
 task backlog, stage restart, Playwright E2E testing, and deployment adapters for any
-platform — with your own models and your own auth, because ADHD never calls a model API
+platform — with your own models and your own auth, because Isotopy never calls a model API
 itself.
 
 ## How it works
@@ -129,7 +129,7 @@ drives through its `plan_milestone` and `continue_milestone` decisions, and thre
 **preset pipelines** you can still start directly without a conversation. Both are honest
 residents of the codebase, not part of the layer diagram.
 
-ADHD never calls a model API itself. Layer 4 spawns a coding CLI you already have logged
+Isotopy never calls a model API itself. Layer 4 spawns a coding CLI you already have logged
 in, so your models and your auth stay yours. See
 [architecture.md](docs/architecture.md#core-components) for the seams by name.
 
@@ -177,9 +177,9 @@ pnpm typecheck  # type-check all packages
 
 ### Seeing what a run built
 
-Tell ADHD how your project starts itself — **Setup → Automation → Start the
+Tell Isotopy how your project starts itself — **Setup → Automation → Start the
 product** — and a run gains a **Preview** tab that starts it, waits for its health
-URL, and shows it inside ADHD. ADHD owns that process: it survives switching
+URL, and shows it inside Isotopy. Isotopy owns that process: it survives switching
 between runs, restarts when a run changes files so you are never looking at the
 previous build, and is stopped on Stop, on switching project, and when the server
 shuts down. The QA agent asks for the same product through the same mechanism
@@ -214,7 +214,7 @@ findings rather than silently flipping a status.
 
 **Release and deploy are automated as of 0.9.29.** A project's own commands live in
 `.adhd/automation.json` — validation, how the product starts, and a deploy target per
-environment. The `deploy` stage is run by ADHD itself rather than by an agent: no target
+environment. The `deploy` stage is run by Isotopy itself rather than by an agent: no target
 configured reports `VERDICT: SKIP` without spending an engine turn; a configured one runs
 the command, health-checks the URL it printed, and passes only if both succeed. Production
 sits outside Full Delivery and milestone autorun, behind an explicit confirmation.
@@ -223,11 +223,12 @@ sits outside Full Delivery and milestone autorun, behind an explicit confirmatio
 E — Eigen, the Orchestrator — closed at 0.9.23 on live runs against Cursor and Codex; both
 closed on live dogfoods against real projects. In progress is **Milestone F — Fixpoint**:
 stabilising to something a first-time user can install, point at a folder, and *see the
-result of*. Next are **G — Gauge** (the product is renamed **Isotopy**) and **H —
-Harmonic** (features chosen by the people who try it, not by us). Milestones are named for
-mathematical terms; A–D keep their letters.
+result of*. **Milestone G — Gauge** is introducing the Isotopy identity in controlled
+surfaces before the final repository and filesystem cutover. **Milestone H — Harmonic**
+will take its features from the people who try it, not from guesses made here. Milestones
+are named for mathematical terms; A–D keep their letters.
 
-## Where ADHD fits
+## Where Isotopy fits
 
 The wedge is not "no competitors exist." The market has hosted app builders (fast v1, weak
 v2+), local OSS app builders (Dyad, Locode, Singulary, Tinykit — generation-focused,
@@ -258,7 +259,7 @@ deploy-anywhere, and stage restart. The full argument is in
 | [decisions.md](docs/decisions.md) | Dated decision log — context, decision, and the alternative that was rejected |
 | [implementation-notes.md](docs/implementation-notes.md) | The "why" behind non-obvious code: engine quirks, paths, persistence, personas |
 | [workflow-runtime-options.md](docs/workflow-runtime-options.md) | Durable-runtime comparison behind the OpenWorkflow choice, and the workflow seam |
-| [embedded-preview.md](docs/embedded-preview.md) | How the harnesses show a running product, and why ADHD frames it rather than proxying it |
+| [embedded-preview.md](docs/embedded-preview.md) | How the harnesses show a running product, and why Isotopy frames it rather than proxying it |
 
 ### Testing
 
@@ -280,7 +281,7 @@ docs/       # planning and design documents
 
 ## Working with Claude and Cursor
 
-ADHD orchestrates a full lifecycle pipeline but **delegates every stage to your coding tools**. It does not call model APIs itself: each engine-backed stage spawns a coding CLI — **Claude Code**, **Cursor**, or **Codex** — in the run's workspace, so the engine brings its own model selection and its own auth. What an agent *is* comes from a persona (Markdown you can override per user or per project); what it *does* comes from the stage's assignment. You can work on the ADHD repo in Cursor while Claude Code runs the stages for target projects. See [architecture.md](docs/architecture.md#agent-model) for the engine roster and persona layering.
+Isotopy orchestrates a full lifecycle pipeline but **delegates every stage to your coding tools**. It does not call model APIs itself: each engine-backed stage spawns a coding CLI — **Claude Code**, **Cursor**, or **Codex** — in the run's workspace, so the engine brings its own model selection and its own auth. What an agent *is* comes from a persona (Markdown you can override per user or per project); what it *does* comes from the stage's assignment. You can work on the Isotopy repo in Cursor while Claude Code runs the stages for target projects. See [architecture.md](docs/architecture.md#agent-model) for the engine roster and persona layering.
 
 <!-- TASKPLANNER:ATTRIBUTION:START -->
 This project uses [TaskPlanner](https://github.com/smekai/taskplanner) for task planning.

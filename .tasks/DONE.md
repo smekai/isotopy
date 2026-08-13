@@ -1,5 +1,30 @@
 # Done
 
+## TASK-131: Set the Isotopy brand contract and rename visible surfaces
+**Priority:** P1 | **Tags:** ui, infra, milestone-g
+**Updated:** 2026-08-13 11:28
+
+Settle the product identity before changing technical contracts:
+
+- Decide whether **Isotopy** expands to anything; if it does not, record that explicitly.
+- Choose the tagline, exact casing, and short product description used everywhere else.
+- Rename user-visible UI copy, browser/window title, README, current docs, `CLAUDE.md`, `AGENTS.md`, generated skills, image alt text, and other public-facing text.
+- Preserve intentional historical references where rewriting history would be misleading, and maintain a small documented allowlist for the final audit.
+
+Do **not** yet rename the GitHub repository, local checkout, `.adhd` state roots, or `packages/ui/public/adhd-icon.png`; those physical path changes belong to final cutover `TASK-143`. Do not update repository/homepage/bugs URLs before that cutover.
+
+Acceptance: current user-facing surfaces say Isotopy consistently, generated files are regenerated from their sources, and the application remains buildable and runnable from the existing checkout.
+
+Cross-platform: n/a — text and rendered assets only; any setup commands shown in docs must retain both PowerShell and bash variants.
+
+### Plan
+
+Completed 2026-08-13: Established Isotopy as the complete product name with no backronym, using “The last mile for your ideas — turning them into working businesses.” Updated current public docs, UI/browser branding, notifications, setup/preview/closeout copy, server-facing messages, repository instructions, personas, and generated skills; retained the abstract icon artwork. Deferred package scopes, CLI/state paths, environment variables, HTTP headers, protocol fences, persistence markers, repository URLs, checkout/repository folders, and adhd-icon.png to TASK-132/TASK-133/TASK-143.
+
+Verification on Windows: lint passed; all TypeScript projects passed; 94 Vitest files / 838 tests passed; recursive production build passed; generated-skill check passed; Playwright passed 69 with 4 intentionally skipped tiers; visual browser smoke check confirmed the Isotopy title and wordmarks with no visible old wordmark. macOS/POSIX was not executed; this task changes text/UI only and preserves shell-neutral PowerShell/bash documentation.
+
+---
+
 ## TASK-128: Closing dogfood for Milestone F
 **Priority:** P1 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-13 12:35
@@ -1012,8 +1037,7 @@ A subscription/plan limit used to kill the run: all three adapters pattern-match
 ---
 
 ## TASK-106: Consolidate the decision log
-**Priority:** P2
-**Tags:** infra
+**Priority:** P2 | **Tags:** infra
 **Updated:** 2026-08-03 15:50
 
 `docs/decisions.md` was 1013 lines across 35 entries and is loaded as context constantly.
@@ -1035,8 +1059,7 @@ Also corrected the stale "simulate vs. engine" description of `stage-execution.t
 ---
 
 ## TASK-104: README and docs coherence after Milestone D
-**Priority:** P2
-**Tags:** infra, setup
+**Priority:** P2 | **Tags:** infra, setup
 **Updated:** 2026-08-03 15:40
 
 **Done:**
@@ -1069,8 +1092,7 @@ Also dropped the stale "simulate vs. engine" description of `stage-execution.ts`
 ---
 
 ## TASK-105: A schema slip must not discard the whole closeout record
-**Priority:** P1
-**Tags:** server, testing
+**Priority:** P1 | **Tags:** server, testing
 **Updated:** 2026-08-03 15:20
 
 The gap TASK-101 deliberately left open: `severity` was normalized, but every *other* schema failure still answered with `emptyCloseout(...)`, so one bad follow-up task priority — or one key the agent invented — discarded the summary, delivered scope, decisions, knowledge, findings and task drafts of a run that cost real money.

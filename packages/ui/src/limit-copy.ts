@@ -20,9 +20,9 @@ export const LIMIT_COPY = {
   keepWaiting: "Keep waiting",
   enableNotifications: "Enable notifications",
   abort: "Abort the run",
-  notificationTitle: "⏸ Limit — ADHD",
+  notificationTitle: "⏸ Limit — Isotopy",
   notificationBody: (resetLabel: string | undefined): string =>
     resetLabel === undefined ? "Waiting for the reset." : `Waiting until ${resetLabel}.`,
 } as const;
 
-export const APP_TITLE = "ADHD";
+export const APP_TITLE = "Isotopy";

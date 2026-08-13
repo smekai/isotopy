@@ -1,91 +1,86 @@
 # Backlog
 
 ## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
-**Priority:** P1 | **Tags:** core, server, ui, infra, milestone-g
-**Updated:** 2026-08-07 11:40
+**Priority:** P1 | **Tags:** core, server, ui, infra, testing, milestone-g
+**Updated:** 2026-08-13 10:38
 
-A gauge transformation changes the representation and not the physics. That is exactly
-this milestone: the product becomes **Isotopy**, and nothing it does changes.
+A gauge transformation changes the representation and not the physics. This milestone makes the product **Isotopy** without changing what it does.
 
-Do it before anyone outside sees the product, and after `TASK-125` — renaming a system
-that is still moving means renaming it twice.
+Start only after Milestone F and its closing dogfood are complete. The first implementation commit starts the explicitly planned **0.10.x** series at **0.10.0**; every later commit increments the shared workspace patch version from its parent.
 
-**Open question this epic settles first:** what "Isotopy" expands to, if anything. "ADHD"
-was a backronym — *Artificial Development, Human Directed* — and the new name needs its
-own answer or an explicit decision to have none. Everything downstream quotes it.
+**Ordered milestone sequence:**
+1. `TASK-131` settles the brand contract and renames user-visible surfaces.
+2. `TASK-132` renames code-level identifiers and integration contracts.
+3. `TASK-133` renames model-facing protocol fences and verifies their consumers.
+4. `TASK-143` performs the final filesystem and repository cutover.
 
-**Split by contract surface** — `TASK-131` (visible), `TASK-132` (code), `TASK-133` (data
-and protocol) — because the rename touches 262 files and a half-renamed system is worse
-than either end state.
+The repository slug and checkout directory are deliberately last. Until `TASK-143`, intermediate commits may retain old path names while user-visible and code surfaces move in controlled, green steps.
 
-**Clean break, decided with the user on 2026-08-07:** no migration, no dual-parsing, no
-compatibility shims. Local run history under `.adhd` is abandoned rather than carried
-across. There are no external users; a migration path written now is one we delete later.
+**Clean break, decided with the user on 2026-08-07:** no migration, dual parsing, aliases, or compatibility shims. Existing local history under `.adhd` is abandoned when the final cutover occurs.
 
-Cross-platform: path and env-var handling already goes through `paths.ts` and `config.ts`;
-the rename must not introduce a literal separator anywhere.
+**Milestone exit:** a clean clone from the renamed repository builds, passes automated verification, launches on Windows, completes a real engine-backed run using only Isotopy contracts, and contains no unintended ADHD identifiers outside historical records.
+
+Cross-platform: every step must keep Windows and macOS/POSIX path, environment, subprocess, and command behavior valid. Record which platform was actually tested and mark the other untested when necessary.
 
 ---
 
-## TASK-131: Rename the visible surface to Isotopy
-**Priority:** P1 | **Tags:** ui, infra, milestone-g
-**Updated:** 2026-08-07 11:40
+## TASK-132: Rename the code and integration surface to Isotopy
+**Priority:** P1 | **Tags:** core, server, ui, testing, milestone-g
+**Updated:** 2026-08-13 10:39
 
-Product name and tagline, `README.md`, everything under `docs/`, `CLAUDE.md`, `AGENTS.md`,
-the generated skills under `.claude/skills/`, UI strings and the window title,
-`packages/ui/public/adhd-icon.png`, and the GitHub repository with its URLs in
-`package.json` (`repository`, `homepage`, `bugs`).
+Rename technical identifiers that code, configuration, and HTTP clients consume:
 
-Depends on `TASK-130` having settled the expansion, since the tagline quotes it.
+- `@adhd/core`, `@adhd/server`, and `@adhd/ui` → `@isotopy/*` across package manifests, imports, TypeScript paths, workspace filters, CI, and tests.
+- `ADHD_*` environment variables → `ISOTOPY_*`, including home, ports, timeout, live-E2E, and per-engine path/argument overrides.
+- `X-ADHD-Project` → `X-Isotopy-Project` in the server, UI network boundary, product-environment prompt, and test harness.
+- Rename remaining code-owned service ids, test ids, CSS/keyframe identifiers, fixtures, and generated constants where the old product name is part of the contract.
 
-Cross-platform: n/a — text and assets.
+This is a clean break: rename every reader and writer together, with no aliases or fallback reads. Leave physical filenames and directories for `TASK-143`, and leave model-output fences for `TASK-133`.
 
----
+Verify typecheck, lint, unit/component tests, build, and Playwright from the existing checkout path.
 
-## TASK-132: Rename the code surface to Isotopy
-**Priority:** P1 | **Tags:** core, server, ui, milestone-g
-**Updated:** 2026-08-07 11:40
-
-- `@adhd/core`, `@adhd/server`, `@adhd/ui` → `@isotopy/*` — 272 references across
-  `package.json` files, imports, `tsconfig` paths and `pnpm-workspace.yaml`.
-- `ADHD_*` environment variables → `ISOTOPY_*` — 145 references: `ADHD_HOME`,
-  `ADHD_USER_HOME`, `ADHD_PORT`, `ADHD_UI_PORT`, `ADHD_ENGINE_TIMEOUT_MS`,
-  `ADHD_E2E_LIVE`, and the per-engine path and argument overrides.
-- The `X-ADHD-Project` header → `X-Isotopy-Project` — 14 references across
-  `routes/project-scope.ts`, the UI's single network module, and the test harness.
-
-Mechanical, but verify by running rather than by grepping: `pnpm dev`, one real run, and
-the full e2e suite.
-
-Cross-platform: env-var names are case-sensitive on POSIX and not on Windows — rename
-every reader and writer together, not one side.
+Cross-platform: environment names are case-sensitive on POSIX and not on Windows. Update every producer and consumer atomically; npm scripts must remain shell-neutral and displayed commands must be correct for both PowerShell and bash.
 
 ---
 
-## TASK-133: Rename the data and protocol surface to Isotopy
-**Priority:** P1 | **Tags:** server, core, engine, milestone-g
-**Updated:** 2026-08-07 11:40
+## TASK-133: Rename the model protocol surface to Isotopy
+**Priority:** P1 | **Tags:** server, core, engine, testing, milestone-g
+**Updated:** 2026-08-13 10:39
 
-The two surfaces that are contracts rather than names, which is why they are their own
-task.
+Rename model-facing fenced protocols as one producer/consumer contract:
 
-- **On-disk `.adhd` → `.isotopy`** — 169 references. `~/.adhd/` (registry, settings,
-  credentials, the home project) and every project's `.adhd/` (runs, `runs.db`,
-  artifacts, orchestrations, milestones, teams). **No migration:** existing directories
-  are left where they are and ignored, and the task must say so in the code review so
-  nobody adds a reader for them later.
-- **Protocol fences** — 42 references. `adhd-orchestrator-decision`, `adhd-run-artifacts`
-  and `adhd-milestone-plan` appear in the bundled step tasks that instruct the model, and
-  in the extractors under `packages/server/src/schemas/` that parse what comes back.
-  Rename both sides in one change; a mismatch means every decision fails to parse and
-  every run needs attention. **No dual-parsing** — old persisted outputs stop being
-  readable, and that is accepted.
+- `adhd-orchestrator-decision` → `isotopy-orchestrator-decision`.
+- `adhd-run-artifacts` → `isotopy-run-artifacts`.
+- `adhd-milestone-plan` → `isotopy-milestone-plan`.
+- Rename any other emitted or parsed fence discovered by the protocol inventory.
 
-Verify with a real run on at least two engines: the model must emit the new fence and the
-extractor must accept it.
+Update bundled step tasks, generated skills, examples, fixtures, schema extractors, and error messages in the same change. Add focused producer/consumer round-trip tests so a prompt/parser mismatch cannot report a successful run.
 
-Cross-platform: n/a — the directory name is a literal, and joins already go through
-`paths.ts`.
+No dual parsing: old persisted model outputs stop being readable, which is accepted for this pre-release clean break.
+
+Verify the full automated suite plus real runs on at least two available engines; each engine must emit the new fence and each extractor must accept it. Record engines and platform actually tested.
+
+Cross-platform: n/a — protocol parsing is pure text logic and line handling must continue to accept both LF and CRLF.
+
+---
+
+## TASK-143: Final filesystem and repository cutover to Isotopy
+**Priority:** P1 | **Tags:** server, ui, infra, testing, milestone-g
+**Updated:** 2026-08-13 10:39
+
+Perform every physical path and repository identity change only after `TASK-131`, `TASK-132`, and `TASK-133` are green:
+
+- Change user and project state roots from `.adhd` to `.isotopy` everywhere, using the existing centralized path helpers.
+- Rename `packages/ui/public/adhd-icon.png` to an Isotopy filename and update all consumers.
+- Rename the GitHub repository from `smekai/adhd` to `smekai/isotopy`, then update `repository`, `homepage`, `bugs`, badges, documentation links, CI references, and the local `origin`.
+- Stop app servers, watchers, and tools that hold the checkout; rename the local checkout directory from `adhd` to `isotopy` from its parent directory.
+- Run a final case-insensitive identifier and filename audit. Keep only explicitly allowlisted historical references.
+
+**No migration:** do not move or read legacy `.adhd` state. Existing directories remain untouched and Isotopy starts with fresh state.
+
+**Cutover verification:** clone from the new repository URL into a fresh path; install, typecheck, lint, test, build, launch the dev stack, and complete one real engine-backed run. Confirm all generated state lands under `.isotopy` and that no running configuration relies on the former checkout path or repository URL.
+
+Cross-platform: use `path.join` and `os.homedir()`; never hardcode separators. On Windows, close processes that lock the checkout before renaming it. On macOS/POSIX, verify the exact lowercase path on a case-sensitive filesystem. Document PowerShell and bash cutover commands, record the platform actually tested, and mark the other untested if not exercised.
 
 ---
 

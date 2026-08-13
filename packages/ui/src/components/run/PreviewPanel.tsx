@@ -120,7 +120,7 @@ function explanation(status: ProductProcessStatus): string {
     return `Waiting for ${status.url ?? "the health URL"} to answer.`;
   }
   if (status.state === "stopped") {
-    return "Start it to see what this run built, without leaving ADHD.";
+    return "Start it to see what this run built, without leaving Isotopy.";
   }
   return "";
 }

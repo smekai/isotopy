@@ -183,7 +183,7 @@ sound for it, and the three answers are deliberately different:
 - **Codex is not probed**, because its auto-review is *configuration*
   (`approvals_reviewer`), passed with `-c`. There is no `--help` listing of
   config keys to read, and an unrecognised `-c` key is tolerated rather than
-  fatal (`--strict-config`, which ADHD does not pass, exists precisely to opt
+  fatal (`--strict-config`, which Isotopy does not pass, exists precisely to opt
   into the strict behaviour). Crucially the fallback is safe by construction: a
   build that ignores the key still runs under `sandbox_mode="workspace-write"`,
   so the worst case is escalations denied rather than reviewed — never a wider
@@ -215,7 +215,7 @@ that path Claude also falls back to prompt-folding via stdin.
 **Cursor (`engines/cursor.ts`).** Headless runs must not stop for confirmation;
 Cursor has no accept-edits-only mode, so every permission mode uses `--force`.
 Its **Auto-review** run mode is real but is selected by the `approvalMode` key in
-`~/.cursor/cli-config.json`, not by a flag, so ADHD cannot ask for it without
+`~/.cursor/cli-config.json`, not by a flag, so Isotopy cannot ask for it without
 writing a file it has no business writing (see `decisions.md`). Cursor therefore
 reports `unsupported` as a constant and runs no probe — which is why its `run()`
 calls `resolvePermissionPlan` for the notice alone and discards the plan: no
@@ -223,7 +223,7 @@ strategy changes its argv.
 `--trust` is on by default (fresh scratch workspaces would otherwise hit the
 workspace-trust prompt and hang). **The prompt goes on stdin whenever the binary
 is a Windows `.cmd` shim**, which is what `cursor-agent` always resolves to on
-Windows: cmd.exe cannot carry a multi-line argument, and every ADHD prompt is
+Windows: cmd.exe cannot carry a multi-line argument, and every Isotopy prompt is
 multi-line, so passing it positionally made the run fail before it spawned.
 `cursor-agent -p` with no positional prompt reads it from stdin (verified against
 the real CLI). Experimentation knobs, since the CLI's headless behavior on Windows
@@ -381,7 +381,7 @@ Resolving the persona touches the filesystem. An abort arriving in that window
 used to find no `AbortController` to cancel, so the CLI was spawned anyway and
 ran to completion for a run the user had already stopped. The controller is set
 before any await, and cancellation is re-checked after the inputs resolve and
-after the adapter returns. Cancel stays immediate and ADHD-owned (`abortRun` →
+after the adapter returns. Cancel stays immediate and Isotopy-owned (`abortRun` →
 `controller.abort()` → `killProcessTree`); OpenWorkflow's `cancelWorkflowRun`
 only marks durable state (G4).
 
@@ -480,7 +480,7 @@ the workspace is the source of truth, the reports only add what a box *said*.
 - **Data paths are a value, not a constant.** Every storage call takes a
   `ProjectPaths` (`id`, `root`, `dataDir`): a project's data lives in
   `<root>/.adhd/`, so history sits beside the code it belongs to instead of
-  inside the ADHD checkout. See [`decisions.md`](./decisions.md) (2026-07-23).
+  inside the Isotopy checkout. See [`decisions.md`](./decisions.md) (2026-07-23).
 - **`homeProjectPaths()` and `userAdhdDir()` are functions, not constants.** A
   constant would freeze `ADHD_HOME` / `ADHD_USER_HOME` at import time; as
   functions, a test can point both roots at temp directories regardless of module

@@ -42,7 +42,7 @@ serve(
     port: config.port,
   },
   (info) => {
-    console.log(`ADHD server listening on http://${config.host}:${info.port}`);
+    console.log(`Isotopy server listening on http://${config.host}:${info.port}`);
   },
 );
 
@@ -53,7 +53,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     return;
   }
   stopping = true;
-  console.log(`ADHD server stopping on ${signal}`);
+  console.log(`Isotopy server stopping on ${signal}`);
   await product.shutdown();
   await runs.shutdown();
   process.exit(0);

@@ -14,7 +14,7 @@ const CLOSEOUT_BLOCK = /```adhd-closeout\s*([\s\S]*?)```/i;
 const closeoutRecordSchema = z.record(z.string(), z.unknown());
 
 // Everything below normalizes what an agent wrote. Core's shape is the contract
-// for what ADHD persists, so it stays transform-free; padding, duplicates and
+// for what Isotopy persists, so it stays transform-free; padding, duplicates and
 // severity prose are cleaned up here, on the way in, and never on the way out.
 const requiredText = z.string().trim().min(1);
 const uniqueStrings = z

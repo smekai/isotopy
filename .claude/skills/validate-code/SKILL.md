@@ -131,7 +131,7 @@ functions.
 - Discriminated unions over stringly-typed state; exhaustive `switch` closed with
   a `never` assertion so a new case is a compile error.
 - `strict` and `noUncheckedIndexedAccess` are on in `tsconfig.base.json` and stay
-  on. `exactOptionalPropertyTypes` is deliberately **off** — ADHD treats an absent
+  on. `exactOptionalPropertyTypes` is deliberately **off** — Isotopy treats an absent
   property and `undefined` as the same state, so `field?: T` covers both and
   `= undefined` is fine (`docs/decisions.md`, 2026-07-29).
 - A `as` cast that papers over a real gap is a failure, not a fix. Casting to

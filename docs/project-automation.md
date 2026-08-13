@@ -41,7 +41,7 @@ automation file.
 ## Preview deployment
 
 The `deploy` box of Full Delivery does not start an agent. Any stage whose step
-task is `deploy-preview` is executed by ADHD directly: with no preview target
+task is `deploy-preview` is executed by Isotopy directly: with no preview target
 configured the stage records that and ends `SKIP`, spending nothing. With one
 configured it runs the command, streams stdout and stderr into the stage log,
 and reads back an exact `ADHD_DEPLOY_URL=https://…` line if the command prints

@@ -1,7 +1,10 @@
-# Product Brief: ADHD
+# Product Brief: Isotopy
 
-**Product name:** ADHD (Artificial Development, Human Directed)  
-**One-liner:** An open-source, local-first app builder and evolution workflow — build the first version, test end-to-end, deploy anywhere, and keep improving with prepared agents and your choice of models and coding tools.
+**Product name:** Isotopy
+
+**Tagline:** The last mile for your ideas — turning them into working businesses.
+
+**One-liner:** An open-source, local AI development team that turns ideas into working products, tests them end-to-end, deploys them anywhere, and keeps them evolving with prepared agents and your choice of coding tools.
 
 ---
 
@@ -34,7 +37,7 @@ A **local-first AI app builder and evolution workflow**: predefined, editable st
 
 ## The App Builder Gap (Our Wedge)
 
-| Phase | Hosted app builders | ADHD |
+| Phase | Hosted app builders | Isotopy |
 |-------|------------------------|----------------------|
 | First version | Fast, impressive demos | Comparable speed with prepared agents |
 | Iteration 2+ | Unpredictable side effects, debug loops | Restartable stages, explicit artifacts |
@@ -118,7 +121,7 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 
 **Positioning statement:**
 
-> For developers who liked hosted app-builder speed but hit a wall on iteration, ADHD is the open-source local alternative that builds the first version and keeps the project evolvable — with prepared agents, Playwright E2E, deploy-anywhere adapters, and restartable stages — without replacing Cursor or Claude Code.
+> For developers who liked hosted app-builder speed but hit a wall on iteration, Isotopy is the open-source local alternative that builds the first version and keeps the project evolvable — with prepared agents, Playwright E2E, deploy-anywhere adapters, and restartable stages — without replacing Cursor or Claude Code.
 
 ---
 
@@ -171,4 +174,4 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 
 1. Implement architecture with the OpenWorkflow workflow runtime (see [architecture.md](architecture.md))
 2. Validate with 3-5 developers running one real feature end-to-end including deploy
-3. Publish docs and open-source repo under ADHD
+3. Publish docs and open-source repo under Isotopy

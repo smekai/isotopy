@@ -15,6 +15,24 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-13 — Isotopy is the complete product name, not a backronym
+
+**Context:** the old name expanded to *Artificial Development, Human Directed*. The rename
+needed one stable product identity before visible copy, code contracts, protocols, and
+filesystem paths could move in separate green changes. Forcing another expansion would make
+the wording drive the product rather than describe it.
+
+**Decision:** the product name is **Isotopy**, with no expanded form. Its tagline is **“The
+last mile for your ideas — turning them into working businesses.”** The short description is
+an open-source, local AI development team that turns ideas into working products and keeps
+them evolving. Visible surfaces adopt that identity first; technical identifiers and
+physical paths remain unchanged until their later Milestone G cutovers.
+
+**Rejected:** inventing a replacement backronym. It would preserve a constraint that belongs
+to the former name and make otherwise plain product copy harder to understand.
+
+---
+
 ## 2026-08-12 — A rejected decision informs the next attempt; a blocked one stops the loop
 
 **Context:** two failures of the decision loop, observed the same day in the `dogfood`
