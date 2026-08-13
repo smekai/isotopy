@@ -4,19 +4,31 @@
 
 # ADHD — Artificial Development, Human Directed
 
-Research and planning artifacts for **ADHD** (formerly **Artificial Developer**) — an open-source, local-first AI development team orchestrator for creating the first version of a product and evolving it over time.
+**ADHD** is an open-source, local-running AI development team, human directed: you describe
+what you want, approve the team it proposes, and real coding agents — your own Claude Code,
+Cursor, or Codex — build it, test it, deploy it, and show it to you running.
 
-## One-line pitch
+> **The last mile for your ideas.** Most tools stop where the code generates. ADHD is
+> pointed at the distance between generated code and a working business — a product that
+> starts, survives its tenth change, deploys where you want, and keeps evolving. Not just
+> built. Running.
 
-> ADHD is an open-source, local-running AI development team for real projects: build the first version, keep evolving it with prepared agents, test it end-to-end, and deploy anywhere with your own models and tools.
+And yes, the name is on purpose: a team of agents hyperfocused on your product, with a
+human directing where the attention goes.
 
-## Summary
+## Why this exists
 
-**ADHD** is an open-source, local-running development team for real projects — model-agnostic, deployable to any platform, and built for long-term ownership.
+Getting to a first version has never been easier. The hard part is everything after:
+unpredictable changes, lost context, fragile debugging loops, and infrastructure you don't
+fully control. ADHD targets **ongoing evolution** — the same prepared agents that build v1
+keep improving the product with predictable, restartable stages, a task backlog stored in
+your repo, end-to-end tests, and deployment to any platform.
 
-Most hosted and local app builders excel at getting to a first version quickly. The hard part is everything after: unpredictable changes, lost context, fragile debugging loops, and infrastructure you don't fully control. ADHD targets **ongoing evolution** — the same prepared agents help you build v1 and keep improving the product with predictable, restartable stages.
-
-**Tradeoff:** you bring more project context (specs, repo history, acceptance criteria). In return you get pre-configured agents you can adjust, artifacts stored in git, built-in task backlog, stage restart, Playwright E2E testing, and deployment adapters for any platform.
+**Tradeoff:** you bring more project context (specs, repo history, acceptance criteria). In
+return you get pre-configured agents you can adjust, artifacts stored in git, a built-in
+task backlog, stage restart, Playwright E2E testing, and deployment adapters for any
+platform — with your own models and your own auth, because ADHD never calls a model API
+itself.
 
 ## How it works
 
@@ -97,7 +109,7 @@ reason. Three blocked runs in a row stop the loop rather than spinning.
 
 ### The four layers
 
-Underneath, the system is four layers, each leaning only on the one below it.
+Underneath, the system is built toward four layers, each leaning only on the one below it.
 
 ```mermaid
 flowchart TB
@@ -111,94 +123,15 @@ flowchart TB
     L3 -.->|"handoff · verdict · question"| L1
 ```
 
+Two subsystems predate this picture and still sit beside it rather than inside it: the
+**milestone dashboard**, which sequences features on its own and which the Orchestrator
+drives through its `plan_milestone` and `continue_milestone` decisions, and three
+**preset pipelines** you can still start directly without a conversation. Both are honest
+residents of the codebase, not part of the layer diagram.
+
 ADHD never calls a model API itself. Layer 4 spawns a coding CLI you already have logged
 in, so your models and your auth stay yours. See
 [architecture.md](docs/architecture.md#core-components) for the seams by name.
-
-## Does This Product Make Sense?
-
-**Yes — but the wedge is not "no competitors exist."** The market has:
-
-- **Hosted app builders** — fast v1, weak v2+
-- **Local OSS app builders** (Dyad, Locode, Singulary, Tinykit) — generation-focused, limited governed lifecycle
-- **Lifecycle orchestrators** (Sikula, autonomous-sdlc) — developer tools, weaker first-run UX
-- **Frameworks** (LangGraph, Aiki) — building blocks, not a product
-
-**What nobody owns cleanly:** open-source + local + model-agnostic + fast first-run + **predictable ongoing evolution** with repo-native context, Playwright E2E, deploy-anywhere, and stage restart.
-
-## Documents
-
-### Product
-
-| Document | Description |
-| --- | --- |
-| [product-brief.md](docs/product-brief.md) | Positioning, app-builder gap, target user, workflow, differentiation |
-| [competitor-matrix.md](docs/competitor-matrix.md) | What existing tools miss and why none fully owns ongoing local development |
-
-### Architecture and standards
-
-| Document | Description |
-| --- | --- |
-| [architecture.md](docs/architecture.md) | The code standard (A1–A9, source of the Architect skill), the package layout, and the system design |
-| [architecture-ui.md](docs/architecture-ui.md) | The frontend tier in full: module map, network seam, run data flow, state ownership, design tokens, testing |
-| [decisions.md](docs/decisions.md) | Dated decision log — context, decision, and the alternative that was rejected |
-| [implementation-notes.md](docs/implementation-notes.md) | The "why" behind non-obvious code: engine quirks, paths, persistence, personas |
-| [workflow-runtime-options.md](docs/workflow-runtime-options.md) | Durable-runtime comparison behind the OpenWorkflow choice, and the workflow seam |
-| [embedded-preview.md](docs/embedded-preview.md) | How the harnesses show a running product, and why ADHD frames it rather than proxying it |
-
-### Testing
-
-| Document | Description |
-| --- | --- |
-| [testing.md](docs/testing.md) | How a test here is written (AAAAA), which layer a check belongs in, merge protection |
-| [e2e-test-plan.md](docs/e2e-test-plan.md) | The browser layer: tiers, cost, and what the Playwright suite covers |
-
-
-## Status
-
-**Milestone E — Eigen: the Orchestrator — closed at 0.9.23** on live runs against two
-harnesses, Cursor and Codex. An **Orchestrator** now sits above the pipelines: you
-describe a goal, it talks it through, composes a team from the persona catalog for you to
-approve, launches the composed run, and decides what happens next when that run settles —
-another run, a milestone to plan, or a reasoned stop.
-
-**In progress — Milestone F, Fixpoint:** stabilising to something a first-time user can
-install, point at a folder, and *see the result of*. Its headline gap is exactly that last
-step: a run finishes and the files are somewhere, and you have to already know where.
-Next after it are **G — Gauge** (the product is renamed **Isotopy**) and **H — Harmonic**
-(features chosen by the people who try it, not by us). Milestones are named for
-mathematical terms; A–D keep their letters.
-
-**Milestone D — the Full Delivery loop — shipped at 0.8.7**, and was closed on a live
-dogfood against a real project. The current version is in
-[`package.json`](package.json); this section describes capability, not a release.
-
-A run is driven by real coding agents (Claude Code, Codex, Cursor) through a durable
-OpenWorkflow runtime backed by SQLite, so a run survives a server restart and resumes
-without re-running completed stages. Three pipelines ship: **Single agent**,
-**Product Manager + Developer + QA**, and **Full Delivery** — Product Manager gate →
-Product Designer → Software Architect → Developer → independent review → QA Engineer →
-Release Manager → SRE → Product Manager closeout. These three are still selectable
-directly as presets; the Orchestrator path composes a team per goal instead, and both end
-up as the same kind of run.
-
-**Milestones** group the runs that deliver one body of work. A Product Manager
-conversation plans a milestone, you edit and approve the proposal, and its features
-become a queue: start the next feature yourself, or turn on **Auto-run next feature**
-and let the server chain them. The dashboard at `#/milestones/:id` shows feature
-progress, each feature's run history, and the blocking findings that closeout
-recorded. A quality stage that finds a blocking problem does not kill the run — it
-marks it **needs attention**, and the pipeline still closes out and writes follow-up
-tasks to your backlog. A feature left needing attention is resolved from the dashboard
-with **Accept findings & complete**, which records who accepted it over which open
-findings rather than silently flipping a status.
-
-**Release and deploy are automated as of 0.9.29.** A project's own commands live in
-`.adhd/automation.json` — validation, how the product starts, and a deploy target per
-environment. The `deploy` stage is run by ADHD itself rather than by an agent: no target
-configured reports `VERDICT: SKIP` without spending an engine turn; a configured one runs
-the command, health-checks the URL it printed, and passes only if both succeed. Production
-sits outside Full Delivery and milestone autorun, behind an explicit confirmation.
 
 ## Prerequisites
 
@@ -248,6 +181,88 @@ between runs, restarts when a run changes files so you are never looking at the
 previous build, and is stopped on Stop, on switching project, and when the server
 shuts down. The QA agent asks for the same product through the same mechanism
 rather than starting a server of its own.
+
+## Status
+
+The current version is in [`package.json`](package.json); this section describes
+capability, not a release.
+
+**What works today.** A run is driven by real coding agents (Claude Code, Codex, Cursor)
+through a durable OpenWorkflow runtime backed by SQLite, so a run survives a server restart
+and resumes without re-running completed stages. The **Orchestrator** sits above the runs:
+you describe a goal, it talks it through, composes a team from the persona catalog for you
+to approve, launches the composed run, and decides what happens next when that run
+settles — another run, a milestone to plan, or a reasoned stop. Three preset pipelines are
+still selectable directly — **Single agent**, **Product Manager + Developer + QA**, and
+**Full Delivery** (Product Manager gate → Product Designer → Software Architect →
+Developer → independent review → QA Engineer → Release Manager → SRE → Product Manager
+closeout) — and both paths end up as the same kind of run.
+
+**Milestones** group the runs that deliver one body of work. A Product Manager
+conversation plans a milestone, you edit and approve the proposal, and its features
+become a queue: start the next feature yourself, or turn on **Auto-run next feature**
+and let the server chain them. The dashboard at `#/milestones/:id` shows feature
+progress, each feature's run history, and the blocking findings that closeout
+recorded. A quality stage that finds a blocking problem does not kill the run — it
+marks it **needs attention**, and the pipeline still closes out and writes follow-up
+tasks to your backlog. A feature left needing attention is resolved from the dashboard
+with **Accept findings & complete**, which records who accepted it over which open
+findings rather than silently flipping a status.
+
+**Release and deploy are automated as of 0.9.29.** A project's own commands live in
+`.adhd/automation.json` — validation, how the product starts, and a deploy target per
+environment. The `deploy` stage is run by ADHD itself rather than by an agent: no target
+configured reports `VERDICT: SKIP` without spending an engine turn; a configured one runs
+the command, health-checks the URL it printed, and passes only if both succeed. Production
+sits outside Full Delivery and milestone autorun, behind an explicit confirmation.
+
+**Where it is going.** Milestone D — the Full Delivery loop — shipped at 0.8.7; Milestone
+E — Eigen, the Orchestrator — closed at 0.9.23 on live runs against Cursor and Codex; both
+closed on live dogfoods against real projects. In progress is **Milestone F — Fixpoint**:
+stabilising to something a first-time user can install, point at a folder, and *see the
+result of*. Next are **G — Gauge** (the product is renamed **Isotopy**) and **H —
+Harmonic** (features chosen by the people who try it, not by us). Milestones are named for
+mathematical terms; A–D keep their letters.
+
+## Where ADHD fits
+
+The wedge is not "no competitors exist." The market has hosted app builders (fast v1, weak
+v2+), local OSS app builders (Dyad, Locode, Singulary, Tinykit — generation-focused,
+limited governed lifecycle), lifecycle orchestrators (Sikula, autonomous-sdlc — developer
+tools, weaker first-run UX), and frameworks (LangGraph, Aiki — building blocks, not a
+product).
+
+**What nobody owns cleanly:** open-source + local + model-agnostic + fast first-run +
+**predictable ongoing evolution** with repo-native context, Playwright E2E,
+deploy-anywhere, and stage restart. The full argument is in
+[competitor-matrix.md](docs/competitor-matrix.md).
+
+## Documents
+
+### Product
+
+| Document | Description |
+| --- | --- |
+| [product-brief.md](docs/product-brief.md) | Positioning, app-builder gap, target user, workflow, differentiation |
+| [competitor-matrix.md](docs/competitor-matrix.md) | What existing tools miss and why none fully owns ongoing local development |
+
+### Architecture and standards
+
+| Document | Description |
+| --- | --- |
+| [architecture.md](docs/architecture.md) | The code standard (A1–A9, source of the Architect skill), the package layout, and the system design |
+| [architecture-ui.md](docs/architecture-ui.md) | The frontend tier in full: module map, network seam, run data flow, state ownership, design tokens, testing |
+| [decisions.md](docs/decisions.md) | Dated decision log — context, decision, and the alternative that was rejected |
+| [implementation-notes.md](docs/implementation-notes.md) | The "why" behind non-obvious code: engine quirks, paths, persistence, personas |
+| [workflow-runtime-options.md](docs/workflow-runtime-options.md) | Durable-runtime comparison behind the OpenWorkflow choice, and the workflow seam |
+| [embedded-preview.md](docs/embedded-preview.md) | How the harnesses show a running product, and why ADHD frames it rather than proxying it |
+
+### Testing
+
+| Document | Description |
+| --- | --- |
+| [testing.md](docs/testing.md) | How a test here is written (AAAAA), which layer a check belongs in, merge protection |
+| [e2e-test-plan.md](docs/e2e-test-plan.md) | The browser layer: tiers, cost, and what the Playwright suite covers |
 
 ## Project structure
 
