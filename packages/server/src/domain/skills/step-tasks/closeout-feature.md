@@ -8,9 +8,9 @@ next feature run.
 
 Do not mark unresolved work complete or implement fixes during closeout. Record
 which platform was tested and any Windows/macOS gap. Return exactly one
-`adhd-closeout` fenced JSON block with this shape before the verdict:
+`isotopy-closeout` fenced JSON block with this shape before the verdict:
 
-```adhd-closeout
+```isotopy-closeout
 {
   "summary": "What happened",
   "deliveredScope": ["Completed outcome"],

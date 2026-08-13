@@ -1,5 +1,32 @@
 # Done
 
+## TASK-133: Rename the model protocol surface to Isotopy
+**Priority:** P1 | **Tags:** server, core, engine, testing, milestone-g
+**Updated:** 2026-08-13 19:25
+
+Rename model-facing fenced protocols as one producer/consumer contract:
+
+- `adhd-orchestrator-decision` → `isotopy-orchestrator-decision`.
+- `adhd-run-artifacts` → `isotopy-run-artifacts`.
+- `adhd-milestone-plan` → `isotopy-milestone-plan`.
+- Rename any other emitted or parsed fence discovered by the protocol inventory.
+
+Update bundled step tasks, generated skills, examples, fixtures, schema extractors, and error messages in the same change. Add focused producer/consumer round-trip tests so a prompt/parser mismatch cannot report a successful run.
+
+No dual parsing: old persisted model outputs stop being readable, which is accepted for this pre-release clean break.
+
+Verify the full automated suite plus real runs on at least two available engines; each engine must emit the new fence and each extractor must accept it. Record engines and platform actually tested.
+
+Cross-platform: n/a — protocol parsing is pure text logic and line handling must continue to accept both LF and CRLF.
+
+### Plan
+
+Completed 2026-08-13: Inventoried and renamed all five active model-output contracts to `isotopy-closeout`, `isotopy-milestone-plan`, `isotopy-orchestrator-decision`, `isotopy-release`, and `isotopy-run-artifacts`. Added shared core fence definitions and extraction, updated every parser, prompt, bundled persona/step task, fixture, error, current document, and transcript filter, with no legacy aliases. Added LF/CRLF extraction, former-fence rejection, producer/consumer agreement, and transcript clean-break coverage. Bumped all workspace packages to 0.10.2.
+
+Verification on Windows: frozen install, generated-skill freshness, lint, all TypeScript projects, 94 Vitest files / 847 tests, recursive production build, and free Playwright passed (69 passed, 4 opt-in tests skipped). Real Codex and Claude Code canaries each emitted `isotopy-orchestrator-decision` and the shared extractor accepted it; Cursor was attempted and skipped because its external monthly quota is exhausted until 2026-09-03. macOS/POSIX was not run locally; protocol parsing is platform-neutral, CRLF is covered, and the existing Windows/macOS CI matrix remains authoritative.
+
+---
+
 ## TASK-132: Rename the code and integration surface to Isotopy
 **Priority:** P1 | **Tags:** core, server, ui, testing, milestone-g
 **Updated:** 2026-08-13 18:23

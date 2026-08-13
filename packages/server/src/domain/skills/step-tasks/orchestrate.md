@@ -7,7 +7,7 @@ End your turn with a readable explanation followed by exactly one fenced JSON
 block. The block is the only thing the system reads:
 
 ````
-```adhd-orchestrator-decision
+```isotopy-orchestrator-decision
 { "action": "...", ... }
 ```
 ````

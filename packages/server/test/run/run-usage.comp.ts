@@ -143,5 +143,5 @@ test("spend survives a server restart", async () => {
 }, 15_000);
 
 function fenced(decision: unknown): string {
-  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+  return `\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }

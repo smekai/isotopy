@@ -503,5 +503,5 @@ test("aborting a parked run skips the asking stage rather than stranding it", as
 });
 
 function fenced(decision: unknown): string {
-  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+  return `\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }

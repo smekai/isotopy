@@ -1,7 +1,11 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
+import {
+  DEMO_PIPELINES,
+  flattenPipelineStages,
+  MODEL_PROTOCOL_FENCE,
+} from "@isotopy/core";
 import { REPO_ROOT } from "../src/paths.ts";
 import {
   loadBundledPersona,
@@ -10,6 +14,15 @@ import {
 
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
+const PROTOCOL_ASSIGNMENTS = [
+  ["closeout-feature", MODEL_PROTOCOL_FENCE.closeout],
+  ["mediate-question", MODEL_PROTOCOL_FENCE.orchestratorDecision],
+  ["orchestrate", MODEL_PROTOCOL_FENCE.orchestratorDecision],
+  ["plan-milestone", MODEL_PROTOCOL_FENCE.milestonePlan],
+  ["prepare-release", MODEL_PROTOCOL_FENCE.release],
+  ["review-run", MODEL_PROTOCOL_FENCE.runArtifacts],
+  ["review-run", MODEL_PROTOCOL_FENCE.orchestratorDecision],
+] as const;
 
 describe("skill generation", () => {
   test("committed outputs are in sync with their sources (gen:skills --check)", () => {
@@ -44,6 +57,21 @@ describe("skill generation", () => {
     ).toEqual([]);
   });
 
+  test.each(PROTOCOL_ASSIGNMENTS)(
+    "%s emits the %s fence its consumer expects",
+    async (stepTask, fence) => {
+      const assignment = await loadBundledStepTask(stepTask);
+
+      expect(assignment).toContain(fence);
+    },
+  );
+
+  test("the Orchestrator persona requires the decision fence its consumer expects", async () => {
+    const persona = await loadBundledPersona("orchestrator");
+
+    expect(persona).toContain(MODEL_PROTOCOL_FENCE.orchestratorDecision);
+  });
+
   test("QA stays an ordinary workflow step that never owns the product process", async () => {
     const persona = await loadBundledPersona("tester");
     const assignment = await loadBundledStepTask("verify-feature");
@@ -52,6 +80,6 @@ describe("skill generation", () => {
     expect(persona).toContain("Playwright");
     expect(persona).toContain("Never start, stop or kill the product yourself");
     expect(assignment).toContain("Do not start it yourself");
-    expect(assignment).not.toContain("adhd-qa-result");
+    expect(assignment).not.toContain("isotopy-qa-result");
   });
 });

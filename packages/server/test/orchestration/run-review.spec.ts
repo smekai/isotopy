@@ -15,11 +15,11 @@ const ARTIFACTS = {
 const DECISION = { action: "stop", reason: "goal met" };
 
 function artifactsBlock(payload: unknown): string {
-  return `\`\`\`adhd-run-artifacts\n${JSON.stringify(payload)}\n\`\`\``;
+  return `\`\`\`isotopy-run-artifacts\n${JSON.stringify(payload)}\n\`\`\``;
 }
 
 function decisionBlock(payload: unknown): string {
-  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(payload)}\n\`\`\``;
+  return `\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(payload)}\n\`\`\``;
 }
 
 describe("extractRunArtifacts", () => {
@@ -35,13 +35,13 @@ describe("extractRunArtifacts", () => {
     const parsed = extractRunArtifacts("The run went fine, nothing to add.");
 
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "Missing fenced adhd-run-artifacts JSON block",
+      "Missing fenced isotopy-run-artifacts JSON block",
     );
   });
 
   it("reports a block that is not valid JSON", () => {
     const parsed = extractRunArtifacts(
-      "```adhd-run-artifacts\n{ summary: done }\n```",
+      "```isotopy-run-artifacts\n{ summary: done }\n```",
     );
 
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(

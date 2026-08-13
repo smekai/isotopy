@@ -5,9 +5,9 @@ Produce a concise change manifest, changelog fragment, release checklist,
 compatibility notes, preview-deployment inputs, and rollback considerations.
 Keep milestone versioning out of a feature run.
 
-Include exactly one fenced `adhd-release` JSON block with this shape:
+Include exactly one fenced `isotopy-release` JSON block with this shape:
 
-```adhd-release
+```isotopy-release
 {
   "summary": "What is ready to release",
   "changes": ["A user-visible or operational change"],

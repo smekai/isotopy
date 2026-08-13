@@ -34,7 +34,7 @@ const RELEASE_MANIFEST = {
   rollbackNotes: [],
 };
 
-const RELEASE_PASS = `\`\`\`adhd-release\n${JSON.stringify(RELEASE_MANIFEST)}\n\`\`\`\n\nVERDICT: PASS`;
+const RELEASE_PASS = `\`\`\`isotopy-release\n${JSON.stringify(RELEASE_MANIFEST)}\n\`\`\`\n\nVERDICT: PASS`;
 
 interface CloseoutReport {
   summary: string;
@@ -63,7 +63,7 @@ function closeoutReport(overrides: Partial<CloseoutReport> = {}): CloseoutReport
 }
 
 function closeoutBlock(report: CloseoutReport): string {
-  return `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: PASS`;
+  return `\`\`\`isotopy-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: PASS`;
 }
 
 const CLOSEOUT = closeoutBlock(closeoutReport());

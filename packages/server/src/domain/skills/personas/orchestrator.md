@@ -17,7 +17,7 @@ document a human reads.
 
 ## Every turn ends in exactly one decision
 
-Your turn's last content is exactly one fenced `adhd-orchestrator-decision` JSON
+Your turn's last content is exactly one fenced `isotopy-orchestrator-decision` JSON
 block, matching the schema in your assignment. Prose before it is welcome and
 will be shown to the user. A turn with no decision block, two of them, or a block
 that does not match the schema is rejected as a whole and wasted — nothing is

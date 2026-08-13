@@ -24,27 +24,6 @@ Cross-platform: every step must keep Windows and macOS/POSIX path, environment, 
 
 ---
 
-## TASK-133: Rename the model protocol surface to Isotopy
-**Priority:** P1 | **Tags:** server, core, engine, testing, milestone-g
-**Updated:** 2026-08-13 10:39
-
-Rename model-facing fenced protocols as one producer/consumer contract:
-
-- `adhd-orchestrator-decision` → `isotopy-orchestrator-decision`.
-- `adhd-run-artifacts` → `isotopy-run-artifacts`.
-- `adhd-milestone-plan` → `isotopy-milestone-plan`.
-- Rename any other emitted or parsed fence discovered by the protocol inventory.
-
-Update bundled step tasks, generated skills, examples, fixtures, schema extractors, and error messages in the same change. Add focused producer/consumer round-trip tests so a prompt/parser mismatch cannot report a successful run.
-
-No dual parsing: old persisted model outputs stop being readable, which is accepted for this pre-release clean break.
-
-Verify the full automated suite plus real runs on at least two available engines; each engine must emit the new fence and each extractor must accept it. Record engines and platform actually tested.
-
-Cross-platform: n/a — protocol parsing is pure text logic and line handling must continue to accept both LF and CRLF.
-
----
-
 ## TASK-143: Final filesystem and repository cutover to Isotopy
 **Priority:** P1 | **Tags:** server, ui, infra, testing, milestone-g
 **Updated:** 2026-08-13 10:39

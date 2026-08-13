@@ -36,5 +36,5 @@ After the user answers, route the answer to the supplied origin stage:
 }
 ```
 
-End with exactly one fenced `adhd-orchestrator-decision` JSON block. Do not
+End with exactly one fenced `isotopy-orchestrator-decision` JSON block. Do not
 propose a team, start work, stop the orchestration, or ask a separate question.

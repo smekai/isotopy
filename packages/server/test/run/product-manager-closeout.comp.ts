@@ -259,5 +259,5 @@ function makeCloseoutRun() {
 }
 
 function closeoutOutput(report: object, verdict: "PASS" | "FAIL"): string {
-  return `\`\`\`adhd-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: ${verdict}`;
+  return `\`\`\`isotopy-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: ${verdict}`;
 }

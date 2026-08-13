@@ -3,7 +3,7 @@ import { extractOrchestratorDecision } from "../../src/schemas/orchestrator-deci
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 function fenced(decision: unknown): string {
-  return `\`\`\`adhd-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
+  return `\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }
 
 describe("extractOrchestratorDecision", () => {
@@ -25,13 +25,13 @@ describe("extractOrchestratorDecision", () => {
     const parsed = extractOrchestratorDecision("I think we should start with a PM.");
 
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "Missing fenced adhd-orchestrator-decision JSON block",
+      "Missing fenced isotopy-orchestrator-decision JSON block",
     );
   });
 
   it("reports a block that is not valid JSON", () => {
     const parsed = extractOrchestratorDecision(
-      "```adhd-orchestrator-decision\n{ action: stop }\n```",
+      "```isotopy-orchestrator-decision\n{ action: stop }\n```",
     );
 
     expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(

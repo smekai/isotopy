@@ -1,6 +1,8 @@
 import {
   CLOSEOUT_SHAPE,
+  extractModelProtocolBlock,
   FINDING_SEVERITIES,
+  MODEL_PROTOCOL_FENCE,
   TASK_PRIORITIES,
   refineDeclaredFindings,
   type CloseoutFinding,
@@ -10,7 +12,6 @@ import {
 } from "@isotopy/core";
 import { z } from "zod";
 
-const CLOSEOUT_BLOCK = /```adhd-closeout\s*([\s\S]*?)```/i;
 const closeoutRecordSchema = z.record(z.string(), z.unknown());
 
 // Everything below normalizes what an agent wrote. Core's shape is the contract
@@ -203,13 +204,15 @@ function salvageCloseout(
 }
 
 export function parseProductManagerCloseout(output: string): ParsedCloseout {
-  const block = CLOSEOUT_BLOCK.exec(output)?.[1];
+  const block = extractModelProtocolBlock(output, MODEL_PROTOCOL_FENCE.closeout);
   if (!block) {
     return {
       report: emptyCloseout(
         output.trim() || "Product Manager produced no closeout text.",
       ),
-      validationErrors: ["Missing fenced adhd-closeout JSON block"],
+      validationErrors: [
+        `Missing fenced ${MODEL_PROTOCOL_FENCE.closeout} JSON block`,
+      ],
     };
   }
 
@@ -219,7 +222,7 @@ export function parseProductManagerCloseout(output: string): ParsedCloseout {
   } catch {
     return {
       report: emptyCloseout(output.trim()),
-      validationErrors: ["adhd-closeout block is not valid JSON"],
+      validationErrors: [`${MODEL_PROTOCOL_FENCE.closeout} block is not valid JSON`],
     };
   }
 

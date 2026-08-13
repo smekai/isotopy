@@ -10,10 +10,10 @@ Consolidate what the run produced into durable facts a later run can use. When a
 Product Manager closeout was supplied, take its report as authoritative and
 condense it rather than re-deriving it from the raw stage outputs.
 
-Return exactly one fenced `adhd-run-artifacts` JSON block:
+Return exactly one fenced `isotopy-run-artifacts` JSON block:
 
 ````
-```adhd-run-artifacts
+```isotopy-run-artifacts
 {
   "summary": "What this run actually produced",
   "deliveredScope": ["Completed outcome"],
@@ -39,7 +39,7 @@ complete because the run reached a terminal status.
 
 ## Second: decide what happens next
 
-Return exactly one fenced `adhd-orchestrator-decision` JSON block. The available
+Return exactly one fenced `isotopy-orchestrator-decision` JSON block. The available
 actions are the ones in your orchestration assignment. For a settled run these
 four are the ones that apply:
 
