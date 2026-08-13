@@ -1,5 +1,47 @@
 # Done
 
+## TASK-116: README — top-level product schema (“How it works”)
+**Priority:** P1 | **Tags:** ui, server, milestone-f
+**Updated:** 2026-08-12 12:40
+
+**What shipped.** A `## How it works` section in `README.md`, directly after the opening
+pitch — the place a first-time reader asks "yes, but how".
+
+Two mermaid diagrams. The first is the product flow: you → Orchestrator conversation → team
+proposal → your approval → composed run, stage by stage, each stage a persona plus a step
+task plus the upstream handoffs, executed through a harness adapter → handoff and verdict →
+changed files and closeout → the Orchestrator's review of the settled run → the decision
+loop back to the top. The human gate and the mediated question hang off it as dotted side
+paths, because that is what they are: a specialist never talks to the user directly. The
+second names the four layers — Orchestrator, personas, workflow runtime, harness adapters —
+so a reader has somewhere to put every file they open next.
+
+Five short prose blocks under the first diagram carry what a diagram cannot: that an
+approved team is compiled and then carried by the run because it exists in no constant,
+that a blocking finding marks a run **needs attention** rather than killing it, and that
+three blocked runs in a row stop the loop.
+
+Both diagrams are parsed with mermaid before commit, not eyeballed.
+
+**Also corrected two stale claims in `## Status`:** release and deploy were still described
+as unautomated pending `TASK-092`, which shipped at 0.9.29; and the three built-in pipelines
+were presented as the only way to start work, with no mention that they are now presets
+beside the Orchestrator's per-goal composition.
+
+**Revised on review, same PR.** The opening no longer calls the repo "research and planning
+artifacts" — it says what the product is, and carries the positioning the founder asked for:
+ADHD is the last mile between generated code and a working business, not a demo generator.
+Prerequisites and Quick start moved up to directly under How it works, so `pnpm install` is
+reachable without passing a market analysis; the market argument became a short `## Where
+ADHD fits` below Status; Status itself now leads with current capability and keeps the
+milestone history to one closing paragraph. The four-layer diagram's caption stopped
+claiming purity: the milestone dashboard and the preset pipelines are named as the two
+subsystems that predate the picture and sit beside it.
+
+Version 0.9.38.
+
+---
+
 ## TASK-139: The Orchestrator's decision loop must not dead-end or spin
 **Priority:** P1 | **Tags:** server, engine, testing, milestone-f
 **Updated:** 2026-08-12 17:20
