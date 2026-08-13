@@ -1,5 +1,39 @@
 # Backlog
 
+## TASK-140: A persona remembers its own last work
+**Priority:** P2 | **Tags:** core, server, milestone-h
+**Updated:** 2026-08-13 11:00
+
+**Milestone H — Harmonic. Claimed by the user on 2026-08-12** — the architecture review
+found that a persona has zero continuity across runs, and the user named it the thing they
+most disliked. A Developer that has worked on a project ten times starts the eleventh from
+nothing: its output lives at `.adhd/runs/<runId>/<stageId>/handoff.md`, keyed by run, never
+by persona.
+
+**The substrate:** a per-persona folder, `.adhd/personas/<personaId>/`, holding `latest.md`
+— that persona's most recent handoff for this project.
+
+- **Written where handoffs are already written.** Extend the single writer — `persistHandoff`
+  in `repository/run-repository.ts`, or a sibling in `services/run-evidence.ts`, which
+  `TASK-092` established as the one place that knows a run's on-disk layout. Do not add a
+  second thing that knows the path. The persona id comes from the stage's `skill`; a stage
+  with no skill writes nothing.
+- **Read back through a new layer in `composeSkill`** (`domain/markdown/skill.ts`), which
+  already layers base / user override / project override / project addendum. This is a fifth
+  input to the same pure function, not a new mechanism.
+- **Bounded.** One latest output, hard size cap, truncated head-and-tail rather than
+  silently dropped. Persona memory that grows without limit is a prompt-cost bug.
+
+**Storage is local-only by decision, not oversight** (2026-08-12, see `docs/decisions.md`):
+`.adhd/` is git-ignored whole (`.adhd/.gitignore` is `*`), so memory is per-machine and does
+not survive a fresh clone. Accepted; revisit only if a user asks for shared memory.
+
+`TASK-113` builds on this substrate.
+
+Cross-platform: path-joined reads and writes under existing `.adhd` roots; no shell.
+
+---
+
 ## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
 **Priority:** P1 | **Tags:** core, server, ui, infra, milestone-g
 **Updated:** 2026-08-07 11:40
@@ -99,10 +133,16 @@ that — rather than what we guessed while building it.
 **Goal:** the features in this milestone are chosen by users, not by us. `TASK-135`
 collects the feedback; what follows is decided by what it says.
 
-**Parked here pending that evidence:** `TASK-111` (reusable teams), `TASK-113` (per-persona
-accumulated context). Each was written as post-MVP by whoever deferred it, and none has a
-user behind it yet. Build the ones feedback asks for; reject the rest rather than letting
-them age in the backlog.
+**Claimed already, by the first user we have — ourselves.** On 2026-08-12 the architecture
+review found that a persona has zero continuity across runs, and the user named persona
+memory and self-improvement as what H must solve. So `TASK-113` (a persona writes what it
+learned) is no longer parked on `TASK-135`'s evidence — it is committed H scope, rewritten
+around self-authored notes rather than a closeout distiller, and `TASK-140` (a persona
+remembers its own last work) joins as its substrate.
+
+**Still parked pending evidence:** `TASK-111` (reusable teams) — written as post-MVP when
+Milestone E deferred it, and still without a user behind it. Build it if feedback asks;
+reject it rather than letting it age.
 
 That rule has been applied once already: `TASK-095` (agent-native browser testing for QA)
 was **rejected on 2026-08-11**, answered by `TASK-138` rather than built. Its policy half
@@ -149,16 +189,35 @@ Cross-platform: n/a — JSON + path-joined storage under the existing `.adhd` ro
 
 ---
 
-## TASK-113: Per-persona accumulated context (artifact distilled memory)
-**Priority:** P3 | **Tags:** core, server, ui, milestone-h
-**Updated:** 2026-08-07 11:40
+## TASK-113: A persona writes what it learned
+**Priority:** P2 | **Tags:** core, server, ui, milestone-h
+**Updated:** 2026-08-13 11:00
 
-**Milestone H — Harmonic. Build only if feedback asks for it.** The evidence to wait for
-is a user saying an agent kept relearning the same thing about their project.
+**Milestone H — Harmonic. Claimed by the user on 2026-08-12** — no longer waiting on
+`TASK-135`'s feedback. The original mechanism (a distiller reading closeout reports) was
+also rejected the same day: **the persona writes its own notes, at the end of its own
+stage.** Self-improvement, not supervision. Depends on `TASK-140`.
 
-Distill closeout knowledge into per-persona accumulated notes under `.adhd` and inject those notes into `composeSkill` alongside existing user/project overrides.
+The mechanism fits the existing boundary standard rather than letting an agent write files:
 
-Also add an orchestrator-facing constraint digest so the orchestrator can reason about “must-do differently for stage X in this project” without needing deep per-agent state.
+- The persona emits a fenced `adhd-persona-notes` block as part of its stage output — the
+  same shape as `adhd-orchestrator-decision`, `adhd-release`, and the closeout report.
+- Parsed in `schemas/` into a validated value or path-aware issues, never a partial object.
+- Applied by a **`PersonaNotesConsumer`** on the `StageOutputConsumer` seam, registered
+  like `CloseoutConsumer` and `ReleaseConsumer`. A new aggregate registers a consumer; it
+  does not edit the run service.
+- Appended to `.adhd/personas/<personaId>/notes.md` (`TASK-140`'s folder) and read back
+  through the same `composeSkill` layer.
+- **A stage that emits no block is normal.** Unlike the closeout consumer, absence is not a
+  rejection — most stages will have learned nothing worth keeping, and that must cost
+  nothing.
+- **Bounded growth is part of this task, not a follow-up:** a size cap and a compaction
+  rule. Notes that only ever append are a slow prompt-cost leak that eventually crowds out
+  the persona itself.
+
+Keep the original second half: an Orchestrator-facing constraint digest, so it can reason
+about "must do differently for stage X in this project" without reading every persona's
+notes.
 
 Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell assumptions.
 

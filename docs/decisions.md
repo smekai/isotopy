@@ -15,6 +15,42 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-13 — The Orchestrator supervises runs, not stages; a persona owns its own memory
+
+**Context:** an architecture review against the founder's four-layer model (Orchestrator →
+personas → workflow runtime → harness adapters) found two divergences worth deciding rather
+than drifting on. First: the Orchestrator does not read each stage's output — 
+`OrchestrationService.consume` guards on `pipelineId === "orchestration"`, so as a
+registered `StageOutputConsumer` it receives every stage's output and acts only on its own
+decision stage; a specialist's handoff reaches it only when the whole run settles. Second:
+a persona has no continuity — output is stored per run and stage
+(`.adhd/runs/<runId>/<stageId>/handoff.md`), so a persona that has worked a project ten
+times starts the eleventh from nothing.
+
+**Decision — run-granularity supervision stays.** Per-stage review is a plausible reading
+of the Orchestrator's job that is explicitly declined: a review turn per stage roughly
+doubles engine spend on a long pipeline, and run-level review plus mediated questions has
+been enough. The guard in `consume` is the deliberate line, not a bug; widening it is the
+place to start if this is ever revisited.
+
+**Decision — persona memory is local-only under `.adhd/personas/<personaId>/`.** `.adhd/`
+is git-ignored whole, so memory is per-machine and dies on a fresh clone. Rejected
+alternatives: versioning it in the repo (reviewable, shared, but publishes an agent's
+accumulated notes into every clone and diff), and user-level `~/.adhd/` (follows the person
+across projects, wrong for knowledge that is project-specific).
+
+**Decision — the persona writes its own notes, at the end of its own stage.** Rejected
+alternatives: a distiller reading closeout reports (supervised and consistent, but only
+pipelines with a closeout produce memory, and it makes memory someone else's summary), and
+the Orchestrator writing notes at run review (has the whole picture, but turns memory into
+supervision again). Self-authorship is the point; the accepted cost is unsupervised
+quality, bounded by a size cap and compaction owned by `TASK-113`.
+
+**Consequence:** `TASK-140` (the substrate) and the rewritten `TASK-113` (self-authored
+notes on the `StageOutputConsumer` seam) carry the mechanism; both are Milestone H.
+
+---
+
 ## 2026-08-12 — A rejected decision informs the next attempt; a blocked one stops the loop
 
 **Context:** two failures of the decision loop, observed the same day in the `dogfood`
