@@ -228,7 +228,7 @@ test("a task-board failure is recorded in the closeout without making the report
 
 /** An empty project root, swept by the afterEach above. */
 async function makeProject(): Promise<ProjectPath> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "adhd-closeout-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-closeout-"));
   roots.push(root);
   return { id: "project", root, dataDir: path.join(root, ".adhd") };
 }

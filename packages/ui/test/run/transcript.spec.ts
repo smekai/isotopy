@@ -257,22 +257,6 @@ describe("conversationOnly", () => {
     ).toEqual(["stage", "Here it is."]);
   });
 
-  test("a former protocol fence is no longer treated as current machinery", () => {
-    const formerDecision =
-      '```adhd-orchestrator-decision\n{"action":"stop","reason":"done"}\n```';
-    const state = run([
-      started("orchestrate", "passed", "2026-07-27T10:00:00.000Z", [
-        log("2026-07-27T10:00:01.000Z", "info", formerDecision),
-      ]),
-    ]);
-
-    expect(
-      conversationOnly(buildTranscript(state)).map((item) =>
-        "text" in item ? item.text : item.kind,
-      ),
-    ).toEqual(["stage", formerDecision]);
-  });
-
   test("questions and the user's own turns survive the filter", () => {
     const state = run([started("intake", "asking", "2026-07-27T10:00:00.000Z", [])]);
     state.messages = [

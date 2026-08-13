@@ -2,7 +2,7 @@
 
 ## TASK-133: Rename the model protocol surface to Isotopy
 **Priority:** P1 | **Tags:** server, core, engine, testing, milestone-g
-**Updated:** 2026-08-13 19:25
+**Updated:** 2026-08-13 19:46
 
 Rename model-facing fenced protocols as one producer/consumer contract:
 
@@ -21,9 +21,9 @@ Cross-platform: n/a — protocol parsing is pure text logic and line handling mu
 
 ### Plan
 
-Completed 2026-08-13: Inventoried and renamed all five active model-output contracts to `isotopy-closeout`, `isotopy-milestone-plan`, `isotopy-orchestrator-decision`, `isotopy-release`, and `isotopy-run-artifacts`. Added shared core fence definitions and extraction, updated every parser, prompt, bundled persona/step task, fixture, error, current document, and transcript filter, with no legacy aliases. Added LF/CRLF extraction, former-fence rejection, producer/consumer agreement, and transcript clean-break coverage. Bumped all workspace packages to 0.10.2.
+Completed 2026-08-13, including review correction: directly renamed all five active model-output contracts to `isotopy-closeout`, `isotopy-milestone-plan`, `isotopy-orchestrator-decision`, `isotopy-release`, and `isotopy-run-artifacts`. Parsers, prompts, bundled persona/step tasks, fixtures, errors, current documentation, and transcript filtering now use only direct Isotopy literals. Removed the temporary shared `model-protocol` module and all former-fence compatibility/rejection fixtures; there are no aliases, fallbacks, migration paths, or active old-protocol occurrences. Bumped all workspace packages to 0.10.3 for the follow-up commit.
 
-Verification on Windows: frozen install, generated-skill freshness, lint, all TypeScript projects, 94 Vitest files / 847 tests, recursive production build, and free Playwright passed (69 passed, 4 opt-in tests skipped). Real Codex and Claude Code canaries each emitted `isotopy-orchestrator-decision` and the shared extractor accepted it; Cursor was attempted and skipped because its external monthly quota is exhausted until 2026-09-03. macOS/POSIX was not run locally; protocol parsing is platform-neutral, CRLF is covered, and the existing Windows/macOS CI matrix remains authoritative.
+Verification on Windows after simplification: frozen install, generated-skill freshness, lint, all TypeScript projects, 93 Vitest files / 840 tests, and recursive production build passed. The earlier free Playwright run passed 69 tests with 4 opt-in tiers skipped. Real Codex and Claude Code canaries each emitted `isotopy-orchestrator-decision` and its direct extractor accepted it; Cursor was attempted and skipped because its external monthly quota is exhausted until 2026-09-03. macOS/POSIX was not run locally; protocol parsing is platform-neutral and the existing Windows/macOS CI matrix remains authoritative.
 
 ---
 

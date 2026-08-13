@@ -1,4 +1,4 @@
-import { agentForStage, MODEL_PROTOCOL_FENCE } from "@isotopy/core";
+import { agentForStage } from "@isotopy/core";
 import type { LogLevel, RunState, StageActivity, StageStatus } from "@isotopy/core";
 
 export type TranscriptItem =
@@ -134,10 +134,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
 export type ConversationItem = Exclude<TranscriptItem, { kind: "tool" }>;
 
 // Trailing `$` alternative catches a fence still streaming in, which has no closer yet.
-const MACHINERY_FENCE = new RegExp(
-  `\`\`\`(?:${Object.values(MODEL_PROTOCOL_FENCE).join("|")})[\\s\\S]*?(?:\`\`\`|$)`,
-  "g",
-);
+const MACHINERY_FENCE = /```isotopy-[a-z-]+[\s\S]*?(?:```|$)/g;
 
 function withoutMachinery(text: string): string {
   return text.replace(MACHINERY_FENCE, "").replace(/\n{3,}/g, "\n\n").trim();

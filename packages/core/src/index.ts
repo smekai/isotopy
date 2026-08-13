@@ -3,7 +3,6 @@ export * from "./automation.ts";
 export * from "./closeout.ts";
 export * from "./engines.ts";
 export * from "./milestones.ts";
-export * from "./model-protocol.ts";
 export * from "./orchestration.ts";
 export * from "./pipelines.ts";
 export * from "./product.ts";

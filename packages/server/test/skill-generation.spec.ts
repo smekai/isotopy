@@ -1,11 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import {
-  DEMO_PIPELINES,
-  flattenPipelineStages,
-  MODEL_PROTOCOL_FENCE,
-} from "@isotopy/core";
+import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
 import { REPO_ROOT } from "../src/paths.ts";
 import {
   loadBundledPersona,
@@ -15,13 +11,13 @@ import {
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
 const PROTOCOL_ASSIGNMENTS = [
-  ["closeout-feature", MODEL_PROTOCOL_FENCE.closeout],
-  ["mediate-question", MODEL_PROTOCOL_FENCE.orchestratorDecision],
-  ["orchestrate", MODEL_PROTOCOL_FENCE.orchestratorDecision],
-  ["plan-milestone", MODEL_PROTOCOL_FENCE.milestonePlan],
-  ["prepare-release", MODEL_PROTOCOL_FENCE.release],
-  ["review-run", MODEL_PROTOCOL_FENCE.runArtifacts],
-  ["review-run", MODEL_PROTOCOL_FENCE.orchestratorDecision],
+  ["closeout-feature", "isotopy-closeout"],
+  ["mediate-question", "isotopy-orchestrator-decision"],
+  ["orchestrate", "isotopy-orchestrator-decision"],
+  ["plan-milestone", "isotopy-milestone-plan"],
+  ["prepare-release", "isotopy-release"],
+  ["review-run", "isotopy-run-artifacts"],
+  ["review-run", "isotopy-orchestrator-decision"],
 ] as const;
 
 describe("skill generation", () => {
@@ -69,7 +65,7 @@ describe("skill generation", () => {
   test("the Orchestrator persona requires the decision fence its consumer expects", async () => {
     const persona = await loadBundledPersona("orchestrator");
 
-    expect(persona).toContain(MODEL_PROTOCOL_FENCE.orchestratorDecision);
+    expect(persona).toContain("isotopy-orchestrator-decision");
   });
 
   test("QA stays an ordinary workflow step that never owns the product process", async () => {
