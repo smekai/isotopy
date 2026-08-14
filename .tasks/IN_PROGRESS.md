@@ -18,6 +18,25 @@ Perform every physical path and repository identity change only after `TASK-131`
 
 Cross-platform: use `path.join` and `os.homedir()`; never hardcode separators. On Windows, close processes that lock the checkout before renaming it. On macOS/POSIX, verify the exact lowercase path on a case-sensitive filesystem. Document PowerShell and bash cutover commands, record the platform actually tested, and mark the other untested if not exercised.
 
+### Status — repository-side work landed 2026-08-14, physical renames pending
+
+Everything inside the checkout is done and verified on Windows (v0.10.4). **Three
+steps remain, and all three are the user's to run** because they cannot be performed
+from inside this checkout without invalidating the session's working directory:
+
+1. `gh repo rename isotopy --repo smekai/adhd`
+2. Rename the local checkout `C:\Development\smekai\adhd` → `...\isotopy` with every
+   server, watcher, editor, and agent session closed, then
+   `git remote set-url origin https://github.com/smekai/isotopy.git`
+3. Cutover verification: clone the renamed repository into a fresh path, install, run
+   the gates, launch the dev stack, and complete one real engine-backed run.
+
+Until step 3 passes, `TASK-130`'s milestone exit is not met and both tasks stay open.
+
+The abandoned user-level `~/.adhd` is untouched and can be deleted at leisure; the
+repository-local `.adhd/` was deleted with the user's agreement, since the new ignore
+lists no longer cover it.
+
 ### Plan
 
 **Decisions taken with the user (2026-08-14):**
