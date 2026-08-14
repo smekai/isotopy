@@ -1,7 +1,7 @@
 # Project automation
 
 A project's own commands — how to start it, how to check it, how to deploy it —
-live in `.adhd/automation.json`. The Setup screen's **Automation** section edits
+live in `.isotopy/automation.json`. The Setup screen's **Automation** section edits
 that file through `GET`/`PUT /automation`. A project that has never configured
 anything reads back as the explicit empty configuration rather than an error:
 
@@ -61,9 +61,9 @@ downstream can read.
 
 | Path | Written by |
 | --- | --- |
-| `.adhd/runs/<run-id>/release/` | `release.json`, `release.md` |
-| `.adhd/runs/<run-id>/deploy/` | `deployment.json`, `deployment.md`, `deploy.log` |
-| `.adhd/deployments/<deployment-id>/` | The same three files, for a production deployment, which belongs to the project rather than to a run |
+| `.isotopy/runs/<run-id>/release/` | `release.json`, `release.md` |
+| `.isotopy/runs/<run-id>/deploy/` | `deployment.json`, `deployment.md`, `deploy.log` |
+| `.isotopy/deployments/<deployment-id>/` | The same three files, for a production deployment, which belongs to the project rather than to a run |
 
 ## Production
 

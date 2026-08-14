@@ -230,7 +230,7 @@ test("a task-board failure is recorded in the closeout without making the report
 async function makeProject(): Promise<ProjectPath> {
   const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-closeout-"));
   roots.push(root);
-  return { id: "project", root, dataDir: path.join(root, ".adhd") };
+  return { id: "project", root, dataDir: path.join(root, ".isotopy") };
 }
 
 /** A TaskPlanner board holding TASK-001 and TASK-002, both in progress. */

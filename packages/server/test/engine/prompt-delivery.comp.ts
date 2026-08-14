@@ -36,7 +36,7 @@ const ADAPTERS: Record<EngineId, EngineAdapter> = {
 let stubDir: string;
 
 beforeAll(() => {
-  stubDir = mkdtempSync(path.join(os.tmpdir(), "adhd-prompt-stub-"));
+  stubDir = mkdtempSync(path.join(os.tmpdir(), "isotopy-prompt-stub-"));
   process.env[PATH_ENV["claude-code"]] = writeSilentStub("claude");
   process.env[PATH_ENV.codex] = writeSilentStub("codex");
   process.env[PATH_ENV.cursor] = writeSilentStub("cursor-agent");

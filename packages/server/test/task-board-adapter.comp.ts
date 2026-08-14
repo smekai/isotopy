@@ -10,8 +10,8 @@ let root: string;
 let project: ProjectPath;
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), "adhd-task-board-"));
-  project = { id: "p", root, dataDir: path.join(root, ".adhd") };
+  root = await mkdtemp(path.join(os.tmpdir(), "isotopy-task-board-"));
+  project = { id: "p", root, dataDir: path.join(root, ".isotopy") };
 });
 
 afterEach(async () => {

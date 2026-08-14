@@ -97,14 +97,14 @@ test("a rejected cleanup path is shown, not silently dropped", () => {
   render(
     <CloseoutPanel
       closeout={closeout({
-        cleanup: { removed: [".adhd/runs/r1/tmp"], rejected: ["../../etc/hosts"] },
+        cleanup: { removed: [".isotopy/runs/r1/tmp"], rejected: ["../../etc/hosts"] },
       })}
       d={d}
     />,
   );
 
   // Assert
-  expect(screen.getByText(/Removed \.adhd\/runs\/r1\/tmp/)).toBeDefined();
+  expect(screen.getByText(/Removed \.isotopy\/runs\/r1\/tmp/)).toBeDefined();
   expect(screen.getByText(/Rejected \.\.\/\.\.\/etc\/hosts/)).toBeDefined();
 });
 

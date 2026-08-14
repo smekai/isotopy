@@ -20,7 +20,7 @@ export function userIsotopyDir(): string {
   const override = process.env.ISOTOPY_USER_HOME;
   return override && override.trim() !== ""
     ? path.resolve(override.trim())
-    : path.join(os.homedir(), ".adhd");
+    : path.join(os.homedir(), ".isotopy");
 }
 
 export function projectsFilePath(): string {
@@ -49,7 +49,7 @@ export type ProjectLocation = Pick<Project, "id" | "root">;
 export function projectPaths(project: ProjectLocation): ProjectPath {
   return project.id === HOME_PROJECT_ID
     ? homeProjectPaths()
-    : { id: project.id, root: project.root, dataDir: path.join(project.root, ".adhd") };
+    : { id: project.id, root: project.root, dataDir: path.join(project.root, ".isotopy") };
 }
 
 export function runsDir(projectPath: ProjectPath): string {

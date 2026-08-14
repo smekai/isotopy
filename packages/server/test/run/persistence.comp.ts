@@ -1,6 +1,6 @@
 // What survives a restart. The orchestrator's read model is in-memory, so
 // everything a user sees after the server comes back has to have been
-// reconstructed from the project's run repository (a SQLite DB under .adhd/) —
+// reconstructed from the project's run repository (a SQLite DB under .isotopy/) —
 // this suite is what proves that round trip.
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";

@@ -38,15 +38,15 @@ describe("resumeStageId", () => {
 
 describe("isScratchWorkspace", () => {
   test("recognises a scratch path with Windows separators", () => {
-    expect(isScratchWorkspace("C:\\dev\\adhd\\.adhd\\runs\\ab12\\workspace")).toBe(true);
+    expect(isScratchWorkspace("C:\\dev\\isotopy\\.isotopy\\runs\\ab12\\workspace")).toBe(true);
   });
 
   test("recognises a scratch path with POSIX separators", () => {
-    expect(isScratchWorkspace("/home/me/adhd/.adhd/runs/ab12/workspace")).toBe(true);
+    expect(isScratchWorkspace("/home/me/isotopy/.isotopy/runs/ab12/workspace")).toBe(true);
   });
 
-  test("recognises the home project's scratch path, which has no .adhd/runs segment", () => {
-    expect(isScratchWorkspace("C:\\Users\\me\\.adhd\\home\\runs\\ab12\\workspace")).toBe(true);
+  test("recognises the home project's scratch path, which has no .isotopy/runs segment", () => {
+    expect(isScratchWorkspace("C:\\Users\\me\\.isotopy\\home\\runs\\ab12\\workspace")).toBe(true);
   });
 
   test("a project root is not scratch", () => {
@@ -80,14 +80,14 @@ describe("stagePresentation", () => {
 
 describe("childPath", () => {
   test("keeps Windows separators when the base has them", () => {
-    expect(childPath("C:\\projects\\my-app\\.adhd", "runs/ab12")).toBe(
-      "C:\\projects\\my-app\\.adhd\\runs\\ab12",
+    expect(childPath("C:\\projects\\my-app\\.isotopy", "runs/ab12")).toBe(
+      "C:\\projects\\my-app\\.isotopy\\runs\\ab12",
     );
   });
 
   test("keeps POSIX separators when the base has them", () => {
-    expect(childPath("/home/me/my-app/.adhd", "runs/ab12")).toBe(
-      "/home/me/my-app/.adhd/runs/ab12",
+    expect(childPath("/home/me/my-app/.isotopy", "runs/ab12")).toBe(
+      "/home/me/my-app/.isotopy/runs/ab12",
     );
   });
 });

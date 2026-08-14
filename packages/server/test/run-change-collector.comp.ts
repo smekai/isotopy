@@ -15,10 +15,10 @@ afterEach(async () => {
 });
 
 async function project(): Promise<ProjectPath> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "adhd-changes-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-changes-"));
   projects.push(root);
   await writeFile(path.join(root, "README.md"), "# app\n");
-  return { id: "test-project", root, dataDir: path.join(root, ".adhd") };
+  return { id: "test-project", root, dataDir: path.join(root, ".isotopy") };
 }
 
 test("a folder that is not a repository still reports what the run created", async () => {

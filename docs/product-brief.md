@@ -87,7 +87,7 @@ flowchart LR
     deploy --> task
 ```
 
-**Input paths:** Tasks from the built-in backlog (`adhd task create`, dashboard), plain text (`adhd run "..."`), markdown files, or GitHub issue URLs. All paths normalize through the intake stage before requirements.
+**Input paths:** Tasks from the built-in backlog (`isotopy task create`, dashboard), plain text (`isotopy run "..."`), markdown files, or GitHub issue URLs. All paths normalize through the intake stage before requirements.
 
 | Stage | Agent role | Primary outputs |
 |-------|------------|-----------------|
@@ -132,7 +132,7 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 3. **Auditability** — State file plus git history show what each agent did and why.
 4. **Speed with guardrails** — Automation where safe; human gates where judgment matters.
 5. **No lock-in** — Markdown specs, standard git, pluggable agents, your deployment target.
-6. **Persistent backlog** — Tasks live in the repo (`.adhd/tasks/`), link to runs, and survive across sessions — not a separate Jira clone, but intake that feeds the pipeline.
+6. **Persistent backlog** — Tasks live in the repo (`.isotopy/tasks/`), link to runs, and survive across sessions — not a separate Jira clone, but intake that feeds the pipeline.
 
 ---
 

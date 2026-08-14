@@ -52,13 +52,13 @@ substitute the engine adapter.
   → `{"installed":true,"path":...,"version":...}`.
 - Connection settings: `GET /settings`, `PUT /settings/engines/claude-code`
   (`{"connectionMode":"subscription"|"api-key","apiKey":"..."|null}`);
-  stored user-level in `~/.adhd/settings.json` keyed by project, key never
+  stored user-level in `~/.isotopy/settings.json` keyed by project, key never
   echoed back. `PUT /settings/preferences` holds engine, model, permission
   mode and the selected pipeline — these are **server** state, not
   localStorage. Scope any call to a project with `-H "X-Isotopy-Project: <id>"`.
 - Projects: `GET /projects` → the registry (`home` always present);
   `POST /projects` (`{"root":"C:/some/dir"}`) registers one and creates its
-  self-ignoring `.adhd/`; `POST /projects/<id>/activate`; `DELETE /projects/<id>`
+  self-ignoring `.isotopy/`; `POST /projects/<id>/activate`; `DELETE /projects/<id>`
   unregisters without touching files.
 - Milestones: `GET /milestones`, `GET /milestones/:id`, `POST /milestones/plan`
   (starts the planning conversation), `POST /milestones/:id/revise`,
@@ -111,7 +111,7 @@ curl -s -X POST http://localhost:9477/runs -H "content-type: application/json" \
 `pipelineId` is validated against the shipped set, so a retired id
 (`one-box`, `dev-test`, `gated-dev-test`) is rejected at the boundary.
 The working directory is **not** a request field: a run works in its
-project's folder, and a `home` run gets `~/.adhd/home/runs/<id>/workspace`.
+project's folder, and a `home` run gets `~/.isotopy/home/runs/<id>/workspace`.
 Target a folder by targeting its project (`X-Isotopy-Project`, or activate
 it first). `model` takes standard-context CLI aliases (`opus`/`sonnet`/
 `haiku`); full model IDs resolve to 1M-context variants that

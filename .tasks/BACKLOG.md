@@ -24,26 +24,6 @@ Cross-platform: every step must keep Windows and macOS/POSIX path, environment, 
 
 ---
 
-## TASK-143: Final filesystem and repository cutover to Isotopy
-**Priority:** P1 | **Tags:** server, ui, infra, testing, milestone-g
-**Updated:** 2026-08-13 10:39
-
-Perform every physical path and repository identity change only after `TASK-131`, `TASK-132`, and `TASK-133` are green:
-
-- Change user and project state roots from `.adhd` to `.isotopy` everywhere, using the existing centralized path helpers.
-- Rename `packages/ui/public/adhd-icon.png` to an Isotopy filename and update all consumers.
-- Rename the GitHub repository from `smekai/adhd` to `smekai/isotopy`, then update `repository`, `homepage`, `bugs`, badges, documentation links, CI references, and the local `origin`.
-- Stop app servers, watchers, and tools that hold the checkout; rename the local checkout directory from `adhd` to `isotopy` from its parent directory.
-- Run a final case-insensitive identifier and filename audit. Keep only explicitly allowlisted historical references.
-
-**No migration:** do not move or read legacy `.adhd` state. Existing directories remain untouched and Isotopy starts with fresh state.
-
-**Cutover verification:** clone from the new repository URL into a fresh path; install, typecheck, lint, test, build, launch the dev stack, and complete one real engine-backed run. Confirm all generated state lands under `.isotopy` and that no running configuration relies on the former checkout path or repository URL.
-
-Cross-platform: use `path.join` and `os.homedir()`; never hardcode separators. On Windows, close processes that lock the checkout before renaming it. On macOS/POSIX, verify the exact lowercase path on a case-sensitive filesystem. Document PowerShell and bash cutover commands, record the platform actually tested, and mark the other untested if not exercised.
-
----
-
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-10 14:10

@@ -262,29 +262,6 @@ test("an exact model pinned in the advanced disclosure is what the composer repo
   await expect(page.getByText(/Engine: Claude Code · claude-3-legacy/)).toBeVisible();
 });
 
-test("a preference left in the former localStorage contract is ignored", async ({ page }) => {
-  // Arrange
-  await page.goto("/");
-  await writePreferences(page, { pipelineId: "pm-dev-test" });
-  const { activeProjectId } = (await (await page.request.get("/projects")).json()) as {
-    activeProjectId: string;
-  };
-  await page.evaluate(
-    (id) => localStorage.setItem(`adhd.${id}.pipelineId`, "solo"),
-    activeProjectId,
-  );
-  // Act
-  await page.reload();
-
-  // Assert
-  await expect
-    .poll(async () => (await readPreferences(page)).pipelineId)
-    .toBe("pm-dev-test");
-  expect(
-    await page.evaluate((id) => localStorage.getItem(`adhd.${id}.pipelineId`), activeProjectId),
-  ).toBe("solo");
-});
-
 test("the run rail is always present and offers a new run", async ({ page }) => {
   // Act
   await page.goto("/");

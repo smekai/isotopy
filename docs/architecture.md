@@ -382,7 +382,7 @@ The frontend tier is documented in full — module map, the network seam, run da
 - **No hardcoded hosts/ports.** Everything comes from env vars with sensible defaults — see [`.env.example`](../.env.example). Copy it to `.env` (gitignored) for local overrides.
 - The server loads the root `.env` itself (`src/config.ts`), Vite reads the same file via `loadEnv`, so one file drives both processes.
 - Named constants over magic numbers: timeouts, poll intervals, and status lists are declared at the top of the module that owns them (or in `@isotopy/core` when shared, e.g. `TERMINAL_RUN_STATUSES`).
-- Secrets (API keys) never go in code or `.env.example`; runtime secrets live in the user-level `~/.adhd/settings.json` (mode `0600`) or real env vars — **never** in a project's `.adhd/`, which sits in the user's git working tree.
+- Secrets (API keys) never go in code or `.env.example`; runtime secrets live in the user-level `~/.isotopy/settings.json` (mode `0600`) or real env vars — **never** in a project's `.isotopy/`, which sits in the user's git working tree.
 
 ## Subsystem review: Developer→Tester flow (TASK-049)
 
@@ -435,7 +435,7 @@ Recommended next steps, in rough priority order:
 ```mermaid
 flowchart TB
     subgraph userMachine [User Machine]
-        CLI[CLI adhd]
+        CLI[CLI isotopy]
         UI[Local Dashboard]
         Orch[Orchestrator Core]
         TaskMgr[TaskManager]
@@ -508,8 +508,8 @@ Central state machine. Responsibilities:
 
 | File | Purpose |
 |------|---------|
-| `.adhd/tasks/index.json` | Machine-readable summaries for fast listing and filtering |
-| `.adhd/tasks/<task-id>.md` | Human-readable detail: title, description, acceptance criteria, run history |
+| `.isotopy/tasks/index.json` | Machine-readable summaries for fast listing and filtering |
+| `.isotopy/tasks/<task-id>.md` | Human-readable detail: title, description, acceptance criteria, run history |
 
 **index.json shape:**
 
@@ -534,7 +534,7 @@ Central state machine. Responsibilities:
 
 **Task statuses:** `backlog` | `ready` | `in_progress` | `blocked` | `done` | `rejected`
 
-**Task markdown format** (`.adhd/tasks/TASK-001.md`):
+**Task markdown format** (`.isotopy/tasks/TASK-001.md`):
 
 ```markdown
 # TASK-001: Add dark mode toggle
@@ -755,7 +755,7 @@ worker, admission lane, or direct-user fallback when the invariant is broken.
 
 ### 3. Workflow state
 
-**File:** `.adhd/runs/<run-id>/state.json`
+**File:** `.isotopy/runs/<run-id>/state.json`
 
 ```json
 {
@@ -766,8 +766,8 @@ worker, admission lane, or direct-user fallback when the invariant is broken.
   "currentStage": "implementation",
   "inputRef": "intake/raw-input.md",
   "worktree": {
-    "path": ".adhd/worktrees/a1b2c3",
-    "branch": "adhd/dark-mode-toggle-a1b2c3",
+    "path": ".isotopy/worktrees/a1b2c3",
+    "branch": "isotopy/dark-mode-toggle-a1b2c3",
     "baseBranch": "main"
   },
   "stages": {
@@ -799,7 +799,7 @@ worker, admission lane, or direct-user fallback when the invariant is broken.
 
 ### 4. Event log (audit trail)
 
-**File:** `.adhd/runs/<run-id>/events.jsonl`
+**File:** `.isotopy/runs/<run-id>/events.jsonl`
 
 One JSON object per line:
 
@@ -836,7 +836,7 @@ comparison; Aiki remains the recorded second choice.
 | Stage retries | `RetryPolicy` (`maximumAttempts` + backoff) per workflow/step |
 | Crash recovery | Worker resumes from the last completed step (SQLite lease/heartbeat) |
 | Durable timers | `step.sleep` survives restart (TASK-061 shape) |
-| Local-first | In-process worker; the SQLite file lives inside `.adhd/` and travels with the project |
+| Local-first | In-process worker; the SQLite file lives inside `.isotopy/` and travels with the project |
 
 **Layering** (the durable runtime owns the *whole* lifecycle, not one method —
 see `workflow-runtime-options.md` §4):
@@ -852,8 +852,8 @@ see `workflow-runtime-options.md` §4):
 │  pipeline-workflow = the run loop,      │
 │  stage-execution = the durable step     │
 ├─────────────────────────────────────────┤
-│  .adhd/workflow.db — OpenWorkflow SoT   │
-│  .adhd/runs.db — runs/events projection │
+│  .isotopy/workflow.db — OpenWorkflow SoT   │
+│  .isotopy/runs.db — runs/events projection │
 └─────────────────────────────────────────┘
 ```
 
@@ -881,7 +881,7 @@ sequenceDiagram
     participant WT as Worktree
     participant Harness as Harness Adapter
 
-    Orch->>Git: git worktree add .adhd/worktrees/runId -b adhd/slug-runId
+    Orch->>Git: git worktree add .isotopy/worktrees/runId -b isotopy/slug-runId
     Orch->>Harness: run(worktreePath, implementationPrompt)
     Harness->>WT: edit files, commit
     Orch->>Git: run tests in worktree
@@ -1048,10 +1048,10 @@ harness:
 
 | Command | Behavior |
 |---------|----------|
-| `adhd run` (new) | New `runId`, fresh state |
-| `adhd resume <runId>` | Continue from `currentStage` if paused/failed |
-| `adhd restart <runId> --from <stage>` | Mark stage and all downstream as `pending`; keep upstream artifacts |
-| `adhd restart <runId> --from <stage> --fresh` | Delete downstream artifacts; re-run stage from scratch |
+| `isotopy run` (new) | New `runId`, fresh state |
+| `isotopy resume <runId>` | Continue from `currentStage` if paused/failed |
+| `isotopy restart <runId> --from <stage>` | Mark stage and all downstream as `pending`; keep upstream artifacts |
+| `isotopy restart <runId> --from <stage> --fresh` | Delete downstream artifacts; re-run stage from scratch |
 
 **Implementation detail:** Restart invalidates stage entries in `state.json` from the target stage forward; does not delete upstream artifact files (unless `--fresh`).
 
@@ -1061,7 +1061,7 @@ harness:
 
 ### Where a project's data lives
 
-A **project** is a directory that owns its own `.adhd/`, the way a repository
+A **project** is a directory that owns its own `.isotopy/`, the way a repository
 owns its `.git/`. History travels with the code and is isolated by construction.
 Nothing is anchored to the Isotopy checkout: `paths.ts` exports a `ProjectPaths`
 value (`id`, `root`, `dataDir`) that callers receive, and `REPO_ROOT` survives
@@ -1069,15 +1069,15 @@ only for loading the tool's own `.env`.
 
 | Location | Holds | Scope |
 |----------|-------|-------|
-| `<project>/.adhd/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `artifacts/artifacts.{json,md}` | One project |
-| `<project>/.adhd/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
-| `<project>/.adhd/skills/<id>.md` | Full persona replacement (power users) | One project |
-| `<project>/.adhd/.gitignore` | `*` — the folder ignores itself by default | One project |
-| `~/.adhd/projects.json` | Known projects (paths + metadata) and the active one | User |
-| `~/.adhd/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
-| `~/.adhd/skills/<id>.md` | User-level persona override of the bundled default | User |
-| `~/.adhd/home/runs/<run-id>/workspace/` | Scratch working folder — **home runs only** | User |
-| `~/.adhd/home/` | Data root of the **home** project — the fallback when no project is selected | User |
+| `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `artifacts/artifacts.{json,md}` | One project |
+| `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
+| `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
+| `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
+| `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
+| `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
+| `~/.isotopy/skills/<id>.md` | User-level persona override of the bundled default | User |
+| `~/.isotopy/home/runs/<run-id>/workspace/` | Scratch working folder — **home runs only** | User |
+| `~/.isotopy/home/` | Data root of the **home** project — the fallback when no project is selected | User |
 
 **A run works in its project's folder.** The working directory is derived, never
 requested: `resolveWorkspace(paths, runId)` returns the project root, or — for
@@ -1085,9 +1085,9 @@ the home project, which has no code of its own — a scratch
 `runs/<run-id>/workspace/` used by that run alone. A client cannot name the
 directory an agent runs in; it selects a *project*, and the project's root is
 fixed when it is registered. Run artifacts always stay in the per-run folder
-under `.adhd/`, which ignores itself from git.
+under `.isotopy/`, which ignores itself from git.
 
-**Secrets never enter a project folder.** `<project>/.adhd/` sits in the user's
+**Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by
 project id, with user-level defaults a new project inherits until it overrides
 them.
@@ -1110,12 +1110,12 @@ user-level root; both exist so tests get isolated roots.
 
 | Artifact type | Location | Git tracked? |
 |---------------|----------|--------------|
-| Tasks | `.adhd/tasks/` | Optional (gitignore by default) |
-| Run state, events | `<project>/.adhd/runs/` | No (self-ignoring by default) |
+| Tasks | `.isotopy/tasks/` | Optional (gitignore by default) |
+| Run state, events | `<project>/.isotopy/runs/` | No (self-ignoring by default) |
 | Approved specs | `specs/<slug>/` | Yes (on user opt-in) |
-| Code changes | `adhd/*` branch | Yes (normal git) |
-| Agent prompts | `.adhd/agents/` | Yes (team customization) |
-| Project context | `.adhd/context/` | Yes |
+| Code changes | `isotopy/*` branch | Yes (normal git) |
+| Agent prompts | `.isotopy/agents/` | Yes (team customization) |
+| Project context | `.isotopy/context/` | Yes |
 
 **Principle:** Machine state is local and reproducible; human-approved artifacts promote into tracked repo paths.
 
@@ -1152,7 +1152,7 @@ user-level root; both exist so tests get isolated roots.
 └──────────────────────────────────────────────────┘
 ```
 
-Every request carries an `X-Isotopy-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ISOTOPY_PORT`, `ISOTOPY_UI_PORT`). There is no external database — OpenWorkflow owns `.adhd/workflow.db`, and Isotopy's run/event/milestone/orchestration tables live in `.adhd/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
+Every request carries an `X-Isotopy-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ISOTOPY_PORT`, `ISOTOPY_UI_PORT`). There is no external database — OpenWorkflow owns `.isotopy/workflow.db`, and Isotopy's run/event/milestone/orchestration tables live in `.isotopy/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 
@@ -1160,7 +1160,7 @@ Every request carries an `X-Isotopy-Project` header identifying the active proje
 
 ## Default pipeline definition
 
-**File:** `.adhd/workflows/default.yaml`
+**File:** `.isotopy/workflows/default.yaml`
 
 ```yaml
 id: default
@@ -1215,16 +1215,16 @@ Custom workflows: copy YAML, edit stage list (v0.2 visual editor).
 ## Repository layout (implementation)
 
 ```
-adhd/
+isotopy/
   packages/
-    cli/              # adhd CLI entry (Commander or CAC)
+    cli/              # isotopy CLI entry (Commander or CAC)
     core/             # orchestrator, TaskManager, state machine, gates
     adapters/         # harness adapters
     agents/           # stage agent runners
     server/           # Hono local API for dashboard
     ui/               # React/Vite dashboard SPA
   templates/
-    default/          # scaffold .adhd/ on init (incl. tasks/)
+    default/          # scaffold .isotopy/ on init (incl. tasks/)
   docs/               # product docs (this folder)
 ```
 
@@ -1258,7 +1258,7 @@ adhd/
 | CLI framework | Not taken — the app is server + Web UI | No CLI package shipped; `pnpm dev` starts both processes |
 | API framework | Hono | Compact, typed, good SSE support |
 | UI | React + Vite | Fast dev, aligns with dashboard needs |
-| Persistence | SQLite (`node:sqlite`) in `<project>/.adhd/` | Sole run store behind a layered repository; no server, no native build |
+| Persistence | SQLite (`node:sqlite`) in `<project>/.isotopy/` | Sole run store behind a layered repository; no server, no native build |
 | Desktop packaging | Defer (Tauri later) | Server + Web UI sufficient; Tauri can wrap same stack |
 | LLM abstraction | None — engines are coding CLIs | Isotopy spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
 | Worktree at run start vs impl stage | At implementation | Spec stages don't need branch |

@@ -31,7 +31,7 @@ let dir: string;
 let script: string;
 
 beforeAll(() => {
-  dir = mkdtempSync(path.join(os.tmpdir(), "adhd-subprocess-"));
+  dir = mkdtempSync(path.join(os.tmpdir(), "isotopy-subprocess-"));
   script = path.join(dir, "leaves-a-child-behind.cjs");
   writeFileSync(script, LEAVES_A_CHILD_BEHIND);
 });

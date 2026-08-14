@@ -290,7 +290,7 @@ Exactly two things on the server. Everything else is the real code.
 | Dependency | Substituted with | Why |
 | --- | --- | --- |
 | Engine adapter (spawns a CLI) | `FakeEngine` via `setEngineAdapter()` | Otherwise the test costs money and needs an authenticated CLI. |
-| `.adhd` data root | temp dir via `ISOTOPY_HOME` | Otherwise tests write into the developer's real run history. |
+| `.isotopy` data root | temp dir via `ISOTOPY_HOME` | Otherwise tests write into the developer's real run history. |
 
 The UI's substituted boundary is [`api.ts`](../packages/ui/src/api.ts) — the only
 module that talks to the network — mocked with `vi.mock("../src/api")`. In `e2e/`

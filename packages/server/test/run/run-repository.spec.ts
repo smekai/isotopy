@@ -14,7 +14,7 @@ let projectPath: ProjectPath;
 let repository: RunRepository;
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), "adhd-repo-"));
+  dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-repo-"));
   projectPath = { id: "p", root: dir, dataDir: dir };
   repository = new RunRepository(projectPath);
 });

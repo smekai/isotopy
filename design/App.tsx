@@ -237,7 +237,7 @@ function Waveform({ color, height = 14 }: { color: string; height?: number }) {
         <div key={i} style={{
           background: color, width: 3, borderRadius: 2,
           height: `${h * height}px`,
-          animation: `adhd-wave ${0.38 + i * 0.07}s ease-in-out ${i * 0.05}s infinite alternate`,
+          animation: `isotopy-wave ${0.38 + i * 0.07}s ease-in-out ${i * 0.05}s infinite alternate`,
         }} />
       ))}
     </div>
@@ -333,7 +333,7 @@ function StageNode({
           <div style={{
             position: "absolute", inset: 0,
             background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)",
-            animation: "adhd-shimmer 1.6s linear infinite",
+            animation: "isotopy-shimmer 1.6s linear infinite",
           }} />
         )}
       </div>
@@ -372,7 +372,7 @@ function StageNode({
           <div style={{
             width: 5, height: 5, borderRadius: "50%",
             background: st.dot,
-            animation: running ? "adhd-pulse 1.2s ease-in-out infinite" : undefined,
+            animation: running ? "isotopy-pulse 1.2s ease-in-out infinite" : undefined,
           }} />
           <span style={{ color: st.text, fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: "0.06em" }}>
             {sLabel(status)}
@@ -403,7 +403,7 @@ function GateMarker({
         transform: "rotate(45deg)",
         borderRadius: 4,
         boxShadow: awaiting ? `0 0 10px ${goldSoft}, 0 0 20px ${goldSoft}` : "none",
-        animation: awaiting ? "adhd-pulse 1.4s ease-in-out infinite" : "none",
+        animation: awaiting ? "isotopy-pulse 1.4s ease-in-out infinite" : "none",
         transition: "all 0.3s",
         flexShrink: 0,
       }} />
@@ -468,7 +468,7 @@ function VoiceBtn({
           position: "absolute", inset: -4,
           borderRadius: "50%",
           border: `2px solid ${listening ? "#EF4444" : d.accent}`,
-          animation: "adhd-ring 1.4s ease-out infinite",
+          animation: "isotopy-ring 1.4s ease-out infinite",
           opacity: 0.5,
         }} />
       )}
@@ -781,7 +781,7 @@ function TeamController({
         }}>
           <Sparkles size={14} style={{ color: "#FFF" }} />
         </div>
-        <span style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em" }}>ADHD</span>
+        <span style={{ color: d.text, fontFamily: SANS, fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em" }}>Isotopy</span>
       </div>
 
       <div style={{ width: 1, height: 20, background: d.border }} />
@@ -796,7 +796,7 @@ function TeamController({
             width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
             background: run.state === "running" ? d.accent : run.state === "awaiting" ? "#D97706" : run.state === "failed" ? "#DC2626" : "#059669",
             boxShadow: run.state === "running" ? `0 0 6px ${d.accent}` : undefined,
-            animation: run.state === "running" ? "adhd-pulse 1.2s ease-in-out infinite" : undefined,
+            animation: run.state === "running" ? "isotopy-pulse 1.2s ease-in-out infinite" : undefined,
           }} />
         </div>
       ) : (
@@ -1180,19 +1180,19 @@ export default function App() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
       <style>{`
-        @keyframes adhd-wave {
+        @keyframes isotopy-wave {
           from { transform: scaleY(0.2); }
           to   { transform: scaleY(1); }
         }
-        @keyframes adhd-pulse {
+        @keyframes isotopy-pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50%       { opacity: 0.7; transform: scale(0.88); }
         }
-        @keyframes adhd-ring {
+        @keyframes isotopy-ring {
           0%   { transform: scale(1);   opacity: 0.6; }
           100% { transform: scale(1.7); opacity: 0; }
         }
-        @keyframes adhd-shimmer {
+        @keyframes isotopy-shimmer {
           0%   { transform: translateX(-100%); }
           100% { transform: translateX(300%); }
         }
@@ -1208,7 +1208,7 @@ export default function App() {
           <div style={{ width: 30, height: 30, borderRadius: 9, background: `linear-gradient(135deg, ${d.accent}, ${d.accentDark})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Sparkles size={15} style={{ color: "#FFF" }} />
           </div>
-          <span style={{ color: d.text, fontFamily: SANS, fontSize: 15, fontWeight: 800, letterSpacing: "-0.02em" }}>ADHD</span>
+          <span style={{ color: d.text, fontFamily: SANS, fontSize: 15, fontWeight: 800, letterSpacing: "-0.02em" }}>Isotopy</span>
         </div>
 
         <div style={{ width: 1, height: 22, background: d.border }} />
@@ -1269,7 +1269,7 @@ export default function App() {
                   width: 7, height: 7, borderRadius: "50%",
                   background: scen.run.state === "running" ? d.accent : scen.run.state === "awaiting" ? "#D97706" : scen.run.state === "failed" ? "#DC2626" : "#059669",
                   boxShadow: scen.run.state === "running" ? `0 0 7px ${d.accent}` : undefined,
-                  animation: scen.run.state === "running" ? "adhd-pulse 1.2s ease-in-out infinite" : undefined,
+                  animation: scen.run.state === "running" ? "isotopy-pulse 1.2s ease-in-out infinite" : undefined,
                 }} />
                 <span style={{ color: d.textMid, fontFamily: MONO, fontSize: 10, fontWeight: 600 }}>{scen.run.state.toUpperCase()}</span>
               </div>

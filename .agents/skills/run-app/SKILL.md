@@ -43,7 +43,7 @@ verifying engine runs. Mock (`sequential`) runs are unaffected.
   → `{"installed":true,"path":...,"version":...}`.
 - Connection settings: `GET /settings`, `PUT /settings/engines/Codex`
   (`{"connectionMode":"subscription"|"api-key","apiKey":"..."|null}`);
-  stored in gitignored `.adhd/settings.json`, key never echoed back.
+  stored in gitignored `.isotopy/settings.json`, key never echoed back.
 - E2E, free + seeded tiers (no engine spend, auto-starts the dev
   server): `pnpm e2e`. The live tier is opt-in:
   `ISOTOPY_E2E_LIVE=1 pnpm --filter @isotopy/ui e2e live-dev-test`.

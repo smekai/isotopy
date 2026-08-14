@@ -15,7 +15,7 @@ let projectPath: ProjectPath;
 let database: Database | undefined;
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), "adhd-timestamps-"));
+  dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-timestamps-"));
   projectPath = { id: "p", root: dir, dataDir: dir };
 });
 

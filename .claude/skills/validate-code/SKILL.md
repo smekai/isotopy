@@ -43,7 +43,7 @@ Rules about the gates:
   `*.comp.ts` for request-in/behaviour-out component tests, `packages/ui/e2e/`
   for Playwright.
 - **Watch what a test writes.** A test that touches the developer's real
-  `~/.adhd` or the repo's `.adhd/` is a broken test even when it passes. Point
+  `~/.isotopy` or the repo's `.isotopy/` is a broken test even when it passes. Point
   `ISOTOPY_HOME` and `ISOTOPY_USER_HOME` at temp directories (`createTestApp` in
   `test/support/harness.ts` already does).
 

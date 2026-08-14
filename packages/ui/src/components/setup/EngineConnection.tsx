@@ -176,7 +176,7 @@ export function EngineConnection({ d, projectName, engine, settings }: EngineCon
         <div style={API_KEY_BLOCK}>
           <div style={apiKeyLabel(d)}>{apiKeyMode?.label ?? "API key"}</div>
           <div style={apiKeyNote(d)}>
-            Stored server-side in your user-level ~/.adhd/settings.json for {projectName} — never inside the project folder, never sent back to the browser.
+            Stored server-side in your user-level ~/.isotopy/settings.json for {projectName} — never inside the project folder, never sent back to the browser.
           </div>
           {apiKeyConfigured && (
             <div style={KEY_STATUS_ROW}>
