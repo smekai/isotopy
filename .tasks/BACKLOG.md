@@ -1,29 +1,5 @@
 # Backlog
 
-## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
-**Priority:** P1 | **Tags:** core, server, ui, infra, testing, milestone-g
-**Updated:** 2026-08-13 10:38
-
-A gauge transformation changes the representation and not the physics. This milestone makes the product **Isotopy** without changing what it does.
-
-Start only after Milestone F and its closing dogfood are complete. The first implementation commit starts the explicitly planned **0.10.x** series at **0.10.0**; every later commit increments the shared workspace patch version from its parent.
-
-**Ordered milestone sequence:**
-1. `TASK-131` settles the brand contract and renames user-visible surfaces.
-2. `TASK-132` renames code-level identifiers and integration contracts.
-3. `TASK-133` renames model-facing protocol fences and verifies their consumers.
-4. `TASK-143` performs the final filesystem and repository cutover.
-
-The repository slug and checkout directory are deliberately last. Until `TASK-143`, intermediate commits may retain old path names while user-visible and code surfaces move in controlled, green steps.
-
-**Clean break, decided with the user on 2026-08-07:** no migration, dual parsing, aliases, or compatibility shims. Existing local history under `.adhd` is abandoned when the final cutover occurs.
-
-**Milestone exit:** a clean clone from the renamed repository builds, passes automated verification, launches on Windows, completes a real engine-backed run using only Isotopy contracts, and contains no unintended ADHD identifiers outside historical records.
-
-Cross-platform: every step must keep Windows and macOS/POSIX path, environment, subprocess, and command behavior valid. Record which platform was actually tested and mark the other untested when necessary.
-
----
-
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-10 14:10

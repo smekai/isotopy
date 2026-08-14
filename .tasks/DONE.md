@@ -1,5 +1,41 @@
 # Done
 
+## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
+**Priority:** P1 | **Tags:** core, server, ui, infra, testing, milestone-g
+**Updated:** 2026-08-14 00:00
+
+A gauge transformation changes the representation and not the physics. This milestone made the product **Isotopy** without changing what it does.
+
+**Clean break, decided with the user on 2026-08-07 and reconfirmed 2026-08-14:** no migration, dual parsing, aliases, or compatibility shims. Local history under `.adhd` is abandoned.
+
+Completed 2026-08-14 across four tasks, one per surface, each landing green before the next started: `TASK-131` the brand contract and user-visible surfaces, `TASK-132` code identifiers (`@isotopy/*`, `ISOTOPY_*`, `X-Isotopy-Project`), `TASK-133` the model-facing protocol fences, and `TASK-143` the physical paths and repository identity. The repository slug and checkout directory were deliberately last so the earlier steps could move in controlled, verifiable increments.
+
+Shipped at **0.10.4**. `docs/decisions.md` and `.tasks/DONE.md` keep their ADHD references as the dated historical record; no other ADHD identifier survives.
+
+**Milestone exit — partially verified.** The renamed tree builds, passes lint, typecheck, 838 tests, e2e, and the identifier/filename audits, and launches on Windows with all state under `.isotopy`. The remaining exit conditions — a clean clone from the renamed repository URL and a real engine-backed run inside it — depend on the GitHub repository rename and the checkout rename, which only the user can perform. Both are documented in `TASK-143` and were closed out with the user on 2026-08-14 rather than held open.
+
+Platform: verified on Windows. macOS/POSIX not exercised; the lowercase `.isotopy` path still wants a check on a case-sensitive filesystem.
+
+---
+
+## TASK-143: Final filesystem and repository cutover to Isotopy
+**Priority:** P1 | **Tags:** server, ui, infra, testing, milestone-g
+**Updated:** 2026-08-14 00:00
+
+Completed 2026-08-14 at **0.10.4**. Changed the user and project state roots from `.adhd` to `.isotopy` through the two literals in `packages/server/src/paths.ts` that every other path helper derives from, plus the non-derived references (snapshot ignore set, `.gitignore`, `eslint.config.mjs`, `.env.example`, and the two UI strings that display the path). Renamed `adhd-icon.png` → `isotopy-icon.png` with its three consumers, and pointed the package name and `repository`/`homepage`/`bugs` URLs at `smekai/isotopy`. Renamed `.adhd` fixtures and all 14 `mkdtemp` prefixes in tests, ten documentation files, the `design/` mockup, and the hand-written agent skills; regenerated the bundled skills from their doc sources.
+
+**Deleted three back-compat guards** — the `X-ADHD-Project` header test, the `ADHD_DEPLOY_URL` marker test, and the `adhd.*` localStorage e2e assertion. Each asserted that a retired name was *ignored* and was the only reason its string still existed in code; under the clean break they guarded a path that no longer exists.
+
+**Kept as historical record:** `docs/decisions.md` and `.tasks/DONE.md`. Those entries describe what was true when written.
+
+Verification on Windows: lint, typecheck, build, and `gen:skills` (no resulting diff) green; 838 tests passed against an 840 baseline measured on `main` — exactly the two deleted unit tests; e2e 68 passed / 4 skipped against 69/4 — the one deleted e2e test. Case-insensitive `git grep` and `git ls-files` audits return nothing outside the allowlisted historical files. Ran the dev stack: the server created `~/.isotopy/home`, a registered project got `<root>/.isotopy/` with its self-ignoring `.gitignore`, no `.adhd` was created anywhere, and the UI loaded `/isotopy-icon.png`. macOS/POSIX untested.
+
+**Left to the user, by agreement:** the `smekai/adhd` → `smekai/isotopy` GitHub rename, the local checkout rename, `git remote set-url`, and the clean-clone cutover verification. None can be performed from inside the checkout without invalidating the working directory. The repository URLs shipped here resolve once the GitHub rename happens; GitHub redirects the old slug afterward.
+
+**No migration:** the user-level `~/.adhd` is untouched and disposable. The repository-local `.adhd/` was deleted with the user's agreement once the new ignore lists stopped covering it. Isotopy starts with fresh state and asks for an engine key on first launch.
+
+---
+
 ## TASK-133: Rename the model protocol surface to Isotopy
 **Priority:** P1 | **Tags:** server, core, engine, testing, milestone-g
 **Updated:** 2026-08-13 19:46
