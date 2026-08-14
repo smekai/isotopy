@@ -1,6 +1,6 @@
 // Project isolation, proven at the API boundary. Two projects pointing at two
 // directories must not see each other's history, must write their runs into
-// their own `.adhd/`, and must never have an API key written inside them.
+// their own `.isotopy/`, and must never have an API key written inside them.
 import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
@@ -46,12 +46,12 @@ test("the registry starts with just the home project, active", async () => {
   expect(body.projects.map((project) => project.id)).toEqual([HOME_PROJECT_ID]);
 });
 
-test("adding a project creates a self-ignoring .adhd folder inside it", async () => {
+test("adding a project creates a self-ignoring .isotopy folder inside it", async () => {
   // Arrange
   const added = await addTestProject(ctx.registry, "proj");
 
   // Assert
-  const gitignore = await readFile(path.join(added.root, ".adhd", ".gitignore"), "utf8");
+  const gitignore = await readFile(path.join(added.root, ".isotopy", ".gitignore"), "utf8");
   expect(gitignore.trim()).toBe("*");
 });
 
@@ -72,7 +72,7 @@ test("adding the same folder twice returns one project, not two", async () => {
   expect(body.projects.filter((project) => project.id === first.id)).toHaveLength(1);
 });
 
-test("a run is written into its own project's .adhd, not the home project's", async () => {
+test("a run is written into its own project's .isotopy, not the home project's", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "writes");
 
@@ -84,16 +84,16 @@ test("a run is written into its own project's .adhd, not the home project's", as
 
   // Assert
   expect(run.projectId).toBe(project.id);
-  expect(await exists(path.join(project.root, ".adhd", "runs.db"))).toBe(true);
+  expect(await exists(path.join(project.root, ".isotopy", "runs.db"))).toBe(true);
   // Every project's database file exists from startup, so what proves isolation
   // is that no run landed in the home project, not that the file is absent.
   expect(ctx.orchestrator.listRuns(HOME_PROJECT_ID)).toEqual([]);
 });
 
-test("starting a run restores the .adhd git-ignore if the folder was wiped", async () => {
+test("starting a run restores the .isotopy git-ignore if the folder was wiped", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "reignore");
-  await rm(path.join(project.root, ".adhd"), { recursive: true, force: true });
+  await rm(path.join(project.root, ".isotopy"), { recursive: true, force: true });
 
   // Act
   ctx.engine.anticipate().reports("done");
@@ -101,7 +101,7 @@ test("starting a run restores the .adhd git-ignore if the folder was wiped", asy
 
   // Assert
   await waitForRunStatus(ctx.app, run.id, "completed");
-  const gitignore = await readFile(path.join(project.root, ".adhd", ".gitignore"), "utf8");
+  const gitignore = await readFile(path.join(project.root, ".isotopy", ".gitignore"), "utf8");
   expect(gitignore.trim()).toBe("*");
 });
 
@@ -212,7 +212,7 @@ test("an API key is stored user-level and never inside the project folder", asyn
   expect(status).toBe(200);
   const userSettings = await readFile(path.join(ctx.userHome, "settings.json"), "utf8");
   expect(userSettings).toContain("sk-ant-test-key");
-  const projectData = await readdir(path.join(project.root, ".adhd"));
+  const projectData = await readdir(path.join(project.root, ".isotopy"));
   expect(projectData).not.toContain("settings.json");
 });
 
@@ -250,7 +250,7 @@ test("removing a project unregisters it but leaves its folder and history on dis
   // Assert
   expect(status).toBe(200);
   expect(body.projects.map((entry) => entry.id)).not.toContain(project.id);
-  expect(await exists(path.join(project.root, ".adhd", "runs.db"))).toBe(true);
+  expect(await exists(path.join(project.root, ".isotopy", "runs.db"))).toBe(true);
 });
 
 test("the home project cannot be removed", async () => {

@@ -76,12 +76,6 @@ test("output with no marker at all keeps the configured URL", () => {
   );
 });
 
-test("the former deployment marker is ignored", () => {
-  expect(
-    reportedDeploymentUrl("ADHD_DEPLOY_URL=https://old.example.test", "https://fixed.test"),
-  ).toBe("https://fixed.test");
-});
-
 test("a marker in a CRLF log is read without the carriage return", () => {
   expect(reportedDeploymentUrl("done\r\nISOTOPY_DEPLOY_URL=https://crlf.test\r\n")).toBe(
     "https://crlf.test/",

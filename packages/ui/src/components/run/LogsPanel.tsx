@@ -93,7 +93,7 @@ function StageLog({ stage, d }: { stage: StageState; d: Dir }) {
         {stage.skill && (
           <span
             data-testid="stage-persona"
-            title={`Persona: .adhd/skills/${stage.skill}.md`}
+            title={`Persona: .isotopy/skills/${stage.skill}.md`}
             style={personaPill(d)}
           >
             {stage.skill.toUpperCase()}

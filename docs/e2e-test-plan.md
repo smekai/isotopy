@@ -29,9 +29,9 @@ the API server, so it covers both processes). The suite runs single-worker on
 purpose: every spec drives the same server and the same in-memory run store.
 
 **The suite gets its own machine state.** Since preferences became server-side
-(TASK-065), a spec that picks a pipeline writes to `~/.adhd/settings.json` — so
+(TASK-065), a spec that picks a pipeline writes to `~/.isotopy/settings.json` — so
 Playwright starts the server with `ISOTOPY_USER_HOME` and `ISOTOPY_HOME` pointed at
-`<tmp>/adhd-e2e` and its own ports (`9499`/`5199`), and does **not** reuse an
+`<tmp>/isotopy-e2e` and its own ports (`9499`/`5199`), and does **not** reuse an
 already-running dev server: the isolation is only real on a server this config
 started. Your own settings, projects and run history are never touched, and
 `pnpm dev` can stay running on 5173 while the suite works.
@@ -41,7 +41,7 @@ discard for free. Every spec therefore calls `resetPreferences` in a
 `beforeEach` (`e2e/support/preferences.ts`) — without it, the pipeline chosen in
 `dev-test-flow.spec.ts` changes the run `run-lifecycle.spec.ts` starts.
 
-The free and seeded tiers create real runs under `.adhd/runs/` (gitignored) but
+The free and seeded tiers create real runs under `.isotopy/runs/` (gitignored) but
 never spawn an engine. Every test leaves its run in a terminal state, so the
 empty-state specs still see a quiet server.
 
@@ -65,8 +65,8 @@ on Windows and macOS.
    "Accept edits only".
 4. **Persistence across reload** (server-side, asserted through `/settings`) —
    pipeline, engine model and permission mode survive a reload; they also
-   survive a browser whose storage was wiped, a legacy model id is migrated on
-   read, and the retired `adhd.*` localStorage contract is ignored.
+   survive a browser whose storage was wiped, and a legacy model id is migrated
+   on read.
 5. **History drawer** — "No runs yet." on a fresh server, otherwise run cards.
 6. **Run view wiring** (simulated `sequential`, driven through the API with
    `minDurationMs`/`maxDurationMs`/`failProbability: 0` so it finishes in

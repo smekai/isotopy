@@ -14,7 +14,7 @@ let dir: string;
 let projectPath: ProjectPath;
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), "adhd-db-"));
+  dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-db-"));
   projectPath = { id: "p", root: dir, dataDir: dir };
 });
 

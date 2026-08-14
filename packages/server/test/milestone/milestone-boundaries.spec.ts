@@ -36,12 +36,12 @@ describe("milestone persistence boundaries", () => {
   });
 
   it("enforces valid JSON in SQLite", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "adhd-milestone-db-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-milestone-db-"));
     roots.push(root);
     const database = new Database({
       id: "project",
       root,
-      dataDir: path.join(root, ".adhd"),
+      dataDir: path.join(root, ".isotopy"),
     });
     const table = new MilestonesTable(database);
 

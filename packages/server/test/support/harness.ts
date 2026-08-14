@@ -79,8 +79,8 @@ function killedProcess(): SubprocessResult {
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
   const engineId = options.engineId ?? "claude-code";
-  const home = await mkdtemp(path.join(os.tmpdir(), "adhd-comp-"));
-  const userHome = await mkdtemp(path.join(os.tmpdir(), "adhd-user-"));
+  const home = await mkdtemp(path.join(os.tmpdir(), "isotopy-comp-"));
+  const userHome = await mkdtemp(path.join(os.tmpdir(), "isotopy-user-"));
   process.env.ISOTOPY_HOME = home;
   process.env.ISOTOPY_USER_HOME = userHome;
 
@@ -197,7 +197,7 @@ export async function addTestProject(
   registry: ProjectRegistry,
   label: string,
 ): Promise<{ id: string; root: string; headers: Record<string, string> }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), `adhd-${label}-`));
+  const root = await mkdtemp(path.join(os.tmpdir(), `isotopy-${label}-`));
   const project = await registry.add(root);
   return { id: project.id, root, headers: { [PROJECT_HEADER]: project.id } };
 }
@@ -457,7 +457,7 @@ export function stageMessage(run: RunState): string {
  * point of the file the caller is usually asking about.
  */
 export function tablesIn(projectRoot: string, file: string): string[] {
-  const connection = new DatabaseSync(path.join(projectRoot, ".adhd", file), {
+  const connection = new DatabaseSync(path.join(projectRoot, ".isotopy", file), {
     readOnly: true,
   });
   try {

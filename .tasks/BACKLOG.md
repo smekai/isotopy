@@ -1,49 +1,5 @@
 # Backlog
 
-## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
-**Priority:** P1 | **Tags:** core, server, ui, infra, testing, milestone-g
-**Updated:** 2026-08-13 10:38
-
-A gauge transformation changes the representation and not the physics. This milestone makes the product **Isotopy** without changing what it does.
-
-Start only after Milestone F and its closing dogfood are complete. The first implementation commit starts the explicitly planned **0.10.x** series at **0.10.0**; every later commit increments the shared workspace patch version from its parent.
-
-**Ordered milestone sequence:**
-1. `TASK-131` settles the brand contract and renames user-visible surfaces.
-2. `TASK-132` renames code-level identifiers and integration contracts.
-3. `TASK-133` renames model-facing protocol fences and verifies their consumers.
-4. `TASK-143` performs the final filesystem and repository cutover.
-
-The repository slug and checkout directory are deliberately last. Until `TASK-143`, intermediate commits may retain old path names while user-visible and code surfaces move in controlled, green steps.
-
-**Clean break, decided with the user on 2026-08-07:** no migration, dual parsing, aliases, or compatibility shims. Existing local history under `.adhd` is abandoned when the final cutover occurs.
-
-**Milestone exit:** a clean clone from the renamed repository builds, passes automated verification, launches on Windows, completes a real engine-backed run using only Isotopy contracts, and contains no unintended ADHD identifiers outside historical records.
-
-Cross-platform: every step must keep Windows and macOS/POSIX path, environment, subprocess, and command behavior valid. Record which platform was actually tested and mark the other untested when necessary.
-
----
-
-## TASK-143: Final filesystem and repository cutover to Isotopy
-**Priority:** P1 | **Tags:** server, ui, infra, testing, milestone-g
-**Updated:** 2026-08-13 10:39
-
-Perform every physical path and repository identity change only after `TASK-131`, `TASK-132`, and `TASK-133` are green:
-
-- Change user and project state roots from `.adhd` to `.isotopy` everywhere, using the existing centralized path helpers.
-- Rename `packages/ui/public/adhd-icon.png` to an Isotopy filename and update all consumers.
-- Rename the GitHub repository from `smekai/adhd` to `smekai/isotopy`, then update `repository`, `homepage`, `bugs`, badges, documentation links, CI references, and the local `origin`.
-- Stop app servers, watchers, and tools that hold the checkout; rename the local checkout directory from `adhd` to `isotopy` from its parent directory.
-- Run a final case-insensitive identifier and filename audit. Keep only explicitly allowlisted historical references.
-
-**No migration:** do not move or read legacy `.adhd` state. Existing directories remain untouched and Isotopy starts with fresh state.
-
-**Cutover verification:** clone from the new repository URL into a fresh path; install, typecheck, lint, test, build, launch the dev stack, and complete one real engine-backed run. Confirm all generated state lands under `.isotopy` and that no running configuration relies on the former checkout path or repository URL.
-
-Cross-platform: use `path.join` and `os.homedir()`; never hardcode separators. On Windows, close processes that lock the checkout before renaming it. On macOS/POSIX, verify the exact lowercase path on a case-sensitive filesystem. Document PowerShell and bash cutover commands, record the platform actually tested, and mark the other untested if not exercised.
-
----
-
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-10 14:10

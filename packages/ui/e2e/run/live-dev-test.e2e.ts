@@ -27,7 +27,7 @@ const LIVE = process.env.ISOTOPY_E2E_LIVE === "1";
 
 /** Deliberately tiny: the point is the handoff, not the coding. */
 const TASK =
-  "Create a file named hello-adhd.txt containing exactly the text: hello from the two-box run. Do nothing else.";
+  "Create a file named hello-isotopy.txt containing exactly the text: hello from the two-box run. Do nothing else.";
 
 // The one deliberate exception to one-action-per-test: every action here costs
 // real tokens and minutes, so splitting this into six tests would mean six paid
@@ -93,5 +93,5 @@ test("the real Claude Code CLI still drives a two-box run end to end", async ({ 
 
   // Both boxes shared one workspace, so the produced file is in the solution folder.
   await page.getByTestId("artifact-view-files").click();
-  await expect(page.getByTestId("artifact-files")).toContainText("hello-adhd.txt");
+  await expect(page.getByTestId("artifact-files")).toContainText("hello-isotopy.txt");
 });

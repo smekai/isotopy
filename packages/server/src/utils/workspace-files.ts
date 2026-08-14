@@ -16,7 +16,7 @@ const IGNORED_DIRECTORIES = new Set([
 const MAX_DEPTH = 8;
 const MAX_ENTRIES = 500;
 
-export const SNAPSHOT_IGNORED_DIRECTORIES = new Set([...IGNORED_DIRECTORIES, ".adhd"]);
+export const SNAPSHOT_IGNORED_DIRECTORIES = new Set([...IGNORED_DIRECTORIES, ".isotopy"]);
 const SNAPSHOT_MAX_DEPTH = 12;
 const SNAPSHOT_MAX_ENTRIES = 20_000;
 

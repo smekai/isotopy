@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="packages/ui/public/adhd-icon.png" alt="Isotopy" width="128" height="128" />
+  <img src="packages/ui/public/isotopy-icon.png" alt="Isotopy" width="128" height="128" />
 </div>
 
 # Isotopy
@@ -213,7 +213,7 @@ with **Accept findings & complete**, which records who accepted it over which op
 findings rather than silently flipping a status.
 
 **Release and deploy are automated as of 0.9.29.** A project's own commands live in
-`.adhd/automation.json` — validation, how the product starts, and a deploy target per
+`.isotopy/automation.json` — validation, how the product starts, and a deploy target per
 environment. The `deploy` stage is run by Isotopy itself rather than by an agent: no target
 configured reports `VERDICT: SKIP` without spending an engine turn; a configured one runs
 the command, health-checks the URL it printed, and passes only if both succeed. Production

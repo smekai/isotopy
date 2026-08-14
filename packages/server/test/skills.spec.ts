@@ -17,8 +17,8 @@ let userHome: string;
 let project: ProjectPath;
 
 beforeEach(async () => {
-  home = await mkdtemp(path.join(os.tmpdir(), "adhd-skills-"));
-  userHome = await mkdtemp(path.join(os.tmpdir(), "adhd-skills-user-"));
+  home = await mkdtemp(path.join(os.tmpdir(), "isotopy-skills-"));
+  userHome = await mkdtemp(path.join(os.tmpdir(), "isotopy-skills-user-"));
   process.env.ISOTOPY_HOME = home;
   process.env.ISOTOPY_USER_HOME = userHome;
   project = homeProjectPaths();

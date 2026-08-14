@@ -106,7 +106,7 @@ unit of restart under S2.
 | **Recovery after restart** | `init()` → `loadProject()` → `reconcileInterrupted()`. | **Not recovery — bereavement.** Any stage found `running` or `awaiting` is rewritten to `failed` with `"✗ Interrupted by server restart"`, and the run is marked `failed`. The user then manually clicks Resume. Nothing resumes itself. |
 | **Retries** | None. | **Absent.** A flaky engine invocation fails the stage and the run. There is no retry policy, backoff, or attempt counter anywhere in the orchestrator. |
 | **Definition copying** | None. Definitions are the frozen constants `SEQUENTIAL_PIPELINE`, `ONE_BOX_PIPELINE`, `DEV_TEST_PIPELINE` in `DEMO_PIPELINES`. | **Absent (S3 unmet).** There are no user-owned definitions, therefore nothing to copy. This is Isotopy product work regardless of runtime. |
-| **Artifacts** | `writeHandoff()` → `.adhd/runs/<id>/<stageId>/handoff.md`; `stageOutputs` in `state.json`; workspace files listed and previewed via `GET /runs/:id/files` (TASK-055). | **Works.** No manifest, no content addressing, no retention policy — but the capability is real and stays Isotopy-owned. |
+| **Artifacts** | `writeHandoff()` → `.isotopy/runs/<id>/<stageId>/handoff.md`; `stageOutputs` in `state.json`; workspace files listed and previewed via `GET /runs/:id/files` (TASK-055). | **Works.** No manifest, no content addressing, no retention policy — but the capability is real and stays Isotopy-owned. |
 | **Durable user waits (gates)** | `stage.status = "awaiting"`, then `await new Promise(resolve => this.gateWaiters.set(key, resolve))`. | **Not durable.** The wait is a resolve callback in a `Map` in heap memory. Kill the process while a gate is open and the promise dies with it; the run is reconciled to `failed` on next boot. A gate that survives a restart is the single clearest thing the current engine cannot do. |
 | **Durable external waits (e.g. TASK-061 limit reset)** | None. | **Absent.** "Subscription limit reached, wait until 16:30 and continue" requires a timer that survives restart. `setTimeout` does not. |
 | **Optional stages** | `disabledStages: string[]` on the run; disabled stages start `skipped`; `restartRun()` refuses to target one. | **Works** for the run-start case, and is correctly frozen into the run — a partial instance of S4. |
@@ -174,7 +174,7 @@ listed candidate) would give the durability substrate without a server.
 
 - **For:** zero new runtime dependency and zero packaging risk — the decisive advantage given S1.
   State stays project-local and human-readable, which is the current source-of-truth story
-  (`.adhd/` beside the code, like `.git`). No determinism constraints on our own code. No
+  (`.isotopy/` beside the code, like `.git`). No determinism constraints on our own code. No
   framework version to track. Cancellation and subprocess-tree kill stay entirely under our control,
   at the exact moment we want them rather than at a step boundary.
 - **Against:** we write and own the hard parts. Durable timers, crash-consistent checkpointing, idempotent
@@ -403,7 +403,7 @@ already implements today against our own state model.
 | **Windows / macOS packaging** | ✅ No new surface | ❌ Must bundle PostgreSQL invisibly on both | ❌ Same — and its documented local path is `npx dbos postgres start`, i.e. **Docker** | ✅ **Measured: 1 package, ~2 s, zero dependencies, no native module, no server** |
 | **Install risk** | None | Postgres | Postgres/Docker | ✅ None — but note `better-sqlite3` **failed to install** on this platform, which is why the driver must be `node:sqlite` |
 | **Integration cost** | High (build 6 capabilities) — but incremental | Medium + **two upstream contributions** (SQLite provider, fork-from-step) + alpha tax | Blocked | Medium: `RunOrchestrator` becomes a workflow; inline I/O / clock / id generation move into steps; **build S2 restart + S5 concurrency** |
-| **Source of truth for execution state** | `.adhd/runs/<id>/state.json` + `events.jsonl`, project-local | Aiki's Postgres | DBOS's Postgres | **A SQLite file that can live inside the project's `.adhd/`** |
+| **Source of truth for execution state** | `.isotopy/runs/<id>/state.json` + `events.jsonl`, project-local | Aiki's Postgres | DBOS's Postgres | **A SQLite file that can live inside the project's `.isotopy/`** |
 | **Project portability** (copy/move a project folder, keep its history) | ✅ Native — history travels with the folder | ⚠️ Broken unless exported | ⚠️ Broken unless exported | ✅ **Preserved** — a per-project DB file travels with the folder, like `.git` |
 | **Versioning of in-flight runs** | Custom | Native | Native | Native (`version?`) |
 | **Lock-in** | None | Moderate — workflow bodies written to Aiki's API | Moderate | Moderate — workflow bodies written to its API; mitigated by an Apache-2.0, zero-dependency, inspectable SQLite schema |
@@ -416,7 +416,7 @@ durable gates, durable sleep, retries and crash recovery already built.
 
 **Note what D recovers that the original recommendation would have lost.** The row that most worried
 §8 — project portability, the differentiator hardest for cloud competitors to copy — comes back:
-a per-project SQLite file sits inside `.adhd/` and travels with the folder, exactly like `.git`.
+a per-project SQLite file sits inside `.isotopy/` and travels with the folder, exactly like `.git`.
 Postgres would have moved execution history to a machine-level database and broken that.
 
 ---
@@ -482,7 +482,7 @@ and personas, and all code and files generated into the project workspace. The r
 durability primitives; it does not get to define the product's vocabulary.
 
 **Its database becomes authoritative for execution state — and it lives inside the project.** Put
-the SQLite file under the project's `.adhd/`, so history travels with the folder like `.git` and the
+the SQLite file under the project's `.isotopy/`, so history travels with the folder like `.git` and the
 local-first differentiator survives. Project-local `state.json` and `events.jsonl` are retained as an
 **idempotent projection and export**, rebuildable at any time. This is the one non-negotiable
 integration rule: **two independently advancing state machines is the failure mode to design out.**
@@ -503,7 +503,7 @@ measured passing. What remains is what the probe did *not* cover.
 |---|------|--------------------|
 | G1 | **Semantic restart from a chosen stage (S2)** | The one capability OpenWorkflow does not provide and DBOS did. Prove that Isotopy's existing `restartRun(runId, stageId)` semantics can be rebuilt on durable steps — most likely by starting a fresh run seeded with the retained outputs of stages before the restart point. Decide then whether to contribute it upstream as a fork primitive. |
 | G2 | **One active run per project, concurrent runs across projects (S5)** | `concurrency` is a worker pool size, not a per-key cap, so this is Isotopy-owned. Prove an admission check keyed by project id — `idempotencyKey` plus a project-scoped guard — that survives restart and cannot be bypassed via the API, which it currently can be. |
-| G3 | **Per-project database placement and portability** | Prove a SQLite file under each project's `.adhd/` works with a per-project backend instance, that copying the folder carries history, and that `state.json`/`events.jsonl` can be rebuilt idempotently as a projection with no code path writing both stores. |
+| G3 | **Per-project database placement and portability** | Prove a SQLite file under each project's `.isotopy/` works with a per-project backend instance, that copying the folder carries history, and that `state.json`/`events.jsonl` can be rebuilt idempotently as a projection with no code path writing both stores. |
 | G4 | **Immediate subprocess-tree termination on cancel** | `cancelWorkflowRun()` marks state durably, but a stage *is* a long-running CLI. Killing the process tree stays Isotopy-owned and must be immediate on Windows and macOS — unchanged from the original analysis. |
 | G5 | **Declared parallel branches sharing one project folder (S6)** | `Promise.all` over durable steps is documented and simple; prove fan-in, per-branch failure policy, and that the shared-workspace assumption holds under real concurrent agents. |
 | G6 | **`node:sqlite` under sustained use** | It is an experimental Node API. Prove WAL behaviour under concurrent readers plus the writer, that the `ExperimentalWarning` can be suppressed or accepted in a shipped product, and pin the `engines.node` floor to `>=22.5`. |

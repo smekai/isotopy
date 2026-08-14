@@ -1,6 +1,6 @@
 # Design reference
 
-Visual reference for the ADHD workspace UI. **Not product code** — nothing here is
+Visual reference for the Isotopy workspace UI. **Not product code** — nothing here is
 built, imported, or linted. The shipping implementation lives in [`packages/ui`](../packages/ui).
 
 | File | What it is |

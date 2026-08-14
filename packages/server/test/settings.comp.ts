@@ -140,20 +140,6 @@ test("preferences do not cross projects", async () => {
   expect(body.preferences.pipelineId).toBe(defaultProjectPreferences().pipelineId);
 });
 
-test("the former project header no longer selects a project", async () => {
-  // Arrange
-  const alpha = await addTestProject(ctx.registry, "old-header");
-  await put<SettingsView>(ctx.app, "/settings/preferences", { pipelineId: "solo" }, alpha.headers);
-
-  // Act
-  const { body } = await get<SettingsView>(ctx.app, "/settings", {
-    "X-ADHD-Project": alpha.id,
-  });
-
-  // Assert
-  expect(body.preferences.pipelineId).toBe(defaultProjectPreferences().pipelineId);
-});
-
 test("a legacy model id stored on disk is migrated on read, onto the preset that covers it", async () => {
   // Arrange — what a browser wrote before the aliases landed.
   await writeUserSettings(ctx.userHome, {

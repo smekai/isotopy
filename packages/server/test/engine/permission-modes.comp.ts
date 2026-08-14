@@ -50,7 +50,7 @@ let stubDir: string;
 // One stub directory for the whole file: each adapter memoises the binary it
 // resolved, so a fresh directory per test would leave them pointing at the old one.
 beforeAll(() => {
-  stubDir = mkdtempSync(path.join(os.tmpdir(), "adhd-permission-stub-"));
+  stubDir = mkdtempSync(path.join(os.tmpdir(), "isotopy-permission-stub-"));
   writeStubRunner();
   for (const [engine, variable] of Object.entries(PATH_ENV)) {
     process.env[variable] = installStub(stubName(engine as EngineId));

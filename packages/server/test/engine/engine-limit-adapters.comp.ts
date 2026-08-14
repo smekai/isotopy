@@ -39,7 +39,7 @@ let stubDir: string;
 
 
 beforeAll(() => {
-  stubDir = mkdtempSync(path.join(os.tmpdir(), "adhd-limit-stub-"));
+  stubDir = mkdtempSync(path.join(os.tmpdir(), "isotopy-limit-stub-"));
   process.env[PATH_ENV["claude-code"]] = writeStub("claude", CLAUDE_LINE);
   process.env[PATH_ENV.codex] = writeStub("codex", CODEX_LINE);
   process.env[PATH_ENV.cursor] = writeStub("cursor-agent", CURSOR_LINE);

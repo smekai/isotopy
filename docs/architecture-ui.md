@@ -257,7 +257,7 @@ the bar already asks about the run. Stopping an initiative lives once, on `TeamC
 **A project that says how to start itself earns a `Preview` tab**, appended after
 `Artifacts` rather than opened on — the run is still what the user came for. It appears only
 when `product.status.configured` is true, which is the server's answer about the `ui` block
-in `.adhd/automation.json`, so a project that never declared a start command is never offered
+in `.isotopy/automation.json`, so a project that never declared a start command is never offered
 a tab that can only disappoint. Unlike the two above, the product is **project**-scoped: it
 survives switching between runs, and an initiative's child runs share one process.
 
@@ -546,7 +546,7 @@ interception, so per-stage rendering and the parked-question UI are asserted at
 zero cost), and **live** (`live-dev-test`, skipped
 unless `ISOTOPY_E2E_LIVE=1`, described in-file as "a canary, not a proof"). It runs
 against an isolated `ISOTOPY_USER_HOME` under `os.tmpdir()` on its own ports
-(9499 / 5199) — **a test must never touch the real `~/.adhd`**. Because preferences
+(9499 / 5199) — **a test must never touch the real `~/.isotopy`**. Because preferences
 are server state, every spec calls `resetPreferences(page)` in `beforeEach`.
 
 **Rule.** Selectors are role- and text-based by default. Add a `data-testid` only

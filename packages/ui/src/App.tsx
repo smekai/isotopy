@@ -423,7 +423,7 @@ export function App() {
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: SANS, background: d.bg }}>
       <div style={topBar(d)}>
         <div style={{ display: "flex", alignItems: "center", gap: SPACE.md }}>
-          <img src="/adhd-icon.png" alt="" width={LOGO_SIZE} height={LOGO_SIZE} style={appLogo()} />
+          <img src="/isotopy-icon.png" alt="" width={LOGO_SIZE} height={LOGO_SIZE} style={appLogo()} />
           <span style={wordmark(d)}>Isotopy</span>
         </div>
 

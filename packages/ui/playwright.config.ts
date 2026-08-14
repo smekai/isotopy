@@ -5,9 +5,9 @@ import { defineConfig } from "@playwright/test";
 const HERE = import.meta.dirname;
 
 // Preferences are durable server state (TASK-065), so the suite gets its own
-// `~/.adhd` and its own ports: it must never edit the developer's real settings,
+// `~/.isotopy` and its own ports: it must never edit the developer's real settings,
 // and it must not collide with a `pnpm dev` already on 5173.
-const E2E_HOME = path.join(os.tmpdir(), "adhd-e2e");
+const E2E_HOME = path.join(os.tmpdir(), "isotopy-e2e");
 const SERVER_PORT = process.env.ISOTOPY_PORT ?? "9499";
 const UI_PORT = process.env.ISOTOPY_UI_PORT ?? "5199";
 

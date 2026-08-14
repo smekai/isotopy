@@ -132,7 +132,7 @@ test("a file created in a commit and edited afterwards is created, not edited", 
 
 test("Isotopy's own run bookkeeping is never reported as something the run built", () => {
   expect(
-    reportableChanges([change(".adhd/runs/abc/changes.json", "created"), change("a.ts", "created")]),
+    reportableChanges([change(".isotopy/runs/abc/changes.json", "created"), change("a.ts", "created")]),
   ).toEqual([change("a.ts", "created")]);
 });
 
