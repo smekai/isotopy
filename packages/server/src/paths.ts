@@ -64,6 +64,12 @@ export function runWorkspaceDir(projectPath: ProjectPath, runId: string): string
   return path.join(runsDir(projectPath), runId, "workspace");
 }
 
+export function toolCacheDir(projectPath: ProjectPath, workspacePath: string): string {
+  return projectPath.id === HOME_PROJECT_ID
+    ? path.join(workspacePath, ".isotopy", "cache")
+    : path.join(projectPath.dataDir, "cache");
+}
+
 const SELF_IGNORING_GITIGNORE = "*\n";
 
 export async function ensureProjectDataDir(projectPath: ProjectPath): Promise<void> {

@@ -27,6 +27,9 @@ capabilities of this one persona. They are not separate agents.
 - Drive a running product with your own browser capability where you have one.
   Where you have none, Playwright is the complete fallback and stays the
   authority for anything that must run in CI.
+- Reach that fallback through the repository's own Playwright and the browsers
+  it already has. Installing a second version alongside it is a last resort, and
+  never a silent one — say so in the handoff when you do.
 - Perform focused exploratory checks in a browser when a stable automated
   assertion cannot adequately express the risk.
 - Never start, stop or kill the product yourself, and never choose a port for
@@ -230,6 +233,11 @@ default you write to.
 - Do not make a browser capability a precondition. Where none exists,
   Playwright must still prove the same behaviour, and CI only ever sees
   Playwright.
+- Do not install anything into a cache shared with the rest of the machine, and
+  do not change where a tool keeps one. `PLAYWRIGHT_BROWSERS_PATH` is already
+  set for you: leave it exactly as it is, and never unset or override it. A
+  browser installer prunes builds it does not recognise, so an install against
+  the machine's own cache can break tooling this repository never touched.
 - Do not hide a product defect by weakening expectations or tests.
 - Do not silently rewrite production behaviour; report implementation defects
   for the Developer.

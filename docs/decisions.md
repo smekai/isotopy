@@ -15,6 +15,57 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-17 — A run installs tooling into the project, never into the machine
+
+**Context:** with no native browser capability, the QA persona fell back to Playwright
+exactly as `TASK-138` told it to — and reached that fallback with `npm install playwright`
+and `npx playwright install`. A browser installer prunes builds it believes nothing
+references, so that deleted `chromium_headless_shell-1228` from the user-level
+`ms-playwright` cache: the build this repository's own e2e suite is pinned to. `pnpm e2e`
+was broken on the host machine until it was reinstalled by hand. The agent did nothing it
+was told not to do; the product gave it nowhere else to put a browser.
+
+**Decision:** Isotopy points relocatable tool caches at the project.
+`PLAYWRIGHT_BROWSERS_PATH` is set to `<project>/.isotopy/cache/ms-playwright` on **every**
+engine child process, at the single place `adapter.run` is constructed — not only on the
+QA stage, because a Developer adding a browser test prunes the shared cache exactly as
+readily as a Tester does. The persona and the step task carry the matching policy: prefer
+the repository's own Playwright, and never override the variable.
+
+**Per project, not per run, and not one shared Isotopy cache.** The variable is both the
+download target and the lookup path, so a per-run directory would mean re-downloading a
+browser on every run, with no reliable sweeper — `tmp/` is only cleared on cancellation, or
+when a Product Manager happens to name it during a full-delivery closeout. A single
+Isotopy-wide cache would avoid that but lets two projects on different Playwright versions
+prune each other. Per project pays one download per project and keeps projects from
+interfering. The requirement was never that runs be isolated from each other; it is that a
+run cannot reach the machine.
+
+**This does not reopen the `CURSOR_CONFIG_DIR` rejection** recorded on 2026-08-10. That
+was refused because relocating a *credential* root risks relocating stored auth, which
+could not be verified without the CLI installed, and because CLI config files are read and
+never written. A browser download cache carries no auth, is idempotently re-downloadable,
+and is relocated by a documented environment variable rather than by writing someone's
+config file. The standing rule survives intact: Isotopy still reads CLI configuration and
+never writes it.
+
+**The field is required, not optional.** Every run has a project and therefore a cache, so
+an optional `toolCacheDir` would only have let some future call site opt out of the
+protection without anything failing — and a run whose tooling is unscoped is exactly the
+bug. The guarantee belongs in the type rather than in a test that describes a state nobody
+should be able to construct.
+
+**A home run caches inside its own workspace, not beside it.** The home project inverts the
+usual nesting: its workspace is `<dataDir>/runs/<id>/workspace`, so a cache at
+`<dataDir>/cache` sits *above* the only directory Codex's `--sandbox workspace-write` lets
+an agent write. The install would be refused, and a QA stage with no native browser would
+be left with no working fallback — which contradicts the persona rule that Playwright must
+still prove the behaviour. Protecting the machine is not worth a stage that cannot finish,
+so the home project's cache goes under the workspace. It costs one download per home run,
+against a scratch workspace that is disposable by design.
+
+---
+
 ## 2026-08-17 — Pre-existing dirt is subtracted on content, not on a status code
 
 **Context:** the change set's git path subtracted what was already dirty at baseline by

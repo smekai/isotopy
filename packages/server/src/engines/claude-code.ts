@@ -10,6 +10,7 @@ import { claudePermissionModeChoices } from "../schemas/engine-cli-help.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseClaudeProtocolLine } from "./claude-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
+import { toolCacheEnv } from "./tool-cache.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import {
   clearAutoReviewCache,
@@ -150,8 +151,11 @@ function mapKnownError(raw: string): string | undefined {
   return ERROR_HINTS.find((hint) => hint.pattern.test(raw))?.message;
 }
 
-function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+function buildChildEnv(
+  connection: EngineConnection | undefined,
+  toolCacheDir: string,
+): NodeJS.ProcessEnv {
+  const env = { ...process.env, ...toolCacheEnv(toolCacheDir) };
   delete env.ANTHROPIC_API_KEY;
   delete env.ANTHROPIC_AUTH_TOKEN;
   if (connection?.mode === "api-key" && connection.apiKey) {
@@ -247,7 +251,7 @@ export const claudeCodeAdapter: EngineAdapter = {
       command: binary,
       args,
       cwd: ctx.cwd,
-      env: buildChildEnv(ctx.connection),
+      env: buildChildEnv(ctx.connection, ctx.toolCacheDir),
       input: runCtx.prompt,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,

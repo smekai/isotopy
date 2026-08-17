@@ -7,16 +7,19 @@
 // The stub records every argv it is called with and answers `--help` from a
 // fixture the test wrote, so a Codex build that advertises auto-review on `exec`
 // but not on `exec resume` is something a test can actually arrange.
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import type { EngineId, EnginePermissionMode } from "@isotopy/core";
-import { claudeCodeAdapter } from "../../src/engines/claude-code.ts";
-import { codexAdapter } from "../../src/engines/codex.ts";
-import { cursorAdapter } from "../../src/engines/cursor.ts";
 import { clearAutoReviewCache } from "../../src/engines/permission-mode.ts";
-import type { EngineAdapter } from "../../src/engines/types.ts";
+import {
+  HELP_FILE,
+  installEngineStubs,
+  recordedArgv,
+  removeEngineStubs,
+  resetEngineStubs,
+  runArgv,
+  runStubAdapter,
+  writeStubHelp,
+} from "../support/engine-stub.ts";
 import type { StageLogDraft } from "@isotopy/core";
 
 const CLAUDE_HELP_WITH_AUTO = [
@@ -29,46 +32,19 @@ const CLAUDE_HELP_WITHOUT_AUTO = [
   '                                        (choices: "acceptEdits", "plan")',
 ].join("\n");
 
-const PATH_ENV: Record<EngineId, string> = {
-  "claude-code": "ISOTOPY_CLAUDE_PATH",
-  codex: "ISOTOPY_CODEX_PATH",
-  cursor: "ISOTOPY_CURSOR_PATH",
-};
-
-const ADAPTERS: Record<EngineId, EngineAdapter> = {
-  "claude-code": claudeCodeAdapter,
-  codex: codexAdapter,
-  cursor: cursorAdapter,
-};
-
-const ARGS_FILE = "args.txt";
-const HELP_FILE = "help.txt";
-const RESUME_HELP_FILE = "help-resume.txt";
-
-let stubDir: string;
-
 // One stub directory for the whole file: each adapter memoises the binary it
 // resolved, so a fresh directory per test would leave them pointing at the old one.
 beforeAll(() => {
-  stubDir = mkdtempSync(path.join(os.tmpdir(), "isotopy-permission-stub-"));
-  writeStubRunner();
-  for (const [engine, variable] of Object.entries(PATH_ENV)) {
-    process.env[variable] = installStub(stubName(engine as EngineId));
-  }
+  installEngineStubs();
 });
 
 beforeEach(() => {
   clearAutoReviewCache();
-  writeFileSync(path.join(stubDir, ARGS_FILE), "");
-  writeHelp(HELP_FILE, "");
-  writeHelp(RESUME_HELP_FILE, "");
+  resetEngineStubs();
 });
 
 afterAll(() => {
-  for (const variable of Object.values(PATH_ENV)) {
-    delete process.env[variable];
-  }
-  rmSync(stubDir, { recursive: true, force: true, maxRetries: 3 });
+  removeEngineStubs();
 });
 
 describe("claude-code", () => {
@@ -175,49 +151,8 @@ describe("cursor", () => {
   });
 });
 
-function stubName(engine: EngineId): string {
-  return engine === "cursor" ? "cursor-agent" : engine === "codex" ? "codex" : "claude";
-}
-
-function writeStubRunner(): void {
-  const runner = [
-    'const fs = require("node:fs");',
-    'const path = require("node:path");',
-    "const args = process.argv.slice(2);",
-    'fs.appendFileSync(path.join(__dirname, "args.txt"), args.join(" ") + "\\n");',
-    'if (args.includes("--help")) {',
-    '  const file = args.includes("resume") ? "help-resume.txt" : "help.txt";',
-    '  process.stdout.write(fs.readFileSync(path.join(__dirname, file), "utf8"));',
-    "  process.exit(0);",
-    "}",
-    "process.exit(1);",
-  ].join("\n");
-  writeFileSync(path.join(stubDir, "stub.cjs"), runner);
-}
-
 function writeHelp(file: string, body: string): void {
-  writeFileSync(path.join(stubDir, file), body);
-}
-
-function installStub(name: string): string {
-  const windows = process.platform === "win32";
-  const file = path.join(stubDir, windows ? `${name}.cmd` : name);
-  const body = windows
-    ? `@echo off\r\nnode "%~dp0stub.cjs" %*\r\n`
-    : `#!/bin/sh\nexec node "$(dirname "$0")/stub.cjs" "$@"\n`;
-  writeFileSync(file, body);
-  if (!windows) {
-    chmodSync(file, 0o755);
-  }
-  return file;
-}
-
-function recordedArgv(): string[] {
-  return readFileSync(path.join(stubDir, ARGS_FILE), "utf8").split("\n").filter(Boolean);
-}
-
-function runArgv(): string {
-  return recordedArgv().filter((line) => !line.includes("--help"))[0] ?? "";
+  writeStubHelp(file, body);
 }
 
 async function runAdapter(
@@ -225,17 +160,5 @@ async function runAdapter(
   permissionMode: EnginePermissionMode,
   resumeSessionId?: string,
 ): Promise<StageLogDraft[]> {
-  const logs: StageLogDraft[] = [];
-  await ADAPTERS[engine].run({
-    runId: `permission-${engine}`,
-    prompt: "say hello",
-    cwd: stubDir,
-    permissionMode,
-    connection: { mode: "subscription" },
-    resumeSessionId,
-    timeoutMs: 15_000,
-    signal: new AbortController().signal,
-    onLog: (log) => logs.push(log),
-  });
-  return logs;
+  return runStubAdapter(engine, { permissionMode, resumeSessionId });
 }

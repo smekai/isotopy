@@ -25,6 +25,7 @@ export interface EngineRunContext {
   connection: EngineConnection;
   /** Continue this CLI session instead of starting a new one. */
   resumeSessionId?: string;
+  toolCacheDir: string;
   timeoutMs: number;
   signal: AbortSignal;
   onLog: (log: StageLogDraft) => void;

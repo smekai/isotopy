@@ -24,6 +24,14 @@ Where you have none, Playwright is the complete fallback and stays the authority
 for anything that must run in CI. Retain useful screenshots or traces either
 way, and stop only the browser processes you started yourself.
 
+Reach that fallback through the repository's own Playwright and the browsers it
+already has, and install a second version alongside it only as a last resort you
+report in the handoff. Whatever you install, install it where Isotopy already
+points you: `PLAYWRIGHT_BROWSERS_PATH` is set for this run and must be left
+exactly as it is. A browser installer prunes builds it does not recognise, so an
+install against the machine's shared cache can break tooling outside this
+project.
+
 Report in the normal stage handoff:
 
 - **What was tested** — behaviours and scenarios.

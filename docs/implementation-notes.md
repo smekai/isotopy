@@ -200,6 +200,45 @@ both makes the CLI reject requests) and passes `--bare` in api-key mode, because
 bare mode reads auth strictly from `ANTHROPIC_API_KEY` — without it a logged-in
 CLI ignores the injected key and bills the plan.
 
+## Engines — tool cache scoping (`engines/tool-cache.ts`)
+
+The same `buildChildEnv` also points relocatable tool caches at the project
+instead of the machine. Today that is one variable, `PLAYWRIGHT_BROWSERS_PATH`,
+set to `<project>/.isotopy/cache/ms-playwright`.
+
+- **Why it exists:** a browser installer prunes builds it believes nothing
+  references. An agent that ran `npx playwright install` against the shared
+  user-level cache deleted the build this repository's own e2e suite is pinned
+  to, and `pnpm e2e` stayed broken until it was reinstalled by hand.
+- **`engines/tool-cache.ts` is the only file that names a tool.** The adapters
+  take a `toolCacheDir` and spread whatever env it maps to, so a second tool with
+  a relocatable cache is one line there and no change to any adapter.
+- **It is set at the single place `adapter.run` is constructed**
+  (`workflow/stage-execution.ts`), so every engine child gets it — a Developer
+  adding a browser test can prune the machine's cache exactly as readily as a
+  Tester. It is never set on the Isotopy server's own process, so this
+  repository's `pnpm e2e` keeps using the host cache.
+- **Nothing extra hides the cache.** `ensureProjectDataDir` already writes
+  `.isotopy/.gitignore` containing `*`, and `SNAPSHOT_IGNORED_DIRECTORIES`
+  already excludes `.isotopy`, so a multi-hundred-megabyte cache is invisible to
+  git and is never reported as files the run created.
+- **`toolCacheDir` is required on `EngineRunContext`, not optional.** Every run
+  has a project and therefore a cache, so an optional field would only have let a
+  future call site silently opt out of the protection — and an unset variable is
+  precisely the bug. Making it required moves that from a test to the type.
+- **A home run caches inside its own workspace.** For a real project the data
+  directory is `<root>/.isotopy`, so the cache is already under the workspace.
+  A home run inverts that: its workspace is `<dataDir>/runs/<id>/workspace`, so
+  `<dataDir>/cache` is a *sibling above* it and Codex's `--sandbox
+  workspace-write` would refuse the install. A QA stage with no native browser
+  would then have no working fallback at all, which contradicts the persona
+  requirement that Playwright must still prove the behaviour — a failed install
+  protects the machine but does not finish the job. So `toolCacheDir` returns
+  `<workspace>/.isotopy/cache` for the home project. The `.isotopy` segment is
+  what keeps it out of change sets, since `SNAPSHOT_IGNORED_DIRECTORIES` matches
+  that basename at any depth. The cost is one download per home run, which is
+  the price of a scratch workspace that is thrown away anyway.
+
 ## Engines — persona delivery (`engines/persona.ts`)
 
 Claude Code takes the stage persona natively via `--append-system-prompt`, so it
