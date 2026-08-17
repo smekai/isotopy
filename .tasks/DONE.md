@@ -1,5 +1,49 @@
 # Done
 
+## TASK-145: A run must not mutate the host's global toolchain
+**Priority:** P0 | **Tags:** engine, testing, milestone-h
+**Updated:** 2026-08-17 22:30
+
+In `TASK-141` the QA persona fell back to Playwright exactly as `TASK-138` told it to, and reached
+that fallback with `npm install playwright` and `npx playwright install`. A browser installer prunes
+builds it believes nothing references, so that deleted `chromium_headless_shell-1228` from the
+user-level `ms-playwright` cache — the build this repo's own e2e suite is pinned to. The agent did
+nothing it was told not to do; the product gave it nowhere else to put a browser.
+
+**Isotopy now points relocatable tool caches at the project.** `PLAYWRIGHT_BROWSERS_PATH` is set to
+`<project>/.isotopy/cache/ms-playwright` on **every** engine child process, at the single place
+`adapter.run` is constructed — not only on the QA stage, because a Developer adding a browser test
+prunes the shared cache exactly as readily as a Tester does. `engines/tool-cache.ts` is the only
+file that names a tool, so a second relocatable cache is one line there and no adapter change. The
+QA persona and the `verify-feature` step task carry the matching policy: prefer the repository's own
+Playwright, and never override the variable.
+
+**Per project, not per run**, decided with the user. The variable is both the download target and
+the lookup path, so a per-run directory would re-download ~150 MB every run with no reliable
+sweeper. A single Isotopy-wide cache would instead let two projects on different Playwright versions
+prune each other. The requirement was never that runs be isolated from each other; it is that a run
+cannot reach the machine.
+
+**Verified, not assumed.** `playwright install --dry-run` reports its install location as
+`C:\Users\...\AppData\Local\ms-playwright\...` unpinned and
+`<pinned>\ms-playwright\...` with the variable set — the redirection is total. Three of the six new
+adapter tests fail without the change, one per engine; the other three assert the variable is left
+*untouched* when nothing is scoped, since an empty value would send Playwright to the CWD. The
+stub-binary harness moved from `permission-modes.comp.ts` into `test/support/engine-stub.ts` so both
+files share it, and the stub records only the one variable under test rather than an environment
+carrying real provider keys.
+
+**Known limitation:** under Codex's `--sandbox workspace-write`, a *home* run's cache is a sibling
+above its workspace and an install there may be refused. That is a failed install rather than a
+damaged machine, which is the intended side of the trade; recorded rather than worked around.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (850 passed), `pnpm build` and `pnpm gen:skills` all
+green on Windows. macOS reasoned through — the shared cache is `~/Library/Caches/ms-playwright`
+there and the same variable overrides it; all paths are `path.join` off `projectPath.dataDir` — and
+not executed.
+
+---
+
 ## TASK-144: A run must name files it edited that were already dirty when it started
 **Priority:** P0 | **Tags:** server, testing, milestone-h
 **Updated:** 2026-08-17 21:00

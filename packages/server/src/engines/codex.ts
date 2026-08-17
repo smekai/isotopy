@@ -9,6 +9,7 @@ import { codexConfigModel } from "../schemas/engine-cli-config.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
 import { parseCodexProtocolLine } from "./codex-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
+import { toolCacheEnv } from "./tool-cache.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { resolvePermissionPlan } from "./permission-mode.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
@@ -119,8 +120,11 @@ function mapKnownError(raw: string): string | undefined {
   return ERROR_HINTS.find((hint) => hint.pattern.test(raw))?.message;
 }
 
-function buildChildEnv(connection?: EngineConnection): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+function buildChildEnv(
+  connection: EngineConnection | undefined,
+  toolCacheDir: string | undefined,
+): NodeJS.ProcessEnv {
+  const env = { ...process.env, ...toolCacheEnv(toolCacheDir) };
   delete env.OPENAI_API_KEY;
   if (connection?.mode === "api-key" && connection.apiKey) {
     env.OPENAI_API_KEY = connection.apiKey;
@@ -303,7 +307,7 @@ export const codexAdapter: EngineAdapter = {
       command: binary,
       args: buildArgs(runCtx, plan),
       cwd: ctx.cwd,
-      env: buildChildEnv(ctx.connection),
+      env: buildChildEnv(ctx.connection, ctx.toolCacheDir),
       input: runCtx.prompt,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,

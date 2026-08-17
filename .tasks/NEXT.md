@@ -1,27 +1,5 @@
 # Next
 
-## TASK-145: A run must not mutate the host's global toolchain
-**Priority:** P0
-**Tags:** engine, testing, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Found by the `TASK-141` dogfood. With no native browser capability available, the tester persona
-correctly fell back to Playwright — the policy `TASK-138` wrote into it — but reached that fallback
-by running `npm install playwright@1.62.1` and `npx playwright install` in a scratch folder. That
-pruned `chromium_headless_shell-1228` from the user-level `ms-playwright` cache: the exact build
-this repo's own `@playwright/test@1.61.1` e2e suite depends on. `pnpm e2e` would have failed on the
-host machine until the browser was reinstalled by hand, which the dogfood had to do.
-
-A run must not leave the user's shared tooling worse than it found it. Options, cheapest first:
-prefer the target project's own Playwright when it has one; pin `PLAYWRIGHT_BROWSERS_PATH` to a
-run-scoped directory so an install cannot touch the shared cache; and state the constraint in the
-tester persona so the fallback is bounded rather than open-ended.
-
-Cross-platform: the shared cache exists on both Windows (`%LOCALAPPDATA%\ms-playwright`) and macOS
-(`~/Library/Caches/ms-playwright`); the fix must scope the path on both.
-
----
-
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-10 14:10

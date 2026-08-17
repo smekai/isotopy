@@ -200,6 +200,37 @@ both makes the CLI reject requests) and passes `--bare` in api-key mode, because
 bare mode reads auth strictly from `ANTHROPIC_API_KEY` — without it a logged-in
 CLI ignores the injected key and bills the plan.
 
+## Engines — tool cache scoping (`engines/tool-cache.ts`)
+
+The same `buildChildEnv` also points relocatable tool caches at the project
+instead of the machine. Today that is one variable, `PLAYWRIGHT_BROWSERS_PATH`,
+set to `<project>/.isotopy/cache/ms-playwright`.
+
+- **Why it exists:** a browser installer prunes builds it believes nothing
+  references. An agent that ran `npx playwright install` against the shared
+  user-level cache deleted the build this repository's own e2e suite is pinned
+  to, and `pnpm e2e` stayed broken until it was reinstalled by hand.
+- **`engines/tool-cache.ts` is the only file that names a tool.** The adapters
+  take a `toolCacheDir` and spread whatever env it maps to, so a second tool with
+  a relocatable cache is one line there and no change to any adapter.
+- **It is set at the single place `adapter.run` is constructed**
+  (`workflow/stage-execution.ts`), so every engine child gets it — a Developer
+  adding a browser test can prune the machine's cache exactly as readily as a
+  Tester. It is never set on the Isotopy server's own process, so this
+  repository's `pnpm e2e` keeps using the host cache.
+- **Nothing extra hides the cache.** `ensureProjectDataDir` already writes
+  `.isotopy/.gitignore` containing `*`, and `SNAPSHOT_IGNORED_DIRECTORIES`
+  already excludes `.isotopy`, so a multi-hundred-megabyte cache is invisible to
+  git and is never reported as files the run created.
+- **Absent means absent, not empty.** With no `toolCacheDir` the variable is left
+  alone rather than set to `""` — an empty value sends Playwright to the current
+  working directory, which is worse than its default.
+- **Codex's sandbox.** `--sandbox workspace-write` permits the workspace root.
+  For a real project the cache is under it. For a **home** run the workspace is
+  `~/.isotopy/home/runs/<id>/workspace` while the cache is `~/.isotopy/home/cache`
+  — a sibling above it, so an install there may be refused. That is a failed
+  install rather than a damaged machine, which is the intended side of the trade.
+
 ## Engines — persona delivery (`engines/persona.ts`)
 
 Claude Code takes the stage persona natively via `--append-system-prompt`, so it

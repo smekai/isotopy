@@ -30,6 +30,7 @@ import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
+import { toolCacheDir } from "../paths.ts";
 import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -256,6 +257,7 @@ async function runAdapter(
       permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
       connection: deps.settings.getEngineConnection(run.projectId, engine),
       resumeSessionId,
+      toolCacheDir: toolCacheDir(deps.registry.resolve(run.projectId)),
       timeoutMs: config.engineTimeoutMs,
       signal: controller.signal,
       onLog: (log) => deps.projection.log(run.id, stageId, log),
