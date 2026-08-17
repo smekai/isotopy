@@ -80,6 +80,7 @@ export async function runStubAdapter(
     cwd: stubDir,
     permissionMode: "skip",
     connection: { mode: "subscription" },
+    toolCacheDir: path.join(stubDir, "cache"),
     timeoutMs: 15_000,
     signal: new AbortController().signal,
     onLog: (log) => logs.push(log),

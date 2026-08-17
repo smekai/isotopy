@@ -153,7 +153,7 @@ function mapKnownError(raw: string): string | undefined {
 
 function buildChildEnv(
   connection: EngineConnection | undefined,
-  toolCacheDir: string | undefined,
+  toolCacheDir: string,
 ): NodeJS.ProcessEnv {
   const env = { ...process.env, ...toolCacheEnv(toolCacheDir) };
   delete env.ANTHROPIC_API_KEY;

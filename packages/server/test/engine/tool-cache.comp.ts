@@ -4,7 +4,7 @@
 // per adapter, so it is proven per adapter, against a stub binary that reports
 // the environment it was actually handed.
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import type { EngineId } from "@isotopy/core";
 import {
   installEngineStubs,
@@ -29,20 +29,13 @@ afterAll(() => {
   removeEngineStubs();
 });
 
-describe.each(ENGINES)("%s", (engine) => {
-  test("downloads browsers into the project's own cache, never the machine's", async () => {
+test.each(ENGINES)(
+  "%s downloads browsers into the project's own cache, never the machine's",
+  async (engine) => {
     // Act
     await runStubAdapter(engine, { toolCacheDir: PROJECT_CACHE });
 
     // Assert
     expect(recordedBrowsersPaths()).toEqual([path.join(PROJECT_CACHE, "ms-playwright")]);
-  });
-
-  test("leaves the variable alone when no cache was scoped, rather than blanking it", async () => {
-    // Act
-    await runStubAdapter(engine);
-
-    // Assert — an empty value would send Playwright to the CWD, which is worse than the default.
-    expect(recordedBrowsersPaths()).toEqual(["<unset>"]);
-  });
-});
+  },
+);

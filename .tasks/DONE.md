@@ -26,12 +26,15 @@ cannot reach the machine.
 
 **Verified, not assumed.** `playwright install --dry-run` reports its install location as
 `C:\Users\...\AppData\Local\ms-playwright\...` unpinned and
-`<pinned>\ms-playwright\...` with the variable set — the redirection is total. Three of the six new
-adapter tests fail without the change, one per engine; the other three assert the variable is left
-*untouched* when nothing is scoped, since an empty value would send Playwright to the CWD. The
-stub-binary harness moved from `permission-modes.comp.ts` into `test/support/engine-stub.ts` so both
-files share it, and the stub records only the one variable under test rather than an environment
-carrying real provider keys.
+`<pinned>\ms-playwright\...` with the variable set — the redirection is total. One test per engine
+fails without the change. The stub-binary harness moved from `permission-modes.comp.ts` into
+`test/support/engine-stub.ts` so both files share it, and the stub records only the one variable
+under test rather than an environment carrying real provider keys.
+
+`toolCacheDir` is **required** on `EngineRunContext`. It began optional, which made the
+"no cache scoped" branch reachable only from hand-built test contexts — and left a future call site
+free to opt out of the protection with nothing failing. The guarantee belongs in the type rather
+than in a test describing a state nobody should be able to construct.
 
 **Known limitation:** under Codex's `--sandbox workspace-write`, a *home* run's cache is a sibling
 above its workspace and an install there may be refused. That is a failed install rather than a

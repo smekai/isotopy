@@ -25,8 +25,7 @@ export interface EngineRunContext {
   connection: EngineConnection;
   /** Continue this CLI session instead of starting a new one. */
   resumeSessionId?: string;
-  /** Where this run may download tooling, instead of a shared user-level cache. */
-  toolCacheDir?: string;
+  toolCacheDir: string;
   timeoutMs: number;
   signal: AbortSignal;
   onLog: (log: StageLogDraft) => void;

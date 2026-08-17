@@ -222,9 +222,10 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   `.isotopy/.gitignore` containing `*`, and `SNAPSHOT_IGNORED_DIRECTORIES`
   already excludes `.isotopy`, so a multi-hundred-megabyte cache is invisible to
   git and is never reported as files the run created.
-- **Absent means absent, not empty.** With no `toolCacheDir` the variable is left
-  alone rather than set to `""` — an empty value sends Playwright to the current
-  working directory, which is worse than its default.
+- **`toolCacheDir` is required on `EngineRunContext`, not optional.** Every run
+  has a project and therefore a cache, so an optional field would only have let a
+  future call site silently opt out of the protection — and an unset variable is
+  precisely the bug. Making it required moves that from a test to the type.
 - **Codex's sandbox.** `--sandbox workspace-write` permits the workspace root.
   For a real project the cache is under it. For a **home** run the workspace is
   `~/.isotopy/home/runs/<id>/workspace` while the cache is `~/.isotopy/home/cache`

@@ -49,9 +49,11 @@ and is relocated by a documented environment variable rather than by writing som
 config file. The standing rule survives intact: Isotopy still reads CLI configuration and
 never writes it.
 
-**Absent means absent.** With no scoped directory the variable is left untouched rather
-than set to an empty string, which would send Playwright to the current working directory —
-a worse outcome than its own default.
+**The field is required, not optional.** Every run has a project and therefore a cache, so
+an optional `toolCacheDir` would only have let some future call site opt out of the
+protection without anything failing — and a run whose tooling is unscoped is exactly the
+bug. The guarantee belongs in the type rather than in a test that describes a state nobody
+should be able to construct.
 
 ---
 
