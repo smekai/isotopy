@@ -704,8 +704,16 @@ when it settles. Why each piece is the way it is:
 - **`git status` alone is not enough.** An agent that commits its work leaves a clean
   tree, and a status-only reading would report nothing. The collector diffs the
   baseline `HEAD` against the current one as well, and merges: what was committed,
-  plus what is dirty now, minus what was *already* dirty at baseline with the same
-  kind (that dirt is the user's, not the run's).
+  plus what is dirty now, minus what was *already* dirty at baseline and is still
+  byte-for-byte the same (that dirt is the user's, not the run's).
+- **The subtraction compares content, because a status code cannot move.** A file
+  already ` M` at baseline is still ` M` after the run rewrote it, so `hash-object`
+  records a blob oid for each baseline-dirty path and for the ones still dirty at
+  capture. Only two oids that positively disagree promote a file to the run's work —
+  a missing oid on either side subtracts, so an older baseline degrades rather than
+  claiming the user's edits. `--stdin-paths` carries the list because a large dirty
+  set would otherwise outgrow the Windows command line; `startSubprocess` always
+  ends stdin, so git sees EOF and does not block.
 - **The empty-tree object `4b825dc642cb6eb9a060e54bf8d69288fbee4904`** is git's
   well-known hash for an empty tree. It stands in as the diff base when the
   repository had no commits when the run started — the case where an agent makes the

@@ -7,6 +7,7 @@ import {
   parseGitStatus,
   reportableChanges,
 } from "../src/domain/rules/run-changes.ts";
+import type { DirtyFile } from "../src/schemas/run-change-baseline.ts";
 import type { WorkspaceSnapshot } from "../src/utils/workspace-files.ts";
 
 function snapshot(
@@ -23,6 +24,10 @@ function snapshot(
 
 function change(path: string, kind: FileChange["kind"]): FileChange {
   return { path, kind };
+}
+
+function dirty(path: string, kind: FileChange["kind"], blob: string): DirtyFile {
+  return { path, kind, blob };
 }
 
 function nulJoined(...fields: string[]): string {
@@ -116,6 +121,32 @@ test("a file that was already dirty before the run is not claimed as the run's d
   const dirty = [change("src/app.ts", "edited")];
 
   expect(mergeGitChanges(dirty, dirty, [])).toEqual([]);
+});
+
+test("a file already dirty before the run is the run's work once its content moves", () => {
+  expect(
+    mergeGitChanges(
+      [dirty("src/main.ts", "edited", "1111111")],
+      [dirty("src/main.ts", "edited", "2222222")],
+      [],
+    ),
+  ).toEqual([change("src/main.ts", "edited")]);
+});
+
+test("a dirty file the run never opened keeps its content hash, so it stays the user's", () => {
+  const untouched = dirty("src/app.ts", "edited", "1111111");
+
+  expect(mergeGitChanges([untouched], [untouched], [])).toEqual([]);
+});
+
+test("a baseline that recorded no content hash falls back to the status code rather than claiming the file", () => {
+  expect(
+    mergeGitChanges(
+      [change("src/app.ts", "edited")],
+      [dirty("src/app.ts", "edited", "1111111")],
+      [],
+    ),
+  ).toEqual([]);
 });
 
 test("a file dirty before the run and deleted during it is still reported as deleted", () => {

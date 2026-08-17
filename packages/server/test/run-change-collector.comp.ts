@@ -94,6 +94,36 @@ test("a file already dirty before the run started is not claimed as the run's wo
   expect(await collector.capture(scope, RUN_ID, scope.root)).toMatchObject({ files: [] });
 });
 
+test("a file already dirty before the run started is claimed once the run rewrites it", async () => {
+  const collector = new RunChangeCollector();
+  const scope = await project();
+  await initGitRepository(scope.root);
+  await commitEverything(scope.root, "initial");
+  await writeFile(path.join(scope.root, "README.md"), "# app, edited by hand\n");
+  await collector.captureBaseline(scope, RUN_ID, scope.root);
+  await writeFile(path.join(scope.root, "README.md"), "# app, then rewritten by the run\n");
+
+  expect(await collector.capture(scope, RUN_ID, scope.root)).toMatchObject({
+    source: "git",
+    files: [{ path: "README.md", kind: "edited" }],
+  });
+});
+
+test("an untracked file already present before the run is claimed once the run rewrites it", async () => {
+  const collector = new RunChangeCollector();
+  const scope = await project();
+  await initGitRepository(scope.root);
+  await commitEverything(scope.root, "initial");
+  await writeFile(path.join(scope.root, "notes.md"), "dropped here by hand\n");
+  await collector.captureBaseline(scope, RUN_ID, scope.root);
+  await writeFile(path.join(scope.root, "notes.md"), "rewritten by the run\n");
+
+  expect(await collector.capture(scope, RUN_ID, scope.root)).toMatchObject({
+    source: "git",
+    files: [{ path: "notes.md", kind: "created" }],
+  });
+});
+
 test("a run with no baseline reports nothing rather than inventing a change set", async () => {
   const collector = new RunChangeCollector();
   const scope = await project();

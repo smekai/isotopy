@@ -12,7 +12,7 @@ import { runSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
 import { RUN_CHANGE_BASELINE_VERSION } from "../schemas/run-change-baseline.ts";
-import type { RunChangeBaseline } from "../schemas/run-change-baseline.ts";
+import type { DirtyFile, RunChangeBaseline } from "../schemas/run-change-baseline.ts";
 import { snapshotWorkspace } from "../utils/workspace-files.ts";
 import type { WorkspaceSnapshot } from "../utils/workspace-files.ts";
 import {
@@ -24,6 +24,9 @@ import {
 const GIT_TIMEOUT_MS = 15_000;
 const EMPTY_TREE_OBJECT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const STATUS_ARGS = ["status", "--porcelain=v1", "-z", "-uall"];
+const HASH_OBJECT_ARGS = ["hash-object", "--stdin-paths"];
+
+type BlobIndex = ReadonlyMap<string, string | undefined>;
 
 type SubprocessRunner = (spec: SubprocessSpec) => Promise<SubprocessResult>;
 
@@ -43,6 +46,22 @@ async function isRepositoryRoot(workspacePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function stillDirtyAtBaseline(
+  finalDirty: FileChange[],
+  baselineDirty: DirtyFile[],
+): FileChange[] {
+  const baselinePaths = new Set(baselineDirty.map((change) => change.path));
+  return finalDirty.filter((change) => baselinePaths.has(change.path));
+}
+
+function pathsWithContent(changes: FileChange[]): string[] {
+  return changes.filter((change) => change.kind !== "deleted").map((change) => change.path);
+}
+
+function withBlobs(changes: FileChange[], blobs: BlobIndex): DirtyFile[] {
+  return changes.map((change) => ({ ...change, blob: blobs.get(change.path) }));
 }
 
 function restoreSnapshot(baseline: RunChangeBaseline): WorkspaceSnapshot {
@@ -157,8 +176,13 @@ export class RunChangeCollector {
       return undefined;
     }
     const committed = await this.committedChanges(workspacePath, baselineGit.head);
+    const finalDirty = parseGitStatus(status);
+    const blobs = await this.hashObjects(
+      workspacePath,
+      pathsWithContent(stillDirtyAtBaseline(finalDirty, baselineGit.dirty)),
+    );
     return reportableChanges(
-      mergeGitChanges(baselineGit.dirty, parseGitStatus(status), committed),
+      mergeGitChanges(baselineGit.dirty, withBlobs(finalDirty, blobs), committed),
     );
   }
 
@@ -191,17 +215,42 @@ export class RunChangeCollector {
       return undefined;
     }
     const head = (await this.git(workspacePath, ["rev-parse", "HEAD"]))?.trim();
+    const dirty = parseGitStatus(status);
+    const blobs = await this.hashObjects(workspacePath, pathsWithContent(dirty));
     return {
       head: head || undefined,
-      dirty: parseGitStatus(status),
+      dirty: withBlobs(dirty, blobs),
     };
   }
 
-  private async git(cwd: string, args: string[]): Promise<string | undefined> {
+  private async hashObjects(workspacePath: string, paths: string[]): Promise<BlobIndex> {
+    if (paths.length === 0) {
+      return new Map();
+    }
+    const output = await this.git(workspacePath, HASH_OBJECT_ARGS, `${paths.join("\n")}\n`);
+    const oids =
+      output === undefined
+        ? []
+        : output
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((oid) => oid !== "");
+    if (oids.length !== paths.length) {
+      return new Map();
+    }
+    return new Map(paths.map((filePath, index) => [filePath, oids[index]]));
+  }
+
+  private async git(
+    cwd: string,
+    args: string[],
+    input?: string,
+  ): Promise<string | undefined> {
     const result = await this.deps.run({
       command: "git",
       args,
       cwd,
+      input,
       timeoutMs: GIT_TIMEOUT_MS,
     });
     return result.success ? result.stdout : undefined;

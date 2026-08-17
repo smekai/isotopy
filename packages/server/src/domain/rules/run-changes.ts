@@ -1,4 +1,5 @@
 import type { FileChange, FileChangeKind } from "@isotopy/core";
+import type { DirtyFile } from "../../schemas/run-change-baseline.ts";
 import { SNAPSHOT_IGNORED_DIRECTORIES } from "../../utils/workspace-files.ts";
 import type { WorkspaceSnapshot } from "../../utils/workspace-files.ts";
 
@@ -92,15 +93,15 @@ export function parseGitNameStatus(output: string): FileChange[] {
 }
 
 export function mergeGitChanges(
-  baselineDirty: FileChange[],
-  finalDirty: FileChange[],
+  baselineDirty: DirtyFile[],
+  finalDirty: DirtyFile[],
   committed: FileChange[],
 ): FileChange[] {
-  const preexisting = new Map(baselineDirty.map((change) => [change.path, change.kind]));
+  const preexisting = new Map(baselineDirty.map((change) => [change.path, change]));
   const changes: ChangeMap = new Map();
   const applicable = [
     ...committed,
-    ...finalDirty.filter((change) => preexisting.get(change.path) !== change.kind),
+    ...finalDirty.filter((change) => !isUntouchedDirt(preexisting.get(change.path), change)),
   ];
   for (const change of applicable) {
     const combined = combine(changes.get(change.path), change.kind);
@@ -111,6 +112,15 @@ export function mergeGitChanges(
     }
   }
   return sortChanges(changes);
+}
+
+function isUntouchedDirt(baseline: DirtyFile | undefined, final: DirtyFile): boolean {
+  if (baseline === undefined || baseline.kind !== final.kind) {
+    return false;
+  }
+  return (
+    baseline.blob === undefined || final.blob === undefined || baseline.blob === final.blob
+  );
 }
 
 function combine(

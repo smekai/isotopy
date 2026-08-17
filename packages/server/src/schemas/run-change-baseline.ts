@@ -13,6 +13,14 @@ const fileStampSchema = z
   })
   .strict();
 
+const dirtyFileSchema = fileChangeSchema
+  .extend({
+    blob: requiredText.optional(),
+  })
+  .strict();
+
+export type DirtyFile = z.infer<typeof dirtyFileSchema>;
+
 export const runChangeBaselineSchema = z
   .object({
     version: z.literal(RUN_CHANGE_BASELINE_VERSION),
@@ -26,7 +34,7 @@ export const runChangeBaselineSchema = z
     git: z
       .object({
         head: requiredText.optional(),
-        dirty: z.array(fileChangeSchema),
+        dirty: z.array(dirtyFileSchema),
       })
       .strict()
       .optional(),

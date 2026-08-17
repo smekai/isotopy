@@ -1,5 +1,44 @@
 # Done
 
+## TASK-144: A run must name files it edited that were already dirty when it started
+**Priority:** P0 | **Tags:** server, testing, milestone-h
+**Updated:** 2026-08-17 21:00
+
+The change set's git path subtracted pre-existing dirt by comparing **status codes**, so a file
+already ` M` when the run started was still ` M` when it ended and the run's own rewrite was
+discarded as the user's. `TASK-141`'s run 3 existed only to edit `src/main.ts`, did edit it, and
+reported "1 created" with no edits — the shape every run after the first in an initiative hits,
+because those always start against a dirty tree.
+
+**Fixed by comparing content.** `RunChangeCollector` records a `git hash-object` blob oid for each
+file dirty at baseline and again, at capture, for the ones still dirty; `mergeGitChanges` now
+subtracts only when the kind matches *and* the two oids do not disagree. Only the baseline-dirty
+set is hashed — a clean file the run edits becomes ` M` and was always reported correctly, so
+hashing the whole index would cost a full-repo pass per run and catch nothing more. Cost is one
+extra git invocation per side, sized by the dirt rather than by the repository.
+
+**Two corrections to the filed task, from reading the code.** The snapshot path compares
+`(mtimeMs, size)` stamps rather than content — but it never had this bug, because a stamp moves
+when the run writes the file, so only the git path needed fixing. And a missing oid *subtracts*
+rather than claims: only two oids that positively disagree promote a file to the run's work, so a
+baseline written before this shipped degrades to the old behaviour instead of attributing every
+file the user had dirty to the agent. That is also why `RUN_CHANGE_BASELINE_VERSION` stays at `1`
+— bumping the literal would fail an in-flight run's baseline validation, and that answer is
+`undefined`, i.e. no change set at all.
+
+Three tests fail without the fix and pass with it: the rule-level regression in
+`run-changes.spec.ts`, and a tracked and an untracked dirty-then-rewritten file against the real
+git binary in `run-change-collector.comp.ts`. The counterweight — "a file already dirty before the
+run started is not claimed as the run's work" — is green in both states.
+
+Decision recorded in [`docs/decisions.md`](../docs/decisions.md); the now-inaccurate `git status`
+bullet in [`docs/implementation-notes.md`](../docs/implementation-notes.md) corrected.
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (843 passed) and `pnpm build` all green on Windows.
+macOS reasoned through — `hash-object --stdin-paths`, forward-slash paths out of `status -z`, no
+new path construction or process cleanup — and not executed.
+
+---
+
 ## TASK-141: Run the Milestone F dogfood with Claude Code
 **Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-17 12:30
