@@ -1,5 +1,54 @@
 # Done
 
+## TASK-141: Run the Milestone F dogfood with Claude Code
+**Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-17 12:30
+
+Closed the 2026-08-17 execution with release verdict **PASS**. Full evidence:
+[`docs/dogfood/TASK-141-claude-code-2026-08-17.md`](../docs/dogfood/TASK-141-claude-code-2026-08-17.md).
+**Milestone F remains open in TASK-125** — TASK-142's Cursor rerun is still required.
+
+**Claude Code evidence.** From a recreated clean baseline (`87fe592`) and isolated
+`ISOTOPY_USER_HOME`/`ISOTOPY_HOME`, the Orchestrator proposed a five-role team on its first turn
+without asking anything, raising the Developer to the `deep` tier on its own reasoning and giving
+both quality roles `quality` policy. Approved unedited. The team delivered configurable 1–120
+minute focus/break lengths, reload persistence, automatic Focus/Break alternation, focus-only
+history, preserved Start/Pause/Reset and an `aria-live` status that announces once per transition
+rather than per tick. Target tests went 9 → 31, build green. Three runs, 35 minutes, **$6.69**.
+
+**The run's best moment.** Independent verification caught a real accessibility bug in its own
+team's work — `statusText()` derived "Ready" from `remaining === focusSeconds`, so pausing
+immediately after Start announced "Ready" instead of "Paused". The tester reproduced it
+deliberately before reporting; the run went `needs_attention` rather than dying; the Orchestrator
+issued exactly one partial retry from `implementation` (skipping planning and design) quoting the
+specific defect; the fix passed; the Orchestrator then **stopped itself** with a model-authored
+reason. `blockedLaunchRefusal` never came near firing — the runs #10–#13 spin did not reproduce,
+which is the clearest evidence yet that TASK-139 holds.
+
+**Embedded Preview verified live.** Twelve interactive checks passed against the framed product,
+including real one-minute Focus→Break→Focus transitions and a reload at the phase boundary. Two
+TASK-138 behaviours confirmed that tests cannot show: the tester used the injected `## Environment`
+block to start the product through Isotopy rather than running its own server, and Isotopy
+restarted the product 0.4s after the run completed so the preview was never the previous build.
+
+**Defects filed, not fixed here:** `TASK-144` (changed-files under-report on files already dirty at
+run start — bites every run after the first in an initiative, so TASK-126's bar is systematically
+under-met), `TASK-145` (the QA persona's global `npx playwright install` pruned the host's pinned
+browser and would have broken `pnpm e2e`), `TASK-146` (three stale claims in the `run-app` skill),
+`TASK-147` (post-run Orchestrator decision turns missing from surfaced cost).
+
+**Newcomer findings:** there is no onboarding wizard and the first screen builds into a scratch
+workspace; the default tier is Fast (`haiku`), not Balanced; and Claude Code's engine card shows
+installation only — no login or quota state and no Login button, unlike Cursor and Codex — which
+is why the quota probe had to be made out of band before spending.
+
+Verified on Windows. macOS reasoned through against the process-group kill, executable selection,
+persona delivery and path-casing paths, and **not executed**. Isolation held: `~/.isotopy` was
+untouched throughout. No fresh clone was used, by the user's decision, so **Milestone G's
+clean-clone exit condition remains unverified**.
+
+---
+
 ## TASK-130: Milestone G — Gauge: rename ADHD to Isotopy
 **Priority:** P1 | **Tags:** core, server, ui, infra, testing, milestone-g
 **Updated:** 2026-08-14 00:00

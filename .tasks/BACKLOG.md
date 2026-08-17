@@ -1,5 +1,94 @@
 # Backlog
 
+## TASK-144: A run must name files it edited that were already dirty when it started
+**Priority:** P1
+**Tags:** server, testing
+**Updated:** 2026-08-17 12:30
+
+Found by the `TASK-141` dogfood. `RunChangeCollector` records a git-status baseline at run start
+and compares status codes at the end, so a file already ` M` when the run began is still ` M`
+afterwards and is reported as unchanged — even when the run rewrote it.
+
+In the dogfood, run 3 existed **only** to edit `src/main.ts`, did edit it, and reported "1 created"
+with no edits at all. This is not an edge case: every run after the first in an Orchestrator
+initiative starts against a dirty tree, so `TASK-126`'s bar — a finished run names what it changed
+— is systematically under-met from run 2 onward, exactly when the user most needs to see what the
+retry actually did.
+
+Compare content, not status codes: hash the tracked files at baseline (or record blob oids) and
+diff hashes at capture. The snapshot path already does content comparison; the git path is the one
+that regressed. Cover it with a test that dirties a file, runs, edits it further, and asserts it
+appears as `edited`.
+
+Cross-platform: n/a — hashing and git plumbing, no process spawning or new path construction.
+
+---
+
+## TASK-145: A run must not mutate the host's global toolchain
+**Priority:** P1
+**Tags:** engine, testing
+**Updated:** 2026-08-17 12:30
+
+Found by the `TASK-141` dogfood. With no native browser capability available, the tester persona
+correctly fell back to Playwright — the policy `TASK-138` wrote into it — but reached that fallback
+by running `npm install playwright@1.62.1` and `npx playwright install` in a scratch folder. That
+pruned `chromium_headless_shell-1228` from the user-level `ms-playwright` cache: the exact build
+this repo's own `@playwright/test@1.61.1` e2e suite depends on. `pnpm e2e` would have failed on the
+host machine until the browser was reinstalled by hand, which the dogfood had to do.
+
+A run must not leave the user's shared tooling worse than it found it. Options, cheapest first:
+prefer the target project's own Playwright when it has one; pin `PLAYWRIGHT_BROWSERS_PATH` to a
+run-scoped directory so an install cannot touch the shared cache; and state the constraint in the
+tester persona so the fallback is bounded rather than open-ended.
+
+Cross-platform: the shared cache exists on both Windows (`%LOCALAPPDATA%\ms-playwright`) and macOS
+(`~/Library/Caches/ms-playwright`); the fix must scope the path on both.
+
+---
+
+## TASK-146: Refresh three stale claims in the run-app skill
+**Priority:** P2
+**Tags:** infra, testing
+**Updated:** 2026-08-17 12:30
+
+Found in `TASK-141`'s pre-flight. `.claude/skills/run-app/SKILL.md` is wrong in three ways:
+
+- Its proxy list omits `/orchestrations` and `/automation`, both of which are in
+  `packages/ui/vite.config.ts` `API_PROXY_PATHS` and mounted in `packages/server/src/app.ts`.
+  `/automation` is the Preview surface and `/orchestrations` is the Orchestrator — the two things a
+  dogfood most needs to drive.
+- It documents no Preview endpoints at all (`GET/POST /automation/product{,/start,/stop}`).
+- It states that a subscription session limit is "a hard failure, not a pause". `TASK-061` shipped:
+  the stage now parks on a durable `limit:<runId>:<stageId>` signal and resumes via
+  `POST /runs/:id/limit/:stageId/resolve`.
+
+`TASK-103` already records this class of staleness costing real time during the `TASK-094` dogfood;
+it cost planning time again here. Not fixed inside `TASK-141` because that run had to start from an
+unmodified `main`.
+
+Cross-platform: n/a — documentation.
+
+---
+
+## TASK-147: Surface the cost of post-run Orchestrator decision turns
+**Priority:** P3
+**Tags:** server, ui
+**Updated:** 2026-08-17 12:30
+
+Found by the `TASK-141` dogfood. The orchestration run reported `$0.35` after its first
+`propose_team` turn and still reported `$0.35` after two further turns (`start_run` at settle time
+and the closing `stop`). Those decisions call the engine, so the displayed total understates real
+spend by an unknown amount — $6.69 was the figure the dogfood could evidence, not necessarily what
+was billed.
+
+Decide where a settle-time decision's usage belongs — folded into the orchestration run's stage,
+or carried on the orchestration itself — and show it, so an initiative's cost is the sum of what
+the user can see.
+
+Cross-platform: n/a — accounting and display.
+
+---
+
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-10 14:10
