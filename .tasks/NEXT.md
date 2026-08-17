@@ -13,10 +13,18 @@ post-run Orchestrator stop.
 
 **Match TASK-141, not TASK-128.** TASK-128's target and its literal goal string are both gone —
 the target repo was deleted and the goal was never written into a task file. TASK-141 recreated
-both, so *that* is the comparable run. Reuse its baseline at
-`C:\Development\smekai\dogfood-focus-timer` commit `87fe592` (re-scaffold from
-[`docs/dogfood/TASK-141-claude-code-2026-08-17.md`](../docs/dogfood/TASK-141-claude-code-2026-08-17.md) §3
-if it has been deleted), and type this goal verbatim:
+both, so *that* is the comparable run.
+
+Restore its baseline from the bundle committed in this repository — **not** from any local
+directory, which is how `4175c97` was lost:
+
+```
+git clone docs/dogfood/baseline/dogfood-focus-timer-87fe592.bundle <target>
+cd <target> && pnpm install
+```
+
+That checks out `87fe5929f60f92b6f0c10ffc610229d34047f82b` exactly, with all 14 tracked files.
+Confirm the SHA before starting, then type this goal verbatim:
 
 > Evolve this focus timer into one I would actually use every day: let me set the focus and break
 > lengths anywhere from 1 to 120 minutes, remember the timer's state across a page reload,
@@ -79,14 +87,23 @@ research spikes belong to no milestone at all. `TASK-137` is here because a user
 it and because F's bar is a first-time user meeting the Orchestrator — the one surface the
 demo cannot route around.
 
-**Where the closing dogfood stands, as of 2026-08-17.** `TASK-128` closed `SKIP` — Codex passed,
-Cursor was out of quota. `TASK-141` then closed **`PASS`** on Claude Code: a five-role team built
-the feature, independent verification caught a real accessibility bug in its own work, the
-Orchestrator recovered with one partial retry and stopped itself, and the built product was seen
-running in the embedded Preview. **Only `TASK-142` (Cursor, unblocked 2026-09-03) now stands
-between this milestone and its release decision.** Four defects were filed rather than fixed
-(`TASK-144`–`TASK-147`); none blocked the run, but `TASK-144` under-cuts `TASK-126`'s bar for the
-second and later runs of an initiative and is worth closing before the release decision.
+**Scope finalised 2026-08-17. `TASK-142` is the only work left in this milestone.**
+
+`TASK-128` closed `SKIP` — Codex passed, Cursor was out of quota. `TASK-141` then closed **`PASS`**
+on Claude Code: a five-role team built the feature, independent verification caught a real
+accessibility bug in its own work, the Orchestrator recovered with one partial retry and stopped
+itself, and the built product was seen running in the embedded Preview. That is F's bar, met on a
+second engine.
+
+`TASK-142` reruns the same path on Cursor once its quota resets on 2026-09-03, and is expected to
+be done **in September**. It carries `TASK-141`'s baseline and goal string so the two are
+comparable. Nothing else is admitted here.
+
+**The four defects `TASK-141` found went to Milestone H, not here** — decided with the user on
+2026-08-17. `TASK-144` and `TASK-145` at P0, `TASK-146` and `TASK-147` at P2. `TASK-144` does
+under-cut `TASK-126`'s bar for the second and later runs of an initiative, which is a real argument
+for fixing it inside F; the user chose H anyway, so F closes on the evidence it has rather than
+growing a tail. That is the "nothing else" rule being kept rather than bent.
 
 Cross-platform: every task here is verified on Windows and reasoned through for macOS, and
 `TASK-126`'s folder reveal and `TASK-124`'s per-CLI mode flags are where that bites.

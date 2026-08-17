@@ -1,9 +1,9 @@
 # Backlog
 
 ## TASK-144: A run must name files it edited that were already dirty when it started
-**Priority:** P1
-**Tags:** server, testing
-**Updated:** 2026-08-17 12:30
+**Priority:** P0
+**Tags:** server, testing, milestone-h
+**Updated:** 2026-08-17 13:10
 
 Found by the `TASK-141` dogfood. `RunChangeCollector` records a git-status baseline at run start
 and compares status codes at the end, so a file already ` M` when the run began is still ` M`
@@ -25,9 +25,9 @@ Cross-platform: n/a — hashing and git plumbing, no process spawning or new pat
 ---
 
 ## TASK-145: A run must not mutate the host's global toolchain
-**Priority:** P1
-**Tags:** engine, testing
-**Updated:** 2026-08-17 12:30
+**Priority:** P0
+**Tags:** engine, testing, milestone-h
+**Updated:** 2026-08-17 13:10
 
 Found by the `TASK-141` dogfood. With no native browser capability available, the tester persona
 correctly fell back to Playwright — the policy `TASK-138` wrote into it — but reached that fallback
@@ -48,8 +48,8 @@ Cross-platform: the shared cache exists on both Windows (`%LOCALAPPDATA%\ms-play
 
 ## TASK-146: Refresh three stale claims in the run-app skill
 **Priority:** P2
-**Tags:** infra, testing
-**Updated:** 2026-08-17 12:30
+**Tags:** infra, testing, milestone-h
+**Updated:** 2026-08-17 13:10
 
 Found in `TASK-141`'s pre-flight. `.claude/skills/run-app/SKILL.md` is wrong in three ways:
 
@@ -71,9 +71,9 @@ Cross-platform: n/a — documentation.
 ---
 
 ## TASK-147: Surface the cost of post-run Orchestrator decision turns
-**Priority:** P3
-**Tags:** server, ui
-**Updated:** 2026-08-17 12:30
+**Priority:** P2
+**Tags:** server, ui, milestone-h
+**Updated:** 2026-08-17 13:10
 
 Found by the `TASK-141` dogfood. The orchestration run reported `$0.35` after its first
 `propose_team` turn and still reported `$0.35` after two further turns (`start_run` at settle time
@@ -86,6 +86,90 @@ or carried on the orchestration itself — and show it, so an initiative's cost 
 the user can see.
 
 Cross-platform: n/a — accounting and display.
+
+---
+
+## TASK-150: The Orchestrator should compose a team for every run, not only the first
+**Priority:** P2
+**Tags:** core, server, ui, milestone-h
+**Updated:** 2026-08-17 13:10
+
+Asked for by the user on 2026-08-17, after watching the `TASK-141` dogfood.
+
+Today an initiative approves **one** team and reuses it for every later run.
+`OrchestrationService.launch` reads `orchestration.composedPipeline` and re-runs the same roles,
+tiers and step tasks; the Orchestrator's only levers on a continuation are the task text and
+`fromStage`. So a second run that needs a different shape — a bug fix wanting only a Developer and
+a Tester, or a run that turns out to need a Software Architect nobody picked at the start — is
+forced through the original composition.
+
+That is visible in the dogfood: run 3 existed only to fix one function, and it carried the whole
+five-role team, skipping planning and design by *seeding* rather than by being composed correctly.
+Skipping is a workaround for composing.
+
+**What to build:** let the Orchestrator propose a team per run, through the same approval flow the
+first one gets. The machinery partly exists — a `propose_team` decision after a run settles already
+parks the initiative at `awaiting_approval`, and `approveTeam` already replaces `composedPipeline`.
+The work is telling the Orchestrator it may re-compose, making that a real option in the prompt and
+step task, and showing in the UI which team a given run actually used.
+
+**Decide, and record the choice:** whether re-composition needs approval every time or only when
+the shape changes; how a run's team is shown in history once teams differ per run; and how this
+meets `TASK-111` (reusable saved teams), which is the same question from the other side.
+
+Cross-platform: n/a — composition and UI.
+
+---
+
+## TASK-149: Group an initiative's runs visually in the UI
+**Priority:** P2
+**Tags:** ui, milestone-h
+**Updated:** 2026-08-17 13:10
+
+Asked for by the user on 2026-08-17, after watching the `TASK-141` dogfood.
+
+An initiative's runs are already linked in the data — each run carries `orchestrationId` and the
+orchestration keeps `runIds[]` — but the runs rail renders them as a flat list of independent
+cards. In the dogfood the three runs (the Orchestrator conversation, the run that ended
+`needs_attention`, and the fix) read as three unrelated things stacked by time. Nothing showed that
+run 3 existed *because* run 2 failed, or that all three served one goal.
+
+**What to build:** show the grouping. A collapsible initiative header carrying the goal, its runs
+nested under it, and the relationship legible — which run followed which, and why the later one
+started. The parent/child data is already there.
+
+This meets, from the other direction, the question left open in `docs/decisions.md:144` — whether a
+runs overview is needed. `TASK-141` found the flat rail adequate at three runs and said so; the
+user asked for grouping anyway. Record that the ask came from the user rather than from the rail
+failing at this scale, so the design is not over-built for a problem nobody has hit yet.
+
+Cross-platform: n/a — UI only.
+
+---
+
+## TASK-148: Make human gates real configuration
+**Priority:** P2
+**Tags:** ui, server, core, milestone-h
+**Updated:** 2026-08-17 13:10
+
+Found in `TASK-141`, and confirmed with the user on 2026-08-17: gates should be a config.
+
+`Setup → Gates` looks configurable and is not. `GatesSection.tsx` derives its list from the shipped
+`DEMO_PIPELINES`, filters to stages with `gateAfter`, and renders each with a hard-coded `ENABLED`
+badge. There is no toggle, and nothing it displays is stored or read back. A user who wants Full
+Delivery's Product Manager gate off cannot turn it off, and the screen gives no hint of that.
+
+**What to build:** make the section mean what it shows — per-gate enable/disable persisted with the
+other preferences (server state keyed by project, as `PUT /settings/preferences` already does) and
+honoured when a fixed pipeline runs.
+
+**Scope note.** This is about *fixed* pipelines. Orchestrator-composed teams already decide gates
+per role via `gateAfter` in the proposal, which is why the dogfood ran end to end on a single
+approval at team composition with no mid-run pauses. That flow is already the "approve the plan and
+the team, then let it run" model and needs no change — do not regress it while making fixed-pipeline
+gates configurable.
+
+Cross-platform: n/a — settings and UI.
 
 ---
 
@@ -103,6 +187,17 @@ collects the feedback; what follows is decided by what it says.
 accumulated context). Each was written as post-MVP by whoever deferred it, and none has a
 user behind it yet. Build the ones feedback asks for; reject the rest rather than letting
 them age in the backlog.
+
+**Admitted 2026-08-17, out of the `TASK-141` dogfood.** Two different kinds arrived at once:
+
+- **Defects, kept out of Milestone F deliberately** so F could close on its evidence rather than
+  grow a tail: `TASK-144` and `TASK-145` (P0), `TASK-146` and `TASK-147` (P2). These are **not**
+  feedback-gated — they are known-broken behaviour and should be fixed whatever `TASK-135` finds.
+- **Three asks from the user**, who watched the dogfood: `TASK-148` (gates as real config),
+  `TASK-149` (group an initiative's runs), `TASK-150` (compose a team per run). These came from the
+  product owner, not from `TASK-135`'s prospective users. That is a legitimate source, but it is
+  not the evidence this milestone was created to wait for — recorded plainly so "a user asked" does
+  not quietly come to mean "we asked ourselves". `TASK-150` overlaps `TASK-111`; design them together.
 
 That rule has been applied once already: `TASK-095` (agent-native browser testing for QA)
 was **rejected on 2026-08-11**, answered by `TASK-138` rather than built. Its policy half

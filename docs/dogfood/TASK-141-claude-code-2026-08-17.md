@@ -63,6 +63,21 @@ production build. Absent: configurable lengths, reload persistence, Focus/Break 
 session history — and the status line was a plain `<p>` with **no** `role="status"`/`aria-live`,
 the accessibility gap TASK-128's team closed.
 
+**The baseline is preserved in this repository, not only on the machine that ran it.** The target
+lives at `C:\Development\smekai\dogfood-focus-timer` and its git repository has **no remote**, so
+the commit would be unreachable the moment that directory is deleted — which is precisely the
+reproducibility gap that lost TASK-128's `4175c97` and forced this recreation. The prose above
+describes behaviour and could not rebuild the exact 14-file tree.
+
+A complete bundle is therefore committed alongside this record:
+
+- **Artifact:** [`baseline/dogfood-focus-timer-87fe592.bundle`](baseline/dogfood-focus-timer-87fe592.bundle)
+- **Full SHA:** `87fe5929f60f92b6f0c10ffc610229d34047f82b`
+- **Restore:** `git clone docs/dogfood/baseline/dogfood-focus-timer-87fe592.bundle <target>` —
+  verified to check out that exact SHA with all 14 tracked files, then `pnpm install`.
+
+TASK-142 points at this artifact rather than at a local path.
+
 ## 4. Onboarding — what a newcomer meets
 
 - **There is no onboarding wizard.** The first screen is a goal composer over a *scratch
@@ -210,10 +225,18 @@ untouched (`projects: []`), all state under the isolated root.
 
 ## 11. Screenshots
 
+**Provenance note on 01 and 02.** These two were originally captured *after* the project was
+registered and preferences were set, so they showed a registered project and a `Balanced` tier —
+not the empty-home state §4 describes. They have been **re-captured against a pristine, empty
+`ISOTOPY_USER_HOME`** (`C:\tmp\isotopy-firstlaunch`) after the run, reproducing the same first-launch
+condition; `GET /projects` returned `home` only, with no registered projects, at capture time. The
+§4 findings were originally read from the live DOM before registration and are unchanged — the
+screenshots now actually evidence them. Screenshots 03–09 are from the run itself, untouched.
+
 | # | File | Shows |
 | --- | --- | --- |
-| 01 | `01-first-launch.png` | First launch on an empty user home — composer, scratch-workspace chip, Fast default |
-| 02 | `02-setup-ai-harness.png` | Setup → AI Harness: installed, no login state, connection modes |
+| 01 | `01-first-launch.png` | First launch on an empty user home — Home only, "No runs yet.", scratch-workspace chip, **Fast** default (re-captured, see above) |
+| 02 | `02-setup-ai-harness.png` | Setup → AI Harness on an empty user home: installed, no login state, connection modes (re-captured, see above) |
 | 03 | `03-team-proposal.png` | The five-role proposal with per-role tier dropdowns, before approval |
 | 04 | `04-needs-attention-run.png` | Run 2 parked at `needs_attention` after the QA FAIL |
 | 05 | `05-preview-controls.png` | Keyboard-driven Start/Pause/Reset in the live product |
@@ -231,6 +254,9 @@ untouched (`projects: []`), all state under the isolated root.
    this to the user because a sandboxed shell makes the spawned `claude.exe` die with 0xC0000142;
    the pre-flight probe proved that gotcha did not apply in this session, and no spawn failure
    occurred.
+3. **Re-captured screenshots 01 and 02 after the run**, against a fresh empty `ISOTOPY_USER_HOME`,
+   because the originals were taken after project registration and did not show the state §4
+   describes. Raised in review of PR #52. No run state was touched; see the provenance note in §11.
 
 Nothing else. No stage was nudged, no answer was typed on the product's behalf (it asked nothing),
 no run was manually restarted, and the Orchestrator was never stopped by hand.
