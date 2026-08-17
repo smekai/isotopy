@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { lstat, stat } from "node:fs/promises";
 import path from "node:path";
 import type { FileChange, RunChangeSet, RunState } from "@isotopy/core";
 import {
@@ -58,6 +58,31 @@ function stillDirtyAtBaseline(
 
 function pathsWithContent(changes: FileChange[]): string[] {
   return changes.filter((change) => change.kind !== "deleted").map((change) => change.path);
+}
+
+async function isRegularFile(absolutePath: string): Promise<boolean> {
+  try {
+    return (await lstat(absolutePath)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function regularFiles(workspacePath: string, paths: string[]): Promise<string[]> {
+  const hashable = await Promise.all(
+    paths.map(async (filePath) =>
+      (await isRegularFile(path.join(workspacePath, filePath))) ? filePath : undefined,
+    ),
+  );
+  return hashable.filter((filePath): filePath is string => filePath !== undefined);
+}
+
+function pairOids(paths: string[], stdout: string): BlobIndex {
+  const oids = stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((oid) => oid !== "");
+  return new Map(paths.slice(0, oids.length).map((filePath, index) => [filePath, oids[index]]));
 }
 
 function withBlobs(changes: FileChange[], blobs: BlobIndex): DirtyFile[] {
@@ -224,21 +249,18 @@ export class RunChangeCollector {
   }
 
   private async hashObjects(workspacePath: string, paths: string[]): Promise<BlobIndex> {
-    if (paths.length === 0) {
+    const hashable = await regularFiles(workspacePath, paths);
+    if (hashable.length === 0) {
       return new Map();
     }
-    const output = await this.git(workspacePath, HASH_OBJECT_ARGS, `${paths.join("\n")}\n`);
-    const oids =
-      output === undefined
-        ? []
-        : output
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((oid) => oid !== "");
-    if (oids.length !== paths.length) {
-      return new Map();
-    }
-    return new Map(paths.map((filePath, index) => [filePath, oids[index]]));
+    const result = await this.deps.run({
+      command: "git",
+      args: HASH_OBJECT_ARGS,
+      cwd: workspacePath,
+      input: `${hashable.join("\n")}\n`,
+      timeoutMs: GIT_TIMEOUT_MS,
+    });
+    return pairOids(hashable, result.stdout);
   }
 
   private async git(

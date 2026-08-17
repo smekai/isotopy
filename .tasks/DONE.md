@@ -26,10 +26,18 @@ file the user had dirty to the agent. That is also why `RUN_CHANGE_BASELINE_VERS
 — bumping the literal would fail an in-flight run's baseline validation, and that answer is
 `undefined`, i.e. no change set at all.
 
-Three tests fail without the fix and pass with it: the rule-level regression in
-`run-changes.spec.ts`, and a tracked and an untracked dirty-then-rewritten file against the real
-git binary in `run-change-collector.comp.ts`. The counterweight — "a file already dirty before the
-run started is not claimed as the run's work" — is green in both states.
+**One unhashable path must not take the others with it**, found in PR review. A dirty submodule
+reports as ` M sub` and `hash-object` answers `fatal: Unable to hash sub`, aborting the batch — and
+because a missing oid subtracts, that silenced every edit in the run and restored the original bug
+in full. Paths are now filtered to regular files before hashing, and the oids git did print are
+paired positionally rather than read through the usual exit-code check, so a batch that still dies
+partway keeps what it produced.
+
+Four tests fail without the fix and pass with it: the rule-level regression in
+`run-changes.spec.ts`, a tracked and an untracked dirty-then-rewritten file against the real git
+binary in `run-change-collector.comp.ts`, and a dirty embedded repository alongside a rewritten
+file in the same. The counterweight — "a file already dirty before the run started is not claimed
+as the run's work" — is green in both states.
 
 Decision recorded in [`docs/decisions.md`](../docs/decisions.md); the now-inaccurate `git status`
 bullet in [`docs/implementation-notes.md`](../docs/implementation-notes.md) corrected.

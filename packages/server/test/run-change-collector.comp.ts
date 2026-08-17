@@ -4,7 +4,11 @@ import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import type { ProjectPath } from "../src/paths.ts";
 import { RunChangeCollector } from "../src/services/run-change-collector.ts";
-import { commitEverything, initGitRepository } from "./support/git-project.ts";
+import {
+  addDirtyEmbeddedRepository,
+  commitEverything,
+  initGitRepository,
+} from "./support/git-project.ts";
 
 const RUN_ID = "run-0001";
 
@@ -121,6 +125,22 @@ test("an untracked file already present before the run is claimed once the run r
   expect(await collector.capture(scope, RUN_ID, scope.root)).toMatchObject({
     source: "git",
     files: [{ path: "notes.md", kind: "created" }],
+  });
+});
+
+test("a dirty submodule cannot hide the run's edits, because it is unhashable and the rest are not", async () => {
+  const collector = new RunChangeCollector();
+  const scope = await project();
+  await initGitRepository(scope.root);
+  await commitEverything(scope.root, "initial");
+  await addDirtyEmbeddedRepository(scope.root, "sub");
+  await writeFile(path.join(scope.root, "README.md"), "# app, edited by hand\n");
+  await collector.captureBaseline(scope, RUN_ID, scope.root);
+  await writeFile(path.join(scope.root, "README.md"), "# app, then rewritten by the run\n");
+
+  expect(await collector.capture(scope, RUN_ID, scope.root)).toMatchObject({
+    source: "git",
+    files: [{ path: "README.md", kind: "edited" }],
   });
 });
 

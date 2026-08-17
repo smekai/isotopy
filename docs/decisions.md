@@ -39,6 +39,15 @@ status-code behaviour. The opposite default would have made the first run after 
 attribute every file the user had dirty to the agent, which is the failure this subtraction
 exists to prevent.
 
+**One unhashable path must not take the others with it.** Because a missing blob subtracts,
+an all-or-nothing hash step would have restored the original bug in full whenever a single
+path could not be hashed — and a dirty submodule is exactly that path: it reports as ` M sub`
+and `hash-object` answers `fatal: Unable to hash sub`. Two things keep the failure local. The
+paths are filtered to regular files before hashing, so a gitlink, a directory or a broken
+symlink never enters the batch; and the oids git did emit are paired positionally with the
+paths it was given, so a batch that dies partway keeps what it produced instead of being
+discarded with the process's exit code.
+
 **`RUN_CHANGE_BASELINE_VERSION` deliberately stays at `1`.** The field is optional and
 additive, so an in-flight run's baseline still parses. Bumping the literal would fail its
 validation instead, and `readRunChangeBaseline` answers a validation failure with
