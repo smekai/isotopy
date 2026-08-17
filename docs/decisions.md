@@ -15,6 +15,53 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-17 — Pre-existing dirt is subtracted on content, not on a status code
+
+**Context:** the change set's git path subtracted what was already dirty at baseline by
+comparing *status codes*. A file already ` M` when the run started is still ` M` when it
+ends, so a run that rewrote it reported nothing. The `TASK-141` dogfood is the evidence:
+run 3 existed only to edit `src/main.ts`, did edit it, and reported "1 created" with no
+edits at all. Every run after the first in an initiative starts against a dirty tree, so
+`TASK-126`'s bar was under-met from run 2 onward — exactly when the user most needs to see
+what a retry actually did.
+
+**Decision:** a blob oid is recorded for each file dirty at baseline, and again at capture
+for the ones still dirty, and the subtraction requires the content to match as well as the
+kind. **Only the baseline-dirty set is hashed**, not the index: a *clean* file the run
+edits becomes ` M` and was always reported correctly, so hashing everything would cost a
+full-repo pass on every run start and catch nothing more. The cost is one extra
+`git hash-object --stdin-paths` per side, sized by the dirt rather than by the repository.
+
+**A missing hash subtracts, it does not claim.** Only two blobs that positively disagree
+promote a file to the run's work. A blob absent on either side — a baseline written before
+this shipped, a `deleted` entry with nothing on disk, a failed hash — falls back to the
+status-code behaviour. The opposite default would have made the first run after an upgrade
+attribute every file the user had dirty to the agent, which is the failure this subtraction
+exists to prevent.
+
+**One unhashable path must not take the others with it.** Because a missing blob subtracts,
+an all-or-nothing hash step would have restored the original bug in full whenever a single
+path could not be hashed — and a dirty submodule is exactly that path: it reports as ` M sub`
+and `hash-object` answers `fatal: Unable to hash sub`. Two things keep the failure local. The
+paths are filtered to regular files before hashing, so a gitlink, a directory or a broken
+symlink never enters the batch; and the oids git did emit are paired positionally with the
+paths it was given, so a batch that dies partway keeps what it produced instead of being
+discarded with the process's exit code.
+
+**`RUN_CHANGE_BASELINE_VERSION` deliberately stays at `1`.** The field is optional and
+additive, so an in-flight run's baseline still parses. Bumping the literal would fail its
+validation instead, and `readRunChangeBaseline` answers a validation failure with
+`undefined` — the run would then report *no* changes at all, which is worse than the bug
+being fixed.
+
+**Rejected: reusing the snapshot stamps.** A second workspace walk at capture would let
+`diffSnapshots`' `(mtimeMs, size)` comparison answer for the git path too, with no git
+plumbing at all. It was rejected for costing a 20 000-entry walk where hashing costs one
+process, and for reporting a false edit whenever a formatter or an install touches a file
+without changing it.
+
+---
+
 ## 2026-08-13 — Isotopy is the complete product name, not a backronym
 
 **Context:** the old name expanded to *Artificial Development, Human Directed*. The rename
