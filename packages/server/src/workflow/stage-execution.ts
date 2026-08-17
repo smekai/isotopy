@@ -248,16 +248,17 @@ async function runAdapter(
   try {
     const adapter = getEngineAdapter(engine);
     const selection = await selectModel(deps, run, stageId, engine);
+    const cwd = run.workspacePath ?? process.cwd();
     return await adapter.run({
       runId: run.id,
       prompt,
-      cwd: run.workspacePath ?? process.cwd(),
+      cwd,
       ...selection,
       appendSystemPrompt: persona,
       permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
       connection: deps.settings.getEngineConnection(run.projectId, engine),
       resumeSessionId,
-      toolCacheDir: toolCacheDir(deps.registry.resolve(run.projectId)),
+      toolCacheDir: toolCacheDir(deps.registry.resolve(run.projectId), cwd),
       timeoutMs: config.engineTimeoutMs,
       signal: controller.signal,
       onLog: (log) => deps.projection.log(run.id, stageId, log),

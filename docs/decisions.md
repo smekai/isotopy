@@ -55,6 +55,15 @@ protection without anything failing — and a run whose tooling is unscoped is e
 bug. The guarantee belongs in the type rather than in a test that describes a state nobody
 should be able to construct.
 
+**A home run caches inside its own workspace, not beside it.** The home project inverts the
+usual nesting: its workspace is `<dataDir>/runs/<id>/workspace`, so a cache at
+`<dataDir>/cache` sits *above* the only directory Codex's `--sandbox workspace-write` lets
+an agent write. The install would be refused, and a QA stage with no native browser would
+be left with no working fallback — which contradicts the persona rule that Playwright must
+still prove the behaviour. Protecting the machine is not worth a stage that cannot finish,
+so the home project's cache goes under the workspace. It costs one download per home run,
+against a scratch workspace that is disposable by design.
+
 ---
 
 ## 2026-08-17 — Pre-existing dirt is subtracted on content, not on a status code

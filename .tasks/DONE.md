@@ -11,8 +11,9 @@ user-level `ms-playwright` cache — the build this repo's own e2e suite is pinn
 nothing it was told not to do; the product gave it nowhere else to put a browser.
 
 **Isotopy now points relocatable tool caches at the project.** `PLAYWRIGHT_BROWSERS_PATH` is set to
-`<project>/.isotopy/cache/ms-playwright` on **every** engine child process, at the single place
-`adapter.run` is constructed — not only on the QA stage, because a Developer adding a browser test
+`<project>/.isotopy/cache/ms-playwright` on **every** engine child process — and to
+`<workspace>/.isotopy/cache/ms-playwright` for a home run, see below — at the single place
+`adapter.run` is constructed, not only on the QA stage, because a Developer adding a browser test
 prunes the shared cache exactly as readily as a Tester does. `engines/tool-cache.ts` is the only
 file that names a tool, so a second relocatable cache is one line there and no adapter change. The
 QA persona and the `verify-feature` step task carry the matching policy: prefer the repository's own
@@ -36,12 +37,17 @@ under test rather than an environment carrying real provider keys.
 free to opt out of the protection with nothing failing. The guarantee belongs in the type rather
 than in a test describing a state nobody should be able to construct.
 
-**Known limitation:** under Codex's `--sandbox workspace-write`, a *home* run's cache is a sibling
-above its workspace and an install there may be refused. That is a failed install rather than a
-damaged machine, which is the intended side of the trade; recorded rather than worked around.
+**A home run caches inside its own workspace**, found in PR review. The home project inverts the
+usual nesting — its workspace is `<dataDir>/runs/<id>/workspace` — so a cache at `<dataDir>/cache`
+sits above the only directory Codex's `--sandbox workspace-write` lets an agent write. Shipped as a
+"known limitation" first, which was wrong: a refused install leaves a QA stage with no working
+fallback at all, contradicting the persona rule that Playwright must still prove the behaviour.
+Protecting the machine is not worth a stage that cannot finish. The home project's cache now goes
+under the workspace, at one download per home run against a workspace that is disposable by design,
+and a comp test covers the real construction path for both project kinds.
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (850 passed), `pnpm build` and `pnpm gen:skills` all
-green on Windows. macOS reasoned through — the shared cache is `~/Library/Caches/ms-playwright`
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (849 passed, 95 files), `pnpm build` and `pnpm gen:skills`
+all green on Windows. macOS reasoned through — the shared cache is `~/Library/Caches/ms-playwright`
 there and the same variable overrides it; all paths are `path.join` off `projectPath.dataDir` — and
 not executed.
 

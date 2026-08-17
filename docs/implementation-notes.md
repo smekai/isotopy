@@ -226,11 +226,18 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   has a project and therefore a cache, so an optional field would only have let a
   future call site silently opt out of the protection — and an unset variable is
   precisely the bug. Making it required moves that from a test to the type.
-- **Codex's sandbox.** `--sandbox workspace-write` permits the workspace root.
-  For a real project the cache is under it. For a **home** run the workspace is
-  `~/.isotopy/home/runs/<id>/workspace` while the cache is `~/.isotopy/home/cache`
-  — a sibling above it, so an install there may be refused. That is a failed
-  install rather than a damaged machine, which is the intended side of the trade.
+- **A home run caches inside its own workspace.** For a real project the data
+  directory is `<root>/.isotopy`, so the cache is already under the workspace.
+  A home run inverts that: its workspace is `<dataDir>/runs/<id>/workspace`, so
+  `<dataDir>/cache` is a *sibling above* it and Codex's `--sandbox
+  workspace-write` would refuse the install. A QA stage with no native browser
+  would then have no working fallback at all, which contradicts the persona
+  requirement that Playwright must still prove the behaviour — a failed install
+  protects the machine but does not finish the job. So `toolCacheDir` returns
+  `<workspace>/.isotopy/cache` for the home project. The `.isotopy` segment is
+  what keeps it out of change sets, since `SNAPSHOT_IGNORED_DIRECTORIES` matches
+  that basename at any depth. The cost is one download per home run, which is
+  the price of a scratch workspace that is thrown away anyway.
 
 ## Engines — persona delivery (`engines/persona.ts`)
 
