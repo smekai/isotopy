@@ -26,9 +26,11 @@ first turn and still `$0.35` after two more decisions, because an orchestration 
 at all.
 
 **Decision:** an orchestration carries its own `usage`, accumulated with the same `addUsage` a run
-uses, and the settle-time review books there instead of on the settled run's last stage. The turn
-is the Orchestrator's work; an initiative's cost is now the sum of its runs plus its own decisions,
-which is what the user is being asked to read.
+uses, and **every** Orchestrator turn books there rather than on whatever stage it happened inside —
+both the settle-time review and the question-mediation turns that broker a specialist's question.
+The turn is the Orchestrator's work; an initiative's cost is now the sum of its runs plus its own
+decisions, which is what the user is being asked to read. Splitting the two would have left the
+same wrong-actor accounting in the half nobody had looked at.
 
 **The booking must not depend on the decision being recorded.** `recordReview` refuses when the
 orchestration has already stopped, and its caller answers by logging a warning — so routing spend

@@ -4,9 +4,15 @@
 **Priority:** P2 | **Tags:** server, ui, milestone-h
 **Updated:** 2026-08-18 22:45
 
-An orchestration now carries its own `usage`, and the settle-time review books there instead of on
-the settled run's last stage. The figure beside an initiative's status is the Orchestrator's own
-spend; a run's total is only the work that run did.
+An orchestration now carries its own `usage`, and every Orchestrator turn books there instead of on
+whatever stage it happened inside. The figure beside an initiative's status is the Orchestrator's
+own spend; a run's total is only the work that run did.
+
+**PR review caught the half I had missed.** The fix landed on the settle-time review but not on
+question mediation, which also loads the `orchestrator` persona and was still billing the asking
+specialist's stage for the broker turn. Both call sites carry an `orchestrationId` on their context,
+so the second fix is symmetric with the first — and splitting them would have left exactly the
+wrong-actor accounting this task exists to remove, in the half nobody had looked at.
 
 **One correction to the task as filed.** It said the displayed total "understates real spend by an
 unknown amount". It did not: `runOrchestratorReviewWork` already called `stageUsage`, and the review
@@ -32,8 +38,9 @@ it on the work run under a label (fixes the mis-targeting and leaves the initiat
 The review's log lines still go to the settled run's last stage — a run's log stream is the only
 place they can go, and it is cosmetic once the money is not there too.
 
-Two comp tests fail without the change: the settle-time spend landing on the initiative rather than
-the run that triggered it, and the figure surviving a server restart. A UI test covers the new
+Three comp tests fail without the change: the settle-time spend landing on the initiative rather than
+the run that triggered it, a brokered question's spend landing there rather than on the asking
+specialist's stage, and the figure surviving a server restart. A UI test covers the new
 `orchestrator-spend` surface and its silence when there is nothing to report. An accumulation test
 was written and then deleted: `addUsage` already proves it at `usage.spec.ts:33`, and re-proving a
 one-line reuse through a two-run arrangement is the anti-pattern the testing standard names.
@@ -41,7 +48,7 @@ one-line reuse through a two-run arrangement is the anti-pattern the testing sta
 Also raised the timeout on `TASK-145`'s dirty-submodule test, which spawns five git processes and
 exceeded the 15s default under full-suite load while passing in 3s alone.
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (853 passed, 97 files), `pnpm build` and `pnpm e2e`
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (854 passed, 97 files), `pnpm build` and `pnpm e2e`
 (68 passed) all green on Windows. Cross-platform: n/a — accounting and display.
 
 ---

@@ -202,9 +202,12 @@ CLI ignores the injected key and bills the plan.
 
 ## What an initiative cost (`services/orchestration-service.ts`)
 
-`Orchestration.usage` accumulates every settle-time decision turn, so the figure
-beside an initiative's status is the Orchestrator's own spend and a run's total is
-only the work that run did.
+`Orchestration.usage` accumulates every Orchestrator turn — the settle-time review
+and the question-mediation turns that broker a specialist's question — so the
+figure beside an initiative's status is the Orchestrator's own spend and a run's
+total is only the work that run did. Both turns load the `orchestrator` persona
+and both carry an `orchestrationId` on their context, which is what makes the two
+call sites symmetric.
 
 - **`recordDecisionUsage` is deliberately not part of `recordReview`.** That method
   throws `OrchestratorRequiredError` once the orchestration has stopped, and
