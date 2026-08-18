@@ -43,30 +43,6 @@ everything else.
 
 ---
 
-## TASK-146: Refresh three stale claims in the run-app skill
-**Priority:** P2
-**Tags:** infra, testing, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Found in `TASK-141`'s pre-flight. `.claude/skills/run-app/SKILL.md` is wrong in three ways:
-
-- Its proxy list omits `/orchestrations` and `/automation`, both of which are in
-  `packages/ui/vite.config.ts` `API_PROXY_PATHS` and mounted in `packages/server/src/app.ts`.
-  `/automation` is the Preview surface and `/orchestrations` is the Orchestrator — the two things a
-  dogfood most needs to drive.
-- It documents no Preview endpoints at all (`GET/POST /automation/product{,/start,/stop}`).
-- It states that a subscription session limit is "a hard failure, not a pause". `TASK-061` shipped:
-  the stage now parks on a durable `limit:<runId>:<stageId>` signal and resumes via
-  `POST /runs/:id/limit/:stageId/resolve`.
-
-`TASK-103` already records this class of staleness costing real time during the `TASK-094` dogfood;
-it cost planning time again here. Not fixed inside `TASK-141` because that run had to start from an
-unmodified `main`.
-
-Cross-platform: n/a — documentation.
-
----
-
 ## TASK-147: Surface the cost of post-run Orchestrator decision turns
 **Priority:** P2
 **Tags:** server, ui, milestone-h

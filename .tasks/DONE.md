@@ -1,5 +1,47 @@
 # Done
 
+## TASK-146: Refresh three stale claims in the run-app skill
+**Priority:** P2 | **Tags:** infra, testing, milestone-h
+**Updated:** 2026-08-18 21:30
+
+`.claude/skills/run-app/SKILL.md` is what an agent reads before driving this app, so its errors cost
+planning time on every dogfood — `TASK-103` recorded this class of staleness during `TASK-094`, and
+`TASK-146` recorded it again from `TASK-141`'s pre-flight. Fixed, with each claim checked against the
+code first:
+
+- **The proxy list named eight of ten prefixes**, missing `/orchestrations` and `/automation` — the
+  two surfaces a dogfood most needs. The file already claimed the list "mirrors the route mounts in
+  `app.ts`", so it contradicted itself.
+- **The Preview had no documentation at all.** Now carries `GET /automation/product`, the idempotent
+  `POST /automation/product/start`, `/stop`, the `GET`/`PUT /automation` config and
+  `POST /automation/deploy/production`, with a pointer to the `## Environment` block rather than
+  letting a stage think it should start the product itself.
+- **The Orchestrator had none either** — nine milestone endpoints documented and zero orchestration
+  ones, for the surface a first-time user actually meets. Added, agreed with the user as within scope.
+- **"A session limit is currently a hard failure, not a pause" was two milestones out of date.**
+  `TASK-061` shipped: the stage parks on a durable `limit:<runId>:<stageId>` signal carrying the
+  parsed reset time, resumes itself, survives a restart still parked, and can be released early with
+  `POST /runs/:id/limit/:stageId/resolve`. The replacement says plainly that a parked run is not a
+  stuck run, which is the mistake the old text invited.
+- Also added `POST /runs/:id/abort` and `POST /runs/:id/reveal`, the latter being `TASK-126`'s one
+  click to the folder.
+
+**Verified by grepping the routes, not by trusting notes.** All 35 endpoints the finished file names
+resolve to a real handler in `packages/server/src/routes/`. Worth knowing that this skill is
+hand-authored — `scripts/generate-skills.mjs` covers only `architect` and `write-tests` — so
+`pnpm gen:skills --check` will never police it. That is precisely why it rots.
+
+**Follow-up filed as `TASK-151`.** The `.agents/skills/run-app/SKILL.md` twin is far worse: a fossil
+last touched in content at `332df5c`, still claiming a retired `one-box` pipeline, a nonexistent
+`engines/Codex.ts`, a mock `sequential` pipeline and a removed `workspaceDir` field. Hand-fixing it
+would re-arm the same trap, so the task is to decide what `.agents/` is for — generated with a drift
+gate, or deleted.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` green on Windows. Cross-platform: n/a,
+documentation.
+
+---
+
 ## TASK-145: A run must not mutate the host's global toolchain
 **Priority:** P0 | **Tags:** engine, testing, milestone-h
 **Updated:** 2026-08-17 22:30

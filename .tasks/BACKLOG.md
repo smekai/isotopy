@@ -1,5 +1,39 @@
 # Backlog
 
+## TASK-151: Decide what `.agents/skills/` is for, and stop it rotting
+**Priority:** P2
+**Tags:** infra, testing, milestone-h
+**Updated:** 2026-08-18 21:30
+
+Found while fixing `TASK-146`. `.agents/skills/run-app/SKILL.md` is a fossil. Its last content
+change was `332df5c` (`TASK-090`); everything since has been mechanical rename commits, so on top of
+the three defects `TASK-146` fixed in the `.claude` copy it still claims:
+
+- the server spawns "the Codex CLI for `one-box` runs" — `one-box` is a **retired** pipeline id that
+  the sibling documents as rejected at the boundary;
+- `packages/server/src/engines/Codex.ts`, `Codex.exe`, `Codex /login`, `~/.Codex.json` — none exist;
+  this is a capital-preserving find/replace of `claude`;
+- a mock `sequential` pipeline, which does not exist — every shipped pipeline drives a real engine;
+- `.isotopy/settings.json` gitignored inside the project, when settings are user-level in
+  `~/.isotopy/settings.json` keyed by project;
+- a `workspaceDir` request field on `POST /runs`, removed when the working directory became derived;
+- a duplicated test-id roster, which the sibling deliberately delegates to `architecture-ui.md` §9.
+
+**The task is not "fix the text."** Hand-fixing it re-arms the same trap: two hand-maintained copies
+where only one gets updated is exactly the failure `TASK-103` recorded during the `TASK-094` dogfood
+and `TASK-146` recorded again from `TASK-141`'s. Twice is a pattern.
+
+**Decide what `.agents/` is for, and record it.** Nothing in the build, config or CI references the
+directory — but `REJECTED.md:22` treats `.agents/skills/qa-testing/SKILL.md` as one of three live
+homes for the browser-fallback policy, so it is not obviously dead either. Either generate it from a
+single source with a `pnpm gen:skills --check` drift gate, as `architect` and `write-tests` already
+are, or delete it. Whichever wins, the outcome must be that no copy of a skill can silently disagree
+with another.
+
+Cross-platform: n/a — documentation and tooling.
+
+---
+
 ## TASK-111: Reusable teams for later orchestrations
 **Priority:** P3 | **Tags:** core, server, milestone-h
 **Updated:** 2026-08-07 11:40
