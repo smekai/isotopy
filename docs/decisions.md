@@ -15,6 +15,42 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-18 — A decision turn's cost belongs to the initiative, not to the run that triggered it
+
+**Context:** the Orchestrator reviews a run when it settles, and that review is an engine turn
+that costs money. Its usage was booked against `run.stages.at(-1)`, so a Tester's stage was billed
+for a decision the Tester did not make — and because `run.stages` includes stages that never ran,
+on a run that stopped early the cost could land on a stage the user sees as skipped. The
+`TASK-141` dogfood saw the other half of the same fault: the initiative reported `$0.35` after its
+first turn and still `$0.35` after two more decisions, because an orchestration carried no usage
+at all.
+
+**Decision:** an orchestration carries its own `usage`, accumulated with the same `addUsage` a run
+uses, and **every** Orchestrator turn books there rather than on whatever stage it happened inside —
+both the settle-time review and the question-mediation turns that broker a specialist's question.
+The turn is the Orchestrator's work; an initiative's cost is now the sum of its runs plus its own
+decisions, which is what the user is being asked to read. Splitting the two would have left the
+same wrong-actor accounting in the half nobody had looked at.
+
+**The booking must not depend on the decision being recorded.** `recordReview` refuses when the
+orchestration has already stopped, and its caller answers by logging a warning — so routing spend
+through it would have reproduced the same silence in a new place. `recordDecisionUsage` is
+separate and unconditional: a turn that was spent is spent whether or not its decision survived.
+
+**Rejected: folding it into the Orchestrator's own conversation run.** It needs no new field and
+reuses the per-run cost display, but it mutates a second, already-settled run from the settled
+run's workflow step, and a review is not a turn of that conversation.
+
+**Rejected: keeping it on the work run under its own label.** That fixes the mis-targeting and
+nothing else. The initiative would still have no cost of its own, which is the question the
+dogfood actually went looking for.
+
+**The review's log lines stay on the run.** A run's log stream is the only place they can go, so a
+row can still appear against a stage that never executed. That is cosmetic once the money is not
+there too, and moving it would mean inventing an orchestration log for one line.
+
+---
+
 ## 2026-08-17 — A run installs tooling into the project, never into the machine
 
 **Context:** with no native browser capability, the QA persona fell back to Playwright

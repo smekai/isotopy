@@ -148,6 +148,7 @@ export interface OrchestrationHooks {
   ): Promise<void>;
   restartTask(run: RunState): Promise<string | undefined>;
   reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext>;
+  recordDecisionUsage(orchestrationId: string, usage: StageUsage): Promise<void>;
   recordReview(
     request: RunReviewRequest,
     context: RunReviewContext,

@@ -89,6 +89,7 @@ export interface RunReviewScript {
   decision?: OrchestratorDecision;
   as?: string;
   prompt?: string | RegExp;
+  usage?: StageUsage;
 }
 
 const DEFAULT_REVIEW_ARTIFACTS: RunArtifacts = {
@@ -241,6 +242,7 @@ QUESTION: ${question}`,
         fencedBlock("isotopy-run-artifacts", artifacts),
         fencedBlock("isotopy-orchestrator-decision", decision),
       ].join("\n\n"),
+      review.usage,
     );
   }
 

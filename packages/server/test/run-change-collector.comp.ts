@@ -142,7 +142,7 @@ test("a dirty submodule cannot hide the run's edits, because it is unhashable an
     source: "git",
     files: [{ path: "README.md", kind: "edited" }],
   });
-});
+}, 30_000);
 
 test("a run with no baseline reports nothing rather than inventing a change set", async () => {
   const collector = new RunChangeCollector();

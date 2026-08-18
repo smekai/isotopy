@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
 import type { LimitResolution, ModelTier, RunSummary } from "@isotopy/core";
-import { preferredRunOptions } from "@isotopy/core";
+import { formatUsage, preferredRunOptions } from "@isotopy/core";
 import {
   abortRun,
   answerOrchestrator,
@@ -403,6 +403,7 @@ export function App() {
   const initiativeChrome: InitiativeChrome | undefined = activeOrchestration && {
     statusLabel: orchestrationStatusLabel(activeOrchestration.status),
     needsUser: orchestrationNeedsUser(activeOrchestration.status),
+    spend: activeOrchestration.usage && formatUsage(activeOrchestration.usage),
     stopReason: activeOrchestration.stopReason,
     decisionError: activeOrchestration.decisionError,
   };

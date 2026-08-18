@@ -79,7 +79,8 @@ test("a question loop's turns add up instead of the last one winning", async () 
   engine
     .anticipate({ as: "resumed turn", resumeSessionId: SESSION, prompt: "Use SQLite." })
     .reports("Added the settings page.", { costUsd: 0.03, turns: 2 });
-  // The review reports no spend, so the stage total stays the specialist's own.
+  // Orchestrator turns are the initiative's spend now, so whatever the broker and
+  // the review cost, this stage's total is the specialist's own two turns.
   engine.anticipateRunReview();
 
   // Act

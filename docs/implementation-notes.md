@@ -200,6 +200,28 @@ both makes the CLI reject requests) and passes `--bare` in api-key mode, because
 bare mode reads auth strictly from `ANTHROPIC_API_KEY` — without it a logged-in
 CLI ignores the injected key and bills the plan.
 
+## What an initiative cost (`services/orchestration-service.ts`)
+
+`Orchestration.usage` accumulates every Orchestrator turn — the settle-time review
+and the question-mediation turns that broker a specialist's question — so the
+figure beside an initiative's status is the Orchestrator's own spend and a run's
+total is only the work that run did. Both turns load the `orchestrator` persona
+and both carry an `orchestrationId` on their context, which is what makes the two
+call sites symmetric.
+
+- **`recordDecisionUsage` is deliberately not part of `recordReview`.** That method
+  throws `OrchestratorRequiredError` once the orchestration has stopped, and
+  `runOrchestratorReviewWork` answers by logging a warning. Booking the cost there
+  would lose it in exactly the case where a turn was spent and its decision was not
+  kept.
+- **It accumulates with `addUsage`**, the same function `runUsage` folds stages
+  with, so an engine that reports only tokens and one that reports dollars combine
+  the same way here as anywhere else.
+- **The review's log lines still go to the settled run's last stage.** There is no
+  orchestration log stream to move them to. Before this change the *cost* went
+  there too, and `run.stages` includes `pending` and `skipped` stages, so a run
+  that stopped early could show spend against a stage that never executed.
+
 ## Engines — tool cache scoping (`engines/tool-cache.ts`)
 
 The same `buildChildEnv` also points relocatable tool caches at the project
