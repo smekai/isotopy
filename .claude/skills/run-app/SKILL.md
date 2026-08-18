@@ -72,17 +72,24 @@ substitute the engine adapter.
 - Orchestrator: `GET /orchestrations` → the initiatives; `POST /orchestrations`
   (`{"goal":"..."}`) starts one, parked on the Orchestrator's first turn;
   `GET /orchestrations/:id`; `POST /orchestrations/:id/approve` accepts or edits
-  the proposed team and launches the composed run;
-  `POST /orchestrations/:id/messages` answers a question it asked;
-  `POST /orchestrations/:id/stop` ends the initiative.
+  the proposed team and launches the composed run — every field is optional, so
+  accepting the proposal unchanged still needs a body, `{}`, and editing it takes
+  `engine`, `model`, `modelTier`, `roleTiers` or `permissionMode`;
+  `POST /orchestrations/:id/messages` (`{"text":"..."}`) answers a question it
+  asked; `POST /orchestrations/:id/stop` ends the initiative. Every one of these
+  is parsed strictly — a missing or unknown field is a 400, not a default.
 - Preview — the built product, run by Isotopy rather than by an agent:
-  `GET /automation/product` → `state` (`starting` | `ready` | `failed` |
-  `exited`), `url`, `lastError`; `POST /automation/product/start`, idempotent,
-  returning the process already running if there is one;
+  `GET /automation/product` → `state` (`stopped` | `starting` | `ready` |
+  `failed` | `exited` — `stopped` is the ordinary answer for a project whose
+  product is not running, not an error), `url`, `lastError`;
+  `POST /automation/product/start`, idempotent, returning the process already
+  running if there is one;
   `POST /automation/product/stop`. The per-project config is `GET /automation`
-  and `PUT /automation`; `POST /automation/deploy/production` runs the
-  production target. A stage never starts the product itself — it is told to ask
-  through the `## Environment` block Isotopy injects into a QA prompt.
+  and `PUT /automation`. `POST /automation/deploy/production` runs the production
+  target and is guarded: it takes `{"confirmation":"DEPLOY PRODUCTION"}`
+  verbatim, and any other body is a 400 rather than a deployment. A stage never
+  starts the product itself — it is told to ask through the `## Environment`
+  block Isotopy injects into a QA prompt.
 - Backend behaviour without a browser or a server: `pnpm test`
   (Vitest, mocks the engine adapter). Reach for this before driving the UI.
 - E2E, free + seeded tiers (no engine spend, auto-starts its own dev

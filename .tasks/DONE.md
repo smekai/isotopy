@@ -27,7 +27,14 @@ code first:
   click to the folder.
 
 **Verified by grepping the routes, not by trusting notes.** All 35 endpoints the finished file names
-resolve to a real handler in `packages/server/src/routes/`. Worth knowing that this skill is
+resolve to a real handler in `packages/server/src/routes/`. PR review then caught the gap that check
+could not see: an endpoint documented without its request body is a 400 waiting to happen, because
+every body-taking route here parses strictly. So `/orchestrations/:id/approve` now says that
+accepting a proposal unchanged still needs `{}`, `/messages` shows `{"text":"..."}`,
+`/automation/deploy/production` shows the `{"confirmation":"DEPLOY PRODUCTION"}` guard rather than
+implying a bare POST deploys, and the product-state union regained `stopped` — the ordinary answer
+for a project whose product is not running, which an agent reading the old four-way union would have
+read as unknown or failed. Worth knowing that this skill is
 hand-authored — `scripts/generate-skills.mjs` covers only `architect` and `write-tests` — so
 `pnpm gen:skills --check` will never police it. That is precisely why it rots.
 
