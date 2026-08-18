@@ -8,8 +8,9 @@ description: Launch and drive the Isotopy app (Hono server :9477 + Vite UI :5173
 Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@isotopy/server` (Hono, port **9477**) and `@isotopy/ui`
 (Vite + React, port **5173**). The UI proxies `/pipelines`, `/projects`,
-`/runs`, `/milestones`, `/health`, `/settings`, `/engines`, `/fs` to the
-server, so `http://localhost:5173/health` proves both are up. The proxy
+`/runs`, `/milestones`, `/orchestrations`, `/health`, `/settings`,
+`/engines`, `/automation`, `/fs` to the server, so
+`http://localhost:5173/health` proves both are up. The proxy
 list in `packages/ui/vite.config.ts` mirrors the route mounts in
 `packages/server/src/app.ts` — add a mount, add a prefix.
 
@@ -68,6 +69,27 @@ substitute the engine adapter.
   `needs_attention` feature), `POST /milestones/:id/finalize` (writes
   `summary.json` + `summary.md`; refuses while a feature is unfinished).
   Autorun is `PATCH /milestones/:id` with `{"autoRunNext":true}`.
+- Orchestrator: `GET /orchestrations` → the initiatives; `POST /orchestrations`
+  (`{"goal":"..."}`) starts one, parked on the Orchestrator's first turn;
+  `GET /orchestrations/:id`; `POST /orchestrations/:id/approve` accepts or edits
+  the proposed team and launches the composed run — every field is optional, so
+  accepting the proposal unchanged still needs a body, `{}`, and editing it takes
+  `engine`, `model`, `modelTier`, `roleTiers` or `permissionMode`;
+  `POST /orchestrations/:id/messages` (`{"text":"..."}`) answers a question it
+  asked; `POST /orchestrations/:id/stop` ends the initiative. Every one of these
+  is parsed strictly — a missing or unknown field is a 400, not a default.
+- Preview — the built product, run by Isotopy rather than by an agent:
+  `GET /automation/product` → `state` (`stopped` | `starting` | `ready` |
+  `failed` | `exited` — `stopped` is the ordinary answer for a project whose
+  product is not running, not an error), `url`, `lastError`;
+  `POST /automation/product/start`, idempotent, returning the process already
+  running if there is one;
+  `POST /automation/product/stop`. The per-project config is `GET /automation`
+  and `PUT /automation`. `POST /automation/deploy/production` runs the production
+  target and is guarded: it takes `{"confirmation":"DEPLOY PRODUCTION"}`
+  verbatim, and any other body is a 400 rather than a deployment. A stage never
+  starts the product itself — it is told to ask through the `## Environment`
+  block Isotopy injects into a QA prompt.
 - Backend behaviour without a browser or a server: `pnpm test`
   (Vitest, mocks the engine adapter). Reach for this before driving the UI.
 - E2E, free + seeded tiers (no engine spend, auto-starts its own dev
@@ -121,6 +143,9 @@ A run that parks on a gate is released with
 `POST /runs/:id/gates/:stageId/approve`; a run that parks on a question
 is answered with `POST /runs/:id/messages`. `POST /runs/:id/restart`
 re-runs from one stage, keeping the completed stages' output.
+`POST /runs/:id/abort` cancels a live run; `POST /runs/:id/reveal` opens its
+workspace in the platform file manager and takes no path — it resolves the
+folder from the run it is scoped to.
 
 ## Auth gotcha: subscription vs API key
 
@@ -131,7 +156,10 @@ without `--bare`, a logged-in CLI silently ignores the env key and
 bills the plan (keys otherwise need interactive approval into
 `~/.claude.json` `customApiKeyResponses`).
 
-A subscription **session limit** is currently a hard failure, not a
-pause: the stage fails with a hint pointing at Setup → Connection and
-the printed reset time is discarded. That is TASK-061, not a bug in
-your run.
+A subscription **session limit** parks the run; it does not fail it. The
+stage stops on a durable `limit:<runId>:<stageId>` signal carrying the reset
+time parsed from the CLI's own message, resumes by itself once that time
+passes, and survives a server restart still parked. Release it early — with a
+different model or tier, once the plan is topped up — via
+`POST /runs/:id/limit/:stageId/resolve`. A parked run is not a stuck run, so
+wait or resolve it rather than aborting and re-running from the top.
