@@ -118,6 +118,7 @@ function statusText(d: Dir): CSSProperties {
 export interface InitiativeChrome {
   statusLabel: string;
   needsUser: boolean;
+  spend?: string;
   stopReason?: string;
   decisionError?: string;
 }
@@ -165,6 +166,11 @@ export function RunStatusBar({ run, d, initiative }: RunStatusBarProps) {
           >
             {initiative.statusLabel}
           </span>
+          {initiative.spend !== undefined && (
+            <span data-testid="orchestrator-spend" style={metaText(d)}>
+              {initiative.spend}
+            </span>
+          )}
           <div style={divider(d)} />
         </>
       )}

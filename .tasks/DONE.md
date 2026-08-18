@@ -1,5 +1,51 @@
 # Done
 
+## TASK-147: Surface the cost of post-run Orchestrator decision turns
+**Priority:** P2 | **Tags:** server, ui, milestone-h
+**Updated:** 2026-08-18 22:45
+
+An orchestration now carries its own `usage`, and the settle-time review books there instead of on
+the settled run's last stage. The figure beside an initiative's status is the Orchestrator's own
+spend; a run's total is only the work that run did.
+
+**One correction to the task as filed.** It said the displayed total "understates real spend by an
+unknown amount". It did not: `runOrchestratorReviewWork` already called `stageUsage`, and the review
+runs *before* `run:completed` is emitted, so the client's single refetch saw it. The money was never
+missing from the system — it was charged to the wrong actor. Three things were actually wrong:
+
+- a work run's stage silently absorbed an Orchestrator turn, because `stageId` was
+  `run.stages.at(-1)?.id` — a Tester's stage billed for a decision the Tester did not make;
+- `run.stages` includes `pending` and `skipped` stages, so on a run that stopped early — the
+  dogfood's `needs_attention` run 2 — the cost could land on a stage the user sees as never run;
+- an orchestration carried no usage at all, so there was no answer to "what did the Orchestrator
+  cost", which is the question the dogfood went looking for.
+
+**`recordDecisionUsage` is deliberately separate from `recordReview`.** That method refuses once the
+orchestration has stopped and its caller answers by logging a warning, so routing spend through it
+would have reproduced the same silence in a new place. A turn that was spent is spent whether or not
+its decision survived.
+
+**Rejected:** folding it into the Orchestrator's own conversation run (mutates a second, settled run
+from the settled run's workflow step, and a review is not a turn of that conversation), and keeping
+it on the work run under a label (fixes the mis-targeting and leaves the initiative with no cost).
+
+The review's log lines still go to the settled run's last stage — a run's log stream is the only
+place they can go, and it is cosmetic once the money is not there too.
+
+Two comp tests fail without the change: the settle-time spend landing on the initiative rather than
+the run that triggered it, and the figure surviving a server restart. A UI test covers the new
+`orchestrator-spend` surface and its silence when there is nothing to report. An accumulation test
+was written and then deleted: `addUsage` already proves it at `usage.spec.ts:33`, and re-proving a
+one-line reuse through a two-run arrangement is the anti-pattern the testing standard names.
+
+Also raised the timeout on `TASK-145`'s dirty-submodule test, which spawns five git processes and
+exceeded the 15s default under full-suite load while passing in 3s alone.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (853 passed, 97 files), `pnpm build` and `pnpm e2e`
+(68 passed) all green on Windows. Cross-platform: n/a — accounting and display.
+
+---
+
 ## TASK-146: Refresh three stale claims in the run-app skill
 **Priority:** P2 | **Tags:** infra, testing, milestone-h
 **Updated:** 2026-08-18 21:30

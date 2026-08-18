@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MODEL_TIERS } from "./engines.ts";
 import { STAGE_EXECUTION_POLICIES, pipelineDefinitionSchema } from "./pipelines.ts";
+import { stageUsageSchema } from "./runs.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const ORCHESTRATOR_ACTIONS = [
@@ -176,6 +177,7 @@ export const orchestrationSchema = z
     approvedTeam: orchestratorTeamProposalSchema.optional(),
     composedPipeline: pipelineDefinitionSchema.optional(),
     runIds: requiredTexts,
+    usage: stageUsageSchema.optional(),
     stoppedAt: timestamp.optional(),
     stopReason: requiredText.optional(),
     createdAt: timestamp,

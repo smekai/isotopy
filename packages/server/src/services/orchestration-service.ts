@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  addUsage,
   agentForStage,
   isTerminalRunStatus,
   orchestrationStatusFor,
@@ -14,6 +15,7 @@ import type {
   PipelineDefinition,
   RunState,
   StageDefinition,
+  StageUsage,
 } from "@isotopy/core";
 import {
   renderComposedRunTask,
@@ -435,6 +437,16 @@ export class OrchestrationService implements StageOutputConsumer {
         rejectedDecision: orchestration.decisionError,
       }),
     };
+  }
+
+  async recordDecisionUsage(orchestrationId: string, usage: StageUsage): Promise<void> {
+    const orchestration = this.orchestrations.get(orchestrationId);
+    if (!orchestration) {
+      return;
+    }
+    orchestration.usage = addUsage(orchestration.usage, usage);
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
   }
 
   async recordReview(

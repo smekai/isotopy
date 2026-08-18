@@ -468,7 +468,7 @@ export async function runOrchestratorReviewWork(
     undefined,
   );
   if (outcome.usage) {
-    deps.projection.stageUsage(run.id, stageId, outcome.usage);
+    await orchestration.recordDecisionUsage(context.orchestrationId, outcome.usage);
   }
   if (deps.isCancelled(run.id)) {
     return null;

@@ -43,25 +43,6 @@ everything else.
 
 ---
 
-## TASK-147: Surface the cost of post-run Orchestrator decision turns
-**Priority:** P2
-**Tags:** server, ui, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Found by the `TASK-141` dogfood. The orchestration run reported `$0.35` after its first
-`propose_team` turn and still reported `$0.35` after two further turns (`start_run` at settle time
-and the closing `stop`). Those decisions call the engine, so the displayed total understates real
-spend by an unknown amount — $6.69 was the figure the dogfood could evidence, not necessarily what
-was billed.
-
-Decide where a settle-time decision's usage belongs — folded into the orchestration run's stage,
-or carried on the orchestration itself — and show it, so an initiative's cost is the sum of what
-the user can see.
-
-Cross-platform: n/a — accounting and display.
-
----
-
 ## TASK-148: Make human gates real configuration
 **Priority:** P2
 **Tags:** ui, server, core, milestone-h
