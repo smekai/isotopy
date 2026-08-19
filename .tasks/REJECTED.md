@@ -37,7 +37,11 @@ minute of confusion into an hour and are now fixed:
 - `.claude/skills/run-app/SKILL.md` polled the proxied `/health` with `curl -sf` inside
   `timeout 60`, so a proxy returning 500 was indistinguishable from a server still booting and the
   agent carried on regardless. The health gate now fails loudly, prints the direct URL's response
-  for comparison, and says what it means when the proxied URL is dead while the direct one answers.
+  for comparison, and says what a dead proxied URL beside a healthy direct one actually means —
+  either the Vite process never started or the proxy hop is failing, which are different faults.
+  The first attempt at this reproduced the very bug it was fixing: a shell group returns its last
+  command's status, so `… || { echo; curl; }` exited **0** whenever the direct `curl` succeeded.
+  Caught in review; the group now ends in `false`.
 - `packages/server/src/index.ts` logged a URL built from config rather than from the socket. It now
   prints the address actually bound, which is the fact that was missing while guessing at families.
 
