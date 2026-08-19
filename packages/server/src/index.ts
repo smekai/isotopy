@@ -42,7 +42,8 @@ serve(
     port: config.port,
   },
   (info) => {
-    console.log(`Isotopy server listening on http://${config.host}:${info.port}`);
+    const address = info.family === "IPv6" ? `[${info.address}]` : info.address;
+    console.log(`Isotopy server listening on http://${address}:${info.port}`);
   },
 );
 

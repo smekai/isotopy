@@ -1,44 +1,5 @@
 # Backlog
 
-## TASK-152: `pnpm dev` gives a UI that cannot reach the server on Windows
-**Priority:** P1
-**Tags:** infra, ui, server, milestone-h
-**Updated:** 2026-08-18 23:30
-
-Found while verifying `TASK-148` in the real app. `pnpm dev` starts both processes, the UI loads, and
-**every** proxied request fails:
-
-```
-[vite] http proxy error: /settings
-AggregateError [EADDRINUSE]: at internalConnectMultiple (node:net:1134:18)
-```
-
-The server binds `localhost`, which on this machine resolves to IPv6 only — `netstat` shows
-`[::1]:9477 LISTENING`, `curl http://[::1]:9477/health` answers `200`, and
-`curl http://127.0.0.1:9477/health` is refused. Vite's proxy client tries both families and reports
-the aggregate as `EADDRINUSE`. So the whole app degrades to "Could not load projects" with no error
-that names the cause.
-
-`pnpm e2e` is unaffected — it starts its own pair on 9499/5199 and its 68 tests pass — which is
-exactly why this has stayed invisible: the gate that would catch it does not use this path.
-
-**Why it matters:** `pnpm dev` is what `.claude/skills/run-app/SKILL.md` tells an agent to run, so
-every dogfood starts here. `TASK-141`'s pre-flight already lost time to stale claims in that skill;
-this loses more, and silently.
-
-**Decide which side moves.** Either the server binds both families (`ISOTOPY_HOST=0.0.0.0`, or
-listening on `::` with dual-stack), or the Vite proxy targets an explicit literal rather than
-`localhost` (`packages/ui/vite.config.ts` builds `serverUrl` from `ISOTOPY_PORT`). Whichever wins,
-`pnpm dev` must work on a stock Windows box without an env var, and the health check in the run-app
-skill should prove the *proxied* path, not just the direct one — today it checks
-`http://localhost:5173/health`, which is the request that fails, so the skill's own gate should have
-caught this.
-
-Cross-platform: the failure is a Windows name-resolution difference; the fix must not break macOS,
-where `localhost` usually resolves IPv4-first.
-
----
-
 ## TASK-151: Decide what `.agents/skills/` is for, and stop it rotting
 **Priority:** P2
 **Tags:** infra, testing, milestone-h
