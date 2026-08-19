@@ -101,9 +101,7 @@ about model ids.
 **Its policy half survived, as policy rather than as a task.** "When no compatible capability
 exists, Playwright remains the complete fallback and CI authority" is now written into
 `packages/server/src/domain/skills/personas/tester.md` (via the `gen:` blocks in
-`docs/testing.md`) and `step-tasks/verify-feature.md`. A third copy lived in
-`.agents/skills/qa-testing/SKILL.md` until `TASK-151` deleted that directory on 2026-08-19 —
-nothing read it, and it was a hand-maintained restatement of the two homes above.
+`docs/testing.md`), `step-tasks/verify-feature.md`, and `.agents/skills/qa-testing/SKILL.md`.
 The persona's old boundary — *"Do not use or depend on an agent-native browser in the MVP;
 that work is deferred to TASK-095"* — is gone, replaced by the rule that a browser capability
 may be used but must never become a precondition, because CI has none.

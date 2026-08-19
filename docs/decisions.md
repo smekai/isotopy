@@ -15,37 +15,41 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
-## 2026-08-19 — A skill has one home, and a second copy needs a reader to justify it
+## 2026-08-19 — Two harnesses need two skill paths; the body belongs in one of them
 
-**Context:** `.agents/skills/` held a parallel, hand-maintained copy of the project's skills —
-`plan-task`, `run-app`, and a `qa-testing` that existed nowhere else. Only one of the two copies
-ever got updated. `TASK-103` recorded the cost of that during the `TASK-094` dogfood and
-`TASK-146` recorded it again from `TASK-141`'s pre-flight, which is twice, which is a pattern.
+**Context:** `.claude/skills/` and `.agents/skills/` held parallel copies of the same skills, and
+only one copy ever got updated — `run-app` had drifted ~85%, still describing a retired `one-box`
+pipeline and an `engines/Codex.ts` that never existed. `TASK-103` recorded the cost of that during
+the `TASK-094` dogfood and `TASK-146` recorded it again from `TASK-141`'s pre-flight.
 
-**Decision: deleted, because nothing read it.** Not "nothing should" — nothing did. No `*.ts`,
-`*.mjs`, `*.json` or `*.yml` in the repo referenced the path; `.cursor/` and `.codex/` did not
-exist; `AGENTS.md` and `CLAUDE.md` carried no skills pointer; and Claude Code itself never loaded
-it — `qa-testing` lived only under `.agents/` and was never offered as an available skill, while
-the five directories under `.claude/skills/` always were. That absence is the evidence, and it is
-checkable rather than argued.
+**The first answer was wrong, and the way it was wrong is the lesson.** `TASK-151` originally
+deleted `.agents/` on the grounds that nothing read it: no reference in any `*.ts`, `*.mjs`,
+`*.json` or `*.yml`, no `.codex/` directory, and Claude Code never offered `qa-testing` — which
+lives only there — as a skill. Every one of those observations was true and the conclusion was
+still false. **Codex scans `.agents/skills` from the working directory up to the repository root,
+by documented convention, with no configuration file.** Convention-based discovery leaves no trace
+in a repository, so grepping the repository can never disprove it. Absence of a reference is not
+absence of a reader.
 
-**There was nothing to preserve.** `run-app` had diverged ~85% from the live copy and still
-described a retired `one-box` pipeline and an `engines/Codex.ts` that never existed. `qa-testing`
-was a condensed restatement of `docs/testing.md` → the `write-tests` skill, `personas/tester.md`
-and `step-tasks/verify-feature.md`. The single line of content unique to `.agents/` — a `plan-task`
-rule to update a `Current` version value in `AGENTS.md` — was itself stale, since that number was
-removed on purpose for drifting. Its *intent* survived as one corrected line in
-`.claude/skills/plan-task/SKILL.md`.
+**Decision: keep both registration paths, single-home the body.** Each harness only discovers its
+own path and neither can be redirected, so `SKILL.md` must exist twice. But the part that rots —
+ports, endpoints, procedure — now lives once, in `docs/running-the-app.md` and
+`docs/planning-a-task.md`, and both `SKILL.md` files are ten-line shims that point at it. The two
+shims are byte-identical, so there is nothing left for them to disagree about.
 
-**The standing rule.** One home per skill. A second copy is created only when something is proven
-to read it, and when that happens it is generated from the same source with a
-`pnpm gen:skills --check` gate — the way `architect` and `write-tests` already are — never
-hand-maintained beside the first. A copy no gate can police is a copy that will disagree.
+**Rejected: a symlink.** Codex follows symlinked skill folders, so one real directory would have
+served both. It cannot work here: this repository has `core.symlinks=false`, so git checks a
+committed link out as a plain text file containing the target path, and the MSYS shell silently
+creates a *copy* rather than a link unless `MSYS=winsymlinks:nativestrict` is set. The failure is
+invisible to whoever commits it and broken for everyone else.
 
-**Rejected: generating `.agents/` instead of deleting it.** The mechanism is small (`outputs`
-already returns arbitrary path/content pairs), but none of the three skills had a `docs/` source to
-generate *from*; each would have needed extracting into `gen:` blocks first. That is real work in
-service of a directory with no reader.
+**Rejected: generating or mirroring the second copy.** Both work, and both add machinery to keep two
+copies equal. Once the body is single-homed there is no second copy of anything that changes, so
+the machinery has nothing to police.
+
+**The standing rule.** A skill's registration may be duplicated as far as harness conventions
+require; its content may not. Before concluding that a path is unused, name the mechanism that
+would read it — a convention needs no configuration, and so leaves nothing to grep for.
 
 ---
 

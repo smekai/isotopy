@@ -2,43 +2,40 @@
 
 ## TASK-151: Decide what `.agents/skills/` is for, and stop it rotting
 **Priority:** P2 | **Tags:** infra, testing, milestone-h
-**Updated:** 2026-08-19 12:15
+**Updated:** 2026-08-19 13:40
 
-Deleted. `.agents/skills/` was a parallel, hand-maintained copy of the project's skills, and only
-one of the two copies ever got updated — the failure `TASK-103` recorded during the `TASK-094`
-dogfood and `TASK-146` recorded again from `TASK-141`'s pre-flight.
+`.agents/skills/` is **kept**, and the duplication it caused is gone: each harness keeps its own
+`SKILL.md` because each only discovers its own path, but the body now lives once under `docs/`.
 
-**Nothing read it, and that was checked rather than assumed.** No `*.ts`, `*.mjs`, `*.json` or
-`*.yml` in the repo referenced the path — the only hits were prose in `.tasks/`. `.cursor/` and
-`.codex/` do not exist, `.cursorrules` is a bare TaskPlanner block, and neither `AGENTS.md` nor
-`CLAUDE.md` carries a skills pointer. **Claude Code did not load it either:** `qa-testing` lived
-only under `.agents/` and was never offered as an available skill, while the five directories under
-`.claude/skills/` always were. That absence is the evidence.
+**The first attempt deleted it, and was wrong.** The reasoning was that nothing read the directory:
+no reference in any `*.ts`, `*.mjs`, `*.json` or `*.yml`, no `.codex/`, and Claude Code never
+offered `qa-testing` — which lives only there — as an available skill. All true; the conclusion was
+not. **Codex scans `.agents/skills` from the working directory up to the repository root by
+documented convention, with no configuration file**, so deleting it removed working functionality
+for one of this project's three engines. Caught in review, verified against OpenAI's own
+documentation, and reverted. The lesson is recorded in `docs/decisions.md`: convention-based
+discovery leaves nothing in the repository to grep for, so absence of a reference is not absence of
+a reader.
 
-**There was nothing worth keeping.** `run-app` had diverged ~85% from the live copy and still
-described a retired `one-box` pipeline and an `engines/Codex.ts` that never existed. `qa-testing`
-was a condensed restatement of `docs/testing.md` → the `write-tests` skill, `personas/tester.md`
-and `step-tasks/verify-feature.md`, with no policy of its own. The one line unique to `.agents/` —
-a `plan-task` rule to update a `Current` version value in `AGENTS.md` — was itself rot, since that
-number was removed on purpose for drifting.
+**What shipped instead.** `docs/running-the-app.md` and `docs/planning-a-task.md` hold the bodies
+that used to be duplicated; the four `SKILL.md` files are ten-line shims naming the doc, and the
+`.claude` and `.agents` shims are byte-identical. `run-app`'s ~85% divergence is gone because there
+is no second body left to diverge. `plan-task`'s harness-specific line — "the TaskPlanner flow in
+CLAUDE.md" — became "your harness's instructions file, `CLAUDE.md` for Claude Code, `AGENTS.md` for
+Codex", which is what made one body able to serve both. `qa-testing` is untouched: it exists only
+under `.agents/`, so it is not a duplicate of anything and has no drift to remove.
 
-**Its intent survived as one corrected line.** `.claude/skills/plan-task/SKILL.md` now says the
-version sequence is allocated when planning rather than remembered when committing, pointing at
-`AGENTS.md`'s Versioning section and the root `package.json` rather than restating a number. This
-session forgot the bump on one PR and mis-sequenced it on another, so the reminder is earned.
+Also folded in, from the stale `plan-task` rule that prompted the original deletion: the version
+sequence is allocated when planning rather than remembered when committing, pointing at `AGENTS.md`
+and the root `package.json` rather than restating a number the way the old text did.
 
-`.tasks/REJECTED.md` was corrected where it named the deleted file as one of three homes for the
-browser-fallback policy; it now names the two that remain. `DONE.md`'s mentions were left alone —
-they record what was true when those tasks closed, and rewriting them would falsify the log.
-
-**Rejected: generating `.agents/` instead.** The mechanism is small, but none of the three skills
-had a `docs/` source to generate from — each would have needed extracting into `gen:` blocks first,
-which is real work for a directory with no reader. Recorded in `docs/decisions.md` along with the
-standing rule: one home per skill, and a second copy only when something is proven to read it, then
-generated with a `--check` gate rather than hand-maintained.
+**Rejected: a symlink**, which Codex would follow — `core.symlinks=false` here turns a committed
+link into a text file, and the MSYS shell silently copies instead of linking. **Rejected:
+generating or mirroring the second copy** — machinery to keep two copies equal has nothing to do
+once there is only one body.
 
 `pnpm lint`, `pnpm typecheck`, `pnpm test` (874 passed, 99 files), `pnpm build` and
-`pnpm gen:skills --check` all green on Windows. Cross-platform: n/a — deleting tracked files.
+`pnpm gen:skills --check` all green on Windows. Cross-platform: n/a — documentation.
 
 ---
 
