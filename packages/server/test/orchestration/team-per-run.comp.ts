@@ -98,6 +98,34 @@ test("a review that proposes the team already running starts the next run withou
   expect(followUp.pipelineId).toBe(`team-${composed.orchestrationId}-1`);
 });
 
+test("a rename with the same roles runs the team already approved, not the proposal's label", async () => {
+  // Anticipate — identical roles under a new name. `sameComposition` sees no change,
+  // so nothing should be renamed behind the user's back.
+  await approvedPair();
+  ctx.engine.anticipateRunReview({
+    decision: {
+      action: "propose_team",
+      rationale: "Same people, new label",
+      task: "Add the missing index",
+      team: { ...PAIR, name: "Fix crew", summary: "Renamed, same roles" },
+    },
+  });
+  ctx.engine.anticipate({ as: "second Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "second QA" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "second review" });
+
+  // Act
+  const composed = await runComposed();
+
+  // Assert — the run and the stored team agree, rather than the card saying one
+  // thing while the next review context says another.
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  const initiative = await waitForRuns(composed, 3);
+  const followUp = await runById(initiative.runIds[2]);
+  expect(followUp.pipelineName).toBe("Delivery pair");
+  expect(initiative.approvedTeam?.name).toBe("Delivery pair");
+});
+
 test("approving a re-composed team runs the task the review asked for, not the initiative's goal", async () => {
   // Anticipate
   await approvedPair();

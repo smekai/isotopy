@@ -7,6 +7,8 @@ import type {
 } from "@isotopy/core";
 import {
   composeTeamPipeline,
+  composedPipelineId,
+  generationOf,
   sameComposition,
   withRoleTiers,
 } from "../../src/schemas/team-composition.ts";
@@ -238,3 +240,24 @@ function valueOf(composed: Composed): PipelineDefinition {
 function stagesOf(composed: Composed): StageDefinition[] {
   return valueOf(composed).groups.flatMap((group) => group.stages);
 }
+
+// An orchestration id is eight hex characters and can be all digits, so a legacy
+// `team-12345678` must not read as generation 12345678 and mint `team-12345678-12345679`.
+test("a legacy all-numeric pipeline id reads as no generation, not as a huge one", () => {
+  expect(generationOf("team-12345678")).toBe(0);
+});
+
+test("a legacy pipeline id reads as no generation, so the next approval is the first", () => {
+  expect(generationOf("team-abc12345")).toBe(0);
+});
+
+test("a composed pipeline id reads back the generation it carries", () => {
+  expect(generationOf(composedPipelineId("abc12345", 3))).toBe(3);
+});
+
+test("a renamed team with the same roles is still the same composition", () => {
+  const named = composeTeamPipeline({ ...team([role({})]), name: "Fix crew" }, "abc12345");
+  const original = composeTeamPipeline(team([role({})]), "abc12345");
+
+  expect(sameComposition(valueOf(named), valueOf(original))).toBe(true);
+});

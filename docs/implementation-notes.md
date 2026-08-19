@@ -243,9 +243,16 @@ interrupts the user.
   is read back out of it by `generationOf` rather than being stored twice. That
   keeps the orchestration record unchanged and makes an old
   `team-<orchestrationId>` id read as generation 0, so the next approval becomes 1.
-- **`launchUnchangedTeam` composes at the *current* generation**, not the next
-  one: if the proposal matches, the run joins the team already running rather
-  than minting a new identity for an identical shape.
+  The parser is anchored to the whole shape (`^team-[0-9a-f]{8}-(\d+)$`) rather
+  than to a trailing number: an orchestration id is eight hex characters and can
+  be all digits, so a legacy `team-12345678` would otherwise read as generation
+  12345678 and mint `team-12345678-12345679`.
+- **`launchUnchangedTeam` starts the *stored* pipeline**, not the one it just
+  composed. It composes only to compare. `sameComposition` looks at stages alone,
+  so a proposal with identical roles under a new name compares equal — launching
+  the freshly composed object would put that new name on the run card while
+  `approvedTeam` and the next review context still said the old one. Same roles
+  means same team, and the team keeps its own name.
 - **The prompt was the only gate.** The service already accepted a settle-time
   `propose_team`, recorded it, and parked at `awaiting_approval` without
   launching. `review-run.md` had forbidden it in one sentence, and

@@ -588,14 +588,18 @@ export class OrchestrationService implements StageOutputConsumer {
     if (decision.task === undefined) {
       return undefined;
     }
+    const running = orchestration.composedPipeline;
     const approved = withRoleTiers(decision.team, undefined);
     const composed = approved.ok
       ? composeTeamPipeline(approved.value, orchestration.id, currentGeneration(orchestration))
       : undefined;
-    if (!composed?.ok || !sameComposition(composed.value, orchestration.composedPipeline)) {
+    if (!running || !composed?.ok || !sameComposition(composed.value, running)) {
       return undefined;
     }
-    const run = await this.runs.startComposedRun(projectPath, composed.value, {
+    // The roles are unchanged, so this is the team already approved — run it under
+    // its own name rather than the one the proposal happened to use, or the card
+    // would say one thing while the stored team and the next review say another.
+    const run = await this.runs.startComposedRun(projectPath, running, {
       ...options,
       task: decision.task,
       orchestrationId: orchestration.id,

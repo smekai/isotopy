@@ -33,8 +33,9 @@ here; the approved team is already composed."* The fix is mostly telling the mod
 and compared against the running pipeline; identical means the run starts immediately, different
 means the user approves first. This keeps the "approve the team, then let it run" model that the
 dogfood validated and `TASK-148`'s scope note protects, while putting the human back in front of
-composition whenever composition changes. Identical means identical — a changed model tier is a
-real change, because it changes what the run costs.
+composition whenever composition changes. Identical means identical where composition is concerned — a changed model tier is a real change,
+because it changes what the run costs. A *rename* is not: `sameComposition` compares stages, so
+identical roles under a new label run as the team already approved rather than quietly renaming it.
 
 **A settle-time proposal carries a task.** On the opening turn the task is the goal; on a
 re-composition it is "run *this* next, with *this* team". Without the field an auto-approved

@@ -68,8 +68,13 @@ export function composedPipelineId(orchestrationId: string, generation: number):
   return `team-${orchestrationId}-${generation}`;
 }
 
+// Anchored to the whole composed shape, not just a trailing number: an
+// orchestration id is eight hex characters and can be all digits, so a legacy
+// `team-12345678` would otherwise read as generation 12345678.
+const COMPOSED_PIPELINE_ID = /^team-[0-9a-f]{8}-(\d+)$/;
+
 export function generationOf(pipelineId: string | undefined): number {
-  const trailing = pipelineId?.match(/-(\d+)$/)?.[1];
+  const trailing = pipelineId?.match(COMPOSED_PIPELINE_ID)?.[1];
   return trailing === undefined ? 0 : Number(trailing);
 }
 

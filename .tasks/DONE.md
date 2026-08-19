@@ -42,14 +42,22 @@ run 3 lacked. The prompt now says so rather than leaving the model to discover i
 *saved* teams, the same question from the other side, and stays P3 and feedback-gated on `TASK-135`.
 `start_run.teamId` remains declared and unread rather than half-wired to look like progress.
 
-Four of the five new comp tests fail without the change; the fifth — a differing team parks rather
+**Two more found in PR review**, both in the auto-approve path. `sameComposition` compares stages
+only, so identical roles under a new name compared equal and the run launched the freshly composed
+object — putting that new name on the run card while `approvedTeam` and the next review context
+still said the old one; it now starts the stored pipeline, because same roles means same team. And
+`generationOf` matched any trailing number, so a legacy `team-12345678` — orchestration ids are
+eight hex characters and can be all digits — read as generation 12345678 and would have minted
+`team-12345678-12345679`; the parser is now anchored to the whole composed shape.
+
+Four of the six new comp tests fail without the change; the fifth — a differing team parks rather
 than launching — passes on the old code too, because that half was already implemented and only the
-prompt forbade reaching it. Eight new unit tests cover `sameComposition` and the generation, and a
+prompt forbade reaching it. Twelve new unit tests cover `sameComposition` and the generation, and a
 `run-thread` test pins that an older proposal keeps what it proposed once `approvedTeam` holds a
 newer team. Three existing assertions on `team-<orchestrationId>` were updated to the generation
 suffix — the honest edit, not a weakening.
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (886 passed, 100 files), `pnpm build` and `pnpm e2e`
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (891 passed, 100 files), `pnpm build` and `pnpm e2e`
 (68 passed) all green on Windows. Cross-platform: n/a — composition, prompt text and display.
 
 ---
