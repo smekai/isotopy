@@ -6,13 +6,15 @@
 // The shipped presets themselves are data, not logic — asserting their ids and
 // labels back would only restate the constant. The one thing worth checking
 // across them is an invariant no single definition can enforce alone.
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { AGENTS, agentForStage } from "../src/agents.ts";
-import type { PipelineDefinition } from "../src/pipelines.ts";
+import type { PipelineDefinition, StageDefinition } from "../src/pipelines.ts";
 import {
   DEMO_PIPELINES,
+  applyGatePreferences,
   findPipeline,
   flattenPipelineStages,
+  gateEnabled,
   isRetiredPipeline,
   pipelineDefinitionSchema,
   pipelineUsesEngine,
@@ -124,3 +126,41 @@ describe("the shipped set", () => {
     expect(titled.map((stage) => stage.label)).toEqual([]);
   });
 });
+
+test("a gate the project turned off is resolved off, whatever the pipeline ships", () => {
+  const pipeline = findPipeline("pm-dev-test");
+  assert(pipeline, "expected the pm-dev-test pipeline to exist");
+
+  const configured = applyGatePreferences(pipeline, { "pm-dev-test:intake": false });
+
+  expect(gateEnabled("pm-dev-test", stageNamed(configured, "intake"))).toBe(false);
+});
+
+test("a gate the project added is resolved on, for a stage that ships without one", () => {
+  const pipeline = findPipeline("pm-dev-test");
+  assert(pipeline, "expected the pm-dev-test pipeline to exist");
+
+  const configured = applyGatePreferences(pipeline, { "pm-dev-test:implementation": true });
+
+  expect(gateEnabled("pm-dev-test", stageNamed(configured, "implementation"))).toBe(true);
+});
+
+test("a pipeline nothing overrides is returned untouched, so a plain run stores no definition", () => {
+  const pipeline = findPipeline("pm-dev-test");
+  assert(pipeline, "expected the pm-dev-test pipeline to exist");
+
+  expect(applyGatePreferences(pipeline, { "full-delivery:intake": false })).toBe(pipeline);
+});
+
+test("an override naming a stage the pipeline does not have is ignored, not an error", () => {
+  const pipeline = findPipeline("solo");
+  assert(pipeline, "expected the solo pipeline to exist");
+
+  expect(applyGatePreferences(pipeline, { "solo:nonexistent": true })).toBe(pipeline);
+});
+
+function stageNamed(pipeline: PipelineDefinition, stageId: string): StageDefinition {
+  const stage = flattenPipelineStages(pipeline).find((candidate) => candidate.id === stageId);
+  assert(stage, `expected a stage named ${stageId}`);
+  return stage;
+}

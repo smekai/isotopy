@@ -91,7 +91,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const settings = new SettingsStore();
   const rosters = new ModelRosterService();
   const orchestrator = new RunService(registry, settings, rosters);
-  const orchestrations = new OrchestrationService(registry, orchestrator);
+  const orchestrations = new OrchestrationService(registry, orchestrator, settings);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
@@ -163,7 +163,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const settings = new SettingsStore();
   const rosters = new ModelRosterService();
   const orchestrator = new RunService(registry, settings, rosters);
-  const orchestrations = new OrchestrationService(registry, orchestrator);
+  const orchestrations = new OrchestrationService(registry, orchestrator, settings);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();

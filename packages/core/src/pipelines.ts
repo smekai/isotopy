@@ -239,6 +239,38 @@ export function flattenPipelineStages(
   return pipeline.groups.flatMap((group) => group.stages);
 }
 
+export function gateKey(pipelineId: string, stageId: string): string {
+  return `${pipelineId}:${stageId}`;
+}
+
+export function gateEnabled(
+  pipelineId: string,
+  stage: StageDefinition,
+  gates: Record<string, boolean> = {},
+): boolean {
+  return gates[gateKey(pipelineId, stage.id)] ?? stage.gateAfter ?? false;
+}
+
+export function applyGatePreferences(
+  pipeline: PipelineDefinition,
+  gates: Record<string, boolean> = {},
+): PipelineDefinition {
+  const stages = flattenPipelineStages(pipeline);
+  if (stages.every((stage) => gateEnabled(pipeline.id, stage) === gateEnabled(pipeline.id, stage, gates))) {
+    return pipeline;
+  }
+  return {
+    ...pipeline,
+    groups: pipeline.groups.map((group) => ({
+      ...group,
+      stages: group.stages.map((stage) => ({
+        ...stage,
+        gateAfter: gateEnabled(pipeline.id, stage, gates),
+      })),
+    })),
+  };
+}
+
 export const DEFAULT_PIPELINE_ID: string = PM_DEV_TEST_PIPELINE.id;
 
 export function isRetiredPipeline(pipelineId: string): boolean {

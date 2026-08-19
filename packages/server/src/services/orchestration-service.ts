@@ -19,6 +19,7 @@ import type {
 } from "@isotopy/core";
 import {
   renderComposedRunTask,
+  renderGatePreference,
   renderOrchestrationContext,
   renderOrchestrationFollowUp,
   renderQuestionMediationContext,
@@ -52,6 +53,7 @@ import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
+import type { SettingsStore } from "./settings-store.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
 import type { InheritedRunOptions } from "./run/run-options.ts";
@@ -79,6 +81,7 @@ export class OrchestrationService implements StageOutputConsumer {
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: RunService,
+    private readonly settings: SettingsStore,
   ) {}
 
   async init(): Promise<void> {
@@ -714,6 +717,9 @@ export class OrchestrationService implements StageOutputConsumer {
       stepTasks: STEP_TASK_CATALOG,
       boardContext,
       closeoutContext,
+      gatePreference: renderGatePreference(
+        this.settings.getPreferences(projectPath.id).gates,
+      ),
     };
   }
 

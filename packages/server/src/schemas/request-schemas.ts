@@ -41,6 +41,7 @@ export const projectPreferencesUpdateSchema: z.ZodType<ProjectPreferencesUpdate>
     engineModels: engineModelsSchema.optional(),
     permissionMode: permissionModeSchema.optional(),
     pipelineId: pipelineIdSchema.optional(),
+    gates: z.record(z.string(), z.boolean().nullable()).optional(),
   })
   .strict();
 

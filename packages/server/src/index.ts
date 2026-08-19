@@ -18,7 +18,7 @@ const deployment = new DeploymentRunner();
 const product = new ProductProcessService(automation);
 const runs = new RunService(registry, settings, rosters);
 runs.registerProduct(product);
-const orchestrations = new OrchestrationService(registry, runs);
+const orchestrations = new OrchestrationService(registry, runs, settings);
 runs.registerStageOutputConsumer(orchestrations);
 runs.registerOrchestration(orchestrations);
 

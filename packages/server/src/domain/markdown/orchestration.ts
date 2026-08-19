@@ -13,6 +13,7 @@ export interface OrchestrationContext {
   stepTasks: CatalogEntry[];
   boardContext: string;
   closeoutContext: string;
+  gatePreference?: string;
 }
 
 export interface OrchestrationFollowUpContext extends OrchestrationContext {
@@ -56,13 +57,36 @@ export function renderOrchestrationContext({
   stepTasks,
   boardContext,
   closeoutContext,
+  gatePreference,
 }: OrchestrationContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
     renderCatalog("Persona catalog", personas),
     renderCatalog("Step task catalog", stepTasks),
+    gatePreference === undefined
+      ? undefined
+      : `## Where this project likes its gates\n\n${markdownBody(gatePreference)}`,
     markdownBody(boardContext),
     markdownBody(closeoutContext),
+  ]);
+}
+
+export function renderGatePreference(gates: Record<string, boolean>): string | undefined {
+  const stagesWhere = (enabled: boolean): string[] =>
+    Object.entries(gates)
+      .filter(([, on]) => on === enabled)
+      .map(([key]) => key.split(":")[1] ?? key);
+  const wanted = stagesWhere(true);
+  const waived = stagesWhere(false);
+  if (wanted.length === 0 && waived.length === 0) {
+    return undefined;
+  }
+  return markdownBlocks([
+    "On its fixed pipelines this project has asked for approval after some steps and not others.",
+    "Treat it as a preference and not a rule: you own `gateAfter` for the team you compose, and a",
+    "role whose work the user has said they want to see is a good candidate for one.",
+    wanted.length === 0 ? undefined : `Approval wanted after: ${wanted.join(", ")}.`,
+    waived.length === 0 ? undefined : `Approval waived after: ${waived.join(", ")}.`,
   ]);
 }
 

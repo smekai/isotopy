@@ -10,6 +10,7 @@ export const DEFAULT_PREFERENCES: ProjectPreferencesUpdate = {
   engineModels: { "claude-code": null, cursor: null, codex: null },
   permissionMode: "skip",
   pipelineId: "pm-dev-test",
+  gates: {},
 };
 
 export async function readPreferences(page: Page): Promise<ProjectPreferences> {

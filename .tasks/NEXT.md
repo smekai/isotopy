@@ -43,32 +43,6 @@ everything else.
 
 ---
 
-## TASK-148: Make human gates real configuration
-**Priority:** P2
-**Tags:** ui, server, core, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Found in `TASK-141`, and confirmed with the user on 2026-08-17: gates should be a config.
-
-`Setup → Gates` looks configurable and is not. `GatesSection.tsx` derives its list from the shipped
-`DEMO_PIPELINES`, filters to stages with `gateAfter`, and renders each with a hard-coded `ENABLED`
-badge. There is no toggle, and nothing it displays is stored or read back. A user who wants Full
-Delivery's Product Manager gate off cannot turn it off, and the screen gives no hint of that.
-
-**What to build:** make the section mean what it shows — per-gate enable/disable persisted with the
-other preferences (server state keyed by project, as `PUT /settings/preferences` already does) and
-honoured when a fixed pipeline runs.
-
-**Scope note.** This is about *fixed* pipelines. Orchestrator-composed teams already decide gates
-per role via `gateAfter` in the proposal, which is why the dogfood ran end to end on a single
-approval at team composition with no mid-run pauses. That flow is already the "approve the plan and
-the team, then let it run" model and needs no change — do not regress it while making fixed-pipeline
-gates configurable.
-
-Cross-platform: n/a — settings and UI.
-
----
-
 ## TASK-149: Group an initiative's runs visually in the UI
 **Priority:** P2
 **Tags:** ui, milestone-h

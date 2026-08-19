@@ -1,6 +1,11 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ENGINES, defaultConnectionMode, withoutClearedOverrides } from "@isotopy/core";
+import {
+  ENGINES,
+  defaultConnectionMode,
+  withoutClearedGates,
+  withoutClearedOverrides,
+} from "@isotopy/core";
 import type {
   EngineId,
   ProjectPreferences,
@@ -151,6 +156,9 @@ function mergedPreferenceOverride(
       ...current?.engineModels,
       ...update.engineModels,
     });
+  }
+  if (update.gates) {
+    merged.gates = withoutClearedGates({ ...current?.gates, ...update.gates });
   }
   return merged;
 }

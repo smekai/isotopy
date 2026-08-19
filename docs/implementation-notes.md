@@ -200,6 +200,26 @@ both makes the CLI reject requests) and passes `--bare` in api-key mode, because
 bare mode reads auth strictly from `ANTHROPIC_API_KEY` — without it a logged-in
 CLI ignores the injected key and bills the plan.
 
+## Configurable gates (`core/pipelines.ts`, `services/run/run-service.ts`)
+
+`gateEnabled(pipelineId, stage, gates)` is the single rule — `override ?? stage.gateAfter ?? false`
+— and both the runtime and `Setup → Gates` call it, so the screen cannot promise something the run
+will not do.
+
+- **`applyGatePreferences` returns the *identical* object when nothing is overridden.** That is not
+  a micro-optimisation; `isCatalogPipeline` in `core/runs.ts` decides whether a run persists its own
+  pipeline definition, and it tests `findPipeline(pipeline.id) === pipeline`. Identity is what keeps
+  an unconfigured run storing nothing (as before) while a configured one freezes the gates it
+  actually ran with. It used to test the *id*, which would have let a configured run silently
+  re-resolve the unmodified pipeline after a restart.
+- **The override is applied in `startRun` only.** `startComposedRun` shares everything from
+  `startRunWith` down, so a composed team keeps deciding its own `gateAfter` per role. The seam
+  between the two entry points is the whole reason the Orchestrator path is untouched.
+- **Keys are `"<pipelineId>:<stageId>"`** because a stage id is not unique across pipelines —
+  `intake` is gated in both `pm-dev-test` and `full-delivery`.
+- **`null` clears an override** rather than meaning "off", matching how `engineModels` already
+  behaves, so a cleared gate returns to whatever its pipeline ships.
+
 ## What an initiative cost (`services/orchestration-service.ts`)
 
 `Orchestration.usage` accumulates every Orchestrator turn — the settle-time review
