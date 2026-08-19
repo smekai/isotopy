@@ -1,5 +1,44 @@
 # Done
 
+## TASK-151: Decide what `.agents/skills/` is for, and stop it rotting
+**Priority:** P2 | **Tags:** infra, testing, milestone-h
+**Updated:** 2026-08-19 13:40
+
+`.agents/skills/` is **kept**, and the duplication it caused is gone: each harness keeps its own
+`SKILL.md` because each only discovers its own path, but the body now lives once under `docs/`.
+
+**The first attempt deleted it, and was wrong.** The reasoning was that nothing read the directory:
+no reference in any `*.ts`, `*.mjs`, `*.json` or `*.yml`, no `.codex/`, and Claude Code never
+offered `qa-testing` — which lives only there — as an available skill. All true; the conclusion was
+not. **Codex scans `.agents/skills` from the working directory up to the repository root by
+documented convention, with no configuration file**, so deleting it removed working functionality
+for one of this project's three engines. Caught in review, verified against OpenAI's own
+documentation, and reverted. The lesson is recorded in `docs/decisions.md`: convention-based
+discovery leaves nothing in the repository to grep for, so absence of a reference is not absence of
+a reader.
+
+**What shipped instead.** `docs/running-the-app.md` and `docs/planning-a-task.md` hold the bodies
+that used to be duplicated; the four `SKILL.md` files are ten-line shims naming the doc, and the
+`.claude` and `.agents` shims are byte-identical. `run-app`'s ~85% divergence is gone because there
+is no second body left to diverge. `plan-task`'s harness-specific line — "the TaskPlanner flow in
+CLAUDE.md" — became "your harness's instructions file, `CLAUDE.md` for Claude Code, `AGENTS.md` for
+Codex", which is what made one body able to serve both. `qa-testing` is untouched: it exists only
+under `.agents/`, so it is not a duplicate of anything and has no drift to remove.
+
+Also folded in, from the stale `plan-task` rule that prompted the original deletion: the version
+sequence is allocated when planning rather than remembered when committing, pointing at `AGENTS.md`
+and the root `package.json` rather than restating a number the way the old text did.
+
+**Rejected: a symlink**, which Codex would follow — `core.symlinks=false` here turns a committed
+link into a text file, and the MSYS shell silently copies instead of linking. **Rejected:
+generating or mirroring the second copy** — machinery to keep two copies equal has nothing to do
+once there is only one body.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (874 passed, 99 files), `pnpm build` and
+`pnpm gen:skills --check` all green on Windows. Cross-platform: n/a — documentation.
+
+---
+
 ## TASK-148: Make human gates real configuration
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-18 23:30
