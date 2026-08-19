@@ -75,7 +75,7 @@ export function renderGatePreference(gates: Record<string, boolean>): string | u
   const stagesWhere = (enabled: boolean): string[] =>
     Object.entries(gates)
       .filter(([, on]) => on === enabled)
-      .map(([key]) => key.split(":")[1] ?? key);
+      .map(([key]) => `\`${key}\``);
   const wanted = stagesWhere(true);
   const waived = stagesWhere(false);
   if (wanted.length === 0 && waived.length === 0) {
@@ -83,8 +83,9 @@ export function renderGatePreference(gates: Record<string, boolean>): string | u
   }
   return markdownBlocks([
     "On its fixed pipelines this project has asked for approval after some steps and not others.",
-    "Treat it as a preference and not a rule: you own `gateAfter` for the team you compose, and a",
-    "role whose work the user has said they want to see is a good candidate for one.",
+    "Each entry is `pipeline:stage`, because the same stage name can be gated in one pipeline and",
+    "not another. Treat it as a preference and not a rule: you own `gateAfter` for the team you",
+    "compose, and a role whose work the user has said they want to see is a good candidate for one.",
     wanted.length === 0 ? undefined : `Approval wanted after: ${wanted.join(", ")}.`,
     waived.length === 0 ? undefined : `Approval waived after: ${waived.join(", ")}.`,
   ]);

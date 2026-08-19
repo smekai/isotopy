@@ -25,6 +25,12 @@ export async function writePreferences(
   await page.request.put("/settings/preferences", { data: update });
 }
 
-export function resetPreferences(page: Page): Promise<void> {
-  return writePreferences(page, DEFAULT_PREFERENCES);
+// `gates` is a sparse override map, so `{}` merges to nothing and would leave a
+// gate one spec turned off turned off for every spec after it. Clearing means
+// naming each stored key with `null`, which is what the server treats as "drop
+// this override".
+export async function resetPreferences(page: Page): Promise<void> {
+  const stored = await readPreferences(page);
+  const cleared = Object.fromEntries(Object.keys(stored.gates).map((key) => [key, null]));
+  await writePreferences(page, { ...DEFAULT_PREFERENCES, gates: cleared });
 }

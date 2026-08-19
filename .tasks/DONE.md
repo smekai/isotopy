@@ -43,10 +43,18 @@ than shaving lines, the accessor I had added there was removed: `OrchestrationSe
 `SettingsStore` directly instead of tunnelling through `RunService`, which is the more honest
 dependency anyway.
 
+**Three more found in PR review**, each a way the new configurability reached somewhere it should
+not: an internal pipeline could be gated — `orchestration` launches through the same `startRun`, so
+a stored `orchestration:orchestrate` would have parked the Orchestrator's own conversation awaiting
+a human, on a stage the screen never offers; the Orchestrator's copy of the preferences stripped the
+pipeline qualifier, so with the two pipelines disagreeing about `intake` the prompt said both
+"wanted after: intake" and "waived after: intake"; and the e2e reset wrote `gates: {}`, which merges
+to nothing, so a gate one spec turned off would have stayed off for every spec after it.
+
 Three run-level comp tests fail without the change (a disabled gate does not park; an added gate
 does; a restarted run keeps the gates it started with), plus four `applyGatePreferences` unit tests,
 three settings tests, and five UI tests over the new screen. `pnpm lint`, `pnpm typecheck`,
-`pnpm test` (871 passed, 99 files), `pnpm build` and `pnpm e2e` (68 passed) all green on Windows.
+`pnpm test` (874 passed, 99 files), `pnpm build` and `pnpm e2e` (68 passed) all green on Windows.
 
 **Verified in the real app** only as far as the environment allowed: the API stores and returns the
 override, and the screen renders every stage of every non-internal pipeline with real ENABLED/OFF

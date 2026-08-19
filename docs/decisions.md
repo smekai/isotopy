@@ -46,7 +46,8 @@ whatever the config says *now* rather than what it started with. It now tests id
 nothing is overridden, so unconfigured runs still store nothing.
 
 **The Orchestrator is told, not commanded.** A composed team gets the project's gate preferences as
-a section in its context, phrased as a preference it may follow. Making it deterministic would have
+a section in its context, keyed `pipeline:stage` so the advice stays unambiguous when one pipeline
+gates a stage the other does not, and phrased as a preference it may follow. Making it deterministic would have
 turned the "approve the team, then let it run" model into a mid-run pause the user did not ask for,
 and the team already owns `gateAfter` per role.
 

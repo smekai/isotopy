@@ -256,7 +256,10 @@ export function applyGatePreferences(
   gates: Record<string, boolean> = {},
 ): PipelineDefinition {
   const stages = flattenPipelineStages(pipeline);
-  if (stages.every((stage) => gateEnabled(pipeline.id, stage) === gateEnabled(pipeline.id, stage, gates))) {
+  const unchanged = stages.every(
+    (stage) => gateEnabled(pipeline.id, stage) === gateEnabled(pipeline.id, stage, gates),
+  );
+  if (pipeline.internal === true || unchanged) {
     return pipeline;
   }
   return {

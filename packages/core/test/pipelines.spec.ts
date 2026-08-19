@@ -164,3 +164,10 @@ function stageNamed(pipeline: PipelineDefinition, stageId: string): StageDefinit
   assert(stage, `expected a stage named ${stageId}`);
   return stage;
 }
+
+test("an internal pipeline ignores gate overrides, because nothing offers them and a gate would park the Orchestrator", () => {
+  const pipeline = findPipeline("orchestration");
+  assert(pipeline, "expected the orchestration pipeline to exist");
+
+  expect(applyGatePreferences(pipeline, { "orchestration:orchestrate": true })).toBe(pipeline);
+});

@@ -218,7 +218,16 @@ will not do.
 - **Keys are `"<pipelineId>:<stageId>"`** because a stage id is not unique across pipelines —
   `intake` is gated in both `pm-dev-test` and `full-delivery`.
 - **`null` clears an override** rather than meaning "off", matching how `engineModels` already
-  behaves, so a cleared gate returns to whatever its pipeline ships.
+  behaves, so a cleared gate returns to whatever its pipeline ships. That also means an empty map
+  clears *nothing* — the e2e reset has to name each stored key with `null`, or a gate one spec turns
+  off stays off for every spec after it.
+- **Internal pipelines ignore overrides entirely.** `orchestration` and `milestone-planning` are
+  launched through the same `startRun`, and the API accepts any key, so without this a stored
+  `orchestration:orchestrate` would park the Orchestrator's own conversation awaiting a human — on a
+  stage the screen deliberately never offers.
+- **The Orchestrator's copy keeps the `pipeline:stage` qualifier.** Stripping it produced a prompt
+  that said both "wanted after: intake" and "waived after: intake" whenever the two pipelines
+  disagreed, which is worse than saying nothing.
 
 ## What an initiative cost (`services/orchestration-service.ts`)
 
