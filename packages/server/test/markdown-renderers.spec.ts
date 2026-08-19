@@ -1,5 +1,5 @@
 import type { ProductManagerCloseout } from "@isotopy/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import {
   renderCancelledCleanupReport,
   renderCleanupReport,
@@ -15,6 +15,7 @@ import {
   renderPriorMilestoneCloseouts,
 } from "../src/domain/markdown/planning.ts";
 import { buildContinuationPrompt, buildStagePrompt } from "../src/domain/markdown/stage.ts";
+import { renderGatePreference } from "../src/domain/markdown/orchestration.ts";
 
 const CLOSEOUT: ProductManagerCloseout = {
   summary: "Delivered\r\ncleanly.",
@@ -214,4 +215,18 @@ describe("prompt Markdown", () => {
         "- Second: Issue one; Issue two",
     );
   });
+});
+
+test("a gate preference names the pipeline, because the same stage is gated in one and not another", () => {
+  const rendered = renderGatePreference({
+    "full-delivery:intake": true,
+    "pm-dev-test:intake": false,
+  });
+
+  expect(rendered).toContain("Approval wanted after: `full-delivery:intake`.");
+  expect(rendered).toContain("Approval waived after: `pm-dev-test:intake`.");
+});
+
+test("a project with no gate overrides gives the Orchestrator nothing to read", () => {
+  expect(renderGatePreference({})).toBeUndefined();
 });

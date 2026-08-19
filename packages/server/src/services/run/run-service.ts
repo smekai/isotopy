@@ -25,6 +25,7 @@ import {
   ENGINES,
   addUsage,
   agentForStage,
+  applyGatePreferences,
   createInitialRunState,
   isTerminalRunStatus,
   pipelineUsesEngine,
@@ -271,7 +272,8 @@ export class RunService implements RunProjection {
     if (!pipeline) {
       throw new Error(`Unknown pipeline: ${pipelineId}`);
     }
-    return this.startRunWith(projectPath, pipeline, options);
+    const gates = this.settings.getPreferences(projectPath.id).gates;
+    return this.startRunWith(projectPath, applyGatePreferences(pipeline, gates), options);
   }
 
   startComposedRun(

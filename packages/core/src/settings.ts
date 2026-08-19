@@ -18,10 +18,14 @@ export interface ProjectPreferences {
   engineModels: Partial<Record<EngineId, string>>;
   permissionMode: EnginePermissionMode;
   pipelineId: string;
+  gates: Record<string, boolean>;
 }
 
-export type ProjectPreferencesUpdate = Partial<Omit<ProjectPreferences, "engineModels">> & {
+export type ProjectPreferencesUpdate = Partial<
+  Omit<ProjectPreferences, "engineModels" | "gates">
+> & {
   engineModels?: Partial<Record<EngineId, string | null>>;
+  gates?: Record<string, boolean | null>;
 };
 
 export interface SettingsView {
@@ -36,6 +40,7 @@ export function defaultProjectPreferences(): ProjectPreferences {
     engineModels: {},
     permissionMode: DEFAULT_PERMISSION_MODE,
     pipelineId: DEFAULT_PIPELINE_ID,
+    gates: {},
   };
 }
 
@@ -47,7 +52,18 @@ export function mergeProjectPreferences(
     ...base,
     ...update,
     engineModels: withoutClearedOverrides({ ...base.engineModels, ...update.engineModels }),
+    gates: withoutClearedGates({ ...base.gates, ...update.gates }),
   };
+}
+
+export function withoutClearedGates(
+  overrides: Record<string, boolean | null | undefined>,
+): Record<string, boolean> {
+  return Object.fromEntries(
+    Object.entries(overrides).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+    ),
+  );
 }
 
 export function withoutClearedOverrides(

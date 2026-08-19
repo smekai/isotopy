@@ -59,6 +59,7 @@ test("a preference set through the API is visible to a second server over the sa
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
     pipelineId: "solo",
+    gates: {},
   });
   await shutdown();
 });
@@ -194,4 +195,42 @@ test("storing preferences leaves the engine connection untouched", async () => {
 
   // Assert
   expect(body.engines["claude-code"]?.apiKeyConfigured).toBe(true);
+});
+
+test("a gate override survives a restart, because a gate is server state like every other preference", async () => {
+  // Arrange
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } });
+  await ctx.orchestrator.shutdown();
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const { body } = await get<SettingsView>(restarted.app, "/settings");
+  expect(body.preferences.gates).toEqual({ "pm-dev-test:intake": false });
+  await restarted.shutdown();
+}, 15_000);
+
+test("gate overrides do not cross projects", async () => {
+  // Arrange
+  const other = await addTestProject(ctx.registry, "gates-other");
+
+  // Act
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } });
+
+  // Assert
+  const { body } = await get<SettingsView>(ctx.app, "/settings", other.headers);
+  expect(body.preferences.gates).toEqual({});
+});
+
+test("clearing a gate override with null returns the stage to what the pipeline ships", async () => {
+  // Arrange
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } });
+
+  // Act
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": null } });
+
+  // Assert
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+  expect(body.preferences.gates).toEqual({});
 });

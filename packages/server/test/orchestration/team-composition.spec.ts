@@ -62,6 +62,23 @@ test("a role that declares no execution policy is composed as a standard stage",
   expect(stagesOf(composed)[0]).toMatchObject({ executionPolicy: "standard" });
 });
 
+// The Orchestrator decides its own team's gates, and TASK-148 makes fixed pipelines
+// configurable without touching that. These two pin the composed side so the
+// difference stays deliberate.
+test("a role that asks for a gate is composed as a gated stage", () => {
+  const composed = composeTeamPipeline(team([role({ id: "intake", gateAfter: true })]), "abc123");
+
+  expect(stagesOf(composed)[0]).toMatchObject({ gateAfter: true });
+});
+
+test("a role that asks for no gate is composed without one, whatever the project prefers", () => {
+  const composed = composeTeamPipeline(team([role({ id: "intake" })]), "abc123");
+
+  const [stage] = stagesOf(composed);
+  assert(stage, "expected the team to compose one stage");
+  expect(stage.gateAfter).toBeUndefined();
+});
+
 test("a declared execution policy survives composition, so quality stages still run after a failure", () => {
   const composed = composeTeamPipeline(
     team([role({ id: "test", executionPolicy: "quality" })]),

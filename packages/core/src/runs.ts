@@ -327,7 +327,7 @@ export interface NewRunInput {
 }
 
 function isCatalogPipeline(pipeline: PipelineDefinition): boolean {
-  return findPipeline(pipeline.id) !== undefined;
+  return findPipeline(pipeline.id) === pipeline;
 }
 
 export function createInitialRunState({

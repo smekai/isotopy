@@ -141,7 +141,7 @@ export function SetupModal({
 
         <div style={BODY}>
           {sec === "appearance" && <AppearanceSection d={d} />}
-          {sec === "gates" && <GatesSection d={d} />}
+          {sec === "gates" && <GatesSection d={d} settings={settings} />}
           {sec === "harness" && (
             <HarnessSection d={d} projectName={projectName} settings={settings} />
           )}

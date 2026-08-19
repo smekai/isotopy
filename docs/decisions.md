@@ -15,6 +15,49 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-18 — A gate is a project's decision, and the shipped one is only a default
+
+**Context:** `Setup → Gates` listed gates and could not change one. It computed a module-level
+constant from `DEMO_PIPELINES`, filtered to stages carrying `gateAfter`, deduped by stage id — so
+because both gated stages are called `intake`, it rendered exactly one card — and stamped it
+`ENABLED` as a string literal. Nothing it showed was stored or read back, and the runtime read
+`gateAfter` off the shipped constant, so there was no seam to store anything into.
+
+**Decision, with the user on 2026-08-18: gates are not hardcoded.** A gate may be configured after
+**any** stage, not only the ones that happen to ship with one. Preferences hold sparse overrides
+keyed `"<pipelineId>:<stageId>"`, and resolution is `override ?? stage.gateAfter ?? false` in a
+single pure function both the runtime and the screen call, so the two cannot disagree. A project
+nobody has configured behaves exactly as before.
+
+**Keyed per pipeline, not per stage id.** A stage id is not unique across pipelines — `intake`
+appears in two — so a stage-id key would silently couple them. The screen groups by pipeline and
+shows the pipeline id rather than a friendly name, which is enough to tell the two apart.
+
+**Applied in `startRun`, never in the shared path.** `startRun` resolves a catalog pipeline and
+`startComposedRun` takes one already built; both then call the same `startRunWith`. Putting the
+override there and nowhere else is what keeps Orchestrator-composed teams untouched — they keep
+deciding `gateAfter` per role, which is the flow the dogfood validated.
+
+**A configured run stores its own definition.** `isCatalogPipeline` tested by *id*, so a
+gate-configured `pm-dev-test` would still have counted as catalog and not been persisted — and
+`pipelineForRun` would have re-resolved the unmodified pipeline on restart, giving a resumed run
+whatever the config says *now* rather than what it started with. It now tests identity
+(`findPipeline(id) === pipeline`), and `applyGatePreferences` returns the very same object when
+nothing is overridden, so unconfigured runs still store nothing.
+
+**The Orchestrator is told, not commanded.** A composed team gets the project's gate preferences as
+a section in its context, keyed `pipeline:stage` so the advice stays unambiguous when one pipeline
+gates a stage the other does not, and phrased as a preference it may follow. Making it deterministic would have
+turned the "approve the team, then let it run" model into a mid-run pause the user did not ask for,
+and the team already owns `gateAfter` per role.
+
+**Rejected: adding the gates the product brief promises** (after Design, Release, before Deploy).
+The screen's fault was lying about being configurable, not lacking gates. Shipping four new mid-run
+pauses nobody asked for would work against the model the dogfood validated; now that a gate can go
+after any stage, a user who wants them can add them.
+
+---
+
 ## 2026-08-18 — A decision turn's cost belongs to the initiative, not to the run that triggered it
 
 **Context:** the Orchestrator reviews a run when it settles, and that review is an engine turn

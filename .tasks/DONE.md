@@ -1,5 +1,71 @@
 # Done
 
+## TASK-148: Make human gates real configuration
+**Priority:** P2 | **Tags:** ui, server, core, milestone-h
+**Updated:** 2026-08-18 23:30
+
+`Setup → Gates` listed gates it could not change: a module-level constant derived from
+`DEMO_PIPELINES`, deduped by stage id — so because both gated stages are called `intake` it rendered
+exactly one card — with `ENABLED` as a string literal. Nothing it showed was stored or read back.
+
+**Gates are no longer hardcoded**, decided with the user on 2026-08-18. A gate can be configured
+after **any** stage, not only the ones that ship with one. Preferences hold sparse overrides keyed
+`"<pipelineId>:<stageId>"`, and `gateEnabled` — `override ?? stage.gateAfter ?? false` — is the
+single rule the runtime and the screen both call, so the screen cannot promise what a run will not
+do. A project nobody has configured behaves exactly as before.
+
+Keyed per pipeline because a stage id is not unique across pipelines; the screen groups by pipeline
+id rather than inventing a friendly name.
+
+**The Orchestrator is told, not commanded.** A composed team receives the project's gate preferences
+as a context section phrased as a preference it may follow. `composeTeamPipeline` is untouched, so a
+team that ignores it runs exactly as before — the flow the task's scope note protects.
+
+**Two things the plan caught before they bit:**
+
+- **`isCatalogPipeline` tested by *id*.** A gate-configured `pm-dev-test` would still have counted as
+  catalog and not been persisted on the run, so `pipelineForRun` would have re-resolved the
+  *unmodified* pipeline after a restart — a resumed run getting whatever the config says now rather
+  than what it started with. It now tests identity, and `applyGatePreferences` returns the very same
+  object when nothing is overridden, so unconfigured runs still store nothing.
+- **The composed path had no test at all.** `team-composition.spec.ts` forwarded `gateAfter` through
+  its role factory but no test ever set it, while `executionPolicy` and `modelTier` both had
+  assertions. Two characterisation tests were added *before* any change, so the flow that must not
+  regress is now guarded.
+
+**Rejected: adding the gates the product brief promises** (after Design, Release, before Deploy).
+The screen's fault was lying about being configurable, not lacking gates; four new mid-run pauses
+nobody asked for would work against the model the dogfood validated. A user who wants them can now
+add them.
+
+`run-service.ts` was five lines from the repo's 1000-line ceiling and my first cut crossed it. Rather
+than shaving lines, the accessor I had added there was removed: `OrchestrationService` now takes the
+`SettingsStore` directly instead of tunnelling through `RunService`, which is the more honest
+dependency anyway.
+
+**Three more found in PR review**, each a way the new configurability reached somewhere it should
+not: an internal pipeline could be gated — `orchestration` launches through the same `startRun`, so
+a stored `orchestration:orchestrate` would have parked the Orchestrator's own conversation awaiting
+a human, on a stage the screen never offers; the Orchestrator's copy of the preferences stripped the
+pipeline qualifier, so with the two pipelines disagreeing about `intake` the prompt said both
+"wanted after: intake" and "waived after: intake"; and the e2e reset wrote `gates: {}`, which merges
+to nothing, so a gate one spec turned off would have stayed off for every spec after it.
+
+Three run-level comp tests fail without the change (a disabled gate does not park; an added gate
+does; a restarted run keeps the gates it started with), plus four `applyGatePreferences` unit tests,
+three settings tests, and five UI tests over the new screen. `pnpm lint`, `pnpm typecheck`,
+`pnpm test` (874 passed, 99 files), `pnpm build` and `pnpm e2e` (68 passed) all green on Windows.
+
+**Verified in the real app** only as far as the environment allowed: the API stores and returns the
+override, and the screen renders every stage of every non-internal pipeline with real ENABLED/OFF
+state. The browser could not confirm read-back because `pnpm dev`'s Vite proxy cannot reach the
+server on this machine — filed as `TASK-152`, pre-existing and unrelated. The read-back itself is
+covered by a UI test.
+
+Cross-platform: n/a — settings and UI.
+
+---
+
 ## TASK-147: Surface the cost of post-run Orchestrator decision turns
 **Priority:** P2 | **Tags:** server, ui, milestone-h
 **Updated:** 2026-08-18 22:45

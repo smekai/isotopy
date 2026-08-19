@@ -5,6 +5,7 @@ import {
   defaultModelTierFor,
   defaultProjectPreferences,
   tierLadderFor,
+  withoutClearedGates,
   withoutClearedOverrides,
 } from "@isotopy/core";
 import type {
@@ -35,6 +36,7 @@ export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
     engineModels: Object.fromEntries(preTierFile ? unladderedPins(pinned) : pinned),
     permissionMode: stored.permissionMode ?? defaults.permissionMode,
     pipelineId: stored.pipelineId ?? defaults.pipelineId,
+    gates: withoutClearedGates(stored.gates ?? {}),
   };
 }
 
