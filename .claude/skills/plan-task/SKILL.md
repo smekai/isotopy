@@ -54,3 +54,7 @@ pure logic/UI`.
 - The untested platform degrades gracefully with an *accurate*
   message.
 - The task/PR notes which platform was actually tested.
+- The version sequence is allocated when planning, not remembered when
+  committing — every commit bumps the shared patch across the root and all
+  `packages/*`, so a three-commit PR needs three numbers. See **Versioning** in
+  `AGENTS.md`, and read the current value from the root `package.json`.

@@ -1,4 +1,0 @@
-interface:
-  display_name: "QA Testing"
-  short_description: "Run Isotopy UI verification safely"
-  default_prompt: "Use $qa-testing to validate this Isotopy UI change."

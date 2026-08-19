@@ -1,5 +1,47 @@
 # Done
 
+## TASK-151: Decide what `.agents/skills/` is for, and stop it rotting
+**Priority:** P2 | **Tags:** infra, testing, milestone-h
+**Updated:** 2026-08-19 12:15
+
+Deleted. `.agents/skills/` was a parallel, hand-maintained copy of the project's skills, and only
+one of the two copies ever got updated — the failure `TASK-103` recorded during the `TASK-094`
+dogfood and `TASK-146` recorded again from `TASK-141`'s pre-flight.
+
+**Nothing read it, and that was checked rather than assumed.** No `*.ts`, `*.mjs`, `*.json` or
+`*.yml` in the repo referenced the path — the only hits were prose in `.tasks/`. `.cursor/` and
+`.codex/` do not exist, `.cursorrules` is a bare TaskPlanner block, and neither `AGENTS.md` nor
+`CLAUDE.md` carries a skills pointer. **Claude Code did not load it either:** `qa-testing` lived
+only under `.agents/` and was never offered as an available skill, while the five directories under
+`.claude/skills/` always were. That absence is the evidence.
+
+**There was nothing worth keeping.** `run-app` had diverged ~85% from the live copy and still
+described a retired `one-box` pipeline and an `engines/Codex.ts` that never existed. `qa-testing`
+was a condensed restatement of `docs/testing.md` → the `write-tests` skill, `personas/tester.md`
+and `step-tasks/verify-feature.md`, with no policy of its own. The one line unique to `.agents/` —
+a `plan-task` rule to update a `Current` version value in `AGENTS.md` — was itself rot, since that
+number was removed on purpose for drifting.
+
+**Its intent survived as one corrected line.** `.claude/skills/plan-task/SKILL.md` now says the
+version sequence is allocated when planning rather than remembered when committing, pointing at
+`AGENTS.md`'s Versioning section and the root `package.json` rather than restating a number. This
+session forgot the bump on one PR and mis-sequenced it on another, so the reminder is earned.
+
+`.tasks/REJECTED.md` was corrected where it named the deleted file as one of three homes for the
+browser-fallback policy; it now names the two that remain. `DONE.md`'s mentions were left alone —
+they record what was true when those tasks closed, and rewriting them would falsify the log.
+
+**Rejected: generating `.agents/` instead.** The mechanism is small, but none of the three skills
+had a `docs/` source to generate from — each would have needed extracting into `gen:` blocks first,
+which is real work for a directory with no reader. Recorded in `docs/decisions.md` along with the
+standing rule: one home per skill, and a second copy only when something is proven to read it, then
+generated with a `--check` gate rather than hand-maintained.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (874 passed, 99 files), `pnpm build` and
+`pnpm gen:skills --check` all green on Windows. Cross-platform: n/a — deleting tracked files.
+
+---
+
 ## TASK-148: Make human gates real configuration
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-18 23:30

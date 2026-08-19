@@ -15,6 +15,40 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-19 — A skill has one home, and a second copy needs a reader to justify it
+
+**Context:** `.agents/skills/` held a parallel, hand-maintained copy of the project's skills —
+`plan-task`, `run-app`, and a `qa-testing` that existed nowhere else. Only one of the two copies
+ever got updated. `TASK-103` recorded the cost of that during the `TASK-094` dogfood and
+`TASK-146` recorded it again from `TASK-141`'s pre-flight, which is twice, which is a pattern.
+
+**Decision: deleted, because nothing read it.** Not "nothing should" — nothing did. No `*.ts`,
+`*.mjs`, `*.json` or `*.yml` in the repo referenced the path; `.cursor/` and `.codex/` did not
+exist; `AGENTS.md` and `CLAUDE.md` carried no skills pointer; and Claude Code itself never loaded
+it — `qa-testing` lived only under `.agents/` and was never offered as an available skill, while
+the five directories under `.claude/skills/` always were. That absence is the evidence, and it is
+checkable rather than argued.
+
+**There was nothing to preserve.** `run-app` had diverged ~85% from the live copy and still
+described a retired `one-box` pipeline and an `engines/Codex.ts` that never existed. `qa-testing`
+was a condensed restatement of `docs/testing.md` → the `write-tests` skill, `personas/tester.md`
+and `step-tasks/verify-feature.md`. The single line of content unique to `.agents/` — a `plan-task`
+rule to update a `Current` version value in `AGENTS.md` — was itself stale, since that number was
+removed on purpose for drifting. Its *intent* survived as one corrected line in
+`.claude/skills/plan-task/SKILL.md`.
+
+**The standing rule.** One home per skill. A second copy is created only when something is proven
+to read it, and when that happens it is generated from the same source with a
+`pnpm gen:skills --check` gate — the way `architect` and `write-tests` already are — never
+hand-maintained beside the first. A copy no gate can police is a copy that will disagree.
+
+**Rejected: generating `.agents/` instead of deleting it.** The mechanism is small (`outputs`
+already returns arbitrary path/content pairs), but none of the three skills had a `docs/` source to
+generate *from*; each would have needed extracting into `gen:` blocks first. That is real work in
+service of a directory with no reader.
+
+---
+
 ## 2026-08-18 — A gate is a project's decision, and the shipped one is only a default
 
 **Context:** `Setup → Gates` listed gates and could not change one. It computed a module-level
