@@ -5,7 +5,13 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@isotopy/core";
-import { composeTeamPipeline, withRoleTiers } from "../../src/schemas/team-composition.ts";
+import {
+  composeTeamPipeline,
+  composedPipelineId,
+  generationOf,
+  sameComposition,
+  withRoleTiers,
+} from "../../src/schemas/team-composition.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 test("an invented persona id is rejected, rather than degrading the stage to no persona", () => {
@@ -104,7 +110,50 @@ test("stages are composed in the order the team proposed them", () => {
 test("the composed pipeline is named for the orchestration that produced it", () => {
   const composed = composeTeamPipeline(team([role({})]), "abc123");
 
-  expect(valueOf(composed).id).toBe("team-abc123");
+  expect(valueOf(composed).id).toBe("team-abc123-1");
+});
+
+// An initiative can compose more than one team, and a run has to be attributable
+// to the team it actually ran with — which the shared `pipelineId`/`pipelineName`
+// could not express while every generation was called the same thing.
+test("a later team gets its own pipeline id, so two runs are not both team-abc123", () => {
+  const first = composeTeamPipeline(team([role({})]), "abc123", 1);
+  const second = composeTeamPipeline(team([role({})]), "abc123", 2);
+
+  expect(valueOf(second).id).not.toBe(valueOf(first).id);
+});
+
+test("a later team says so in its name, because that is what every run list already shows", () => {
+  const composed = composeTeamPipeline(team([role({})]), "abc123", 2);
+
+  expect(valueOf(composed).name).toBe("Delivery pair (team 2)");
+});
+
+test("the first team is named plainly, so an initiative with one team reads as it always did", () => {
+  const composed = composeTeamPipeline(team([role({})]), "abc123", 1);
+
+  expect(valueOf(composed).name).toBe("Delivery pair");
+});
+
+test("a team whose roles are unchanged is the same composition, whatever generation it carries", () => {
+  const first = composeTeamPipeline(team([role({})]), "abc123", 1);
+  const second = composeTeamPipeline(team([role({})]), "abc123", 2);
+
+  expect(sameComposition(valueOf(first), valueOf(second))).toBe(true);
+});
+
+test("a dropped role is a different composition, so the user is asked before it runs", () => {
+  const pair = composeTeamPipeline(team([role({}), role({ id: "test" })]), "abc123");
+  const solo = composeTeamPipeline(team([role({})]), "abc123");
+
+  expect(sameComposition(valueOf(pair), valueOf(solo))).toBe(false);
+});
+
+test("a changed model tier is a different composition, because it changes what the run costs", () => {
+  const balanced = composeTeamPipeline(team([role({ modelTier: "balanced" })]), "abc123");
+  const deep = composeTeamPipeline(team([role({ modelTier: "deep" })]), "abc123");
+
+  expect(sameComposition(valueOf(balanced), valueOf(deep))).toBe(false);
 });
 
 test("a role's model tier reaches the stage, which is the only place resolution reads it", () => {
@@ -191,3 +240,24 @@ function valueOf(composed: Composed): PipelineDefinition {
 function stagesOf(composed: Composed): StageDefinition[] {
   return valueOf(composed).groups.flatMap((group) => group.stages);
 }
+
+// An orchestration id is eight hex characters and can be all digits, so a legacy
+// `team-12345678` must not read as generation 12345678 and mint `team-12345678-12345679`.
+test("a legacy all-numeric pipeline id reads as no generation, not as a huge one", () => {
+  expect(generationOf("team-12345678")).toBe(0);
+});
+
+test("a legacy pipeline id reads as no generation, so the next approval is the first", () => {
+  expect(generationOf("team-abc12345")).toBe(0);
+});
+
+test("a composed pipeline id reads back the generation it carries", () => {
+  expect(generationOf(composedPipelineId("abc12345", 3))).toBe(3);
+});
+
+test("a renamed team with the same roles is still the same composition", () => {
+  const named = composeTeamPipeline({ ...team([role({})]), name: "Fix crew" }, "abc12345");
+  const original = composeTeamPipeline(team([role({})]), "abc12345");
+
+  expect(sameComposition(valueOf(named), valueOf(original))).toBe(true);
+});

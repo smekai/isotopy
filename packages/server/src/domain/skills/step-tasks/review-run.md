@@ -41,7 +41,7 @@ complete because the run reached a terminal status.
 
 Return exactly one fenced `isotopy-orchestrator-decision` JSON block. The available
 actions are the ones in your orchestration assignment. For a settled run these
-four are the ones that apply:
+five are the ones that apply:
 
 Start another run with the approved team, when the goal needs more work that the
 same team can do:
@@ -96,6 +96,33 @@ fixed by running the same team against the same machine again: it is an
 the first time you read it, not on the fourth run.
 
 A failed or needs-attention run is not automatically a reason to stop — decide
-from the findings whether the work can continue. Do not propose a new team here;
-the approved team is already composed. Do not answer or route a specialist
-question in this turn — no specialist is waiting.
+from the findings whether the work can continue. Do not answer or route a
+specialist question in this turn — no specialist is waiting.
+
+### Composing a different team
+
+`propose_team` is available here, and it takes a `task` as well as a `team`:
+
+```json
+{
+  "action": "propose_team",
+  "rationale": "Why this shape, and why the current one is wrong for the work ahead",
+  "task": "What the next run will do",
+  "team": { "name": "...", "summary": "...", "roles": [] }
+}
+```
+
+Reach for it when the work ahead needs a **different shape**, not merely a
+different task — a one-function bug fix that needs a Developer and a Tester and
+nothing else, or work that turns out to need an architect nobody picked at the
+start. `start_run` remains the right answer whenever the composed team still
+fits; it is cheaper and it does not interrupt the user.
+
+Compose the team the work needs rather than a smaller edit of the current one.
+If the roles you propose are identical to the team already running, the run
+starts immediately; if they differ, the user is asked to approve the new shape
+before anything runs, so say in the `rationale` what changed and why.
+
+Do not reach for `start_run` with `fromStage` as a way to skip roles you did not
+want. Seeding carries work a previous run actually did; a team that should not
+have had those roles should be composed without them.

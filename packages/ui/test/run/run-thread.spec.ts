@@ -197,3 +197,28 @@ function proposeTeam(): OrchestratorDecision {
 function askUser(question: string): OrchestratorDecision {
   return { action: "ask_user", question };
 }
+
+// TASK-150 lets an initiative compose more than one team, so the thread now holds
+// several proposals. `approvedTeam` is singular and holds only the newest, which is
+// exactly right for the newest proposal and must not be pinned onto the older ones.
+test("an earlier proposal keeps what it proposed, because the newest approval is not its own", () => {
+  // Arrange — two proposals; approvedTeam belongs to the second.
+  const first = team({ roles: [role({ id: "implementation", modelTier: "deep" })] });
+  const second = team({ roles: [role({ id: "implementation", modelTier: "fast" })] });
+  const live = orchestration({
+    status: "running",
+    turns: [
+      turn({ action: "propose_team", rationale: "Full team", team: first }, PROPOSED_AT),
+      turn({ action: "propose_team", rationale: "Smaller", team: second }, PROPOSED_AT),
+    ],
+    approvedTeam: second,
+  });
+
+  // Act
+  const items = runThread(run([]), live, []);
+
+  // Assert
+  expect(
+    items.flatMap((item) => (item.kind === "proposal" ? [item.team.roles[0]?.modelTier] : [])),
+  ).toEqual(["deep", "fast"]);
+});

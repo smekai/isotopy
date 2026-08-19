@@ -229,6 +229,40 @@ will not do.
   that said both "wanted after: intake" and "waived after: intake" whenever the two pipelines
   disagreed, which is worse than saying nothing.
 
+## A team per run (`schemas/team-composition.ts`, `services/orchestration-service.ts`)
+
+An initiative may compose a new team when a run settles, and only a real change
+interrupts the user.
+
+- **`sameComposition` compares the flattened stages, serialised.** It is a
+  deliberate whole-shape comparison rather than a field-by-field one: any part of
+  a stage that differs — role set, order, step task, gate, tier — is a change the
+  user should see. Serialising is safe here because `toStage` builds the objects
+  with a fixed key order.
+- **The generation lives in the pipeline id**, `team-<orchestrationId>-<n>`, and
+  is read back out of it by `generationOf` rather than being stored twice. That
+  keeps the orchestration record unchanged and makes an old
+  `team-<orchestrationId>` id read as generation 0, so the next approval becomes 1.
+  The parser is anchored to the whole shape (`^team-[0-9a-f]{8}-(\d+)$`) rather
+  than to a trailing number: an orchestration id is eight hex characters and can
+  be all digits, so a legacy `team-12345678` would otherwise read as generation
+  12345678 and mint `team-12345678-12345679`.
+- **`launchUnchangedTeam` starts the *stored* pipeline**, not the one it just
+  composed. It composes only to compare. `sameComposition` looks at stages alone,
+  so a proposal with identical roles under a new name compares equal — launching
+  the freshly composed object would put that new name on the run card while
+  `approvedTeam` and the next review context still said the old one. Same roles
+  means same team, and the team keeps its own name.
+- **The prompt was the only gate.** The service already accepted a settle-time
+  `propose_team`, recorded it, and parked at `awaiting_approval` without
+  launching. `review-run.md` had forbidden it in one sentence, and
+  `renderRunReviewContext` reinforced that by heading the section "Approved team"
+  as though it were fixed.
+- **`fromStage` refuses across a team change** because `seedFromSettledRun`
+  validates stage ids against the pipeline being launched. That needs no code: a
+  new team's ids do not match the settled run's stages, so the existing "would
+  claim work nobody did" refusal fires, which is the right answer.
+
 ## What an initiative cost (`services/orchestration-service.ts`)
 
 `Orchestration.usage` accumulates every Orchestrator turn — the settle-time review

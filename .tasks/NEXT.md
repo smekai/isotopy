@@ -69,38 +69,6 @@ Cross-platform: n/a — UI only.
 
 ---
 
-## TASK-150: The Orchestrator should compose a team for every run, not only the first
-**Priority:** P2
-**Tags:** core, server, ui, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Asked for by the user on 2026-08-17, after watching the `TASK-141` dogfood.
-
-Today an initiative approves **one** team and reuses it for every later run.
-`OrchestrationService.launch` reads `orchestration.composedPipeline` and re-runs the same roles,
-tiers and step tasks; the Orchestrator's only levers on a continuation are the task text and
-`fromStage`. So a second run that needs a different shape — a bug fix wanting only a Developer and
-a Tester, or a run that turns out to need a Software Architect nobody picked at the start — is
-forced through the original composition.
-
-That is visible in the dogfood: run 3 existed only to fix one function, and it carried the whole
-five-role team, skipping planning and design by *seeding* rather than by being composed correctly.
-Skipping is a workaround for composing.
-
-**What to build:** let the Orchestrator propose a team per run, through the same approval flow the
-first one gets. The machinery partly exists — a `propose_team` decision after a run settles already
-parks the initiative at `awaiting_approval`, and `approveTeam` already replaces `composedPipeline`.
-The work is telling the Orchestrator it may re-compose, making that a real option in the prompt and
-step task, and showing in the UI which team a given run actually used.
-
-**Decide, and record the choice:** whether re-composition needs approval every time or only when
-the shape changes; how a run's team is shown in history once teams differ per run; and how this
-meets `TASK-111` (reusable saved teams), which is the same question from the other side.
-
-Cross-platform: n/a — composition and UI.
-
----
-
 ## TASK-135: Recruit prospective users and collect their feedback
 **Priority:** P2 | **Tags:** ui, milestone-h
 **Updated:** 2026-08-07 11:40

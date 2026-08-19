@@ -549,7 +549,7 @@ test("approving a proposed team starts a composed run carrying its own pipeline 
   // Assert — the definition travels on the run, since no constant can resolve it.
   expect(status, JSON.stringify(composed)).toBe(201);
   const finished = await waitForRunStatus(ctx.app, composed.id, "completed");
-  expect(finished.pipelineId).toBe(`team-${conversation.orchestrationId}`);
+  expect(finished.pipelineId).toBe(`team-${conversation.orchestrationId}-1`);
   expect(finished.pipeline?.groups[0]?.stages).toMatchObject([
     { id: "implementation", executionPolicy: "standard" },
     { id: "test", executionPolicy: "quality" },
@@ -869,7 +869,7 @@ test("a start_run review launches the next run only once the first freed the pro
   expect(second).not.toBe(composed.id);
   const { body: latest } = await get<RunState>(ctx.app, `/runs/${second}`);
   expect(latest).toMatchObject({
-    pipelineId: `team-${conversation.orchestrationId}`,
+    pipelineId: `team-${conversation.orchestrationId}-1`,
     task: "Warm the search index on startup",
     orchestrationId: conversation.orchestrationId,
   });
