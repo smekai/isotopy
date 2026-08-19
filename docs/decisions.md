@@ -15,6 +15,53 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-19 — A team is composed per run, and only a real change asks the user
+
+**Context:** an initiative approved one team and reused it forever. `launch` read
+`orchestration.composedPipeline` and re-ran the same roles, so a continuation needing a different
+shape had only two levers: the task text, and `fromStage`. `TASK-141` watched run 3 exist purely to
+fix one function while carrying the whole five-role team, skipping planning and design by *seeding*
+rather than by being composed without them. Skipping is a workaround for composing.
+
+**The code was never the obstacle.** `propose_team` is a full member of the decision union,
+`extractOrchestratorDecision` parses a review's output against that same union, `refusalFor` refuses
+only `start_run`, and a settle-time proposal already parked the initiative at `awaiting_approval`
+without launching anything. What stopped it was one sentence of prompt: *"Do not propose a new team
+here; the approved team is already composed."* The fix is mostly telling the model the truth.
+
+**Approval happens only when the composition actually differs.** A settle-time proposal is composed
+and compared against the running pipeline; identical means the run starts immediately, different
+means the user approves first. This keeps the "approve the team, then let it run" model that the
+dogfood validated and `TASK-148`'s scope note protects, while putting the human back in front of
+composition whenever composition changes. Identical means identical — a changed model tier is a
+real change, because it changes what the run costs.
+
+**A settle-time proposal carries a task.** On the opening turn the task is the goal; on a
+re-composition it is "run *this* next, with *this* team". Without the field an auto-approved
+proposal would have nothing to run, and `approveTeam` would have started the new team against the
+initiative's original goal — which is what it did before this change, and would have been silently
+wrong for every re-composition. A proposal that omits it is refused with a message saying so, the
+way `NO_APPROVED_TEAM` already teaches.
+
+**Teams are numbered so runs stay attributable.** `composedPipelineId` was `team-<orchestrationId>`
+for every generation, so two teams' runs were indistinguishable. It now carries a generation, and
+the name gains a `(team n)` suffix for the second onward — which means `run.pipelineName`, already
+rendered on every run card, the status bar, the project drawer and child-run links, tells them apart
+with no new UI. Each composed run already embedded its full `PipelineDefinition`, so the roles were
+never lost, only unlabelled.
+
+**Seeding across a team change stays refused.** `seedFromSettledRun` validates `fromStage` against
+the pipeline being launched and refuses when the settled run never ran a preceding stage. A
+re-composed team's ids do not line up, so `fromStage` fails — correctly. A new team starts from the
+top, which is precisely the honesty run 3 lacked when it seeded past planning instead of being
+composed without it. The prompt now says so rather than leaving the model to discover the refusal.
+
+**`TASK-111` is not answered here.** Reusable *saved* teams is the same question from the other
+side, and this composes fresh rather than recalling. It stays P3 and feedback-gated on `TASK-135`;
+`start_run.teamId` remains declared and unread rather than half-wired to look like progress.
+
+---
+
 ## 2026-08-19 — Two harnesses need two skill paths; the body belongs in one of them
 
 **Context:** `.claude/skills/` and `.agents/skills/` held parallel copies of the same skills, and

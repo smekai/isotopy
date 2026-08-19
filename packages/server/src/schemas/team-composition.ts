@@ -1,4 +1,4 @@
-import { STAGE_EXECUTION_POLICIES } from "@isotopy/core";
+import { STAGE_EXECUTION_POLICIES, flattenPipelineStages } from "@isotopy/core";
 import type {
   ModelTier,
   OrchestratorRole,
@@ -64,8 +64,25 @@ function toStage(role: OrchestratorRole): StageDefinition {
   };
 }
 
-export function composedPipelineId(orchestrationId: string): string {
-  return `team-${orchestrationId}`;
+export function composedPipelineId(orchestrationId: string, generation: number): string {
+  return `team-${orchestrationId}-${generation}`;
+}
+
+export function generationOf(pipelineId: string | undefined): number {
+  const trailing = pipelineId?.match(/-(\d+)$/)?.[1];
+  return trailing === undefined ? 0 : Number(trailing);
+}
+
+export function sameComposition(
+  left: PipelineDefinition | undefined,
+  right: PipelineDefinition | undefined,
+): boolean {
+  if (left === undefined || right === undefined) {
+    return false;
+  }
+  const shape = (pipeline: PipelineDefinition): string =>
+    JSON.stringify(flattenPipelineStages(pipeline));
+  return shape(left) === shape(right);
 }
 
 export function withRoleTiers(
@@ -108,6 +125,7 @@ function chosenTier(
 export function composeTeamPipeline(
   team: OrchestratorTeamProposal,
   orchestrationId: string,
+  generation = 1,
 ): ValidationResult<PipelineDefinition> {
   const issues = [
     ...team.roles.flatMap(roleIssues),
@@ -119,8 +137,8 @@ export function composeTeamPipeline(
   return {
     ok: true,
     value: {
-      id: composedPipelineId(orchestrationId),
-      name: team.name,
+      id: composedPipelineId(orchestrationId, generation),
+      name: generation > 1 ? `${team.name} (team ${generation})` : team.name,
       description: team.summary,
       groups: [{ stages: team.roles.map(toStage) }],
     },

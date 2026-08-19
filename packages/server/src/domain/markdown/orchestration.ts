@@ -219,8 +219,8 @@ export function renderRunReviewContext({
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
     team
-      ? `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}`
-      : "## Approved team\n\nNo team has been approved yet.",
+      ? `## Team currently composed: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}\n\nThis is the team that just ran. Keep it, or propose a different one if the work ahead needs another shape.`
+      : "## Team currently composed\n\nNo team has been approved yet.",
     `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
     closeout
       ? `## Product Manager closeout\n\n${renderCloseoutBody(closeout, "###")}`

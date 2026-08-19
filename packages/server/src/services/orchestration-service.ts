@@ -44,7 +44,12 @@ import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
-import { composeTeamPipeline, withRoleTiers } from "../schemas/team-composition.ts";
+import {
+  composeTeamPipeline,
+  generationOf,
+  sameComposition,
+  withRoleTiers,
+} from "../schemas/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -203,16 +208,19 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!approved.ok) {
       return approved;
     }
-    const composed = composeTeamPipeline(approved.value, orchestration.id);
+    const composed = composeTeamPipeline(
+      approved.value,
+      orchestration.id,
+      nextGeneration(orchestration),
+    );
     if (!composed.ok) {
       return composed;
     }
     const run = await this.runs.startComposedRun(projectPath, composed.value, {
       ...options,
-      task: renderComposedRunTask({
-        goal: orchestration.goal,
-        team: approved.value,
-      }),
+      task:
+        decision.task ??
+        renderComposedRunTask({ goal: orchestration.goal, team: approved.value }),
       orchestrationId: orchestration.id,
     });
     orchestration.approvedTeam = approved.value;
@@ -559,6 +567,9 @@ export class OrchestrationService implements StageOutputConsumer {
         seeded: seeded?.value,
       });
     }
+    if (decision.action === "propose_team") {
+      return this.launchUnchangedTeam(projectPath, orchestration, decision, options);
+    }
     if (decision.action === "delegate_milestone_planning") {
       return this.runs.milestones.startMilestonePlanning(projectPath, decision.goal, options);
     }
@@ -566,6 +577,34 @@ export class OrchestrationService implements StageOutputConsumer {
       return this.continueMilestone(projectPath, run, decision.featureId, options);
     }
     return undefined;
+  }
+
+  private async launchUnchangedTeam(
+    projectPath: ProjectPath,
+    orchestration: Orchestration,
+    decision: Extract<OrchestratorDecision, { action: "propose_team" }>,
+    options: StartOrchestrationOptions,
+  ): Promise<RunState | undefined> {
+    if (decision.task === undefined) {
+      return undefined;
+    }
+    const approved = withRoleTiers(decision.team, undefined);
+    const composed = approved.ok
+      ? composeTeamPipeline(approved.value, orchestration.id, currentGeneration(orchestration))
+      : undefined;
+    if (!composed?.ok || !sameComposition(composed.value, orchestration.composedPipeline)) {
+      return undefined;
+    }
+    const run = await this.runs.startComposedRun(projectPath, composed.value, {
+      ...options,
+      task: decision.task,
+      orchestrationId: orchestration.id,
+    });
+    if (!orchestration.runIds.includes(run.id)) {
+      orchestration.runIds.push(run.id);
+    }
+    orchestration.status = "running";
+    return run;
   }
 
   private actionableDecision(
@@ -594,6 +633,11 @@ export class OrchestrationService implements StageOutputConsumer {
     settledStatus: RunState["status"],
     decision: OrchestratorDecision,
   ): string | undefined {
+    if (decision.action === "propose_team") {
+      return decision.task === undefined && orchestration.composedPipeline !== undefined
+        ? PROPOSAL_NEEDS_TASK
+        : undefined;
+    }
     if (decision.action !== "start_run") {
       return undefined;
     }
@@ -845,6 +889,18 @@ interface ReviewedDecision {
 const NO_APPROVED_TEAM =
   "The Orchestrator asked to start a run before a team was approved";
 
+const PROPOSAL_NEEDS_TASK =
+  "A team proposed after a run has settled must carry the task its run will do — " +
+  "add a `task` field, or use start_run to reuse the team already composed";
+
 const PIPELINE_ID = "orchestration";
 
 const STAGE_ID = "orchestrate";
+
+function currentGeneration(orchestration: Orchestration): number {
+  return Math.max(generationOf(orchestration.composedPipeline?.id), 1);
+}
+
+function nextGeneration(orchestration: Orchestration): number {
+  return generationOf(orchestration.composedPipeline?.id) + 1;
+}

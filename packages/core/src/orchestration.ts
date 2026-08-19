@@ -86,6 +86,7 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       action: z.literal("propose_team"),
       rationale: requiredText,
       team: orchestratorTeamProposalSchema,
+      task: requiredText.optional(),
     })
     .strict(),
   z

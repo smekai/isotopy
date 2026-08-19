@@ -1,5 +1,59 @@
 # Done
 
+## TASK-150: The Orchestrator should compose a team for every run, not only the first
+**Priority:** P2 | **Tags:** core, server, ui, milestone-h
+**Updated:** 2026-08-19 15:20
+
+An initiative approved one team and reused it forever, so a continuation needing a different shape
+had only the task text and `fromStage` to work with. `TASK-141` watched run 3 exist purely to fix one
+function while carrying the whole five-role team, skipping planning and design by *seeding* rather
+than by being composed without them.
+
+**The code was never the obstacle.** `propose_team` is already a full member of the decision union,
+`refusalFor` refuses only `start_run`, and a settle-time proposal already parked the initiative at
+`awaiting_approval` without launching. The gate was one sentence in `review-run.md`: *"Do not propose
+a new team here; the approved team is already composed."* Most of this task is telling the model the
+truth and making the surrounding behaviour honest.
+
+**Approval only on a real change**, decided with the user. A settle-time proposal is composed and
+compared with `sameComposition`; identical means the run starts immediately, different means the
+user approves first. That keeps the "approve the team, then let it run" model the dogfood validated
+and `TASK-148`'s scope note protects, while putting the human back in front of composition whenever
+composition changes. A changed model tier counts as different, because it changes what the run costs.
+
+**A settle-time proposal carries a task.** Without it an auto-approved proposal has nothing to run,
+and `approveTeam` would have started the new team against the initiative's *goal* — which is what it
+did before, and would have been silently wrong for every re-composition. A proposal that omits it is
+refused with a message saying so.
+
+**Teams are numbered.** `composedPipelineId` was `team-<orchestrationId>` for every generation, so
+two teams' runs were indistinguishable; it now carries a generation and the name gains a `(team n)`
+suffix from the second onward. Because `run.pipelineName` is already rendered on every run card, the
+status bar, the project drawer and child-run links, history tells the teams apart with **no new UI**
+— and each composed run already embedded its full `PipelineDefinition`, so the roles were never
+lost, only unlabelled.
+
+**Seeding across a team change stays refused**, needing no code: `seedFromSettledRun` validates
+`fromStage` against the pipeline being launched, so a re-composed team's ids do not line up and the
+existing "would claim work nobody did" refusal fires. A new team starts from the top — the honesty
+run 3 lacked. The prompt now says so rather than leaving the model to discover it.
+
+**`TASK-111` is not answered here**, and that is recorded rather than assumed: it asks for reusable
+*saved* teams, the same question from the other side, and stays P3 and feedback-gated on `TASK-135`.
+`start_run.teamId` remains declared and unread rather than half-wired to look like progress.
+
+Four of the five new comp tests fail without the change; the fifth — a differing team parks rather
+than launching — passes on the old code too, because that half was already implemented and only the
+prompt forbade reaching it. Eight new unit tests cover `sameComposition` and the generation, and a
+`run-thread` test pins that an older proposal keeps what it proposed once `approvedTeam` holds a
+newer team. Three existing assertions on `team-<orchestrationId>` were updated to the generation
+suffix — the honest edit, not a weakening.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (886 passed, 100 files), `pnpm build` and `pnpm e2e`
+(68 passed) all green on Windows. Cross-platform: n/a — composition, prompt text and display.
+
+---
+
 ## TASK-151: Decide what `.agents/skills/` is for, and stop it rotting
 **Priority:** P2 | **Tags:** infra, testing, milestone-h
 **Updated:** 2026-08-19 13:40
