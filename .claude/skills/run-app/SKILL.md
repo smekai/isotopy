@@ -18,8 +18,19 @@ list in `packages/ui/vite.config.ts` mirrors the route mounts in
 
 ```bash
 pnpm dev   # run in background; poll, don't sleep
-timeout 60 bash -c 'until curl -sf http://localhost:5173/health >/dev/null; do sleep 1; done'
+timeout 60 bash -c 'until curl -sf http://localhost:5173/health >/dev/null; do sleep 1; done' \
+  || { echo "UI proxy never answered"; curl -sv http://localhost:9477/health; }
 ```
+
+**A timeout here is a failure, not a slow start** — `curl -sf` treats the
+proxy's 500 exactly like a connection refused, so without the `||` branch a
+broken proxy is indistinguishable from a server still booting, and 60 seconds
+later you carry on against an app that cannot load anything. If the proxied URL
+stays dead while `http://localhost:9477/health` answers, the two processes are
+both up and it is the *proxy hop* that is failing — suspect whatever launched
+them rather than the app. A harness that starts the two `pnpm --filter` commands
+itself can produce exactly that, with `[vite] http proxy error … EADDRINUSE` in
+the UI log, while a plain `pnpm dev` on the same machine is fine.
 
 Stop: kill the `pnpm dev` task, then confirm ports 9477/5173 are
 released (a stray `tsx watch`/`vite` child sometimes survives —
