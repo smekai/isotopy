@@ -1,7 +1,7 @@
 import type {
   OrchestratorBrokerPhase,
   OrchestratorTeamProposal,
-  ProductManagerCloseout,
+  CloseoutReport,
 } from "@isotopy/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
 import { renderCloseoutBody } from "./closeout.ts";
@@ -209,7 +209,7 @@ export interface RunReviewMarkdownContext {
   team?: OrchestratorTeamProposal;
   runLabel: string;
   runStatus: string;
-  closeout?: ProductManagerCloseout;
+  closeout?: CloseoutReport;
   artifacts: QuestionMediationArtifact[];
   milestone?: RunReviewMilestoneContext;
   rejectedDecision?: string;
@@ -252,7 +252,7 @@ export function renderRunReviewContext({
       : "## Team currently composed\n\nNo team has been approved yet.",
     `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
     closeout
-      ? `## Product Manager closeout\n\n${renderCloseoutBody(closeout, "###")}`
+      ? `## Run closeout\n\n${renderCloseoutBody(closeout, "###")}`
       : undefined,
     milestone ? renderReviewMilestone(milestone) : undefined,
     renderArtifactSections("Stage outputs", artifacts),

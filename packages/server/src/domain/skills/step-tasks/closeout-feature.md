@@ -1,5 +1,10 @@
 # Assignment: Close out the feature run
 
+This is a closeout, not a decision: end it with a `VERDICT:` line and the
+`isotopy-closeout` block below, and do not emit an
+`isotopy-orchestrator-decision` block. Nothing is launched from here — you are
+recording what this run turned out to be, for the review that comes next.
+
 Consolidate the approved scope, decisions, implementation handoff, review and QA
 evidence, release or deployment evidence, unresolved problems, and cleanup
 result. Distinguish completed work from blocking findings and runtime failures.

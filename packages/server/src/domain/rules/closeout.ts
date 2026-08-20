@@ -5,7 +5,7 @@ import {
   refineDeclaredFindings,
   type CloseoutFinding,
   type FollowUpTaskDraft,
-  type ProductManagerCloseout,
+  type CloseoutReport,
   type RunState,
 } from "@isotopy/core";
 import { z } from "zod";
@@ -70,11 +70,11 @@ const agentCloseoutSchema = z
   .superRefine(refineDeclaredFindings);
 
 export interface ParsedCloseout {
-  report: ProductManagerCloseout;
+  report: CloseoutReport;
   validationErrors: string[];
 }
 
-function emptyCloseout(summary: string): ProductManagerCloseout {
+function emptyCloseout(summary: string): CloseoutReport {
   return {
     summary,
     deliveredScope: [],
@@ -202,12 +202,12 @@ function salvageCloseout(
   };
 }
 
-export function parseProductManagerCloseout(output: string): ParsedCloseout {
+export function parseCloseoutReport(output: string): ParsedCloseout {
   const block = CLOSEOUT_BLOCK.exec(output)?.[1];
   if (!block) {
     return {
       report: emptyCloseout(
-        output.trim() || "Product Manager produced no closeout text.",
+        output.trim() || "The closeout produced no text.",
       ),
       validationErrors: ["Missing fenced isotopy-closeout JSON block"],
     };
@@ -252,7 +252,7 @@ export interface SourceTaskOutcomeReview {
 
 export function validateSourceTaskOutcome(
   run: RunState,
-  report: ProductManagerCloseout,
+  report: CloseoutReport,
 ): SourceTaskOutcomeReview {
   const sourceIds = new Set(run.sourceTaskIds ?? []);
   const reportedIds = [

@@ -3,13 +3,13 @@ import path from "node:path";
 import { agentForStage } from "@isotopy/core";
 import type {
   CleanupResult,
-  ProductManagerCloseout,
+  CloseoutReport,
   RunCloseoutRecord,
   RunState,
   StageDefinition,
 } from "@isotopy/core";
 import {
-  parseProductManagerCloseout,
+  parseCloseoutReport,
   validateSourceTaskOutcome,
 } from "../../domain/rules/closeout.ts";
 import {
@@ -40,7 +40,7 @@ export class CloseoutConsumer implements StageOutputConsumer {
     if (run.pipelineId !== PIPELINE_ID || stageDef.id !== STAGE_ID) {
       return undefined;
     }
-    const applied = await applyProductManagerCloseout(
+    const applied = await applyCloseoutReport(
       this.registry.resolve(run.projectId),
       run,
       output,
@@ -55,12 +55,12 @@ export class CloseoutConsumer implements StageOutputConsumer {
   }
 }
 
-export async function applyProductManagerCloseout(
+export async function applyCloseoutReport(
   projectPath: ProjectPath,
   run: RunState,
   output: string,
 ): Promise<CloseoutApplication> {
-  const parsed = parseProductManagerCloseout(output);
+  const parsed = parseCloseoutReport(output);
   const review = validateSourceTaskOutcome(run, parsed.report);
   const reportErrors = [...parsed.validationErrors, ...review.contradictions];
   const sideEffectErrors: string[] = [];
@@ -115,7 +115,7 @@ const STAGE_ID = "closeout";
 async function cleanupRunTemp(
   projectPath: ProjectPath,
   runId: string,
-  report: ProductManagerCloseout,
+  report: CloseoutReport,
 ): Promise<CleanupResult> {
   const tempRoot = path.resolve(runsDir(projectPath), runId, "tmp");
   const removed: string[] = [];

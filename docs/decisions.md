@@ -15,6 +15,51 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-20 — Every role keeps its own memory of the project, and the Orchestrator owns the closeout
+
+**Context:** A handoff dies with its run. Every role therefore started each run knowing nothing
+about the project it had already worked on three times — where migrations live, which command
+really builds, that the config is not where its name suggests. The run artifacts the Orchestrator
+collects are the *opposite* store: they are about what one run produced, they are shared across all
+roles, and they are consumed by the next run's planning rather than by the role that learned the
+fact.
+
+**Decision:** each persona gets a private, append-only memory of the project, stored beside its
+skill as `<skills>/<id>.notes.md` and layered into that persona's prompt and no other. A stage is
+invited — never required — to end its report with an `isotopy-persona-notes` block. Notes are
+merged, deduped, and capped at 40; a repeated note moves to the end rather than being written
+twice, so the cap evicts what has stopped being mentioned.
+
+The notes are scoped to the **project**, not the run. "The suite takes eight minutes" is a note;
+"I added greet.js" is a handoff and is already carried as one. The prompt says so explicitly,
+because a role summarising its own run into its notes would fill the cap with things no future run
+can use.
+
+**Rejected — one shared memory for the whole team.** It is the cheaper build and the worse product.
+A QA Engineer's hard-won fact about flaky selectors is noise in an Architect's context window, and a
+shared file makes every role pay for every other role's learning on every run. Per-role notes also
+give the Orchestrator something a shared blob cannot: a digest of *who knows what*, which it now
+sees when composing, so it can build a team around existing knowledge instead of re-teaching it.
+
+**Decision:** the run closeout is the Orchestrator's, not the Product Manager's. A closeout
+consolidates the whole run — every specialist's evidence, the follow-up tasks, the source-task
+outcomes, the cleanup. The Product Manager only ever saw its own planning stage plus whatever the
+handoffs quoted, so having it adjudicate the run's outcome asked one specialist to grade the
+others. The Orchestrator is the only role that owns the run end to end.
+
+**Rejected — folding the closeout into the Orchestrator's settle-time review.** It reads cleaner:
+one turn, one role, no closeout stage at all. But the review only happens when an orchestration
+exists, and `routes/runs.ts` starts any pipeline directly — a `full-delivery` run launched from the
+run list has no Orchestrator to review it. Folding the closeout in would have silently stopped
+creating follow-up tasks and transitioning source tasks for that supported path. The closeout stays
+a stage; only its persona changed.
+
+That change was available because the Orchestrator persona already defers output shape to the
+assignment. Its "every turn ends in exactly one decision" rule was narrowed to decision turns, and
+the closeout assignment now states that it is not one.
+
+---
+
 ## 2026-08-20 — The rail groups an initiative's runs, and groups on the run's own claim
 
 **Context:** `TASK-141`'s dogfood produced three runs of one initiative — the Orchestrator

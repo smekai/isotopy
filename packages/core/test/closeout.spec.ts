@@ -3,7 +3,7 @@
 // Isotopy itself persists. If core ever starts normalising, the two collapse into
 // one lenient codec and the strict-on-the-way-to-disk guarantee is gone.
 import { describe, expect, it } from "vitest";
-import { productManagerCloseoutSchema } from "../src/closeout.ts";
+import { closeoutReportSchema } from "../src/closeout.ts";
 
 const CLOSEOUT = {
   summary: "Delivered the feature.",
@@ -25,16 +25,16 @@ const CLOSEOUT = {
   cleanup: [],
 };
 
-describe("productManagerCloseoutSchema", () => {
+describe("closeoutReportSchema", () => {
   it("stays transform-free: severity prose and duplicates are the agent boundary's job", () => {
     expect(
-      productManagerCloseoutSchema.safeParse({
+      closeoutReportSchema.safeParse({
         ...CLOSEOUT,
         findings: [{ id: "F1", title: "Flaky test", severity: "Non-Blocking" }],
       }).success,
     ).toBe(false);
 
-    const duplicated = productManagerCloseoutSchema.safeParse({
+    const duplicated = closeoutReportSchema.safeParse({
       ...CLOSEOUT,
       deliveredScope: ["Feature", "Feature"],
     });
@@ -44,7 +44,7 @@ describe("productManagerCloseoutSchema", () => {
   });
 
   it("rejects a follow-up task naming a finding that was never declared", () => {
-    const parsed = productManagerCloseoutSchema.safeParse({
+    const parsed = closeoutReportSchema.safeParse({
       ...CLOSEOUT,
       tasks: [{ ...CLOSEOUT.tasks[0], findingId: "F9" }],
     });

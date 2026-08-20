@@ -889,8 +889,47 @@ TASK-053 follow-up. Personas are **layered** instead, composed by the pure
 4. plus `<project>/.isotopy/skills/<id>.project.md` **appended** — the default way
    to customise, carrying only the project's tweaks so improvements to the base
    keep reaching it.
+5. plus `<project>/.isotopy/skills/<id>.notes.md` **appended** — what this role
+   learned about this project on earlier runs. Layer 4 is written by a human;
+   layer 5 is written by the role itself.
 
 The cache is keyed by resolved path, not skill id, because the data roots differ
 per project and an id-keyed cache would leak one project's persona into another.
 See [`architecture.md`](./architecture.md) for how the `architect`
 persona is generated from a single source.
+
+## A role's memory of the project (`services/persona-notes-store.ts`, `domain/rules/persona-notes.ts`)
+
+The fifth skill layer above. Three properties are load-bearing and none is obvious
+from the code alone.
+
+**The invitation rides with the step task, not with the prompt.** `buildStagePrompt`
+appends `STAGE_NOTES_INVITATION` only when a `stepTask` is present. A single-box run
+has no step task, and its prompt must stay *exactly* what the user typed —
+`stage-context.spec.ts` pins that. A persona-backed stage always has one, so no real
+role loses the invitation.
+
+**Capture never fails a stage.** `capturePersonaNotes` runs after `settleStageOutput`
+and its rejection is logged as a warning, not surfaced. Notes are optional by
+construction: `extractPersonaNotes` returns `undefined` when the block is absent —
+unlike `extractRunArtifacts`, whose absence is a defect worth reporting — and a
+malformed block is treated the same as no block. A role that writes bad JSON in an
+optional trailer should not lose the work it just did.
+
+**A repeated note moves to the end.** `mergePersonaNotes` dedupes by appending: a note
+already stored and reported again is removed from its old position and re-added last.
+The cap (`MAX_NOTES = 40`) then evicts from the front, so what survives is what roles
+keep re-observing rather than what they observed first. Without the move, the cap would
+freeze the earliest 40 facts forever.
+
+Writes are tmp-then-rename because two stages of the same run can settle close together
+and a half-written notes file would be parsed as truncated on the next read.
+`personaNotesByRole` tolerates a missing directory and skips empty files, so a project
+that has never produced a note contributes nothing to the Orchestrator's digest rather
+than a list of empty roles.
+
+The `NOTES_ID` guard (`/^[a-z0-9-]+$/`) is applied on both the write and the scan. A
+skill id reaches this code from a pipeline definition, which the Orchestrator can
+compose — so it is untrusted enough to keep out of a path join.
+
+---

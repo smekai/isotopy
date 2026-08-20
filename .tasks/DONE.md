@@ -1,5 +1,6 @@
 # Done
 
+<<<<<<< Updated upstream
 ## TASK-149: Group an initiative's runs visually in the UI
 **Priority:** P2
 **Tags:** ui, milestone-h
@@ -1153,6 +1154,8 @@ Cross-platform: n/a — file moves and in-process refactors only; no process spa
 
 ---
 
+=======
+>>>>>>> Stashed changes
 ## TASK-108: Milestone E — Eigen: the Orchestrator
 **Priority:** P1 | **Tags:** core, server, ui, engine, milestone-e
 **Updated:** 2026-08-07 11:40

@@ -8,7 +8,7 @@ import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@isotopy/core";
 import type { ProjectPath } from "../../src/paths.ts";
-import { applyProductManagerCloseout } from "../../src/services/consumers/closeout-consumer.ts";
+import { applyCloseoutReport } from "../../src/services/consumers/closeout-consumer.ts";
 
 const roots: string[] = [];
 
@@ -90,7 +90,7 @@ test("only the tasks the report calls completed move to Done", async () => {
   await writeTaskBoard(project);
 
   // Act
-  const { record, reportErrors } = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
@@ -109,7 +109,7 @@ test("only the tasks the report calls completed move to Done", async () => {
       path.join(project.dataDir, "runs", run.id, "closeout", "closeout.md"),
       "utf8",
     ),
-  ).toContain("# Product Manager closeout");
+  ).toContain("# Run closeout");
 });
 
 test("cleanup deletes inside the run directory and refuses to escape it", async () => {
@@ -123,7 +123,7 @@ test("cleanup deletes inside the run directory and refuses to escape it", async 
   await writeFile(path.join(project.root, "user-work.txt"), "preserve");
 
   // Act
-  const { record } = await applyProductManagerCloseout(
+  const { record } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
@@ -146,10 +146,10 @@ test("closing the same run out twice does not file the follow-up task again", as
   const run = makeCloseoutRun();
   await writeTaskBoard(project);
   const output = closeoutOutput(PARTIAL_DELIVERY, "FAIL");
-  await applyProductManagerCloseout(project, run, output);
+  await applyCloseoutReport(project, run, output);
 
   // Act
-  const { record: second } = await applyProductManagerCloseout(project, run, output);
+  const { record: second } = await applyCloseoutReport(project, run, output);
 
   // Assert
   expect(second.createdTasks).toEqual([]);
@@ -190,7 +190,7 @@ test("keeps findings and follow-up tasks when the agent writes a hyphenated seve
   };
 
   // Act
-  const { record, reportErrors } = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(report, "PASS"),
@@ -215,7 +215,7 @@ test("a task-board failure is recorded in the closeout without making the report
   await writeFile(path.join(tasksDir, "config.json"), "{ not json");
 
   // Act
-  const { record, reportErrors } = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),

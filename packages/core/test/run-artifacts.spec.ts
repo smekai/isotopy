@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { productManagerCloseoutSchema } from "../src/closeout.ts";
+import { closeoutReportSchema } from "../src/closeout.ts";
 import { runArtifactsSchema, runArtifactRecordSchema } from "../src/run-artifacts.ts";
 
 const ARTIFACTS = {
@@ -87,9 +87,9 @@ describe("runArtifactRecordSchema", () => {
   });
 });
 
-describe("productManagerCloseoutSchema", () => {
+describe("closeoutReportSchema", () => {
   test("closeout still accepts a full report after sharing the artifacts shape", () => {
-    const parsed = productManagerCloseoutSchema.safeParse(CLOSEOUT);
+    const parsed = closeoutReportSchema.safeParse(CLOSEOUT);
 
     expect(parsed.success && parsed.data).toMatchObject({
       completedTaskIds: ["TASK-001"],
@@ -98,7 +98,7 @@ describe("productManagerCloseoutSchema", () => {
   });
 
   test("a closeout missing the task-board fields is rejected — it is the superset", () => {
-    const parsed = productManagerCloseoutSchema.safeParse(ARTIFACTS);
+    const parsed = closeoutReportSchema.safeParse(ARTIFACTS);
 
     expect(parsed.success).toBe(false);
   });

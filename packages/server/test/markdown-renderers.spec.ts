@@ -1,4 +1,4 @@
-import type { ProductManagerCloseout } from "@isotopy/core";
+import type { CloseoutReport } from "@isotopy/core";
 import { describe, expect, it, test } from "vitest";
 import {
   renderCancelledCleanupReport,
@@ -21,7 +21,7 @@ import {
 } from "../src/domain/markdown/stage.ts";
 import { renderGatePreference } from "../src/domain/markdown/orchestration.ts";
 
-const CLOSEOUT: ProductManagerCloseout = {
+const CLOSEOUT: CloseoutReport = {
   summary: "Delivered\r\ncleanly.",
   deliveredScope: ["Feature one\nwith details"],
   decisions: ["Keep\nboth lines"],
@@ -45,7 +45,7 @@ describe("artifact Markdown", () => {
   it("renders closeout sections with normalized structure and one terminal newline", () => {
     expect(renderCloseout(CLOSEOUT)).toBe(
       [
-        "# Product Manager closeout",
+        "# Run closeout",
         "",
         "Delivered",
         "cleanly.",

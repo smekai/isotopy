@@ -1,7 +1,7 @@
 import type {
   CleanupResult,
   CloseoutFinding,
-  ProductManagerCloseout,
+  CloseoutReport,
   RunArtifacts,
 } from "@isotopy/core";
 import {
@@ -65,7 +65,7 @@ function recommendationSection(
 }
 
 function closeoutSections(
-  report: ProductManagerCloseout,
+  report: CloseoutReport,
   level: HeadingLevel,
 ): Array<string | undefined> {
   return [
@@ -94,15 +94,15 @@ function artifactSections(
   ];
 }
 
-export function renderCloseout(report: ProductManagerCloseout): string {
+export function renderCloseout(report: CloseoutReport): string {
   return markdownBlocks(
-    ["# Product Manager closeout", ...closeoutSections(report, DOCUMENT_LEVEL)],
+    ["# Run closeout", ...closeoutSections(report, DOCUMENT_LEVEL)],
     true,
   );
 }
 
 export function renderCloseoutBody(
-  report: ProductManagerCloseout,
+  report: CloseoutReport,
   level: HeadingLevel,
 ): string {
   return markdownBlocks(closeoutSections(report, level));
