@@ -1,5 +1,81 @@
 # Done
 
+## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
+**Priority:** P2 | **Tags:** ui, server, core, milestone-h
+**Updated:** 2026-08-20 22:45
+
+**Closed 2026-08-20.** Eleven tasks admitted, nine built, two rejected.
+
+**Built — defects from the `TASK-141` dogfood, never feedback-gated:**
+`TASK-144` (a run's changed files compared by content, not by dirty-list membership),
+`TASK-145` (the tool cache scoped per project and kept inside the sandbox),
+`TASK-146` (the documented API actually matches the server),
+`TASK-147` (a mediated question bills the Orchestrator, not the specialist it interrupted),
+`TASK-152` (rejected — the dev-proxy defect was mine, and misfiled twice; the launcher was the cause).
+
+**Built — three asks from the product owner, who watched the dogfood:**
+`TASK-148` (gates as real per-pipeline-per-stage config, not a hardcoded list),
+`TASK-149` (an initiative's runs grouped on the run's own claim, and every launching decision
+attributed to the run it started),
+`TASK-150` (a team composed per run, with approval only when the shape actually differs).
+
+**Built — `TASK-151`** (`.agents/skills/` restored; Codex discovers it by documented convention,
+so no repo grep can prove nothing reads it).
+
+**Built — `TASK-113`**, the one feedback-gated task that got built: per-persona accumulated
+context, plus the run closeout moving from the Product Manager to the Orchestrator.
+
+**Rejected:** `TASK-135` (collect feedback) — not development work; the product owner will dogfood
+Isotopy on a real project and report back when they have something to say. `TASK-111` (reusable
+saved teams) — `TASK-150` answers the same question from the composing side, and no user has asked
+to recall a team by name.
+
+**The rule this milestone was created to enforce, judged honestly.** It said to build what feedback
+asks for and reject the rest. No prospective-user feedback ever arrived, because `TASK-135` was
+never run. What did arrive was the product owner watching a dogfood — a legitimate source, but not
+the evidence this milestone was waiting for, and the milestone notes said as much in advance so
+"a user asked" could not quietly come to mean "we asked ourselves". `TASK-113` was built on the
+owner's direct instruction rather than on that evidence. Recorded rather than smoothed over: the
+gate held for `TASK-111` and `TASK-135`, and was consciously overridden once.
+
+Cross-platform: every task in the milestone carried the same Windows and macOS bar.
+
+---
+
+## TASK-113: Per-persona accumulated context (artifact distilled memory)
+**Priority:** P3 | **Tags:** core, server, ui, milestone-h
+**Updated:** 2026-08-20 22:40
+
+Every role now keeps a private memory of the project and the Orchestrator owns the run closeout.
+
+**Done:**
+
+1. **A fifth skill layer.** `<project>/.isotopy/skills/<id>.notes.md`, appended by `composeSkill`
+   under "What earlier runs taught you about this project". Layer 4 (`.project.md`) is written by a
+   human; layer 5 is written by the role itself.
+2. **The invitation.** Every stage prompt carrying a step task ends with an optional
+   `isotopy-persona-notes` block. A bare single-box prompt is still exactly what the user typed.
+3. **Merge rules** (`domain/rules/persona-notes.ts`): dedupe, cap at 40, and a repeated note moves
+   to the end — so the cap evicts what stopped being mentioned, not what was learned first.
+4. **Capture never fails a stage.** Notes are optional by construction; a malformed block is
+   treated as no block and logged as a warning.
+5. **The Orchestrator's constraint digest.** `renderPersonaConstraints` shows it who already knows
+   what, so it composes around existing knowledge instead of re-teaching it.
+6. **The closeout moved to the Orchestrator.** The `full-delivery` closeout stage runs as
+   `orchestrator`, not `project-manager`; `ProductManagerCloseout` is now `CloseoutReport`. The
+   Product Manager keeps the right to read anyone's output and disagree — in its own report and its
+   own notes.
+
+**Not done, deliberately:** folding the closeout into the Orchestrator's settle-time review. The
+review needs an orchestration, and `routes/runs.ts` starts any pipeline directly, so a
+`full-delivery` run launched from the run list would have silently stopped creating follow-up tasks
+and transitioning source tasks. Both decisions are in `docs/decisions.md` (2026-08-20).
+
+Tests: 5 comp tests round-tripping notes through real runs (3 verified failing without the
+feature), 9 unit tests on the merge rules, 3 on the skill layering, 1 pinning closeout ownership.
+
+---
+
 ## TASK-149: Group an initiative's runs visually in the UI
 **Priority:** P2
 **Tags:** ui, milestone-h

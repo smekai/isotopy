@@ -142,49 +142,6 @@ today.
 
 ---
 
-## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
-**Priority:** P2 | **Tags:** ui, server, core, milestone-h
-**Updated:** 2026-08-10 14:10
-
-Show Isotopy to people who might want it, find out what they actually need, and build
-that — rather than what we guessed while building it.
-
-**Goal:** the features in this milestone are chosen by users, not by us. `TASK-135`
-collects the feedback; what follows is decided by what it says.
-
-**Parked here pending that evidence:** `TASK-111` (reusable teams), `TASK-113` (per-persona
-accumulated context). Each was written as post-MVP by whoever deferred it, and none has a
-user behind it yet. Build the ones feedback asks for; reject the rest rather than letting
-them age in the backlog.
-
-**Admitted 2026-08-17, out of the `TASK-141` dogfood.** Two different kinds arrived at once:
-
-- **Defects, kept out of Milestone F deliberately** so F could close on its evidence rather than
-  grow a tail: `TASK-144` and `TASK-145` (P0), `TASK-146` and `TASK-147` (P2). These are **not**
-  feedback-gated — they are known-broken behaviour and should be fixed whatever `TASK-135` finds.
-- **Three asks from the user**, who watched the dogfood: `TASK-148` (gates as real config),
-  `TASK-149` (group an initiative's runs), `TASK-150` (compose a team per run). These came from the
-  product owner, not from `TASK-135`'s prospective users. That is a legitimate source, but it is
-  not the evidence this milestone was created to wait for — recorded plainly so "a user asked" does
-  not quietly come to mean "we asked ourselves". `TASK-150` overlaps `TASK-111`; design them together.
-
-That rule has been applied once already: `TASK-095` (agent-native browser testing for QA)
-was **rejected on 2026-08-11**, answered by `TASK-138` rather than built. Its policy half
-lives in the tester persona now instead of in a task.
-
-Also unclaimed: the **full Orchestrator UI** beyond the MVP slice `TASK-114` shipped. No
-task exists for it on purpose — write one when someone says what is missing. The first
-such claim arrived and went to Milestone F, not here: `TASK-137` (one dialog instead of
-an `Orchestrator` tab beside a `Chat` tab), because the demo cannot route around it.
-
-**Started 2026-08-17.** The nine tasks that are not feedback-gated moved to Next; `TASK-111`
-and `TASK-113` stay in Backlog until `TASK-135` produces the evidence they are waiting for.
-
-Cross-platform: whatever this milestone builds carries the same Windows and macOS bar as
-everything else.
-
----
-
 ## TASK-142: Rerun the Milestone F dogfood with Cursor after quota reset
 **Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-17 12:30

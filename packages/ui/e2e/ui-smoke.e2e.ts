@@ -89,13 +89,14 @@ test("Full Delivery previews the revised persona team", async ({ page }) => {
 
   // Assert
   await expect(page.getByText("What should the delivery team build?")).toBeVisible();
-  await expect(page.getByText("Product Manager", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Product Manager", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Product Designer", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Software Architect", { exact: true })).toHaveCount(2);
   await expect(page.getByText("Developer", { exact: true })).toHaveCount(1);
   await expect(page.getByText("QA Engineer", { exact: true })).toHaveCount(1);
   await expect(page.getByText("Release Manager", { exact: true })).toHaveCount(1);
   await expect(page.getByText("SRE", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("Orchestrator", { exact: true })).toHaveCount(1);
 });
 
 test("single-agent mode shows the folder as read-only context, not an input", async ({ page }) => {
