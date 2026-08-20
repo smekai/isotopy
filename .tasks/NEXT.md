@@ -185,24 +185,6 @@ everything else.
 
 ---
 
-## TASK-135: Recruit prospective users and collect their feedback
-**Priority:** P2 | **Tags:** ui, milestone-h
-**Updated:** 2026-08-07 11:40
-
-The input `TASK-134` runs on.
-
-**Decide and record:** who to approach and why they are the target (developers who want a
-local, model-agnostic team over a hosted app builder); what to put in front of them — a
-README, a recording, or a session where they drive it themselves; what to ask, in
-questions that surface what they *tried to do* rather than what they thought of the UI;
-and where answers land so they are quotable in a task later.
-
-The bar for a useful answer is a sentence naming something they wanted and could not do.
-
-Cross-platform: n/a — process, not code.
-
----
-
 ## TASK-142: Rerun the Milestone F dogfood with Cursor after quota reset
 **Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-17 12:30

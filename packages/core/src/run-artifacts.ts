@@ -35,3 +35,12 @@ export const runArtifactRecordSchema = z
   .strict();
 
 export type RunArtifactRecord = z.infer<typeof runArtifactRecordSchema>;
+
+/** Durable facts a persona learned about this project, carried into its next run. */
+export const personaNotesSchema = z
+  .object({
+    notes: z.array(requiredText).min(1),
+  })
+  .strict();
+
+export type PersonaNotes = z.infer<typeof personaNotesSchema>;

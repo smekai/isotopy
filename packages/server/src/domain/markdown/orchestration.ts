@@ -14,6 +14,7 @@ export interface OrchestrationContext {
   boardContext: string;
   closeoutContext: string;
   gatePreference?: string;
+  personaConstraints?: string;
 }
 
 export interface OrchestrationFollowUpContext extends OrchestrationContext {
@@ -58,6 +59,7 @@ export function renderOrchestrationContext({
   boardContext,
   closeoutContext,
   gatePreference,
+  personaConstraints,
 }: OrchestrationContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
@@ -66,8 +68,35 @@ export function renderOrchestrationContext({
     gatePreference === undefined
       ? undefined
       : `## Where this project likes its gates\n\n${markdownBody(gatePreference)}`,
+    personaConstraints === undefined
+      ? undefined
+      : `## What each role already knows about this project\n\n${markdownBody(personaConstraints)}`,
     markdownBody(boardContext),
     markdownBody(closeoutContext),
+  ]);
+}
+
+export interface PersonaNoteSummary {
+  skillId: string;
+  notes: string[];
+}
+
+export function renderPersonaConstraints(
+  roles: PersonaNoteSummary[],
+): string | undefined {
+  if (roles.length === 0) {
+    return undefined;
+  }
+  return markdownBlocks([
+    "Each role keeps its own notes about this project, written by that role at the end of an",
+    "earlier run and replayed only to itself. They are what the team has already learned here, so",
+    "compose around them rather than sending someone to rediscover them.",
+    ...roles.map(({ skillId, notes }) =>
+      markdownBlocks([
+        `### \`${skillId}\``,
+        notes.map((note) => bullet(note)).join("\n"),
+      ]),
+    ),
   ]);
 }
 

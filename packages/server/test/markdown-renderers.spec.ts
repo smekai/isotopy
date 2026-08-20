@@ -14,7 +14,11 @@ import {
   renderMilestoneRevisionContext,
   renderPriorMilestoneCloseouts,
 } from "../src/domain/markdown/planning.ts";
-import { buildContinuationPrompt, buildStagePrompt } from "../src/domain/markdown/stage.ts";
+import {
+  STAGE_NOTES_INVITATION,
+  buildContinuationPrompt,
+  buildStagePrompt,
+} from "../src/domain/markdown/stage.ts";
 import { renderGatePreference } from "../src/domain/markdown/orchestration.ts";
 
 const CLOSEOUT: ProductManagerCloseout = {
@@ -146,7 +150,8 @@ describe("prompt Markdown", () => {
         "## Task\n\nBuild\nthis\n\n" +
         "## Handoff from previous steps\n\n" +
         "These are reports from the boxes that ran before you, in order. They describe intent — the working directory is the source of truth. Verify rather than assume.\n\n" +
-        "### Software Architect\n\nReview\nnotes",
+        "### Software Architect\n\nReview\nnotes\n\n" +
+        STAGE_NOTES_INVITATION,
     );
   });
 
@@ -174,7 +179,8 @@ describe("prompt Markdown", () => {
         "### What you asked on turn 1\n\nWhich database?\n\n" +
         "### The answer you were given\n\nPostgres\n\n" +
         "### What you asked on turn 2\n\nWhich table?\n\n" +
-        "### The answer you were given\n\nsettings",
+        "### The answer you were given\n\nsettings\n\n" +
+        STAGE_NOTES_INVITATION,
     );
   });
 

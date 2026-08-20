@@ -1,33 +1,5 @@
 # Backlog
 
-## TASK-111: Reusable teams for later orchestrations
-**Priority:** P3 | **Tags:** core, server, milestone-h
-**Updated:** 2026-08-07 11:40
-
-**Milestone H — Harmonic. Build only if feedback asks for it.** Written as post-MVP when
-Milestone E deferred it; no user has yet said they recompose teams often enough to mind.
-
-Persist approved team compositions to `.adhd/teams/<id>.json` with a strict schema and a single writer. The orchestrator lists and reuses saved teams across later conversations instead of recomposing from scratch.
-
-Cross-platform: n/a — JSON + path-joined storage under the existing `.adhd` roots.
-
----
-
-## TASK-113: Per-persona accumulated context (artifact distilled memory)
-**Priority:** P3 | **Tags:** core, server, ui, milestone-h
-**Updated:** 2026-08-07 11:40
-
-**Milestone H — Harmonic. Build only if feedback asks for it.** The evidence to wait for
-is a user saying an agent kept relearning the same thing about their project.
-
-Distill closeout knowledge into per-persona accumulated notes under `.adhd` and inject those notes into `composeSkill` alongside existing user/project overrides.
-
-Also add an orchestrator-facing constraint digest so the orchestrator can reason about “must-do differently for stage X in this project” without needing deep per-agent state.
-
-Cross-platform: path-joined read/write to `.adhd` roots; no subprocess/shell assumptions.
-
----
-
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P3 | **Tags:** server, engine, infra
 **Updated:** 2026-08-07 11:40

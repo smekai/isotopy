@@ -1,5 +1,69 @@
 # Rejected
 
+## TASK-135: Recruit prospective users and collect their feedback
+**Priority:** P2 | **Tags:** ui, milestone-h
+**Updated:** 2026-08-20 16:10
+
+**Rejected as not a development task, 2026-08-20**, decided with the user.
+
+Recruiting people and asking them what they tried to do is real and worth doing, but it is not work
+the board can carry: it has no diff, no gate, and no definition of done a run could check. The user
+will trial the product themselves and feed back informally rather than through a task.
+
+**What this costs, recorded plainly.** `TASK-134` built Milestone H around this task's evidence, and
+without it the milestone closes having been steered entirely by the product owner. `TASK-111` was
+rejected on the strength of `TASK-150` answering it; `TASK-113` was built because the user judged it
+needed, not because a user asked. That is a legitimate way to run a milestone, but it is not the one
+`TASK-134` described, and saying so here is the point.
+
+Original scope follows, for the record:
+
+The input `TASK-134` runs on.
+
+**Decide and record:** who to approach and why they are the target (developers who want a
+local, model-agnostic team over a hosted app builder); what to put in front of them — a
+README, a recording, or a session where they drive it themselves; what to ask, in
+questions that surface what they *tried to do* rather than what they thought of the UI;
+and where answers land so they are quotable in a task later.
+
+The bar for a useful answer is a sentence naming something they wanted and could not do.
+
+Cross-platform: n/a — process, not code.
+
+
+---
+
+## TASK-111: Reusable teams for later orchestrations
+**Priority:** P3 | **Tags:** core, server, milestone-h
+**Updated:** 2026-08-20 16:10
+
+**Rejected as answered by:** TASK-150, 2026-08-20.
+
+`TASK-150` built this from the other side. It asked whether an initiative should *recall* a saved
+team; `TASK-150` made the Orchestrator *compose* one per run, proposing a fresh shape whenever the
+work ahead needs a different one and reusing the running team when it does not. Saving teams to
+recall later solves a problem that composing per run does not have, and its own text already said
+the two were the same question from two directions.
+
+The spec had also aged out of the repository it was written for: it targets `.adhd/teams/<id>.json`,
+a path renamed to `.isotopy` in `TASK-143`.
+
+**Decided with the user on 2026-08-20**, closing Milestone H. No user ever said they recompose teams
+often enough to mind, which is the evidence `TASK-134` said to wait for — and `TASK-134`'s rule is to
+reject rather than let it age.
+
+Original scope follows, for the record:
+
+**Milestone H — Harmonic. Build only if feedback asks for it.** Written as post-MVP when
+Milestone E deferred it; no user has yet said they recompose teams often enough to mind.
+
+Persist approved team compositions to `.adhd/teams/<id>.json` with a strict schema and a single writer. The orchestrator lists and reuses saved teams across later conversations instead of recomposing from scratch.
+
+Cross-platform: n/a — JSON + path-joined storage under the existing `.adhd` roots.
+
+
+---
+
 ## TASK-152: `pnpm dev` gives a UI that cannot reach the server on Windows
 **Priority:** P1 | **Tags:** infra, ui, server, milestone-h
 **Updated:** 2026-08-19 10:30

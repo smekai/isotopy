@@ -25,20 +25,27 @@ export function projectSkillAddendumPath(projectPath: ProjectPath, skillId: stri
   return path.join(skillsDir(projectPath), `${skillId}.project.md`);
 }
 
+export function personaNotesPath(projectPath: ProjectPath, skillId: string): string {
+  return path.join(skillsDir(projectPath), `${skillId}.notes.md`);
+}
+
 export async function loadSkill(
   projectPath: ProjectPath,
   skillId: string,
 ): Promise<string | undefined> {
-  const [bundled, userOverride, projectOverride, projectAddendum] = await Promise.all([
-    loadBundledPersona(skillId),
-    readCached(userSkillFilePath(skillId)),
-    readCached(projectSkillFilePath(projectPath, skillId)),
-    readCached(projectSkillAddendumPath(projectPath, skillId)),
-  ]);
+  const [bundled, userOverride, projectOverride, projectAddendum, accumulatedNotes] =
+    await Promise.all([
+      loadBundledPersona(skillId),
+      readCached(userSkillFilePath(skillId)),
+      readCached(projectSkillFilePath(projectPath, skillId)),
+      readCached(projectSkillAddendumPath(projectPath, skillId)),
+      readCached(personaNotesPath(projectPath, skillId)),
+    ]);
   return composeSkill({
     base: userOverride ?? bundled,
     projectOverride,
     projectAddendum,
+    accumulatedNotes,
   });
 }
 

@@ -27,6 +27,16 @@ export function buildStagePrompt(
   stepTask?: string,
   environment?: string,
 ): string {
+  const body = stagePromptBody(task, upstream, stepTask, environment);
+  return stepTask ? markdownBlocks([body, STAGE_NOTES_INVITATION]) : body;
+}
+
+function stagePromptBody(
+  task: string,
+  upstream: UpstreamOutput[],
+  stepTask?: string,
+  environment?: string,
+): string {
   const reports = upstream.filter((entry) => markdownBody(entry.output) !== "");
   const assignment = stepTask ? markdownBody(stepTask) : "";
   const surroundings = environment ? markdownBody(environment) : "";
@@ -46,6 +56,22 @@ export function buildStagePrompt(
     ),
   ]);
 }
+
+export const STAGE_NOTES_INVITATION = [
+  "## Notes for your next run here (optional)",
+  "",
+  "If this run taught you something durable about **this project** that you would want",
+  "to know before starting here again — a convention, a constraint, a place that is not",
+  "where it looks — end your handoff with a fenced block:",
+  "",
+  "```isotopy-persona-notes",
+  '{ "notes": ["Migrations live in db/migrate, not prisma/"] }',
+  "```",
+  "",
+  "These go to you alone, not to the other roles, and are replayed to you next time.",
+  "Write facts about the project, not a summary of this run — the handoff already",
+  "carries that. Omit the block entirely when there is nothing durable to add.",
+].join("\n");
 
 const CONTINUATION_NOTE =
   "You already worked on this stage and stopped to ask. Your CLI cannot resume its " +
@@ -85,9 +111,10 @@ export function buildContinuationPrompt({
   environment,
 }: ContinuationPromptInput): string {
   return markdownBlocks([
-    buildStagePrompt(task, upstream, stepTask, environment),
+    stagePromptBody(task, upstream, stepTask, environment),
     `## Conversation so far\n\n${CONTINUATION_NOTE}`,
     ...exchanges.flatMap(exchangeBlocks),
+    stepTask ? STAGE_NOTES_INVITATION : undefined,
   ]);
 }
 

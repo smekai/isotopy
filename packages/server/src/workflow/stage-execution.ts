@@ -31,6 +31,7 @@ import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { toolCacheDir } from "../paths.ts";
+import { capturePersonaNotes } from "../services/persona-notes-store.ts";
 import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -621,6 +622,19 @@ export async function runStageWork(
   }
 
   const settled = await settleStageOutput(projection, runId, stageDef, decision);
+  if (settled.output !== undefined) {
+    await capturePersonaNotes(
+      registry.resolve(run.projectId),
+      stageDef.skill,
+      settled.output,
+    ).catch((error: unknown) => {
+      projection.log(runId, stageDef.id, {
+        level: "warn",
+        message: `Notes for the next run were not saved — ${messageOf(error)}`,
+      });
+      return undefined;
+    });
+  }
   if (settled.verdict !== undefined) {
     projection.setVerdict(runId, stageDef.id, settled.verdict);
   }
