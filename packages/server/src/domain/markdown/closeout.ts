@@ -65,28 +65,15 @@ function recommendationSection(
 }
 
 function closeoutSections(
-  report: CloseoutReport,
+  report: RunArtifacts | CloseoutReport,
   level: HeadingLevel,
 ): Array<string | undefined> {
+  const sourceTasks = report as Partial<CloseoutReport>;
   return [
     markdownBody(report.summary),
     listSection(level, "Delivered scope", report.deliveredScope),
-    listSection(level, "Completed source tasks", report.completedTaskIds),
-    listSection(level, "Unresolved source tasks", report.unresolvedTaskIds),
-    listSection(level, "Decisions", report.decisions),
-    listSection(level, "Knowledge", report.knowledge),
-    findingsSection(level, report.findings),
-    recommendationSection(level, report.nextRecommendation),
-  ];
-}
-
-function artifactSections(
-  report: RunArtifacts,
-  level: HeadingLevel,
-): Array<string | undefined> {
-  return [
-    markdownBody(report.summary),
-    listSection(level, "Delivered scope", report.deliveredScope),
+    listSection(level, "Completed source tasks", sourceTasks.completedTaskIds ?? []),
+    listSection(level, "Unresolved source tasks", sourceTasks.unresolvedTaskIds ?? []),
     listSection(level, "Decisions", report.decisions),
     listSection(level, "Knowledge", report.knowledge),
     findingsSection(level, report.findings),
@@ -110,7 +97,7 @@ export function renderCloseoutBody(
 
 export function renderRunArtifacts(report: RunArtifacts): string {
   return markdownBlocks(
-    ["# Orchestrator run artifacts", ...artifactSections(report, DOCUMENT_LEVEL)],
+    ["# Orchestrator run artifacts", ...closeoutSections(report, DOCUMENT_LEVEL)],
     true,
   );
 }
@@ -119,7 +106,7 @@ export function renderRunArtifactsBody(
   report: RunArtifacts,
   level: HeadingLevel,
 ): string {
-  return markdownBlocks(artifactSections(report, level));
+  return markdownBlocks(closeoutSections(report, level));
 }
 
 export function renderCleanupReport(cleanup: CleanupResult): string {

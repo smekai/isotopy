@@ -35,8 +35,18 @@ function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
       message: `Unknown step task: ${role.stepTask}`,
     });
   }
+  if (role.skill === ORCHESTRATOR_PERSONA && role.stepTask !== CLOSEOUT_STEP_TASK) {
+    issues.push({
+      path: ["roles", index, "skill"],
+      message: `The Orchestrator composes the team and closes it out; it cannot take ${role.stepTask}`,
+    });
+  }
   return issues;
 }
+
+const ORCHESTRATOR_PERSONA = "orchestrator";
+
+const CLOSEOUT_STEP_TASK = "closeout-feature";
 
 function duplicateIdIssues(roles: OrchestratorRole[]): ValidationIssue[] {
   const seen = new Set<string>();

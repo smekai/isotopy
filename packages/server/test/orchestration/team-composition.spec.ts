@@ -1,4 +1,5 @@
 import { assert, expect, test } from "vitest";
+import { flattenPipelineStages } from "@isotopy/core";
 import type {
   OrchestratorRole,
   OrchestratorTeamProposal,
@@ -31,15 +32,37 @@ test("an invented step task id is rejected on the field that carries it", () => 
   );
 });
 
-test("the Orchestrator cannot compose itself into the team it is proposing", () => {
+test("the Orchestrator cannot compose itself to orchestrate again", () => {
   const composed = composeTeamPipeline(
     team([role({ skill: "orchestrator", stepTask: "orchestrate" })]),
     "abc123",
   );
 
   expect(issuesOf(composed)).toBe(
-    "roles.0.skill: Unknown persona: orchestrator; roles.0.stepTask: Unknown step task: orchestrate",
+    "roles.0.stepTask: Unknown step task: orchestrate; " +
+      "roles.0.skill: The Orchestrator composes the team and closes it out; it cannot take orchestrate",
   );
+});
+
+test("the Orchestrator cannot compose itself to do a specialist's work", () => {
+  const composed = composeTeamPipeline(
+    team([role({ skill: "orchestrator", stepTask: "implement-feature" })]),
+    "abc123",
+  );
+
+  expect(issuesOf(composed)).toBe(
+    "roles.0.skill: The Orchestrator composes the team and closes it out; " +
+      "it cannot take implement-feature",
+  );
+});
+
+test("the Orchestrator can compose itself to close the run out, because no specialist saw it all", () => {
+  const composed = composeTeamPipeline(
+    team([role({ skill: "orchestrator", stepTask: "closeout-feature" })]),
+    "abc123",
+  );
+
+  expect(flattenPipelineStages(valueOf(composed))[0]?.skill).toBe("orchestrator");
 });
 
 test("a role id that would escape the run directory is rejected before it reaches a path", () => {

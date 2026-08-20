@@ -37,7 +37,7 @@ export class CloseoutConsumer implements StageOutputConsumer {
     stageDef: StageDefinition,
     output: string,
   ): Promise<StageOutputRejection | undefined> {
-    if (run.pipelineId !== PIPELINE_ID || stageDef.id !== STAGE_ID) {
+    if (stageDef.stepTask !== CLOSEOUT_STEP_TASK) {
       return undefined;
     }
     const applied = await applyCloseoutReport(
@@ -104,13 +104,11 @@ export async function applyCloseoutReport(
     ],
     completedAt: nowIso(),
   };
-  await persistRunCloseout(projectPath, run, record);
+  await persistRunCloseout(projectPath, run.id, record);
   return { record, reportErrors };
 }
 
-const PIPELINE_ID = "full-delivery";
-
-const STAGE_ID = "closeout";
+const CLOSEOUT_STEP_TASK = "closeout-feature";
 
 async function cleanupRunTemp(
   projectPath: ProjectPath,
@@ -145,10 +143,10 @@ async function cleanupRunTemp(
 
 async function persistRunCloseout(
   projectPath: ProjectPath,
-  run: RunState,
+  runId: string,
   record: RunCloseoutRecord,
 ): Promise<void> {
-  const closeoutDir = path.join(runsDir(projectPath), run.id, "closeout");
+  const closeoutDir = path.join(runsDir(projectPath), runId, "closeout");
   await mkdir(closeoutDir, { recursive: true });
   await Promise.all([
     writeFile(
@@ -164,24 +162,4 @@ async function persistRunCloseout(
       renderCleanupReport(record.cleanup),
     ),
   ]);
-
-  if (run.milestoneId) {
-    const milestoneRunsDir = path.join(
-      projectPath.dataDir,
-      "milestones",
-      run.milestoneId,
-      "runs",
-    );
-    await mkdir(milestoneRunsDir, { recursive: true });
-    await Promise.all([
-      writeFile(
-        path.join(milestoneRunsDir, `${run.id}.json`),
-        `${JSON.stringify(record, null, 2)}\n`,
-      ),
-      writeFile(
-        path.join(milestoneRunsDir, `${run.id}.md`),
-        renderCloseout(record.report),
-      ),
-    ]);
-  }
 }

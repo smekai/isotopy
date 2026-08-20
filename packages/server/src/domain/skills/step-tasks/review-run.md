@@ -6,11 +6,14 @@ closeout stage, and any milestone context. Then do two things in one turn.
 
 ## First: collect the run's artifacts
 
-Consolidate what the run produced into durable facts a later run can use. When a
-closeout was supplied, it is your own report from that stage — condense it rather
-than re-deriving it from the raw stage outputs.
+Consolidate what the run produced into durable facts a later run can use.
 
-Return exactly one fenced `isotopy-run-artifacts` JSON block:
+**Skip this half entirely when a closeout is shown below.** That closeout is your
+own report from the run's closeout stage, and the artifacts are taken from it
+directly — writing them again would only give the same run two accounts that can
+disagree. Go straight to the decision.
+
+Otherwise, return exactly one fenced `isotopy-run-artifacts` JSON block:
 
 ````
 ```isotopy-run-artifacts

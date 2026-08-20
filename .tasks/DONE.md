@@ -65,6 +65,19 @@ Every role now keeps a private memory of the project and the Orchestrator owns t
    `orchestrator`, not `project-manager`; `ProductManagerCloseout` is now `CloseoutReport`. The
    Product Manager keeps the right to read anyone's output and disagree — in its own report and its
    own notes.
+7. **A composed team's closeout works at all.** `CloseoutConsumer` fired on
+   `full-delivery`/`closeout` specifically, so after `TASK-150` made teams composed per run, a
+   composed team's closeout was parsed by nobody — no follow-up tasks, no source tasks moved, no
+   cleanup. It now fires on the `closeout-feature` step task. Found by audit, not by a test; a comp
+   test now covers it and was verified failing against the old guard.
+8. **`orchestrator` joins the persona catalog**, so a composed team can actually reach the role that
+   owns the closeout. The rule that the Orchestrator cannot compose itself as a worker was kept
+   structural — it may pair only with `closeout-feature` — rather than demoted to persona prose.
+9. **Run artifacts are derived from the closeout, not written twice.** `runArtifactsFrom` projects
+   the superset onto the subset, so the review turn only decides. The persona warning against
+   contradicting itself is gone, because the contradiction is now impossible.
+10. **Dropped the write-only milestone copy** of each run's closeout, which duplicated
+    `runs/<id>/closeout/*` byte for byte and had no reader.
 
 **Not done, deliberately:** folding the closeout into the Orchestrator's settle-time review. The
 review needs an orchestration, and `routes/runs.ts` starts any pipeline directly, so a

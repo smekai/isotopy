@@ -54,7 +54,6 @@ const cleanupCandidateSchema = z
 
 const agentCloseoutSchema = z
   .object({
-    ...CLOSEOUT_SHAPE,
     summary: requiredText,
     deliveredScope: uniqueStrings,
     decisions: uniqueStrings,

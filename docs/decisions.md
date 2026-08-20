@@ -15,6 +15,51 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-20 — The closeout follows the step task, and the artifacts are derived from it
+
+**Context:** moving the closeout to the Orchestrator (above) exposed two things the earlier
+design had left implicit, both found by auditing rather than by a failing test.
+
+**`CloseoutConsumer` fired on `pipelineId === "full-delivery" && stageId === "closeout"`.** After
+`TASK-150` made a team composed per run, `team-<orchestrationId>-<n>` became the common pipeline id
+and `full-delivery` the exception — so a composed team that ran `closeout-feature` produced a full
+closeout report that **nothing parsed**. No follow-up tasks, no source tasks moved to Done, no temp
+cleanup, no `run.closeout`. The run said the work was done and the board never heard.
+
+**Decision:** the consumer fires on `stepTask === "closeout-feature"`. A stage is a closeout because
+of the assignment it was given, not because of which pipeline it happens to sit in. This is the
+general rule the codebase already follows elsewhere — `productEnvironment` keys on
+`verify-feature`, the deterministic deploy on `deploy-preview` — and the hardcoded pair was the
+outlier.
+
+**Decision:** `orchestrator` joins the persona catalog, so a composed team can give the closeout to
+the role that now owns it. Without this the move only took effect on the fixed pipeline, and the
+catalog still pointed the Orchestrator at the Product Manager for closeout work.
+
+The rule that the Orchestrator cannot compose itself as a worker was **kept structural rather than
+demoted to prose**: `roleIssues` rejects the `orchestrator` persona paired with any step task other
+than `closeout-feature`. The original guard was an accident of the catalog — the Orchestrator was
+unlisted, so every pairing failed — and replacing an accidental guarantee with a persona instruction
+would have been a real loss.
+
+**Decision:** run artifacts are derived from the closeout, not authored twice. `RUN_ARTIFACTS_SHAPE`
+is a strict subset of `CLOSEOUT_SHAPE`, so `runArtifactsFrom` projects one onto the other. Before
+this, the Orchestrator wrote the superset at the closeout stage and then restated the subset one
+turn later at the review — and the persona carried a hand-written warning telling it not to
+contradict itself. That warning was the tell: two model-authored accounts of one run can disagree,
+and a projection cannot. The review turn now only decides, which is its actual job.
+
+**Rejected — deriving the closeout from the artifacts instead.** The arrow only points one way: the
+extra fields (`tasks`, `completedTaskIds`, `unresolvedTaskIds`, `cleanup`) are the ones with side
+effects on the board and the disk, and they cannot be invented from a summary.
+
+**Dropped:** `milestones/<id>/runs/<runId>.json` and `.md`, which `persistRunCloseout` wrote as
+byte-identical copies of the run's own `closeout.json` and `closeout.md`. Nothing read them —
+`milestoneCloseoutContext` reads `summary.json` — so they were a second copy that could only ever
+go stale relative to the first.
+
+---
+
 ## 2026-08-20 — Every role keeps its own memory of the project, and the Orchestrator owns the closeout
 
 **Context:** A handoff dies with its run. Every role therefore started each run knowing nothing

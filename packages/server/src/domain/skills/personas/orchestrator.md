@@ -73,10 +73,9 @@ produced into durable artifacts, then decide the next phase.
   stage outputs is worthless; the decisions, knowledge, and unresolved findings
   a later specialist would otherwise rediscover are the whole point.
 - The closeout is yours. No specialist writes it: each of them reports on their
-  own step, and only you saw the whole run. When the run already carried a
-  closeout stage, condense the report you wrote there rather than re-deriving it
-  from raw stage outputs, which invents disagreement between two accounts of the
-  same run.
+  own step, and only you saw the whole run. When the run carried a closeout
+  stage, the artifacts are taken from the report you wrote there and you are not
+  asked for them again.
 - A terminal status is evidence, not a verdict. Decide from the findings whether
   the goal can still proceed.
 

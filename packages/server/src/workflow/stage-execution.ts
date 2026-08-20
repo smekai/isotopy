@@ -6,6 +6,7 @@ import {
   STAGE_VERDICTS,
   agentForStage,
   resolveTier,
+  runArtifactsFrom,
 } from "@isotopy/core";
 import type {
   DeploymentAutomation,
@@ -431,6 +432,20 @@ function reviewRecord(artifacts: RunArtifacts): RunArtifactRecord {
   return { report: artifacts, validationErrors: [], collectedAt: nowIso() };
 }
 
+function closeoutArtifacts(
+  deps: WorkflowDeps,
+  runId: string,
+): RunArtifactRecord | undefined {
+  const closeout = deps.projection.getRun(runId)?.closeout;
+  return closeout
+    ? {
+        report: runArtifactsFrom(closeout.report),
+        validationErrors: closeout.validationErrors,
+        collectedAt: closeout.completedAt,
+      }
+    : undefined;
+}
+
 export async function runOrchestratorReviewWork(
   deps: WorkflowDeps,
   input: PipelineWorkflowInput,
@@ -474,9 +489,11 @@ export async function runOrchestratorReviewWork(
   if (deps.isCancelled(run.id)) {
     return null;
   }
-  const review = readReview(outcome);
-  if (review.artifacts) {
-    await deps.projection.captureRunArtifacts(run.id, review.artifacts);
+  const derived = closeoutArtifacts(deps, run.id);
+  const review = readReview(outcome, derived === undefined);
+  const artifacts = derived ?? review.artifacts;
+  if (artifacts) {
+    await deps.projection.captureRunArtifacts(run.id, artifacts);
   }
   try {
     await orchestration.recordReview(request, context, review);
@@ -489,7 +506,7 @@ export async function runOrchestratorReviewWork(
   return null;
 }
 
-function readReview(outcome: EngineRunResult): RunReview {
+function readReview(outcome: EngineRunResult, artifactsExpected: boolean): RunReview {
   if (!outcome.success) {
     return { errors: [outcome.errorMessage ?? "Orchestrator review failed"] };
   }
@@ -498,7 +515,7 @@ function readReview(outcome: EngineRunResult): RunReview {
   const decision = extractOrchestratorDecision(output);
   const review: RunReview = {
     errors: [
-      ...(artifacts.ok
+      ...(artifacts.ok || !artifactsExpected
         ? []
         : [`Run artifacts: ${formatValidationIssues(artifacts.issues)}`]),
       ...(decision.ok
