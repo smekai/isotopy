@@ -48,3 +48,46 @@ export function orchestrationRefreshKey(runs: RunSummary[]): string {
     .sort()
     .join("|");
 }
+
+export type RailItem =
+  | { kind: "run"; run: RunSummary }
+  | { kind: "initiative"; orchestration: Orchestration; runs: RunSummary[] };
+
+interface GatheredInitiative {
+  orchestration: Orchestration;
+  runs: RunSummary[];
+}
+
+function newestAt(item: RailItem): string {
+  return item.kind === "run" ? item.run.createdAt : (item.runs.at(-1)?.createdAt ?? "");
+}
+
+export function railItems(
+  runs: RunSummary[],
+  orchestrations: Orchestration[],
+): RailItem[] {
+  const known = new Map(orchestrations.map((entry) => [entry.id, entry]));
+  const gathered = new Map<string, GatheredInitiative>();
+  const items: RailItem[] = [];
+
+  for (const run of runs) {
+    const owner = run.orchestrationId === undefined ? undefined : known.get(run.orchestrationId);
+    if (owner === undefined) {
+      items.push({ kind: "run", run });
+      continue;
+    }
+    const initiative = gathered.get(owner.id) ?? { orchestration: owner, runs: [] };
+    initiative.runs.push(run);
+    gathered.set(owner.id, initiative);
+  }
+
+  for (const initiative of gathered.values()) {
+    items.push({
+      kind: "initiative",
+      orchestration: initiative.orchestration,
+      runs: [...initiative.runs].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    });
+  }
+
+  return items.sort((a, b) => newestAt(b).localeCompare(newestAt(a)));
+}

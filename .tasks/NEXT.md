@@ -43,32 +43,6 @@ everything else.
 
 ---
 
-## TASK-149: Group an initiative's runs visually in the UI
-**Priority:** P2
-**Tags:** ui, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Asked for by the user on 2026-08-17, after watching the `TASK-141` dogfood.
-
-An initiative's runs are already linked in the data — each run carries `orchestrationId` and the
-orchestration keeps `runIds[]` — but the runs rail renders them as a flat list of independent
-cards. In the dogfood the three runs (the Orchestrator conversation, the run that ended
-`needs_attention`, and the fix) read as three unrelated things stacked by time. Nothing showed that
-run 3 existed *because* run 2 failed, or that all three served one goal.
-
-**What to build:** show the grouping. A collapsible initiative header carrying the goal, its runs
-nested under it, and the relationship legible — which run followed which, and why the later one
-started. The parent/child data is already there.
-
-This meets, from the other direction, the question left open in `docs/decisions.md:144` — whether a
-runs overview is needed. `TASK-141` found the flat rail adequate at three runs and said so; the
-user asked for grouping anyway. Record that the ask came from the user rather than from the rail
-failing at this scale, so the design is not over-built for a problem nobody has hit yet.
-
-Cross-platform: n/a — UI only.
-
----
-
 ## TASK-135: Recruit prospective users and collect their feedback
 **Priority:** P2 | **Tags:** ui, milestone-h
 **Updated:** 2026-08-07 11:40

@@ -116,3 +116,16 @@ export function decisionPresentation(
     }
   }
 }
+
+export function startReasonFor(
+  orchestration: Orchestration,
+  run: RunSummary,
+): string | undefined {
+  let reason: string | undefined;
+  for (const turn of orchestration.turns) {
+    if (turn.decision.action === "start_run" && turn.at <= run.createdAt) {
+      reason = turn.decision.rationale;
+    }
+  }
+  return reason;
+}

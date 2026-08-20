@@ -1,5 +1,75 @@
 # Done
 
+## TASK-149: Group an initiative's runs visually in the UI
+**Priority:** P2
+**Tags:** ui, milestone-h
+**Updated:** 2026-08-20 15:45
+
+The rail is no longer a flat list. An initiative's runs sit under a collapsible header carrying its
+goal and status, oldest first, and a later run says why it exists.
+
+**The data was never missing, so this is presentation only.** Every run already carried
+`orchestrationId` and every orchestration already kept `runIds[]`. No server file, no API and no
+`packages/core` change — `useOrchestration` already fetched every orchestration for the project, so
+the rail needed one new prop from `App`, not a new request.
+
+**Built in the rail because that was already decided.** The 2026-08-12 entry rejecting an
+Orchestrator sidebar said where grouping would go if it were ever wanted: *"If it does, the rail is
+the place, not a panel."* This is that need arriving, built there.
+
+**Grouped on `run.orchestrationId`, not on `orchestration.runIds`** — the one real design decision,
+and the plan said the opposite before the code was written. The two sources disagree for a window:
+`useRunList` gets runs over SSE the instant they exist, while `useOrchestration` refetches on
+`orchestrationRefreshKey` and lands later, so a run names its initiative before the initiative
+admits the run. Grouping on `runIds` would have dropped such a run out of its group and — no longer
+loose either — off the rail entirely until the refetch returned. A run whose orchestration has not
+loaded yet now stays a top-level card for a frame, then joins its group. `runsForOrchestration` is
+untouched and still reads `runIds`; it feeds the thread, where the user has already opened one
+initiative and `runIds` is the authority. There is a test pinning the ungrouped-but-visible case,
+because it is the one nobody would notice breaking.
+
+**Ordering runs both ways on purpose.** Items rank newest-first so the rail reads as it always has,
+and an initiative ranks on its *most recent* run rather than its oldest, so an active initiative
+does not sink because it started days ago. Runs inside an initiative run oldest-first, because
+"which followed which" is a timeline.
+
+**A run says why it started, and the first one says nothing.** `startReasonFor` pairs a run with the
+latest `start_run` turn at or before its `createdAt` — `orchestration-service.ts` records the
+decision and starts the composed run in the same handler, so the turn always precedes the run it
+produced. The run an initiative *began* as is the Orchestrator conversation, which no decision
+started; it renders no reason line rather than borrowing the goal already on the header above it.
+
+**`RunCard` was not touched.** "Why this run started" is a relationship between two runs, not a
+property of one, and `RunCard` also renders for runs belonging to no initiative. The line renders in
+`InitiativeGroup` between the cards. `RunRail` does move from pure to local-state presentational in
+`docs/architecture-ui.md`, because it now owns which groups are collapsed — corrected there rather
+than left to rot.
+
+**Rejected: persisting collapse state.** A settings key, a migration and a write on every chevron
+click, for a rail holding a handful of initiatives, and nobody has asked to keep a group shut.
+
+**Recorded so the evidence is not misread later:** `TASK-141` examined the flat rail at three runs
+and found it adequate. The trigger was the product owner asking on 2026-08-17, not the rail failing
+at that scale. This work is not proof the flat list broke, and the scope stayed small because of it.
+
+Seven new tests fail without the change: four over `railItems` (grouping, a loose run, the
+not-yet-loaded orchestration, the two ordering directions) and three over `startReasonFor`. Six
+component tests cover `InitiativeGroup`, and two e2e tests assert the grouping and the collapse in a
+real browser against the seeded initiative `orchestrator-flow.e2e.ts` already served.
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (904 passed, 101 files), `pnpm build`, `pnpm e2e`
+(70 passed) and `pnpm gen:skills --check` all green on Windows.
+
+**Verified in the real app.** The dev environment has no runs of its own, and seeing a grouped
+initiative live would have meant spending real engine runs, so the visual check was driven through
+the same seeded route interception the e2e tier uses: the header, the nesting, both reason lines,
+the run that belongs to no initiative sitting outside the group, and collapse/expand were all
+confirmed on screen at :5173. The server-backed path is unexercised beyond that.
+
+Cross-platform: n/a — UI only, no paths and no subprocesses.
+
+---
+
 ## TASK-150: The Orchestrator should compose a team for every run, not only the first
 **Priority:** P2 | **Tags:** core, server, ui, milestone-h
 **Updated:** 2026-08-19 15:20

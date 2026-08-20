@@ -2,16 +2,23 @@
 // arrive for a run the snapshot already holds (replace, keep position) or for one
 // it has never seen (prepend — the server sorts newest first).
 import { describe, expect, test } from "vitest";
+import type { RailItem } from "../../src/run-list";
 import {
   mergeSummaries,
   mergeSummary,
   milestoneRefreshKey,
   orchestrationRefreshKey,
+  railItems,
   runsForFeature,
   runsForOrchestration,
 } from "../../src/run-list";
 import { featureRun } from "../support/milestone-fixtures";
-import { orchestratedRun, orchestration } from "../support/orchestration-fixtures";
+import {
+  ORCHESTRATION_ID,
+  orchestratedRun,
+  orchestration,
+} from "../support/orchestration-fixtures";
+import type { RunSummary } from "@isotopy/core";
 import { stage, summary } from "../support/run-fixtures";
 
 describe("mergeSummary", () => {
@@ -131,3 +138,68 @@ describe("orchestrationRefreshKey", () => {
     expect(orchestrationRefreshKey([a, b])).toBe(orchestrationRefreshKey([b, a]));
   });
 });
+
+describe("railItems", () => {
+  test("gathers an initiative's runs under it, oldest first, because a timeline runs forward", () => {
+    // Arrange
+    const runs = [
+      orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
+      orchestratedRun("earlier", "2026-08-01T09:00:00.000Z"),
+    ];
+
+    // Act
+    const items = railItems(runs, [orchestration({ runIds: ["earlier", "later"] })]);
+
+    // Assert
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe("initiative");
+    expect(initiativeRuns(items[0]).map((run) => run.id)).toEqual(["earlier", "later"]);
+  });
+
+  test("leaves a run no orchestrator owns at the top level", () => {
+    // Arrange
+    const loose = summary({ id: "loose", createdAt: "2026-08-01T10:00:00.000Z" });
+
+    // Act
+    const items = railItems([loose], []);
+
+    // Assert
+    expect(items).toEqual([{ kind: "run", run: loose }]);
+  });
+
+  test("keeps a run visible when its orchestration has not loaded yet", () => {
+    // Arrange — the run stream is live while orchestrations are refetched, so a run
+    // can name an initiative this render has never seen. Losing it is worse than
+    // showing it ungrouped for one frame.
+    const orphan = orchestratedRun("orphan", "2026-08-01T10:00:00.000Z");
+
+    // Act
+    const items = railItems([orphan], []);
+
+    // Assert
+    expect(items).toEqual([{ kind: "run", run: orphan }]);
+  });
+
+  test("orders the rail newest first, ranking an initiative by its most recent run", () => {
+    // Arrange
+    const runs = [
+      summary({ id: "loose", createdAt: "2026-08-01T11:00:00.000Z" }),
+      orchestratedRun("first", "2026-08-01T09:00:00.000Z"),
+      orchestratedRun("last", "2026-08-01T13:00:00.000Z"),
+    ];
+
+    // Act
+    const items = railItems(runs, [orchestration({ runIds: ["first", "last"] })]);
+
+    // Assert — the initiative outranks the loose run on its newest member, not its oldest.
+    expect(items.map(railItemId)).toEqual([ORCHESTRATION_ID, "loose"]);
+  });
+});
+
+function initiativeRuns(item: RailItem | undefined): RunSummary[] {
+  return item?.kind === "initiative" ? item.runs : [];
+}
+
+function railItemId(item: RailItem): string {
+  return item.kind === "initiative" ? item.orchestration.id : item.run.id;
+}
