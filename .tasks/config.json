@@ -2,7 +2,7 @@
   "version": 2,
   "taskplannerVersion": "2.1.4",
   "idPrefix": "TASK",
-  "nextId": 153,
+  "nextId": 155,
   "states": [
     {
       "name": "Backlog",
@@ -51,7 +51,8 @@
     "milestone-e",
     "milestone-f",
     "milestone-g",
-    "milestone-h"
+    "milestone-h",
+    "milestone-i"
   ],
   "insertPosition": "top",
   "aiPlanRequired": false,
