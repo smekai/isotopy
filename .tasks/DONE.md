@@ -34,10 +34,20 @@ does not sink because it started days ago. Runs inside an initiative run oldest-
 "which followed which" is a timeline.
 
 **A run says why it started, and the first one says nothing.** `startReasonFor` pairs a run with the
-latest `start_run` turn at or before its `createdAt` — `orchestration-service.ts` records the
-decision and starts the composed run in the same handler, so the turn always precedes the run it
-produced. The run an initiative *began* as is the Orchestrator conversation, which no decision
-started; it renders no reason line rather than borrowing the goal already on the header above it.
+latest **launch-producing** turn at or before its `createdAt` — `start_run` and `propose_team` both,
+since a proposal starts a run through `approveTeam` and through `TASK-150`'s auto-approve
+`launchUnchangedTeam`, neither of which records a turn of its own. `orchestration-service.ts` starts
+the composed run in the same handler that records the decision, so the launching turn always
+precedes the run it produced. The run an initiative *began* as is the Orchestrator conversation,
+which no decision started; it renders no reason line rather than borrowing the goal already on the
+header above it.
+
+**Found in PR review, and it was the common path.** The first cut read only `start_run`. That left
+the *first* work run of every initiative — which comes from an approved proposal — with no reason at
+all, and handed a proposal-started run that followed an earlier `start_run` that older rationale on
+timestamp alone, which is worse than silence. Three regression tests cover it: an approved team's
+first run, a proposal-started run preceded by a stale `start_run`, and a non-launching turn in
+between that must not blank the reason.
 
 **`RunCard` was not touched.** "Why this run started" is a relationship between two runs, not a
 property of one, and `RunCard` also renders for runs belonging to no initiative. The line renders in
@@ -52,12 +62,12 @@ click, for a rail holding a handful of initiatives, and nobody has asked to keep
 and found it adequate. The trigger was the product owner asking on 2026-08-17, not the rail failing
 at that scale. This work is not proof the flat list broke, and the scope stayed small because of it.
 
-Seven new tests fail without the change: four over `railItems` (grouping, a loose run, the
-not-yet-loaded orchestration, the two ordering directions) and three over `startReasonFor`. Six
+Ten new tests fail without the change: four over `railItems` (grouping, a loose run, the
+not-yet-loaded orchestration, the two ordering directions) and six over `startReasonFor`. Six
 component tests cover `InitiativeGroup`, and two e2e tests assert the grouping and the collapse in a
 real browser against the seeded initiative `orchestrator-flow.e2e.ts` already served.
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (904 passed, 101 files), `pnpm build`, `pnpm e2e`
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (907 passed, 101 files), `pnpm build`, `pnpm e2e`
 (70 passed) and `pnpm gen:skills --check` all green on Windows.
 
 **Verified in the real app.** The dev environment has no runs of its own, and seeing a grouped

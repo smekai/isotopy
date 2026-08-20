@@ -99,3 +99,67 @@ function startRunTurn(at: string, rationale: string): OrchestrationTurn {
     decision: { action: "start_run", rationale, task: "Do the work." },
   };
 }
+
+describe("startReasonFor over a proposal-started run", () => {
+  test("attributes an approved team's first run to the proposal that created it", () => {
+    // Arrange — the first work run of every initiative comes from approveTeam acting
+    // on a propose_team turn, and no start_run exists yet.
+    const initiative = orchestration({
+      runIds: ["conversation", "build"],
+      turns: [proposeTeamTurn("2026-08-01T10:00:00.000Z", "A Developer and a Tester cover this.")],
+    });
+
+    // Act
+    const reason = startReasonFor(initiative, orchestratedRun("build", "2026-08-01T10:00:01.000Z"));
+
+    // Assert
+    expect(reason).toBe("A Developer and a Tester cover this.");
+  });
+
+  test("does not hand a proposal-started run an older start_run's rationale", () => {
+    // Arrange — a re-composed team auto-launches from propose_team when the roles are
+    // unchanged, so a stale start_run sits before it and used to win on timestamp alone.
+    const initiative = orchestration({
+      runIds: ["fix", "next"],
+      turns: [
+        startRunTurn("2026-08-01T10:00:00.000Z", "Run two failed on accessibility."),
+        proposeTeamTurn("2026-08-01T14:00:00.000Z", "The same team can take the next feature."),
+      ],
+    });
+
+    // Act
+    const reason = startReasonFor(initiative, orchestratedRun("next", "2026-08-01T14:00:01.000Z"));
+
+    // Assert
+    expect(reason).toBe("The same team can take the next feature.");
+  });
+
+  test("ignores a decision that starts no run, keeping the launch that did", () => {
+    // Arrange — a question parked between the launch and the run must not blank the reason.
+    const initiative = orchestration({
+      runIds: ["build"],
+      turns: [
+        proposeTeamTurn("2026-08-01T10:00:00.000Z", "A Developer and a Tester cover this."),
+        {
+          runId: "conversation",
+          at: "2026-08-01T10:00:00.500Z",
+          decision: { action: "ask_user", question: "Which database?" },
+        },
+      ],
+    });
+
+    // Act
+    const reason = startReasonFor(initiative, orchestratedRun("build", "2026-08-01T10:00:01.000Z"));
+
+    // Assert
+    expect(reason).toBe("A Developer and a Tester cover this.");
+  });
+});
+
+function proposeTeamTurn(at: string, rationale: string): OrchestrationTurn {
+  return {
+    runId: "conversation",
+    at,
+    decision: { action: "propose_team", rationale, team: team() },
+  };
+}

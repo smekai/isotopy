@@ -53,11 +53,18 @@ should not sink because it started days ago. Runs *inside* an initiative run old
 `runsForOrchestration` already made for the thread.
 
 **A run says why it exists, and the first one says nothing.** `startReasonFor` pairs a run with the
-latest `start_run` turn at or before its `createdAt`; `orchestration-service.ts` records the decision
-and starts the composed run in the same handler, so the turn always precedes the run it produced. The
-run an initiative *began* as is the Orchestrator conversation, which no decision started — it gets
-`undefined` and renders no reason line. That is the honest answer rather than a gap to fill with the
-initiative's goal, which is already on the header directly above it.
+latest **launch-producing** turn at or before its `createdAt`. That is `start_run` *and*
+`propose_team`, because a proposal starts a run on two paths — `approveTeam`, and the auto-approve
+`launchUnchangedTeam` that `TASK-150` added — and neither records a turn of its own. Reading only
+`start_run` was wrong twice over: the first work run of every initiative comes from an approved
+proposal and so had no reason at all, and a proposal-started run that followed an earlier
+`start_run` inherited that stale rationale on timestamp alone. Caught in PR review. A turn that
+launches nothing — a question, a verdict — leaves the reason standing rather than blanking it.
+`orchestration-service.ts` starts the composed run in the same handler that records the decision, so
+the launching turn always precedes the run it produced. The run an initiative *began* as is the
+Orchestrator conversation, which no decision started — it gets `undefined` and renders no reason
+line. That is the honest answer rather than a gap to fill with the initiative's goal, which is
+already on the header directly above it.
 
 **Rejected: persisting which initiatives are collapsed.** Collapse state is local to `RunRail` and
 resets on reload. Preferences would mean a settings key, a migration and a write on every chevron
