@@ -1,5 +1,147 @@
 # Next
 
+## TASK-153: Milestone I — Isomorphic: one seam, three adapters that actually answer it
+**Priority:** P1 | **Tags:** core, server, engine, milestone-i
+**Updated:** 2026-08-20 15:19
+
+An isomorphism is a structure-preserving equivalence. Three adapters behind one interface that
+answer different subsets of it are not one seam — they are three programs sharing a type name.
+
+**The seam is real; what it requires is not written down.** `EngineAdapter` (`engines/types.ts`)
+marks `detect`, `install` and `login` optional and says nothing about the rest, so resume, effort,
+usage, cost and live model listing are all "supported" as far as the compiler is concerned. Every
+gap below is invisible until a run hits one. The second failure follows from the first: a CLI that
+grows a flag drifts away from the adapter that drives it, and nothing notices.
+
+**Opened 2026-08-20** after comparing Isotopy's harness layer against
+[stablyai/orca](https://github.com/stablyai/orca) at the user's request, and probing the CLIs
+actually installed on this machine.
+
+### What the Orca comparison found
+
+| | Orca | Isotopy today |
+|---|---|---|
+| Agent definition | Declarative catalog — `src/shared/agent-session-option-catalog*.ts`, split per family, with `-types.ts` and per-agent `.test.ts` | Imperative argv built inline in three 300–400 line adapters |
+| Capability shape | `CatalogOption { id, label, kind, apply }`; `apply` → `launchArgs`, plus `midSession` applicability | Nothing declared |
+| Unknown model ids | `unknownModelOptions` — launch-safe options for opaque ids absent from the static catalog | `MODEL_FALLBACKS` maps to Auto; no launch-arg story |
+| Detection | `agent-detection.ts`, `agent-kind.ts` — one place | `resolveXBinary()` written three times, near-identically |
+| Trust / permissions | `agent-trust-presets.ts` — presets as data | Three hand-written `permissionArgs()` switches |
+| Usage & limits | First-class subsystems: `usage/`, `rate-limits/`, `claude-usage/`, `codex-usage/` | `domain/rules/engine-limit.ts` plus per-protocol capture — empty for Cursor |
+| Isolation | Git worktree per agent run | Agents run directly in `ctx.cwd` |
+| Execution | PTY (`pty/`, `ghost-tty/`) | Plain pipes into headless JSON modes |
+
+**One pattern is worth taking: the declarative catalog** — capability and launch args as *data*,
+per agent, with per-agent tests. It is not a foreign import. `packages/core/src/engines.ts`
+already declares `ENGINES`, `EngineDefinition` and `PERMISSION_MODES` exactly this way; it stops
+before capabilities and launch args, and that is where the drift gets in.
+
+**PTY execution is rejected, and recorded as rejected so it is not re-proposed.** Orca is a
+terminal multiplexer: it renders agent output, it does not parse it. Isotopy drives `-p` / `exec`
+JSON modes behind strict Zod codecs (`engines/protocol-validation.ts`), with billing-safety env
+stripping, a real auto-review capability probe, and plan-limit detection with reset parsing. A PTY
+would trade a validated protocol for screen-scraping. Isotopy is ahead here and stays ahead.
+
+### The evidence — six defects, all verified
+
+Confirmed by reading the source and probing the installed CLIs: `cursor-agent` (2026-08 build at
+`%LOCALAPPDATA%\cursor-agent`), `codex-cli 0.144.6`, `claude 2.1.215`.
+
+1. **Cursor throws away every session.** `pipeline-workflow.ts:349` stores `result.sessionId` into
+   `nextTurn.resumeSessionId` and `stage-execution.ts:71` branches on it. Claude returns
+   `session_id`, Codex returns `thread_id`, Cursor returns nothing — `cursor-protocol.ts:16` parses
+   `system.init` without reading a session id, and `cursor.ts` passes no resume flag. Every
+   follow-up turn on Cursor starts cold, silently. The CLI advertises `--resume [chatId]` and
+   `--continue`.
+2. **Cursor's `acceptEdits` runs `--force`.** `cursor.ts:177` passes `--force` on every permission
+   mode; the CLI documents it as "force allow commands unless explicitly denied" and aliases it
+   `--yolo`. The safest mode produces the least safe behaviour.
+3. **Cursor reports auto-review as `unsupported`, as a constant** (`cursor.ts:31`). The CLI now has
+   `--auto-review` — "a server classifier auto-runs safe tool calls and prompts for the rest".
+   Cursor is the one engine that discards its `resolvePermissionPlan` result, and that is now a
+   real capability being refused.
+4. **Cursor reports no cost and no tokens.** `cursor-protocol.ts:163` emits
+   `{ durationMs, turns: 1 }`. `TASK-147`'s initiative cost readout is structurally blind on Cursor
+   and nothing says so.
+5. **Claude Code never reports `loggedIn`** (`claude-code.ts:182`). Codex and Cursor both do.
+   `TASK-142` already names this from the other side. A user finds out Claude is logged out by
+   spending a run.
+6. **`EngineAdapter` does not declare any of this**, which is why 1–5 were all invisible.
+
+Defects 2 and 3 mean `docs/implementation-notes.md` §"Engines — CLI-specific quirks" is now wrong
+about Cursor in two places. It was written in good faith against an older CLI. That is the drift
+this milestone exists to make visible.
+
+### Scope
+
+`TASK-154` is the first task and the only one written so far. Named candidates, deliberately
+unwritten until someone picks one up — this repo does not file speculative tasks:
+
+- **Setup parity.** `install()` is absent for Claude Code, `login()` is absent for Claude Code and
+  Codex, and Cursor's `install()` is Windows-only. Three engines, three different Setup stories.
+- **Shared binary resolution**, against Orca's `agent-detection.ts`. `resolveClaudeBinary`,
+  `resolveCursorBinary` and `resolveCodexBinary` are the same function three times with different
+  fallbacks; only Codex has the Windows shim-picking fix (`pickBinaryLine`).
+- **Worktree isolation.** `cursor-agent` advertises `--worktree`, `--add-dir` and `--workspace`;
+  git-worktree isolation is Orca's core primitive. This must be designed **with** `TASK-036`, the
+  sandcastle spike, rather than around it — the spike asks the same question from the other side.
+
+Cross-platform: every task here carries the same Windows and macOS bar as everything else. The
+harness layer is where it bites hardest — binary resolution, `.cmd` shims, stdin-versus-argv, and
+per-platform installers all differ by OS today.
+
+---
+
+## TASK-154: An adapter declares what it can do, and Cursor stops lying about three of them
+**Priority:** P1 | **Tags:** core, server, engine, milestone-i
+**Updated:** 2026-08-20 15:19
+
+The first task of **Milestone I — Isomorphic** (`TASK-153`), which carries the full evidence and
+the Orca comparison this scope is drawn from.
+
+**Ordered scope.** Step 1 is what makes 2–5 checkable rather than a list of one-off patches.
+
+1. **Declare the capabilities.** In `packages/core/src/engines.ts`, beside `EngineDefinition` and
+   `PERMISSION_MODES`, derived from one exported `as const` tuple per the runtime-validation rule
+   in `AGENTS.md`: resume, effort, usage, cost, live model listing, auto-review, and per-mode
+   permission support. `engines/types.ts` references the declaration rather than restating it, and
+   a `never`-closed switch makes a new capability a compile error in every adapter (A7). This is
+   Orca's `agent-session-option-catalog` pattern in the shape this codebase already uses.
+2. **Cursor session resume.** Read `session_id` off `system.init` in `cursor-protocol.ts` — the
+   schema is already `.passthrough()`, so the field is arriving and being dropped — return it as
+   `sessionId`, and pass `--resume <id>` when `ctx.resumeSessionId` is set.
+3. **Cursor permission modes.** Map `acceptEdits` → `--sandbox enabled` and `autoReview` →
+   `--auto-review`; keep `--force` for `skip` only. Cursor stops discarding its
+   `resolvePermissionPlan` result.
+4. **Claude `loggedIn`.** A best-effort auth probe in `detect()`, following the shape Codex and
+   Cursor already use: exit code plus text, `undefined` when it cannot tell, never a guess.
+5. **Say what is still missing.** Cursor reports no cost or tokens. Declare that as a capability
+   the adapter does *not* have, so Setup and the cost readout can say so rather than show a
+   confident zero.
+
+**Verify against the real CLI before implementing, and pin the version verified.** The
+`--auto-review`, `--sandbox` and `--resume` flags above were read from the binary installed on this
+machine on 2026-08-20; `docs/implementation-notes.md` currently documents the opposite in good
+faith, which is exactly how this drift happened. Where a flag turns out to be absent or to behave
+differently, the honest outcome is to **declare the gap in the catalog**, not to fake the
+capability. This is the standing rule from the 2026-08-19 decision entry applied to CLIs instead of
+skill paths: name the mechanism, do not infer it.
+
+**Evidence to produce**, per `docs/testing.md`: a failing-first test per behaviour —
+`engine-protocols.spec.ts` for the Cursor session id, per-adapter argv tests in the shape of Orca's
+per-agent `.test.ts` files for the permission mapping, and a comp test proving a Cursor stage's
+second turn resumes rather than restarts. Then `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+`pnpm build`, `pnpm e2e`. Per A8, a dated `docs/decisions.md` entry (why the catalog is data, why
+PTY was rejected) and a correction to the three now-stale Cursor claims in
+`docs/implementation-notes.md` §"Engines — CLI-specific quirks".
+
+Cross-platform: verify live on Windows; reason macOS through and record it as untested unless a Mac
+is actually used. The hazards are known and documented: `cursor-agent` always resolves to a `.cmd`
+shim on Windows so the prompt goes via stdin (`commandNeedsWindowsShell`), and a resume argument
+must not regress that; binary resolution differs per platform; Cursor's `install()` is Windows-only
+today.
+
+---
+
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-10 14:10
@@ -40,32 +182,6 @@ and `TASK-113` stay in Backlog until `TASK-135` produces the evidence they are w
 
 Cross-platform: whatever this milestone builds carries the same Windows and macOS bar as
 everything else.
-
----
-
-## TASK-149: Group an initiative's runs visually in the UI
-**Priority:** P2
-**Tags:** ui, milestone-h
-**Updated:** 2026-08-17 13:10
-
-Asked for by the user on 2026-08-17, after watching the `TASK-141` dogfood.
-
-An initiative's runs are already linked in the data — each run carries `orchestrationId` and the
-orchestration keeps `runIds[]` — but the runs rail renders them as a flat list of independent
-cards. In the dogfood the three runs (the Orchestrator conversation, the run that ended
-`needs_attention`, and the fix) read as three unrelated things stacked by time. Nothing showed that
-run 3 existed *because* run 2 failed, or that all three served one goal.
-
-**What to build:** show the grouping. A collapsible initiative header carrying the goal, its runs
-nested under it, and the relationship legible — which run followed which, and why the later one
-started. The parent/child data is already there.
-
-This meets, from the other direction, the question left open in `docs/decisions.md:144` — whether a
-runs overview is needed. `TASK-141` found the flat rail adequate at three runs and said so; the
-user asked for grouping anyway. Record that the ask came from the user rather than from the rail
-failing at this scale, so the design is not over-built for a problem nobody has hit yet.
-
-Cross-platform: n/a — UI only.
 
 ---
 

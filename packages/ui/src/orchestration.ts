@@ -116,3 +116,22 @@ export function decisionPresentation(
     }
   }
 }
+
+function launchRationale(decision: OrchestratorDecision): string | undefined {
+  return decision.action === "start_run" || decision.action === "propose_team"
+    ? decision.rationale
+    : undefined;
+}
+
+export function startReasonFor(
+  orchestration: Orchestration,
+  run: RunSummary,
+): string | undefined {
+  let reason: string | undefined;
+  for (const turn of orchestration.turns) {
+    if (turn.at <= run.createdAt) {
+      reason = launchRationale(turn.decision) ?? reason;
+    }
+  }
+  return reason;
+}

@@ -100,6 +100,33 @@ test("a child run is linked from the thread, and the thread's own run is not", a
   );
 });
 
+test("the rail gathers an initiative's runs under its goal", async ({ page }) => {
+  // Arrange
+  await anticipate(page, awaitingApproval());
+
+  // Act
+  await page.goto("/");
+
+  // Assert — two runs that used to stack as unrelated cards now read as one initiative.
+  await expect(page.getByTestId("initiative-goal")).toHaveText(GOAL);
+  await expect(page.getByTestId("initiative-count")).toHaveText("2");
+  await expect(page.getByTestId("run-card")).toHaveCount(2);
+});
+
+test("collapsing an initiative hides its runs but keeps it on the rail", async ({ page }) => {
+  // Arrange
+  await anticipate(page, awaitingApproval());
+  await page.goto("/");
+  await expect(page.getByTestId("run-card")).toHaveCount(2);
+
+  // Act
+  await page.getByTestId("initiative-toggle").click();
+
+  // Assert
+  await expect(page.getByTestId("run-card")).toHaveCount(0);
+  await expect(page.getByTestId("initiative-goal")).toBeVisible();
+});
+
 const CREATED_AT = "2026-07-20T10:00:00.000Z";
 const CHILD_RUN_ID = "e2eteam1";
 

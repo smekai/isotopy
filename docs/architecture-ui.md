@@ -56,7 +56,7 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run rail, run view vs. composer, every overlay. See §6 for what it may own. |
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
 | [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union of home, `#/runs/:id` and `#/milestones/:id`. Unit-tested. |
-| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `orchestrationRefreshKey`. Unit-tested. |
+| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `orchestrationRefreshKey`, `railItems` (groups an initiative's runs under it). Unit-tested. |
 | [`orchestration.ts`](../packages/ui/src/orchestration.ts) | Pure orchestrator view rules — `teamAwaitingApproval` (status **and** decision must agree before Approve is offered), `decisionPresentation`, status labels. Unit-tested. |
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
@@ -114,10 +114,11 @@ them without exception.
 The split as it stands:
 
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
-  `RunStatusBar`, `PipelineRow`, `TeamController`, `RunRail`, `RunCard`,
+  `RunStatusBar`, `PipelineRow`, `TeamController`, `RunCard`, `InitiativeGroup`,
   `MilestoneDashboard`, `MilestoneFeatureCard`, inside `home/` — `PipelineHeader`,
   and inside `run/` — `CloseoutPanel`, `OrchestratorPanel`.
-- **Local-state presentational:** `PipelineDropdown`, `VoiceControls`, inside `home/` —
+- **Local-state presentational:** `RunRail` (which initiatives are collapsed),
+  `PipelineDropdown`, `VoiceControls`, inside `home/` —
   `HomeComposer`, and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state,
   no I/O.
 - **Container:** `ProjectSwitcher`, `FolderPicker`, `ProjectDrawer`,
@@ -130,7 +131,12 @@ The split as it stands:
 
 `RunRail` is worth noting as the pattern for new surfaces: it fetches nothing. The
 list, its loading state and its live updates all arrive as props from `useRunList`,
-which is what lets the rail be exercised without a network at all.
+which is what lets the rail be exercised without a network at all. It is no longer a
+flat list — `railItems` folds the runs of one initiative into an `InitiativeGroup`
+keyed on each run's own `orchestrationId`, and the orchestrations it needs for the
+header arrive as a prop too, from the `useOrchestration` the run view already builds.
+The only state the rail owns is which groups are collapsed, which is deliberately not
+persisted.
 
 **Rule.** A component file that passes ~300 lines is a signal, not a limit — look for
 the axis it is splitting along and split there. `SetupModal.tsx` was the standing

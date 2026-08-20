@@ -457,6 +457,7 @@ export function App() {
         <RunRail
           d={d}
           runs={runs.runs}
+          orchestrations={orchestration.orchestrations}
           milestones={milestones.milestones}
           ready={runs.ready}
           selectedRunId={activeRunId}

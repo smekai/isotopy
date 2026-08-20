@@ -15,6 +15,69 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-20 — The rail groups an initiative's runs, and groups on the run's own claim
+
+**Context:** `TASK-141`'s dogfood produced three runs of one initiative — the Orchestrator
+conversation, a run that ended `needs_attention`, and the fix — and the rail rendered them as three
+independent cards stacked by time. Nothing showed that run 3 existed *because* run 2 failed, or that
+all three served one goal. The data was never missing: every run carries `orchestrationId` and every
+orchestration keeps `runIds[]`.
+
+**The surface was already decided.** The 2026-08-12 entry on the Orchestrator's dialog rejected a
+sidebar panel and said where grouping would go if it were ever needed: *"If it does, the rail is the
+place, not a panel."* This is that need arriving, and it is built where that entry said.
+
+**Recorded because it changes how the evidence should be read:** `TASK-141` examined the flat rail at
+three runs and found it adequate. The trigger here was the product owner asking for grouping on
+2026-08-17, **not** the rail failing at that scale. Nobody should later cite this work as proof the
+flat list broke — it did not. That is also why the scope stayed small: a header, nesting, a reason
+line, and a chevron.
+
+**Decision: group on `run.orchestrationId`, not on `orchestration.runIds`.** The two disagree for a
+window, and the direction of the disagreement decides the rule. `useRunList` receives runs over SSE
+the moment they exist; `useOrchestration` refetches on `orchestrationRefreshKey` and lands later. A
+run therefore names its initiative before the initiative admits the run. Grouping on `runIds` would
+drop such a run out of its group — and, since it is no longer loose either, off the rail entirely
+until the refetch returned. Grouping on the run's own field cannot lose a run: one whose
+orchestration has not loaded yet stays a top-level card for a frame, then joins its group. Showing a
+run ungrouped is a smaller wrong than not showing it.
+
+`runsForOrchestration` still reads `runIds` and is unchanged. It feeds the *thread*, which is a view
+of one initiative the user already opened; there, `runIds` is the authority. The two functions answer
+different questions and now say so.
+
+**Ordering, both directions on purpose.** Items rank newest-first, so the rail reads as it always
+has, and an initiative ranks on its most recent run rather than its oldest — an active initiative
+should not sink because it started days ago. Runs *inside* an initiative run oldest-first, because
+"which followed which" is a timeline and a timeline runs forward. This is the same split
+`runsForOrchestration` already made for the thread.
+
+**A run says why it exists, and the first one says nothing.** `startReasonFor` pairs a run with the
+latest **launch-producing** turn at or before its `createdAt`. That is `start_run` *and*
+`propose_team`, because a proposal starts a run on two paths — `approveTeam`, and the auto-approve
+`launchUnchangedTeam` that `TASK-150` added — and neither records a turn of its own. Reading only
+`start_run` was wrong twice over: the first work run of every initiative comes from an approved
+proposal and so had no reason at all, and a proposal-started run that followed an earlier
+`start_run` inherited that stale rationale on timestamp alone. Caught in PR review. A turn that
+launches nothing — a question, a verdict — leaves the reason standing rather than blanking it.
+`orchestration-service.ts` starts the composed run in the same handler that records the decision, so
+the launching turn always precedes the run it produced. The run an initiative *began* as is the
+Orchestrator conversation, which no decision started — it gets `undefined` and renders no reason
+line. That is the honest answer rather than a gap to fill with the initiative's goal, which is
+already on the header directly above it.
+
+**Rejected: persisting which initiatives are collapsed.** Collapse state is local to `RunRail` and
+resets on reload. Preferences would mean a settings key, a migration and a write on every chevron
+click, for a rail that holds a handful of initiatives. Nobody has asked to keep a group shut. If
+someone does, `SettingsStore` is where it goes.
+
+**Rejected: putting the reason on `RunCard`.** "Why this run started" is a relationship between two
+runs, not a property of one, and `RunCard` is also rendered for runs that belong to no initiative.
+Giving it a second reason to change bought nothing, so the line renders in `InitiativeGroup` between
+the cards instead.
+
+---
+
 ## 2026-08-19 — A team is composed per run, and only a real change asks the user
 
 **Context:** an initiative approved one team and reused it forever. `launch` read

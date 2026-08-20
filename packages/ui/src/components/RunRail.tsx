@@ -1,7 +1,10 @@
+import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, Plus } from "lucide-react";
-import type { Milestone, RunSummary } from "@isotopy/core";
+import type { Milestone, Orchestration, RunSummary } from "@isotopy/core";
 import { milestoneProgress } from "@isotopy/core";
+import { railItems } from "../run-list";
+import { InitiativeGroup } from "./InitiativeGroup";
 import { RunCard } from "./RunCard";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
@@ -173,6 +176,7 @@ function MilestoneList({
 export interface RunRailProps {
   d: Dir;
   runs: RunSummary[];
+  orchestrations: Orchestration[];
   milestones: Milestone[];
   ready: boolean;
   selectedRunId: string | null;
@@ -188,6 +192,7 @@ export interface RunRailProps {
 export function RunRail({
   d,
   runs,
+  orchestrations,
   milestones,
   ready,
   selectedRunId,
@@ -199,6 +204,18 @@ export function RunRail({
   onRestart,
   onRerun,
 }: RunRailProps) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleInitiative(orchestrationId: string) {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (!next.delete(orchestrationId)) {
+        next.add(orchestrationId);
+      }
+      return next;
+    });
+  }
+
   return (
     <nav aria-label="Runs" style={rail(d)}>
       <div style={head(d)}>
@@ -222,17 +239,32 @@ export function RunRail({
       {ready && runs.length === 0 && <div style={placeholder(d)}>No runs yet.</div>}
 
       <ul style={LIST}>
-        {runs.map((run) => (
-          <RunCard
-            key={run.id}
-            run={run}
-            selected={run.id === selectedRunId}
-            d={d}
-            onOpen={() => onOpen(run.id)}
-            onRestart={(stageId) => onRestart(run.id, stageId)}
-            onRerun={() => onRerun(run)}
-          />
-        ))}
+        {railItems(runs, orchestrations).map((item) =>
+          item.kind === "initiative" ? (
+            <InitiativeGroup
+              key={item.orchestration.id}
+              orchestration={item.orchestration}
+              runs={item.runs}
+              collapsed={collapsed.has(item.orchestration.id)}
+              selectedRunId={selectedRunId}
+              d={d}
+              onToggle={() => toggleInitiative(item.orchestration.id)}
+              onOpen={onOpen}
+              onRestart={onRestart}
+              onRerun={onRerun}
+            />
+          ) : (
+            <RunCard
+              key={item.run.id}
+              run={item.run}
+              selected={item.run.id === selectedRunId}
+              d={d}
+              onOpen={() => onOpen(item.run.id)}
+              onRestart={(stageId) => onRestart(item.run.id, stageId)}
+              onRerun={() => onRerun(item.run)}
+            />
+          ),
+        )}
       </ul>
     </nav>
   );
