@@ -752,17 +752,28 @@ project's `.isotopy/`.
 Run history lives in one `node:sqlite` database per project at
 `<project>/.isotopy/runs.db`: a `runs` table holding the `PersistedRun` snapshot
 (upserted on `run_id`) and an append-only `events` table. The layering is
-**services → repository → db**: `RunOrchestrator` depends on `RunRepository`
+**services → repository → db**: `RunService` depends on `RunRepository`
 (`repository/run-repository.ts`), a single concrete class that owns the
 `PersistedRun` shape and coordinates the low-level pieces — a `Database` connection
-plus `RunsTable` / `EventsTable` in `db/`, and the handoff file writer that
+plus `JsonRecordsTable` / `EventsTable` in `db/`, and the handoff file writer that
 `writeHandoff` tracks. SQLite was chosen over `better-sqlite3`, which fails to
 install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23).
 
 - **The `db/` layer knows nothing about `PersistedRun`.** `Database` owns the
-  connection (lazy open, WAL, `busy_timeout`, schema, settle/close); `RunsTable` and
-  `EventsTable` take strings in and hand strings out. `RunRepository` does the JSON
-  encode/decode and the resilience policy on top.
+  connection (lazy open, WAL, `busy_timeout`, schema, settle/close);
+  `JsonRecordsTable` and `EventsTable` take strings in and hand strings out.
+  `RunRepository` does the JSON encode/decode and the resilience policy on top.
+- **One connection per project, and schemas apply lazily.** `ProjectDatabases`
+  hands every repository for a project the *same* `Database`, so `runs.db` is opened
+  once rather than once per aggregate. Because a table can therefore register its
+  schema after the connection is already open, `Database.connection()` applies any
+  registrations it has not run yet on each call, and `settle()` resets that cursor so
+  a reopened connection re-applies them. Registering a schema is idempotent
+  (`CREATE TABLE IF NOT EXISTS`), so the cost is a no-op `exec` per table.
+- **`JsonRecordsTable` is one class over three tables** — `runs`, `milestones`,
+  `orchestrations` — each described by a `JsonTableSpec` (table name, id column,
+  whether the legacy timestamp migration applies). They had been three near-identical
+  classes.
 - **Handoffs stay on disk** as `runs/<id>/<stageId>/handoff.md` — nothing reads them
   back and a markdown file is inspectable without a SQLite client. Only run state and
   the event trail live in the DB.

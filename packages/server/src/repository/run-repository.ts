@@ -2,9 +2,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import nodepath from "node:path";
 import type { RunEvent } from "@isotopy/core";
 import { ActiveRunsTable } from "../db/active-runs-table.ts";
-import { Database } from "../db/database.ts";
+import type { Database } from "../db/database.ts";
 import { EventsTable } from "../db/events-table.ts";
-import { RunsTable } from "../db/runs-table.ts";
+import { JsonRecordsTable, RUNS_TABLE } from "../db/json-records-table.ts";
 import {
   parsePersistedRun,
   parsePersistedRunEvent,
@@ -18,15 +18,16 @@ import { nowIso } from "../utils/time.ts";
 export type { PersistedRun } from "../schemas/run-persistence.ts";
 
 export class RunRepository {
-  private readonly db: Database;
-  private readonly runs: RunsTable;
+  private readonly runs: JsonRecordsTable;
   private readonly events: EventsTable;
   private readonly active: ActiveRunsTable;
   private readonly handoffs = new Set<Promise<void>>();
 
-  constructor(private readonly path: ProjectPath) {
-    this.db = new Database(path);
-    this.runs = new RunsTable(this.db);
+  constructor(
+    private readonly path: ProjectPath,
+    private readonly db: Database,
+  ) {
+    this.runs = new JsonRecordsTable(this.db, RUNS_TABLE);
     this.events = new EventsTable(this.db);
     this.active = new ActiveRunsTable(this.db);
   }
@@ -92,7 +93,6 @@ export class RunRepository {
 
   async settle(): Promise<void> {
     await Promise.allSettled([...this.handoffs]);
-    await this.db.settle();
   }
 }
 

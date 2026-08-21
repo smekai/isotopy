@@ -15,6 +15,39 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-21 — One json-record table, one connection per project
+
+**Context:** extends 2026-07-23 ("SQLite is the sole run store, behind a layered repository"),
+which this does not overturn — `services → repository → db` stays. What had drifted is what
+filled those layers. `runs`, `milestones` and `orchestrations` are all `(id, data, created_at,
+updated_at)` with the same upsert, the same `updated_at` trigger and the same legacy-timestamp
+migration, yet they were three table classes; `MilestoneRepository` and `OrchestrationRepository`
+were byte-identical modulo names; and `schemas/milestone.ts` and `schemas/orchestration.ts` were
+the same `JSON.parse`-then-validate function twice. Each of the three repositories also opened
+its **own** connection to the same `runs.db`.
+
+**Decision:** one `JsonRecordsTable` parameterized by a `JsonTableSpec`, one generic
+`JsonRecordRepository<T>` carrying the parse-and-warn boundary, one `parsePersistedRecord`, and a
+`ProjectDatabases` registry that hands every repository for a project the same `Database`.
+
+**Consequences worth knowing:**
+
+- A table can now register its schema *after* the shared connection is open, so
+  `Database.connection()` applies not-yet-run registrations on every call and `settle()` resets
+  that cursor. Without this, whichever aggregate loaded second queried a table that was never
+  created.
+- The unified `CREATE TABLE` carries `CHECK (json_valid(data))`, which the `runs` table alone
+  had lacked. `CREATE TABLE IF NOT EXISTS` never alters an existing database, so only newly
+  created ones are stricter.
+- Closing moved off the repositories onto `ProjectDatabases.settleAll()`, which must run **last**
+  in shutdown — after the services have flushed — or Windows fails the temp-directory delete
+  with EBUSY.
+
+**Rejected:** collapsing `repository/` into `db/`. The repositories carry the parse-and-warn
+boundary, and pushing that into services would put decoding back in the layer A3 keeps thin.
+
+---
+
 ## 2026-08-21 — The projection stays narrow; the hooks beside it collapse
 
 **Context:** three interfaces in `workflow/types.ts` each had exactly one implementation —

@@ -3,8 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { Database } from "../src/db/database.ts";
-import { MilestonesTable } from "../src/db/milestones-table.ts";
-import { RunsTable } from "../src/db/runs-table.ts";
+import {
+  JsonRecordsTable,
+  MILESTONES_TABLE,
+  RUNS_TABLE,
+} from "../src/db/json-records-table.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -30,13 +33,13 @@ afterEach(async () => {
 });
 
 function createTables(): {
-  runs: RunsTable;
-  milestones: MilestonesTable;
+  runs: JsonRecordsTable;
+  milestones: JsonRecordsTable;
 } {
   database = new Database(projectPath);
   return {
-    runs: new RunsTable(database),
-    milestones: new MilestonesTable(database),
+    runs: new JsonRecordsTable(database, RUNS_TABLE),
+    milestones: new JsonRecordsTable(database, MILESTONES_TABLE),
   };
 }
 

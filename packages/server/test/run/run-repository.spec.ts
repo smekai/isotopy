@@ -6,21 +6,25 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { ProjectPath } from "../../src/paths.ts";
+import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { RunRepository } from "../../src/repository/run-repository.ts";
 import { makePersistedRun, makeRunEvent } from "../support/run-fixtures.ts";
 
 let dir: string;
 let projectPath: ProjectPath;
 let repository: RunRepository;
+let databases: ProjectDatabases;
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-repo-"));
   projectPath = { id: "p", root: dir, dataDir: dir };
-  repository = new RunRepository(projectPath);
+  databases = new ProjectDatabases();
+  repository = new RunRepository(projectPath, databases.for(projectPath));
 });
 
 afterEach(async () => {
   await repository.settle();
+  await databases.settleAll();
   await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(
     () => undefined,
   );

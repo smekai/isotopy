@@ -8,6 +8,7 @@ import type {
 } from "@isotopy/core";
 import {
   canAcceptMilestoneFeature,
+  milestoneSchema,
   requestedMilestoneFeature,
   toMilestoneProposal,
 } from "@isotopy/core";
@@ -21,7 +22,9 @@ import {
   renderMilestoneRevisionContext,
 } from "../domain/markdown/planning.ts";
 import type { ProjectPath } from "../paths.ts";
-import { MilestoneRepository } from "../repository/milestone-repository.ts";
+import { MILESTONES_TABLE } from "../db/json-records-table.ts";
+import type { ProjectDatabases } from "../db/project-databases.ts";
+import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import {
   milestoneCloseoutContext,
@@ -34,13 +37,14 @@ import { taskBoardFor } from "./task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "./run/run-service.ts";
 
 export class MilestoneService {
-  private readonly milestoneRepositories = new Map<string, MilestoneRepository>();
+  private readonly milestoneRepositories = new Map<string, JsonRecordRepository<Milestone>>();
   private readonly milestones = new Map<string, Milestone>();
   private readonly completingMilestoneRuns = new Set<string>();
 
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: () => RunService,
+    private readonly databases: ProjectDatabases,
   ) {}
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
@@ -50,13 +54,6 @@ export class MilestoneService {
     }
   }
 
-  async settle(): Promise<void> {
-    await Promise.all(
-      [...this.milestoneRepositories.values()].map((repository) =>
-        repository.settle(),
-      ),
-    );
-  }
 
   listMilestones(projectId: string): Milestone[] {
     return [...this.milestones.values()]
@@ -541,11 +538,17 @@ export class MilestoneService {
 
   private milestoneRepositoryFor(
     projectPath: ProjectPath,
-  ): MilestoneRepository {
+  ): JsonRecordRepository<Milestone> {
     return getOrCreate(
       this.milestoneRepositories,
       projectPath.id,
-      () => new MilestoneRepository(projectPath),
+      () =>
+        new JsonRecordRepository(
+          this.databases.for(projectPath),
+          MILESTONES_TABLE,
+          milestoneSchema,
+          "milestone",
+        ),
     );
   }
 }

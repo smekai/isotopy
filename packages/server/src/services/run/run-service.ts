@@ -52,6 +52,7 @@ import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts"
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
+import type { ProjectDatabases } from "../../db/project-databases.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import type { ModelRosterService } from "../model-roster-service.ts";
 import { engineLabel } from "../../domain/rules/engine-label.ts";
@@ -124,10 +125,11 @@ export class RunService implements RunProjection {
     private readonly rosters: ModelRosterService,
     private readonly automation: AutomationConfigStore,
     private readonly deployment: DeploymentRunner,
+    databases: ProjectDatabases,
     private readonly product?: ProductProcessService,
   ) {
-    this.store = new RunStore(registry);
-    this.milestones = new MilestoneService(registry, () => this);
+    this.store = new RunStore(registry, databases);
+    this.milestones = new MilestoneService(registry, () => this, databases);
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
       new ReleaseConsumer(this.registry),
@@ -176,7 +178,6 @@ export class RunService implements RunProjection {
       [...this.store.runs.keys()].map((runId) => this.store.flushPersist(runId)),
     );
     await this.store.settle();
-    await this.milestones.settle();
   }
 
   private async reconcileOnLoad(projectPath: ProjectPath, run: RunState): Promise<void> {

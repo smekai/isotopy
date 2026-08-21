@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
 import { config } from "./config.ts";
+import { ProjectDatabases } from "./db/project-databases.ts";
 import { AutomationConfigStore } from "./services/automation-config-store.ts";
 import { DeploymentRunner } from "./services/deployment-runner.ts";
 import { ModelRosterService } from "./services/model-roster-service.ts";
@@ -15,9 +16,18 @@ const settings = new SettingsStore();
 const rosters = new ModelRosterService();
 const automation = new AutomationConfigStore();
 const deployment = new DeploymentRunner();
+const databases = new ProjectDatabases();
 const product = new ProductProcessService(automation);
-const runs = new RunService(registry, settings, rosters, automation, deployment, product);
-const orchestrations = new OrchestrationService(registry, runs, settings);
+const runs = new RunService(
+  registry,
+  settings,
+  rosters,
+  automation,
+  deployment,
+  databases,
+  product,
+);
+const orchestrations = new OrchestrationService(registry, runs, settings, databases);
 runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();
@@ -55,6 +65,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.log(`Isotopy server stopping on ${signal}`);
   await product.shutdown();
   await runs.shutdown();
+  await databases.settleAll();
   process.exit(0);
 }
 

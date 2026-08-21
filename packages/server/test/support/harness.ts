@@ -9,6 +9,7 @@ import type { Hono } from "hono";
 import { PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
 import type { EngineId, RunEvent, RunState, RunSummary } from "@isotopy/core";
 import { createApp } from "../../src/app.ts";
+import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
 import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
@@ -92,6 +93,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const rosters = new ModelRosterService();
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
+  const databases = new ProjectDatabases();
   const product = new ProductProcessService(automation, unspawnedProduct());
   const orchestrator = new RunService(
     registry,
@@ -99,9 +101,10 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     rosters,
     automation,
     deployment,
+    databases,
     product,
   );
-  const orchestrations = new OrchestrationService(registry, orchestrator, settings);
+  const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   const app = createApp({
@@ -133,7 +136,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       // target, or Windows fails the delete with EBUSY.
       await product.shutdown();
       await orchestrator.shutdown();
-      await orchestrations.shutdown();
+      await databases.settleAll();
       resetEngineAdapters();
       delete process.env.ISOTOPY_HOME;
       delete process.env.ISOTOPY_USER_HOME;
@@ -170,6 +173,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const rosters = new ModelRosterService();
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
+  const databases = new ProjectDatabases();
   const product = new ProductProcessService(automation, unspawnedProduct());
   const orchestrator = new RunService(
     registry,
@@ -177,9 +181,10 @@ export async function restartApp(): Promise<RestartedApp> {
     rosters,
     automation,
     deployment,
+    databases,
     product,
   );
-  const orchestrations = new OrchestrationService(registry, orchestrator, settings);
+  const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
@@ -200,7 +205,7 @@ export async function restartApp(): Promise<RestartedApp> {
     shutdown: async () => {
       await product.shutdown();
       await orchestrator.shutdown();
-      await orchestrations.shutdown();
+      await databases.settleAll();
     },
   };
 }

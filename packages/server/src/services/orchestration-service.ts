@@ -3,6 +3,7 @@ import {
   addUsage,
   agentForStage,
   isTerminalRunStatus,
+  orchestrationSchema,
   orchestrationStatusFor,
   parkedQuestion,
 } from "@isotopy/core";
@@ -54,7 +55,9 @@ import {
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
-import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
+import { ORCHESTRATIONS_TABLE } from "../db/json-records-table.ts";
+import type { ProjectDatabases } from "../db/project-databases.ts";
+import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
@@ -83,13 +86,14 @@ export interface ApproveTeamOptions extends StartOrchestrationOptions {
 
 export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
-  private readonly repositories = new Map<string, OrchestrationRepository>();
+  private readonly repositories = new Map<string, JsonRecordRepository<Orchestration>>();
   private readonly settledRuns = new Set<string>();
 
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: RunService,
     private readonly settings: SettingsStore,
+    private readonly databases: ProjectDatabases,
   ) {}
 
   async init(): Promise<void> {
@@ -101,12 +105,6 @@ export class OrchestrationService implements StageOutputConsumer {
       }
       await this.reconcileActiveOrchestrations(projectPath.id);
     }
-  }
-
-  async shutdown(): Promise<void> {
-    await Promise.all(
-      [...this.repositories.values()].map((repository) => repository.settle()),
-    );
   }
 
   list(projectId: string): Orchestration[] {
@@ -878,11 +876,17 @@ export class OrchestrationService implements StageOutputConsumer {
     ).write(orchestration);
   }
 
-  private repositoryFor(projectPath: ProjectPath): OrchestrationRepository {
+  private repositoryFor(projectPath: ProjectPath): JsonRecordRepository<Orchestration> {
     return getOrCreate(
       this.repositories,
       projectPath.id,
-      () => new OrchestrationRepository(projectPath),
+      () =>
+        new JsonRecordRepository(
+          this.databases.for(projectPath),
+          ORCHESTRATIONS_TABLE,
+          orchestrationSchema,
+          "orchestration",
+        ),
     );
   }
 }
