@@ -224,9 +224,10 @@ sits outside Full Delivery and milestone autorun, behind an explicit confirmatio
 stabilised the product to something a first-time user can install, point at a folder and see
 the result of; **G — Gauge** carried the Isotopy identity through the repository and
 filesystem cutover; and **H — Harmonic** took its features from the people who tried it
-rather than from guesses. In progress is **Milestone I — Isomorphic**: three adapters behind
-one interface that answer different subsets of it are not one seam, so the harness layer gets
-a declarative capability catalog that says what each engine actually supports. Milestones are
+rather than from guesses. In progress is **Milestone I — Induction**: prove the base case, then
+prove the step. Isotopy builds one small real product, deploys it, and then carries it forward on
+a schedule — unattended, for a measured stretch — because *fast first version, then built for v2
+and everything after* is the claim, and the half after v1 has never been measured. Milestones are
 named for mathematical terms; A–D keep their letters.
 
 ## Where Isotopy fits
