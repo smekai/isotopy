@@ -3,6 +3,7 @@ import { addProjectSchema } from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProductProcessService } from "../services/product-process-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { parseRequestBody } from "./request-body.ts";
 
 export function createProjectRoutes(
@@ -21,8 +22,7 @@ export function createProjectRoutes(
         const project = await registry.add(parsed.value.root);
         return c.json({ project, ...registry.list() }, 201);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to add project";
-        return c.json({ error: message }, 400);
+        return c.json({ error: messageOf(error) }, 400);
       }
     })
 
@@ -32,8 +32,7 @@ export function createProjectRoutes(
         await product.stopUnless(c.req.param("id"));
         return c.json(projects);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to switch project";
-        return c.json({ error: message }, 404);
+        return c.json({ error: messageOf(error) }, 404);
       }
     })
 
@@ -43,8 +42,7 @@ export function createProjectRoutes(
         await product.stopFor(c.req.param("id"));
         return c.json(projects);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to remove project";
-        return c.json({ error: message }, 400);
+        return c.json({ error: messageOf(error) }, 400);
       }
     });
 }

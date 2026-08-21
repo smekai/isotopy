@@ -72,6 +72,7 @@ import type {
   RunReviewContext,
   RunReviewRequest,
 } from "../workflow/types.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 
 export type StartOrchestrationOptions = InheritedRunOptions;
@@ -530,8 +531,7 @@ export class OrchestrationService implements StageOutputConsumer {
       decision,
       options,
     ).catch((error: unknown) => {
-      orchestration.decisionError =
-        error instanceof Error ? error.message : String(error);
+      orchestration.decisionError = messageOf(error);
       return undefined;
     });
     if (started && !orchestration.runIds.includes(started.id)) {

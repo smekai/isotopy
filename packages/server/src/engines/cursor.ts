@@ -11,6 +11,7 @@ import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { toolCacheEnv } from "./tool-cache.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { resolvePermissionPlan } from "./permission-mode.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import {
   applyProtocolUpdate,
@@ -186,10 +187,6 @@ function buildArgs(ctx: EngineRunContext, promptViaArg: boolean): string[] {
   ];
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export const cursorAdapter: EngineAdapter = {
   id: "cursor",
 
@@ -227,7 +224,7 @@ export const cursorAdapter: EngineAdapter = {
       return {
         engine: "cursor",
         installed: false,
-        message: `${ide}${errorText(error)}`,
+        message: `${ide}${messageOf(error)}`,
         installCommand: INSTALL_COMMAND,
         docsUrl: DOCS_URL,
       };
@@ -291,7 +288,7 @@ export const cursorAdapter: EngineAdapter = {
     try {
       binary = resolveCursorBinary().path;
     } catch (error) {
-      return { ok: false, message: errorText(error) };
+      return { ok: false, message: messageOf(error) };
     }
     const result = await runSubprocess({
       command: binary,
@@ -317,7 +314,7 @@ export const cursorAdapter: EngineAdapter = {
     try {
       binary = resolveCursorBinary().path;
     } catch (error) {
-      const message = errorText(error);
+      const message = messageOf(error);
       ctx.onLog({ level: "fail", message });
       return { success: false, exitCode: null, errorMessage: message };
     }

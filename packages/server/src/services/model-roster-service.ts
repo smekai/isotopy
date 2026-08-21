@@ -2,6 +2,7 @@ import { mergeModelLayers, staticModelsFor } from "@isotopy/core";
 import type { EngineId, EngineModelRoster } from "@isotopy/core";
 import { findEngineAdapter } from "../engines/registry.ts";
 import type { EngineAdapter, LiveModelLayer } from "../engines/types.ts";
+import { messageOf } from "../utils/message-of.ts";
 
 export class ModelRosterService {
   private readonly cached = new Map<EngineId, Promise<EngineModelRoster>>();
@@ -39,7 +40,7 @@ async function liveModels(adapter: EngineAdapter | undefined): Promise<LiveModel
   try {
     return (await adapter?.liveModels()) ?? { options: [] };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = messageOf(error);
     return { options: [], note: `Model lookup failed (${reason}).` };
   }
 }

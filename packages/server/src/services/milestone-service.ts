@@ -28,6 +28,7 @@ import {
   persistMilestoneSummary,
 } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "./run/run-service.ts";
 
@@ -202,8 +203,7 @@ export class MilestoneService {
       await this.persistMilestone(milestone);
       return structuredClone(milestone);
     } catch (error) {
-      milestone.approvalError =
-        error instanceof Error ? error.message : "Milestone approval failed";
+      milestone.approvalError = messageOf(error);
       milestone.updatedAt = nowIso();
       await this.persistMilestone(milestone);
       throw error;

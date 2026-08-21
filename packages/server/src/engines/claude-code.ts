@@ -23,6 +23,7 @@ import {
   protocolProblemMessage,
 } from "./protocol-validation.ts";
 import type { EngineProtocolUpdate } from "./protocol-validation.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import type {
   EngineAdapter,
@@ -186,7 +187,7 @@ export const claudeCodeAdapter: EngineAdapter = {
     try {
       resolved = resolveClaudeBinary();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = messageOf(error);
       return { engine: "claude-code", installed: false, message };
     }
     try {
@@ -199,7 +200,7 @@ export const claudeCodeAdapter: EngineAdapter = {
         source: resolved.source,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = messageOf(error);
       return {
         engine: "claude-code",
         installed: false,
@@ -215,7 +216,7 @@ export const claudeCodeAdapter: EngineAdapter = {
     try {
       binary = resolveClaudeBinary().path;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = messageOf(error);
       ctx.onLog({ level: "fail", message });
       return { success: false, exitCode: null, errorMessage: message };
     }

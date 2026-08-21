@@ -7,12 +7,9 @@ import {
 import { invalidRequest } from "../domain/validation.ts";
 import type { OrchestrationService } from "../services/orchestration-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "Orchestration operation failed";
-}
 
 export function createOrchestrationRoutes(
   orchestrations: OrchestrationService,

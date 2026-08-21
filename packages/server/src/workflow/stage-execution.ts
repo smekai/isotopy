@@ -1,6 +1,5 @@
 import {
   DEFAULT_PERMISSION_MODE,
-  ENGINES,
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
@@ -25,6 +24,7 @@ import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
 import { buildContinuationPrompt, buildStagePrompt } from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
+import { engineLabel } from "../domain/rules/engine-label.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
 import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
@@ -33,6 +33,7 @@ import { formatValidationIssues } from "../domain/validation.ts";
 import { toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
 import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
   PipelineWorkflowInput,
@@ -47,8 +48,6 @@ import type {
   StageTurn,
   WorkflowDeps,
 } from "./types.ts";
-
-const UNKNOWN_ENGINE_LABEL = "unknown";
 
 /** Bounds the question loop so a persona that always asks cannot run forever. */
 export const MAX_QUESTION_TURNS = 6;
@@ -110,10 +109,6 @@ function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
     .slice(0, index)
     .map((stage) => ({ label: stage.label, output: outputs[stage.id] ?? "" }))
     .filter((entry) => entry.output !== "");
-}
-
-function engineLabel(run: RunState): string {
-  return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
 }
 
 export const PREVIEW_DEPLOY_STEP_TASK = "deploy-preview";
@@ -268,7 +263,7 @@ async function runAdapter(
     return {
       success: false,
       exitCode: null,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: messageOf(error),
     };
   } finally {
     deps.endEngineStage(run.id);
@@ -360,7 +355,7 @@ export async function runQuestionMediationWork(
   } catch (error) {
     return {
       outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
-      failureMessage: error instanceof Error ? error.message : String(error),
+      failureMessage: messageOf(error),
     };
   }
   const projectPath = deps.registry.resolve(run.projectId);
@@ -417,7 +412,7 @@ export async function runQuestionMediationWork(
   } catch (error) {
     return {
       outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
-      failureMessage: error instanceof Error ? error.message : String(error),
+      failureMessage: messageOf(error),
     };
   }
   return {
@@ -521,10 +516,6 @@ function readReview(outcome: EngineRunResult, artifactsExpected: boolean): RunRe
     review.decision = decision.value;
   }
   return review;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export async function runStageWork(

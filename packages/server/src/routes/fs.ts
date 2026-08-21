@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { joinDirectory, listDirectories } from "../utils/directory-browser.ts";
+import { messageOf } from "../utils/message-of.ts";
 
 export const fsRoutes = new Hono().get("/dirs", async (c) => {
   const base = c.req.query("path");
@@ -8,7 +9,6 @@ export const fsRoutes = new Hono().get("/dirs", async (c) => {
   try {
     return c.json(await listDirectories(target));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to list directory";
-    return c.json({ error: message }, 400);
+    return c.json({ error: messageOf(error) }, 400);
   }
 });

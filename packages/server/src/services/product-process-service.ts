@@ -11,6 +11,7 @@ import type { ProductResponseHeaders } from "../domain/rules/product-preview.ts"
 import { startSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessHandle, SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { pollUntilHealthy } from "../utils/health-poll.ts";
 import type { HealthProbe } from "../utils/health-poll.ts";
 import type { AutomationConfigStore } from "./automation-config-store.ts";
@@ -296,10 +297,6 @@ export class ProductProcessService {
       return { allowed: true };
     }
   }
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function noteExit(current: RunningProduct, result: SubprocessResult): void {

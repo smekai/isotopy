@@ -53,6 +53,7 @@ import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { ModelRosterService } from "../model-roster-service.ts";
+import { engineLabel } from "../../domain/rules/engine-label.ts";
 import { unknownModelMessage } from "../../domain/rules/model-roster.ts";
 import { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
@@ -749,7 +750,7 @@ export class RunService implements RunProjection {
           {
             stageLabel: stageDef.label,
             profession: agentForStage(stageDef).profession,
-            engine: this.engineLabel(run),
+            engine: engineLabel(run),
             model: run.model,
             completedAt: nowIso(),
           },
@@ -895,10 +896,6 @@ export class RunService implements RunProjection {
     return stage;
   }
 
-  private engineLabel(run: RunState): string {
-    return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
-  }
-
   private emit(event: RunEvent): void {
     void this.store.repositoryForRun(event.runId)
       .appendEvent(event.runId, event)
@@ -993,5 +990,4 @@ type RunListener = (event: RunEvent) => void;
 type RunSummaryListener = (summary: RunSummary) => void;
 
 const ORCHESTRATION_PIPELINE_ID = "orchestration";
-const UNKNOWN_ENGINE_LABEL = "unknown";
 
