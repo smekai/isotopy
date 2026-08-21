@@ -9,10 +9,10 @@
 
 # Architect Standards
 
-The **prescriptive** standard for how code in this repo is written. Where
-[`architecture.md`](./architecture.md) *describes* the layout that exists, this
-*prescribes* what any new or refactored code must look like — and it is the
-single source the two Architect consumers are generated from.
+The **prescriptive** standard for how code in this repo is written. Where the
+*Technical Architecture* half of this document describes the layout that exists,
+this half prescribes what any new or refactored code must look like — and it is
+the single source the two Architect consumers are generated from.
 
 > **This file is the source of truth for the Architect persona.** Do not
 > hand-edit [`.claude/skills/architect/SKILL.md`](../.claude/skills/architect/SKILL.md)
@@ -212,8 +212,8 @@ of the source. When you strip or avoid a comment, that is where its content goes
   `MilestoneService` owns milestone CRUD beside it; `RunStore` holds the
   cross-project run map and persistence.
 - **Named types & styles (A6):** every component exports a named `XProps`
-  interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
-  into named constants and builders.
+  interface; `components/run/run-styles.ts` is the reference for lifting
+  `style={{…}}` into named constants and builders.
 
 - **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
   `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or
@@ -308,9 +308,9 @@ Be concise and concrete. Do not restate this prompt.
 
 How code in this repo is organized, linted, and configured. Introduced by TASK-032.
 
-> **Descriptive, not prescriptive.** This file records the layout that *exists*.
-> For the rules any new or refactored code *must* follow, see
-> [`architecture.md`](./architecture.md) (the Architect standard);
+> **Descriptive, not prescriptive.** This section records the layout that *exists*.
+> For the rules any new or refactored code *must* follow, see the **Architect
+> Standards** section above;
 > [`decisions.md`](./decisions.md) for the rationale behind non-obvious choices;
 > and [`implementation-notes.md`](./implementation-notes.md) for the "why" behind
 > non-obvious code, which — per the comments-are-a-smell rule — lives in docs, not
@@ -341,7 +341,6 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 | `projects.ts` | Project model and the home-project constant |
 | `runs.ts` | Run/stage state models, run events, status constants |
 | `settings.ts` | UI-safe settings view models, project preferences and their defaults |
-
 | `schema.ts` | Shared zod primitives every shape is built from |
 
 Core carries exactly one runtime dependency — zod — because a shape and its codec
@@ -413,11 +412,11 @@ Already in place:
 
 Recommended next steps, in rough priority order:
 
-1. **CI gate** — a GitHub Actions workflow running `pnpm lint && pnpm typecheck && pnpm test && pnpm build` on every PR, then `pnpm e2e`. The Vitest suite is CI-ready today (no credentials, no engine, no browser, ~1.5s); the Playwright job additionally needs `npx playwright install chromium`. The workflow itself is not written yet.
+1. ~~**CI gate**~~ — done. `.github/workflows/ci.yml` runs the gate on every PR, and `main` merges only on green; see [`decisions.md`](./decisions.md) (2026-08-04).
 2. **Formatter** — add Prettier (or Biome) with a pre-commit hook (`husky` + `lint-staged`) so style never reaches review.
 3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
 4. **Structured logger** — replace `console.*` (tracked as TASK-022; `LOG_LEVEL` should join `config.ts`).
-5. **Request validation** — zod (or Hono's validator) at route boundaries instead of hand-rolled `body.x !== undefined` checks; the parsed types then flow into services for free.
+5. ~~**Request validation**~~ — done. `packages/server/src/schemas/` owns every untrusted boundary and the parsed types flow into services; see [`decisions.md`](./decisions.md) (2026-07-29).
 6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because Isotopy intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).
 
@@ -425,130 +424,12 @@ Recommended next steps, in rough priority order:
 
 # Technical Architecture: Isotopy
 
-**Version:** 0.1 draft  
-**Stack recommendation:** TypeScript (CLI + API + UI) on Node.js; pnpm workspaces monorepo; Hono API; React/Vite dashboard; file-based persistence. Python acceptable for agent subprocess glue. Optional future Tauri desktop shell — not MVP.
+The tiers as built. This half of the document used to be a pre-implementation
+`0.1 draft`; the sections describing components, layouts and file formats that were
+never built have been removed rather than left to be read as current. What remains
+has been checked against `packages/`.
 
 ---
-
-## System context
-
-```mermaid
-flowchart TB
-    subgraph userMachine [User Machine]
-        CLI[CLI isotopy]
-        UI[Local Dashboard]
-        Orch[Orchestrator Core]
-        TaskMgr[TaskManager]
-        State[State Store]
-        Artifacts[Artifact Store]
-        WT[Git Worktree Manager]
-        Adapters[Harness Adapters]
-        DeployAdapters[Deploy Adapters]
-        E2E[Playwright Runner]
-
-        CLI --> Orch
-        CLI --> TaskMgr
-        UI --> Orch
-        UI --> TaskMgr
-        Orch --> State
-        Orch --> Artifacts
-        Orch --> WT
-        Orch --> Adapters
-        Orch --> DeployAdapters
-        Orch --> E2E
-        TaskMgr --> State
-    end
-
-    subgraph external [External - BYOK]
-        LLM[LLM APIs]
-        Harness[Cursor / Claude Code / etc]
-        GH[GitHub CLI]
-        Platforms[Vercel / Docker / custom CLI]
-    end
-
-    Adapters --> Harness
-    DeployAdapters --> Platforms
-    Orch --> LLM
-    Orch --> GH
-    WT --> Repo[(Target Git Repo)]
-    Artifacts --> Repo
-```
-
----
-
-## Core components
-
-### 1. Orchestrator
-
-Central state machine. Responsibilities:
-
-- Load workflow definition (default pipeline YAML)
-- Transition stages based on agent output and gate results
-- Spawn stage agents (LLM-backed or harness-backed)
-- Emit events to `events.jsonl`
-- Handle pause at human gates
-- Implement restart semantics (partial re-run)
-
-**Key modules:**
-
-| Module | Responsibility |
-|--------|----------------|
-| `WorkflowEngine` | Parse pipeline, validate transitions |
-| `RunController` | CRUD for runs, cancel, restart |
-| `TaskManager` | CRUD for tasks, status, link runs to tasks |
-| `StageExecutor` | Invoke agent for one stage |
-| `GateEvaluator` | Run soft/hard gates on artifacts |
-| `EventBus` | Internal pub/sub; fan-out to UI SSE |
-
-### 2. Task management
-
-**TaskManager** handles repo-native backlog items. Tasks are independent of run state; a task can spawn multiple runs over time.
-
-**Storage:**
-
-| File | Purpose |
-|------|---------|
-| `.isotopy/tasks/index.json` | Machine-readable summaries for fast listing and filtering |
-| `.isotopy/tasks/<task-id>.md` | Human-readable detail: title, description, acceptance criteria, run history |
-
-**index.json shape:**
-
-```json
-{
-  "nextId": 2,
-  "idPrefix": "TASK",
-  "tasks": [
-    {
-      "id": "TASK-001",
-      "title": "Add dark mode toggle",
-      "status": "in_progress",
-      "priority": "P1",
-      "tags": ["ui", "accessibility"],
-      "runIds": ["a1b2c3"],
-      "createdAt": "2026-06-28T09:00:00Z",
-      "updatedAt": "2026-06-28T10:00:00Z"
-    }
-  ]
-}
-```
-
-**Task statuses:** `backlog` | `ready` | `in_progress` | `blocked` | `done` | `rejected`
-
-**Task markdown format** (`.isotopy/tasks/TASK-001.md`):
-
-```markdown
-# TASK-001: Add dark mode toggle
-
-**Status:** in_progress | **Priority:** P1 | **Tags:** ui, accessibility
-
-## Description
-
-User-toggleable dark mode with system preference detection.
-
-## Acceptance criteria
-
-- Toggle in settings persists across sessions
-- Respects `prefers-color-scheme` when set to "system"
 
 ## Runs
 
@@ -870,38 +751,6 @@ the repository seam — so the storage work is preserved either way.
 
 ---
 
-## Git worktree isolation
-
-Pattern borrowed from Sikula and AI-SDLC.
-
-```mermaid
-sequenceDiagram
-    participant Orch as Orchestrator
-    participant Git as Git
-    participant WT as Worktree
-    participant Harness as Harness Adapter
-
-    Orch->>Git: git worktree add .isotopy/worktrees/runId -b isotopy/slug-runId
-    Orch->>Harness: run(worktreePath, implementationPrompt)
-    Harness->>WT: edit files, commit
-    Orch->>Git: run tests in worktree
-    alt success
-        Orch->>Git: optional push branch
-    else failure
-        Orch->>Orch: preserve worktree for inspection
-    end
-```
-
-**Rules:**
-
-- Worktree created before `implementation` stage (or at run start if config says so)
-- Base branch from config (`main` default)
-- Dirty tracked files on base branch: block run with clear error (like Sikula)
-- On cancel: worktree preserved; on success: worktree removed, branch kept
-- `restart --from implementation`: reuse existing worktree if present
-
----
-
 ## Agent model
 
 **A stage is engine-backed if and only if it carries a `skill`.** There is no
@@ -950,110 +799,6 @@ closeout.
 
 **Blind review rule:** a reviewing agent receives the task description, the
 artifacts, and `git diff` — not the implementing agent's logs.
-
----
-
-## Deploy adapter layer
-
-```mermaid
-classDiagram
-    class DeployAdapter {
-        +id: string
-        +deploy(ctx: DeployContext): DeployResult
-        +healthCheck(): boolean
-    }
-    class SubprocessDeployAdapter {
-        +command: string
-        +deploy()
-    }
-    class DockerComposeAdapter {
-        +deploy()
-    }
-    class VercelAdapter {
-        +deploy()
-    }
-    DeployAdapter <|-- SubprocessDeployAdapter
-    DeployAdapter <|-- DockerComposeAdapter
-    DeployAdapter <|-- VercelAdapter
-```
-
-**Registration:** `config.yaml`:
-
-```yaml
-deploy:
-  default: docker-compose
-  environment: preview
-  adapters:
-    docker-compose:
-      type: subprocess
-      command: docker compose up -d --build
-      cwd: worktree
-    vercel:
-      type: vercel
-      command: vercel
-      args: ["deploy"]
-```
-
-Deploy stage runs after release gate approval. Production deploy requires explicit config + human gate.
-
----
-
-## Harness adapter layer
-
-For the engine roster and how a stage picks one, see [Agent model](#agent-model) above.
-
-```mermaid
-classDiagram
-    class HarnessAdapter {
-        +id: string
-        +run(ctx: HarnessContext): HarnessResult
-        +healthCheck(): boolean
-    }
-    class ClaudeCodeAdapter {
-        +run()
-    }
-    class CursorAdapter {
-        +run()
-    }
-    class SubprocessAdapter {
-        +command: string
-        +run()
-    }
-    HarnessAdapter <|-- ClaudeCodeAdapter
-    HarnessAdapter <|-- CursorAdapter
-    HarnessAdapter <|-- SubprocessAdapter
-```
-
-**Registration:** `config.yaml`:
-
-```yaml
-harness:
-  default: claude-code
-  adapters:
-    claude-code:
-      type: claude-code
-      command: claude
-      timeoutMs: 1800000
-    cursor:
-      type: cursor
-      command: cursor
-      args: ["agent"]
-```
-
-**SubprocessAdapter** allows power users to wire any CLI without code changes.
-
----
-
-## Restart and resume semantics
-
-| Command | Behavior |
-|---------|----------|
-| `isotopy run` (new) | New `runId`, fresh state |
-| `isotopy resume <runId>` | Continue from `currentStage` if paused/failed |
-| `isotopy restart <runId> --from <stage>` | Mark stage and all downstream as `pending`; keep upstream artifacts |
-| `isotopy restart <runId> --from <stage> --fresh` | Delete downstream artifacts; re-run stage from scratch |
-
-**Implementation detail:** Restart invalidates stage entries in `state.json` from the target stage forward; does not delete upstream artifact files (unless `--fresh`).
 
 ---
 
@@ -1106,19 +851,6 @@ without a header.
 `ISOTOPY_HOME` overrides the home project's data directory and `ISOTOPY_USER_HOME` the
 user-level root; both exist so tests get isolated roots.
 
-### Promotion
-
-| Artifact type | Location | Git tracked? |
-|---------------|----------|--------------|
-| Tasks | `.isotopy/tasks/` | Optional (gitignore by default) |
-| Run state, events | `<project>/.isotopy/runs/` | No (self-ignoring by default) |
-| Approved specs | `specs/<slug>/` | Yes (on user opt-in) |
-| Code changes | `isotopy/*` branch | Yes (normal git) |
-| Agent prompts | `.isotopy/agents/` | Yes (team customization) |
-| Project context | `.isotopy/context/` | Yes |
-
-**Principle:** Machine state is local and reproducible; human-approved artifacts promote into tracked repo paths.
-
 ---
 
 ## Local dashboard architecture
@@ -1158,96 +890,6 @@ Every request carries an `X-Isotopy-Project` header identifying the active proje
 
 ---
 
-## Default pipeline definition
-
-**File:** `.isotopy/workflows/default.yaml`
-
-```yaml
-id: default
-version: 1
-stages:
-  - id: intake
-    agent: intake
-    gates: []
-  - id: requirements
-    agent: requirements
-    gates: [req_complete]
-    humanGate: req_gate
-  - id: design
-    agent: design
-    gates: [design_complete]
-    humanGate: design_gate
-  - id: implementation
-    agent: implementation
-    harness: true
-    gates: []
-  - id: review
-    agent: review
-    gates: [no_critical_findings]
-  - id: test
-    agent: test
-    gates: [tests_pass]
-    onFail: fix_loop
-  - id: release
-    agent: release
-    gates: []
-    humanGate: release_gate
-  - id: deploy
-    agent: deploy
-    gates: [deploy_success]
-    humanGate: deploy_gate
-```
-
-Custom workflows: copy YAML, edit stage list (v0.2 visual editor).
-
----
-
-## Security considerations
-
-- All execution local; API keys from env or OS keychain
-- Harness runs in worktree only; no arbitrary path write
-- Subprocess adapter: allowlist or explicit user confirmation for custom commands
-- No telemetry by default
-- Secrets scanner in review stage (optional gate)
-
----
-
-## Repository layout (implementation)
-
-```
-isotopy/
-  packages/
-    cli/              # isotopy CLI entry (Commander or CAC)
-    core/             # orchestrator, TaskManager, state machine, gates
-    adapters/         # harness adapters
-    agents/           # stage agent runners
-    server/           # Hono local API for dashboard
-    ui/               # React/Vite dashboard SPA
-  templates/
-    default/          # scaffold .isotopy/ on init (incl. tasks/)
-  docs/               # product docs (this folder)
-```
-
-**Monorepo:** pnpm workspaces. Shared types in `packages/core`.
-
----
-
-## Suggested build order
-
-1. **Core:** state.json, events.jsonl, workflow YAML parser
-2. **TaskManager:** index.json, task markdown CRUD, run linkage
-3. **CLI:** `init`, `run`, `task` subcommands (requirements + design only, no harness)
-4. **Worktree manager:** git isolation
-5. **One harness adapter:** Claude Code
-6. **OpenWorkflow integration:** wrap stages as durable steps; gates via signals
-7. **Review + test stages** with unit + Playwright E2E fix loop
-8. **Deploy adapter:** Docker Compose or generic subprocess
-9. **Dashboard:** task backlog + run list + stage timeline + approve
-10. **Restart/resume** commands
-11. **Second harness adapter:** Cursor or subprocess
-
----
-
 ## Open decisions
 
 | Decision | Recommendation | Rationale |
@@ -1261,7 +903,7 @@ isotopy/
 | Persistence | SQLite (`node:sqlite`) in `<project>/.isotopy/` | Sole run store behind a layered repository; no server, no native build |
 | Desktop packaging | Defer (Tauri later) | Server + Web UI sufficient; Tauri can wrap same stack |
 | LLM abstraction | None — engines are coding CLIs | Isotopy spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
-| Worktree at run start vs impl stage | At implementation | Spec stages don't need branch |
+| Worktree isolation | Not taken — agents run in `ctx.cwd` | Never built; a run works the project directory directly |
 | Commit specs automatically | Opt-in on gate approve | Keeps git clean |
 | Workflow runtime | OpenWorkflow (`node:sqlite`, in-process) | Durable execution, gates, retries, crash recovery; embedded file DB, no server |
 | E2E runner | Playwright | Industry standard; test agents; trace on failure |

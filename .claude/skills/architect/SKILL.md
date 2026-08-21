@@ -184,8 +184,8 @@ of the source. When you strip or avoid a comment, that is where its content goes
   `MilestoneService` owns milestone CRUD beside it; `RunStore` holds the
   cross-project run map and persistence.
 - **Named types & styles (A6):** every component exports a named `XProps`
-  interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
-  into named constants and builders.
+  interface; `components/run/run-styles.ts` is the reference for lifting
+  `style={{…}}` into named constants and builders.
 
 - **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
   `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or

@@ -122,7 +122,7 @@ functions.
 - Every component exports a named `XProps` interface.
 - No large inline `style={{…}}` blocks: static ones become module-level
   constants, theme- or state-dependent ones become small named builders
-  (`StageFocusPanel.tsx` is the reference).
+  (`components/run/run-styles.ts` is the reference).
 - A config blob or options bag written inline at a call site gets a named type.
 - A literal repeated twice exists once, named.
 
