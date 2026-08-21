@@ -37,8 +37,12 @@ its **own** connection to the same `runs.db`.
   that cursor. Without this, whichever aggregate loaded second queried a table that was never
   created.
 - The unified `CREATE TABLE` carries `CHECK (json_valid(data))`, which the `runs` table alone
-  had lacked. `CREATE TABLE IF NOT EXISTS` never alters an existing database, so only newly
-  created ones are stricter.
+  had lacked. `CREATE TABLE IF NOT EXISTS` never alters an existing database — but the legacy
+  timestamp migration *rebuilds* the table, and that path does apply the new constraint. Because
+  the old `runs` table accepted anything and `RunRepository` skipped unreadable rows on read, a
+  database could hold a row the rebuild would reject, and the failed migration would repeat on
+  every later `connection()`. The copy therefore selects `WHERE json_valid(data)` and warns with
+  a count: a row that could not be read before the migration is not lost by being dropped in it.
 - Closing moved off the repositories onto `ProjectDatabases.settleAll()`, which must run **last**
   in shutdown — after the services have flushed — or Windows fails the temp-directory delete
   with EBUSY.

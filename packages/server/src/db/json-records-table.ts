@@ -58,6 +58,12 @@ function columnNames(connection: SqliteConnection, table: string): Set<string> {
   );
 }
 
+function countRows(connection: SqliteConnection, sql: string): number {
+  const row = connection.prepare(sql).get();
+  const value = row?.rows;
+  return typeof value === "number" ? value : Number(value ?? 0);
+}
+
 function migrateLegacyTimestamps(
   connection: SqliteConnection,
   spec: JsonTableSpec,
@@ -79,7 +85,17 @@ function migrateLegacyTimestamps(
     connection.exec(`
 INSERT INTO ${table}(${idColumn}, data, created_at, updated_at)
 SELECT ${idColumn}, data, updated_at, updated_at
-FROM ${temporaryTable}`);
+FROM ${temporaryTable}
+WHERE json_valid(data)`);
+    const abandoned = countRows(
+      connection,
+      `SELECT COUNT(*) AS rows FROM ${temporaryTable} WHERE NOT json_valid(data)`,
+    );
+    if (abandoned > 0) {
+      console.warn(
+        `Dropped ${abandoned} malformed ${table} row(s) during timestamp migration; they could not be read before it either`,
+      );
+    }
     connection.exec(`DROP TABLE ${temporaryTable}`);
     connection.exec("COMMIT");
   } catch (error) {
