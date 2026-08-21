@@ -7,7 +7,6 @@ const REPO_ROOT = path.resolve(__dirname, "../..");
 // API prefixes proxied to the server during development.
 // Keep in sync with the route mounts in packages/server/src/app.ts.
 const API_PROXY_PATHS = [
-  "/pipelines",
   "/projects",
   "/runs",
   "/milestones",

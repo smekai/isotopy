@@ -3,6 +3,7 @@ import {
   addUsage,
   agentForStage,
   isTerminalRunStatus,
+  orchestrationSchema,
   orchestrationStatusFor,
   parkedQuestion,
 } from "@isotopy/core";
@@ -39,7 +40,10 @@ import {
   runLabel,
   stageOutputsOf,
 } from "../domain/rules/orchestration-context.ts";
-import { blockedLaunchRefusal } from "../domain/rules/orchestration-loop.ts";
+import {
+  activeOrchestrations,
+  blockedLaunchRefusal,
+} from "../domain/rules/orchestration-loop.ts";
 import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
@@ -50,11 +54,13 @@ import {
   generationOf,
   sameComposition,
   withRoleTiers,
-} from "../schemas/team-composition.ts";
+} from "../domain/rules/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
-import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
+import { ORCHESTRATIONS_TABLE } from "../db/json-records-table.ts";
+import type { ProjectDatabases } from "../db/project-databases.ts";
+import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
@@ -63,8 +69,7 @@ import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
-import type { InheritedRunOptions } from "./run/run-options.ts";
-import { OrchestratorRequiredError } from "../domain/orchestrator-required-error.ts";
+import type { InheritedRunOptions } from "./run/run-service.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
@@ -72,6 +77,8 @@ import type {
   RunReviewContext,
   RunReviewRequest,
 } from "../workflow/types.ts";
+import { getOrCreate } from "../utils/get-or-create.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 
 export type StartOrchestrationOptions = InheritedRunOptions;
@@ -82,13 +89,14 @@ export interface ApproveTeamOptions extends StartOrchestrationOptions {
 
 export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
-  private readonly repositories = new Map<string, OrchestrationRepository>();
+  private readonly repositories = new Map<string, JsonRecordRepository<Orchestration>>();
   private readonly settledRuns = new Set<string>();
 
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: RunService,
     private readonly settings: SettingsStore,
+    private readonly databases: ProjectDatabases,
   ) {}
 
   async init(): Promise<void> {
@@ -100,12 +108,6 @@ export class OrchestrationService implements StageOutputConsumer {
       }
       await this.reconcileActiveOrchestrations(projectPath.id);
     }
-  }
-
-  async shutdown(): Promise<void> {
-    await Promise.all(
-      [...this.repositories.values()].map((repository) => repository.settle()),
-    );
   }
 
   list(projectId: string): Orchestration[] {
@@ -134,7 +136,7 @@ export class OrchestrationService implements StageOutputConsumer {
   async attachRun(projectId: string, runId: string): Promise<void> {
     const orchestration = this.activeFor(projectId);
     if (!orchestration) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The project has no active Orchestrator to own the run",
       );
     }
@@ -345,27 +347,36 @@ export class OrchestrationService implements StageOutputConsumer {
     return structuredClone(orchestration);
   }
 
-  async contextFor(
-    request: QuestionMediationRequest,
-  ): Promise<QuestionMediationContext> {
-    const run = this.runs.getRun(request.runId);
+  private requireActiveOrchestrationFor(
+    runId: string,
+    purpose: string,
+  ): { run: RunState; orchestration: Orchestration } {
+    const run = this.runs.getRun(runId);
     if (!run) {
-      throw new Error(`Run not found: ${request.runId}`);
+      throw new Error(`Run not found: ${runId}`);
     }
     const orchestration = this.activeFor(run.projectId);
     if (!orchestration) {
-      throw new OrchestratorRequiredError(
-        "The project has no active Orchestrator to mediate this question",
-      );
+      throw new Error(`The project has no active Orchestrator to ${purpose}`);
     }
     if (
       run.orchestrationId !== undefined &&
       run.orchestrationId !== orchestration.id
     ) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The run belongs to an Orchestrator that is no longer active",
       );
     }
+    return { run, orchestration };
+  }
+
+  async contextFor(
+    request: QuestionMediationRequest,
+  ): Promise<QuestionMediationContext> {
+    const { run, orchestration } = this.requireActiveOrchestrationFor(
+      request.runId,
+      "mediate this question",
+    );
     return {
       orchestrationId: orchestration.id,
       prompt: renderQuestionMediationContext({
@@ -387,7 +398,7 @@ export class OrchestrationService implements StageOutputConsumer {
   ): Promise<void> {
     const orchestration = this.orchestrations.get(context.orchestrationId);
     if (!orchestration || orchestration.status === "stopped") {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The Orchestrator stopped before it could record the mediation decision",
       );
     }
@@ -419,24 +430,10 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   async reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext> {
-    const run = this.runs.getRun(request.runId);
-    if (!run) {
-      throw new Error(`Run not found: ${request.runId}`);
-    }
-    const orchestration = this.activeFor(run.projectId);
-    if (!orchestration) {
-      throw new OrchestratorRequiredError(
-        "The project has no active Orchestrator to review this run",
-      );
-    }
-    if (
-      run.orchestrationId !== undefined &&
-      run.orchestrationId !== orchestration.id
-    ) {
-      throw new OrchestratorRequiredError(
-        "The run belongs to an Orchestrator that is no longer active",
-      );
-    }
+    const { run, orchestration } = this.requireActiveOrchestrationFor(
+      request.runId,
+      "review this run",
+    );
     return {
       orchestrationId: orchestration.id,
       prompt: renderRunReviewContext({
@@ -469,7 +466,7 @@ export class OrchestrationService implements StageOutputConsumer {
   ): Promise<void> {
     const orchestration = this.orchestrations.get(context.orchestrationId);
     if (!orchestration || orchestration.status === "stopped") {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The Orchestrator stopped before it could record the run review",
       );
     }
@@ -530,8 +527,7 @@ export class OrchestrationService implements StageOutputConsumer {
       decision,
       options,
     ).catch((error: unknown) => {
-      orchestration.decisionError =
-        error instanceof Error ? error.message : String(error);
+      orchestration.decisionError = messageOf(error);
       return undefined;
     });
     if (started && !orchestration.runIds.includes(started.id)) {
@@ -809,12 +805,7 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private activeFor(projectId: string): Orchestration | undefined {
-    return [...this.orchestrations.values()]
-      .filter(
-        (orchestration) =>
-          orchestration.projectId === projectId && orchestration.status !== "stopped",
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    return activeOrchestrations(this.orchestrations.values(), projectId)[0];
   }
 
   private mediationArtifacts(
@@ -832,12 +823,7 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private async reconcileActiveOrchestrations(projectId: string): Promise<void> {
-    const active = [...this.orchestrations.values()]
-      .filter(
-        (orchestration) =>
-          orchestration.projectId === projectId && orchestration.status !== "stopped",
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const active = activeOrchestrations(this.orchestrations.values(), projectId);
     for (const duplicate of active.slice(1)) {
       await this.terminate(
         duplicate,
@@ -878,14 +864,18 @@ export class OrchestrationService implements StageOutputConsumer {
     ).write(orchestration);
   }
 
-  private repositoryFor(projectPath: ProjectPath): OrchestrationRepository {
-    const existing = this.repositories.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const repository = new OrchestrationRepository(projectPath);
-    this.repositories.set(projectPath.id, repository);
-    return repository;
+  private repositoryFor(projectPath: ProjectPath): JsonRecordRepository<Orchestration> {
+    return getOrCreate(
+      this.repositories,
+      projectPath.id,
+      () =>
+        new JsonRecordRepository(
+          this.databases.for(projectPath),
+          ORCHESTRATIONS_TABLE,
+          orchestrationSchema,
+          "orchestration",
+        ),
+    );
   }
 }
 

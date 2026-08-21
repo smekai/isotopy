@@ -12,12 +12,9 @@ import {
 import { invalidRequest } from "../domain/validation.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { MilestoneService } from "../services/milestone-service.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "Milestone operation failed";
-}
 
 export function createMilestoneRoutes(
   milestones: MilestoneService,

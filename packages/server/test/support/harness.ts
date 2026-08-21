@@ -9,6 +9,7 @@ import type { Hono } from "hono";
 import { PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
 import type { EngineId, RunEvent, RunState, RunSummary } from "@isotopy/core";
 import { createApp } from "../../src/app.ts";
+import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
 import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
@@ -90,14 +91,22 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
   const rosters = new ModelRosterService();
-  const orchestrator = new RunService(registry, settings, rosters);
-  const orchestrations = new OrchestrationService(registry, orchestrator, settings);
-  orchestrator.registerStageOutputConsumer(orchestrations);
+  const automation = new AutomationConfigStore();
+  const deployment = new DeploymentRunner();
+  const databases = new ProjectDatabases();
+  const product = new ProductProcessService(automation, unspawnedProduct());
+  const orchestrator = new RunService(
+    registry,
+    settings,
+    rosters,
+    automation,
+    deployment,
+    databases,
+    product,
+  );
+  const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
-  const automation = new AutomationConfigStore();
-  const product = new ProductProcessService(automation, unspawnedProduct());
-  orchestrator.registerProduct(product);
   const app = createApp({
     runs: orchestrator,
     milestones: orchestrator.milestones,
@@ -106,7 +115,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     settings,
     rosters,
     automation,
-    deployment: new DeploymentRunner(),
+    deployment,
     product,
   });
 
@@ -127,7 +136,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       // target, or Windows fails the delete with EBUSY.
       await product.shutdown();
       await orchestrator.shutdown();
-      await orchestrations.shutdown();
+      await databases.settleAll();
       resetEngineAdapters();
       delete process.env.ISOTOPY_HOME;
       delete process.env.ISOTOPY_USER_HOME;
@@ -162,15 +171,23 @@ export async function restartApp(): Promise<RestartedApp> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
   const rosters = new ModelRosterService();
-  const orchestrator = new RunService(registry, settings, rosters);
-  const orchestrations = new OrchestrationService(registry, orchestrator, settings);
-  orchestrator.registerStageOutputConsumer(orchestrations);
+  const automation = new AutomationConfigStore();
+  const deployment = new DeploymentRunner();
+  const databases = new ProjectDatabases();
+  const product = new ProductProcessService(automation, unspawnedProduct());
+  const orchestrator = new RunService(
+    registry,
+    settings,
+    rosters,
+    automation,
+    deployment,
+    databases,
+    product,
+  );
+  const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
-  const automation = new AutomationConfigStore();
-  const product = new ProductProcessService(automation, unspawnedProduct());
-  orchestrator.registerProduct(product);
   return {
     app: createApp({
       runs: orchestrator,
@@ -180,7 +197,7 @@ export async function restartApp(): Promise<RestartedApp> {
       settings,
       rosters,
       automation,
-      deployment: new DeploymentRunner(),
+      deployment,
       product,
     }),
     orchestrator,
@@ -188,7 +205,7 @@ export async function restartApp(): Promise<RestartedApp> {
     shutdown: async () => {
       await product.shutdown();
       await orchestrator.shutdown();
-      await orchestrations.shutdown();
+      await databases.settleAll();
     },
   };
 }

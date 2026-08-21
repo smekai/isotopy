@@ -228,8 +228,13 @@ will not do.
 - **The Orchestrator's copy keeps the `pipeline:stage` qualifier.** Stripping it produced a prompt
   that said both "wanted after: intake" and "waived after: intake" whenever the two pipelines
   disagreed, which is worse than saying nothing.
+- **`approveGate` applies the approval *and* signals the workflow, on purpose.** It looks like a
+  double-apply: the durable `<stage>:gate:approved` step calls `projection.gateApproved` again when
+  the signal lands. The eager call is what makes the UI update on the click rather than a round
+  trip later, and the replay is a no-op behind the `stage.status !== "awaiting"` guard. Two separate
+  audits have now flagged it as a bug, so it is written down here rather than re-argued a third time.
 
-## A team per run (`schemas/team-composition.ts`, `services/orchestration-service.ts`)
+## A team per run (`domain/rules/team-composition.ts`, `services/orchestration-service.ts`)
 
 An initiative may compose a new team when a run settles, and only a real change
 interrupts the user.
@@ -407,7 +412,7 @@ the reader sees in the chat, so a new machinery line has to opt out on purpose.
 
 ---
 
-## Engines — plan limits and reset parsing (`domain/engine-limit.ts`)
+## Engines — plan limits and reset parsing (`domain/rules/engine-limit.ts`)
 
 A limit is detected separately from `ERROR_HINTS`, because it is not a failure to
 explain but a wait to schedule (see [`decisions.md`](./decisions.md)). One
@@ -460,7 +465,7 @@ never a clock time, because the server does not know the reader's zone.
 
 ---
 
-## Orchestration (`services/orchestration.ts`)
+## Orchestration (`services/orchestration-service.ts`)
 
 **`start()` registers in memory before the run, but persists only after it.** The
 two halves look interchangeable and are not.
@@ -483,19 +488,20 @@ makes the ordering harmless.
 
 ---
 
-## Run orchestration (`services/run-orchestrator.ts`)
+## Run orchestration (`services/run/run-service.ts`)
 
-`RunOrchestrator` owns run lifecycle — it starts pipelines, streams stage events
-to subscribers, and executes each stage either as a simulation or through a real
-engine adapter. State is in-memory for the prototype, persisted per transition.
+`RunService` owns run lifecycle — it starts pipelines, streams stage events to
+subscribers, and executes each stage either as a simulation or through a real
+engine adapter. The read model is in memory; SQLite (`repository/` over `db/`) is
+the store of record, written per transition.
 
-**The durable-workflow seam is the whole `RunOrchestrator`, not one method.**
+**The durable-workflow seam is the whole `RunService`, not one method.**
 The durable runtime is **OpenWorkflow** (`workflow/`, see
 `workflow-runtime-options.md`). `workflow/pipeline-workflow.ts` is the durable
 workflow body (the ported run loop) and `workflow/stage-execution.ts` is the
 durable *step* — the single decision point for how a stage runs (simulate vs.
 engine). Durability owns starting/queueing, the loop, gates (durable signals),
-durable timers, retries, recovery and cancellation state; `RunOrchestrator` is
+durable timers, retries, recovery and cancellation state; `RunService` is
 the single writer of the `RunState`/events read model. The earlier claim that a
 durable runtime "replaces `executeStage()` alone" was wrong (§4 of the runtime
 doc). Keep stage-execution logic inside `workflow/stage-execution.ts`.
@@ -677,7 +683,7 @@ entry falls back to the default. Retired model ids are rewritten on read via
 failing runs. This ran in the browser until preferences moved server-side; it now
 runs once for every client, which is also why a legacy id is accepted on write.
 
-**Focus panel log-follow (`ui/src/components/StageFocusPanel.tsx`).** The live
+**Live log follow (`ui/src/hooks/useFollowScroll.ts`, used by `components/run/LogsPanel.tsx`).** The live
 log auto-scrolls only while the user is already within `FOLLOW_THRESHOLD_PX` of
 the bottom; scrolling up to read must not be yanked away by new entries. A newly
 opened stage starts following again. Its `run.result` handling mirrors the
@@ -702,7 +708,7 @@ writer — the durable workflow — never a second, independently advancing stor
 **One workspace per run.** Every box works in the same directory, so the Tester
 sees exactly what the Developer wrote.
 
-## Projects (`domain/projects.ts`, `services/project-registry.ts`, `routes/project-scope.ts`)
+## Projects (`domain/rules/projects.ts`, `services/project-registry.ts`, `routes/project-scope.ts`)
 
 A project is a directory owning its `.isotopy/`; the user-level registry at
 `~/.isotopy/projects.json` holds paths and metadata only. See
@@ -752,17 +758,28 @@ project's `.isotopy/`.
 Run history lives in one `node:sqlite` database per project at
 `<project>/.isotopy/runs.db`: a `runs` table holding the `PersistedRun` snapshot
 (upserted on `run_id`) and an append-only `events` table. The layering is
-**services → repository → db**: `RunOrchestrator` depends on `RunRepository`
+**services → repository → db**: `RunService` depends on `RunRepository`
 (`repository/run-repository.ts`), a single concrete class that owns the
 `PersistedRun` shape and coordinates the low-level pieces — a `Database` connection
-plus `RunsTable` / `EventsTable` in `db/`, and the handoff file writer that
+plus `JsonRecordsTable` / `EventsTable` in `db/`, and the handoff file writer that
 `writeHandoff` tracks. SQLite was chosen over `better-sqlite3`, which fails to
 install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23).
 
 - **The `db/` layer knows nothing about `PersistedRun`.** `Database` owns the
-  connection (lazy open, WAL, `busy_timeout`, schema, settle/close); `RunsTable` and
-  `EventsTable` take strings in and hand strings out. `RunRepository` does the JSON
-  encode/decode and the resilience policy on top.
+  connection (lazy open, WAL, `busy_timeout`, schema, settle/close);
+  `JsonRecordsTable` and `EventsTable` take strings in and hand strings out.
+  `RunRepository` does the JSON encode/decode and the resilience policy on top.
+- **One connection per project, and schemas apply lazily.** `ProjectDatabases`
+  hands every repository for a project the *same* `Database`, so `runs.db` is opened
+  once rather than once per aggregate. Because a table can therefore register its
+  schema after the connection is already open, `Database.connection()` applies any
+  registrations it has not run yet on each call, and `settle()` resets that cursor so
+  a reopened connection re-applies them. Registering a schema is idempotent
+  (`CREATE TABLE IF NOT EXISTS`), so the cost is a no-op `exec` per table.
+- **`JsonRecordsTable` is one class over three tables** — `runs`, `milestones`,
+  `orchestrations` — each described by a `JsonTableSpec` (table name, id column,
+  whether the legacy timestamp migration applies). They had been three near-identical
+  classes.
 - **Handoffs stay on disk** as `runs/<id>/<stageId>/handoff.md` — nothing reads them
   back and a markdown file is inspectable without a SQLite client. Only run state and
   the event trail live in the DB.
@@ -792,7 +809,7 @@ install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23
   `parsePersistedRun` — the one trust boundary where `unknown` is narrowed by the
   `isPersistedRun` guard.
 
-## Filesystem access (`services/workspace-files.ts`, `services/directory-browser.ts`)
+## Filesystem access (`utils/workspace-files.ts`, `utils/directory-browser.ts`)
 
 These back read-only UI views and every path from the client is untrusted.
 

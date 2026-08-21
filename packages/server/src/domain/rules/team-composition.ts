@@ -6,9 +6,9 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@isotopy/core";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
-import type { ValidationIssue, ValidationResult } from "../domain/validation.ts";
-import { SKILL_ID } from "../domain/rules/persona-notes.ts";
+import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../skills/catalog.ts";
+import type { ValidationIssue, ValidationResult } from "../validation.ts";
+import { SKILL_ID } from "./persona-notes.ts";
 
 
 

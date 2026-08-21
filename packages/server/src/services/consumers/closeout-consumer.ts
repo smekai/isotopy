@@ -17,6 +17,7 @@ import type { ProjectPath } from "../../paths.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { persistRunCloseout } from "../run-evidence.ts";
+import { messageOf } from "../../utils/message-of.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
@@ -66,7 +67,7 @@ export async function applyCloseoutReport(
     .createFollowUpTasks(run, parsed.report.tasks)
     .catch((error: unknown) => {
       sideEffectErrors.push(
-        `Task creation failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Task creation failed: ${messageOf(error)}`,
       );
       return [];
     });
@@ -74,7 +75,7 @@ export async function applyCloseoutReport(
     .transitionTasks(parsed.report.completedTaskIds, "Done", run.id)
     .catch((error: unknown) => {
       sideEffectErrors.push(
-        `Task transition failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Task transition failed: ${messageOf(error)}`,
       );
     });
   const cleanup = await cleanupRunTemp(
@@ -83,7 +84,7 @@ export async function applyCloseoutReport(
     parsed.report,
   ).catch((error: unknown) => {
     sideEffectErrors.push(
-      `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+      `Cleanup failed: ${messageOf(error)}`,
     );
     return {
       removed: [],

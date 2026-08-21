@@ -153,7 +153,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
   the orchestrator; nothing reaches for a concrete engine by import. New pluggable
   seams follow its shape. Persistence is the layering reference: `RunRepository`
   (`src/repository/`) is a coordinator over a data-access layer (`src/db/` —
-  `Database`, `RunsTable`, `EventsTable`). Folders are named for the layer, never a
+  `Database`, `JsonRecordsTable`, `EventsTable`). Folders are named for the layer, never a
   backend, and there is no barrel `index.ts` — callers import the file they need.
 
 - **The domain layer (A3):** `packages/core` is the *shared* pure layer (imported
@@ -184,8 +184,8 @@ of the source. When you strip or avoid a comment, that is where its content goes
   `MilestoneService` owns milestone CRUD beside it; `RunStore` holds the
   cross-project run map and persistence.
 - **Named types & styles (A6):** every component exports a named `XProps`
-  interface; `StageFocusPanel.tsx` is the reference for lifting `style={{…}}`
-  into named constants and builders.
+  interface; `components/run/run-styles.ts` is the reference for lifting
+  `style={{…}}` into named constants and builders.
 
 - **Strict TypeScript (A7):** `tsconfig.base.json` carries `strict` and
   `noUncheckedIndexedAccess`. Use `field?: T` when a property may be absent or

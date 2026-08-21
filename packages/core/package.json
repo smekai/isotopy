@@ -1,6 +1,6 @@
 {
   "name": "@isotopy/core",
-  "version": "0.11.22",
+  "version": "0.11.35",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

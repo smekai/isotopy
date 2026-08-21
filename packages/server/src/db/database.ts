@@ -15,6 +15,7 @@ interface Registration {
 export class Database {
   private ready?: Promise<SqliteConnection>;
   private readonly registrations: Registration[] = [];
+  private applied = 0;
 
   constructor(private readonly path: ProjectPath) {}
 
@@ -26,7 +27,7 @@ export class Database {
     return path.join(this.path.dataDir, "runs.db");
   }
 
-  connection(): Promise<SqliteConnection> {
+  async connection(): Promise<SqliteConnection> {
     if (!this.ready) {
       const opening = this.open();
       this.ready = opening;
@@ -36,7 +37,9 @@ export class Database {
         }
       });
     }
-    return this.ready;
+    const db = await this.ready;
+    this.applyPending(db);
+    return db;
   }
 
   private async open(): Promise<SqliteConnection> {
@@ -45,12 +48,20 @@ export class Database {
     const db = new DatabaseSync(this.describe());
     db.exec("PRAGMA journal_mode=WAL");
     db.exec(`PRAGMA busy_timeout=${BUSY_TIMEOUT_MS}`);
-    for (const registration of this.registrations) {
-      db.exec(registration.schema);
-      registration.migrate?.(db);
-      db.exec(registration.schema);
-    }
+    this.applied = 0;
     return db;
+  }
+
+  private applyPending(db: SqliteConnection): void {
+    while (this.applied < this.registrations.length) {
+      const registration = this.registrations[this.applied];
+      if (registration) {
+        db.exec(registration.schema);
+        registration.migrate?.(db);
+        db.exec(registration.schema);
+      }
+      this.applied += 1;
+    }
   }
 
   async settle(): Promise<void> {
@@ -59,6 +70,7 @@ export class Database {
     }
     const pending = this.ready;
     delete this.ready;
+    this.applied = 0;
     try {
       const db = await pending;
       db.exec("PRAGMA wal_checkpoint(TRUNCATE)");

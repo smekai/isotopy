@@ -1,7 +1,49 @@
 import { STAGE_OUTCOMES } from "@isotopy/core";
-import type { StageOutcome, StageState } from "@isotopy/core";
+import type { RunState, StageOutcome, StageState, StageStatus } from "@isotopy/core";
 
 export type RunCompletionStatus = "completed" | "needs_attention" | "failed";
+
+const CANCELLABLE_STAGE_STATUSES: StageStatus[] = [
+  "pending",
+  "running",
+  "awaiting",
+  "asking",
+  "blocked",
+];
+
+const INTERRUPTIBLE_STAGE_STATUSES: StageStatus[] = [
+  "running",
+  "awaiting",
+  "asking",
+  "blocked",
+];
+
+export function applyCancellation(run: RunState, ts: string): string[] {
+  const cancelled = run.stages.filter((stage) =>
+    CANCELLABLE_STAGE_STATUSES.includes(stage.status),
+  );
+  for (const stage of cancelled) {
+    stage.status = "skipped";
+  }
+  delete run.limit;
+  run.status = "cancelled";
+  run.completedAt = ts;
+  return cancelled.map((stage) => stage.id);
+}
+
+export function applyInterruption(run: RunState, ts: string): string[] {
+  const interrupted = run.stages.filter((stage) =>
+    INTERRUPTIBLE_STAGE_STATUSES.includes(stage.status),
+  );
+  for (const stage of interrupted) {
+    stage.status = "failed";
+    stage.completedAt = ts;
+  }
+  delete run.limit;
+  run.status = "failed";
+  run.completedAt = ts;
+  return interrupted.map((stage) => stage.id);
+}
 
 export const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
   "succeeded",

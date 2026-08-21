@@ -38,7 +38,7 @@ by accident and nobody defends them past their usefulness.
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
-on ports, and proxies `/pipelines /projects /runs /milestones /orchestrations /health
+on ports, and proxies `/projects /runs /milestones /orchestrations /health
 /settings /engines /fs` to the server. **That proxy list must stay in sync with the routes
 mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
 dev UI until it is added there.
@@ -116,7 +116,7 @@ The split as it stands:
 - **Pure presentational:** `StageNode`, `StatusIcon`, `GateMarker`, `Waveform`,
   `RunStatusBar`, `PipelineRow`, `TeamController`, `RunCard`, `InitiativeGroup`,
   `MilestoneDashboard`, `MilestoneFeatureCard`, inside `home/` — `PipelineHeader`,
-  and inside `run/` — `CloseoutPanel`, `OrchestratorPanel`.
+  and inside `run/` — `CloseoutPanel`, `TeamProposalCard`.
 - **Local-state presentational:** `RunRail` (which initiatives are collapsed),
   `PipelineDropdown`, `VoiceControls`, inside `home/` —
   `HomeComposer`, and inside `run/` — `ChatPanel`, `LogsPanel` — own open/draft state,
@@ -147,10 +147,10 @@ example of the rule: nine files replace the one, the largest of them
 (`EngineStatusCard`, 322 lines — half of it style builders) is one responsibility
 and stays whole. TASK-082 applied the same treatment to the 586-line
 `StageFocusPanel`, which is gone: `components/run/` replaces it with one file per
-run view. Outside `App.tsx` — the composition root, governed by §6 instead — nothing in
-`packages/ui` passes ~380 lines, and the three over 350 (`MilestonePlanPanel`,
-`OrchestratorPanel`, `CloseoutPanel`) are more than half style builders each. Length
-alone is not the trigger; a second responsibility is.
+run view. Outside `App.tsx` — the composition root, governed by §6 instead — the
+largest are `ChatPanel` (536), `MilestonePlanPanel` (377) and `CloseoutPanel`
+(335), each more than half style builders. Length alone is not the trigger; a
+second responsibility is.
 
 ---
 
@@ -598,10 +598,9 @@ actionable rather than merely noted.
 | 4 | ~~**`SetupModal.tsx` is 1002 lines.**~~ **Closed by TASK-073** — `components/setup/` holds one component per `SetupSection`, the harness section split again into `EngineStatusCard` / `EngineConnection` / `EngineModelPicker`, and the modal is chrome only. **TASK-082 did the same to `StageFocusPanel` (586)**, which `components/run/` replaces. | — | — |
 | 5 | **`SetupModal` is not an accessible overlay** — no `role="dialog"`, no `aria-modal`, no Escape, no focus management, while four smaller surfaces do handle Escape. (`HistoryDrawer` shared this and was deleted by TASK-077.) | The §8 overlay rule applied. | — |
 | 6 | **Non-functional mock surfaces.** `VoiceControls` (`cycleVS` just advances `idle → listening → transcribing → speaking` on click) and `Waveform` are visual placeholders. (`SteerChat` was the third and was deleted by TASK-078, replaced by `ChatPanel` over a real endpoint.) | Documented here so no styling or test effort is spent on them; keep-or-cut is a product call. | — |
-| 9 | **An answer resumes a parked stage; an unprompted message still goes nowhere.** TASK-079 wired the `asking` path end to end. A message sent while no stage is asking is recorded and displayed only. | Decide whether mid-run steering should reach the *next* stage's prompt, or be refused. | — |
-| 10 | **Cursor is `conversational: false`.** The CLI is not installed on the machine that built TASK-079, so its session-id emission is unverified; claiming the capability from docs alone would fail silently at runtime. | Verify `cursor-agent --resume` and its stream-json session id, then flip the flag. | — |
 | 7 | **Hand-mirrored response types.** `DirectoryListing`, `WorkspaceFile`, `EngineActionResult`, `AddProjectResult` are declared in `api.ts` against the Hono handlers, and nothing prevents drift. | Move each into `@isotopy/core` when its shape stabilises. | — |
 | 8 | **Theme is light-only.** No dark values, no `prefers-color-scheme`. | A decision, not a bug — recorded so it is not discovered mid-redesign. | — |
+| 9 | **An answer resumes a parked stage; an unprompted message still goes nowhere.** TASK-079 wired the `asking` path end to end. A message sent while no stage is asking is recorded and displayed only. | Decide whether mid-run steering should reach the *next* stage's prompt, or be refused. | — |
+| 10 | **Cursor's session resumption is unverified.** The `conversational` flag this gap was written against no longer exists; what remains true is that `cursor-agent --resume` and its stream-json session id have never been exercised on an installed CLI. TASK-153 (Milestone I) owns the adapter-capability question this belongs to. | Verify against a real Cursor CLI, and describe the result as capability data per TASK-153. | — |
 
-Minor: `packages/ui/tmp-devtest.png` is a committed scratch screenshot;
-`AGENTS.md` records version `0.6.1` while `package.json` is well past it.
+Minor: `packages/ui/tmp-devtest.png` is a committed scratch screenshot.

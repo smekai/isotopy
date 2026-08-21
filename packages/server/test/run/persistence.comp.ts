@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { RunState } from "@isotopy/core";
+import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { RunRepository } from "../../src/repository/run-repository.ts";
 import {
   approveIntake,
@@ -169,13 +170,11 @@ test("the persisted run snapshot does not store stage.logs", async () => {
   await ctx.orchestrator.shutdown();
 
   // Act
-  const repository = new RunRepository({
-    id: HOME_PROJECT_ID,
-    root: home,
-    dataDir: home,
-  });
+  const databases = new ProjectDatabases();
+  const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
+  const repository = new RunRepository(projectPath, databases.for(projectPath));
   const [persisted] = await repository.loadAll();
-  await repository.settle();
+  await databases.settleAll();
 
   // Assert
   expect(persisted?.run.id).toBe(run.id);
@@ -221,7 +220,9 @@ test("run numbering continues from the highest number on disk", async () => {
  * would have left it — used to drive the crash-recovery path on restart.
  */
 async function seedHomeRun(home: string, run: RunState): Promise<void> {
-  const repository = new RunRepository({ id: HOME_PROJECT_ID, root: home, dataDir: home });
+  const databases = new ProjectDatabases();
+  const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
+  const repository = new RunRepository(projectPath, databases.for(projectPath));
   await repository.writeState(run.id, { version: 1, run });
-  await repository.settle();
+  await databases.settleAll();
 }

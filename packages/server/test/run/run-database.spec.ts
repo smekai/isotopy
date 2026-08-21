@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { ProjectPath } from "../../src/paths.ts";
+import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { RunRepository } from "../../src/repository/run-repository.ts";
 import type { PersistedRun } from "../../src/repository/run-repository.ts";
 import { makePersistedRun } from "../support/run-fixtures.ts";
@@ -29,11 +30,13 @@ function dbPath(): string {
 }
 
 async function withRepository(fn: (repo: RunRepository) => Promise<void>): Promise<void> {
-  const repository = new RunRepository(projectPath);
+  const databases = new ProjectDatabases();
+  const repository = new RunRepository(projectPath, databases.for(projectPath));
   try {
     await fn(repository);
   } finally {
     await repository.settle();
+    await databases.settleAll();
   }
 }
 

@@ -12,6 +12,7 @@ import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { toolCacheEnv } from "./tool-cache.ts";
 import { withPersonaPrompt } from "./persona.ts";
 import { resolvePermissionPlan } from "./permission-mode.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
 import {
   applyProtocolUpdate,
@@ -199,10 +200,6 @@ function buildResumeArgs(
   ];
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export const codexAdapter: EngineAdapter = {
   id: "codex",
 
@@ -227,7 +224,7 @@ export const codexAdapter: EngineAdapter = {
       return {
         engine: "codex",
         installed: false,
-        message: errorText(error),
+        message: messageOf(error),
         installCommand: INSTALL_COMMAND,
         docsUrl: DOCS_URL,
       };
@@ -290,7 +287,7 @@ export const codexAdapter: EngineAdapter = {
     try {
       binary = resolveCodexBinary().path;
     } catch (error) {
-      const message = errorText(error);
+      const message = messageOf(error);
       ctx.onLog({ level: "fail", message });
       return { success: false, exitCode: null, errorMessage: message };
     }

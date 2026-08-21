@@ -1,10 +1,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Database } from "../src/db/database.ts";
-import { MilestonesTable } from "../src/db/milestones-table.ts";
-import { RunsTable } from "../src/db/runs-table.ts";
+import {
+  JsonRecordsTable,
+  MILESTONES_TABLE,
+  RUNS_TABLE,
+} from "../src/db/json-records-table.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -30,13 +33,13 @@ afterEach(async () => {
 });
 
 function createTables(): {
-  runs: RunsTable;
-  milestones: MilestonesTable;
+  runs: JsonRecordsTable;
+  milestones: JsonRecordsTable;
 } {
   database = new Database(projectPath);
   return {
-    runs: new RunsTable(database),
-    milestones: new MilestonesTable(database),
+    runs: new JsonRecordsTable(database, RUNS_TABLE),
+    milestones: new JsonRecordsTable(database, MILESTONES_TABLE),
   };
 }
 
@@ -140,4 +143,36 @@ VALUES('milestone-1', '{"id":"milestone-1"}', '${LEGACY_TIMESTAMP}');
     created_at: LEGACY_TIMESTAMP,
     updated_at: LEGACY_TIMESTAMP,
   });
+});
+
+// The legacy runs table carried no json_valid CHECK, so it can hold a row that
+// RunRepository was already skipping on read. Rebuilding the table under the
+// unified schema must not fail on it: the migration runs on every connection()
+// until it succeeds, so one bad row would take the whole project database down.
+test("a legacy row that is not JSON is dropped rather than failing the migration", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const legacy = new DatabaseSync(path.join(dir, "runs.db"));
+  legacy.exec(`
+CREATE TABLE runs (
+  run_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+INSERT INTO runs(run_id, data, updated_at)
+VALUES('run-ok', '{"version":1}', '${LEGACY_TIMESTAMP}');
+INSERT INTO runs(run_id, data, updated_at)
+VALUES('run-corrupt', 'this is not json', '${LEGACY_TIMESTAMP}');
+`);
+  legacy.close();
+  const warnings = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+  createTables();
+  const connection = await database?.connection();
+
+  const rows = connection?.prepare("SELECT run_id FROM runs ORDER BY run_id").all();
+  expect(rows).toEqual([{ run_id: "run-ok" }]);
+  expect(warnings).toHaveBeenCalledWith(
+    expect.stringContaining("Dropped 1 malformed runs row(s)"),
+  );
+  warnings.mockRestore();
 });

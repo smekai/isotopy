@@ -3,8 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Database } from "../../src/db/database.ts";
-import { MilestonesTable } from "../../src/db/milestones-table.ts";
-import { parsePersistedMilestone } from "../../src/schemas/milestone.ts";
+import { milestoneSchema } from "@isotopy/core";
+import { JsonRecordsTable, MILESTONES_TABLE } from "../../src/db/json-records-table.ts";
+import { parsePersistedRecord } from "../../src/schemas/persisted-record.ts";
 
 const roots: string[] = [];
 
@@ -18,7 +19,8 @@ afterEach(async () => {
 
 describe("milestone persistence boundaries", () => {
   it("rejects invalid nested milestone data", () => {
-    const parsed = parsePersistedMilestone(
+    const parsed = parsePersistedRecord(
+      milestoneSchema,
       JSON.stringify({
         id: "milestone",
         projectId: "project",
@@ -43,7 +45,7 @@ describe("milestone persistence boundaries", () => {
       root,
       dataDir: path.join(root, ".isotopy"),
     });
-    const table = new MilestonesTable(database);
+    const table = new JsonRecordsTable(database, MILESTONES_TABLE);
 
     await expect(table.upsert("milestone", "not JSON")).rejects.toThrow();
     await database.settle();

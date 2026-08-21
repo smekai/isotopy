@@ -2,8 +2,7 @@ import { personaNotesSchema } from "@isotopy/core";
 import type { PersonaNotes } from "@isotopy/core";
 import { parseJson } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
-
-const NOTES_BLOCK = /```isotopy-persona-notes\s*([\s\S]*?)```\s*/i;
+import { takeFencedBlock } from "./fenced-block.ts";
 
 export interface ExtractedPersonaNotes {
   report: string;
@@ -11,12 +10,9 @@ export interface ExtractedPersonaNotes {
 }
 
 export function extractPersonaNotes(output: string): ExtractedPersonaNotes {
-  const match = NOTES_BLOCK.exec(output);
-  if (match === null) {
-    return { report: output };
+  const { report, block } = takeFencedBlock(output, "isotopy-persona-notes");
+  if (block === undefined) {
+    return { report };
   }
-  return {
-    report: `${output.slice(0, match.index)}${output.slice(match.index + match[0].length)}`.trimEnd(),
-    notes: parseJson(personaNotesSchema, match[1] ?? ""),
-  };
+  return { report, notes: parseJson(personaNotesSchema, block) };
 }

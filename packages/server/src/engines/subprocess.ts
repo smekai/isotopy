@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import os from "node:os";
 
+import { messageOf } from "../utils/message-of.ts";
+
 const STDERR_TAIL_LINES = 10;
 const SIGKILL_ESCALATE_MS = 5000;
 
@@ -172,7 +174,7 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
   } catch (error) {
     return settledHandle(
       startupFailure(
-        error instanceof Error ? error.message : String(error),
+        messageOf(error),
         spec.signal?.aborted ?? false,
         Date.now() - startedAt,
       ),

@@ -8,6 +8,7 @@ import type {
 } from "@isotopy/core";
 import {
   canAcceptMilestoneFeature,
+  milestoneSchema,
   requestedMilestoneFeature,
   toMilestoneProposal,
 } from "@isotopy/core";
@@ -21,24 +22,29 @@ import {
   renderMilestoneRevisionContext,
 } from "../domain/markdown/planning.ts";
 import type { ProjectPath } from "../paths.ts";
-import { MilestoneRepository } from "../repository/milestone-repository.ts";
+import { MILESTONES_TABLE } from "../db/json-records-table.ts";
+import type { ProjectDatabases } from "../db/project-databases.ts";
+import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import {
   milestoneCloseoutContext,
   persistMilestoneSummary,
 } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import { getOrCreate } from "../utils/get-or-create.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "./run/run-service.ts";
 
 export class MilestoneService {
-  private readonly milestoneRepositories = new Map<string, MilestoneRepository>();
+  private readonly milestoneRepositories = new Map<string, JsonRecordRepository<Milestone>>();
   private readonly milestones = new Map<string, Milestone>();
   private readonly completingMilestoneRuns = new Set<string>();
 
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: () => RunService,
+    private readonly databases: ProjectDatabases,
   ) {}
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
@@ -48,13 +54,6 @@ export class MilestoneService {
     }
   }
 
-  async settle(): Promise<void> {
-    await Promise.all(
-      [...this.milestoneRepositories.values()].map((repository) =>
-        repository.settle(),
-      ),
-    );
-  }
 
   listMilestones(projectId: string): Milestone[] {
     return [...this.milestones.values()]
@@ -202,8 +201,7 @@ export class MilestoneService {
       await this.persistMilestone(milestone);
       return structuredClone(milestone);
     } catch (error) {
-      milestone.approvalError =
-        error instanceof Error ? error.message : "Milestone approval failed";
+      milestone.approvalError = messageOf(error);
       milestone.updatedAt = nowIso();
       await this.persistMilestone(milestone);
       throw error;
@@ -540,13 +538,17 @@ export class MilestoneService {
 
   private milestoneRepositoryFor(
     projectPath: ProjectPath,
-  ): MilestoneRepository {
-    const existing = this.milestoneRepositories.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const repository = new MilestoneRepository(projectPath);
-    this.milestoneRepositories.set(projectPath.id, repository);
-    return repository;
+  ): JsonRecordRepository<Milestone> {
+    return getOrCreate(
+      this.milestoneRepositories,
+      projectPath.id,
+      () =>
+        new JsonRecordRepository(
+          this.databases.for(projectPath),
+          MILESTONES_TABLE,
+          milestoneSchema,
+          "milestone",
+        ),
+    );
   }
 }

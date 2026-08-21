@@ -18,12 +18,13 @@ import type {
 } from "@isotopy/core";
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
-import type { ProjectPath } from "../paths.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { SeededStage, SeededStart } from "../domain/rules/run-seeding.ts";
 import type { AutomationConfigStore } from "../services/automation-config-store.ts";
 import type { DeploymentRunner } from "../services/deployment-runner.ts";
 import type { ModelRosterService } from "../services/model-roster-service.ts";
+import type { OrchestrationService } from "../services/orchestration-service.ts";
+import type { ProductProcessService } from "../services/product-process-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 
@@ -73,7 +74,6 @@ export interface StageTurn {
 
 export interface RunProjection {
   getRun(runId: string): RunState | undefined;
-  bindOpenWorkflowRun(runId: string, openWorkflowRunId: string): void;
   runStarted(runId: string, message: string): void;
   stageStarted(runId: string, stageId: string): void;
   log(runId: string, stageId: string, draft: StageLogDraft): void;
@@ -136,32 +136,6 @@ export interface RunReview {
   errors: string[];
 }
 
-export interface OrchestrationHooks {
-  ensureActive(projectPath: ProjectPath, goal: string): Promise<string>;
-  attachRun(projectId: string, runId: string): Promise<void>;
-  reconcileRuns(): void;
-  contextFor(request: QuestionMediationRequest): Promise<QuestionMediationContext>;
-  recordDecision(
-    request: QuestionMediationRequest,
-    context: QuestionMediationContext,
-    decision: OrchestratorBrokerDecision,
-  ): Promise<void>;
-  restartTask(run: RunState): Promise<string | undefined>;
-  reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext>;
-  recordDecisionUsage(orchestrationId: string, usage: StageUsage): Promise<void>;
-  recordReview(
-    request: RunReviewRequest,
-    context: RunReviewContext,
-    review: RunReview,
-  ): Promise<void>;
-  settle(runId: string): Promise<void>;
-}
-
-export interface ProductHooks {
-  refreshFor(projectId: string): Promise<void>;
-  urlFor(projectId: string): string | undefined;
-}
-
 export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
@@ -169,8 +143,8 @@ export interface WorkflowDeps {
   rosters: ModelRosterService;
   automation: AutomationConfigStore;
   deployment: DeploymentRunner;
-  orchestration(): OrchestrationHooks | undefined;
-  product(): ProductHooks | undefined;
+  orchestration(): OrchestrationService | undefined;
+  product?: ProductProcessService;
   beginEngineStage(runId: string): AbortController;
   endEngineStage(runId: string): void;
   isCancelled(runId: string): boolean;

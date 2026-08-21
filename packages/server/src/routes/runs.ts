@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@isotopy/core";
 import type { RunEvent } from "@isotopy/core";
@@ -12,12 +13,17 @@ import {
 } from "../schemas/request-schemas.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import { listWorkspaceFiles, readWorkspaceFile } from "../utils/workspace-files.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { revealFolder } from "../utils/reveal-folder.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
 
 const SSE_KEEPALIVE_MS = 15_000;
 const SSE_TERMINAL_POLL_MS = 250;
+
+function runNotFound(c: Context) {
+  return c.json({ error: "Run not found" }, 404);
+}
 
 export function createRunRoutes(
   runs: RunService,
@@ -53,7 +59,7 @@ export function createRunRoutes(
     .get("/:id", (c) => {
       const run = runs.getRun(c.req.param("id"));
       if (!run) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       return c.json(run);
     })
@@ -79,8 +85,7 @@ export function createRunRoutes(
         });
         return c.json(run, 201);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to start run";
-        return c.json({ error: message }, 400);
+        return c.json({ error: messageOf(error) }, 400);
       }
     })
 
@@ -88,13 +93,12 @@ export function createRunRoutes(
       const runId = c.req.param("id");
       const stageId = c.req.param("stageId");
       if (!runs.getRun(runId)) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       try {
         return c.json(runs.approveGate(runId, stageId));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to approve gate";
-        return c.json({ error: message }, 409);
+        return c.json({ error: messageOf(error) }, 409);
       }
     })
 
@@ -102,7 +106,7 @@ export function createRunRoutes(
       const runId = c.req.param("id");
       const stageId = c.req.param("stageId");
       if (!runs.getRun(runId)) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       const parsed = await parseRequestBody(c.req, resolveLimitSchema);
       if (!parsed.ok) {
@@ -111,15 +115,14 @@ export function createRunRoutes(
       try {
         return c.json(runs.resolveLimit(runId, stageId, parsed.value));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to resume the run";
-        return c.json({ error: message }, 409);
+        return c.json({ error: messageOf(error) }, 409);
       }
     })
 
     .post("/:id/messages", async (c) => {
       const runId = c.req.param("id");
       if (!runs.getRun(runId)) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       const parsed = await parseRequestBody(c.req, postRunMessageSchema);
       if (!parsed.ok) {
@@ -128,28 +131,26 @@ export function createRunRoutes(
       try {
         return c.json(runs.postMessage(runId, parsed.value.text), 201);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to post message";
-        return c.json({ error: message }, 409);
+        return c.json({ error: messageOf(error) }, 409);
       }
     })
 
     .post("/:id/abort", (c) => {
       const runId = c.req.param("id");
       if (!runs.getRun(runId)) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       try {
         return c.json(runs.abortRun(runId));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to abort run";
-        return c.json({ error: message }, 409);
+        return c.json({ error: messageOf(error) }, 409);
       }
     })
 
     .post("/:id/restart", async (c) => {
       const runId = c.req.param("id");
       if (!runs.getRun(runId)) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       const parsed = await parseRequestBody(c.req, restartRunSchema);
       if (!parsed.ok) {
@@ -158,15 +159,14 @@ export function createRunRoutes(
       try {
         return c.json(await runs.restartRun(runId, parsed.value.stageId));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to restart run";
-        return c.json({ error: message }, 409);
+        return c.json({ error: messageOf(error) }, 409);
       }
     })
 
     .get("/:id/files", async (c) => {
       const run = runs.getRun(c.req.param("id"));
       if (!run) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       if (!run.workspacePath) {
         return c.json({ files: [] });
@@ -174,30 +174,28 @@ export function createRunRoutes(
       try {
         return c.json({ files: await listWorkspaceFiles(run.workspacePath) });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to list workspace";
-        return c.json({ error: message }, 500);
+        return c.json({ error: messageOf(error) }, 500);
       }
     })
 
     .post("/:id/reveal", async (c) => {
       const run = runs.getRun(c.req.param("id"));
       if (!run) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       const target = run.workspacePath ?? registry.resolve(run.projectId).root;
       try {
         await revealFolder(target);
         return c.json({ path: target });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to open the folder";
-        return c.json({ error: message }, 500);
+        return c.json({ error: messageOf(error) }, 500);
       }
     })
 
     .get("/:id/files/content", async (c) => {
       const run = runs.getRun(c.req.param("id"));
       if (!run) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
       const filePath = c.req.query("path");
       if (!filePath) {
@@ -209,7 +207,7 @@ export function createRunRoutes(
       try {
         return c.json(await readWorkspaceFile(run.workspacePath, filePath));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to read file";
+        const message = messageOf(error);
         const status = /escapes the workspace|must be relative/.test(message) ? 400 : 404;
         return c.json({ error: message }, status);
       }
@@ -219,7 +217,7 @@ export function createRunRoutes(
       const runId = c.req.param("id");
       const run = runs.getRun(runId);
       if (!run) {
-        return c.json({ error: "Run not found" }, 404);
+        return runNotFound(c);
       }
 
       return streamSSE(c, async (stream) => {

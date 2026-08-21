@@ -3,10 +3,14 @@ import type {
   DeploymentResult,
   EngineId,
   EngineLimit,
+  EnginePermissionMode,
   LimitChoice,
   LimitResolution,
   MessageKind,
   MessageRole,
+  Milestone,
+  MilestoneFeature,
+  ModelTier,
   PipelineDefinition,
   RunCloseoutRecord,
   RunEvent,
@@ -36,8 +40,8 @@ import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
 import { ReleaseConsumer } from "../consumers/release-consumer.ts";
 import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
-import { AutomationConfigStore } from "../automation-config-store.ts";
-import { DeploymentRunner } from "../deployment-runner.ts";
+import type { AutomationConfigStore } from "../automation-config-store.ts";
+import type { DeploymentRunner } from "../deployment-runner.ts";
 import {
   cleanupCancelledRun,
   persistRunCloseout,
@@ -47,23 +51,24 @@ import { RunChangeCollector } from "../run-change-collector.ts";
 import { renderDeploymentResult } from "../../domain/markdown/release.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
-import { OrchestratorRequiredError } from "../../domain/orchestrator-required-error.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
+import type { ProjectDatabases } from "../../db/project-databases.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
-import { ModelRosterService } from "../model-roster-service.ts";
-import { unknownModelMessage } from "../../domain/rules/model-roster.ts";
-import { SettingsStore } from "../settings-store.ts";
+import type { ModelRosterService } from "../model-roster-service.ts";
+import { engineLabel } from "../../domain/rules/engine-label.ts";
+import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/run-start.ts";
+import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
-  OrchestrationHooks,
   PipelineWorkflowInput,
-  ProductHooks,
   RunCompletionStatus,
   RunProjection,
   WorkflowDeps,
 } from "../../workflow/types.ts";
+import type { OrchestrationService } from "../orchestration-service.ts";
+import type { ProductProcessService } from "../product-process-service.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
@@ -76,6 +81,8 @@ import {
 import { formatHandoff } from "../../domain/markdown/stage.ts";
 import {
   TERMINAL_OPENWORKFLOW_STATUSES,
+  applyCancellation,
+  applyInterruption,
   completionMessage,
 } from "../../domain/rules/run-lifecycle.ts";
 import {
@@ -85,37 +92,47 @@ import {
 } from "../../domain/rules/run-seeding.ts";
 import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
-import type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 import { RunStore } from "./run-store.ts";
 
-export type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
+export interface InheritedRunOptions {
+  engine?: string;
+  model?: string;
+  modelTier?: ModelTier;
+  permissionMode?: EnginePermissionMode;
+}
+
+export interface StartRunOptions extends InheritedRunOptions {
+  task?: string;
+  milestoneId?: string;
+  featureId?: string;
+  orchestrationId?: string;
+  sourceTaskIds?: string[];
+  seeded?: SeededStart;
+}
 
 export class RunService implements RunProjection {
   readonly store: RunStore;
   readonly milestones: MilestoneService;
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
-  private readonly settings: SettingsStore;
-  private readonly rosters: ModelRosterService;
-  private readonly automation = new AutomationConfigStore();
-  private readonly deployment = new DeploymentRunner();
   private readonly changes = new RunChangeCollector();
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
   private readonly projectListeners = new ListenerRegistry<RunSummary>();
-  private orchestration?: OrchestrationHooks;
-  private product?: ProductHooks;
+  private orchestration?: OrchestrationService;
 
   constructor(
     private readonly registry: ProjectRegistry,
-    settings?: SettingsStore,
-    rosters?: ModelRosterService,
+    private readonly settings: SettingsStore,
+    private readonly rosters: ModelRosterService,
+    private readonly automation: AutomationConfigStore,
+    private readonly deployment: DeploymentRunner,
+    databases: ProjectDatabases,
+    private readonly product?: ProductProcessService,
   ) {
-    this.settings = settings ?? new SettingsStore();
-    this.rosters = rosters ?? new ModelRosterService();
-    this.store = new RunStore(registry);
-    this.milestones = new MilestoneService(registry, () => this);
+    this.store = new RunStore(registry, databases);
+    this.milestones = new MilestoneService(registry, () => this, databases);
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
       new ReleaseConsumer(this.registry),
@@ -129,7 +146,7 @@ export class RunService implements RunProjection {
       automation: this.automation,
       deployment: this.deployment,
       orchestration: () => this.orchestration,
-      product: () => this.product,
+      product: this.product,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
@@ -164,7 +181,6 @@ export class RunService implements RunProjection {
       [...this.store.runs.keys()].map((runId) => this.store.flushPersist(runId)),
     );
     await this.store.settle();
-    await this.milestones.settle();
   }
 
   private async reconcileOnLoad(projectPath: ProjectPath, run: RunState): Promise<void> {
@@ -191,10 +207,6 @@ export class RunService implements RunProjection {
     }
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.milestones.completeMilestoneRun(run);
-  }
-
-  listPipelines(): PipelineDefinition[] {
-    return DEMO_PIPELINES.filter((pipeline) => pipeline.internal !== true);
   }
 
   getPipeline(pipelineId: string): PipelineDefinition | undefined {
@@ -228,16 +240,9 @@ export class RunService implements RunProjection {
     return this.store.allRuns();
   }
 
-  registerStageOutputConsumer(consumer: StageOutputConsumer): void {
-    this.stageOutputConsumers.push(consumer);
-  }
-
-  registerOrchestration(orchestration: OrchestrationHooks): void {
+  registerOrchestration(orchestration: OrchestrationService): void {
     this.orchestration = orchestration;
-  }
-
-  registerProduct(product: ProductHooks): void {
-    this.product = product;
+    this.stageOutputConsumers.push(orchestration);
   }
 
   inheritedRunOptions(runId: string): InheritedRunOptions {
@@ -260,7 +265,7 @@ export class RunService implements RunProjection {
   }
 
   async replayEvents(runId: string): Promise<RunEvent[]> {
-    return this.store.replayEvents(runId);
+    return this.store.repositoryForRun(runId).loadEvents(runId);
   }
 
   async startRun(
@@ -282,6 +287,59 @@ export class RunService implements RunProjection {
     options: StartRunOptions = {},
   ): Promise<RunState> {
     return this.startRunWith(projectPath, pipeline, options);
+  }
+
+  private linkMilestone(
+    projectPath: ProjectPath,
+    milestoneId: string | undefined,
+    featureId: string | undefined,
+  ): { linkedMilestone?: Milestone; linkedFeature?: MilestoneFeature } {
+    if (milestoneId === undefined) {
+      return {};
+    }
+    const linkedMilestone = this.milestones.requireMilestone(projectPath.id, milestoneId);
+    if (featureId === undefined) {
+      return { linkedMilestone };
+    }
+    const linkedFeature = this.milestones.requireMilestoneFeature(
+      linkedMilestone,
+      featureId,
+    );
+    if (linkedFeature.status !== "ready") {
+      throw new Error(`Feature is ${linkedFeature.status}`);
+    }
+    return { linkedMilestone, linkedFeature };
+  }
+
+  private async requireEngineReady(
+    projectPath: ProjectPath,
+    engineId: string,
+    model: string | undefined,
+  ): Promise<void> {
+    getEngineAdapter(engineId);
+    assertEngineId(engineId);
+    const connection = this.settings.getEngineConnection(projectPath.id, engineId);
+    const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
+    if (mode?.requiresApiKey && !connection.apiKey) {
+      throw new Error(
+        `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
+      );
+    }
+    if (model !== undefined) {
+      await this.requireOfferedModel(engineId, model);
+    }
+  }
+
+  private async admitRun(projectPath: ProjectPath): Promise<string> {
+    await ensureProjectDataDir(projectPath);
+    const runId = randomUUID().slice(0, 8);
+    const admitted = await this.store.repositoryFor(projectPath).admitRun(runId);
+    if (!admitted) {
+      throw new Error(
+        "A run is already active in this project — wait for it to finish or abort it before starting another.",
+      );
+    }
+    return runId;
   }
 
   private async startRunWith(
@@ -306,61 +364,21 @@ export class RunService implements RunProjection {
       pipeline.id,
       task ?? pipeline.name,
     );
-    if (
-      requestedOrchestrationId !== undefined &&
-      activeOrchestrationId !== undefined &&
-      requestedOrchestrationId !== activeOrchestrationId
-    ) {
-      throw new OrchestratorRequiredError(
-        "The requested Orchestrator is not the project's active Orchestrator",
-      );
-    }
-    const orchestrationId = requestedOrchestrationId ?? activeOrchestrationId;
-    const planningRun =
-      pipeline.id === "milestone-planning" &&
-      milestoneId !== undefined &&
-      featureId === undefined;
-    if (
-      !planningRun &&
-      (milestoneId === undefined) !== (featureId === undefined)
-    ) {
-      throw new Error("milestoneId and featureId must be provided together");
-    }
-    const linkedMilestone =
-      milestoneId !== undefined
-        ? this.milestones.requireMilestone(projectPath.id, milestoneId)
-        : undefined;
-    const linkedFeature =
-      linkedMilestone && featureId !== undefined
-        ? this.milestones.requireMilestoneFeature(linkedMilestone, featureId)
-        : undefined;
-    if (linkedFeature && linkedFeature.status !== "ready") {
-      throw new Error(`Feature is ${linkedFeature.status}`);
-    }
+    const orchestrationId = resolveOwningOrchestration(
+      requestedOrchestrationId,
+      activeOrchestrationId,
+    );
+    const planningRun = isPlanningRun(pipeline.id, milestoneId, featureId);
+    const { linkedMilestone, linkedFeature } = this.linkMilestone(
+      projectPath,
+      milestoneId,
+      featureId,
+    );
     const usesEngine = pipelineUsesEngine(pipeline);
     if (usesEngine) {
-      const engineId = engine ?? "claude-code";
-      getEngineAdapter(engineId);
-      assertEngineId(engineId);
-      const connection = this.settings.getEngineConnection(projectPath.id, engineId);
-      const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
-      if (mode?.requiresApiKey && !connection.apiKey) {
-        throw new Error(
-          `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
-        );
-      }
-      if (model !== undefined) {
-        await this.requireOfferedModel(engineId, model);
-      }
+      await this.requireEngineReady(projectPath, engine ?? "claude-code", model);
     }
-    await ensureProjectDataDir(projectPath);
-    const runId = randomUUID().slice(0, 8);
-    const admitted = await this.store.repositoryFor(projectPath).admitRun(runId);
-    if (!admitted) {
-      throw new Error(
-        "A run is already active in this project — wait for it to finish or abort it before starting another.",
-      );
-    }
+    const runId = await this.admitRun(projectPath);
     const run = createInitialRunState({
       runId,
       number: this.store.takeRunNumber(projectPath.id),
@@ -665,7 +683,10 @@ export class RunService implements RunProjection {
   private async requireOfferedModel(engineId: EngineId, modelId: string): Promise<void> {
     const roster = await this.rosters.roster(engineId);
     if (!rosterAccepts(roster, modelId)) {
-      throw new Error(unknownModelMessage(engineId, modelId));
+      throw new Error(
+        `Model "${modelId}" isn't offered by ${ENGINES[engineId].label} on this machine — ` +
+          "pick one in Setup → AI Harness. An unlisted id has to be set in the CLI's own config file first.",
+      );
     }
   }
 
@@ -749,7 +770,7 @@ export class RunService implements RunProjection {
           {
             stageLabel: stageDef.label,
             profession: agentForStage(stageDef).profession,
-            engine: this.engineLabel(run),
+            engine: engineLabel(run),
             model: run.model,
             completedAt: nowIso(),
           },
@@ -827,43 +848,20 @@ export class RunService implements RunProjection {
   private markCancelled(runId: string): void {
     const run = this.store.runs.get(runId);
     if (!run || isTerminalRunStatus(run.status)) return;
-    for (const stage of run.stages) {
-      if (
-        stage.status === "pending" ||
-        stage.status === "running" ||
-        stage.status === "awaiting" ||
-        stage.status === "asking" ||
-        stage.status === "blocked"
-      ) {
-        stage.status = "skipped";
-        this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId: stage.id, status: "skipped" });
-      }
+    const ts = nowIso();
+    for (const stageId of applyCancellation(run, ts)) {
+      this.emit({ ts, type: "stage.skipped", runId, stageId, status: "skipped" });
     }
-    delete run.limit;
-    run.status = "cancelled";
-    run.completedAt = nowIso();
-    this.emit({ ts: nowIso(), type: "run.completed", runId, status: "cancelled", message: "Run aborted" });
+    this.emit({ ts, type: "run.completed", runId, status: "cancelled", message: "Run aborted" });
   }
 
   private markInterrupted(runId: string): void {
     const run = this.store.runs.get(runId);
     if (!run || isTerminalRunStatus(run.status)) return;
     const ts = nowIso();
-    for (const stage of run.stages) {
-      if (
-        stage.status === "running" ||
-        stage.status === "awaiting" ||
-        stage.status === "asking" ||
-        stage.status === "blocked"
-      ) {
-        stage.status = "failed";
-        stage.completedAt = ts;
-        this.log(runId, stage.id, { level: "fail", message: "✗ Interrupted by server restart" });
-      }
+    for (const stageId of applyInterruption(run, ts)) {
+      this.log(runId, stageId, { level: "fail", message: "✗ Interrupted by server restart" });
     }
-    delete run.limit;
-    run.status = "failed";
-    run.completedAt = ts;
     this.emit({ ts, type: "run.completed", runId, status: "failed", message: "Interrupted by server restart" });
     void this.settleCompletedRun(run);
   }
@@ -893,10 +891,6 @@ export class RunService implements RunProjection {
       throw new Error(`Stage not found: ${stageId}`);
     }
     return stage;
-  }
-
-  private engineLabel(run: RunState): string {
-    return run.engine ? ENGINES[run.engine].label : UNKNOWN_ENGINE_LABEL;
   }
 
   private emit(event: RunEvent): void {
@@ -993,5 +987,4 @@ type RunListener = (event: RunEvent) => void;
 type RunSummaryListener = (summary: RunSummary) => void;
 
 const ORCHESTRATION_PIPELINE_ID = "orchestration";
-const UNKNOWN_ENGINE_LABEL = "unknown";
 

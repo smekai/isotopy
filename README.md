@@ -219,14 +219,15 @@ configured reports `VERDICT: SKIP` without spending an engine turn; a configured
 the command, health-checks the URL it printed, and passes only if both succeed. Production
 sits outside Full Delivery and milestone autorun, behind an explicit confirmation.
 
-**Where it is going.** Milestone D — the Full Delivery loop — shipped at 0.8.7; Milestone
-E — Eigen, the Orchestrator — closed at 0.9.23 on live runs against Cursor and Codex; both
-closed on live dogfoods against real projects. In progress is **Milestone F — Fixpoint**:
-stabilising to something a first-time user can install, point at a folder, and *see the
-result of*. **Milestone G — Gauge** is introducing the Isotopy identity in controlled
-surfaces before the final repository and filesystem cutover. **Milestone H — Harmonic**
-will take its features from the people who try it, not from guesses made here. Milestones
-are named for mathematical terms; A–D keep their letters.
+**Where it is going.** Milestone D — the Full Delivery loop — shipped at 0.8.7; **E — Eigen**
+(the Orchestrator) closed at 0.9.23 on live runs against Cursor and Codex; **F — Fixpoint**
+stabilised the product to something a first-time user can install, point at a folder and see
+the result of; **G — Gauge** carried the Isotopy identity through the repository and
+filesystem cutover; and **H — Harmonic** took its features from the people who tried it
+rather than from guesses. In progress is **Milestone I — Isomorphic**: three adapters behind
+one interface that answer different subsets of it are not one seam, so the harness layer gets
+a declarative capability catalog that says what each engine actually supports. Milestones are
+named for mathematical terms; A–D keep their letters.
 
 ## Where Isotopy fits
 
@@ -268,12 +269,21 @@ deploy-anywhere, and stage restart. The full argument is in
 | [testing.md](docs/testing.md) | How a test here is written (AAAAA), which layer a check belongs in, merge protection |
 | [e2e-test-plan.md](docs/e2e-test-plan.md) | The browser layer: tiers, cost, and what the Playwright suite covers |
 
+### Running and working on it
+
+| Document | Description |
+| --- | --- |
+| [running-the-app.md](docs/running-the-app.md) | Dev command, health checks, driving the app headless, and the sandbox gotcha |
+| [planning-a-task.md](docs/planning-a-task.md) | The cross-platform rule every new task must plan for, with its hazard checklist |
+| [project-automation.md](docs/project-automation.md) | `.isotopy/automation.json`: how a project declares how to start, build and deploy itself |
+| [dogfood/](docs/dogfood/) | End-to-end run records against real projects — setup, spend, timings, verdict |
+
 ## Project structure
 
 ```
 packages/
   core/     # shared types: Run, Stage, AgentStatus, events
-  server/   # Node.js + Hono: REST + SSE, orchestrator
+  server/   # Node.js + Hono: REST + SSE, durable run workflow, engine adapters
   ui/       # React/Vite team workspace (pipeline, gates, history, setup)
 docs/       # planning and design documents
 .tasks/     # implementation backlog (TaskPlanner)

@@ -104,9 +104,34 @@ Rules for new tasks:
 
 ## Project standards
 
-The rules below are binding. The rest of the standard — versioning, runtime
-validation boundaries, and the A1–A9 architecture rules — lives in
-[`AGENTS.md`](AGENTS.md) and [`docs/architecture.md`](docs/architecture.md).
+The rules below are binding. The A1–A9 architecture rules live in
+[`docs/architecture.md`](docs/architecture.md); [`AGENTS.md`](AGENTS.md) carries the
+same standard for the other harness.
+
+## Versioning
+
+All workspace packages (root + `packages/*`) share one version, bumped together.
+
+- **Every commit:** increment the patch component from its parent and update the
+  root plus every `packages/*` package together. A three-commit PR starting at
+  `0.8.0` must therefore contain `0.8.1`, `0.8.2`, and `0.8.3`.
+- **Minor** (0.x.0): start a new explicitly planned feature or milestone series.
+- **Major** (1.0.0): when everything planned for the milestone set is done and the product is ready.
+
+The current version lives in the root `package.json` — read it there. A hand-copied
+number in this file drifts on the very next commit, which is why one is no longer kept.
+
+## Runtime validation boundaries
+
+- Parse untrusted HTTP, engine, database, settings, and file data once at its
+  boundary with a strict runtime schema.
+- Domain and service code receives validated types; do not repeat
+  `Record<string, unknown>` traversal or silently filter malformed nested data.
+- Derive runtime value lists and TypeScript unions from one exported `as const`
+  tuple.
+- Use `field?: T` when a property may be absent or `undefined`; those states have
+  the same meaning in Isotopy contracts. Use `null` only when the contract needs an
+  explicit cleared or removed value.
 
 ## Comments — default to zero
 

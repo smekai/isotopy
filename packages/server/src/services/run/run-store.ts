@@ -1,6 +1,5 @@
 import type {
   EnginePermissionMode,
-  RunEvent,
   RunState,
   StageLogEntry,
 } from "@isotopy/core";
@@ -8,6 +7,8 @@ import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { RunRepository } from "../../repository/run-repository.ts";
 import type { PersistedRun } from "../../repository/run-repository.ts";
+import type { ProjectDatabases } from "../../db/project-databases.ts";
+import { getOrCreate } from "../../utils/get-or-create.ts";
 
 export class RunStore {
   readonly runs = new Map<string, RunState>();
@@ -16,9 +17,11 @@ export class RunStore {
   readonly nextRunNumbers = new Map<string, number>();
   private readonly repositories = new Map<string, RunRepository>();
   private readonly registry: ProjectRegistry;
+  private readonly databases: ProjectDatabases;
 
-  constructor(registry: ProjectRegistry) {
+  constructor(registry: ProjectRegistry, databases: ProjectDatabases) {
     this.registry = registry;
+    this.databases = databases;
   }
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
@@ -82,19 +85,12 @@ export class RunStore {
     return [...this.runs.values()];
   }
 
-
-  async replayEvents(runId: string): Promise<RunEvent[]> {
-    return this.repositoryForRun(runId).loadEvents(runId);
-  }
-
   repositoryFor(projectPath: ProjectPath): RunRepository {
-    const existing = this.repositories.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const repository = new RunRepository(projectPath);
-    this.repositories.set(projectPath.id, repository);
-    return repository;
+    return getOrCreate(
+      this.repositories,
+      projectPath.id,
+      () => new RunRepository(projectPath, this.databases.for(projectPath)),
+    );
   }
 
   repositoryForRun(runId: string): RunRepository {

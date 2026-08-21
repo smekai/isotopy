@@ -15,6 +15,77 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-21 — One json-record table, one connection per project
+
+**Context:** extends 2026-07-23 ("SQLite is the sole run store, behind a layered repository"),
+which this does not overturn — `services → repository → db` stays. What had drifted is what
+filled those layers. `runs`, `milestones` and `orchestrations` are all `(id, data, created_at,
+updated_at)` with the same upsert, the same `updated_at` trigger and the same legacy-timestamp
+migration, yet they were three table classes; `MilestoneRepository` and `OrchestrationRepository`
+were byte-identical modulo names; and `schemas/milestone.ts` and `schemas/orchestration.ts` were
+the same `JSON.parse`-then-validate function twice. Each of the three repositories also opened
+its **own** connection to the same `runs.db`.
+
+**Decision:** one `JsonRecordsTable` parameterized by a `JsonTableSpec`, one generic
+`JsonRecordRepository<T>` carrying the parse-and-warn boundary, one `parsePersistedRecord`, and a
+`ProjectDatabases` registry that hands every repository for a project the same `Database`.
+
+**Consequences worth knowing:**
+
+- A table can now register its schema *after* the shared connection is open, so
+  `Database.connection()` applies not-yet-run registrations on every call and `settle()` resets
+  that cursor. Without this, whichever aggregate loaded second queried a table that was never
+  created.
+- The unified `CREATE TABLE` carries `CHECK (json_valid(data))`, which the `runs` table alone
+  had lacked. `CREATE TABLE IF NOT EXISTS` never alters an existing database — but the legacy
+  timestamp migration *rebuilds* the table, and that path does apply the new constraint. Because
+  the old `runs` table accepted anything and `RunRepository` skipped unreadable rows on read, a
+  database could hold a row the rebuild would reject, and the failed migration would repeat on
+  every later `connection()`. The copy therefore selects `WHERE json_valid(data)` and warns with
+  a count: a row that could not be read before the migration is not lost by being dropped in it.
+- Closing moved off the repositories onto `ProjectDatabases.settleAll()`, which must run **last**
+  in shutdown — after the services have flushed — or Windows fails the temp-directory delete
+  with EBUSY.
+
+**Rejected:** collapsing `repository/` into `db/`. The repositories carry the parse-and-warn
+boundary, and pushing that into services would put decoding back in the layer A3 keeps thin.
+
+---
+
+## 2026-08-21 — The projection stays narrow; the hooks beside it collapse
+
+**Context:** three interfaces in `workflow/types.ts` each had exactly one implementation —
+`RunProjection` (34 methods, `RunService`), `OrchestrationHooks` (12, `OrchestrationService`)
+and `ProductHooks` (2, `ProductProcessService`). An audit read all three as ceremony: a type
+restating the public surface of the single class behind it, which A2 does not ask for.
+
+**Decision:** `RunProjection` **stays**; the other two are replaced by the class types.
+
+The difference is what the seam excludes. `RunService` also exposes `approveGate`,
+`resolveLimit` and `postMessage`, which *send signals into the running workflow*. Reaching one
+from inside a durable step would re-enter the workflow that is currently executing it, and the
+projection is what makes those methods unreachable from `workflow/` — interface segregation
+doing real work, not a restatement. `bindOpenWorkflowRun` left the interface: `RunService` only
+ever called it on itself.
+
+`OrchestrationHooks` and `ProductHooks` excluded nothing their services would not; they existed
+because both were registered *after* `RunService` was constructed. `ProductProcessService` is
+built first, so it became a constructor parameter and its late-binding getter went. The
+orchestration getter stays: `RunService` and `OrchestrationService` construct mutually, so the
+late binding there is structural rather than incidental. Registration also collapsed from two
+calls to one — `OrchestrationService` implements `StageOutputConsumer`, so the one
+`registerOrchestration` now does both jobs.
+
+**Consequence:** `workflow/types.ts` and `services/orchestration-service.ts` now reference each
+other. The cycle is **type-only**, erased at emit, and `pnpm build` confirms it; there is no
+runtime cycle and no `import/no-cycle` rule. Should a bundler ever object, `Pick<
+OrchestrationService, …>` aliases would keep the collapse without the hand-maintained interface.
+
+**Rejected:** collapsing all three (loses the reentrancy guard on the run's signal API); keeping
+all three (two of them cost maintenance and bought nothing).
+
+---
+
 ## 2026-08-20 — Every role remembers this project, and a run has exactly one closeout
 
 **Context:** two stores were wrong at once. A handoff dies with its run, so every role began each
@@ -838,6 +909,89 @@ values above `high` are unconfirmed, so Max shares Deep's effort there. Cursor's
 file holds a CLI-managed object with a `"default"` sentinel, so hand-pinning an unlisted id
 there is not a real escape hatch — it is unnecessary exactly where it does not work, since
 Cursor is the one engine with a complete live roster.
+
+---
+
+## 2026-08-07 — The task board adapter caches where the board is, never what it holds
+
+**Context:** every task-board operation re-probed `<root>/.tasks/config.json` and then
+`<dataDir>/tasks/config.json` before doing anything, so a single closeout paid the
+detection cost four times over.
+
+**Decision:** `TaskBoardAdapter` is a class that resolves the board *location* once and
+keeps it, while `config.json` and the state markdown are re-read on every call. The
+split is deliberate: `.tasks/` is an external directory that a human, TaskPlanner, or
+another agent edits between calls, so a cached `nextId` would hand out IDs that already
+exist. Only a *positive* resolution is remembered — a project with no board is re-probed
+next time, because a project can gain a `.tasks/` directory mid-session.
+
+**Rejected:** caching the parsed `BoardConfig` alongside the location. It halves the
+reads and reintroduces exactly the ID-collision bug that `nextTaskNumber`'s scan of the
+board text exists to defend against.
+
+---
+
+## 2026-08-07 — The Product Manager closeout and the Orchestrator review are two paths, not one
+
+**Context:** with the Orchestrator now deciding what happens after each run, the
+Product Manager closeout stage looked like leftover scaffolding.
+
+**Decision:** keep both. `FULL_DELIVERY_PIPELINE` ends in the `closeout` stage and
+produces a `RunCloseoutRecord`; an Orchestrator-composed pipeline has no closeout stage
+and produces a `RunArtifactRecord` from its review step instead. Consumers merge them at
+`run.closeout?.report ?? run.artifacts?.report`, and the Orchestrator treats a supplied
+closeout as authoritative rather than recomputing it. The file that held both was
+dissolved into its callers, because three of its five exports served the Orchestrator
+path and its name claimed otherwise: `applyProductManagerCloseout` and the closeout
+files it writes now live in `services/consumers/closeout-consumer.ts`, the run-directory
+artifact and cancellation writers in `services/run/run-service.ts`, and the milestone
+summary and prior-closeout context in `services/milestone-closeout.ts`.
+
+**Rejected:** deleting the `closeout` stage and letting the Orchestrator review be the
+only closeout. That also removes source-task transitions, run temp cleanup, and the
+written `closeout.md` from every full-delivery run — a product change wearing a
+refactor's clothes.
+
+---
+
+## 2026-08-07 — A consumer that cannot use a stage's output is what fails the stage
+
+**Context:** a `milestone-planning` run on Codex returned prose instead of a fenced
+`adhd-milestone-plan` block. `MilestonePlanConsumer` recorded `approvalError` correctly,
+and the stage still passed — the run completed and the Orchestrator's review reported
+work as delivered. `StageOutputConsumer.consume` returned `Promise<void>`, and consumers
+ran *after* `interpretEngineResult` had already fixed the outcome, so a consumer could not
+influence the status of the stage whose output it had just rejected. The same swallow was
+live on `full-delivery`: its own test fixtures fed the closeout stage prose, and four
+tests asserted a green run over an empty closeout.
+
+**Decision:** `consume` returns `StageOutputRejection | undefined`, and
+`settleStageOutput` turns a rejection into `NEEDS_ATTENTION` with the consumer's reason.
+**Only a `PASSED` outcome is downgraded** — `interpretEngineResult` returns no output for
+three different reasons, and widening past `PASSED` would run the closeout consumer on a
+*crashed* stage and write a "Product Manager produced no closeout text" artifact for a run
+where the agent never returned. Empty output reaches the consumers instead of
+short-circuiting on length, so usability is judged by whoever claims the stage. The
+closeout splits report errors from side-effect errors, and that split is deliberately
+**not persisted** — `RunCloseoutRecord.validationErrors` keeps its exact current content.
+A rejected stage keeps the verdict the agent claimed: the contradiction between a claimed
+`PASS` and a rejected artifact is the evidence a reader wants.
+
+`OrchestrationService.consume` returns a rejection that is unreachable today — a
+`decision`-protocol stage can never arrive at `PASSED` with unparseable output, because
+`interpretDecision` has already caught it. It exists so the seam is uniform; do not go
+looking for the test that covers it.
+
+**Rejected:** a `claims()` predicate on the seam — a second thing to keep in sync with the
+guard already at the top of every `consume`. Persisting `sideEffectErrors` on
+`RunCloseoutRecord` — a core schema change, a `CloseoutPanel` change and every historical
+`closeout.json`, to express something no reader needs. Downgrading inside
+`captureStageOutput` — that would make the run service decide stage outcomes, which is
+`stage-execution`'s job. Failing on task-board or cleanup errors — those are the board's
+problem, not the report's. Treating an omitted source task as fatal — `validateSourceTaskOutcome`
+already repairs it into `unresolvedTaskIds` before recording it, so failing on it would
+turn a complete, correctly-recorded closeout red: this bug with the sign flipped. And
+downgrading `SKIPPED` — an explicit skip is stated intent, not a silent swallow.
 
 ---
 
@@ -1670,84 +1824,3 @@ reads. A full project replacement stays available for power users, but appending
 addendum is the default path.
 
 ---
-
-## 2026-08-07 — The task board adapter caches where the board is, never what it holds
-
-**Context:** every task-board operation re-probed `<root>/.tasks/config.json` and then
-`<dataDir>/tasks/config.json` before doing anything, so a single closeout paid the
-detection cost four times over.
-
-**Decision:** `TaskBoardAdapter` is a class that resolves the board *location* once and
-keeps it, while `config.json` and the state markdown are re-read on every call. The
-split is deliberate: `.tasks/` is an external directory that a human, TaskPlanner, or
-another agent edits between calls, so a cached `nextId` would hand out IDs that already
-exist. Only a *positive* resolution is remembered — a project with no board is re-probed
-next time, because a project can gain a `.tasks/` directory mid-session.
-
-**Rejected:** caching the parsed `BoardConfig` alongside the location. It halves the
-reads and reintroduces exactly the ID-collision bug that `nextTaskNumber`'s scan of the
-board text exists to defend against.
-
----
-
-## 2026-08-07 — The Product Manager closeout and the Orchestrator review are two paths, not one
-
-**Context:** with the Orchestrator now deciding what happens after each run, the
-Product Manager closeout stage looked like leftover scaffolding.
-
-**Decision:** keep both. `FULL_DELIVERY_PIPELINE` ends in the `closeout` stage and
-produces a `RunCloseoutRecord`; an Orchestrator-composed pipeline has no closeout stage
-and produces a `RunArtifactRecord` from its review step instead. Consumers merge them at
-`run.closeout?.report ?? run.artifacts?.report`, and the Orchestrator treats a supplied
-closeout as authoritative rather than recomputing it. The file that held both was
-dissolved into its callers, because three of its five exports served the Orchestrator
-path and its name claimed otherwise: `applyProductManagerCloseout` and the closeout
-files it writes now live in `services/consumers/closeout-consumer.ts`, the run-directory
-artifact and cancellation writers in `services/run/run-service.ts`, and the milestone
-summary and prior-closeout context in `services/milestone-closeout.ts`.
-
-**Rejected:** deleting the `closeout` stage and letting the Orchestrator review be the
-only closeout. That also removes source-task transitions, run temp cleanup, and the
-written `closeout.md` from every full-delivery run — a product change wearing a
-refactor's clothes.
-
----
-
-## 2026-08-07 — A consumer that cannot use a stage's output is what fails the stage
-
-**Context:** a `milestone-planning` run on Codex returned prose instead of a fenced
-`adhd-milestone-plan` block. `MilestonePlanConsumer` recorded `approvalError` correctly,
-and the stage still passed — the run completed and the Orchestrator's review reported
-work as delivered. `StageOutputConsumer.consume` returned `Promise<void>`, and consumers
-ran *after* `interpretEngineResult` had already fixed the outcome, so a consumer could not
-influence the status of the stage whose output it had just rejected. The same swallow was
-live on `full-delivery`: its own test fixtures fed the closeout stage prose, and four
-tests asserted a green run over an empty closeout.
-
-**Decision:** `consume` returns `StageOutputRejection | undefined`, and
-`settleStageOutput` turns a rejection into `NEEDS_ATTENTION` with the consumer's reason.
-**Only a `PASSED` outcome is downgraded** — `interpretEngineResult` returns no output for
-three different reasons, and widening past `PASSED` would run the closeout consumer on a
-*crashed* stage and write a "Product Manager produced no closeout text" artifact for a run
-where the agent never returned. Empty output reaches the consumers instead of
-short-circuiting on length, so usability is judged by whoever claims the stage. The
-closeout splits report errors from side-effect errors, and that split is deliberately
-**not persisted** — `RunCloseoutRecord.validationErrors` keeps its exact current content.
-A rejected stage keeps the verdict the agent claimed: the contradiction between a claimed
-`PASS` and a rejected artifact is the evidence a reader wants.
-
-`OrchestrationService.consume` returns a rejection that is unreachable today — a
-`decision`-protocol stage can never arrive at `PASSED` with unparseable output, because
-`interpretDecision` has already caught it. It exists so the seam is uniform; do not go
-looking for the test that covers it.
-
-**Rejected:** a `claims()` predicate on the seam — a second thing to keep in sync with the
-guard already at the top of every `consume`. Persisting `sideEffectErrors` on
-`RunCloseoutRecord` — a core schema change, a `CloseoutPanel` change and every historical
-`closeout.json`, to express something no reader needs. Downgrading inside
-`captureStageOutput` — that would make the run service decide stage outcomes, which is
-`stage-execution`'s job. Failing on task-board or cleanup errors — those are the board's
-problem, not the report's. Treating an omitted source task as fatal — `validateSourceTaskOutcome`
-already repairs it into `unresolvedTaskIds` before recording it, so failing on it would
-turn a complete, correctly-recorded closeout red: this bug with the sign flipped. And
-downgrading `SKIPPED` — an explicit skip is stated intent, not a silent swallow.

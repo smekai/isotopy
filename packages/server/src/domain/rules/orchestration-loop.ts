@@ -1,4 +1,16 @@
-import type { OrchestratorAction, RunState } from "@isotopy/core";
+import type { Orchestration, OrchestratorAction, RunState } from "@isotopy/core";
+
+export function activeOrchestrations(
+  all: Iterable<Orchestration>,
+  projectId: string,
+): Orchestration[] {
+  return [...all]
+    .filter(
+      (orchestration) =>
+        orchestration.projectId === projectId && orchestration.status !== "stopped",
+    )
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
 
 export interface SettledLaunch {
   action: OrchestratorAction;
