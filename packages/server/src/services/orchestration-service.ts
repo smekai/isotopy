@@ -40,7 +40,10 @@ import {
   runLabel,
   stageOutputsOf,
 } from "../domain/rules/orchestration-context.ts";
-import { blockedLaunchRefusal } from "../domain/rules/orchestration-loop.ts";
+import {
+  activeOrchestrations,
+  blockedLaunchRefusal,
+} from "../domain/rules/orchestration-loop.ts";
 import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
@@ -344,18 +347,17 @@ export class OrchestrationService implements StageOutputConsumer {
     return structuredClone(orchestration);
   }
 
-  async contextFor(
-    request: QuestionMediationRequest,
-  ): Promise<QuestionMediationContext> {
-    const run = this.runs.getRun(request.runId);
+  private requireActiveOrchestrationFor(
+    runId: string,
+    purpose: string,
+  ): { run: RunState; orchestration: Orchestration } {
+    const run = this.runs.getRun(runId);
     if (!run) {
-      throw new Error(`Run not found: ${request.runId}`);
+      throw new Error(`Run not found: ${runId}`);
     }
     const orchestration = this.activeFor(run.projectId);
     if (!orchestration) {
-      throw new Error(
-        "The project has no active Orchestrator to mediate this question",
-      );
+      throw new Error(`The project has no active Orchestrator to ${purpose}`);
     }
     if (
       run.orchestrationId !== undefined &&
@@ -365,6 +367,16 @@ export class OrchestrationService implements StageOutputConsumer {
         "The run belongs to an Orchestrator that is no longer active",
       );
     }
+    return { run, orchestration };
+  }
+
+  async contextFor(
+    request: QuestionMediationRequest,
+  ): Promise<QuestionMediationContext> {
+    const { run, orchestration } = this.requireActiveOrchestrationFor(
+      request.runId,
+      "mediate this question",
+    );
     return {
       orchestrationId: orchestration.id,
       prompt: renderQuestionMediationContext({
@@ -418,24 +430,10 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   async reviewContextFor(request: RunReviewRequest): Promise<RunReviewContext> {
-    const run = this.runs.getRun(request.runId);
-    if (!run) {
-      throw new Error(`Run not found: ${request.runId}`);
-    }
-    const orchestration = this.activeFor(run.projectId);
-    if (!orchestration) {
-      throw new Error(
-        "The project has no active Orchestrator to review this run",
-      );
-    }
-    if (
-      run.orchestrationId !== undefined &&
-      run.orchestrationId !== orchestration.id
-    ) {
-      throw new Error(
-        "The run belongs to an Orchestrator that is no longer active",
-      );
-    }
+    const { run, orchestration } = this.requireActiveOrchestrationFor(
+      request.runId,
+      "review this run",
+    );
     return {
       orchestrationId: orchestration.id,
       prompt: renderRunReviewContext({
@@ -807,12 +805,7 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private activeFor(projectId: string): Orchestration | undefined {
-    return [...this.orchestrations.values()]
-      .filter(
-        (orchestration) =>
-          orchestration.projectId === projectId && orchestration.status !== "stopped",
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    return activeOrchestrations(this.orchestrations.values(), projectId)[0];
   }
 
   private mediationArtifacts(
@@ -830,12 +823,7 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private async reconcileActiveOrchestrations(projectId: string): Promise<void> {
-    const active = [...this.orchestrations.values()]
-      .filter(
-        (orchestration) =>
-          orchestration.projectId === projectId && orchestration.status !== "stopped",
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const active = activeOrchestrations(this.orchestrations.values(), projectId);
     for (const duplicate of active.slice(1)) {
       await this.terminate(
         duplicate,
