@@ -1,5 +1,82 @@
 # Backlog
 
+## TASK-155: Reduce backend abstraction ceremony and validate/reduce docs
+**Priority:** P2
+**Tags:** server, core, infra
+**Updated:** 2026-08-21 12:00
+
+An audit of `packages/server/src` (~14,500 lines) and `docs/` (~6,900 lines, ~27% stale or
+duplicated) found the layering has outgrown what it protects. This task carries the verified
+findings; carve slices off it as they get scheduled.
+
+**Already done (this task's opening commit):**
+- [x] Delete the legacy `artifacts`→`closeout` read in `schemas/run-persistence.ts`
+      (`legacyArtifactsSchema` + the lift transform). Runs persisted before PR #62 lose their
+      closeout panel; the markdown evidence on disk is untouched.
+
+**Backend — abstraction ceremony:**
+- [ ] Collapse single-implementation seams in `workflow/types.ts`: `RunProjection` (34 methods,
+      only `RunService`), `OrchestrationHooks` (12, only `OrchestrationService`), `ProductHooks`
+      (2, only `ProductProcessService`). `WorkflowDeps` wraps two of them in getter functions on
+      top — late binding that exists only because `index.ts` registers them after construction
+      (twice: `registerOrchestration` + `registerStageOutputConsumer` for one object).
+      `StageOutputConsumer` (4 impls) and `EngineAdapter` (3 impls) are genuine seams — keep.
+- [ ] Merge twins: `repository/milestone-repository.ts` ≡ `repository/orchestration-repository.ts`
+      (byte-identical modulo names); `schemas/milestone.ts` ≡ `schemas/orchestration.ts`; three
+      near-identical `db/*-table.ts` classes over the same `(id, data, created_at, updated_at)`
+      shape. Four layers (`Database → Table → Repository → Store`) over a two-column upsert.
+      Each repository opens its own connection to the same `runs.db` — consolidate.
+- [ ] One fenced-block-extractor helper for the five copies in `schemas/` (orchestrator-decision,
+      milestone-plan, run-artifacts, release-manifest, persona-notes).
+- [ ] One lazy per-project registry helper for the five hand-written `map.get ?? new X` blocks
+      (`RunStore.repositoryFor`, `MilestoneService`, `OrchestrationService`,
+      `WorkflowRuntimeRegistry`, `taskBoardFor`).
+- [ ] Shared `messageOf(error)` (the `instanceof Error` ternary is written 32× in 15 files) and
+      one `engineLabel` (defined identically in `run-service.ts` and `stage-execution.ts`).
+- [ ] Fix the duplicate-instance hazard: `run-service.ts` privately constructs
+      `new AutomationConfigStore()` / `new DeploymentRunner()` while `index.ts` passes separate
+      instances to routes — two live instances of each (same pattern risk for `SettingsStore`
+      defaults).
+- [ ] Shrink the god services per A3: `run-service.ts` (997 lines; `startRunWith` alone 118) and
+      `orchestration-service.ts` (914) — push the branching on domain state into `domain/rules/`.
+- [ ] Dissolve pass-through files: `run-options.ts` (types only, then re-exported),
+      `domain/rules/model-roster.ts` (9 lines), `orchestrator-required-error.ts` (1 line, caught
+      nowhere), `routes/pipelines.ts` → one-line service → array filter.
+
+**Docs — validation and reduction (~1,860 removable lines):**
+- [ ] `docs/architecture.md` lines ~426–1269: the pre-implementation "0.1 draft" naming classes
+      (`WorkflowEngine`, `RunController`, `StageExecutor`…), paths (`.isotopy/tasks/`,
+      `state.json`) and a YAML pipeline that never existed or were deleted. Trim to the
+      still-accurate subsections (milestones, orchestration, workflow runtime, agent model,
+      dashboard, data locations). Lines 34–303 are `gen:` blocks — build inputs, keep.
+- [ ] `docs/workflow-runtime-options.md` §§2–4 describe the deleted pre-OpenWorkflow world
+      (`RunOrchestrator`, `JsonRunStore`, `state.json`) in present tense — mark historical or trim.
+- [ ] `docs/e2e-test-plan.md`: every spec path stale (`.spec.ts` vs actual `.e2e.ts`), retired
+      pipelines (`sequential`, `dev-test`) presented as live, deleted `OrchestratorPanel` cited,
+      five existing e2e specs unmentioned — rewrite against `testing.md` or delete into it.
+- [ ] `docs/implementation-notes.md`: two sections (~463–501) describe deleted `RunOrchestrator`;
+      several headings use pre-`rules/` / wrong-folder paths (`domain/engine-limit.ts`,
+      `services/workspace-files.ts`); `StageFocusPanel` reference.
+- [ ] `docs/architecture.md:215` cites deleted `StageFocusPanel.tsx` **inside the `gen:skill`
+      block** — it has propagated into `.claude/skills/architect/SKILL.md`; fix and re-run
+      `pnpm gen:skills` (drift guarded by `skill-generation.spec.ts`).
+- [ ] `README.md` milestone status is three milestones behind (says F/G in progress; Milestone I
+      is open); Documents index omits four docs.
+- [ ] `docs/product-brief.md` claims an OpenHands adapter that never existed.
+- [ ] `docs/architecture-ui.md`: stale `OrchestratorPanel` rows, unresolvable `conversational`
+      gap, stale `WorkspaceFile`/version meta-notes, gaps table misordered.
+- [ ] `docs/decisions.md`: restore newest-first ordering (last three 2026-08-07 entries sit
+      after 2026-07-22).
+- [ ] Archive `docs/dogfood/TASK-141-claude-code-2026-08-17.md` (356 lines, nothing references it).
+- [ ] `CLAUDE.md` ⇄ `AGENTS.md`: 131 of ~150 lines byte-identical, yet each has a unique half the
+      other lacks (Versioning/validation boundaries vs Server file placement) — reconcile.
+
+Constraints: `gen:` blocks in `architecture.md`/`testing.md` are compiled into skills and drift-
+tested; `docs/running-the-app.md` and `docs/planning-a-task.md` are live skill bodies — edit,
+don't delete.
+
+---
+
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P3 | **Tags:** server, engine, infra
 **Updated:** 2026-08-07 11:40

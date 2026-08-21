@@ -8,7 +8,6 @@ import {
   STAGE_STATUSES,
   STAGE_VERDICTS,
   requiredText,
-  RUN_ARTIFACTS_SHAPE,
   runChangeSetSchema,
   runCloseoutRecordSchema,
   runEventSchema,
@@ -20,7 +19,7 @@ import {
   stageLogEntrySchema,
   timestamp,
 } from "@isotopy/core";
-import type { RunCloseoutRecord, RunEvent, RunState } from "@isotopy/core";
+import type { RunEvent } from "@isotopy/core";
 import { z } from "zod";
 
 import { parseJson } from "../domain/validation.ts";
@@ -44,29 +43,6 @@ const stageSchema = z
   })
   .strict();
 
-const legacyArtifactsSchema = z
-  .object({
-    report: z.object(RUN_ARTIFACTS_SHAPE).strict(),
-    validationErrors: z.array(z.string()),
-    collectedAt: timestamp,
-  })
-  .strict()
-  .transform(
-    (record): RunCloseoutRecord => ({
-      report: {
-        ...record.report,
-        tasks: [],
-        completedTaskIds: [],
-        unresolvedTaskIds: [],
-        cleanup: [],
-      },
-      createdTasks: [],
-      cleanup: { removed: [], rejected: [] },
-      validationErrors: record.validationErrors,
-      completedAt: record.collectedAt,
-    }),
-  );
-
 const runStateSchema = z
   .object({
     id: text,
@@ -79,7 +55,6 @@ const runStateSchema = z
     closeout: runCloseoutRecordSchema.optional(),
     release: runReleaseRecordSchema.optional(),
     deployment: deploymentResultSchema.optional(),
-    artifacts: legacyArtifactsSchema.optional(),
     changes: runChangeSetSchema.optional(),
     pipelineId: text,
     pipelineName: text,
@@ -98,10 +73,7 @@ const runStateSchema = z
     createdAt: timestamp,
     completedAt: timestamp.optional(),
   })
-  .strict()
-  .transform(({ artifacts, ...run }): RunState =>
-    artifacts && !run.closeout ? { ...run, closeout: artifacts } : run,
-  );
+  .strict();
 
 const persistedRunSchema = z
   .object({
