@@ -3,10 +3,12 @@ import type {
   DeploymentResult,
   EngineId,
   EngineLimit,
+  EnginePermissionMode,
   LimitChoice,
   LimitResolution,
   MessageKind,
   MessageRole,
+  ModelTier,
   PipelineDefinition,
   RunCloseoutRecord,
   RunEvent,
@@ -47,14 +49,12 @@ import { RunChangeCollector } from "../run-change-collector.ts";
 import { renderDeploymentResult } from "../../domain/markdown/release.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
-import { OrchestratorRequiredError } from "../../domain/orchestrator-required-error.ts";
 import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { ModelRosterService } from "../model-roster-service.ts";
 import { engineLabel } from "../../domain/rules/engine-label.ts";
-import { unknownModelMessage } from "../../domain/rules/model-roster.ts";
 import { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
@@ -77,6 +77,8 @@ import {
 import { formatHandoff } from "../../domain/markdown/stage.ts";
 import {
   TERMINAL_OPENWORKFLOW_STATUSES,
+  applyCancellation,
+  applyInterruption,
   completionMessage,
 } from "../../domain/rules/run-lifecycle.ts";
 import {
@@ -86,10 +88,23 @@ import {
 } from "../../domain/rules/run-seeding.ts";
 import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
-import type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 import { RunStore } from "./run-store.ts";
 
-export type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
+export interface InheritedRunOptions {
+  engine?: string;
+  model?: string;
+  modelTier?: ModelTier;
+  permissionMode?: EnginePermissionMode;
+}
+
+export interface StartRunOptions extends InheritedRunOptions {
+  task?: string;
+  milestoneId?: string;
+  featureId?: string;
+  orchestrationId?: string;
+  sourceTaskIds?: string[];
+  seeded?: SeededStart;
+}
 
 export class RunService implements RunProjection {
   readonly store: RunStore;
@@ -261,7 +276,7 @@ export class RunService implements RunProjection {
   }
 
   async replayEvents(runId: string): Promise<RunEvent[]> {
-    return this.store.replayEvents(runId);
+    return this.store.repositoryForRun(runId).loadEvents(runId);
   }
 
   async startRun(
@@ -312,7 +327,7 @@ export class RunService implements RunProjection {
       activeOrchestrationId !== undefined &&
       requestedOrchestrationId !== activeOrchestrationId
     ) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The requested Orchestrator is not the project's active Orchestrator",
       );
     }
@@ -666,7 +681,10 @@ export class RunService implements RunProjection {
   private async requireOfferedModel(engineId: EngineId, modelId: string): Promise<void> {
     const roster = await this.rosters.roster(engineId);
     if (!rosterAccepts(roster, modelId)) {
-      throw new Error(unknownModelMessage(engineId, modelId));
+      throw new Error(
+        `Model "${modelId}" isn't offered by ${ENGINES[engineId].label} on this machine — ` +
+          "pick one in Setup → AI Harness. An unlisted id has to be set in the CLI's own config file first.",
+      );
     }
   }
 
@@ -828,43 +846,20 @@ export class RunService implements RunProjection {
   private markCancelled(runId: string): void {
     const run = this.store.runs.get(runId);
     if (!run || isTerminalRunStatus(run.status)) return;
-    for (const stage of run.stages) {
-      if (
-        stage.status === "pending" ||
-        stage.status === "running" ||
-        stage.status === "awaiting" ||
-        stage.status === "asking" ||
-        stage.status === "blocked"
-      ) {
-        stage.status = "skipped";
-        this.emit({ ts: nowIso(), type: "stage.skipped", runId, stageId: stage.id, status: "skipped" });
-      }
+    const ts = nowIso();
+    for (const stageId of applyCancellation(run, ts)) {
+      this.emit({ ts, type: "stage.skipped", runId, stageId, status: "skipped" });
     }
-    delete run.limit;
-    run.status = "cancelled";
-    run.completedAt = nowIso();
-    this.emit({ ts: nowIso(), type: "run.completed", runId, status: "cancelled", message: "Run aborted" });
+    this.emit({ ts, type: "run.completed", runId, status: "cancelled", message: "Run aborted" });
   }
 
   private markInterrupted(runId: string): void {
     const run = this.store.runs.get(runId);
     if (!run || isTerminalRunStatus(run.status)) return;
     const ts = nowIso();
-    for (const stage of run.stages) {
-      if (
-        stage.status === "running" ||
-        stage.status === "awaiting" ||
-        stage.status === "asking" ||
-        stage.status === "blocked"
-      ) {
-        stage.status = "failed";
-        stage.completedAt = ts;
-        this.log(runId, stage.id, { level: "fail", message: "✗ Interrupted by server restart" });
-      }
+    for (const stageId of applyInterruption(run, ts)) {
+      this.log(runId, stageId, { level: "fail", message: "✗ Interrupted by server restart" });
     }
-    delete run.limit;
-    run.status = "failed";
-    run.completedAt = ts;
     this.emit({ ts, type: "run.completed", runId, status: "failed", message: "Interrupted by server restart" });
     void this.settleCompletedRun(run);
   }

@@ -1,6 +1,5 @@
 import type {
   EnginePermissionMode,
-  RunEvent,
   RunState,
   StageLogEntry,
 } from "@isotopy/core";
@@ -81,11 +80,6 @@ export class RunStore {
 
   allRuns(): RunState[] {
     return [...this.runs.values()];
-  }
-
-
-  async replayEvents(runId: string): Promise<RunEvent[]> {
-    return this.repositoryForRun(runId).loadEvents(runId);
   }
 
   repositoryFor(projectPath: ProjectPath): RunRepository {

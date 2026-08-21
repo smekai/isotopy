@@ -50,7 +50,7 @@ import {
   generationOf,
   sameComposition,
   withRoleTiers,
-} from "../schemas/team-composition.ts";
+} from "../domain/rules/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -63,8 +63,7 @@ import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
-import type { InheritedRunOptions } from "./run/run-options.ts";
-import { OrchestratorRequiredError } from "../domain/orchestrator-required-error.ts";
+import type { InheritedRunOptions } from "./run/run-service.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
@@ -136,7 +135,7 @@ export class OrchestrationService implements StageOutputConsumer {
   async attachRun(projectId: string, runId: string): Promise<void> {
     const orchestration = this.activeFor(projectId);
     if (!orchestration) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The project has no active Orchestrator to own the run",
       );
     }
@@ -356,7 +355,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const orchestration = this.activeFor(run.projectId);
     if (!orchestration) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The project has no active Orchestrator to mediate this question",
       );
     }
@@ -364,7 +363,7 @@ export class OrchestrationService implements StageOutputConsumer {
       run.orchestrationId !== undefined &&
       run.orchestrationId !== orchestration.id
     ) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The run belongs to an Orchestrator that is no longer active",
       );
     }
@@ -389,7 +388,7 @@ export class OrchestrationService implements StageOutputConsumer {
   ): Promise<void> {
     const orchestration = this.orchestrations.get(context.orchestrationId);
     if (!orchestration || orchestration.status === "stopped") {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The Orchestrator stopped before it could record the mediation decision",
       );
     }
@@ -427,7 +426,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const orchestration = this.activeFor(run.projectId);
     if (!orchestration) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The project has no active Orchestrator to review this run",
       );
     }
@@ -435,7 +434,7 @@ export class OrchestrationService implements StageOutputConsumer {
       run.orchestrationId !== undefined &&
       run.orchestrationId !== orchestration.id
     ) {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The run belongs to an Orchestrator that is no longer active",
       );
     }
@@ -471,7 +470,7 @@ export class OrchestrationService implements StageOutputConsumer {
   ): Promise<void> {
     const orchestration = this.orchestrations.get(context.orchestrationId);
     if (!orchestration || orchestration.status === "stopped") {
-      throw new OrchestratorRequiredError(
+      throw new Error(
         "The Orchestrator stopped before it could record the run review",
       );
     }

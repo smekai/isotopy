@@ -12,7 +12,7 @@ import {
   generationOf,
   sameComposition,
   withRoleTiers,
-} from "../../src/schemas/team-composition.ts";
+} from "../../src/domain/rules/team-composition.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 test("an invented persona id is rejected, rather than degrading the stage to no persona", () => {
