@@ -2,7 +2,7 @@
 
 Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@isotopy/server` (Hono, port **9477**) and `@isotopy/ui`
-(Vite + React, port **5173**). The UI proxies `/pipelines`, `/projects`,
+(Vite + React, port **5173**). The UI proxies `/projects`,
 `/runs`, `/milestones`, `/orchestrations`, `/health`, `/settings`,
 `/engines`, `/automation`, `/fs` to the server, so
 `http://localhost:5173/health` proves both are up. The proxy
@@ -56,11 +56,10 @@ substitute the engine adapter.
 
 ## Smoke checks
 
-- API: `curl http://localhost:9477/health` → `{"ok":true,...}`;
-  `curl http://localhost:9477/pipelines` → `full-delivery`, `pm-dev-test`,
-  `solo`. `milestone-planning` is marked `internal` and is deliberately
-  **absent** from that list — it is started through `POST /milestones/plan`,
-  not chosen by the user.
+- API: `curl http://localhost:9477/health` → `{"ok":true,...}`. Pipelines are not an
+  endpoint: the UI imports `DEMO_PIPELINES` from `@isotopy/core` and filters
+  `internal` itself, which is why `milestone-planning` never appears in the picker —
+  it is started through `POST /milestones/plan`.
 - CLI detection: `curl http://localhost:9477/engines/claude-code/status`
   → `{"installed":true,"path":...,"version":...}`.
 - Connection settings: `GET /settings`, `PUT /settings/engines/claude-code`

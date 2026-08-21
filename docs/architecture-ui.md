@@ -38,7 +38,7 @@ by accident and nobody defends them past their usefulness.
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
-on ports, and proxies `/pipelines /projects /runs /milestones /orchestrations /health
+on ports, and proxies `/projects /runs /milestones /orchestrations /health
 /settings /engines /fs` to the server. **That proxy list must stay in sync with the routes
 mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
 dev UI until it is added there.

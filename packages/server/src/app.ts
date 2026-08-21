@@ -5,7 +5,6 @@ import { createAutomationRoutes } from "./routes/automation.ts";
 import { createEngineRoutes } from "./routes/engines.ts";
 import { fsRoutes } from "./routes/fs.ts";
 import { healthRoutes } from "./routes/health.ts";
-import { createPipelineRoutes } from "./routes/pipelines.ts";
 import { createMilestoneRoutes } from "./routes/milestones.ts";
 import { createOrchestrationRoutes } from "./routes/orchestrations.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
@@ -55,7 +54,6 @@ export function createApp({
 
   app.route("/health", healthRoutes);
   app.route("/projects", createProjectRoutes(registry, product));
-  app.route("/pipelines", createPipelineRoutes(runs));
   app.route("/milestones", createMilestoneRoutes(milestones, registry));
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", createEngineRoutes(rosters));

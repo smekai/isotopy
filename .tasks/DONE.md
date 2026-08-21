@@ -38,6 +38,16 @@ while the hooks collapsed, and the one-table/one-connection consolidation. The
 `approveGate` eager-apply-then-signal, flagged as a bug by two separate audits, is now
 explained in `implementation-notes.md` rather than re-argued a third time.
 
+**Two checklist items resolved differently than written.** `routes/pipelines.ts` was listed
+as a pass-through to dissolve, and it is now deleted along with `RunService.listPipelines()` and
+the `/pipelines` proxy entry — not because a route is ceremony, but because this one was dead:
+the UI imports `DEMO_PIPELINES` from `@isotopy/core` and applies the same `internal` filter
+itself, so the endpoint had no caller in the app, the tests or the e2e suite. Archiving
+`docs/dogfood/TASK-141-claude-code-2026-08-17.md` was **declined**: the audit called it
+unreferenced, but `TASK-142` requires it — "Match TASK-141… follow its evidence record
+section-for-section so the two are diffable" — and `.tasks/DONE.md` links it. It stays until
+that rerun is done.
+
 **Gotcha worth keeping:** a shared connection can be open before a later table registers its
 schema, so `Database.connection()` applies not-yet-run registrations on every call and
 `settle()` resets that cursor. Without it, whichever aggregate loaded second queried a table

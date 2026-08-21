@@ -209,10 +209,6 @@ export class RunService implements RunProjection {
     await this.milestones.completeMilestoneRun(run);
   }
 
-  listPipelines(): PipelineDefinition[] {
-    return DEMO_PIPELINES.filter((pipeline) => pipeline.internal !== true);
-  }
-
   getPipeline(pipelineId: string): PipelineDefinition | undefined {
     return DEMO_PIPELINES.find((pipeline) => pipeline.id === pipelineId);
   }

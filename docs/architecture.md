@@ -861,7 +861,7 @@ user-level root; both exist so tests get isolated roots.
 │  - Pipeline row + stage focus panel              │
 │  - Run history, project switcher, setup          │
 │  Vite proxies /runs /projects /settings          │
-│  /engines /pipelines /fs /health to the API      │
+│  /engines /fs /health to the API                │
 ├──────────────────────────────────────────────────┤
 │  REST + SSE API (Hono, localhost:9477)           │
 │  Runs:                                           │
@@ -877,7 +877,7 @@ user-level root; both exist so tests get isolated roots.
 │  - PUT /settings/engines/:id                     │
 │  - GET /engines/:id/status|models                │
 │  - POST /engines/:id/install|login               │
-│  - GET /pipelines, GET /fs/dirs, GET /health     │
+│  - GET /fs/dirs, GET /health                     │
 ├──────────────────────────────────────────────────┤
 │  RunService (durable OpenWorkflow runtime)       │
 │  + per-project SQLite read model                 │
