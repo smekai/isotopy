@@ -8,6 +8,8 @@ import type {
   LimitResolution,
   MessageKind,
   MessageRole,
+  Milestone,
+  MilestoneFeature,
   ModelTier,
   PipelineDefinition,
   RunCloseoutRecord,
@@ -56,6 +58,7 @@ import type { ProjectDatabases } from "../../db/project-databases.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import type { ModelRosterService } from "../model-roster-service.ts";
 import { engineLabel } from "../../domain/rules/engine-label.ts";
+import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/run-start.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
@@ -290,6 +293,59 @@ export class RunService implements RunProjection {
     return this.startRunWith(projectPath, pipeline, options);
   }
 
+  private linkMilestone(
+    projectPath: ProjectPath,
+    milestoneId: string | undefined,
+    featureId: string | undefined,
+  ): { linkedMilestone?: Milestone; linkedFeature?: MilestoneFeature } {
+    if (milestoneId === undefined) {
+      return {};
+    }
+    const linkedMilestone = this.milestones.requireMilestone(projectPath.id, milestoneId);
+    if (featureId === undefined) {
+      return { linkedMilestone };
+    }
+    const linkedFeature = this.milestones.requireMilestoneFeature(
+      linkedMilestone,
+      featureId,
+    );
+    if (linkedFeature.status !== "ready") {
+      throw new Error(`Feature is ${linkedFeature.status}`);
+    }
+    return { linkedMilestone, linkedFeature };
+  }
+
+  private async requireEngineReady(
+    projectPath: ProjectPath,
+    engineId: string,
+    model: string | undefined,
+  ): Promise<void> {
+    getEngineAdapter(engineId);
+    assertEngineId(engineId);
+    const connection = this.settings.getEngineConnection(projectPath.id, engineId);
+    const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
+    if (mode?.requiresApiKey && !connection.apiKey) {
+      throw new Error(
+        `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
+      );
+    }
+    if (model !== undefined) {
+      await this.requireOfferedModel(engineId, model);
+    }
+  }
+
+  private async admitRun(projectPath: ProjectPath): Promise<string> {
+    await ensureProjectDataDir(projectPath);
+    const runId = randomUUID().slice(0, 8);
+    const admitted = await this.store.repositoryFor(projectPath).admitRun(runId);
+    if (!admitted) {
+      throw new Error(
+        "A run is already active in this project — wait for it to finish or abort it before starting another.",
+      );
+    }
+    return runId;
+  }
+
   private async startRunWith(
     projectPath: ProjectPath,
     pipeline: PipelineDefinition,
@@ -312,61 +368,21 @@ export class RunService implements RunProjection {
       pipeline.id,
       task ?? pipeline.name,
     );
-    if (
-      requestedOrchestrationId !== undefined &&
-      activeOrchestrationId !== undefined &&
-      requestedOrchestrationId !== activeOrchestrationId
-    ) {
-      throw new Error(
-        "The requested Orchestrator is not the project's active Orchestrator",
-      );
-    }
-    const orchestrationId = requestedOrchestrationId ?? activeOrchestrationId;
-    const planningRun =
-      pipeline.id === "milestone-planning" &&
-      milestoneId !== undefined &&
-      featureId === undefined;
-    if (
-      !planningRun &&
-      (milestoneId === undefined) !== (featureId === undefined)
-    ) {
-      throw new Error("milestoneId and featureId must be provided together");
-    }
-    const linkedMilestone =
-      milestoneId !== undefined
-        ? this.milestones.requireMilestone(projectPath.id, milestoneId)
-        : undefined;
-    const linkedFeature =
-      linkedMilestone && featureId !== undefined
-        ? this.milestones.requireMilestoneFeature(linkedMilestone, featureId)
-        : undefined;
-    if (linkedFeature && linkedFeature.status !== "ready") {
-      throw new Error(`Feature is ${linkedFeature.status}`);
-    }
+    const orchestrationId = resolveOwningOrchestration(
+      requestedOrchestrationId,
+      activeOrchestrationId,
+    );
+    const planningRun = isPlanningRun(pipeline.id, milestoneId, featureId);
+    const { linkedMilestone, linkedFeature } = this.linkMilestone(
+      projectPath,
+      milestoneId,
+      featureId,
+    );
     const usesEngine = pipelineUsesEngine(pipeline);
     if (usesEngine) {
-      const engineId = engine ?? "claude-code";
-      getEngineAdapter(engineId);
-      assertEngineId(engineId);
-      const connection = this.settings.getEngineConnection(projectPath.id, engineId);
-      const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
-      if (mode?.requiresApiKey && !connection.apiKey) {
-        throw new Error(
-          `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
-        );
-      }
-      if (model !== undefined) {
-        await this.requireOfferedModel(engineId, model);
-      }
+      await this.requireEngineReady(projectPath, engine ?? "claude-code", model);
     }
-    await ensureProjectDataDir(projectPath);
-    const runId = randomUUID().slice(0, 8);
-    const admitted = await this.store.repositoryFor(projectPath).admitRun(runId);
-    if (!admitted) {
-      throw new Error(
-        "A run is already active in this project — wait for it to finish or abort it before starting another.",
-      );
-    }
+    const runId = await this.admitRun(projectPath);
     const run = createInitialRunState({
       runId,
       number: this.store.takeRunNumber(projectPath.id),
