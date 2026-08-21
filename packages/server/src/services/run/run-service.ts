@@ -58,13 +58,13 @@ import { engineLabel } from "../../domain/rules/engine-label.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
-  OrchestrationHooks,
   PipelineWorkflowInput,
-  ProductHooks,
   RunCompletionStatus,
   RunProjection,
   WorkflowDeps,
 } from "../../workflow/types.ts";
+import type { OrchestrationService } from "../orchestration-service.ts";
+import type { ProductProcessService } from "../product-process-service.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
@@ -116,8 +116,7 @@ export class RunService implements RunProjection {
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
   private readonly projectListeners = new ListenerRegistry<RunSummary>();
-  private orchestration?: OrchestrationHooks;
-  private product?: ProductHooks;
+  private orchestration?: OrchestrationService;
 
   constructor(
     private readonly registry: ProjectRegistry,
@@ -125,6 +124,7 @@ export class RunService implements RunProjection {
     private readonly rosters: ModelRosterService,
     private readonly automation: AutomationConfigStore,
     private readonly deployment: DeploymentRunner,
+    private readonly product?: ProductProcessService,
   ) {
     this.store = new RunStore(registry);
     this.milestones = new MilestoneService(registry, () => this);
@@ -141,7 +141,7 @@ export class RunService implements RunProjection {
       automation: this.automation,
       deployment: this.deployment,
       orchestration: () => this.orchestration,
-      product: () => this.product,
+      product: this.product,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
@@ -240,16 +240,9 @@ export class RunService implements RunProjection {
     return this.store.allRuns();
   }
 
-  registerStageOutputConsumer(consumer: StageOutputConsumer): void {
-    this.stageOutputConsumers.push(consumer);
-  }
-
-  registerOrchestration(orchestration: OrchestrationHooks): void {
+  registerOrchestration(orchestration: OrchestrationService): void {
     this.orchestration = orchestration;
-  }
-
-  registerProduct(product: ProductHooks): void {
-    this.product = product;
+    this.stageOutputConsumers.push(orchestration);
   }
 
   inheritedRunOptions(runId: string): InheritedRunOptions {

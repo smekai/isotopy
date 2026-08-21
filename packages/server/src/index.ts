@@ -16,10 +16,8 @@ const rosters = new ModelRosterService();
 const automation = new AutomationConfigStore();
 const deployment = new DeploymentRunner();
 const product = new ProductProcessService(automation);
-const runs = new RunService(registry, settings, rosters, automation, deployment);
-runs.registerProduct(product);
+const runs = new RunService(registry, settings, rosters, automation, deployment, product);
 const orchestrations = new OrchestrationService(registry, runs, settings);
-runs.registerStageOutputConsumer(orchestrations);
 runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();

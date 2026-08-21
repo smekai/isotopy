@@ -15,6 +15,40 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-21 — The projection stays narrow; the hooks beside it collapse
+
+**Context:** three interfaces in `workflow/types.ts` each had exactly one implementation —
+`RunProjection` (34 methods, `RunService`), `OrchestrationHooks` (12, `OrchestrationService`)
+and `ProductHooks` (2, `ProductProcessService`). An audit read all three as ceremony: a type
+restating the public surface of the single class behind it, which A2 does not ask for.
+
+**Decision:** `RunProjection` **stays**; the other two are replaced by the class types.
+
+The difference is what the seam excludes. `RunService` also exposes `approveGate`,
+`resolveLimit` and `postMessage`, which *send signals into the running workflow*. Reaching one
+from inside a durable step would re-enter the workflow that is currently executing it, and the
+projection is what makes those methods unreachable from `workflow/` — interface segregation
+doing real work, not a restatement. `bindOpenWorkflowRun` left the interface: `RunService` only
+ever called it on itself.
+
+`OrchestrationHooks` and `ProductHooks` excluded nothing their services would not; they existed
+because both were registered *after* `RunService` was constructed. `ProductProcessService` is
+built first, so it became a constructor parameter and its late-binding getter went. The
+orchestration getter stays: `RunService` and `OrchestrationService` construct mutually, so the
+late binding there is structural rather than incidental. Registration also collapsed from two
+calls to one — `OrchestrationService` implements `StageOutputConsumer`, so the one
+`registerOrchestration` now does both jobs.
+
+**Consequence:** `workflow/types.ts` and `services/orchestration-service.ts` now reference each
+other. The cycle is **type-only**, erased at emit, and `pnpm build` confirms it; there is no
+runtime cycle and no `import/no-cycle` rule. Should a bundler ever object, `Pick<
+OrchestrationService, …>` aliases would keep the collapse without the hand-maintained interface.
+
+**Rejected:** collapsing all three (loses the reentrancy guard on the run's signal API); keeping
+all three (two of them cost maintenance and bought nothing).
+
+---
+
 ## 2026-08-20 — Every role remembers this project, and a run has exactly one closeout
 
 **Context:** two stores were wrong at once. A handoff dies with its run, so every role began each

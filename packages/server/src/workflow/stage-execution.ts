@@ -95,7 +95,7 @@ async function productEnvironment(
   return buildProductEnvironment({
     apiBaseUrl: `http://localhost:${config.port}`,
     projectId: run.projectId,
-    runningUrl: deps.product()?.urlFor(run.projectId),
+    runningUrl: deps.product?.urlFor(run.projectId),
   });
 }
 

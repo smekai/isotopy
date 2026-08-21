@@ -92,13 +92,18 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const rosters = new ModelRosterService();
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
-  const orchestrator = new RunService(registry, settings, rosters, automation, deployment);
+  const product = new ProductProcessService(automation, unspawnedProduct());
+  const orchestrator = new RunService(
+    registry,
+    settings,
+    rosters,
+    automation,
+    deployment,
+    product,
+  );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings);
-  orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
-  const product = new ProductProcessService(automation, unspawnedProduct());
-  orchestrator.registerProduct(product);
   const app = createApp({
     runs: orchestrator,
     milestones: orchestrator.milestones,
@@ -165,14 +170,19 @@ export async function restartApp(): Promise<RestartedApp> {
   const rosters = new ModelRosterService();
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
-  const orchestrator = new RunService(registry, settings, rosters, automation, deployment);
+  const product = new ProductProcessService(automation, unspawnedProduct());
+  const orchestrator = new RunService(
+    registry,
+    settings,
+    rosters,
+    automation,
+    deployment,
+    product,
+  );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings);
-  orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
-  const product = new ProductProcessService(automation, unspawnedProduct());
-  orchestrator.registerProduct(product);
   return {
     app: createApp({
       runs: orchestrator,
