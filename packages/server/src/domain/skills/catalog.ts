@@ -5,9 +5,14 @@ export interface CatalogEntry {
 
 export const PERSONA_CATALOG: CatalogEntry[] = [
   {
+    id: "orchestrator",
+    summary:
+      "Orchestrator — you. Close a run out yourself; no specialist saw the whole run. Never compose yourself to plan, implement, review, or verify.",
+  },
+  {
     id: "project-manager",
     summary:
-      "Product Manager — turns intent into reviewable feature scope and preserves delivery knowledge across runs.",
+      "Product Manager — turns intent into reviewable feature scope.",
   },
   {
     id: "product-designer",

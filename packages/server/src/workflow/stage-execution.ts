@@ -13,7 +13,7 @@ import type {
   EngineId,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
-  RunArtifactRecord,
+  RunCloseoutRecord,
   RunArtifacts,
   RunState,
   StageDefinition,
@@ -31,6 +31,7 @@ import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { toolCacheDir } from "../paths.ts";
+import { capturePersonaNotes } from "../services/persona-notes-store.ts";
 import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -426,9 +427,16 @@ export async function runQuestionMediationWork(
   };
 }
 
-function reviewRecord(artifacts: RunArtifacts): RunArtifactRecord {
-  return { report: artifacts, validationErrors: [], collectedAt: nowIso() };
+function reviewRecord(artifacts: RunArtifacts): RunCloseoutRecord {
+  return {
+    report: { ...artifacts, tasks: [], completedTaskIds: [], unresolvedTaskIds: [], cleanup: [] },
+    createdTasks: [],
+    cleanup: { removed: [], rejected: [] },
+    validationErrors: [],
+    completedAt: nowIso(),
+  };
 }
+
 
 export async function runOrchestratorReviewWork(
   deps: WorkflowDeps,
@@ -473,9 +481,10 @@ export async function runOrchestratorReviewWork(
   if (deps.isCancelled(run.id)) {
     return null;
   }
-  const review = readReview(outcome);
-  if (review.artifacts) {
-    await deps.projection.captureRunArtifacts(run.id, review.artifacts);
+  const closedOut = deps.projection.getRun(run.id)?.closeout !== undefined;
+  const review = readReview(outcome, !closedOut);
+  if (!closedOut && review.artifacts) {
+    await deps.projection.captureRunCloseout(run.id, review.artifacts);
   }
   try {
     await orchestration.recordReview(request, context, review);
@@ -488,7 +497,7 @@ export async function runOrchestratorReviewWork(
   return null;
 }
 
-function readReview(outcome: EngineRunResult): RunReview {
+function readReview(outcome: EngineRunResult, artifactsExpected: boolean): RunReview {
   if (!outcome.success) {
     return { errors: [outcome.errorMessage ?? "Orchestrator review failed"] };
   }
@@ -497,7 +506,7 @@ function readReview(outcome: EngineRunResult): RunReview {
   const decision = extractOrchestratorDecision(output);
   const review: RunReview = {
     errors: [
-      ...(artifacts.ok
+      ...(artifacts.ok || !artifactsExpected
         ? []
         : [`Run artifacts: ${formatValidationIssues(artifacts.issues)}`]),
       ...(decision.ok
@@ -620,7 +629,8 @@ export async function runStageWork(
     };
   }
 
-  const settled = await settleStageOutput(projection, runId, stageDef, decision);
+  const reported = await withNotesRemoved(deps, run, stageDef, decision);
+  const settled = await settleStageOutput(projection, runId, stageDef, reported);
   if (settled.verdict !== undefined) {
     projection.setVerdict(runId, stageDef.id, settled.verdict);
   }
@@ -654,6 +664,32 @@ export async function runStageWork(
     startedAt,
     completedAt: nowIso(),
   };
+}
+
+async function withNotesRemoved(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+  decision: EngineStageOutcome,
+): Promise<EngineStageOutcome> {
+  if (decision.output === undefined) {
+    return decision;
+  }
+  const capture = await capturePersonaNotes(
+    deps.registry.resolve(run.projectId),
+    stageDef.skill,
+    decision.output,
+  ).catch((error: unknown) => ({
+    report: decision.output ?? "",
+    issue: messageOf(error),
+  }));
+  if (capture.issue !== undefined) {
+    deps.projection.log(run.id, stageDef.id, {
+      level: "warn",
+      message: `Notes for the next run were not saved — ${capture.issue}`,
+    });
+  }
+  return { ...decision, output: capture.report };
 }
 
 async function settleStageOutput(

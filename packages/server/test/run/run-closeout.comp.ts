@@ -7,8 +7,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@isotopy/core";
+import type { StageDefinition } from "@isotopy/core";
 import type { ProjectPath } from "../../src/paths.ts";
-import { applyProductManagerCloseout } from "../../src/services/consumers/closeout-consumer.ts";
+import {
+  CloseoutConsumer,
+  applyCloseoutReport,
+} from "../../src/services/consumers/closeout-consumer.ts";
+import type { ProjectRegistry } from "../../src/services/project-registry.ts";
 
 const roots: string[] = [];
 
@@ -90,7 +95,7 @@ test("only the tasks the report calls completed move to Done", async () => {
   await writeTaskBoard(project);
 
   // Act
-  const { record, reportErrors } = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
@@ -109,7 +114,7 @@ test("only the tasks the report calls completed move to Done", async () => {
       path.join(project.dataDir, "runs", run.id, "closeout", "closeout.md"),
       "utf8",
     ),
-  ).toContain("# Product Manager closeout");
+  ).toContain("# Run closeout");
 });
 
 test("cleanup deletes inside the run directory and refuses to escape it", async () => {
@@ -123,7 +128,7 @@ test("cleanup deletes inside the run directory and refuses to escape it", async 
   await writeFile(path.join(project.root, "user-work.txt"), "preserve");
 
   // Act
-  const { record } = await applyProductManagerCloseout(
+  const { record } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
@@ -146,10 +151,10 @@ test("closing the same run out twice does not file the follow-up task again", as
   const run = makeCloseoutRun();
   await writeTaskBoard(project);
   const output = closeoutOutput(PARTIAL_DELIVERY, "FAIL");
-  await applyProductManagerCloseout(project, run, output);
+  await applyCloseoutReport(project, run, output);
 
   // Act
-  const { record: second } = await applyProductManagerCloseout(project, run, output);
+  const { record: second } = await applyCloseoutReport(project, run, output);
 
   // Assert
   expect(second.createdTasks).toEqual([]);
@@ -190,7 +195,7 @@ test("keeps findings and follow-up tasks when the agent writes a hyphenated seve
   };
 
   // Act
-  const { record, reportErrors } = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(report, "PASS"),
@@ -215,7 +220,7 @@ test("a task-board failure is recorded in the closeout without making the report
   await writeFile(path.join(tasksDir, "config.json"), "{ not json");
 
   // Act
-  const { record, reportErrors } = await applyProductManagerCloseout(
+  const { record, reportErrors } = await applyCloseoutReport(
     project,
     run,
     closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
@@ -226,6 +231,47 @@ test("a task-board failure is recorded in the closeout without making the report
   expect(record.validationErrors.join("\n")).toContain("Task creation failed");
 });
 
+
+// TASK-150 made a team composed per run, so `team-<id>-<n>` is now the common
+// pipeline id and `full-delivery` the exception. The consumer used to fire only
+// on the fixed pipeline, which left every composed team's closeout inert: the
+// report was written, and no task ever moved.
+test("a composed team's closeout is applied, not ignored for having another pipeline id", async () => {
+  // Arrange
+  const project = await makeProject();
+  const run = makeComposedTeamRun();
+  await writeTaskBoard(project);
+
+  // Act
+  const rejection = await new CloseoutConsumer(registryFor(project)).consume(
+    run,
+    COMPOSED_CLOSEOUT_STAGE,
+    closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
+  );
+
+  // Assert
+  expect(rejection).toBeUndefined();
+  expect(run.closeout?.createdTasks).toMatchObject([{ id: "TASK-003" }]);
+  expect(await readFile(path.join(project.root, ".tasks", "DONE.md"), "utf8"))
+    .toContain("## TASK-001:");
+});
+
+test("a stage that is not a closeout is left alone, whatever pipeline it belongs to", async () => {
+  // Arrange
+  const project = await makeProject();
+  const run = makeComposedTeamRun();
+
+  // Act
+  const rejection = await new CloseoutConsumer(registryFor(project)).consume(
+    run,
+    { ...COMPOSED_CLOSEOUT_STAGE, stepTask: "implement-feature" },
+    closeoutOutput(PARTIAL_DELIVERY, "FAIL"),
+  );
+
+  // Assert
+  expect(rejection).toBeUndefined();
+  expect(run.closeout).toBeUndefined();
+});
 /** An empty project root, swept by the afterEach above. */
 async function makeProject(): Promise<ProjectPath> {
   const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-closeout-"));
@@ -260,4 +306,30 @@ function makeCloseoutRun() {
 
 function closeoutOutput(report: object, verdict: "PASS" | "FAIL"): string {
   return `\`\`\`isotopy-closeout\n${JSON.stringify(report)}\n\`\`\`\n\nVERDICT: ${verdict}`;
+}
+
+const COMPOSED_CLOSEOUT_STAGE: StageDefinition = {
+  id: "wrap-up",
+  label: "Closing out",
+  skill: "orchestrator",
+  stepTask: "closeout-feature",
+};
+
+function makeComposedTeamRun() {
+  return createInitialRunState({
+    runId: "run-002",
+    number: 2,
+    projectId: "project",
+    pipeline: {
+      id: "team-abc123-1",
+      name: "Delivery pair",
+      description: "A team the Orchestrator composed for this run.",
+      groups: [{ stages: [COMPOSED_CLOSEOUT_STAGE] }],
+    },
+    sourceTaskIds: ["TASK-001", "TASK-002"],
+  });
+}
+
+function registryFor(project: ProjectPath): ProjectRegistry {
+  return { resolve: () => project } as unknown as ProjectRegistry;
 }

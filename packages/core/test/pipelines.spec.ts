@@ -171,3 +171,10 @@ test("an internal pipeline ignores gate overrides, because nothing offers them a
 
   expect(applyGatePreferences(pipeline, { "orchestration:orchestrate": true })).toBe(pipeline);
 });
+
+test("the closeout belongs to the Orchestrator, the only role that saw the whole run", () => {
+  const pipeline = findPipeline("full-delivery");
+  assert(pipeline, "expected the full-delivery pipeline to exist");
+
+  expect(stageNamed(pipeline, "closeout").skill).toBe("orchestrator");
+});

@@ -1,4 +1,4 @@
-import type { ProductManagerCloseout } from "@isotopy/core";
+import type { CloseoutReport } from "@isotopy/core";
 import { describe, expect, it, test } from "vitest";
 import {
   renderCancelledCleanupReport,
@@ -6,18 +6,20 @@ import {
   renderCloseout,
   renderCloseoutBody,
   renderMilestoneSummary,
-  renderRunArtifacts,
-  renderRunArtifactsBody,
 } from "../src/domain/markdown/closeout.ts";
 import {
   renderMilestonePlanningContext,
   renderMilestoneRevisionContext,
   renderPriorMilestoneCloseouts,
 } from "../src/domain/markdown/planning.ts";
-import { buildContinuationPrompt, buildStagePrompt } from "../src/domain/markdown/stage.ts";
+import {
+  STAGE_NOTES_INVITATION,
+  buildContinuationPrompt,
+  buildStagePrompt,
+} from "../src/domain/markdown/stage.ts";
 import { renderGatePreference } from "../src/domain/markdown/orchestration.ts";
 
-const CLOSEOUT: ProductManagerCloseout = {
+const CLOSEOUT: CloseoutReport = {
   summary: "Delivered\r\ncleanly.",
   deliveredScope: ["Feature one\nwith details"],
   decisions: ["Keep\nboth lines"],
@@ -41,7 +43,7 @@ describe("artifact Markdown", () => {
   it("renders closeout sections with normalized structure and one terminal newline", () => {
     expect(renderCloseout(CLOSEOUT)).toBe(
       [
-        "# Product Manager closeout",
+        "# Run closeout",
         "",
         "Delivered",
         "cleanly.",
@@ -97,16 +99,6 @@ describe("artifact Markdown", () => {
     );
   });
 
-  it("renders artifacts as a document with a title and as a body without one", () => {
-    const report = { ...CLOSEOUT, deliveredScope: [], findings: [] };
-
-    expect(renderRunArtifacts(report)).toContain("# Orchestrator run artifacts");
-    expect(renderRunArtifactsBody(report, "####")).not.toContain(
-      "# Orchestrator run artifacts",
-    );
-    expect(renderRunArtifactsBody(report, "####")).toContain("#### Decisions");
-  });
-
   it("renders cleanup outcomes and an explicit cancellation report", () => {
     expect(renderCleanupReport({ removed: [], rejected: [] })).toBe(
       "# Cleanup report\n\nNo cleanup paths were requested.\n",
@@ -146,7 +138,8 @@ describe("prompt Markdown", () => {
         "## Task\n\nBuild\nthis\n\n" +
         "## Handoff from previous steps\n\n" +
         "These are reports from the boxes that ran before you, in order. They describe intent — the working directory is the source of truth. Verify rather than assume.\n\n" +
-        "### Software Architect\n\nReview\nnotes",
+        "### Software Architect\n\nReview\nnotes\n\n" +
+        STAGE_NOTES_INVITATION,
     );
   });
 
@@ -174,7 +167,8 @@ describe("prompt Markdown", () => {
         "### What you asked on turn 1\n\nWhich database?\n\n" +
         "### The answer you were given\n\nPostgres\n\n" +
         "### What you asked on turn 2\n\nWhich table?\n\n" +
-        "### The answer you were given\n\nsettings",
+        "### The answer you were given\n\nsettings\n\n" +
+        STAGE_NOTES_INVITATION,
     );
   });
 

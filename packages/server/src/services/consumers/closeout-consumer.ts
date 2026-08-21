@@ -1,25 +1,22 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { agentForStage } from "@isotopy/core";
 import type {
   CleanupResult,
-  ProductManagerCloseout,
+  CloseoutReport,
   RunCloseoutRecord,
   RunState,
   StageDefinition,
 } from "@isotopy/core";
 import {
-  parseProductManagerCloseout,
+  parseCloseoutReport,
   validateSourceTaskOutcome,
 } from "../../domain/rules/closeout.ts";
-import {
-  renderCleanupReport,
-  renderCloseout,
-} from "../../domain/markdown/closeout.ts";
 import { runsDir } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
+import { persistRunCloseout } from "../run-evidence.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
@@ -37,10 +34,10 @@ export class CloseoutConsumer implements StageOutputConsumer {
     stageDef: StageDefinition,
     output: string,
   ): Promise<StageOutputRejection | undefined> {
-    if (run.pipelineId !== PIPELINE_ID || stageDef.id !== STAGE_ID) {
+    if (stageDef.stepTask !== CLOSEOUT_STEP_TASK) {
       return undefined;
     }
-    const applied = await applyProductManagerCloseout(
+    const applied = await applyCloseoutReport(
       this.registry.resolve(run.projectId),
       run,
       output,
@@ -55,12 +52,12 @@ export class CloseoutConsumer implements StageOutputConsumer {
   }
 }
 
-export async function applyProductManagerCloseout(
+export async function applyCloseoutReport(
   projectPath: ProjectPath,
   run: RunState,
   output: string,
 ): Promise<CloseoutApplication> {
-  const parsed = parseProductManagerCloseout(output);
+  const parsed = parseCloseoutReport(output);
   const review = validateSourceTaskOutcome(run, parsed.report);
   const reportErrors = [...parsed.validationErrors, ...review.contradictions];
   const sideEffectErrors: string[] = [];
@@ -104,18 +101,16 @@ export async function applyProductManagerCloseout(
     ],
     completedAt: nowIso(),
   };
-  await persistRunCloseout(projectPath, run, record);
+  await persistRunCloseout(projectPath, run.id, record);
   return { record, reportErrors };
 }
 
-const PIPELINE_ID = "full-delivery";
-
-const STAGE_ID = "closeout";
+const CLOSEOUT_STEP_TASK = "closeout-feature";
 
 async function cleanupRunTemp(
   projectPath: ProjectPath,
   runId: string,
-  report: ProductManagerCloseout,
+  report: CloseoutReport,
 ): Promise<CleanupResult> {
   const tempRoot = path.resolve(runsDir(projectPath), runId, "tmp");
   const removed: string[] = [];
@@ -141,47 +136,4 @@ async function cleanupRunTemp(
     removed.push(relative);
   }
   return { removed, rejected };
-}
-
-async function persistRunCloseout(
-  projectPath: ProjectPath,
-  run: RunState,
-  record: RunCloseoutRecord,
-): Promise<void> {
-  const closeoutDir = path.join(runsDir(projectPath), run.id, "closeout");
-  await mkdir(closeoutDir, { recursive: true });
-  await Promise.all([
-    writeFile(
-      path.join(closeoutDir, "closeout.json"),
-      `${JSON.stringify(record, null, 2)}\n`,
-    ),
-    writeFile(
-      path.join(closeoutDir, "closeout.md"),
-      renderCloseout(record.report),
-    ),
-    writeFile(
-      path.join(closeoutDir, "cleanup-report.md"),
-      renderCleanupReport(record.cleanup),
-    ),
-  ]);
-
-  if (run.milestoneId) {
-    const milestoneRunsDir = path.join(
-      projectPath.dataDir,
-      "milestones",
-      run.milestoneId,
-      "runs",
-    );
-    await mkdir(milestoneRunsDir, { recursive: true });
-    await Promise.all([
-      writeFile(
-        path.join(milestoneRunsDir, `${run.id}.json`),
-        `${JSON.stringify(record, null, 2)}\n`,
-      ),
-      writeFile(
-        path.join(milestoneRunsDir, `${run.id}.md`),
-        renderCloseout(record.report),
-      ),
-    ]);
-  }
 }

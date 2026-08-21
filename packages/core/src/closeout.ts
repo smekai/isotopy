@@ -49,12 +49,12 @@ export function refineDeclaredFindings(
   });
 }
 
-export const productManagerCloseoutSchema = z
+export const closeoutReportSchema = z
   .object(CLOSEOUT_SHAPE)
   .strict()
   .superRefine(refineDeclaredFindings);
 
-export type ProductManagerCloseout = z.infer<typeof productManagerCloseoutSchema>;
+export type CloseoutReport = z.infer<typeof closeoutReportSchema>;
 
 export const createdTaskReferenceSchema = z
   .object({
@@ -77,7 +77,7 @@ export type CleanupResult = z.infer<typeof cleanupResultSchema>;
 
 export const runCloseoutRecordSchema = z
   .object({
-    report: productManagerCloseoutSchema,
+    report: closeoutReportSchema,
     createdTasks: z.array(createdTaskReferenceSchema),
     cleanup: cleanupResultSchema,
     validationErrors: z.array(z.string()),

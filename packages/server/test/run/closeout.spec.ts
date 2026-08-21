@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { productManagerCloseoutSchema } from "@isotopy/core";
-import type { ProductManagerCloseout, RunState } from "@isotopy/core";
+import { closeoutReportSchema } from "@isotopy/core";
+import type { CloseoutReport, RunState } from "@isotopy/core";
 import {
-  parseProductManagerCloseout,
+  parseCloseoutReport,
   validateSourceTaskOutcome,
 } from "../../src/domain/rules/closeout.ts";
 
@@ -19,12 +19,12 @@ const VALID_CLOSEOUT = {
 };
 
 function parseBlock(input: unknown) {
-  return parseProductManagerCloseout(
+  return parseCloseoutReport(
     `\`\`\`isotopy-closeout\n${JSON.stringify(input)}\n\`\`\``,
   );
 }
 
-describe("parseProductManagerCloseout", () => {
+describe("parseCloseoutReport", () => {
   it("parses a whole closeout, including the hyphenated severity an agent writes", () => {
     const parsed = parseBlock({
       ...VALID_CLOSEOUT,
@@ -86,14 +86,14 @@ describe("parseProductManagerCloseout", () => {
       ]),
     );
     expect(parsed.validationErrors).toHaveLength(7);
-    expect(productManagerCloseoutSchema.safeParse(parsed.report).success).toBe(true);
+    expect(closeoutReportSchema.safeParse(parsed.report).success).toBe(true);
   });
 
   it("falls back to the raw output when the block is missing or unusable", () => {
-    expect(parseProductManagerCloseout("No block here.").validationErrors).toEqual([
+    expect(parseCloseoutReport("No block here.").validationErrors).toEqual([
       "Missing fenced isotopy-closeout JSON block",
     ]);
-    expect(parseProductManagerCloseout("```isotopy-closeout\n{oops\n```").validationErrors)
+    expect(parseCloseoutReport("```isotopy-closeout\n{oops\n```").validationErrors)
       .toEqual(["isotopy-closeout block is not valid JSON"]);
     expect(parseBlock(["not", "a", "closeout"]).validationErrors[0]).toContain(
       "closeout:",
@@ -146,12 +146,12 @@ function runWithSourceTasks(sourceTaskIds: string[]): RunState {
 }
 
 function closeoutFor(
-  overrides: Partial<ProductManagerCloseout> = {},
-): ProductManagerCloseout {
+  overrides: Partial<CloseoutReport> = {},
+): CloseoutReport {
   return {
     ...VALID_CLOSEOUT,
     findings: [],
     completedTaskIds: overrides.completedTaskIds ?? [],
     unresolvedTaskIds: overrides.unresolvedTaskIds ?? [],
-  } as ProductManagerCloseout;
+  } as CloseoutReport;
 }

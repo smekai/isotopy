@@ -889,8 +889,58 @@ TASK-053 follow-up. Personas are **layered** instead, composed by the pure
 4. plus `<project>/.isotopy/skills/<id>.project.md` **appended** — the default way
    to customise, carrying only the project's tweaks so improvements to the base
    keep reaching it.
+5. plus `<project>/.isotopy/skills/<id>.notes.md` **appended** — what this role
+   learned about this project on earlier runs. Layer 4 is written by a human;
+   layer 5 is written by the role itself.
 
 The cache is keyed by resolved path, not skill id, because the data roots differ
 per project and an id-keyed cache would leak one project's persona into another.
 See [`architecture.md`](./architecture.md) for how the `architect`
 persona is generated from a single source.
+
+## A role's memory of the project (`services/persona-notes-store.ts`, `domain/rules/persona-notes.ts`)
+
+The fifth skill layer above. Four properties are load-bearing and none is obvious
+from the code alone.
+
+**The invitation rides with the step task, not with the prompt.** `buildStagePrompt`
+appends `STAGE_NOTES_INVITATION` only when a `stepTask` is present. A single-box run
+has no step task, and its prompt must stay *exactly* what the user typed —
+`stage-context.spec.ts` pins that. A persona-backed stage always has one, so no real
+role loses the invitation.
+
+**Capture runs before the report is stored, not after.** `withNotesRemoved` sits ahead
+of `settleStageOutput`, and what settles is the report with the block taken out. The
+order is the whole guarantee: `captureStageOutput` persists into `run.stageOutputs`,
+and `upstreamFor` replays that verbatim to every later stage — so capturing afterwards
+left a role's private notes in the next box's prompt, private only on the *next* run.
+
+**A block is removed whether or not it parsed.** It is addressed to Isotopy, never to
+the next persona, so a malformed one is stripped too and reported as a `warn` on the
+stage. `capturePersonaNotes` returns `{ report, issue? }` rather than throwing: notes
+are optional, and a role that writes bad JSON in an optional trailer should not lose
+the work it just did. `extractPersonaNotes` leaves `notes` undefined when there is no
+block at all — unlike `extractRunArtifacts`, whose absence is a defect worth reporting.
+
+**A note is one line.** `personaNotesSchema` refuses embedded newlines. Storage is one
+Markdown bullet per note and `parsePersonaNotes` reads only bullet lines, so a
+multi-line note would come back truncated at its first newline — losing project memory
+silently, which is worse than refusing it at the boundary.
+
+**A repeated note moves to the end.** `mergePersonaNotes` dedupes by appending: a note
+already stored and reported again is removed from its old position and re-added last.
+The cap (`MAX_NOTES = 40`) then evicts from the front, so what survives is what roles
+keep re-observing rather than what they observed first. Without the move, the cap would
+freeze the earliest 40 facts forever.
+
+Writes are tmp-then-rename because two stages of the same run can settle close together
+and a half-written notes file would be parsed as truncated on the next read.
+`personaNotesByRole` tolerates a missing directory and skips empty files, so a project
+that has never produced a note contributes nothing to the Orchestrator's digest rather
+than a list of empty roles.
+
+The `NOTES_ID` guard (`/^[a-z0-9-]+$/`) is applied on both the write and the scan. A
+skill id reaches this code from a pipeline definition, which the Orchestrator can
+compose — so it is untrusted enough to keep out of a path join.
+
+---

@@ -8,7 +8,7 @@ import type {
   MessageKind,
   MessageRole,
   PipelineDefinition,
-  RunArtifactRecord,
+  RunCloseoutRecord,
   RunEvent,
   RunMessage,
   RunState,
@@ -40,7 +40,7 @@ import { AutomationConfigStore } from "../automation-config-store.ts";
 import { DeploymentRunner } from "../deployment-runner.ts";
 import {
   cleanupCancelledRun,
-  persistRunArtifacts,
+  persistRunCloseout,
   persistRunDeploymentArtifacts,
 } from "../run-evidence.ts";
 import { RunChangeCollector } from "../run-change-collector.ts";
@@ -786,11 +786,11 @@ export class RunService implements RunProjection {
     void this.store.flushPersist(runId);
   }
 
-  async captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void> {
+  async captureRunCloseout(runId: string, record: RunCloseoutRecord): Promise<void> {
     const run = this.live(runId);
     if (!run) return;
-    run.artifacts = record;
-    await persistRunArtifacts(this.registry.resolve(run.projectId), runId, record);
+    run.closeout = record;
+    await persistRunCloseout(this.registry.resolve(run.projectId), runId, record);
     void this.store.flushPersist(runId);
   }
 

@@ -106,7 +106,7 @@ describe("Task board Markdown", () => {
     expect(renderWorkLogEntry("TASK-004", "2026-07-29", "run-1")).toBe(
       "## TASK-004 — 2026-07-29\n" +
         "**What:** Completed by Full Delivery run run-1.\n" +
-        "**Outcome:** Evidence and follow-ups are recorded in the Product Manager closeout.\n\n" +
+        "**Outcome:** Evidence and follow-ups are recorded in the run closeout.\n\n" +
         "---\n",
     );
   });

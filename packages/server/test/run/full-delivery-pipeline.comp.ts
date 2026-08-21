@@ -153,7 +153,7 @@ test("a blocking architecture review continues through QA and closeout", async (
     .anticipate({ as: "QA Engineer", prompt: /Missing rollback boundary/ })
     .reports(QA_PASS);
   ctx.engine
-    .anticipate({ as: "Product Manager closeout", prompt: /Missing rollback boundary/ })
+    .anticipate({ as: "Orchestrator closeout", prompt: /Missing rollback boundary/ })
     .reports(CLOSEOUT);
   ctx.engine.anticipateRunReview();
 
@@ -177,7 +177,7 @@ test("an engine failure skips unsafe work but still runs closeout", async () => 
   ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
   ctx.engine.anticipate({ as: "QA Engineer" }).fails("test runner crashed");
   ctx.engine
-    .anticipate({ as: "Product Manager closeout" })
+    .anticipate({ as: "Orchestrator closeout" })
     .reports(CLOSEOUT_AFTER_CRASH);
   ctx.engine.anticipateRunReview();
 
@@ -202,7 +202,7 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
     .reports("Missing rollback boundary\n\nVERDICT: FAIL");
   ctx.engine.anticipate({ as: "QA Engineer, first" }).fails("test runner crashed");
   ctx.engine
-    .anticipate({ as: "Product Manager closeout, first" })
+    .anticipate({ as: "Orchestrator closeout, first" })
     .reports(CLOSEOUT_AFTER_CRASH);
   ctx.engine.anticipateRunReview({ as: "Review of the failed pass" });
   const run = await startRun(ctx.app, PIPELINE);
@@ -210,7 +210,7 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
   await waitForRunStatus(ctx.app, run.id, "failed");
   ctx.engine.anticipate({ as: "QA Engineer, retry" }).reports(QA_PASS);
   ctx.engine
-    .anticipate({ as: "Product Manager closeout, retry" })
+    .anticipate({ as: "Orchestrator closeout, retry" })
     .reports(CLOSEOUT);
   ctx.engine.anticipateRunReview({ as: "Review of the retry" });
 
@@ -234,7 +234,7 @@ test("a closeout the Product Manager wrote as prose leaves the run needing atten
   ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
   ctx.engine.anticipate({ as: "Release Manager" }).reports(RELEASE_PASS);
   ctx.engine
-    .anticipate({ as: "Product Manager closeout" })
+    .anticipate({ as: "Orchestrator closeout" })
     .reports("Captured decisions and follow-up work\n\nVERDICT: PASS");
   ctx.engine.anticipateRunReview();
 
@@ -255,7 +255,7 @@ test("a closeout stage that returns nothing at all needs attention rather than p
   ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
   ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
   ctx.engine.anticipate({ as: "Release Manager" }).reports(RELEASE_PASS);
-  ctx.engine.anticipate({ as: "Product Manager closeout" }).reports("");
+  ctx.engine.anticipate({ as: "Orchestrator closeout" }).reports("");
   ctx.engine.anticipateRunReview();
 
   // Act
@@ -301,7 +301,7 @@ test("a preview deployment that fails fails the run rather than completing it", 
   ctx.engine.anticipate({ as: "Software Architect review" }).reports(REVIEW_PASS);
   ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
   ctx.engine.anticipate({ as: "Release Manager" }).reports(RELEASE_PASS);
-  ctx.engine.anticipate({ as: "Product Manager closeout" }).reports(CLOSEOUT);
+  ctx.engine.anticipate({ as: "Orchestrator closeout" }).reports(CLOSEOUT);
   ctx.engine.anticipateRunReview();
 
   // Act
@@ -323,7 +323,7 @@ test("a release handoff written as prose fails the stage — preview automation 
   ctx.engine
     .anticipate({ as: "Release Manager" })
     .reports("Release checklist ready\n\nVERDICT: PASS");
-  ctx.engine.anticipate({ as: "Product Manager closeout" }).reports(CLOSEOUT);
+  ctx.engine.anticipate({ as: "Orchestrator closeout" }).reports(CLOSEOUT);
   ctx.engine.anticipateRunReview();
 
   // Act
@@ -411,8 +411,8 @@ function anticipateDeliveryAndCloseout(): void {
     .reports(RELEASE_PASS);
   ctx.engine
     .anticipate({
-      as: "Product Manager closeout",
-      persona: /# Role: Product Manager/,
+      as: "Orchestrator closeout",
+      persona: /# Role: Orchestrator/,
       prompt: /# Assignment: Close out the feature run/,
     })
     .reports(CLOSEOUT);

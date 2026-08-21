@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FINDING_SEVERITIES } from "./milestones.ts";
-import { requiredText, requiredTexts, timestamp } from "./schema.ts";
+import { requiredText, requiredTexts } from "./schema.ts";
 
 export const closeoutFindingSchema = z
   .object({
@@ -26,12 +26,18 @@ export const runArtifactsSchema = z.object(RUN_ARTIFACTS_SHAPE).strict();
 
 export type RunArtifacts = z.infer<typeof runArtifactsSchema>;
 
-export const runArtifactRecordSchema = z
+/** Durable facts a persona learned about this project, carried into its next run. */
+export const personaNotesSchema = z
   .object({
-    report: runArtifactsSchema,
-    validationErrors: z.array(z.string()),
-    collectedAt: timestamp,
+    notes: z
+      .array(
+        requiredText.refine(
+          (note) => !/[\r\n]/.test(note),
+          "A note is one line — a note that spans lines cannot survive its Markdown storage",
+        ),
+      )
+      .min(1),
   })
   .strict();
 
-export type RunArtifactRecord = z.infer<typeof runArtifactRecordSchema>;
+export type PersonaNotes = z.infer<typeof personaNotesSchema>;

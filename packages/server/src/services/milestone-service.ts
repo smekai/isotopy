@@ -468,7 +468,7 @@ export class MilestoneService {
       const now = nowIso();
       feature.status =
         run.status === "completed" ? "completed" : "needs_attention";
-      const findings = run.closeout?.report.findings ?? run.artifacts?.report.findings;
+      const findings = run.closeout?.report.findings;
       if (findings) {
         feature.findings = findings.map((finding) => ({
           ...finding,

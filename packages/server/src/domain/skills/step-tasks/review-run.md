@@ -1,16 +1,19 @@
 # Assignment: Review a settled run and decide what happens next
 
 A run you own has finished. Read the orchestration goal, the approved team, the
-run's terminal status, its stage outputs, its Product Manager closeout if one was
-supplied, and any milestone context. Then do two things in one turn.
+run's terminal status, its stage outputs, its closeout if the pipeline carried a
+closeout stage, and any milestone context. Then do two things in one turn.
 
 ## First: collect the run's artifacts
 
-Consolidate what the run produced into durable facts a later run can use. When a
-Product Manager closeout was supplied, take its report as authoritative and
-condense it rather than re-deriving it from the raw stage outputs.
+Consolidate what the run produced into durable facts a later run can use.
 
-Return exactly one fenced `isotopy-run-artifacts` JSON block:
+**Skip this half entirely when a closeout is shown below.** That closeout is your
+own report from the run's closeout stage, and the artifacts are taken from it
+directly — writing them again would only give the same run two accounts that can
+disagree. Go straight to the decision.
+
+Otherwise, return exactly one fenced `isotopy-run-artifacts` JSON block:
 
 ````
 ```isotopy-run-artifacts

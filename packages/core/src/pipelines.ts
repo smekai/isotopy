@@ -167,7 +167,7 @@ export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
         {
           id: "closeout",
           label: "Closing out",
-          skill: "project-manager",
+          skill: "orchestrator",
           stepTask: "closeout-feature",
           executionPolicy: STAGE_EXECUTION_POLICIES.CLOSEOUT,
         },

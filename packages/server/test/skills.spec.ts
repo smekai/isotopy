@@ -7,7 +7,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { composeSkill } from "../src/domain/markdown/skill.ts";
 import { homeProjectPaths, skillsDir, userSkillsDir } from "../src/paths.ts";
-import { loadBundledPersona, loadSkill } from "../src/services/skills.ts";
+import {
+  loadBundledPersona,
+  loadSkill,
+  personaNotesPath,
+  projectSkillAddendumPath,
+} from "../src/services/skills.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
 const ADDENDUM = "Always use pnpm, never npm.";
@@ -114,4 +119,35 @@ describe("loadSkill", () => {
   test("an unknown skill resolves to undefined", async () => {
     expect(await loadSkill(project, "no-such-skill")).toBeUndefined();
   });
+});
+
+test("a persona's own notes come back on its next run, under their own heading", async () => {
+  await mkdir(skillsDir(project), { recursive: true });
+  await writeFile(personaNotesPath(project, "developer"), "- Migrations live in db/migrate\n");
+
+  const composed = await loadSkill(project, "developer");
+
+  expect(composed).toContain("Migrations live in db/migrate");
+  expect(composed).toContain("What earlier runs taught you about this project");
+});
+
+test("one persona's notes never reach another, because the file is keyed by skill", async () => {
+  await mkdir(skillsDir(project), { recursive: true });
+  await writeFile(personaNotesPath(project, "developer"), "- A Developer-only fact\n");
+
+  const composed = await loadSkill(project, "tester");
+
+  expect(composed).not.toContain("A Developer-only fact");
+});
+
+test("notes sit after the project's own instructions, so a project override still leads", async () => {
+  await mkdir(skillsDir(project), { recursive: true });
+  await writeFile(projectSkillAddendumPath(project, "developer"), "Always run pnpm lint.");
+  await writeFile(personaNotesPath(project, "developer"), "- Migrations live in db/migrate\n");
+
+  const composed = await loadSkill(project, "developer");
+
+  expect(composed?.indexOf("Always run pnpm lint")).toBeLessThan(
+    composed?.indexOf("Migrations live in db/migrate") ?? -1,
+  );
 });

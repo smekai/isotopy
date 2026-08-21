@@ -22,6 +22,7 @@ import {
   renderGatePreference,
   renderOrchestrationContext,
   renderOrchestrationFollowUp,
+  renderPersonaConstraints,
   renderQuestionMediationContext,
   renderRunReviewContext,
   renderTaskAfterRejection,
@@ -56,6 +57,7 @@ import type { ProjectPath } from "../paths.ts";
 import { OrchestrationRepository } from "../repository/orchestration-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
+import { personaNotesByRole } from "./persona-notes-store.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
@@ -755,9 +757,10 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [boardContext, closeoutContext] = await Promise.all([
+    const [boardContext, closeoutContext, personaNotes] = await Promise.all([
       taskBoardFor(projectPath).planningContext(),
       milestoneCloseoutContext(projectPath),
+      personaNotesByRole(projectPath),
     ]);
     return {
       goal,
@@ -768,6 +771,7 @@ export class OrchestrationService implements StageOutputConsumer {
       gatePreference: renderGatePreference(
         this.settings.getPreferences(projectPath.id).gates,
       ),
+      personaConstraints: renderPersonaConstraints(personaNotes),
     };
   }
 

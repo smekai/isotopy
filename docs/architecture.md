@@ -1069,7 +1069,7 @@ only for loading the tool's own `.env`.
 
 | Location | Holds | Scope |
 |----------|-------|-------|
-| `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `artifacts/artifacts.{json,md}` | One project |
+| `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
 | `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |

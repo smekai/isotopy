@@ -8,8 +8,9 @@ import type {
 } from "@isotopy/core";
 import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
 import type { ValidationIssue, ValidationResult } from "../domain/validation.ts";
+import { SKILL_ID } from "../domain/rules/persona-notes.ts";
 
-const STAGE_ID = /^[a-z0-9-]+$/;
+
 
 const PERSONA_IDS = new Set(PERSONA_CATALOG.map((entry) => entry.id));
 
@@ -17,7 +18,7 @@ const STEP_TASK_IDS = new Set(STEP_TASK_CATALOG.map((entry) => entry.id));
 
 function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  if (!STAGE_ID.test(role.id)) {
+  if (!SKILL_ID.test(role.id)) {
     issues.push({
       path: ["roles", index, "id"],
       message: "Role id must contain only lowercase letters, digits, and hyphens",
@@ -35,8 +36,24 @@ function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
       message: `Unknown step task: ${role.stepTask}`,
     });
   }
+  if (role.skill === ORCHESTRATOR_PERSONA && role.stepTask !== CLOSEOUT_STEP_TASK) {
+    issues.push({
+      path: ["roles", index, "skill"],
+      message: `The Orchestrator composes the team and closes it out; it cannot take ${role.stepTask}`,
+    });
+  }
+  if (role.stepTask === CLOSEOUT_STEP_TASK && role.skill !== ORCHESTRATOR_PERSONA) {
+    issues.push({
+      path: ["roles", index, "skill"],
+      message: `Only the Orchestrator closes a run out; ${role.skill} saw one step of it`,
+    });
+  }
   return issues;
 }
+
+const ORCHESTRATOR_PERSONA = "orchestrator";
+
+const CLOSEOUT_STEP_TASK = "closeout-feature";
 
 function duplicateIdIssues(roles: OrchestratorRole[]): ValidationIssue[] {
   const seen = new Set<string>();
@@ -58,7 +75,10 @@ function toStage(role: OrchestratorRole): StageDefinition {
     skill: role.skill,
     stepTask: role.stepTask,
     modelTier: role.modelTier,
-    executionPolicy: role.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD,
+    executionPolicy:
+      role.stepTask === CLOSEOUT_STEP_TASK
+        ? STAGE_EXECUTION_POLICIES.CLOSEOUT
+        : role.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD,
     gateAfter: role.gateAfter,
     interactive: role.interactive,
   };

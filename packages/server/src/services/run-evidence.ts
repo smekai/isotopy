@@ -2,13 +2,14 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   DeploymentResult,
-  RunArtifactRecord,
+  RunCloseoutRecord,
   RunChangeSet,
   RunReleaseRecord,
 } from "@isotopy/core";
 import {
   renderCancelledCleanupReport,
-  renderRunArtifacts,
+  renderCleanupReport,
+  renderCloseout,
 } from "../domain/markdown/closeout.ts";
 import {
   renderDeploymentResult,
@@ -20,19 +21,23 @@ import type { RunChangeBaseline } from "../schemas/run-change-baseline.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 
-export async function persistRunArtifacts(
+export async function persistRunCloseout(
   project: ProjectPath,
   runId: string,
-  record: RunArtifactRecord,
+  record: RunCloseoutRecord,
 ): Promise<void> {
-  const directory = path.join(runsDir(project), runId, "artifacts");
+  const directory = path.join(runsDir(project), runId, "closeout");
   await mkdir(directory, { recursive: true });
   await Promise.all([
     writeFile(
-      path.join(directory, "artifacts.json"),
+      path.join(directory, "closeout.json"),
       `${JSON.stringify(record, null, 2)}\n`,
     ),
-    writeFile(path.join(directory, "artifacts.md"), renderRunArtifacts(record.report)),
+    writeFile(path.join(directory, "closeout.md"), renderCloseout(record.report)),
+    writeFile(
+      path.join(directory, "cleanup-report.md"),
+      renderCleanupReport(record.cleanup),
+    ),
   ]);
 }
 

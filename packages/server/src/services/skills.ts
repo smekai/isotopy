@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { skillsDir, userSkillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
+import { SKILL_ID } from "../domain/rules/persona-notes.ts";
 
 export function loadBundledPersona(id: string): Promise<string | undefined> {
   return loadBundledMarkdown(PERSONA_DIR, id);
@@ -25,24 +26,31 @@ export function projectSkillAddendumPath(projectPath: ProjectPath, skillId: stri
   return path.join(skillsDir(projectPath), `${skillId}.project.md`);
 }
 
+export function personaNotesPath(projectPath: ProjectPath, skillId: string): string {
+  return path.join(skillsDir(projectPath), `${skillId}.notes.md`);
+}
+
 export async function loadSkill(
   projectPath: ProjectPath,
   skillId: string,
 ): Promise<string | undefined> {
-  const [bundled, userOverride, projectOverride, projectAddendum] = await Promise.all([
-    loadBundledPersona(skillId),
-    readCached(userSkillFilePath(skillId)),
-    readCached(projectSkillFilePath(projectPath, skillId)),
-    readCached(projectSkillAddendumPath(projectPath, skillId)),
-  ]);
+  const [bundled, userOverride, projectOverride, projectAddendum, accumulatedNotes] =
+    await Promise.all([
+      loadBundledPersona(skillId),
+      readCached(userSkillFilePath(skillId)),
+      readCached(projectSkillFilePath(projectPath, skillId)),
+      readCached(projectSkillAddendumPath(projectPath, skillId)),
+      readCached(personaNotesPath(projectPath, skillId)),
+    ]);
   return composeSkill({
     base: userOverride ?? bundled,
     projectOverride,
     projectAddendum,
+    accumulatedNotes,
   });
 }
 
-const PROMPT_ID = /^[a-z0-9-]+$/;
+
 const PERSONA_DIR = new URL("../domain/skills/personas/", import.meta.url);
 const STEP_TASK_DIR = new URL("../domain/skills/step-tasks/", import.meta.url);
 
@@ -50,7 +58,7 @@ async function loadBundledMarkdown(
   directory: URL,
   id: string,
 ): Promise<string | undefined> {
-  if (!PROMPT_ID.test(id)) {
+  if (!SKILL_ID.test(id)) {
     return undefined;
   }
   try {

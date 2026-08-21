@@ -15,6 +15,46 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-20 — Every role remembers this project, and a run has exactly one closeout
+
+**Context:** two stores were wrong at once. A handoff dies with its run, so every role began each
+run knowing nothing about a project it had already worked on three times. Meanwhile a settled run
+kept *two* accounts of itself — a closeout written by the Product Manager and a `RunArtifacts`
+report written by the Orchestrator's review — the second a strict subset of the first.
+
+**Each persona gets a private memory of the project**, stored beside its skill as
+`<skills>/<id>.notes.md` and layered into that persona's prompt and no other. Merged, deduped,
+capped at 40; a repeated note moves to the end, so the cap evicts what stopped being mentioned
+rather than what was learned first. Facts about the **project**, not a summary of the run — the
+handoff already carries that. *Rejected: one shared memory.* A QA Engineer's fact about flaky
+selectors is noise in an Architect's context, and a shared blob cannot tell the Orchestrator *who
+knows what* when it composes.
+
+**The closeout belongs to the Orchestrator.** It consolidates the whole run; the Product Manager
+only ever saw its own planning stage, so having it adjudicate asked one specialist to grade the
+others. *Rejected: folding the closeout into the settle-time review.* The review only runs when an
+orchestration exists and `routes/runs.ts` starts any pipeline directly, so a `full-delivery` run
+launched from the run list would have silently stopped creating follow-up tasks. The closeout stays
+a stage; only its persona changed.
+
+**A stage is a closeout because of its step task.** `CloseoutConsumer` keyed on
+`full-delivery`/`closeout`, so after `TASK-150` made teams composed per run, a composed team's
+closeout was parsed by nobody — no follow-up tasks, no source tasks moved, no cleanup. It keys on
+`closeout-feature` now, as `verify-feature` and `deploy-preview` already do, and only the
+Orchestrator may take that step task. That guard is **structural**, not persona prose: the old
+guarantee was an accident of the catalog (the Orchestrator was unlisted, so every pairing failed),
+and trading it for an instruction would have been a real loss.
+
+**A run has one closeout record.** `RunArtifacts`, `run.artifacts`, their renderer pair, their disk
+directory and their UI panel are gone; a review of a run with no closeout stage writes a
+`RunCloseoutRecord` with its task and cleanup fields empty. This is what removed the persona
+instruction warning the Orchestrator not to contradict itself — two model-authored accounts can
+disagree, one record cannot. `RUN_ARTIFACTS_SHAPE` survives as the base of `CLOSEOUT_SHAPE` and the
+review block's wire format; the shape was never the problem, the second stored copy was. Runs
+persisted earlier carry `artifacts`, read into `closeout` on load.
+
+---
+
 ## 2026-08-20 — The rail groups an initiative's runs, and groups on the run's own claim
 
 **Context:** `TASK-141`'s dogfood produced three runs of one initiative — the Orchestrator
@@ -948,11 +988,10 @@ returns two independent fenced blocks — `adhd-run-artifacts` and `adhd-orchest
 each read on its own, so a malformed report never costs a sound decision. A review that fails
 outright is never fatal: the run's work is already done, and only the review is lost.
 
-Artifacts are a new `RunArtifacts` type, and `ProductManagerCloseout` is redefined as its
-task-board-coupled superset through a shared `RUN_ARTIFACTS_SHAPE`. That relation is now
-structural rather than coincidental. Where a run already carries a Product Manager closeout, the
-Orchestrator is handed it to condense instead of re-deriving a second account of the same run
-from raw stage outputs.
+Artifacts were a `RunArtifacts` type and the closeout its task-board-coupled superset through a
+shared `RUN_ARTIFACTS_SHAPE`. **Superseded 2026-08-20** — the two records collapsed into one
+`RunCloseoutRecord`, since a subset stored beside its superset only invited the two to disagree.
+See the 2026-08-20 entry.
 
 **Launching happens after the admission claim is released, never inside the review.** The
 per-project claim is held for the whole of a run, and the durable runtime gives each project one

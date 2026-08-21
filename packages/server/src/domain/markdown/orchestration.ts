@@ -1,9 +1,10 @@
 import type {
   OrchestratorBrokerPhase,
   OrchestratorTeamProposal,
-  ProductManagerCloseout,
+  CloseoutReport,
 } from "@isotopy/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
+import type { PersonaNoteSet } from "../rules/persona-notes.ts";
 import { renderCloseoutBody } from "./closeout.ts";
 import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";
 
@@ -14,6 +15,7 @@ export interface OrchestrationContext {
   boardContext: string;
   closeoutContext: string;
   gatePreference?: string;
+  personaConstraints?: string;
 }
 
 export interface OrchestrationFollowUpContext extends OrchestrationContext {
@@ -58,6 +60,7 @@ export function renderOrchestrationContext({
   boardContext,
   closeoutContext,
   gatePreference,
+  personaConstraints,
 }: OrchestrationContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
@@ -66,8 +69,30 @@ export function renderOrchestrationContext({
     gatePreference === undefined
       ? undefined
       : `## Where this project likes its gates\n\n${markdownBody(gatePreference)}`,
+    personaConstraints === undefined
+      ? undefined
+      : `## What each role already knows about this project\n\n${markdownBody(personaConstraints)}`,
     markdownBody(boardContext),
     markdownBody(closeoutContext),
+  ]);
+}
+
+export function renderPersonaConstraints(
+  roles: PersonaNoteSet[],
+): string | undefined {
+  if (roles.length === 0) {
+    return undefined;
+  }
+  return markdownBlocks([
+    "Each role keeps its own notes about this project, written by that role at the end of an",
+    "earlier run and replayed only to itself. They are what the team has already learned here, so",
+    "compose around them rather than sending someone to rediscover them.",
+    ...roles.map(({ skillId, notes }) =>
+      markdownBlocks([
+        `### \`${skillId}\``,
+        notes.map((note) => bullet(note)).join("\n"),
+      ]),
+    ),
   ]);
 }
 
@@ -180,7 +205,7 @@ export interface RunReviewMarkdownContext {
   team?: OrchestratorTeamProposal;
   runLabel: string;
   runStatus: string;
-  closeout?: ProductManagerCloseout;
+  closeout?: CloseoutReport;
   artifacts: QuestionMediationArtifact[];
   milestone?: RunReviewMilestoneContext;
   rejectedDecision?: string;
@@ -223,7 +248,7 @@ export function renderRunReviewContext({
       : "## Team currently composed\n\nNo team has been approved yet.",
     `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
     closeout
-      ? `## Product Manager closeout\n\n${renderCloseoutBody(closeout, "###")}`
+      ? `## Run closeout\n\n${renderCloseoutBody(closeout, "###")}`
       : undefined,
     milestone ? renderReviewMilestone(milestone) : undefined,
     renderArtifactSections("Stage outputs", artifacts),

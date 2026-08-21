@@ -183,7 +183,7 @@ export function renderWorkLogEntry(
   return [
     `## ${structuralText(id)} — ${structuralText(date)}`,
     `**What:** Completed by Full Delivery run ${structuralText(runId)}.`,
-    "**Outcome:** Evidence and follow-ups are recorded in the Product Manager closeout.",
+    "**Outcome:** Evidence and follow-ups are recorded in the run closeout.",
     "",
     "---",
     "",

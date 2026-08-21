@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Milestone, RunArtifacts, RunState } from "@isotopy/core";
+import type { CloseoutReport, Milestone, RunState } from "@isotopy/core";
 import { renderMilestoneSummary } from "../domain/markdown/closeout.ts";
 import { renderPriorMilestoneCloseouts } from "../domain/markdown/planning.ts";
 import { parseMilestoneSummary } from "../schemas/milestone-summary.ts";
@@ -78,6 +78,6 @@ export async function milestoneCloseoutContext(
   return renderPriorMilestoneCloseouts(valid);
 }
 
-function milestoneReportOf(run: RunState): RunArtifacts | undefined {
-  return run.closeout?.report ?? run.artifacts?.report;
+function milestoneReportOf(run: RunState): CloseoutReport | undefined {
+  return run.closeout?.report;
 }
