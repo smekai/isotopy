@@ -1,5 +1,13 @@
 # Workflow Runtime Options — Decision Document
 
+> **Historical.** This is the 2026-07-23 research record that chose the durable
+> runtime, kept for the comparison in §5–§9 that TASK-069 still refers to. Its
+> recommendation shipped: OpenWorkflow is the runtime, in `packages/server/src/workflow/`.
+> Sections that described the *then*-current code in the present tense have been
+> reduced to what they concluded — see [`architecture.md`](architecture.md) and
+> [`implementation-notes.md`](implementation-notes.md) for how the runtime works now,
+> and [`decisions.md`](decisions.md) (2026-07-24, 2026-07-23) for the decisions.
+
 **Status:** Decision record · **Research date:** 2026-07-23 · **Task:** TASK-066
 
 **Scope of this branch:** documentation only. No public API, schema, or runtime behaviour changes
@@ -67,29 +75,17 @@ Two consequences are worth stating plainly, because they shape the whole compari
 
 ---
 
-## 2. Where Isotopy is today
+## 2. Where Isotopy was, in July 2026
 
-The workflow engine is [`RunOrchestrator`](../packages/server/src/services/run-orchestrator.ts) —
-an in-memory `Map<string, RunState>` with debounced JSON persistence through
-[`JsonRunStore`](../packages/server/src/services/run-store.ts), over the pure state model in
-[`packages/core/src/runs.ts`](../packages/core/src/runs.ts) and the definition model in
-[`packages/core/src/pipelines.ts`](../packages/core/src/pipelines.ts).
+*The starting point this research measured against — all of it since replaced.*
 
-Delivered by TASK-003 (mock orchestrator + SSE), TASK-005 (`state.json` + `events.jsonl`),
-TASK-014 (real-engine stage branch, abort wiring), TASK-043–046 (per-stage skills, prompt/handoff
-composition, the `executeStage()` seam, shared workspace), TASK-055 (workspace artifacts in the
-UI), TASK-058/060 (Rerun, and the Resume/Restart split), and TASK-059 (project scoping, which made
-`RunStore` an interface bound to a project). See [`../.tasks/DONE.md`](../.tasks/DONE.md).
+The workflow engine was `RunOrchestrator`, an in-memory `Map<string, RunState>` with debounced
+JSON persistence through a `JsonRunStore` over `state.json` + `events.jsonl`. It had no durable
+recovery, no durable gates and no retries: a killed process lost the run.
 
-Open work that touches this area: TASK-039 (pluggable run persistence — the `RunStore` seam exists
-after TASK-059; only a DB adapter remains), TASK-051 (Manual-Tester stage), TASK-061 (subscription
-limit reached → durable wait + user choice), TASK-065 (project preferences moved server-side).
-
-Roadmap position: the delivery item this was waiting on was
-*"Aiki-backed durable workflow runtime (or thin fallback state machine)"*, with
-[`architecture.md`](architecture.md) recommending Aiki plus a custom state machine
-as the fallback. **This document is the research that item was waiting on**, and §9 revises that
-default.
+Every one of those names is gone. `RunService` (`services/run/run-service.ts`) owns the read
+model, SQLite behind `repository/` over `db/` is the store of record, and the durable runtime
+lives in `workflow/`.
 
 **Terminology.** The product concept is a *workflow*; the code still calls it a *pipeline*
 (`PipelineDefinition`, `DEMO_PIPELINES`, `pipelineId`). This document says "workflow" for the
@@ -98,67 +94,35 @@ unit of restart under S2.
 
 ---
 
-## 3. Capability map — requested vs. actual
+## 3. Capability map — what was missing
 
-| Capability | Today | Verdict |
-|------------|-------|---------|
-| **Start a run** | `startRun()` validates the engine/connection, allocates a run number per project, resolves a workspace, persists an initial snapshot, then fires `void this.simulateRun(...)`. | **Works, not durable.** The run is an un-awaited floating promise owned by the process. There is no queue, no admission control, and no record that a run *should* be running beyond its `state.json` status. |
-| **Recovery after restart** | `init()` → `loadProject()` → `reconcileInterrupted()`. | **Not recovery — bereavement.** Any stage found `running` or `awaiting` is rewritten to `failed` with `"✗ Interrupted by server restart"`, and the run is marked `failed`. The user then manually clicks Resume. Nothing resumes itself. |
-| **Retries** | None. | **Absent.** A flaky engine invocation fails the stage and the run. There is no retry policy, backoff, or attempt counter anywhere in the orchestrator. |
-| **Definition copying** | None. Definitions are the frozen constants `SEQUENTIAL_PIPELINE`, `ONE_BOX_PIPELINE`, `DEV_TEST_PIPELINE` in `DEMO_PIPELINES`. | **Absent (S3 unmet).** There are no user-owned definitions, therefore nothing to copy. This is Isotopy product work regardless of runtime. |
-| **Artifacts** | `writeHandoff()` → `.isotopy/runs/<id>/<stageId>/handoff.md`; `stageOutputs` in `state.json`; workspace files listed and previewed via `GET /runs/:id/files` (TASK-055). | **Works.** No manifest, no content addressing, no retention policy — but the capability is real and stays Isotopy-owned. |
-| **Durable user waits (gates)** | `stage.status = "awaiting"`, then `await new Promise(resolve => this.gateWaiters.set(key, resolve))`. | **Not durable.** The wait is a resolve callback in a `Map` in heap memory. Kill the process while a gate is open and the promise dies with it; the run is reconciled to `failed` on next boot. A gate that survives a restart is the single clearest thing the current engine cannot do. |
-| **Durable external waits (e.g. TASK-061 limit reset)** | None. | **Absent.** "Subscription limit reached, wait until 16:30 and continue" requires a timer that survives restart. `setTimeout` does not. |
-| **Optional stages** | `disabledStages: string[]` on the run; disabled stages start `skipped`; `restartRun()` refuses to target one. | **Works** for the run-start case, and is correctly frozen into the run — a partial instance of S4. |
-| **Project concurrency (S5)** | Nothing enforces it. | **Absent.** `startRun()` performs no check for an already-active run in the project. Two concurrent runs in one project sharing a workspace is currently reachable through the API. |
-| **Cancellation** | `abortRun()` sets a `cancelled` flag, fires the run's `AbortController`, releases gate waiters, marks non-terminal stages `skipped`. | **Works in-process, weakly.** Cancellation is cooperative and polled at await points. Subprocess-tree termination on Windows vs. macOS is the hard part and is owned by the engine adapters, not the orchestrator. |
-| **Parallel execution (S6)** | `PipelineGroup.mode: "sequential" \| "parallel"` exists in the type — and `flattenPipelineStages()` is `groups.flatMap(g => g.stages)`. | **Declared but not implemented.** `runStages()` is a strictly sequential `for` loop. A group marked `parallel` runs sequentially today, silently. There is no fan-out, no join, no per-branch failure policy. |
+*Measured in July 2026 against the engine described in §2. Kept as the shape of the
+problem, not as a description of the code: every gap below is closed.*
 
-**Summary:** of eleven requested capabilities, four work (artifacts, optional stages, in-process
-cancellation, starting a run), one is declared but not executed (parallel), and six are absent or
-non-durable (recovery, retries, definition copying, durable user waits, durable external waits,
-project concurrency).
+Of eleven requested capabilities, four worked (artifacts, optional stages, in-process
+cancellation, starting a run), one was declared in the types but not executed (parallel
+groups ran sequentially and silently), and six were absent or non-durable: recovery after
+restart (interrupted runs were rewritten to `failed`, never resumed), retries, definition
+copying, durable user waits (a gate was a `resolve` callback in a heap `Map`), durable
+external waits (the TASK-061 limit reset needs a timer that survives a restart), and
+per-project concurrency (nothing stopped two runs sharing one workspace).
+
+**The durable gate was the clearest single thing the old engine could not do**, and it is
+what the recommendation in §9 was chosen to buy.
 
 ---
 
-## 4. Correction — `executeStage()` is not the whole seam
+## 4. Correction — the seam is the whole lifecycle, not one method
 
-Three documents currently state that a durable runtime swaps in behind one method:
+This document corrected a claim the standards docs then carried: that a durable runtime
+swaps in behind `executeStage()` alone, leaving the lifecycle around it intact. It does
+not. Durability has to own starting and queueing, the run loop, human gates, durable
+timers, retries, crash recovery and cancellation state — everything §3 lists as missing
+sits *outside* the stage-execution method.
 
-> `RunOrchestrator.executeStage()` in `services/run-orchestrator.ts` is the single decision point
-> for how a stage runs. A durable executor replaces that method alone — leave it intact.
-> — `architect-standards.md`, now [`architecture.md` § Architect Standards](architecture.md)
-
-> **`executeStage()` is the durable-workflow seam.** … A durable-workflow runtime (Aiki …) replaces
-> this one method — the engine adapters and the surrounding stage lifecycle are untouched.
-> — [`implementation-notes.md`](implementation-notes.md)
-
-> **Deliberate seam:** … A durable-workflow executor (Aiki) replaces that method alone.
-> — `code-quality.md`, now [`architecture.md` § Code Quality Standards](architecture.md)
-
-**This is wrong, and it under-budgets the migration.** `executeStage()` decides *how one stage is
-executed* — simulation or real engine. That is a genuine and valuable seam, and it should stay. But
-it is not where durability lives. Durable execution has to own:
-
-1. **Starting and queuing** — a run must be a durably enqueued unit of work, not `void this.simulateRun(...)`.
-2. **The orchestration loop** — `runStages()` itself becomes the workflow body. The loop's position
-   is the checkpoint (S2); a runtime that cannot checkpoint the loop cannot resume it.
-3. **Gates and waits** — `gateWaiters` and any limit/backoff wait must become durable receive/sleep
-   primitives, not heap promises.
-4. **Retries** — a per-stage policy with attempt counts that survive restart.
-5. **Fan-out / fan-in** — parallel branch scheduling and joins (S6).
-6. **Recovery** — replacing `reconcileInterrupted()`'s mark-everything-failed with actual resumption.
-7. **Cancellation** — durable cancel state, so a cancel issued before a crash is still honoured after it.
-8. **Execution history** — one authoritative record of what ran, in what order, with what result.
-
-Only items outside that list — engine adapters, prompt/handoff composition in
-`domain/stage-context.ts`, persona loading, artifact writing, the SSE projection — are genuinely
-untouched by the runtime choice.
-
-**Practical consequence:** the honest description of the seam is *"`RunOrchestrator` is the durable
-workflow; `executeStage()` is the durable step."* Migration cost should be estimated against the
-class, not against one method. The three documents above should be amended once a runtime decision
-is executed; this branch deliberately does not edit them.
+That correction is now the standing rule **A4** in [`architecture.md`](architecture.md),
+and the built shape follows it: `workflow/pipeline-workflow.ts` is the durable workflow
+body and `workflow/stage-execution.ts` the durable step.
 
 ---
 
@@ -387,7 +351,7 @@ product semantics.
 **Read the first and seventh rows together.** The embedded-DB row eliminates B and C outright. The
 S2 row is the price of that elimination: DBOS was the only candidate with a native fork-from-step,
 so choosing D means owning semantic stage restart ourselves — which, note, is exactly what
-`restartRun()` in [`run-orchestrator.ts`](../packages/server/src/services/run-orchestrator.ts)
+`restartRun()` in `run-orchestrator.ts` (since replaced by `run-service.ts`)
 already implements today against our own state model.
 
 ---
@@ -473,7 +437,7 @@ fresh process without re-running the completed stage. Apache-2.0, 1279★, zero 
 `forkWorkflow(id, startStep)` and per-queue `concurrency: 1`, which map perfectly onto S2 and S5.
 OpenWorkflow has neither. We are trading two conveniences for the elimination of a PostgreSQL
 server, and **we already implement S2 ourselves** — `restartRun(runId, stageId)` in
-[`run-orchestrator.ts`](../packages/server/src/services/run-orchestrator.ts) resets stages from a
+`run-orchestrator.ts` (since replaced by `run-service.ts`) resets stages from a
 chosen point and clears their outputs. That logic ports onto durable steps; it is not new design.
 
 **Keep Isotopy-owned, without exception:** workflow definitions and their schema, definition copying

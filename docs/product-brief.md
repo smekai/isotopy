@@ -27,7 +27,7 @@ Developers increasingly use AI agents (Cursor, Claude Code, OpenHands) to write 
 
 ## Solution
 
-A **local-first AI app builder and evolution workflow**: predefined, editable stages; each stage runs a specialized subagent; artifacts and state live in git; any stage can be restarted independently; implementation delegates to Cursor, Claude Code, OpenHands, or other adapters; testing includes Playwright E2E; deployment uses pluggable platform adapters.
+A **local-first AI app builder and evolution workflow**: predefined, editable stages; each stage runs a specialized subagent; artifacts and state live in git; any stage can be restarted independently; implementation delegates to Claude Code, Cursor, Codex, or other adapters; testing includes Playwright E2E; deployment uses pluggable platform adapters.
 
 **Built-in task management** provides a repo-native backlog layer — capture ideas, prioritize work, and start lifecycle runs from tasks without a separate PM tool or IDE extension. Tasks feed the intake stage; runs remain the execution unit for the full pipeline.
 

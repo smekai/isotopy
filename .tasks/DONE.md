@@ -1,5 +1,50 @@
 # Done
 
+## TASK-155: Reduce backend abstraction ceremony and validate/reduce docs
+**Priority:** P2
+**Tags:** server, core, infra
+**Updated:** 2026-08-21
+
+An audit of `packages/server/src` and `docs/` found layering that cost more than it
+protected, and roughly a quarter of the docs stale or duplicated. Delivered in eleven
+commits, each independently green against the full gate.
+
+**Backend.** Three seams that restated a single implementation were reduced to one that
+does not: `RunProjection` **stays** (shrunk by `bindOpenWorkflowRun`) because it is what
+keeps `RunService`’s signal-sending API — `approveGate`, `resolveLimit`, `postMessage` —
+unreachable from inside a durable step; `OrchestrationHooks` and `ProductHooks` collapsed
+to class types, and registration went from two calls to one. Three near-identical table
+classes became one `JsonRecordsTable` over a `JsonTableSpec`, the twin milestone and
+orchestration repositories became one generic `JsonRecordRepository`, and `ProjectDatabases`
+made `runs.db` one connection per project instead of one per aggregate. Five copies of the
+fenced-block extractor, five lazy-registry blocks, 32 error-message ternaries and two
+`engineLabel` definitions each became one. `run-options.ts`, `model-roster.ts`,
+`orchestrator-required-error.ts` and `RunStore.replayEvents` are gone; `team-composition.ts`
+moved to `domain/rules/` where the placement rule puts it. `startRunWith` and the two
+orchestration context builders now read as tables of contents over `domain/rules/`.
+
+**Docs.** `architecture.md` lost the 844-line pre-implementation draft that named six
+classes, five paths and a YAML pipeline format none of which were ever built (1,269 → 913
+lines), keeping the sections that survived contact with the code. `e2e-test-plan.md` was
+rewritten against the real suite; `workflow-runtime-options.md` marked historical with its
+present-tense sections reduced to what they concluded; stale `RunOrchestrator` sections and
+folder paths corrected in `implementation-notes.md`; README milestone status brought to
+Milestone I; `decisions.md` newest-first ordering restored; and `CLAUDE.md`/`AGENTS.md`
+reconciled so each harness carries the full standard rather than 131 shared lines and a
+missing half.
+
+**Decisions recorded:** two dated entries in `docs/decisions.md` — why the projection stayed
+while the hooks collapsed, and the one-table/one-connection consolidation. The
+`approveGate` eager-apply-then-signal, flagged as a bug by two separate audits, is now
+explained in `implementation-notes.md` rather than re-argued a third time.
+
+**Gotcha worth keeping:** a shared connection can be open before a later table registers its
+schema, so `Database.connection()` applies not-yet-run registrations on every call and
+`settle()` resets that cursor. Without it, whichever aggregate loaded second queried a table
+that was never created — 161 tests failed on exactly that.
+
+---
+
 ## TASK-134: Milestone H — Harmonic: feedback, then what it asks for
 **Priority:** P2 | **Tags:** ui, server, core, milestone-h
 **Updated:** 2026-08-20 22:45

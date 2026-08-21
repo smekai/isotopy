@@ -128,7 +128,7 @@ in both the pill and the team-controller line — anchor or `.first()`
 your locators.
 
 **Test ids: do not duplicate the roster here.** It lives in
-[`architecture-ui.md`](../../../docs/architecture-ui.md) §9, together with the
+[`architecture-ui.md`](./architecture-ui.md) §9, together with the
 rule for when a new one is justified. Note that `milestone-card` and
 `milestone-feature` also carry `data-milestone-id` / `data-feature-id`,
 which is what the e2e suite locates on.
