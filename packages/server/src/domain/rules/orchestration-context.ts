@@ -1,5 +1,5 @@
 import type { Milestone, RunState } from "@isotopy/core";
-import { renderRunArtifactsBody } from "../markdown/closeout.ts";
+import { renderCloseoutBody } from "../markdown/closeout.ts";
 import type {
   QuestionMediationArtifact,
   RunReviewMilestoneContext,
@@ -19,13 +19,13 @@ export function stageOutputsOf(run: RunState): QuestionMediationArtifact[] {
 }
 
 export function artifactDigestOf(run: RunState): QuestionMediationArtifact[] {
-  const report = run.artifacts?.report;
+  const report = run.closeout?.report;
   return report
     ? [
         {
           runLabel: runLabel(run),
-          stageLabel: "Orchestrator artifacts",
-          output: renderRunArtifactsBody(report, "####"),
+          stageLabel: "Run closeout",
+          output: renderCloseoutBody(report, "####"),
         },
       ]
     : stageOutputsOf(run);

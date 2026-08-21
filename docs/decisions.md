@@ -15,96 +15,62 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
-## 2026-08-20 — The closeout follows the step task, and the artifacts are derived from it
+## 2026-08-20 — Every role remembers this project, and a run has exactly one closeout
 
-**Context:** moving the closeout to the Orchestrator (above) exposed two things the earlier
-design had left implicit, both found by auditing rather than by a failing test.
+**Context:** two stores were wrong at once. A handoff dies with its run, so every role began each
+run knowing nothing about a project it had already worked on three times. Meanwhile a settled run
+kept *two* accounts of itself — a closeout written by the Product Manager and a `RunArtifacts`
+report written by the Orchestrator's review — where the second was a strict subset of the first.
 
-**`CloseoutConsumer` fired on `pipelineId === "full-delivery" && stageId === "closeout"`.** After
-`TASK-150` made a team composed per run, `team-<orchestrationId>-<n>` became the common pipeline id
-and `full-delivery` the exception — so a composed team that ran `closeout-feature` produced a full
-closeout report that **nothing parsed**. No follow-up tasks, no source tasks moved to Done, no temp
-cleanup, no `run.closeout`. The run said the work was done and the board never heard.
+**Decision: each persona gets a private memory of the project.** Stored beside its skill as
+`<skills>/<id>.notes.md` and layered into that persona's prompt and no other. A stage is invited,
+never required, to end its report with an `isotopy-persona-notes` block. Notes are merged, deduped
+and capped at 40; a repeated note moves to the end, so the cap evicts what stopped being mentioned
+rather than what was learned first. They are facts about the **project**, not a summary of the run —
+the handoff already carries that.
 
-**Decision:** the consumer fires on `stepTask === "closeout-feature"`. A stage is a closeout because
-of the assignment it was given, not because of which pipeline it happens to sit in. This is the
-general rule the codebase already follows elsewhere — `productEnvironment` keys on
-`verify-feature`, the deterministic deploy on `deploy-preview` — and the hardcoded pair was the
-outlier.
+*Rejected — one shared memory for the team.* Cheaper to build, worse product: a QA Engineer's fact
+about flaky selectors is noise in an Architect's context, and a shared blob cannot tell the
+Orchestrator *who knows what* when it composes.
 
-**Decision:** `orchestrator` joins the persona catalog, so a composed team can give the closeout to
-the role that now owns it. Without this the move only took effect on the fixed pipeline, and the
-catalog still pointed the Orchestrator at the Product Manager for closeout work.
+**Decision: the run closeout belongs to the Orchestrator.** A closeout consolidates the whole run.
+The Product Manager only ever saw its own planning stage, so having it adjudicate the outcome asked
+one specialist to grade the others. The Orchestrator is the only role that owns the run end to end.
+It could take the assignment because its persona already defers output shape to the step task; the
+"every turn ends in exactly one decision" rule was narrowed to decision turns.
 
-The rule that the Orchestrator cannot compose itself as a worker was **kept structural rather than
-demoted to prose**: `roleIssues` rejects the `orchestrator` persona paired with any step task other
-than `closeout-feature`. The original guard was an accident of the catalog — the Orchestrator was
-unlisted, so every pairing failed — and replacing an accidental guarantee with a persona instruction
-would have been a real loss.
+*Rejected — folding the closeout into the settle-time review.* It reads cleaner, but the review only
+runs when an orchestration exists and `routes/runs.ts` starts any pipeline directly, so a
+`full-delivery` run launched from the run list would have silently stopped creating follow-up tasks.
+The closeout stays a stage; only its persona changed.
 
-**Decision:** run artifacts are derived from the closeout, not authored twice. `RUN_ARTIFACTS_SHAPE`
-is a strict subset of `CLOSEOUT_SHAPE`, so `runArtifactsFrom` projects one onto the other. Before
-this, the Orchestrator wrote the superset at the closeout stage and then restated the subset one
-turn later at the review — and the persona carried a hand-written warning telling it not to
-contradict itself. That warning was the tell: two model-authored accounts of one run can disagree,
-and a projection cannot. The review turn now only decides, which is its actual job.
+**Decision: a run has one closeout record, not a closeout plus artifacts.** `RunArtifacts`,
+`RunArtifactRecord`, `run.artifacts`, `renderRunArtifacts`, `persistRunArtifacts` and
+`RunArtifactsPanel` are gone. A review of a run that had no closeout stage writes a
+`RunCloseoutRecord` with its task and cleanup fields empty; a run that had one is not asked again.
+Every reader that said `closeout ?? artifacts` now just reads `closeout`.
 
-**Rejected — deriving the closeout from the artifacts instead.** The arrow only points one way: the
-extra fields (`tasks`, `completedTaskIds`, `unresolvedTaskIds`, `cleanup`) are the ones with side
-effects on the board and the disk, and they cannot be invented from a summary.
+This is what removed the persona instruction warning the Orchestrator not to contradict itself. Two
+model-authored accounts of one run can disagree; one record cannot. `RUN_ARTIFACTS_SHAPE` survives
+as the base of `CLOSEOUT_SHAPE` and as the wire format of the review's block — the *shape* was never
+the problem, the second stored copy was.
 
-**Dropped:** `milestones/<id>/runs/<runId>.json` and `.md`, which `persistRunCloseout` wrote as
-byte-identical copies of the run's own `closeout.json` and `closeout.md`. Nothing read them —
-`milestoneCloseoutContext` reads `summary.json` — so they were a second copy that could only ever
-go stale relative to the first.
+Runs persisted before this carry `artifacts`; `run-persistence.ts` reads that field into `closeout`
+and nothing writes it any more.
 
----
+**Decision: a stage is a closeout because of its step task.** `CloseoutConsumer` fired on
+`pipelineId === "full-delivery" && stageId === "closeout"`. After `TASK-150` made a team composed per
+run, `team-<id>-<n>` became the common pipeline id — so a composed team running `closeout-feature`
+produced a report **nothing parsed**: no follow-up tasks, no source tasks moved, no cleanup. It now
+keys on the step task, as `verify-feature` and `deploy-preview` already do.
 
-## 2026-08-20 — Every role keeps its own memory of the project, and the Orchestrator owns the closeout
-
-**Context:** A handoff dies with its run. Every role therefore started each run knowing nothing
-about the project it had already worked on three times — where migrations live, which command
-really builds, that the config is not where its name suggests. The run artifacts the Orchestrator
-collects are the *opposite* store: they are about what one run produced, they are shared across all
-roles, and they are consumed by the next run's planning rather than by the role that learned the
-fact.
-
-**Decision:** each persona gets a private, append-only memory of the project, stored beside its
-skill as `<skills>/<id>.notes.md` and layered into that persona's prompt and no other. A stage is
-invited — never required — to end its report with an `isotopy-persona-notes` block. Notes are
-merged, deduped, and capped at 40; a repeated note moves to the end rather than being written
-twice, so the cap evicts what has stopped being mentioned.
-
-The notes are scoped to the **project**, not the run. "The suite takes eight minutes" is a note;
-"I added greet.js" is a handoff and is already carried as one. The prompt says so explicitly,
-because a role summarising its own run into its notes would fill the cap with things no future run
-can use.
-
-**Rejected — one shared memory for the whole team.** It is the cheaper build and the worse product.
-A QA Engineer's hard-won fact about flaky selectors is noise in an Architect's context window, and a
-shared file makes every role pay for every other role's learning on every run. Per-role notes also
-give the Orchestrator something a shared blob cannot: a digest of *who knows what*, which it now
-sees when composing, so it can build a team around existing knowledge instead of re-teaching it.
-
-**Decision:** the run closeout is the Orchestrator's, not the Product Manager's. A closeout
-consolidates the whole run — every specialist's evidence, the follow-up tasks, the source-task
-outcomes, the cleanup. The Product Manager only ever saw its own planning stage plus whatever the
-handoffs quoted, so having it adjudicate the run's outcome asked one specialist to grade the
-others. The Orchestrator is the only role that owns the run end to end.
-
-**Rejected — folding the closeout into the Orchestrator's settle-time review.** It reads cleaner:
-one turn, one role, no closeout stage at all. But the review only happens when an orchestration
-exists, and `routes/runs.ts` starts any pipeline directly — a `full-delivery` run launched from the
-run list has no Orchestrator to review it. Folding the closeout in would have silently stopped
-creating follow-up tasks and transitioning source tasks for that supported path. The closeout stays
-a stage; only its persona changed.
-
-That change was available because the Orchestrator persona already defers output shape to the
-assignment. Its "every turn ends in exactly one decision" rule was narrowed to decision turns, and
-the closeout assignment now states that it is not one.
+`orchestrator` joins the persona catalog so a composed team can reach the role that owns the
+closeout. The rule that it cannot compose itself as a worker was kept **structural** — it may pair
+only with `closeout-feature` — because the old guarantee was an accident of the catalog (the
+Orchestrator was unlisted, so every pairing failed), and trading an accidental guarantee for a
+persona instruction would have been a real loss.
 
 ---
-
 ## 2026-08-20 — The rail groups an initiative's runs, and groups on the run's own claim
 
 **Context:** `TASK-141`'s dogfood produced three runs of one initiative — the Orchestrator
@@ -1038,11 +1004,10 @@ returns two independent fenced blocks — `adhd-run-artifacts` and `adhd-orchest
 each read on its own, so a malformed report never costs a sound decision. A review that fails
 outright is never fatal: the run's work is already done, and only the review is lost.
 
-Artifacts are a new `RunArtifacts` type, and `ProductManagerCloseout` is redefined as its
-task-board-coupled superset through a shared `RUN_ARTIFACTS_SHAPE`. That relation is now
-structural rather than coincidental. Where a run already carries a Product Manager closeout, the
-Orchestrator is handed it to condense instead of re-deriving a second account of the same run
-from raw stage outputs.
+Artifacts were a `RunArtifacts` type and the closeout its task-board-coupled superset through a
+shared `RUN_ARTIFACTS_SHAPE`. **Superseded 2026-08-20** — the two records collapsed into one
+`RunCloseoutRecord`, since a subset stored beside its superset only invited the two to disagree.
+See the 2026-08-20 entry.
 
 **Launching happens after the admission claim is released, never inside the review.** The
 per-project claim is held for the whole of a run, and the durable runtime gives each project one

@@ -786,13 +786,13 @@ test("a composed run's review records its artifacts and its own orchestration tu
 
   // Assert
   const finished = await waitForRunStatus(ctx.app, composed.id, "completed");
-  expect(finished.artifacts?.report).toMatchObject({
+  expect(finished.closeout?.report).toMatchObject({
     knowledge: ["The seed script needs the extension installed first"],
     nextRecommendation: "Warm the index on startup",
   });
   // The record outlives the process, alongside the run's per-stage handoffs.
-  expect(await readArtifacts(ctx.home, composed.id)).toContain(
-    "# Orchestrator run artifacts",
+  expect(await readCloseout(ctx.home, composed.id)).toContain(
+    "# Run closeout",
   );
   const { body: orchestration } = await get<Orchestration>(
     ctx.app,
@@ -923,7 +923,7 @@ test("a malformed review leaves the run terminal and records why it was unusable
 
   // Assert — the run's own work stands; only the review is lost.
   const finished = await waitForRunStatus(ctx.app, run.id, "completed");
-  expect(finished.artifacts).toBeUndefined();
+  expect(finished.closeout).toBeUndefined();
   const { body: orchestration } = await get<Orchestration>(
     ctx.app,
     `/orchestrations/${run.orchestrationId}`,
@@ -1497,8 +1497,8 @@ function fenced(decision: unknown): string {
   return `Here is what I propose.\n\n\`\`\`isotopy-orchestrator-decision\n${JSON.stringify(decision)}\n\`\`\``;
 }
 
-function readArtifacts(home: string, runId: string): Promise<string> {
-  return readFile(path.join(home, "runs", runId, "artifacts", "artifacts.md"), "utf8");
+function readCloseout(home: string, runId: string): Promise<string> {
+  return readFile(path.join(home, "runs", runId, "closeout", "closeout.md"), "utf8");
 }
 
 function artifactsBlock(report: unknown): string {

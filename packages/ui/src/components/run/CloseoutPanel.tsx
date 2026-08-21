@@ -2,7 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 import type {
   CloseoutFinding,
   CreatedTaskReference,
-  RunArtifactRecord,
   RunArtifacts,
   RunCloseoutRecord,
 } from "@isotopy/core";
@@ -332,21 +331,5 @@ export function CloseoutPanel({ closeout, d }: CloseoutPanelProps) {
         </Section>
       )}
     </ArtifactReport>
-  );
-}
-
-export interface RunArtifactsPanelProps {
-  artifacts: RunArtifactRecord;
-  d: Dir;
-}
-
-export function RunArtifactsPanel({ artifacts, d }: RunArtifactsPanelProps) {
-  return (
-    <ArtifactReport
-      report={artifacts.report}
-      validationErrors={artifacts.validationErrors}
-      testId="run-artifacts-panel"
-      d={d}
-    />
   );
 }

@@ -7,7 +7,7 @@ import { fetchRunFiles } from "../../api";
 import type { WorkspaceFile } from "../../api";
 import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";
 import { ChangedFilesPanel } from "./ChangedFilesPanel";
-import { CloseoutPanel, RunArtifactsPanel } from "./CloseoutPanel";
+import { CloseoutPanel } from "./CloseoutPanel";
 import { FileReadingPane } from "./FileReadingPane";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
@@ -222,7 +222,7 @@ export function ArtifactsPanel({
   const views: ArtifactView[] = [
     ...(run.changes ? (["changes"] as const) : []),
     "workflow",
-    ...(run.closeout || run.artifacts ? (["closeout"] as const) : []),
+    ...(run.closeout ? (["closeout"] as const) : []),
     ...(run.workspacePath != null ? (["files"] as const) : []),
   ];
   const active = views.includes(view) ? view : "workflow";
@@ -249,8 +249,6 @@ export function ArtifactsPanel({
         <ChangedFilesPanel runId={run.id} changes={run.changes} d={d} />
       ) : active === "closeout" && run.closeout ? (
         <CloseoutPanel closeout={run.closeout} d={d} />
-      ) : active === "closeout" && run.artifacts ? (
-        <RunArtifactsPanel artifacts={run.artifacts} d={d} />
       ) : active === "files" ? (
         <WorkspaceBrowser runId={run.id} runStatus={run.status} d={d} />
       ) : (

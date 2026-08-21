@@ -2,7 +2,6 @@ import type {
   CleanupResult,
   CloseoutFinding,
   CloseoutReport,
-  RunArtifacts,
 } from "@isotopy/core";
 import {
   bullet,
@@ -65,15 +64,14 @@ function recommendationSection(
 }
 
 function closeoutSections(
-  report: RunArtifacts | CloseoutReport,
+  report: CloseoutReport,
   level: HeadingLevel,
 ): Array<string | undefined> {
-  const sourceTasks = report as Partial<CloseoutReport>;
   return [
     markdownBody(report.summary),
     listSection(level, "Delivered scope", report.deliveredScope),
-    listSection(level, "Completed source tasks", sourceTasks.completedTaskIds ?? []),
-    listSection(level, "Unresolved source tasks", sourceTasks.unresolvedTaskIds ?? []),
+    listSection(level, "Completed source tasks", report.completedTaskIds),
+    listSection(level, "Unresolved source tasks", report.unresolvedTaskIds),
     listSection(level, "Decisions", report.decisions),
     listSection(level, "Knowledge", report.knowledge),
     findingsSection(level, report.findings),
@@ -90,20 +88,6 @@ export function renderCloseout(report: CloseoutReport): string {
 
 export function renderCloseoutBody(
   report: CloseoutReport,
-  level: HeadingLevel,
-): string {
-  return markdownBlocks(closeoutSections(report, level));
-}
-
-export function renderRunArtifacts(report: RunArtifacts): string {
-  return markdownBlocks(
-    ["# Orchestrator run artifacts", ...closeoutSections(report, DOCUMENT_LEVEL)],
-    true,
-  );
-}
-
-export function renderRunArtifactsBody(
-  report: RunArtifacts,
   level: HeadingLevel,
 ): string {
   return markdownBlocks(closeoutSections(report, level));

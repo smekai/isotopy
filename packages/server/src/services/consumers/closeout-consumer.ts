@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { agentForStage } from "@isotopy/core";
 import type {
@@ -12,14 +12,11 @@ import {
   parseCloseoutReport,
   validateSourceTaskOutcome,
 } from "../../domain/rules/closeout.ts";
-import {
-  renderCleanupReport,
-  renderCloseout,
-} from "../../domain/markdown/closeout.ts";
 import { runsDir } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import { nowIso } from "../../utils/time.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
+import { persistRunCloseout } from "../run-evidence.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./stage-output-consumer.ts";
@@ -139,27 +136,4 @@ async function cleanupRunTemp(
     removed.push(relative);
   }
   return { removed, rejected };
-}
-
-async function persistRunCloseout(
-  projectPath: ProjectPath,
-  runId: string,
-  record: RunCloseoutRecord,
-): Promise<void> {
-  const closeoutDir = path.join(runsDir(projectPath), runId, "closeout");
-  await mkdir(closeoutDir, { recursive: true });
-  await Promise.all([
-    writeFile(
-      path.join(closeoutDir, "closeout.json"),
-      `${JSON.stringify(record, null, 2)}\n`,
-    ),
-    writeFile(
-      path.join(closeoutDir, "closeout.md"),
-      renderCloseout(record.report),
-    ),
-    writeFile(
-      path.join(closeoutDir, "cleanup-report.md"),
-      renderCleanupReport(record.cleanup),
-    ),
-  ]);
 }

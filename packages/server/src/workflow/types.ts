@@ -9,7 +9,7 @@ import type {
   OrchestratorDecision,
   StageLogDraft,
   PipelineDefinition,
-  RunArtifactRecord,
+  RunCloseoutRecord,
   RunState,
   StageDefinition,
   StageOutcome,
@@ -102,7 +102,7 @@ export interface RunProjection {
     result: DeploymentResult,
     logLines: string[],
   ): Promise<void>;
-  captureRunArtifacts(runId: string, record: RunArtifactRecord): Promise<void>;
+  captureRunCloseout(runId: string, record: RunCloseoutRecord): Promise<void>;
   runCompleted(runId: string, status: RunCompletionStatus): Promise<void>;
 }
 
@@ -131,7 +131,7 @@ export interface RunReviewContext {
 }
 
 export interface RunReview {
-  artifacts?: RunArtifactRecord;
+  artifacts?: RunCloseoutRecord;
   decision?: OrchestratorDecision;
   errors: string[];
 }

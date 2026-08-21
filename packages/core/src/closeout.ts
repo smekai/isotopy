@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TASK_PRIORITIES } from "./milestones.ts";
 import { RUN_ARTIFACTS_SHAPE } from "./run-artifacts.ts";
-import type { CloseoutFinding, RunArtifacts } from "./run-artifacts.ts";
+import type { CloseoutFinding } from "./run-artifacts.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const followUpTaskDraftSchema = z
@@ -86,14 +86,3 @@ export const runCloseoutRecordSchema = z
   .strict();
 
 export type RunCloseoutRecord = z.infer<typeof runCloseoutRecordSchema>;
-
-export function runArtifactsFrom(report: CloseoutReport): RunArtifacts {
-  return {
-    summary: report.summary,
-    deliveredScope: report.deliveredScope,
-    decisions: report.decisions,
-    knowledge: report.knowledge,
-    findings: report.findings,
-    nextRecommendation: report.nextRecommendation,
-  };
-}

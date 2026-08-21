@@ -6,8 +6,6 @@ import {
   renderCloseout,
   renderCloseoutBody,
   renderMilestoneSummary,
-  renderRunArtifacts,
-  renderRunArtifactsBody,
 } from "../src/domain/markdown/closeout.ts";
 import {
   renderMilestonePlanningContext,
@@ -99,16 +97,6 @@ describe("artifact Markdown", () => {
         "Ship after review.",
       ].join("\n"),
     );
-  });
-
-  it("renders artifacts as a document with a title and as a body without one", () => {
-    const report = { ...CLOSEOUT, deliveredScope: [], findings: [] };
-
-    expect(renderRunArtifacts(report)).toContain("# Orchestrator run artifacts");
-    expect(renderRunArtifactsBody(report, "####")).not.toContain(
-      "# Orchestrator run artifacts",
-    );
-    expect(renderRunArtifactsBody(report, "####")).toContain("#### Decisions");
   });
 
   it("renders cleanup outcomes and an explicit cancellation report", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { closeoutReportSchema } from "../src/closeout.ts";
-import { runArtifactsSchema, runArtifactRecordSchema } from "../src/run-artifacts.ts";
+import { runArtifactsSchema } from "../src/run-artifacts.ts";
 
 const ARTIFACTS = {
   summary: "Search shipped behind a flag",
@@ -72,18 +72,6 @@ describe("runArtifactsSchema", () => {
     const parsed = runArtifactsSchema.safeParse({ ...ARTIFACTS, summary: "" });
 
     expect(parsed.success).toBe(false);
-  });
-});
-
-describe("runArtifactRecordSchema", () => {
-  test("the record carries the report alongside how well it parsed", () => {
-    const parsed = runArtifactRecordSchema.safeParse({
-      report: ARTIFACTS,
-      validationErrors: ["nextRecommendation: Expected string"],
-      collectedAt: "2026-08-05T10:00:00.000Z",
-    });
-
-    expect(parsed.success && parsed.data.validationErrors).toHaveLength(1);
   });
 });
 

@@ -6,7 +6,6 @@ import {
   STAGE_VERDICTS,
   agentForStage,
   resolveTier,
-  runArtifactsFrom,
 } from "@isotopy/core";
 import type {
   DeploymentAutomation,
@@ -14,7 +13,7 @@ import type {
   EngineId,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
-  RunArtifactRecord,
+  RunCloseoutRecord,
   RunArtifacts,
   RunState,
   StageDefinition,
@@ -428,23 +427,16 @@ export async function runQuestionMediationWork(
   };
 }
 
-function reviewRecord(artifacts: RunArtifacts): RunArtifactRecord {
-  return { report: artifacts, validationErrors: [], collectedAt: nowIso() };
+function reviewRecord(artifacts: RunArtifacts): RunCloseoutRecord {
+  return {
+    report: { ...artifacts, tasks: [], completedTaskIds: [], unresolvedTaskIds: [], cleanup: [] },
+    createdTasks: [],
+    cleanup: { removed: [], rejected: [] },
+    validationErrors: [],
+    completedAt: nowIso(),
+  };
 }
 
-function closeoutArtifacts(
-  deps: WorkflowDeps,
-  runId: string,
-): RunArtifactRecord | undefined {
-  const closeout = deps.projection.getRun(runId)?.closeout;
-  return closeout
-    ? {
-        report: runArtifactsFrom(closeout.report),
-        validationErrors: closeout.validationErrors,
-        collectedAt: closeout.completedAt,
-      }
-    : undefined;
-}
 
 export async function runOrchestratorReviewWork(
   deps: WorkflowDeps,
@@ -489,11 +481,10 @@ export async function runOrchestratorReviewWork(
   if (deps.isCancelled(run.id)) {
     return null;
   }
-  const derived = closeoutArtifacts(deps, run.id);
-  const review = readReview(outcome, derived === undefined);
-  const artifacts = derived ?? review.artifacts;
-  if (artifacts) {
-    await deps.projection.captureRunArtifacts(run.id, artifacts);
+  const closedOut = deps.projection.getRun(run.id)?.closeout !== undefined;
+  const review = readReview(outcome, !closedOut);
+  if (!closedOut && review.artifacts) {
+    await deps.projection.captureRunCloseout(run.id, review.artifacts);
   }
   try {
     await orchestration.recordReview(request, context, review);
