@@ -8,6 +8,7 @@ import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { RunRepository } from "../../repository/run-repository.ts";
 import type { PersistedRun } from "../../repository/run-repository.ts";
+import { getOrCreate } from "../../utils/get-or-create.ts";
 
 export class RunStore {
   readonly runs = new Map<string, RunState>();
@@ -88,13 +89,11 @@ export class RunStore {
   }
 
   repositoryFor(projectPath: ProjectPath): RunRepository {
-    const existing = this.repositories.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const repository = new RunRepository(projectPath);
-    this.repositories.set(projectPath.id, repository);
-    return repository;
+    return getOrCreate(
+      this.repositories,
+      projectPath.id,
+      () => new RunRepository(projectPath),
+    );
   }
 
   repositoryForRun(runId: string): RunRepository {

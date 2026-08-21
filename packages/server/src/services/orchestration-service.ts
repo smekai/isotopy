@@ -72,6 +72,7 @@ import type {
   RunReviewContext,
   RunReviewRequest,
 } from "../workflow/types.ts";
+import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 
@@ -879,13 +880,11 @@ export class OrchestrationService implements StageOutputConsumer {
   }
 
   private repositoryFor(projectPath: ProjectPath): OrchestrationRepository {
-    const existing = this.repositories.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const repository = new OrchestrationRepository(projectPath);
-    this.repositories.set(projectPath.id, repository);
-    return repository;
+    return getOrCreate(
+      this.repositories,
+      projectPath.id,
+      () => new OrchestrationRepository(projectPath),
+    );
   }
 }
 

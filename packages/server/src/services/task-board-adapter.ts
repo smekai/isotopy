@@ -31,6 +31,7 @@ import {
   parseJson,
 } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
+import { getOrCreate } from "../utils/get-or-create.ts";
 import { nowIso } from "../utils/time.ts";
 
 export interface ApprovedTaskLinks {
@@ -41,13 +42,11 @@ export interface ApprovedTaskLinks {
 const adapters = new Map<string, TaskBoardAdapter>();
 
 export function taskBoardFor(projectPath: ProjectPath): TaskBoardAdapter {
-  const existing = adapters.get(projectPath.root);
-  if (existing) {
-    return existing;
-  }
-  const adapter = new TaskBoardAdapter(projectPath);
-  adapters.set(projectPath.root, adapter);
-  return adapter;
+  return getOrCreate(
+    adapters,
+    projectPath.root,
+    () => new TaskBoardAdapter(projectPath),
+  );
 }
 
 export class TaskBoardAdapter {

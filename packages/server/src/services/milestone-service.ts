@@ -28,6 +28,7 @@ import {
   persistMilestoneSummary,
 } from "./milestone-closeout.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "./run/run-service.ts";
@@ -541,12 +542,10 @@ export class MilestoneService {
   private milestoneRepositoryFor(
     projectPath: ProjectPath,
   ): MilestoneRepository {
-    const existing = this.milestoneRepositories.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const repository = new MilestoneRepository(projectPath);
-    this.milestoneRepositories.set(projectPath.id, repository);
-    return repository;
+    return getOrCreate(
+      this.milestoneRepositories,
+      projectPath.id,
+      () => new MilestoneRepository(projectPath),
+    );
   }
 }

@@ -12,6 +12,7 @@ import {
   gateSignal,
   limitSignal,
 } from "./pipeline-workflow.ts";
+import { getOrCreate } from "../utils/get-or-create.ts";
 import type { PipelineWorkflowResult } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
@@ -114,13 +115,11 @@ export class WorkflowRuntimeRegistry {
   }
 
   for(projectPath: ProjectPath): WorkflowRuntime {
-    const existing = this.runtimes.get(projectPath.id);
-    if (existing) {
-      return existing;
-    }
-    const runtime = new WorkflowRuntime(projectPath, this.workflow);
-    this.runtimes.set(projectPath.id, runtime);
-    return runtime;
+    return getOrCreate(
+      this.runtimes,
+      projectPath.id,
+      () => new WorkflowRuntime(projectPath, this.workflow),
+    );
   }
 
   forProject(projectId: string): WorkflowRuntime {
