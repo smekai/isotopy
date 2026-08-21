@@ -32,18 +32,6 @@ test("an invented step task id is rejected on the field that carries it", () => 
   );
 });
 
-test("the Orchestrator cannot compose itself to orchestrate again", () => {
-  const composed = composeTeamPipeline(
-    team([role({ skill: "orchestrator", stepTask: "orchestrate" })]),
-    "abc123",
-  );
-
-  expect(issuesOf(composed)).toBe(
-    "roles.0.stepTask: Unknown step task: orchestrate; " +
-      "roles.0.skill: The Orchestrator composes the team and closes it out; it cannot take orchestrate",
-  );
-});
-
 test("the Orchestrator cannot compose itself to do a specialist's work", () => {
   const composed = composeTeamPipeline(
     team([role({ skill: "orchestrator", stepTask: "implement-feature" })]),

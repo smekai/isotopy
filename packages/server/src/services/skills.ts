@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { skillsDir, userSkillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
+import { SKILL_ID } from "../domain/rules/persona-notes.ts";
 
 export function loadBundledPersona(id: string): Promise<string | undefined> {
   return loadBundledMarkdown(PERSONA_DIR, id);
@@ -49,7 +50,7 @@ export async function loadSkill(
   });
 }
 
-const PROMPT_ID = /^[a-z0-9-]+$/;
+
 const PERSONA_DIR = new URL("../domain/skills/personas/", import.meta.url);
 const STEP_TASK_DIR = new URL("../domain/skills/step-tasks/", import.meta.url);
 
@@ -57,7 +58,7 @@ async function loadBundledMarkdown(
   directory: URL,
   id: string,
 ): Promise<string | undefined> {
-  if (!PROMPT_ID.test(id)) {
+  if (!SKILL_ID.test(id)) {
     return undefined;
   }
   try {

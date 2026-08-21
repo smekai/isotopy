@@ -44,48 +44,25 @@ Cross-platform: every task in the milestone carried the same Windows and macOS b
 
 ## TASK-113: Per-persona accumulated context (artifact distilled memory)
 **Priority:** P3 | **Tags:** core, server, ui, milestone-h
-**Updated:** 2026-08-20 22:40
+**Updated:** 2026-08-21 00:10
 
-Every role now keeps a private memory of the project and the Orchestrator owns the run closeout.
+Every role keeps a private memory of the project, and the Orchestrator owns the run closeout.
 
-**Done:**
+**Notes.** A fifth `composeSkill` layer, `<skills>/<id>.notes.md`, written by the role and replayed
+to it alone. Stages are invited — never required — to end a report with an `isotopy-persona-notes`
+block; it is stripped before the report is stored, or `upstreamFor` would replay one role's notes to
+every role after it. Merged, deduped, capped at 40, one line per note. The Orchestrator sees a digest
+of who knows what when it composes.
 
-1. **A fifth skill layer.** `<project>/.isotopy/skills/<id>.notes.md`, appended by `composeSkill`
-   under "What earlier runs taught you about this project". Layer 4 (`.project.md`) is written by a
-   human; layer 5 is written by the role itself.
-2. **The invitation.** Every stage prompt carrying a step task ends with an optional
-   `isotopy-persona-notes` block. A bare single-box prompt is still exactly what the user typed.
-3. **Merge rules** (`domain/rules/persona-notes.ts`): dedupe, cap at 40, and a repeated note moves
-   to the end — so the cap evicts what stopped being mentioned, not what was learned first.
-4. **Capture never fails a stage.** Notes are optional by construction; a malformed block is
-   treated as no block and logged as a warning.
-5. **The Orchestrator's constraint digest.** `renderPersonaConstraints` shows it who already knows
-   what, so it composes around existing knowledge instead of re-teaching it.
-6. **The closeout moved to the Orchestrator.** The `full-delivery` closeout stage runs as
-   `orchestrator`, not `project-manager`; `ProductManagerCloseout` is now `CloseoutReport`. The
-   Product Manager keeps the right to read anyone's output and disagree — in its own report and its
-   own notes.
-7. **A composed team's closeout works at all.** `CloseoutConsumer` fired on
-   `full-delivery`/`closeout` specifically, so after `TASK-150` made teams composed per run, a
-   composed team's closeout was parsed by nobody — no follow-up tasks, no source tasks moved, no
-   cleanup. It now fires on the `closeout-feature` step task. Found by audit, not by a test; a comp
-   test now covers it and was verified failing against the old guard.
-8. **`orchestrator` joins the persona catalog**, so a composed team can actually reach the role that
-   owns the closeout. The rule that the Orchestrator cannot compose itself as a worker was kept
-   structural — it may pair only with `closeout-feature` — rather than demoted to persona prose.
-9. **Run artifacts are derived from the closeout, not written twice.** `runArtifactsFrom` projects
-   the superset onto the subset, so the review turn only decides. The persona warning against
-   contradicting itself is gone, because the contradiction is now impossible.
-10. **Dropped the write-only milestone copy** of each run's closeout, which duplicated
-    `runs/<id>/closeout/*` byte for byte and had no reader.
+**Closeout.** The `closeout-feature` stage is the Orchestrator's — only it saw the whole run — and
+`CloseoutConsumer` now fires on that step task rather than on `full-delivery`/`closeout`, which had
+left every composed team's closeout inert since `TASK-150`. `ProductManagerCloseout` is now
+`CloseoutReport`, and `RunArtifacts` is gone: a run has one closeout record, not a closeout plus a
+subset of it. The Product Manager keeps the right to read anyone's output and disagree — in its own
+report and its own notes.
 
-**Not done, deliberately:** folding the closeout into the Orchestrator's settle-time review. The
-review needs an orchestration, and `routes/runs.ts` starts any pipeline directly, so a
-`full-delivery` run launched from the run list would have silently stopped creating follow-up tasks
-and transitioning source tasks. Both decisions are in `docs/decisions.md` (2026-08-20).
-
-Tests: 5 comp tests round-tripping notes through real runs (3 verified failing without the
-feature), 9 unit tests on the merge rules, 3 on the skill layering, 1 pinning closeout ownership.
+Rationale, rejected alternatives and the back-compat read for older runs are in `docs/decisions.md`
+(2026-08-20) and `docs/implementation-notes.md`.
 
 ---
 

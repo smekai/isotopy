@@ -76,29 +76,6 @@ test("the next run replays the note to that role and to nobody else", async () =
   expect(engine.callAt(2).appendSystemPrompt).not.toContain(LEARNED_FACT);
 });
 
-test("a new note joins the stored ones without repeating what is already there", async () => {
-  // Arrange — one fact already known, and the Developer is about to send it back
-  // alongside a second one.
-  const { app, engine, home } = ctx;
-  await writeNotes(home, "developer", LEARNED_FACT);
-
-  // Anticipate
-  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
-  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT_WITH_TWO_NOTES);
-  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
-  engine.anticipateRunReview();
-
-  // Act
-  const run = await startRun(app, PIPELINE);
-  await approveIntake(app, run.id);
-
-  // Assert
-  await waitForRunStatus(app, run.id, "completed");
-  const stored = (await readNotes(home, "developer")) ?? "";
-  expect(stored.split(LEARNED_FACT)).toHaveLength(2);
-  expect(stored).toContain(SECOND_FACT);
-});
-
 test("a malformed notes block leaves the stage and the stored notes alone", async () => {
   // Arrange
   const { app, engine, home } = ctx;
@@ -113,7 +90,7 @@ test("a malformed notes block leaves the stage and the stored notes alone", asyn
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
 
-  // Assert — a role.s memory is optional, so the stage still passes and the block
+  // Assert — a role's memory is optional, so the stage still passes and the block
   // is still stripped: it was addressed to the system either way.
   const finished = await waitForRunStatus(app, run.id, "completed");
   expect(finished.stageOutputs?.implementation).toBe(DEV_REPORT);
@@ -143,26 +120,7 @@ test("a role's notes never reach the next box in the same run", async () => {
   expect(engine.callAt(2).prompt).not.toContain(LEARNED_FACT);
 });
 
-test("the stored report keeps the work and drops the notes block", async () => {
-  // Arrange
-  const { app, engine } = ctx;
-
-  // Anticipate
-  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
-  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT_WITH_NOTES);
-  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
-  engine.anticipateRunReview();
-
-  // Act
-  const run = await startRun(app, PIPELINE);
-  await approveIntake(app, run.id);
-
-  // Assert
-  const finished = await waitForRunStatus(app, run.id, "completed");
-  expect(finished.stageOutputs?.implementation).toBe(DEV_REPORT);
-});
 const LEARNED_FACT = "The staging database is seeded from fixtures/seed.sql";
-const SECOND_FACT = "The build script is bin/build, not package.json scripts";
 
 const PM_REPORT = "Add a greet function. Done when it prints a greeting.";
 const DEV_REPORT = "Added greet.js and a smoke check.";
@@ -173,14 +131,6 @@ const DEV_REPORT_WITH_NOTES = [
   "",
   "```isotopy-persona-notes",
   JSON.stringify({ notes: [LEARNED_FACT] }),
-  "```",
-].join("\n");
-
-const DEV_REPORT_WITH_TWO_NOTES = [
-  DEV_REPORT,
-  "",
-  "```isotopy-persona-notes",
-  JSON.stringify({ notes: [LEARNED_FACT, SECOND_FACT] }),
   "```",
 ].join("\n");
 

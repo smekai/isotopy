@@ -17,3 +17,10 @@ export function mergePersonaNotes(existing: string[], incoming: string[]): strin
 export function renderPersonaNotes(notes: string[]): string {
   return notes.map((note) => `- ${note}`).join("\n");
 }
+
+export interface PersonaNoteSet {
+  skillId: string;
+  notes: string[];
+}
+
+export const SKILL_ID = /^[a-z0-9-]+$/;

@@ -60,17 +60,16 @@ function stagePromptBody(
 export const STAGE_NOTES_INVITATION = [
   "## Notes for your next run here (optional)",
   "",
-  "If this run taught you something durable about **this project** that you would want",
-  "to know before starting here again — a convention, a constraint, a place that is not",
-  "where it looks — end your handoff with a fenced block:",
+  "Learned something about **this project** you would want to know before starting",
+  "here again? End your handoff with a fenced block — one line per note:",
   "",
   "```isotopy-persona-notes",
   '{ "notes": ["Migrations live in db/migrate, not prisma/"] }',
   "```",
   "",
-  "These go to you alone, not to the other roles, and are replayed to you next time.",
-  "Write facts about the project, not a summary of this run — the handoff already",
-  "carries that. Omit the block entirely when there is nothing durable to add.",
+  "Replayed to you alone, never to the other roles. Facts about the project, not a",
+  "summary of this run — your handoff already carries that. Omit it when there is",
+  "nothing durable to add.",
 ].join("\n");
 
 const CONTINUATION_NOTE =

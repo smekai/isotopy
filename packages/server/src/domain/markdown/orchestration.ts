@@ -4,6 +4,7 @@ import type {
   CloseoutReport,
 } from "@isotopy/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
+import type { PersonaNoteSet } from "../rules/persona-notes.ts";
 import { renderCloseoutBody } from "./closeout.ts";
 import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";
 
@@ -76,13 +77,8 @@ export function renderOrchestrationContext({
   ]);
 }
 
-export interface PersonaNoteSummary {
-  skillId: string;
-  notes: string[];
-}
-
 export function renderPersonaConstraints(
-  roles: PersonaNoteSummary[],
+  roles: PersonaNoteSet[],
 ): string | undefined {
   if (roles.length === 0) {
     return undefined;
