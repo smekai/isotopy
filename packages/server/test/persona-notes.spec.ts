@@ -10,7 +10,7 @@ import {
 import { extractPersonaNotes } from "../src/schemas/persona-notes.ts";
 
 test("a handoff with no notes block asks for nothing to be written", () => {
-  expect(extractPersonaNotes("Built it.\n\nVERDICT: PASS")).toBeUndefined();
+  expect(extractPersonaNotes("Built it.\n\nVERDICT: PASS").notes).toBeUndefined();
 });
 
 test("a notes block is read out of the handoff around it", () => {
@@ -21,7 +21,7 @@ test("a notes block is read out of the handoff around it", () => {
     "```",
   ].join("\n");
 
-  expect(extractPersonaNotes(output)).toMatchObject({
+  expect(extractPersonaNotes(output).notes).toMatchObject({
     ok: true,
     value: { notes: ["Migrations live in db/migrate"] },
   });
@@ -30,7 +30,7 @@ test("a notes block is read out of the handoff around it", () => {
 test("a malformed notes block is a rejection, not silently dropped", () => {
   const output = "```isotopy-persona-notes\n{ \"notes\": [] }\n```";
 
-  expect(extractPersonaNotes(output)).toMatchObject({ ok: false });
+  expect(extractPersonaNotes(output).notes).toMatchObject({ ok: false });
 });
 
 test("a note the persona repeats is not written twice", () => {
@@ -71,4 +71,33 @@ test("a hand-edited notes file keeps only its bullets, so prose around them is i
 
 test("a missing notes file reads as no notes rather than throwing", () => {
   expect(parsePersonaNotes(undefined)).toEqual([]);
+});
+
+// The block is a message to Isotopy, not to the next box. Reading it and leaving
+// it in the report would replay one role's private notes to every role after it.
+test("the block is taken out of the report it arrived in", () => {
+  const output = [
+    "Built it.",
+    "",
+    "```isotopy-persona-notes",
+    '{ "notes": ["Migrations live in db/migrate"] }',
+    "```",
+  ].join("\n");
+
+  expect(extractPersonaNotes(output).report).toBe("Built it.");
+});
+
+test("a malformed block is taken out too, because it was never addressed to a persona", () => {
+  const output = 'Built it.\n\n```isotopy-persona-notes\n{ "notes": [] }\n```';
+
+  expect(extractPersonaNotes(output).report).toBe("Built it.");
+});
+
+// One bullet per note is the storage, so a note that spans lines would come back
+// truncated at the first newline. It is refused at the boundary instead.
+test("a note that spans lines is refused rather than stored lossily", () => {
+  const output =
+    '```isotopy-persona-notes\n{ "notes": ["Run tests with:\npnpm test"] }\n```';
+
+  expect(extractPersonaNotes(output).notes).toMatchObject({ ok: false });
 });

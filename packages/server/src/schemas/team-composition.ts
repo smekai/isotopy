@@ -41,6 +41,12 @@ function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
       message: `The Orchestrator composes the team and closes it out; it cannot take ${role.stepTask}`,
     });
   }
+  if (role.stepTask === CLOSEOUT_STEP_TASK && role.skill !== ORCHESTRATOR_PERSONA) {
+    issues.push({
+      path: ["roles", index, "skill"],
+      message: `Only the Orchestrator closes a run out; ${role.skill} saw one step of it`,
+    });
+  }
   return issues;
 }
 
@@ -68,7 +74,10 @@ function toStage(role: OrchestratorRole): StageDefinition {
     skill: role.skill,
     stepTask: role.stepTask,
     modelTier: role.modelTier,
-    executionPolicy: role.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD,
+    executionPolicy:
+      role.stepTask === CLOSEOUT_STEP_TASK
+        ? STAGE_EXECUTION_POLICIES.CLOSEOUT
+        : role.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD,
     gateAfter: role.gateAfter,
     interactive: role.interactive,
   };

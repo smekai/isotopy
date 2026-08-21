@@ -6,6 +6,7 @@ import {
 } from "../domain/rules/persona-notes.ts";
 import { ensureProjectDataDir, skillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
 import { extractPersonaNotes } from "../schemas/persona-notes.ts";
 import { personaNotesPath } from "./skills.ts";
 
@@ -17,29 +18,37 @@ export interface PersonaNoteSet {
   notes: string[];
 }
 
+export interface PersonaNotesCapture {
+  report: string;
+  issue?: string;
+}
+
 export async function capturePersonaNotes(
   projectPath: ProjectPath,
   skillId: string | undefined,
   output: string,
-): Promise<string[] | undefined> {
-  if (skillId === undefined || !NOTES_ID.test(skillId)) {
-    return undefined;
+): Promise<PersonaNotesCapture> {
+  const { report, notes } = extractPersonaNotes(output);
+  if (notes === undefined) {
+    return { report };
   }
-  const parsed = extractPersonaNotes(output);
-  if (parsed === undefined || !parsed.ok) {
-    return undefined;
+  if (!notes.ok) {
+    return { report, issue: formatValidationIssues(notes.issues) };
+  }
+  if (skillId === undefined || !NOTES_ID.test(skillId)) {
+    return { report, issue: `No persona owns this stage, so its notes have nowhere to go` };
   }
   const file = personaNotesPath(projectPath, skillId);
   const existing = parsePersonaNotes(
     await readFile(file, "utf8").catch(() => undefined),
   );
-  const merged = mergePersonaNotes(existing, parsed.value.notes);
+  const merged = mergePersonaNotes(existing, notes.value.notes);
   await ensureProjectDataDir(projectPath);
   await mkdir(skillsDir(projectPath), { recursive: true });
   const temporary = `${file}.tmp`;
   await writeFile(temporary, `${renderPersonaNotes(merged)}\n`, "utf8");
   await rename(temporary, file);
-  return merged;
+  return { report };
 }
 
 export async function personaNotesByRole(

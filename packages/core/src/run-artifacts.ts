@@ -29,7 +29,14 @@ export type RunArtifacts = z.infer<typeof runArtifactsSchema>;
 /** Durable facts a persona learned about this project, carried into its next run. */
 export const personaNotesSchema = z
   .object({
-    notes: z.array(requiredText).min(1),
+    notes: z
+      .array(
+        requiredText.refine(
+          (note) => !/[\r\n]/.test(note),
+          "A note is one line — a note that spans lines cannot survive its Markdown storage",
+        ),
+      )
+      .min(1),
   })
   .strict();
 

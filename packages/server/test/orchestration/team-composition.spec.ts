@@ -284,3 +284,34 @@ test("a renamed team with the same roles is still the same composition", () => {
 
   expect(sameComposition(valueOf(named), valueOf(original))).toBe(true);
 });
+
+// `CloseoutConsumer` fires on the step task alone, so if any persona could take
+// `closeout-feature` the closeout would be back with whoever the Orchestrator
+// picked — which is the arrangement TASK-113 exists to end.
+test("a specialist cannot be given the closeout, whichever specialist it is", () => {
+  const composed = composeTeamPipeline(
+    team([role({ skill: "project-manager", stepTask: "closeout-feature" })]),
+    "abc123",
+  );
+
+  expect(issuesOf(composed)).toBe(
+    "roles.0.skill: Only the Orchestrator closes a run out; project-manager saw one step of it",
+  );
+});
+
+// A standard-policy stage is skipped once an earlier stage failed, and a failed
+// run is exactly when its follow-up tasks and cleanup matter most.
+test("a composed closeout runs after a failure, whatever policy the team asked for", () => {
+  const composed = composeTeamPipeline(
+    team([
+      role({
+        skill: "orchestrator",
+        stepTask: "closeout-feature",
+        executionPolicy: "standard",
+      }),
+    ]),
+    "abc123",
+  );
+
+  expect(stagesOf(composed)[0]).toMatchObject({ executionPolicy: "closeout" });
+});

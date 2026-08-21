@@ -113,13 +113,55 @@ test("a malformed notes block leaves the stage and the stored notes alone", asyn
   const run = await startRun(app, PIPELINE);
   await approveIntake(app, run.id);
 
-  // Assert — a role's memory is optional, so nothing about the run changes.
+  // Assert — a role.s memory is optional, so the stage still passes and the block
+  // is still stripped: it was addressed to the system either way.
   const finished = await waitForRunStatus(app, run.id, "completed");
-  expect(finished.stageOutputs?.implementation).toBe(DEV_REPORT_WITH_BAD_NOTES);
+  expect(finished.stageOutputs?.implementation).toBe(DEV_REPORT);
   expect(await readNotes(home, "developer")).toBeUndefined();
 });
 
-const LEARNED_FACT = "Migrations live in db/migrate, not prisma/";
+
+// The notes block is addressed to the system, not to the next box. It is stripped
+// before the report is stored, or `upstreamFor` would replay a role's private
+// notes to every stage after it — making them private only on the *next* run.
+test("a role's notes never reach the next box in the same run", async () => {
+  // Arrange
+  const { app, engine } = ctx;
+
+  // Anticipate
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT_WITH_NOTES);
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(app, PIPELINE);
+  await approveIntake(app, run.id);
+
+  // Assert
+  await waitForRunStatus(app, run.id, "completed");
+  expect(engine.callAt(2).prompt).not.toContain(LEARNED_FACT);
+});
+
+test("the stored report keeps the work and drops the notes block", async () => {
+  // Arrange
+  const { app, engine } = ctx;
+
+  // Anticipate
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT_WITH_NOTES);
+  engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+  engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(app, PIPELINE);
+  await approveIntake(app, run.id);
+
+  // Assert
+  const finished = await waitForRunStatus(app, run.id, "completed");
+  expect(finished.stageOutputs?.implementation).toBe(DEV_REPORT);
+});
+const LEARNED_FACT = "The staging database is seeded from fixtures/seed.sql";
 const SECOND_FACT = "The build script is bin/build, not package.json scripts";
 
 const PM_REPORT = "Add a greet function. Done when it prints a greeting.";

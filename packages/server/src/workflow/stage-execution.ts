@@ -629,20 +629,8 @@ export async function runStageWork(
     };
   }
 
-  const settled = await settleStageOutput(projection, runId, stageDef, decision);
-  if (settled.output !== undefined) {
-    await capturePersonaNotes(
-      registry.resolve(run.projectId),
-      stageDef.skill,
-      settled.output,
-    ).catch((error: unknown) => {
-      projection.log(runId, stageDef.id, {
-        level: "warn",
-        message: `Notes for the next run were not saved — ${messageOf(error)}`,
-      });
-      return undefined;
-    });
-  }
+  const reported = await withNotesRemoved(deps, run, stageDef, decision);
+  const settled = await settleStageOutput(projection, runId, stageDef, reported);
   if (settled.verdict !== undefined) {
     projection.setVerdict(runId, stageDef.id, settled.verdict);
   }
@@ -676,6 +664,32 @@ export async function runStageWork(
     startedAt,
     completedAt: nowIso(),
   };
+}
+
+async function withNotesRemoved(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+  decision: EngineStageOutcome,
+): Promise<EngineStageOutcome> {
+  if (decision.output === undefined) {
+    return decision;
+  }
+  const capture = await capturePersonaNotes(
+    deps.registry.resolve(run.projectId),
+    stageDef.skill,
+    decision.output,
+  ).catch((error: unknown) => ({
+    report: decision.output ?? "",
+    issue: messageOf(error),
+  }));
+  if (capture.issue !== undefined) {
+    deps.projection.log(run.id, stageDef.id, {
+      level: "warn",
+      message: `Notes for the next run were not saved — ${capture.issue}`,
+    });
+  }
+  return { ...decision, output: capture.report };
 }
 
 async function settleStageOutput(
