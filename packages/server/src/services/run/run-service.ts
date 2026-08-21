@@ -38,8 +38,8 @@ import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
 import { ReleaseConsumer } from "../consumers/release-consumer.ts";
 import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
-import { AutomationConfigStore } from "../automation-config-store.ts";
-import { DeploymentRunner } from "../deployment-runner.ts";
+import type { AutomationConfigStore } from "../automation-config-store.ts";
+import type { DeploymentRunner } from "../deployment-runner.ts";
 import {
   cleanupCancelledRun,
   persistRunCloseout,
@@ -53,9 +53,9 @@ import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
-import { ModelRosterService } from "../model-roster-service.ts";
+import type { ModelRosterService } from "../model-roster-service.ts";
 import { engineLabel } from "../../domain/rules/engine-label.ts";
-import { SettingsStore } from "../settings-store.ts";
+import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type {
   OrchestrationHooks,
@@ -111,10 +111,6 @@ export class RunService implements RunProjection {
   readonly milestones: MilestoneService;
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
-  private readonly settings: SettingsStore;
-  private readonly rosters: ModelRosterService;
-  private readonly automation = new AutomationConfigStore();
-  private readonly deployment = new DeploymentRunner();
   private readonly changes = new RunChangeCollector();
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
@@ -125,11 +121,11 @@ export class RunService implements RunProjection {
 
   constructor(
     private readonly registry: ProjectRegistry,
-    settings?: SettingsStore,
-    rosters?: ModelRosterService,
+    private readonly settings: SettingsStore,
+    private readonly rosters: ModelRosterService,
+    private readonly automation: AutomationConfigStore,
+    private readonly deployment: DeploymentRunner,
   ) {
-    this.settings = settings ?? new SettingsStore();
-    this.rosters = rosters ?? new ModelRosterService();
     this.store = new RunStore(registry);
     this.milestones = new MilestoneService(registry, () => this);
     this.stageOutputConsumers = [

@@ -90,12 +90,13 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
   const rosters = new ModelRosterService();
-  const orchestrator = new RunService(registry, settings, rosters);
+  const automation = new AutomationConfigStore();
+  const deployment = new DeploymentRunner();
+  const orchestrator = new RunService(registry, settings, rosters, automation, deployment);
   const orchestrations = new OrchestrationService(registry, orchestrator, settings);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
-  const automation = new AutomationConfigStore();
   const product = new ProductProcessService(automation, unspawnedProduct());
   orchestrator.registerProduct(product);
   const app = createApp({
@@ -106,7 +107,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     settings,
     rosters,
     automation,
-    deployment: new DeploymentRunner(),
+    deployment,
     product,
   });
 
@@ -162,13 +163,14 @@ export async function restartApp(): Promise<RestartedApp> {
   const registry = new ProjectRegistry();
   const settings = new SettingsStore();
   const rosters = new ModelRosterService();
-  const orchestrator = new RunService(registry, settings, rosters);
+  const automation = new AutomationConfigStore();
+  const deployment = new DeploymentRunner();
+  const orchestrator = new RunService(registry, settings, rosters, automation, deployment);
   const orchestrations = new OrchestrationService(registry, orchestrator, settings);
   orchestrator.registerStageOutputConsumer(orchestrations);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
-  const automation = new AutomationConfigStore();
   const product = new ProductProcessService(automation, unspawnedProduct());
   orchestrator.registerProduct(product);
   return {
@@ -180,7 +182,7 @@ export async function restartApp(): Promise<RestartedApp> {
       settings,
       rosters,
       automation,
-      deployment: new DeploymentRunner(),
+      deployment,
       product,
     }),
     orchestrator,
