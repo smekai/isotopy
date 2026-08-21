@@ -1,102 +1,136 @@
 # Next
 
-## TASK-153: Milestone I — Isomorphic: one seam, three adapters that actually answer it
-**Priority:** P1 | **Tags:** core, server, engine, milestone-i
-**Updated:** 2026-08-20 15:19
+## TASK-156: Milestone I — Induction: a product the team carries on its own
+**Priority:** P1 | **Tags:** core, server, ui, engine, testing, milestone-i
+**Updated:** 2026-08-21 00:00
 
-An isomorphism is a structure-preserving equivalence. Three adapters behind one interface that
-answer different subsets of it are not one seam — they are three programs sharing a type name.
+Induction proves a base case, then proves each step follows from the last. The base case is a
+product built once with a human watching. The inductive step is the team building the next
+increment without one. If the step holds it holds for every increment after — and that is the
+claim this product has never tested.
 
-**The seam is real; what it requires is not written down.** `EngineAdapter` (`engines/types.ts`)
-marks `detect`, `install` and `login` optional and says nothing about the rest, so resume, effort,
-usage, cost and live model listing are all "supported" as far as the compiler is concerned. Every
-gap below is invisible until a run hits one. The second failure follows from the first: a CLI that
-grows a flag drifts away from the adapter that drives it, and nothing notices.
+**Opened 2026-08-21**, replacing *Milestone I — Isomorphic* (`TASK-153`, retired to
+`REJECTED.md`). Its first task survives here unchanged; the rest went to `TASK-158`.
 
-**Opened 2026-08-20** after comparing Isotopy's harness layer against
-[stablyai/orca](https://github.com/stablyai/orca) at the user's request, and probing the CLIs
-actually installed on this machine.
+### Why the evidence base is not enough
 
-### What the Orca comparison found
+F, G and H were all inward-facing — stabilise, rename, react to feedback — and `TASK-134` closed
+H admitting the feedback it was gated on never arrived. What Isotopy has instead is three
+dogfoods: `TASK-094` (Full Delivery), `TASK-128` (`SKIP`, Codex out of quota) and `TASK-141`
+(`PASS` on Claude Code). Every one was **one feature, on a target that no longer exists** —
+`TASK-142` exists because `TASK-128`'s target was deleted and had to be recreated from a bundle.
 
-| | Orca | Isotopy today |
-|---|---|---|
-| Agent definition | Declarative catalog — `src/shared/agent-session-option-catalog*.ts`, split per family, with `-types.ts` and per-agent `.test.ts` | Imperative argv built inline in three 300–400 line adapters |
-| Capability shape | `CatalogOption { id, label, kind, apply }`; `apply` → `launchArgs`, plus `midSession` applicability | Nothing declared |
-| Unknown model ids | `unknownModelOptions` — launch-safe options for opaque ids absent from the static catalog | `MODEL_FALLBACKS` maps to Auto; no launch-arg story |
-| Detection | `agent-detection.ts`, `agent-kind.ts` — one place | `resolveXBinary()` written three times, near-identically |
-| Trust / permissions | `agent-trust-presets.ts` — presets as data | Three hand-written `permissionArgs()` switches |
-| Usage & limits | First-class subsystems: `usage/`, `rate-limits/`, `claude-usage/`, `codex-usage/` | `domain/rules/engine-limit.ts` plus per-protocol capture — empty for Cursor |
-| Isolation | Git worktree per agent run | Agents run directly in `ctx.cwd` |
-| Execution | PTY (`pty/`, `ghost-tty/`) | Plain pipes into headless JSON modes |
+None of them can answer the question the product is actually selling: *fast first version — then
+built for v2, v3, and everything after.* That second half is the wedge in
+[`docs/product-brief.md`](../docs/product-brief.md), and it is the half that has never been
+measured.
 
-**One pattern is worth taking: the declarative catalog** — capability and launch args as *data*,
-per agent, with per-agent tests. It is not a foreign import. `packages/core/src/engines.ts`
-already declares `ENGINES`, `EngineDefinition` and `PERMISSION_MODES` exactly this way; it stops
-before capabilities and launch args, and that is where the drift gets in.
+**And every increment still starts with a human clicking.** [`docs/architecture.md`](../docs/architecture.md)
+says it plainly: one persisted Orchestrator supervises a project, and *it is an aggregate, not a
+continuously running process*. There is no scheduled work anywhere in the codebase.
 
-**PTY execution is rejected, and recorded as rejected so it is not re-proposed.** Orca is a
-terminal multiplexer: it renders agent output, it does not parse it. Isotopy drives `-p` / `exec`
-JSON modes behind strict Zod codecs (`engines/protocol-validation.ts`), with billing-safety env
-stripping, a real auto-review capability probe, and plan-limit detection with reset parsing. A PTY
-would trade a validated protocol for screen-scraping. Isotopy is ahead here and stays ahead.
+### The bar
 
-### The evidence — six defects, all verified
+A small real product, built by Isotopy, deployed, and then **carried forward by the team on a
+schedule for a measured stretch, unattended** — with the evidence written down. The gap list that
+falls out of that stretch is what MVP and public launch are scoped from.
 
-Confirmed by reading the source and probing the installed CLIs: `cursor-agent` (2026-08 build at
-`%LOCALAPPDATA%\cursor-agent`), `codex-cli 0.144.6`, `claude 2.1.215`.
+### Scope, in order
 
-1. **Cursor throws away every session.** `pipeline-workflow.ts:349` stores `result.sessionId` into
-   `nextTurn.resumeSessionId` and `stage-execution.ts:71` branches on it. Claude returns
-   `session_id`, Codex returns `thread_id`, Cursor returns nothing — `cursor-protocol.ts:16` parses
-   `system.init` without reading a session id, and `cursor.ts` passes no resume flag. Every
-   follow-up turn on Cursor starts cold, silently. The CLI advertises `--resume [chatId]` and
-   `--continue`.
-2. **Cursor's `acceptEdits` runs `--force`.** `cursor.ts:177` passes `--force` on every permission
-   mode; the CLI documents it as "force allow commands unless explicitly denied" and aliases it
-   `--yolo`. The safest mode produces the least safe behaviour.
-3. **Cursor reports auto-review as `unsupported`, as a constant** (`cursor.ts:31`). The CLI now has
-   `--auto-review` — "a server classifier auto-runs safe tool calls and prompts for the rest".
-   Cursor is the one engine that discards its `resolvePermissionPlan` result, and that is now a
-   real capability being refused.
-4. **Cursor reports no cost and no tokens.** `cursor-protocol.ts:163` emits
-   `{ durationMs, turns: 1 }`. `TASK-147`'s initiative cost readout is structurally blind on Cursor
-   and nothing says so.
-5. **Claude Code never reports `loggedIn`** (`claude-code.ts:182`). Codex and Cursor both do.
-   `TASK-142` already names this from the other side. A user finds out Claude is logged out by
-   spending a run.
-6. **`EngineAdapter` does not declare any of this**, which is why 1–5 were all invisible.
+1. **`TASK-154`** — the adapter capability catalog, Cursor session resume and permission modes,
+   Claude `loggedIn`. First, and not for tidiness: Cursor discards every session id, so every
+   follow-up turn starts cold and silently, and an unattended stretch on a cold-starting adapter
+   measures nothing. Claude never reporting logged-out is how an unattended window burns with no
+   output to show for it.
+2. **`TASK-157`** — the dogfood product exists, and Isotopy built it.
 
-Defects 2 and 3 mean `docs/implementation-notes.md` §"Engines — CLI-specific quirks" is now wrong
-about Cursor in two places. It was written in good faith against an older CLI. That is the drift
-this milestone exists to make visible.
+Named candidates, deliberately unwritten until someone picks one up with evidence in hand — this
+repo does not file speculative tasks:
 
-### Scope
+- **A deploy target.** The app reachable at a URL, with `preview` configured in
+  `.isotopy/automation.json` so Full Delivery deploys it without spending an engine turn. The host
+  is an open decision: a new server, or a second Docker Compose project on the share.travel host,
+  which already runs Compose behind Caddy. Decide it when the app exists, not now.
+- **Scheduled work — the Orchestrator gets a heartbeat.** The trigger is
+  `step.waitForSignal({ timeoutMs })` (`workflow/pipeline-workflow.ts`), the durable park
+  `TASK-061` built for plan limits: it lives in OpenWorkflow's SQLite and survived a real
+  mid-flight process kill in the `TASK-094` dogfood. **Not** `cron`, **not** `schtasks`, **not** a
+  second process — each of those diverges by OS and puts the trigger outside the runtime that
+  makes it durable.
+- **The unattended stretch.** A measured window with the human out of the loop, recorded in
+  `docs/dogfood/` in `TASK-141`'s sections so it is diffable against the attended runs.
+- **The MVP gap list.** Written from that stretch. It closes the milestone and opens the launch.
 
-`TASK-154` is the first task and the only one written so far. Named candidates, deliberately
-unwritten until someone picks one up — this repo does not file speculative tasks:
+**Isotopy variants — a build focused on Travel, another on Games, as forks of the core — are the
+milestone after MVP, decided with the product owner on 2026-08-21.** A fork of a core that cannot
+carry a product by itself forks the problem too. Recorded here so it is not lost, and not filed as
+a task, because nothing about it is decidable yet.
 
-- **Setup parity.** `install()` is absent for Claude Code, `login()` is absent for Claude Code and
-  Codex, and Cursor's `install()` is Windows-only. Three engines, three different Setup stories.
-- **Shared binary resolution**, against Orca's `agent-detection.ts`. `resolveClaudeBinary`,
-  `resolveCursorBinary` and `resolveCodexBinary` are the same function three times with different
-  fallbacks; only Codex has the Windows shim-picking fix (`pickBinaryLine`).
-- **Worktree isolation.** `cursor-agent` advertises `--worktree`, `--add-dir` and `--workspace`;
-  git-worktree isolation is Orca's core primitive. This must be designed **with** `TASK-036`, the
-  sandcastle spike, rather than around it — the spike asks the same question from the other side.
+Cross-platform: the usual Windows and macOS bar, and one gap in it becomes load-bearing.
+`TASK-061` closed with the real sleep/wake check on both OSes **reasoned through and not
+observed**. A scheduled wake-up makes that the difference between catching up and silently
+skipping a window, so it gets tested rather than argued.
 
-Cross-platform: every task here carries the same Windows and macOS bar as everything else. The
-harness layer is where it bites hardest — binary resolution, `.cmd` shims, stdin-versus-argv, and
-per-platform installers all differ by OS today.
+---
+
+## TASK-157: The dogfood product — a minigame arcade whose leaderboard cannot stand still
+**Priority:** P1 | **Tags:** testing, engine, ui, milestone-i
+**Updated:** 2026-08-21 00:00
+
+The base case of **Milestone I — Induction** (`TASK-156`): one real product, built by Isotopy,
+with a human watching and writing down everything that went wrong.
+
+### The product
+
+A minigame arcade. Two or three small games, a leaderboard per game, and one **total leaderboard
+where a record in a newer game is worth more than the same record in an older one.**
+
+That weighting is the whole reason to build this rather than another to-do list. **Adding a game
+changes every existing player's total score** — a recomputation across live data, a migration, and
+a regression that shows up on the leaderboard rather than in a log. The product cannot be built
+once and frozen, which is exactly what a base case for something that has to keep going needs.
+
+Small on purpose. The point is not the arcade.
+
+### Shape
+
+- A human creates the private `smekai` repo once — license, README stub, nothing else — and
+  **commits the baseline as a git bundle under `docs/dogfood/baseline/`**. Not optional:
+  `TASK-142` records that restoring from a local directory is how baseline `4175c97` was lost.
+- Register it as an Isotopy project and configure `.isotopy/automation.json` — `validation`, and
+  the `ui` start command and readiness URL so the embedded Preview can show the built product
+  (`TASK-138`). Deployment is a later task's, not this one's.
+- Give the Orchestrator the goal, approve the composed team, let it build. **A human does not
+  write the app.** A human having to fix it is a finding, and gets written down as one.
+- Isolated `ISOTOPY_USER_HOME`/`ISOTOPY_HOME`, as `TASK-141` used, so the run cannot quietly
+  depend on this machine's state.
+
+### Evidence
+
+`docs/dogfood/TASK-157-<engine>-<date>.md`, following
+[`TASK-141`'s record](../docs/dogfood/TASK-141-claude-code-2026-08-17.md) **section for section**
+so the two are diffable: team composition and whether it was edited, turns, changed files
+*measured* rather than claimed, cost with tier and model, embedded Preview verification, and
+whether the Orchestrator stopped itself.
+
+**The gap list is the deliverable, not the arcade.** Every friction, defect and missing capability
+goes on it — that is what the rest of the milestone is scoped from, and what a first-time user
+would have hit.
+
+Cross-platform: the arcade must build and run on Windows and macOS, and its automation commands
+are arrays with a per-platform executable override, never shell strings
+([`docs/project-automation.md`](../docs/project-automation.md)). Run live on Windows; record macOS
+as reasoned-through and untested unless a Mac is actually used.
 
 ---
 
 ## TASK-154: An adapter declares what it can do, and Cursor stops lying about three of them
 **Priority:** P1 | **Tags:** core, server, engine, milestone-i
-**Updated:** 2026-08-20 15:19
+**Updated:** 2026-08-21 00:00
 
-The first task of **Milestone I — Isomorphic** (`TASK-153`), which carries the full evidence and
-the Orca comparison this scope is drawn from.
+The first task of **Milestone I — Induction** (`TASK-156`). The Orca comparison this scope was
+drawn from, and the three adapter candidates it did not claim, are in `TASK-158` (Backlog); the
+defects below were verified against the installed CLIs before either task was written.
 
 **Ordered scope.** Step 1 is what makes 2–5 checkable rather than a list of one-off patches.
 

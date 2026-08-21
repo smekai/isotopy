@@ -1,5 +1,55 @@
 # Backlog
 
+## TASK-158: The adapter layer's unclaimed half, and the Orca comparison it came from
+**Priority:** P3 | **Tags:** core, server, engine
+**Updated:** 2026-08-21 00:00
+
+**No milestone.** Held back from `TASK-153` when Milestone I was redefined as Induction
+(`TASK-156`). `TASK-154` took the part an unattended run depends on; this is the rest. Pick it up
+when a run actually hits one of these, not before.
+
+Opened 2026-08-20 after comparing Isotopy's harness layer against
+[stablyai/orca](https://github.com/stablyai/orca) at the user's request, and probing the CLIs
+installed on this machine: `cursor-agent` (2026-08 build), `codex-cli 0.144.6`, `claude 2.1.215`.
+
+| | Orca | Isotopy today |
+|---|---|---|
+| Agent definition | Declarative catalog — `src/shared/agent-session-option-catalog*.ts`, split per family, with `-types.ts` and per-agent `.test.ts` | Imperative argv built inline in three 300–400 line adapters |
+| Capability shape | `CatalogOption { id, label, kind, apply }`; `apply` → `launchArgs`, plus `midSession` applicability | Nothing declared |
+| Unknown model ids | `unknownModelOptions` — launch-safe options for opaque ids absent from the static catalog | `MODEL_FALLBACKS` maps to Auto; no launch-arg story |
+| Detection | `agent-detection.ts`, `agent-kind.ts` — one place | `resolveXBinary()` written three times, near-identically |
+| Trust / permissions | `agent-trust-presets.ts` — presets as data | Three hand-written `permissionArgs()` switches |
+| Usage & limits | First-class subsystems: `usage/`, `rate-limits/`, `claude-usage/`, `codex-usage/` | `domain/rules/engine-limit.ts` plus per-protocol capture — empty for Cursor |
+| Isolation | Git worktree per agent run | Agents run directly in `ctx.cwd` |
+| Execution | PTY (`pty/`, `ghost-tty/`) | Plain pipes into headless JSON modes |
+
+**The one pattern worth taking is the declarative catalog, and `TASK-154` takes it.**
+`packages/core/src/engines.ts` already declares `ENGINES`, `EngineDefinition` and
+`PERMISSION_MODES` exactly that way; it stops before capabilities and launch args, and that is
+where the drift gets in.
+
+**PTY execution is rejected, and recorded as rejected so it is not re-proposed.** Orca is a
+terminal multiplexer: it renders agent output, it does not parse it. Isotopy drives `-p` / `exec`
+JSON modes behind strict Zod codecs (`engines/protocol-validation.ts`), with billing-safety env
+stripping, a real auto-review capability probe, and plan-limit detection with reset parsing. A PTY
+would trade a validated protocol for screen-scraping. Isotopy is ahead here and stays ahead.
+
+**What is left in this task:**
+
+- **Setup parity.** `install()` is absent for Claude Code, `login()` is absent for Claude Code and
+  Codex, and Cursor's `install()` is Windows-only. Three engines, three different Setup stories.
+- **Shared binary resolution**, against Orca's `agent-detection.ts`. `resolveClaudeBinary`,
+  `resolveCursorBinary` and `resolveCodexBinary` are the same function three times with different
+  fallbacks; only Codex has the Windows shim-picking fix (`pickBinaryLine`).
+- **Worktree isolation.** `cursor-agent` advertises `--worktree`, `--add-dir` and `--workspace`;
+  git-worktree isolation is Orca's core primitive. Design it **with** `TASK-036`, the sandcastle
+  spike, rather than around it — the spike asks the same question from the other side.
+
+Cross-platform: the harness layer is where this bites hardest — binary resolution, `.cmd` shims,
+stdin-versus-argv, and per-platform installers all differ by OS today.
+
+---
+
 ## TASK-069: Spike — Aiki durable runtime on a comparison branch
 **Priority:** P3 | **Tags:** server, engine, infra
 **Updated:** 2026-08-07 11:40

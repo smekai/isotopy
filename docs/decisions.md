@@ -15,6 +15,36 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-21 — Milestone I is a product carried on a schedule, not a better seam
+
+**Context:** F, G and H were all inward-facing — stabilise, rename, react to feedback — and H
+closed admitting the user feedback it was gated on never arrived. The evidence base underneath
+that is three dogfoods (`TASK-094`, `TASK-128`, `TASK-141`), each **one feature on a target that
+no longer exists**. Meanwhile the Orchestrator is an aggregate, not a process, so every increment
+begins with a human clicking, and there is no scheduled work anywhere in the codebase. The
+product's own wedge is *"then built for v2, v3, and everything after"*, and that half has never
+been measured.
+
+**Decision:** Milestone I is **Induction** — Isotopy builds one small real product, deploys it,
+and then carries it forward on a schedule, unattended, for a measured stretch. The gap list that
+falls out is what MVP and public launch are scoped from. Two constraints fall out of it and hold
+beyond this milestone:
+
+- **Scheduled work is built on the durable park, never on OS cron.**
+  `step.waitForSignal({ timeoutMs })` already survives a hard process kill — built for plan limits
+  in `TASK-061`, proven against a real mid-flight kill in the `TASK-094` dogfood. `cron` and
+  `schtasks` diverge by OS and put the trigger outside the runtime that makes it durable.
+- **Product variants — a Travel build, a Games build, as forks of the core — come after MVP, not
+  before.** A fork of a core that cannot carry a product by itself forks the problem too.
+
+**Rejected:** keeping Milestone I as *Isomorphic* — the declarative engine capability catalog —
+and deferring the dogfood behind it. It spends a milestone on internal seam quality while the
+product's central untested claim stays untested. `TASK-154` survives inside Induction anyway,
+because it is the part of that seam an unattended run depends on: an adapter that discards every
+session id makes a long stretch measure nothing, whatever else is true of it.
+
+---
+
 ## 2026-08-21 — One json-record table, one connection per project
 
 **Context:** extends 2026-07-23 ("SQLite is the sole run store, behind a layered repository"),

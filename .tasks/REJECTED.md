@@ -1,5 +1,30 @@
 # Rejected
 
+## TASK-153: Milestone I — Isomorphic: one seam, three adapters that actually answer it
+**Priority:** P1 | **Tags:** core, server, engine, milestone-i
+**Updated:** 2026-08-21 00:00
+
+**Retired as a milestone on 2026-08-21 — not rejected as work, and never started.** Milestone I
+became `TASK-156` — Induction — when the product owner judged that the seam's internal quality
+mattered less right now than the claim nothing has ever tested: that a team can carry a product
+forward without a human starting each increment.
+
+Nothing it found was discarded, which is why this is a record rather than a deletion:
+
+- **`TASK-154` survives unchanged** as Induction's first task. Cursor throwing away every session
+  id is precisely what would make an unattended stretch measure nothing, so the dogfood depends on
+  it rather than merely benefiting from it.
+- **The Orca comparison, the PTY rejection, and the three candidates this milestone never wrote**
+  — setup parity, shared binary resolution, worktree isolation — moved to `TASK-158` in the
+  Backlog at P3.
+- **The six verified adapter defects** are not lost either: five are restated inside `TASK-154`,
+  and the sixth — that `EngineAdapter` declares none of it — *was* `TASK-154`'s first step.
+
+The evidence was sound and stays on the board. The letter I is the only thing this lost. See
+`docs/decisions.md` (2026-08-21).
+
+---
+
 ## TASK-135: Recruit prospective users and collect their feedback
 **Priority:** P2 | **Tags:** ui, milestone-h
 **Updated:** 2026-08-20 16:10
