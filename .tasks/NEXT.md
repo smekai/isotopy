@@ -446,54 +446,6 @@ as reasoned-through and untested unless a Mac is actually used.
 
 ---
 
-## TASK-142: Rerun the Milestone F dogfood with Cursor after quota reset
-**Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
-**Updated:** 2026-08-17 12:30
-
-Repeat the clean newcomer focus-timer path with Cursor after the account's monthly
-usage limit resets on 2026-09-03, or earlier if the user makes Cursor capacity available.
-Start from refreshed `main`, the baseline named below, and isolated
-`ISOTOPY_USER_HOME`/`ISOTOPY_HOME`; require product onboarding, user-approved team composition,
-real execution, measured changed files, embedded Preview verification, and a clean
-post-run Orchestrator stop.
-
-**Match TASK-141, not TASK-128.** TASK-128's target and its literal goal string are both gone —
-the target repo was deleted and the goal was never written into a task file. TASK-141 recreated
-both, so *that* is the comparable run.
-
-Restore its baseline from the bundle committed in this repository — **not** from any local
-directory, which is how `4175c97` was lost:
-
-```
-git clone docs/dogfood/baseline/dogfood-focus-timer-87fe592.bundle <target>
-cd <target> && pnpm install
-```
-
-That checks out `87fe5929f60f92b6f0c10ffc610229d34047f82b` exactly, with all 14 tracked files.
-Confirm the SHA before starting, then type this goal verbatim:
-
-> Evolve this focus timer into one I would actually use every day: let me set the focus and break
-> lengths anywhere from 1 to 120 minutes, remember the timer's state across a page reload,
-> alternate automatically between focus and break, and keep a history of completed focus sessions
-> only. Keep the existing Start, Pause and Reset controls working, and make the timer's state
-> announced accessibly.
-
-Follow TASK-141's evidence record section-for-section so the two are diffable, and record Cursor's
-tier, model and spend — the fields TASK-128 omitted, which is why its numbers are not comparable.
-
-Confirm Cursor install/login through Isotopy before spending a run — unlike Claude Code, the Cursor
-adapter does report `loggedIn`, so this check is available in-product. External authentication,
-quota, or service unavailability is `SKIP`; a product defect is `FAIL`. Note that a mid-run
-subscription limit is **not** a `SKIP` on its own: since TASK-061 the stage parks on a durable
-timer and resumes. On `PASS`, combine the result with TASK-128's Codex evidence and TASK-141's
-Claude evidence to make the final Milestone F release decision and update TASK-125 accordingly.
-
-Cross-platform: run live on Windows. Audit Cursor binary lookup, Node 22.5+, pnpm/POSIX
-executable selection, path handling, and process cleanup for macOS, recording macOS as
-reasoned-through and untested unless a live Mac is actually used.
-
----
-
 ## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
 **Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
 **Updated:** 2026-08-10 14:10
