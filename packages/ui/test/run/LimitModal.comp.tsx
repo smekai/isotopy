@@ -68,6 +68,15 @@ test("dropping to a cheaper preset resolves with the model that preset stands fo
   expect(props.onResolve).toHaveBeenCalledWith({ choice: "switch-tier", tier: "fast" });
 });
 
+test("two rungs on one model stay two offers, because they differ by effort and so by price", () => {
+  // Arrange — Economy and Fast are both haiku on Claude Code; only the effort separates them.
+  render(<LimitModal {...limitProps()} />);
+
+  // Assert
+  expect(screen.getByText("Economy")).toBeTruthy();
+  expect(screen.getByText("Fast")).toBeTruthy();
+});
+
 test("only rungs below the one that hit the limit are offered as a way out", () => {
   // Arrange — a legacy run records only the concrete model that hit the limit.
   const legacyRun = run([stage("design", "blocked")], "blocked");

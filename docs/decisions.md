@@ -15,6 +15,32 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-23 — A preset for the cheapest thing a harness sells
+
+**Context:** preparing `TASK-142`'s Cursor dogfood, the account had capacity — Auto + Composer at
+11% used, API at 100% — and no preset could reach it. Every Cursor rung was a `gpt-5.3-codex`
+variant, and the tier named `auto` meant "pass no `--model`", which inherits whatever
+`~/.cursor/cli-config.json` names. The cheapest thing Cursor sells was unreachable from every
+preset, including the one called Auto.
+
+**Decision:** `economy` becomes a sixth tier, directly after `auto`, and Cursor's ladder moves to
+Composer plus Anthropic. Economy is a **tier rather than a relabelled `auto`** because
+`MODEL_TIER_OPTIONS` order is the price ladder `LimitModal` slices for escapes, and `auto` is
+excluded from it outright — a cheap pool parked under `auto` can never be offered when a run hits
+a limit. Under `economy` it can, which is the whole value: a run that exhausts one pool falls to
+the subsidised one and keeps going.
+
+Economy takes today's Fast rung on Claude Code and Codex and Fast moves up one notch, so six rungs
+stay monotone. **Rejected: letting Economy duplicate Fast there** — it leaves the picker showing
+two presets with one answer and gives the limit ladder a rung that escapes to nothing cheaper. The
+price is that Fast costs slightly more on two engines that were not the reason for the change.
+
+Stored preferences need no migration. `tierOf` matches on model id alone and returns the first
+tier naming it, so a pre-preset `haiku` pin now adopts Economy rather than Fast — correct, because
+the old Fast *was* `haiku`/low, which is now Economy.
+
+---
+
 ## 2026-08-21 — Milestone I is a product carried on a schedule, not a better seam
 
 **Context:** F, G and H were all inward-facing — stabilise, rename, react to feedback — and H

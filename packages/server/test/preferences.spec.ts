@@ -13,8 +13,8 @@ describe("normalizeProjectPreferences", () => {
   test("a pre-tier file adopts its own engine's economical default, not Claude Code's", () => {
     // A settings file written before presets existed has an engine and no tier.
     // Falling back to the default engine's tier hands Cursor `fast`, when the
-    // cheap path on Cursor is its own routing.
-    expect(normalizeProjectPreferences({ engine: "cursor" }).modelTier).toBe("auto");
+    // cheap path on Cursor is its own routing — which `economy` is what names.
+    expect(normalizeProjectPreferences({ engine: "cursor" }).modelTier).toBe("economy");
   });
 
   test("a stored tier still wins over the engine's default", () => {

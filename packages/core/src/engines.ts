@@ -184,13 +184,13 @@ export function rosterOrigins(options: EngineModelOption[]): SelectableModelOrig
   );
 }
 
-export const MODEL_TIERS = ["auto", "fast", "balanced", "deep", "max"] as const;
+export const MODEL_TIERS = ["auto", "economy", "fast", "balanced", "deep", "max"] as const;
 
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
 export const DEFAULT_MODEL_TIER_BY_ENGINE: Record<EngineId, ModelTier> = {
   "claude-code": "fast",
-  cursor: "auto",
+  cursor: "economy",
   codex: "fast",
 };
 
@@ -210,6 +210,11 @@ export interface ModelTierDefinition {
 
 export const MODEL_TIER_OPTIONS: ModelTierDefinition[] = [
   { id: "auto", label: "Auto", hint: "whatever the harness is already set to" },
+  {
+    id: "economy",
+    label: "Economy",
+    hint: "the cheapest the harness sells — on Cursor, its subsidised Auto/Composer allowance",
+  },
   { id: "fast", label: "Fast", hint: "quick and cheap — routine edits" },
   { id: "balanced", label: "Balanced", hint: "the everyday default" },
   { id: "deep", label: "Deep", hint: "more reasoning — design and hard bugs" },
@@ -230,21 +235,30 @@ const AUTO_LADDER: TierCandidate[] = [{ model: AUTO_MODEL_ID }];
 const TIER_LADDERS: Record<EngineId, Record<ModelTier, TierCandidate[]>> = {
   "claude-code": {
     auto: AUTO_LADDER,
-    fast: [{ model: "haiku", effort: "low" }],
+    economy: [{ model: "haiku", effort: "low" }],
+    fast: [{ model: "haiku", effort: "medium" }],
     balanced: [{ model: "sonnet", effort: "medium" }],
     deep: [{ model: "opus", effort: "high" }, { model: "sonnet", effort: "high" }],
     max: [{ model: "opus", effort: "xhigh" }, { model: "sonnet", effort: "xhigh" }],
   },
   cursor: {
     auto: AUTO_LADDER,
-    fast: [{ model: "gpt-5.3-codex-low" }, { model: "composer-2.5" }],
-    balanced: [{ model: "gpt-5.3-codex" }, { model: "auto" }],
-    deep: [{ model: "gpt-5.3-codex-high" }, { model: "gpt-5.3-codex" }],
-    max: [{ model: "gpt-5.3-codex-xhigh" }, { model: "gpt-5.3-codex-high" }],
+    economy: [{ model: "auto" }, { model: "composer-2.5" }],
+    fast: [{ model: "composer-2.5" }, { model: "auto" }],
+    balanced: [{ model: "claude-sonnet-5-thinking-high" }, { model: "composer-2.5" }],
+    deep: [
+      { model: "claude-opus-5-thinking-high" },
+      { model: "claude-sonnet-5-thinking-high" },
+    ],
+    max: [
+      { model: "claude-opus-5-thinking-xhigh" },
+      { model: "claude-opus-5-thinking-high" },
+    ],
   },
   codex: {
     auto: AUTO_LADDER,
-    fast: [{ model: "gpt-5.6-luna", effort: "low" }],
+    economy: [{ model: "gpt-5.6-luna", effort: "low" }],
+    fast: [{ model: "gpt-5.6-luna", effort: "medium" }],
     balanced: [{ model: "gpt-5.6-sol", effort: "medium" }],
     deep: [{ model: "gpt-5.6-sol", effort: "high" }],
     max: [{ model: "gpt-5.6-sol", effort: "high" }],
@@ -322,7 +336,7 @@ export function bundledRosterFor(engineId: EngineId): EngineModelRoster {
   return roster;
 }
 
-const STATIC_ROSTER_CHECKED_ON = "2026-08-07";
+const STATIC_ROSTER_CHECKED_ON = "2026-08-23";
 
 export const CLAUDE_STATIC_MODELS: StaticModelRoster = {
   checkedOn: STATIC_ROSTER_CHECKED_ON,
@@ -349,6 +363,11 @@ export const CURSOR_STATIC_MODELS: StaticModelRoster = {
     { id: "gpt-5.2", label: "GPT-5.2", hint: "OpenAI" },
     { id: "gpt-5.6-sol-high", label: "GPT-5.6 Sol 1M High", hint: "OpenAI" },
     { id: "claude-opus-5-thinking-high", label: "Opus 5 1M Thinking", hint: "Anthropic" },
+    {
+      id: "claude-opus-5-thinking-xhigh",
+      label: "Opus 5 1M Extra High Thinking",
+      hint: "Anthropic",
+    },
     { id: "claude-sonnet-5-thinking-high", label: "Sonnet 5 1M Thinking", hint: "Anthropic" },
     { id: "cursor-grok-4.5-high", label: "Cursor Grok 4.5", hint: "xAI" },
   ],

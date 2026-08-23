@@ -196,13 +196,14 @@ function cheaperTiers(
   if (currentTier !== undefined) {
     return candidates.map(({ tier, model }) => ({ tier, model }));
   }
-  const seen = new Set([currentModel]);
+  const seen = new Set<string>();
   return candidates.flatMap(
-    ({ tier, model }) => {
-      if (seen.has(model)) {
+    ({ tier, model, effort }) => {
+      const rung = `${model}·${effort ?? ""}`;
+      if (model === currentModel || seen.has(rung)) {
         return [];
       }
-      seen.add(model);
+      seen.add(rung);
       return [{ tier, model }];
     },
   );

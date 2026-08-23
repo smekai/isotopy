@@ -224,7 +224,7 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   // Setup shows the stored preset and what it resolves to here
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
-  await expect(page.getByText("→ haiku · effort low")).toBeVisible();
+  await expect(page.getByText("→ haiku · effort medium")).toBeVisible();
 
   // permission mode is stored server-side (UI selection is style-only)
   expect((await readPreferences(page)).permissionMode).toBe("acceptEdits");

@@ -558,7 +558,7 @@ test("approving a proposed team starts a composed run carrying its own pipeline 
 });
 
 test("a role with its own preset runs at it while a role without one follows the run's", async () => {
-  // Anticipate — deep resolves to opus/high for this engine, the run's fast to haiku/low.
+  // Anticipate — deep resolves to opus/high for this engine, the run's fast to haiku/medium.
   ctx.engine
     .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
     .reports(fenced(TIERED_TEAM_PROPOSAL));
@@ -566,7 +566,7 @@ test("a role with its own preset runs at it while a role without one follows the
     .anticipate({ as: "Developer", model: "opus", effort: "high" })
     .reports("Built it.\n\nVERDICT: PASS");
   ctx.engine
-    .anticipate({ as: "QA Engineer", model: "haiku", effort: "low" })
+    .anticipate({ as: "QA Engineer", model: "haiku", effort: "medium" })
     .reports("Checked it.\n\nVERDICT: PASS");
   ctx.engine.anticipateRunReview();
   const conversation = await proposedTeam();
@@ -590,7 +590,7 @@ test("the preset the user changed at approval is what runs, not the one proposed
     .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
     .reports(fenced(TIERED_TEAM_PROPOSAL));
   ctx.engine
-    .anticipate({ as: "Developer", model: "haiku", effort: "low" })
+    .anticipate({ as: "Developer", model: "haiku", effort: "medium" })
     .reports("Built it.\n\nVERDICT: PASS");
   ctx.engine
     .anticipate({ as: "QA Engineer", model: "opus", effort: "high" })

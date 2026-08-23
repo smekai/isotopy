@@ -122,7 +122,7 @@ test("revealing the roster groups verified entries apart from guesses", async ()
   fireEvent.click(screen.getByText(REVEAL_ROSTER));
 
   // Assert
-  expect(screen.getByRole("group", { name: /checked 2026-08-07/ })).toBeTruthy();
+  expect(screen.getByRole("group", { name: /checked 2026-08-23/ })).toBeTruthy();
 });
 
 test("picking an exact model reports the id the harness will be given", async () => {

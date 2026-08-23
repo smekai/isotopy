@@ -1,5 +1,64 @@
 # Done
 
+## TASK-164: A preset for the cheapest thing a harness sells, and Cursor stops riding one OpenAI family
+**Priority:** P1 | **Tags:** core, ui, engine, milestone-i
+**Updated:** 2026-08-23 19:30
+
+Closed 2026-08-23. Opened the same day while preparing `TASK-142`'s Cursor dogfood: the account had
+capacity — **Auto + Composer at 11% used, API at 100%** — and no Isotopy preset could reach it.
+
+**`economy` is a sixth tier, directly after `auto`.** Not a relabelled `auto`, and the reason is
+mechanical rather than cosmetic: `LimitModal` treats `MODEL_TIER_OPTIONS` order as a price ladder,
+slicing it for the rungs cheaper than the one that hit a limit, and drops `auto` from that list
+because "whatever the CLI is set to" has no price. A subsidised allowance parked under `auto` could
+therefore never be offered as an escape. Under `economy` it is.
+
+**Economy took Fast's rung and Fast moved up one notch** on Claude Code (`haiku` low → Economy,
+`haiku` medium → Fast) and Codex (`gpt-5.6-luna` low → Economy, medium → Fast), keeping six rungs
+monotone. **Rejected: letting Economy duplicate Fast there** — two presets with one answer, and a
+limit rung escaping to nothing cheaper.
+
+**Cursor's ladder crossed vendors.** Economy `auto`, Fast `composer-2.5`, Balanced
+`claude-sonnet-5-thinking-high`, Deep `claude-opus-5-thinking-high`, Max
+`claude-opus-5-thinking-xhigh`; `claude-opus-5-thinking-xhigh` joined the bundled roster and
+`STATIC_ROSTER_CHECKED_ON` moved to 2026-08-23, earned by a live `agent models`. `gpt-5.3-codex`
+stayed in the roster as a manual pin and stopped being a preset rung. Cursor's default tier moved
+from `auto` to `economy`.
+
+**Gotcha worth keeping — a new invariant test found a real defect and a documented one.** A sweep
+asserting no two priced rungs resolve alike failed first on **Codex**, where `deep` and `max` are
+both `gpt-5.6-sol`/`high` — pre-existing and deliberate, since efforts above `high` are unconfirmed
+there. The sweep was narrowed to what this task actually decided: Economy must never equal Fast.
+The second find was live code: `cheaperTiers` de-duplicated escape rungs on **model alone**, so
+Economy and Fast — both `haiku`, differing only in effort — collapsed into one offer and Fast
+silently vanished from the limit modal. The key now includes effort. That defect was invisible
+until two rungs shared a model, which is exactly what this change introduced.
+
+**Two ripples nothing in the plan predicted, both caught by existing guards.**
+`orchestrate-assignment.spec.ts` sweeps `MODEL_TIERS` against the orchestrate skill and failed
+because the skill still said "the five tiers", so a tier the assignment never names is a tier the
+model never picks. And the `ui-smoke` e2e asserts what Fast resolves to on screen.
+
+**Verified:** lint, typecheck, **940 tests passed** (up from 933), build, `gen:skills` with no
+resulting diff, **e2e 70 passed / 4 skipped**. Every tier was then resolved against the three
+*live* rosters through `GET /engines/:id/models?refresh=1` — none degraded, and Cursor's Economy
+resolves to `auto`, the pool the dashboard shows free. Setup renders six presets with Economy
+between Auto and Fast. The UI proxy hop was broken during that check (the server bound
+`[::1]` only), so the resolution was read from the API rather than the picker.
+
+Recorded in [`docs/decisions.md`](../docs/decisions.md) (2026-08-23) and
+[`docs/implementation-notes.md`](../docs/implementation-notes.md), which gains the note that
+`MODEL_TIER_OPTIONS` order is a price ladder rather than a display order.
+
+Stored preferences needed no migration. `tierOf` matches on model id alone and returns the first
+tier naming it, so a pre-preset `haiku` or `gpt-5.6-luna` pin now adopts Economy rather than Fast —
+correct, because the old Fast *was* that model at low effort. A legacy `gpt-5.3-codex` pin stops
+being a ladder member and survives as an explicit pin.
+
+Cross-platform: n/a — tier ladders and the bundled roster are pure data. Verified on Windows.
+
+---
+
 ## TASK-155: Reduce backend abstraction ceremony and validate/reduce docs
 **Priority:** P2
 **Tags:** server, core, infra

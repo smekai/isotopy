@@ -548,9 +548,19 @@ the workspace is the source of truth, the reports only add what a box *said*.
 - **Effort is a separate axis on two of three CLIs.** Claude takes
   `--effort low|medium|high|xhigh|max`, Codex takes
   `-c model_reasoning_effort="…"`, and Cursor bakes it into the id
-  (`gpt-5.3-codex-high`), so its ladder rides one model family across four rungs
-  and ignores `EngineRunContext.effort`. Codex's accepted values above `high` are
-  unconfirmed, which is why Max shares Deep's effort there.
+  (`claude-opus-5-thinking-xhigh`), so it ignores `EngineRunContext.effort` and
+  its rungs are whole model ids. Cursor's ladder crosses vendors — Composer at the
+  cheap end, Sonnet 5 and Opus 5 above it — because one family across every rung
+  was a poor default, not because the family mattered. Codex's accepted values
+  above `high` are unconfirmed, which is why Max shares Deep's effort there, and
+  is the one place two presets still resolve alike.
+- **`MODEL_TIER_OPTIONS` order is a price ladder, not a display order.**
+  `LimitModal` slices it to find the rungs *cheaper* than the one that hit a
+  limit, and drops `auto` from that list because "whatever the CLI is set to" has
+  no price. `economy` therefore sits directly after `auto`: it is what makes a
+  harness's subsidised allowance — Cursor's Auto/Composer pool — reachable as an
+  escape rather than only as a hand-pinned model. Two rungs may share a model and
+  differ only in effort, so the escape list de-duplicates on both.
 - **A preset is engine-independent; a pinned id is not.** `ProjectPreferences`
   carries one `modelTier` for the project plus `engineModels` as a per-engine
   *override* — the advanced escape hatch. An override wins over the preset, and
