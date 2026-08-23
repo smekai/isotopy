@@ -1,5 +1,60 @@
 # Done
 
+## TASK-165: A stage's orphans outlive it, and the product runner then fights its own leftovers
+**Priority:** P0 | **Tags:** server, engine, infra, milestone-i
+**Updated:** 2026-08-23 22:30
+
+Closed 2026-08-23. The three-defect chain from `TASK-142`'s dogfood, fixed together.
+
+**A timeout now settles the stage whether or not the child dies.** `ABANDON_AFTER_KILL_MS` (15s)
+starts when the timeout kills the process tree; if `exit` never arrives, the deadline settles
+anyway. That is the 600s-versus-5316s gap closed. The message carries both numbers now —
+`Timed out after 600s, abandoned after 5316s` — because a timeout that silently overran makes every
+duration in a run record a guess.
+
+**`taskkill` is no longer fire-and-forget.** Its spawn error and non-zero exit are reported through
+a `KillProblem` callback into the settled result, so a kill that missed a grandchild says so
+instead of leaving a leaked port to be discovered two hours later.
+
+**The product runner recovers from colliding with its own leftover.** The real mechanism was
+narrower than "it should check the port first": `noteExit` aborts the health poll, so when the
+rival died of `EADDRINUSE` the poll never got to answer and the exit won. `reachable()` now
+re-probes on a *fresh* signal when the child exited, and adopts the product already serving that
+URL — `adopted: true`, `lastError` cleared, a new `AbortController` so the framing probe still runs.
+The Preview says so in the toolbar: *already running here — Isotopy did not start it and cannot stop
+it*.
+
+**Rejected: probing the health URL before launching at all.** It was the first attempt and it broke
+eight existing tests for a good reason — it makes Isotopy never start the product whenever anything
+answers that port, including a stale server serving old code. Recovering from the collision is the
+narrow fix; pre-empting the launch is a different and worse policy.
+
+**Gotcha worth keeping:** the first cut also silently reverted a guard. `abandoned()` meant *either*
+superseded *or* exited, and the exited half is what stops a product that dies mid-header-probe from
+being announced ready. Splitting it into `superseded()` alone lost that, and the existing test
+"a product that dies while its headers are being read is not then announced as ready" caught it
+immediately. It is now `superseded() || diedWhileProbing()`, where the second permits the adopted
+case and nothing else.
+
+**Tests.** `subprocess-timeout.spec.ts` covers the message as a pure function — including the
+dogfood's literal 600s/5316s pair — plus a win32 test that a `taskkill` which cannot reach its pid
+reports rather than fails silently, and a POSIX test that the group signal reaches a detached
+grandchild. Two product-process comp tests: the rival that loses the port is adopted, and the rival
+that dies with nothing serving still reports the exit, so adoption cannot paper over an absent
+product.
+
+**Verified:** lint, typecheck, **946 tests passed / 1 skipped** (up from 940), build, `gen:skills`
+with no diff, e2e 70 passed / 4 skipped.
+
+Cross-platform: the abandon deadline and the adoption are platform-independent. The `taskkill`
+reporting is win32 and tested there; the POSIX group-signal path has its own test. **An unkillable
+child is not portably reproducible**, so the deadline itself is covered through its reporting rather
+than by simulating the hang — stated here rather than implied by a green suite. Whether a POSIX
+process group would have taken the leaked `vite preview` with it is still unestablished; the
+question the task raised stays open and belongs with whoever next has a Mac.
+
+---
+
 ## TASK-142: Rerun the Milestone F dogfood with Cursor, on the pool that has headroom
 **Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-23 22:15

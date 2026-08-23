@@ -176,6 +176,11 @@ export function PreviewPanel({ status, error, busy, start, stop, restart, d }: P
           </button>
         )}
         {error !== null && <span style={failureText()}>{error}</span>}
+        {status.adopted === true && (
+          <span style={addressText(d)} data-testid="product-adopted">
+            already running here — Isotopy did not start it and cannot stop it
+          </span>
+        )}
         {status.url !== undefined && <span style={addressText(d)}>{status.url}</span>}
       </div>
 

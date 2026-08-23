@@ -60,6 +60,18 @@ grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
 does drain. The grace window is the whole trade: too short truncates a chatty
 CLI's last lines, too long re-introduces the stall.
 
+**And a timeout settles the stage even when the kill misses
+(`ABANDON_AFTER_KILL_MS`).** Settling on `exit` only helps when the child
+actually exits. `TASK-142`'s dogfood found the other half: the Developer stage
+left `vite preview` running, `taskkill /T` did not take it, the `cursor-agent`
+tree never exited, and a stage with a 600s timeout ran **5316s** while its own
+error message still read "Timed out after 600s". The timeout now starts a
+deadline after killing and settles on it regardless, and the message carries
+both numbers — a timeout that does not stop the clock makes every duration in a
+run record a guess. `taskkill` is also no longer fire-and-forget: its exit code
+and spawn failure are reported into the settled result, because a kill that
+silently fails is how a leaked port outlives three runs.
+
 **Handle-returning start (`startSubprocess`).** A dev server outlives the request
 that asked for it, so `TASK-138` needed the `ChildProcess` rather than a promise
 of its exit — `killProcessTree` takes the object, not a pid. `startSubprocess`

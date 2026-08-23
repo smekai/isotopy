@@ -1,42 +1,5 @@
 # Backlog
 
-## TASK-165: A stage's orphans outlive it, and the product runner then fights its own leftovers
-**Priority:** P0 | **Tags:** server, engine, infra, milestone-i
-**Updated:** 2026-08-23 22:00
-
-Found by `TASK-142`'s Cursor dogfood, which it cost the milestone. Three defects, one chain, filed
-together because fixing any one alone still leaves a run that cannot finish. Full evidence in
-[`docs/dogfood/TASK-142-cursor-2026-08-23.md`](../docs/dogfood/TASK-142-cursor-2026-08-23.md) §6.
-
-**The Developer stage started `vite preview` on port 5180 and it outlived the run by two hours.**
-The verify stage's 600s timeout fired and `killProcessTree` ran `taskkill /pid <pid> /T /F` against
-the `cursor-agent` tree, but the `vite preview` node process (pid 34408, parented to a surviving
-`cmd.exe` shim) kept running and kept the port. A stage that leaks a listening server poisons every
-later run in that project.
-
-**Isotopy's own product runner then collided with that orphan and reported the opposite of the
-truth.** `GET /automation/product` returned `state: "exited"` with
-`lastError: "Port 5180 is already in use"` while the configured `healthUrl` was answering 200 with
-the freshly built app. The runner should recognise a healthy product already serving at its own URL
-and adopt it, rather than failing to start a second copy and then claiming the product is down. A
-human ran `Stop-Process` by hand; with the orphan gone the Preview reached `ready` in 4.4 seconds,
-so the Preview itself is fine — only its interaction with a leftover is not.
-
-**And the stage reported "Timed out after 600s" after actually running 5316s.** The message and the
-measured duration disagree by 79 minutes, so the stage did not settle when the timeout fired —
-almost certainly because the orphaned grandchild held a stdio pipe open and `close` never arrived.
-`startSubprocess` already has `STDIO_FLUSH_GRACE_MS` for exactly this shape of problem on the
-`exit` path; the timeout path evidently does not get there. A timeout that does not stop the clock
-makes every duration in a run record untrustworthy.
-
-Cross-platform: this is a **Windows** observation and the fix may be Windows-only. The POSIX branch
-signals a process *group* (`SIGTERM` then `SIGKILL` on `-pid`) rather than `taskkill /T`, and a
-group signal plausibly would have taken the `vite preview` grandchild with it. Establish that
-before writing a cross-platform fix for a problem that may only exist on one platform — and if
-POSIX is already correct, the record should say so rather than leaving both branches suspect.
-
----
-
 ## TASK-166: A verification that runs out of time loses everything it learned
 **Priority:** P0 | **Tags:** server, engine, core, milestone-i
 **Updated:** 2026-08-23 22:00
