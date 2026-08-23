@@ -25,15 +25,26 @@ begins with a human clicking, and there is no scheduled work anywhere in the cod
 product's own wedge is *"then built for v2, v3, and everything after"*, and that half has never
 been measured.
 
-**Decision:** Milestone I is **Induction** — Isotopy builds one small real product, deploys it,
-and then carries it forward on a schedule, unattended, for a measured stretch. The gap list that
-falls out is what MVP and public launch are scoped from. Two constraints fall out of it and hold
-beyond this milestone:
+**Decision:** Milestone I is **Induction** — Isotopy builds one small real product and then carries
+it forward on a schedule, unattended, for a measured stretch. The gap list that falls out is what
+MVP and public launch are scoped from. Four things fall out of it and hold beyond this milestone:
 
-- **Scheduled work is built on the durable park, never on OS cron.**
-  `step.waitForSignal({ timeoutMs })` already survives a hard process kill — built for plan limits
-  in `TASK-061`, proven against a real mid-flight kill in the `TASK-094` dogfood. `cron` and
-  `schtasks` diverge by OS and put the trigger outside the runtime that makes it durable.
+- **A schedule is a persisted record plus a ticker, not a durable workflow.** Crash safety comes
+  from the record: a cron expression plus `lastFiredAt` recompute due-ness deterministically after
+  any restart. `step.waitForSignal({ timeoutMs })` — the durable park `TASK-061` built for plan
+  limits — is right for *one* wait of known length and wrong for a recurring one: `WorkflowRuntime`
+  registers exactly one workflow and runs `concurrency: 1`, and a month-long parked workflow must
+  be cancelled and rebuilt every time its expression is edited.
+- **Cron is parsed in-process, never delegated to the OS.** `cron` and `schtasks` diverge by
+  platform. Timezone resolution follows `domain/rules/engine-limit.ts` — ICU through
+  `Intl.DateTimeFormat`, durations in server logs, clock times only in the browser.
+- **The Orchestrator remains an episode handler and is allowed to die.** A schedule, not a
+  long-lived supervisor, is what carries intent between episodes — which is why a standing goal
+  never needed a home on the `Orchestration` record. The project's memory lives in the task board,
+  in per-persona notes (`TASK-113`), and in run artifacts on disk, all of which outlive any
+  orchestration. Accepted cost: an episode cannot cite the previous episode's artifacts directly,
+  because `priorArtifacts()` filters by `orchestration.runIds`. It reads the board and the notes
+  instead.
 - **Product variants — a Travel build, a Games build, as forks of the core — come after MVP, not
   before.** A fork of a core that cannot carry a product by itself forks the problem too.
 
@@ -42,6 +53,12 @@ and deferring the dogfood behind it. It spends a milestone on internal seam qual
 product's central untested claim stays untested. `TASK-154` survives inside Induction anyway,
 because it is the part of that seam an unattended run depends on: an adapter that discards every
 session id makes a long stretch measure nothing, whatever else is true of it.
+
+**Also rejected:** giving an orchestration a resting state so it could survive between scheduled
+episodes. It reads as the obvious fix for the amnesia above, and it is the wrong layer — it would
+put durable intent on a conversation record when the schedule already holds it durably, and it
+would make `stop` mean two things. The system already has one place for "what this project must
+keep being true", and after this milestone it is a schedule.
 
 ---
 
