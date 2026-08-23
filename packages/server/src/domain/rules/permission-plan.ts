@@ -1,3 +1,4 @@
+import { ENGINES, capabilityReachable, engineCapability } from "@isotopy/core";
 import type { AutoReviewSupport, EngineId, EnginePermissionMode } from "@isotopy/core";
 
 export const PERMISSION_STRATEGIES = ["unrestricted", "autoReview", "acceptEdits"] as const;
@@ -10,9 +11,22 @@ export interface PermissionPlan {
 }
 
 const ACCEPT_EDITS_CAVEAT: Partial<Record<EngineId, string>> = {
-  cursor: "Cursor has no accept-edits-only headless mode — running with --force",
   codex: "Codex has no accept-edits-only headless mode — running with --sandbox workspace-write",
 };
+
+function acceptEditsUnreachable(engineId: EngineId): string {
+  return (
+    `${ENGINES[engineId].label}'s accept-edits sandbox needs macOS or Linux — ` +
+    "running unrestricted"
+  );
+}
+
+function acceptEditsPlan(engineId: EngineId, posix: boolean): PermissionPlan {
+  if (capabilityReachable(engineCapability(engineId, "acceptEditsMode"), posix)) {
+    return { strategy: "acceptEdits", notice: ACCEPT_EDITS_CAVEAT[engineId] };
+  }
+  return { strategy: "unrestricted", notice: acceptEditsUnreachable(engineId) };
+}
 
 const AUTO_REVIEW_UNSUPPORTED: Record<EngineId, string> = {
   "claude-code":
@@ -47,12 +61,13 @@ export function permissionPlan(
   engineId: EngineId,
   mode: EnginePermissionMode,
   support: AutoReviewSupport,
+  posix: boolean,
 ): PermissionPlan {
   switch (mode) {
     case "skip":
       return { strategy: "unrestricted" };
     case "acceptEdits":
-      return { strategy: "acceptEdits", notice: ACCEPT_EDITS_CAVEAT[engineId] };
+      return acceptEditsPlan(engineId, posix);
     case "autoReview":
       return autoReviewPlan(engineId, support);
     default: {

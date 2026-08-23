@@ -96,58 +96,6 @@ bites, so it gets tested rather than argued.
 
 ---
 
-## TASK-154: An adapter declares what it can do, and Cursor stops lying about three of them
-**Priority:** P1 | **Tags:** core, server, engine, milestone-i
-**Updated:** 2026-08-21 00:00
-
-The first task of **Milestone I — Induction** (`TASK-156`). The Orca comparison this scope was
-drawn from, and the three adapter candidates it did not claim, are in `TASK-158` (Backlog); the
-defects below were verified against the installed CLIs before either task was written.
-
-**Ordered scope.** Step 1 is what makes 2–5 checkable rather than a list of one-off patches.
-
-1. **Declare the capabilities.** In `packages/core/src/engines.ts`, beside `EngineDefinition` and
-   `PERMISSION_MODES`, derived from one exported `as const` tuple per the runtime-validation rule
-   in `AGENTS.md`: resume, effort, usage, cost, live model listing, auto-review, and per-mode
-   permission support. `engines/types.ts` references the declaration rather than restating it, and
-   a `never`-closed switch makes a new capability a compile error in every adapter (A7). This is
-   Orca's `agent-session-option-catalog` pattern in the shape this codebase already uses.
-2. **Cursor session resume.** Read `session_id` off `system.init` in `cursor-protocol.ts` — the
-   schema is already `.passthrough()`, so the field is arriving and being dropped — return it as
-   `sessionId`, and pass `--resume <id>` when `ctx.resumeSessionId` is set.
-3. **Cursor permission modes.** Map `acceptEdits` → `--sandbox enabled` and `autoReview` →
-   `--auto-review`; keep `--force` for `skip` only. Cursor stops discarding its
-   `resolvePermissionPlan` result.
-4. **Claude `loggedIn`.** A best-effort auth probe in `detect()`, following the shape Codex and
-   Cursor already use: exit code plus text, `undefined` when it cannot tell, never a guess.
-5. **Say what is still missing.** Cursor reports no cost or tokens. Declare that as a capability
-   the adapter does *not* have, so Setup and the cost readout can say so rather than show a
-   confident zero.
-
-**Verify against the real CLI before implementing, and pin the version verified.** The
-`--auto-review`, `--sandbox` and `--resume` flags above were read from the binary installed on this
-machine on 2026-08-20; `docs/implementation-notes.md` currently documents the opposite in good
-faith, which is exactly how this drift happened. Where a flag turns out to be absent or to behave
-differently, the honest outcome is to **declare the gap in the catalog**, not to fake the
-capability. This is the standing rule from the 2026-08-19 decision entry applied to CLIs instead of
-skill paths: name the mechanism, do not infer it.
-
-**Evidence to produce**, per `docs/testing.md`: a failing-first test per behaviour —
-`engine-protocols.spec.ts` for the Cursor session id, per-adapter argv tests in the shape of Orca's
-per-agent `.test.ts` files for the permission mapping, and a comp test proving a Cursor stage's
-second turn resumes rather than restarts. Then `pnpm lint`, `pnpm typecheck`, `pnpm test`,
-`pnpm build`, `pnpm e2e`. Per A8, a dated `docs/decisions.md` entry (why the catalog is data, why
-PTY was rejected) and a correction to the three now-stale Cursor claims in
-`docs/implementation-notes.md` §"Engines — CLI-specific quirks".
-
-Cross-platform: verify live on Windows; reason macOS through and record it as untested unless a Mac
-is actually used. The hazards are known and documented: `cursor-agent` always resolves to a `.cmd`
-shim on Windows so the prompt goes via stdin (`commandNeedsWindowsShell`), and a resume argument
-must not regress that; binary resolution differs per platform; Cursor's `install()` is Windows-only
-today.
-
----
-
 ## TASK-159: Schedules — a recurring task with a fixed team
 **Priority:** P1 | **Tags:** core, server, milestone-i
 **Updated:** 2026-08-21 12:00

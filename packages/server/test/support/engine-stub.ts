@@ -8,12 +8,13 @@ import type { EngineId, StageLogDraft } from "@isotopy/core";
 import { claudeCodeAdapter } from "../../src/engines/claude-code.ts";
 import { codexAdapter } from "../../src/engines/codex.ts";
 import { cursorAdapter } from "../../src/engines/cursor.ts";
-import type { EngineAdapter, EngineRunContext } from "../../src/engines/types.ts";
+import type { EngineAdapter, EngineRunContext, EngineRunResult } from "../../src/engines/types.ts";
 
 export const HELP_FILE = "help.txt";
 
 const RESUME_HELP_FILE = "help-resume.txt";
 const ARGS_FILE = "args.txt";
+const STDOUT_FILE = "stdout.txt";
 const BROWSERS_PATH_FILE = "browsers-path.txt";
 
 const PATH_ENV: Record<EngineId, string> = {
@@ -44,6 +45,7 @@ export function resetEngineStubs(): void {
   writeFileSync(path.join(stubDir, BROWSERS_PATH_FILE), "");
   writeStubHelp(HELP_FILE, "");
   writeStubHelp(RESUME_HELP_FILE, "");
+  writeFileSync(path.join(stubDir, STDOUT_FILE), "");
 }
 
 export function removeEngineStubs(): void {
@@ -55,6 +57,10 @@ export function removeEngineStubs(): void {
 
 export function writeStubHelp(file: string, body: string): void {
   writeFileSync(path.join(stubDir, file), body);
+}
+
+export function writeStubStdout(lines: string[]): void {
+  writeFileSync(path.join(stubDir, STDOUT_FILE), lines.join("\n"));
 }
 
 export function recordedArgv(): string[] {
@@ -74,7 +80,23 @@ export async function runStubAdapter(
   overrides: Partial<EngineRunContext> = {},
 ): Promise<StageLogDraft[]> {
   const logs: StageLogDraft[] = [];
-  await ADAPTERS[engine].run({
+  await ADAPTERS[engine].run(stubContext(engine, logs, overrides));
+  return logs;
+}
+
+export function runStubAdapterResult(
+  engine: EngineId,
+  overrides: Partial<EngineRunContext> = {},
+): Promise<EngineRunResult> {
+  return ADAPTERS[engine].run(stubContext(engine, [], overrides));
+}
+
+function stubContext(
+  engine: EngineId,
+  logs: StageLogDraft[],
+  overrides: Partial<EngineRunContext>,
+): EngineRunContext {
+  return {
     runId: `stub-${engine}`,
     prompt: "say hello",
     cwd: stubDir,
@@ -85,8 +107,7 @@ export async function runStubAdapter(
     signal: new AbortController().signal,
     onLog: (log) => logs.push(log),
     ...overrides,
-  });
-  return logs;
+  };
 }
 
 function recordedLines(file: string): string[] {
@@ -112,6 +133,11 @@ function writeStubRunner(): void {
     'if (args.includes("--help")) {',
     '  const file = args.includes("resume") ? "help-resume.txt" : "help.txt";',
     '  process.stdout.write(fs.readFileSync(path.join(__dirname, file), "utf8"));',
+    "  process.exit(0);",
+    "}",
+    'const out = fs.readFileSync(path.join(__dirname, "stdout.txt"), "utf8");',
+    'if (out !== "") {',
+    '  process.stdout.write(out + "\\n");',
     "  process.exit(0);",
     "}",
     "process.exit(1);",

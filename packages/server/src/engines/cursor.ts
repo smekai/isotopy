@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
+import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { cursorCliConfigModel, parseCursorModels } from "../schemas/engine-cli-config.ts";
 import { configuredModelFrom } from "./cli-config.ts";
@@ -10,7 +10,9 @@ import { parseCursorProtocolLine } from "./cursor-protocol.ts";
 import { firstLine, truncate, withStderr } from "./log-text.ts";
 import { toolCacheEnv } from "./tool-cache.ts";
 import { withPersonaPrompt } from "./persona.ts";
-import { resolvePermissionPlan } from "./permission-mode.ts";
+import { probeAutoReview, resolvePermissionPlan } from "./permission-mode.ts";
+import type { AutoReviewProbe } from "./permission-mode.ts";
+import type { PermissionPlan, PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
 import {
@@ -29,8 +31,10 @@ import type {
 
 const PATH_CANDIDATES = ["cursor-agent", "agent"];
 
-const AUTO_REVIEW_UNREACHABLE = (): Promise<AutoReviewSupport> =>
-  Promise.resolve("unsupported");
+const AUTO_REVIEW_PROBE: AutoReviewProbe = {
+  helpArgs: ["--help"],
+  advertised: (help) => help.includes("--auto-review"),
+};
 
 const INSTALL_COMMAND = "irm 'https://cursor.com/install?win32=true' | iex";
 const DOCS_URL = "https://cursor.com/docs/cli/installation";
@@ -173,14 +177,34 @@ function promptGoesInArgs(binary: string): boolean {
   return process.env.ISOTOPY_CURSOR_PROMPT_VIA !== "stdin";
 }
 
-function buildArgs(ctx: EngineRunContext, promptViaArg: boolean): string[] {
+function permissionArgs(strategy: PermissionStrategy): string[] {
+  switch (strategy) {
+    case "unrestricted":
+      return ["--force"];
+    case "autoReview":
+      return ["--auto-review"];
+    case "acceptEdits":
+      return ["--sandbox", "enabled"];
+    default: {
+      const unreachable: never = strategy;
+      return unreachable;
+    }
+  }
+}
+
+function buildArgs(
+  ctx: EngineRunContext,
+  plan: PermissionPlan,
+  promptViaArg: boolean,
+): string[] {
   const extra = (process.env.ISOTOPY_CURSOR_ARGS ?? "").split(/\s+/).filter(Boolean);
   return [
     "-p",
     "--output-format",
     "stream-json",
-    "--force",
+    ...permissionArgs(plan.strategy),
     ...(process.env.ISOTOPY_CURSOR_TRUST === "0" ? [] : ["--trust"]),
+    ...(ctx.resumeSessionId ? ["--resume", ctx.resumeSessionId] : []),
     ...(ctx.model ? ["--model", ctx.model] : []),
     ...extra,
     ...(promptViaArg ? [ctx.prompt] : []),
@@ -322,15 +346,17 @@ export const cursorAdapter: EngineAdapter = {
     const runCtx = withPersonaPrompt(ctx);
 
     const promptViaArg = promptGoesInArgs(binary);
-    await resolvePermissionPlan("cursor", ctx, AUTO_REVIEW_UNREACHABLE);
+    const plan = await resolvePermissionPlan("cursor", ctx, () =>
+      probeAutoReview(binary, AUTO_REVIEW_PROBE),
+    );
     if (promptViaArg && runCtx.prompt.length > PROMPT_ARG_WARN_LENGTH) {
       ctx.onLog({ level: "warn", message: "Prompt near the command-line length limit — set ISOTOPY_CURSOR_PROMPT_VIA=stdin" });
     }
 
-    const capture: EngineProtocolUpdate = { logs: [] };
+    const capture: EngineProtocolUpdate = { sessionId: ctx.resumeSessionId, logs: [] };
     const result = await runSubprocess({
       command: binary,
-      args: buildArgs(runCtx, promptViaArg),
+      args: buildArgs(runCtx, plan, promptViaArg),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection, ctx.toolCacheDir),
       input: promptViaArg ? undefined : runCtx.prompt,
@@ -384,6 +410,7 @@ export const cursorAdapter: EngineAdapter = {
     return {
       success,
       result: capture.output,
+      sessionId: capture.sessionId,
       exitCode: result.exitCode,
       errorMessage,
       limit,

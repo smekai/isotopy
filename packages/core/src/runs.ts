@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ENGINE_IDS } from "./engines.ts";
+import { ENGINE_IDS, ENGINES, engineCapability } from "./engines.ts";
 import type { EngineId, ModelTier } from "./engines.ts";
 import type { DeploymentResult, RunReleaseRecord } from "./automation.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
@@ -283,6 +283,17 @@ export function formatUsage(usage: StageUsage): string | undefined {
     return `${formatTokenCount(usage.tokensIn ?? 0)} in · ${formatTokenCount(usage.tokensOut ?? 0)} out`;
   }
   return undefined;
+}
+
+export function spendLabel(engineId: EngineId | undefined, usage: StageUsage): string | undefined {
+  const reported = formatUsage(usage);
+  if (reported !== undefined || engineId === undefined) {
+    return reported;
+  }
+  const blind =
+    engineCapability(engineId, "costReporting") === "unsupported" &&
+    engineCapability(engineId, "tokenUsage") === "unsupported";
+  return blind ? `spend not reported by ${ENGINES[engineId].label}` : undefined;
 }
 
 export const RUN_SUMMARY_EVENT = "run.summary";

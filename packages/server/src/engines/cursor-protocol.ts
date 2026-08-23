@@ -18,6 +18,7 @@ const initSchema = z
     type: z.literal("system"),
     subtype: z.literal("init"),
     model: z.string().optional(),
+    session_id: z.string().optional(),
   })
   .passthrough();
 const assistantSchema = z
@@ -97,6 +98,7 @@ export function parseCursorProtocolLine(
       ? {
           ok: true,
           event: {
+            sessionId: parsed.event.session_id,
             logs: [
               {
                 level: "run",

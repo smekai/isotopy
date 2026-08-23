@@ -45,6 +45,78 @@ export function permissionModeLabel(mode: EnginePermissionMode): string {
   return PERMISSION_MODES.find((option) => option.id === mode)?.label ?? mode;
 }
 
+export const ENGINE_CAPABILITIES = [
+  "resumeSession",
+  "reasoningEffort",
+  "liveModelListing",
+  "tokenUsage",
+  "costReporting",
+  "autoReviewMode",
+  "acceptEditsMode",
+] as const;
+
+export type EngineCapability = (typeof ENGINE_CAPABILITIES)[number];
+
+export const CAPABILITY_SUPPORTS = ["supported", "unsupported", "posixOnly", "probed"] as const;
+
+export type CapabilitySupport = (typeof CAPABILITY_SUPPORTS)[number];
+
+export const ENGINE_CAPABILITY_CATALOG: Record<
+  EngineId,
+  Record<EngineCapability, CapabilitySupport>
+> = {
+  "claude-code": {
+    resumeSession: "supported",
+    reasoningEffort: "supported",
+    liveModelListing: "unsupported",
+    tokenUsage: "supported",
+    costReporting: "supported",
+    autoReviewMode: "probed",
+    acceptEditsMode: "supported",
+  },
+  cursor: {
+    resumeSession: "supported",
+    reasoningEffort: "unsupported",
+    liveModelListing: "supported",
+    tokenUsage: "unsupported",
+    costReporting: "unsupported",
+    autoReviewMode: "supported",
+    acceptEditsMode: "posixOnly",
+  },
+  codex: {
+    resumeSession: "supported",
+    reasoningEffort: "supported",
+    liveModelListing: "unsupported",
+    tokenUsage: "supported",
+    costReporting: "unsupported",
+    autoReviewMode: "supported",
+    acceptEditsMode: "supported",
+  },
+};
+
+export function engineCapability(
+  engineId: EngineId,
+  capability: EngineCapability,
+): CapabilitySupport {
+  return ENGINE_CAPABILITY_CATALOG[engineId][capability];
+}
+
+export function capabilityReachable(support: CapabilitySupport, posix: boolean): boolean {
+  switch (support) {
+    case "supported":
+      return true;
+    case "posixOnly":
+      return posix;
+    case "probed":
+    case "unsupported":
+      return false;
+    default: {
+      const unreachable: never = support;
+      return unreachable;
+    }
+  }
+}
+
 export interface EngineConnectionDefinition {
   id: string;
   label: string;

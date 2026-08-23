@@ -1,5 +1,70 @@
 # Done
 
+## TASK-154: An adapter declares what it can do, and Cursor stops lying about three of them
+**Priority:** P1 | **Tags:** core, server, engine, milestone-i
+**Updated:** 2026-08-23 23:10
+
+Closed 2026-08-23. All five steps delivered, and step 3 landed differently than written — for a
+reason worth more than the step.
+
+**1. The capability catalog is data.** `ENGINE_CAPABILITY_CATALOG` in `packages/core/src/engines.ts`
+is an exhaustive `Record<EngineId, Record<EngineCapability, CapabilitySupport>>` over two `as const`
+tuples, so a new capability is a compile error until every engine answers it — the guarantee a
+`never`-closed switch would give, without asking three adapters to restate a table. Support is not a
+boolean: `supported`, `unsupported`, `probed`, `posixOnly`.
+
+**2. Cursor session resume works, verified end to end.** `session_id` is read off `system.init`,
+returned as `sessionId`, and `--resume <id>` is passed when the workflow supplies one. Verified
+against the live CLI before implementing: a first turn was told to remember a word, a second turn
+with `--resume` returned it, same session id both times.
+
+**3. Cursor permission modes — and `--sandbox enabled` is macOS and Linux only.** This is where the
+task's own instruction to verify first paid for itself. `skip` → `--force` and `autoReview` →
+`--auto-review` are exactly as specified, and auto-review is now a real `--help` probe instead of a
+constant `unsupported`. But `acceptEdits` → `--sandbox enabled` **exits 1 on Windows**: *"Sandbox
+mode is enabled but not available on this system. Sandbox requires macOS or Linux."* Implementing
+the mapping as written would have broken every accept-edits run on this platform. The capability is
+declared `posixOnly` and `permissionPlan` degrades to unrestricted with a notice naming the reason —
+the task's own rule, that a flag which behaves differently gets declared rather than faked.
+
+**4. Claude `loggedIn`, and it prints JSON.** `claude auth status` returns
+`{loggedIn, authMethod, email, subscriptionType}`, so it is parsed by a Zod schema at the boundary
+(`schemas/engine-auth.ts`) rather than sniffed for words like Codex's and Cursor's must be. Verified
+live: `loggedIn: true`, *"Logged in as novikovfedor@gmail.com · pro"*. An older build without the
+subcommand fails the probe and reports `undefined` — never a guess.
+
+**5. What is still missing is now said out loud.** `spendLabel` renders *"spend not reported by
+Cursor"* where the catalog says the engine reports neither cost nor tokens, instead of the status bar
+falling silent and leaving the user to wonder.
+
+**Gotcha worth keeping:** the CLI had already moved again. The flags were read on 2026-08-20 for the
+task text and re-read on 2026-08-23 for the work — `cursor-agent` had self-updated from
+`2026.08.04-aaa8809` to `2026.08.11-e8db854` in between. Pinning the version verified is not
+ceremony; it is the only thing that makes a claim in this file checkable later.
+
+**Tests.** Protocol: the session id is kept off init, and an init without one is still valid rather
+than a parse failure. Argv, against a stub binary: auto-review asked for when advertised and degraded
+when not, `--force` only for `skip`, `--resume` on a follow-up turn, and the accept-edits split with
+one test per platform. Round trip: the stub now emits a stdout fixture (`writeStubStdout`), so a run
+whose init announces a session id is proven to hand that id back. Catalog: every engine answers every
+capability, `posixOnly` resolves per platform, `probed` is never claimed unasked.
+
+**Verified:** lint, typecheck, **962 tests passed / 2 skipped** (up from 946), build, `gen:skills`
+with no diff, e2e 70 passed / 4 skipped. Plus live `detect()` against both real CLIs.
+
+Recorded in [`docs/decisions.md`](../docs/decisions.md) (why the catalog is data, why `posixOnly`
+exists, and the rejected alternative of trusting the plan as written) and
+[`docs/implementation-notes.md`](../docs/implementation-notes.md), whose three stale Cursor claims and
+auth-probe paragraph were rewritten rather than patched.
+
+Cross-platform: verified live on **Windows** for both CLIs. The POSIX `--sandbox enabled` branch is
+reasoned through and **untested** — no Mac was used — but it is the branch the catalog declares, and
+it has its own `skipIf` test that will run the moment someone executes the suite on macOS or Linux.
+The prompt-via-stdin behaviour on the Windows `.cmd` shim is unchanged by the new `--resume`
+argument, which the argv tests cover.
+
+---
+
 ## TASK-165: A stage's orphans outlive it, and the product runner then fights its own leftovers
 **Priority:** P0 | **Tags:** server, engine, infra, milestone-i
 **Updated:** 2026-08-23 22:30

@@ -15,6 +15,32 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-23 — An adapter declares what it can do, as data
+
+**Context:** `implementation-notes.md` confidently described three Cursor behaviours that had
+stopped being true — no accept-edits mode, auto-review only via a config file, no session resume —
+and nothing failed when the CLI grew the flags, because a prose note cannot go red. `TASK-142`'s
+dogfood then paid for the resume half at full price: three verify attempts, each starting cold.
+
+**Decision:** capabilities are **data**, not prose and not a switch in each adapter.
+`ENGINE_CAPABILITY_CATALOG` is an exhaustive `Record<EngineId, Record<EngineCapability, …>>`, so
+adding a capability is a compile error until every engine answers it — the same guarantee a
+`never`-closed switch would give, without asking three adapters to restate a table. Support is not
+a boolean: `supported`, `unsupported`, `probed` (the CLI build varies and something must ask it),
+and `posixOnly`.
+
+**`posixOnly` exists because of a real flag.** `--sandbox enabled` is macOS and Linux only; on
+Windows it exits 1. Mapping `acceptEdits` to it as originally planned would have broken every
+accept-edits run on Windows. Declaring the gap and degrading with a notice is the standing rule —
+name the mechanism, do not infer it — applied to a CLI instead of a skill path.
+
+**Rejected: trusting the plan as written.** `TASK-154` specified `acceptEdits` → `--sandbox
+enabled` outright. Running the flag first is what caught it. The rule that produced this entry is
+worth more than the entry: verify against the installed binary and pin the version verified
+(`cursor-agent 2026.08.11-e8db854`, `claude 2.1.215`).
+
+---
+
 ## 2026-08-23 — Milestone F does not close on its third dogfood
 
 **Context:** `TASK-142` ran the Cursor dogfood and closed `FAIL`. The team built the feature

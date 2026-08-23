@@ -18,7 +18,9 @@ import {
   resetEngineStubs,
   runArgv,
   runStubAdapter,
+  runStubAdapterResult,
   writeStubHelp,
+  writeStubStdout,
 } from "../support/engine-stub.ts";
 import type { StageLogDraft } from "@isotopy/core";
 
@@ -30,6 +32,19 @@ const CLAUDE_HELP_WITH_AUTO = [
 const CLAUDE_HELP_WITHOUT_AUTO = [
   "  --permission-mode <mode>              Permission mode to use for the session",
   '                                        (choices: "acceptEdits", "plan")',
+].join("\n");
+
+const SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
+
+const CURSOR_HELP_WITH_AUTO_REVIEW = [
+  "  -f, --force                 Force allow commands unless explicitly denied",
+  "  --auto-review               Use Auto-review (Smart Auto): a server classifier",
+  "  --sandbox <mode>            Explicitly enable or disable sandbox mode",
+].join("\n");
+
+const CURSOR_HELP_WITHOUT_AUTO_REVIEW = [
+  "  -f, --force                 Force allow commands unless explicitly denied",
+  "  --sandbox <mode>            Explicitly enable or disable sandbox mode",
 ].join("\n");
 
 // One stub directory for the whole file: each adapter memoises the binary it
@@ -132,7 +147,23 @@ describe("codex", () => {
 });
 
 describe("cursor", () => {
-  test("keeps running unrestricted, because its Auto-review is a config setting and not a flag", async () => {
+  test("asks for the CLI's own auto-review flag, which it does advertise", async () => {
+    // Arrange — verified against cursor-agent 2026.08.11-e8db854, whose --help
+    // lists "--auto-review  Use Auto-review (Smart Auto)".
+    writeHelp(HELP_FILE, CURSOR_HELP_WITH_AUTO_REVIEW);
+
+    // Act
+    const logs = await runAdapter("cursor", "autoReview");
+
+    // Assert
+    expect(runArgv()).toContain("--auto-review");
+    expect(logs.filter((log) => log.level === "info")).toHaveLength(0);
+  });
+
+  test("degrades when the installed build does not advertise auto-review", async () => {
+    // Arrange
+    writeHelp(HELP_FILE, CURSOR_HELP_WITHOUT_AUTO_REVIEW);
+
     // Act
     const logs = await runAdapter("cursor", "autoReview");
 
@@ -141,13 +172,73 @@ describe("cursor", () => {
     expect(logs.filter((log) => log.level === "info")).toHaveLength(1);
   });
 
+  test("skip is the only mode that still reaches for --force", async () => {
+    // Act
+    await runAdapter("cursor", "skip");
+
+    // Assert
+    expect(runArgv()).toContain("--force");
+  });
+
+  test.skipIf(process.platform === "win32")(
+    "accept-edits asks for the sandbox on POSIX, where the CLI has one",
+    async () => {
+      // Act
+      await runAdapter("cursor", "acceptEdits");
+
+      // Assert
+      expect(runArgv()).toContain("--sandbox enabled");
+    },
+  );
+
+  test.skipIf(process.platform !== "win32")(
+    "accept-edits does not ask for a sandbox Windows refuses to start",
+    async () => {
+      // `--sandbox enabled` exits 1 there: "Sandbox requires macOS or Linux."
+      // Act
+      const logs = await runAdapter("cursor", "acceptEdits");
+
+      // Assert
+      expect(runArgv()).not.toContain("--sandbox");
+      expect(runArgv()).toContain("--force");
+      expect(logs.filter((log) => log.level === "info")).toHaveLength(1);
+    },
+  );
+
+  test("a follow-up turn resumes the session rather than starting cold", async () => {
+    // Act
+    await runAdapter("cursor", "skip", SESSION);
+
+    // Assert
+    expect(runArgv()).toContain(`--resume ${SESSION}`);
+  });
+
+  test("the session id a run reports back is the one its own init announced", async () => {
+    // Arrange — the round trip TASK-142 could not make: init carries the id, the
+    // adapter hands it back, and the workflow feeds it to the next turn.
+    writeStubStdout([
+      JSON.stringify({ type: "system", subtype: "init", model: "Auto", session_id: SESSION }),
+      JSON.stringify({ type: "result", subtype: "success", result: "done", duration_ms: 12 }),
+    ]);
+
+    // Act
+    const result = await runStubAdapterResult("cursor", { permissionMode: "skip" });
+
+    // Assert
+    expect(result.success).toBe(true);
+    expect(result.sessionId).toBe(SESSION);
+  });
+
   test("never reaches for the user's Cursor config to get there", async () => {
+    // Arrange
+    writeHelp(HELP_FILE, CURSOR_HELP_WITH_AUTO_REVIEW);
+
     // Act
     await runAdapter("cursor", "autoReview");
 
     // Assert — the standing rule is that CLI config files are read, never written.
     expect(process.env.CURSOR_CONFIG_DIR).toBeUndefined();
-    expect(recordedArgv()).toHaveLength(1);
+    expect(recordedArgv()).toHaveLength(2);
   });
 });
 
