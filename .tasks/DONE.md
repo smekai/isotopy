@@ -1,5 +1,74 @@
 # Done
 
+## TASK-142: Rerun the Milestone F dogfood with Cursor, on the pool that has headroom
+**Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-23 22:15
+
+Closed 2026-08-23 **`FAIL`**. Record:
+[`docs/dogfood/TASK-142-cursor-2026-08-23.md`](../docs/dogfood/TASK-142-cursor-2026-08-23.md).
+**Milestone F does not close on this.**
+
+**The quota precondition arrived early and in a shape the task did not predict.** It expected a
+monthly reset on 2026-09-03. The dashboard instead showed the limit is two pools — Auto + Composer
+at 11% used, API at 100% — with headroom in one of them. No preset reached it, which became
+`TASK-164`; the run then pinned `auto` anyway, because even after that fix Balanced, Deep and Max
+are Anthropic models on the exhausted pool and per-stage tiers would have spread roles into it.
+
+**The team built the feature and the feature is correct.** Scope, design and implementation took
+**4 minutes 18 seconds**: 5 files modified, 2 modules added, 721 insertions, **23 tests passing**
+(up from 9), clean build. Every clause of the goal verified by hand against the running product —
+1–120 minute durations, reload persistence, automatic focus/break alternation, a history of
+completed *focus* sessions only, Start/Pause/Reset intact, and a live-region announcer.
+
+**Verification then burned 1 hour 58 minutes across three attempts and never produced a verdict.**
+That is the failure, and it is ours, not the engine's:
+
+- The **Developer** stage left `vite preview` running on 5180. The verify timeout killed the
+  `cursor-agent` tree; `taskkill /T` did not take that grandchild, which held the port for two
+  hours.
+- Isotopy's product runner then collided **with its own orphan** — `state: "exited"`,
+  `"Port 5180 is already in use"` — while the app answered 200 at the URL Isotopy had configured.
+- QA burned its budget on that conflict, reached for Playwright and `playwright install chromium`,
+  and hit the 600s wall. The timeout **discards everything**, so each retry began from nothing.
+- Each retry began *cold* because Cursor's `session_id` is dropped, so the same setup was redone
+  twice more into the same wall. That is `TASK-154`'s first defect **measured** rather than argued.
+
+**What worked, and is worth keeping in view.** The Orchestrator recovered twice with precise
+partial retries naming only the Verifying stage and correctly skipping settled work, then **stopped
+itself and asked the user** rather than attempting a fourth — `TASK-139` and `TASK-126` both
+holding. It also reached for `TASK-164`'s brand-new `economy` tier on the role that records and
+`balanced` on the roles that decide, correctly, on first contact. And once a human killed the
+orphan, the embedded Preview reached `ready` in **4.4 seconds** and framed the product — so F's last
+step works; it was blocked by a leftover, not broken.
+
+**Gotcha worth keeping:** a stage reported `Timed out after 600s` after actually running **5316s**.
+The message and the measured duration disagree by 79 minutes, so the stage did not settle when the
+timeout fired — the orphan almost certainly held the pipe open. Every duration in a run record is
+untrustworthy until that is fixed.
+
+**One received belief corrected before it spread further.** "Cursor reports no cost and no tokens"
+is half wrong: its `result` event carries `usage` with input, output and cache token counts, and
+`cursor-protocol.ts` reads only `duration_ms` and drops them. Cursor emits no *cost*; the tokens are
+a defect we own. Spend therefore came from the dashboard, and the record says so.
+
+**Filed, not fixed here** — Milestone F admits nothing else: `TASK-165` (orphaned process tree, the
+product runner fighting its own leftover, the timeout that does not stop the clock), `TASK-166`
+(a timed-out verification loses everything it learned), `TASK-167` (dropped Cursor tokens; the
+composer naming a tier for a pinned run), `TASK-168` (onboarding asks for a project and offers no
+way to add one).
+
+**Deliberately not done:** the Orchestrator's question was left unanswered and the initiative left
+`awaiting_user` — answering it would have spent more on the same trap. No product code was changed
+to make the run pass.
+
+Cross-platform: run live on **Windows**. macOS reasoned through and untested — the Cursor adapter
+there resolves via `which` with no `.cmd` shim, so the prompt goes by **argv** rather than stdin,
+`install()` refuses off win32, and cleanup signals a process group instead of `taskkill /T`. Whether
+a POSIX group signal would have taken the leaked `vite preview` with it is unknown, and `TASK-165`
+is written to establish that before assuming the defect is cross-platform.
+
+---
+
 ## TASK-164: A preset for the cheapest thing a harness sells, and Cursor stops riding one OpenAI family
 **Priority:** P1 | **Tags:** core, ui, engine, milestone-i
 **Updated:** 2026-08-23 19:30

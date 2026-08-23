@@ -1,5 +1,130 @@
 # Backlog
 
+## TASK-165: A stage's orphans outlive it, and the product runner then fights its own leftovers
+**Priority:** P0 | **Tags:** server, engine, infra, milestone-i
+**Updated:** 2026-08-23 22:00
+
+Found by `TASK-142`'s Cursor dogfood, which it cost the milestone. Three defects, one chain, filed
+together because fixing any one alone still leaves a run that cannot finish. Full evidence in
+[`docs/dogfood/TASK-142-cursor-2026-08-23.md`](../docs/dogfood/TASK-142-cursor-2026-08-23.md) §6.
+
+**The Developer stage started `vite preview` on port 5180 and it outlived the run by two hours.**
+The verify stage's 600s timeout fired and `killProcessTree` ran `taskkill /pid <pid> /T /F` against
+the `cursor-agent` tree, but the `vite preview` node process (pid 34408, parented to a surviving
+`cmd.exe` shim) kept running and kept the port. A stage that leaks a listening server poisons every
+later run in that project.
+
+**Isotopy's own product runner then collided with that orphan and reported the opposite of the
+truth.** `GET /automation/product` returned `state: "exited"` with
+`lastError: "Port 5180 is already in use"` while the configured `healthUrl` was answering 200 with
+the freshly built app. The runner should recognise a healthy product already serving at its own URL
+and adopt it, rather than failing to start a second copy and then claiming the product is down. A
+human ran `Stop-Process` by hand; with the orphan gone the Preview reached `ready` in 4.4 seconds,
+so the Preview itself is fine — only its interaction with a leftover is not.
+
+**And the stage reported "Timed out after 600s" after actually running 5316s.** The message and the
+measured duration disagree by 79 minutes, so the stage did not settle when the timeout fired —
+almost certainly because the orphaned grandchild held a stdio pipe open and `close` never arrived.
+`startSubprocess` already has `STDIO_FLUSH_GRACE_MS` for exactly this shape of problem on the
+`exit` path; the timeout path evidently does not get there. A timeout that does not stop the clock
+makes every duration in a run record untrustworthy.
+
+Cross-platform: this is a **Windows** observation and the fix may be Windows-only. The POSIX branch
+signals a process *group* (`SIGTERM` then `SIGKILL` on `-pid`) rather than `taskkill /T`, and a
+group signal plausibly would have taken the `vite preview` grandchild with it. Establish that
+before writing a cross-platform fix for a problem that may only exist on one platform — and if
+POSIX is already correct, the record should say so rather than leaving both branches suspect.
+
+---
+
+## TASK-166: A verification that runs out of time loses everything it learned
+**Priority:** P0 | **Tags:** server, engine, core, milestone-i
+**Updated:** 2026-08-23 22:00
+
+Found by `TASK-142`'s Cursor dogfood. Verification was attempted **three times** and produced no
+verdict any of those times: 5316s, 600s, 602s. Each attempt began from nothing, redid the same
+Playwright and Chromium setup, and hit the same wall. Nearly two hours bought no information at all
+about a feature that was already built, already green, and — checked by hand afterwards — correct.
+
+**A timeout currently discards the stage.** There is no partial capture: no per-criterion evidence,
+no note of what was checked before the clock ran out, nothing for the next attempt to stand on. The
+Orchestrator's retry is precise — it named only the Verifying stage and correctly skipped the three
+settled ones — and it is precise about resuming a stage that left nothing behind.
+
+**Cursor's dropped session is what made the retries cold**, which is `TASK-154`'s first defect
+finally *measured* rather than argued. With session resume the second attempt would have continued
+the QA agent's own context instead of reinstalling a browser. That is the ordering argument for
+`TASK-154` restated as evidence, and this task should land after it.
+
+Two directions, and the choice is the work: either a stage records progress as it goes so a retry
+resumes from it, or the retry carries the prior attempt's transcript forward. Whichever is chosen,
+the bar is that a second attempt at a timed-out verification must not begin by redoing the first
+attempt's setup.
+
+Worth deciding alongside: whether `verify-feature` should be allowed to install a browser at all,
+or whether browser verification needs a prepared harness rather than an agent improvising one
+inside a 600s budget.
+
+Cross-platform: n/a for the mechanism — a stage's progress record and a resumed session are
+platform-independent. The browser-install question is not: `playwright install chromium` differs in
+cache location by OS (`%LOCALAPPDATA%\ms-playwright` versus `~/.cache/ms-playwright`), so any
+prepared harness reads that from Playwright rather than hardcoding either.
+
+---
+
+## TASK-167: Cursor's token counts arrive and are thrown away, and the composer names a model that will not run
+**Priority:** P1 | **Tags:** server, ui, engine, adapters, milestone-i
+**Updated:** 2026-08-23 22:00
+
+Two small honesty defects found by `TASK-142`'s Cursor dogfood, both about the product reporting
+something other than what is true.
+
+**Cursor reports token usage and Isotopy discards it.** The received wisdom — recorded in
+`TASK-142` before the run and in the backlog before that — was that Cursor reports no cost and no
+tokens. Half wrong. Its `result` event carries `usage` with `inputTokens`, `outputTokens`,
+`cacheReadTokens` and `cacheWriteTokens`; `resultSchema` in `cursor-protocol.ts` is `.passthrough()`
+and reads only `duration_ms`, so the numbers arrive on the wire and are dropped on the floor. What
+Cursor genuinely does not emit is a **cost** figure, which is a different and much smaller gap —
+tokens are a defect we own. Fixing it is most of what a Cursor run needs to become as measurable as
+a Claude one, and it is why `TASK-142` had to send the reader to a web dashboard for spend.
+
+**The composer displays the tier for a run whose model is pinned.** With `modelTier: economy` and
+`engineModels: { cursor: "auto" }` stored, the home composer read "Cursor · Economy" while every
+stage ran the pin. Setup's picker is honest — it renders what a preset resolved to — and the
+composer is the surface a user actually starts a run from. `modelChoiceLabel` already prefers the
+override; the composer is not using it.
+
+Cross-platform: n/a — protocol field capture and a UI label, no process, path or binary involved.
+
+---
+
+## TASK-168: Onboarding asks for a project and offers no way to add one
+**Priority:** P2 | **Tags:** ui, setup, milestone-i
+**Updated:** 2026-08-23 22:00
+
+Observed in `TASK-142`'s dogfood by registering a real project through the UI for the first time in
+a clean `ISOTOPY_USER_HOME`. Small, and all in the first sixty seconds a newcomer spends here.
+
+**The Project panel names the need and cannot satisfy it.** It says "Home has no project folder —
+every run works in its own scratch folder. Add a project to work on real code", and contains no
+control that adds one. The control lives in `ProjectSwitcher` in the top bar, which is labelled with
+the *current project's name* — "Home" — next to a separate "Project" button that opens the panel
+that just told you to add one. Two adjacent controls, and the one that reads like the answer is the
+wrong one.
+
+**The folder picker has no path field.** Reaching `C:\Development\smekai\dogfood-focus-timer-142`
+from `C:\` took four clicks. Anyone arriving with a path in hand — which is everyone registering a
+project they already have — wants to paste it. `TASK-141` recorded the adjacent finding that a
+newcomer meets a goal composer over a scratch workspace and is never told that registering a project
+comes first; this is the same wound one layer in.
+
+Cross-platform: a path field must accept both `C:\...` and `/Users/...` shapes and validate through
+the existing `/fs` boundary rather than by pattern-matching a separator, and the picker's roots
+differ per OS (drive letters versus `/`). The existing picker already lists roots per platform, so
+the field joins that rather than replacing it.
+
+---
+
 ## TASK-158: The adapter layer's unclaimed half, and the Orca comparison it came from
 **Priority:** P3 | **Tags:** core, server, engine
 **Updated:** 2026-08-21 00:00

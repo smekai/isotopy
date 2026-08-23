@@ -15,6 +15,32 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-23 — Milestone F does not close on its third dogfood
+
+**Context:** `TASK-142` ran the Cursor dogfood and closed `FAIL`. The team built the feature
+correctly in 4m 18s — 23 tests green, every clause of the goal verified by hand — and then
+verification ran three times over 1h 58m and never produced a verdict. The cause was ours, not the
+engine's: the Developer stage left a `vite preview` on port 5180, it survived the timeout that
+killed its parent process tree, and Isotopy's own product runner then reported the product
+`exited` while that product answered 200 at the URL Isotopy had configured. A human killed the
+orphan by hand; the Preview then worked in 4.4 seconds.
+
+**Decision:** F stays **open** and the four defects go to Milestone I (`TASK-165`–`TASK-168`)
+rather than into F, consistent with how `TASK-141`'s four defects were routed on 2026-08-17. What
+is *not* decided, and is the product owner's: whether F can close at all on two passes and one
+environment-defect failure, or whether `TASK-165` must come inside F because a demoable MVP is
+precisely the thing that cannot require Task Manager. The "nothing else" rule argues the first;
+the bar's own wording — *points it at a folder, describes a goal, and sees the thing that was
+built* — argues the second.
+
+**Recorded because it will be re-argued:** the run also produced the first *measured* cost of
+Cursor's dropped `session_id` (`TASK-154`). Each retry started cold and redid the whole Playwright
+setup, so the defect stopped being a design argument and became two wasted attempts. And a stage
+reported "Timed out after 600s" after running 5316s, which means no duration in a run record is
+trustworthy until that is fixed.
+
+---
+
 ## 2026-08-23 — A preset for the cheapest thing a harness sells
 
 **Context:** preparing `TASK-142`'s Cursor dogfood, the account had capacity — Auto + Composer at

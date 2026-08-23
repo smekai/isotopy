@@ -485,17 +485,34 @@ research spikes belong to no milestone at all. `TASK-137` is here because a user
 it and because F's bar is a first-time user meeting the Orchestrator — the one surface the
 demo cannot route around.
 
-**Scope finalised 2026-08-17. `TASK-142` is the only work left in this milestone.**
+**Scope finalised 2026-08-17. All three dogfoods are now run, and the milestone does not close.**
 
-`TASK-128` closed `SKIP` — Codex passed, Cursor was out of quota. `TASK-141` then closed **`PASS`**
-on Claude Code: a five-role team built the feature, independent verification caught a real
+`TASK-128` closed `SKIP` — Codex passed, Cursor was out of quota. `TASK-141` closed **`PASS`** on
+Claude Code: a five-role team built the feature, independent verification caught a real
 accessibility bug in its own work, the Orchestrator recovered with one partial retry and stopped
 itself, and the built product was seen running in the embedded Preview. That is F's bar, met on a
 second engine.
 
-`TASK-142` reruns the same path on Cursor once its quota resets on 2026-09-03, and is expected to
-be done **in September**. It carries `TASK-141`'s baseline and goal string so the two are
-comparable. Nothing else is admitted here.
+**`TASK-142` then closed `FAIL` on Cursor on 2026-08-23**, earlier than the 2026-09-03 reset it was
+waiting for, because the quota turned out to be two pools with headroom in one. The team built the
+feature correctly in **4m 18s** — 23 tests green, every clause of the goal verified by hand — and
+then **verification ran three times in 1h 58m and never produced a verdict**. A `vite preview` the
+Developer stage left behind survived the timeout that killed its parent, held port 5180 for two
+hours, and made Isotopy's own product runner report `exited` while the app answered 200 at the URL
+Isotopy had configured. A human had to kill it by hand before the Preview could show anything —
+after which it worked in 4.4 seconds.
+
+**That is F's bar failing on its last step, not a Cursor problem.** Every defect is ours: the leaked
+process tree, the runner fighting its own leftover, and a timeout that discards everything it
+interrupts so three attempts bought no information at all. Filed as `TASK-165`, `TASK-166`,
+`TASK-167` and `TASK-168`, in Milestone I.
+
+**So F stays open, and the decision about how it closes is the product owner's.** Two honest
+readings: the milestone's bar is met on two of three engines and the third failed on environment
+defects rather than on the loop F was about — or a demoable MVP is exactly the thing that must not
+need a human with Task Manager, and `TASK-165` belongs inside F after all. The "nothing else" rule
+says the first; the bar's own wording says the second. Nothing is admitted here until that is
+decided.
 
 **The four defects `TASK-141` found went to Milestone H, not here** — decided with the user on
 2026-08-17. `TASK-144` and `TASK-145` at P0, `TASK-146` and `TASK-147` at P2. `TASK-144` does
