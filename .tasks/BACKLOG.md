@@ -35,32 +35,6 @@ prepared harness reads that from Playwright rather than hardcoding either.
 
 ---
 
-## TASK-167: Cursor's token counts arrive and are thrown away, and the composer names a model that will not run
-**Priority:** P1 | **Tags:** server, ui, engine, adapters, milestone-i
-**Updated:** 2026-08-23 22:00
-
-Two small honesty defects found by `TASK-142`'s Cursor dogfood, both about the product reporting
-something other than what is true.
-
-**Cursor reports token usage and Isotopy discards it.** The received wisdom — recorded in
-`TASK-142` before the run and in the backlog before that — was that Cursor reports no cost and no
-tokens. Half wrong. Its `result` event carries `usage` with `inputTokens`, `outputTokens`,
-`cacheReadTokens` and `cacheWriteTokens`; `resultSchema` in `cursor-protocol.ts` is `.passthrough()`
-and reads only `duration_ms`, so the numbers arrive on the wire and are dropped on the floor. What
-Cursor genuinely does not emit is a **cost** figure, which is a different and much smaller gap —
-tokens are a defect we own. Fixing it is most of what a Cursor run needs to become as measurable as
-a Claude one, and it is why `TASK-142` had to send the reader to a web dashboard for spend.
-
-**The composer displays the tier for a run whose model is pinned.** With `modelTier: economy` and
-`engineModels: { cursor: "auto" }` stored, the home composer read "Cursor · Economy" while every
-stage ran the pin. Setup's picker is honest — it renders what a preset resolved to — and the
-composer is the surface a user actually starts a run from. `modelChoiceLabel` already prefers the
-override; the composer is not using it.
-
-Cross-platform: n/a — protocol field capture and a UI label, no process, path or binary involved.
-
----
-
 ## TASK-168: Onboarding asks for a project and offers no way to add one
 **Priority:** P2 | **Tags:** ui, setup, milestone-i
 **Updated:** 2026-08-23 22:00

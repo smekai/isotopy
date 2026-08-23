@@ -1,5 +1,46 @@
 # Done
 
+## TASK-167: Cursor's token counts arrive and are thrown away, and the composer names a model that will not run
+**Priority:** P1 | **Tags:** server, ui, engine, adapters, milestone-i
+**Updated:** 2026-08-23 23:15
+
+Closed 2026-08-23. **One of the two defects was real; the other was my own misreading, and is
+withdrawn rather than quietly dropped.**
+
+**Real: Cursor's tokens were arriving and being discarded.** Its `result` event carries `usage` with
+`inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens` — confirmed on the wire
+during `TASK-142`'s pre-flight probe — while `resultSchema` in `cursor-protocol.ts` read only
+`duration_ms` and let the rest pass through unread. It now maps them onto `StageUsage` the way Codex
+already does (`tokensIn`, `tokensOut`, `cachedTokensIn`), and the capability catalog flips Cursor's
+`tokenUsage` from `unsupported` to `supported`. `cacheWriteTokens` has no `StageUsage` field and was
+left uncaptured rather than growing the schema for a number nothing reads.
+
+Cursor still emits no **cost**, so `costReporting` stays `unsupported` and `spendLabel` keeps saying
+so. That was always the smaller half of the gap, and it is the vendor's, not ours.
+
+**Withdrawn: the composer was never lying about a pinned model.** The finding said it "displays the
+tier for a run whose model is pinned". It does not. `HomeComposer` already renders *"Engine: Cursor ·
+auto — pinned in Setup, so the model above does not apply"* whenever `modelOverrideFor` returns
+something, and `ui-smoke.e2e.ts` has asserted that since `TASK-129`. The observation came from
+reading the tier dropdown during the dogfood **before** the pin had been set, and mistaking one
+control for the whole disclosure.
+
+**Gotcha worth keeping:** the fix here was to check first and write nothing. A dogfood finding is a
+hypothesis, not a defect report — this one survived into a filed P1 task, a defect list and a
+published record before anyone opened the component. `docs/dogfood/TASK-142-cursor-2026-08-23.md`
+keeps the finding struck through in both §4 and §13 rather than deleted, because a record that edits
+out its own mistakes is worth less than one that keeps them.
+
+**Tests.** Two protocol tests: the token counts from the real probe's `result` event land on
+`StageUsage`, and a result without `usage` still reports duration rather than inventing zeroes.
+
+**Verified:** lint, typecheck, **964 tests passed / 2 skipped** (up from 962), build.
+
+Cross-platform: n/a — protocol field capture is pure text logic and the line splitting already
+accepts both LF and CRLF.
+
+---
+
 ## TASK-154: An adapter declares what it can do, and Cursor stops lying about three of them
 **Priority:** P1 | **Tags:** core, server, engine, milestone-i
 **Updated:** 2026-08-23 23:10

@@ -112,6 +112,45 @@ describe("Cursor protocol", () => {
     expect(parsed.ok && parsed.event.sessionId).toBe("d0280d10-d76c-4703-a0ce-0ab42acdc2be");
   });
 
+  test("keeps the token counts the CLI reports, which were arriving and being dropped", () => {
+    const parsed = parseCursorProtocolLine(
+      JSON.stringify({
+        type: "result",
+        subtype: "success",
+        result: "done",
+        duration_ms: 4073,
+        usage: {
+          inputTokens: 4903,
+          outputTokens: 42,
+          cacheReadTokens: 8448,
+          cacheWriteTokens: 0,
+        },
+      }),
+    );
+
+    expect(parsed.ok && parsed.event.usage).toEqual({
+      tokensIn: 4903,
+      tokensOut: 42,
+      cachedTokensIn: 8448,
+      durationMs: 4073,
+      turns: 1,
+    });
+  });
+
+  test("a result without usage still reports duration rather than inventing zeroes", () => {
+    const parsed = parseCursorProtocolLine(
+      JSON.stringify({ type: "result", subtype: "success", result: "done", duration_ms: 12 }),
+    );
+
+    expect(parsed.ok && parsed.event.usage).toEqual({
+      tokensIn: undefined,
+      tokensOut: undefined,
+      cachedTokensIn: undefined,
+      durationMs: 12,
+      turns: 1,
+    });
+  });
+
   test("an init without a session id is still a valid event, not a parse failure", () => {
     const parsed = parseCursorProtocolLine(
       JSON.stringify({ type: "system", subtype: "init", model: "Auto" }),

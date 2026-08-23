@@ -78,7 +78,7 @@ export const ENGINE_CAPABILITY_CATALOG: Record<
     resumeSession: "supported",
     reasoningEffort: "unsupported",
     liveModelListing: "supported",
-    tokenUsage: "unsupported",
+    tokenUsage: "supported",
     costReporting: "unsupported",
     autoReviewMode: "supported",
     acceptEditsMode: "posixOnly",

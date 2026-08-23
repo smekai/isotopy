@@ -49,6 +49,14 @@ const resultSchema = z
     result: z.string().optional(),
     is_error: z.boolean().optional(),
     duration_ms: z.number().nonnegative().optional(),
+    usage: z
+      .object({
+        inputTokens: z.number().int().nonnegative().optional(),
+        cacheReadTokens: z.number().int().nonnegative().optional(),
+        outputTokens: z.number().int().nonnegative().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 const bagSchema = z.record(z.string(), z.unknown());
@@ -162,7 +170,13 @@ export function parseCursorProtocolLine(
         error: success ? undefined : parsed.event.result,
         terminal: success ? "success" : "failure",
         terminalLabel: parsed.event.subtype,
-        usage: { durationMs: parsed.event.duration_ms, turns: 1 },
+        usage: {
+          tokensIn: parsed.event.usage?.inputTokens,
+          cachedTokensIn: parsed.event.usage?.cacheReadTokens,
+          tokensOut: parsed.event.usage?.outputTokens,
+          durationMs: parsed.event.duration_ms,
+          turns: 1,
+        },
       },
     };
   }
