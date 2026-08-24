@@ -1,7 +1,7 @@
 {
   "name": "isotopy",
   "private": true,
-  "version": "0.12.8",
+  "version": "0.12.9",
   "description": "Isotopy — The last mile for your ideas, turning them into working businesses",
   "repository": {
     "type": "git",
@@ -21,7 +21,8 @@
     "e2e": "pnpm --filter @isotopy/ui e2e",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "gen:skills": "node scripts/generate-skills.mjs"
+    "gen:skills": "node scripts/generate-skills.mjs",
+    "pr:summary": "node scripts/pr-summary.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

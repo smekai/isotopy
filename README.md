@@ -276,6 +276,7 @@ deploy-anywhere, and stage restart. The full argument is in
 | --- | --- |
 | [running-the-app.md](docs/running-the-app.md) | Dev command, health checks, driving the app headless, and the sandbox gotcha |
 | [planning-a-task.md](docs/planning-a-task.md) | The cross-platform rule every new task must plan for, with its hazard checklist |
+| [creating-a-pr.md](docs/creating-a-pr.md) | The mandatory lines-changed-per-category table, and what preparation stays out of a PR |
 | [project-automation.md](docs/project-automation.md) | `.isotopy/automation.json`: how a project declares how to start, build and deploy itself |
 | [dogfood/](docs/dogfood/) | End-to-end run records against real projects — setup, spend, timings, verdict |
 
