@@ -116,6 +116,8 @@ export interface ScheduleDashboardProps {
   onEdit: () => void;
   onDelete: () => void;
   onOpenRun: (runId: string) => void;
+  onRestartRun: (runId: string, stageId: string) => void;
+  onRerunRun: (run: RunSummary) => void;
 }
 
 export function ScheduleDashboard({
@@ -127,6 +129,8 @@ export function ScheduleDashboard({
   onEdit,
   onDelete,
   onOpenRun,
+  onRestartRun,
+  onRerunRun,
 }: ScheduleDashboardProps) {
   const fires = runsForSchedule(runs, orchestrations, schedule.id);
   return (
@@ -193,8 +197,8 @@ export function ScheduleDashboard({
               selected={false}
               d={d}
               onOpen={() => onOpenRun(run.id)}
-              onRestart={() => undefined}
-              onRerun={() => undefined}
+              onRestart={(stageId) => onRestartRun(run.id, stageId)}
+              onRerun={() => onRerunRun(run)}
             />
           ))}
         </ul>

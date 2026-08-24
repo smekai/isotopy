@@ -14,12 +14,10 @@ export function scheduleStatusLabel(schedule: ScheduleView): string {
 }
 
 export function formatNextFire(schedule: ScheduleView): string {
-  if (!schedule.enabled) {
+  if (!schedule.enabled || schedule.nextFireAt === undefined) {
     return NEVER;
   }
-  return schedule.nextFireAt === undefined
-    ? NEVER
-    : new Intl.DateTimeFormat(undefined, FIRE_FORMAT).format(new Date(schedule.nextFireAt));
+  return new Intl.DateTimeFormat(undefined, FIRE_FORMAT).format(new Date(schedule.nextFireAt));
 }
 
 export function scheduleFireEcho(schedule: ScheduleView): string {
@@ -29,8 +27,20 @@ export function scheduleFireEcho(schedule: ScheduleView): string {
 }
 
 export function lastOutcomeLabel(schedule: ScheduleView): string {
-  if (schedule.lastSkipReason === "run_active") {
-    return "Skipped — a run was already active";
+  const outcome = schedule.lastOutcome;
+  if (outcome === undefined) {
+    return "Has not run yet";
   }
-  return schedule.lastFiredAt === undefined ? "Has not run yet" : "Last ran";
+  switch (outcome.kind) {
+    case "fired":
+      return "Last ran";
+    case "skipped":
+      return "Skipped — a run was already active";
+    case "failed":
+      return `Failed to start — ${outcome.error}`;
+  }
+}
+
+export function scheduleFailed(schedule: ScheduleView): boolean {
+  return schedule.lastOutcome?.kind === "failed";
 }

@@ -1,7 +1,8 @@
-import { afterEach, assert, beforeEach, expect, test } from "vitest";
+import { afterEach, assert, beforeEach, expect, test, vi } from "vitest";
 import type { Orchestration, OrchestratorTeamProposal, ScheduleView } from "@isotopy/core";
 import type { ScheduleTick } from "../../src/services/schedule-service.ts";
 import {
+  addTestProject,
   createTestApp,
   del,
   get,
@@ -39,6 +40,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await ctx.dispose();
 });
 
@@ -114,12 +116,14 @@ test("a due schedule starts exactly one run, and that run carries the team pinne
 
   // Assert
   expect(ticks).toEqual([
-    { outcome: "fired", scheduleId: created.id, runId: expect.any(String) },
+    { scheduleId: created.id, outcome: { kind: "fired", runId: expect.any(String) } },
   ]);
   const run = await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
   expect(run.pipeline?.groups[0]?.stages.map((stage) => stage.skill)).toEqual([
     "project-manager",
   ]);
+  const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
+  expect(stored.body.lastFiredAt).toBe(AN_HOUR_ON);
   ctx.engine.verify();
 });
 
@@ -188,10 +192,10 @@ test("a due schedule that finds a run already active records a skip instead of s
 
   // Assert
   expect(ticks).toEqual([
-    { outcome: "skipped", scheduleId: created.id, reason: "run_active" },
+    { scheduleId: created.id, outcome: { kind: "skipped", reason: "run_active" } },
   ]);
   const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
-  expect(stored.body.lastSkipReason).toBe("run_active");
+  expect(stored.body.lastOutcome).toEqual({ kind: "skipped", reason: "run_active" });
   expect(stored.body.lastFiredAt).toBeUndefined();
 });
 
@@ -240,6 +244,114 @@ test("a deleted schedule is gone from the project rather than merely switched of
   expect((await get<ScheduleView[]>(ctx.app, "/schedules")).body).toEqual([]);
 });
 
+test("a schedule belongs to its project, and another project cannot read it", async () => {
+  // Arrange — an id from one project, used while scoped to another.
+  const created = await createSchedule();
+  const other = await addTestProject(ctx.registry, "other");
+
+  // Act
+  const response = await get<unknown>(ctx.app, `/schedules/${created.id}`, other.headers);
+
+  // Assert
+  expect(response.status).toBe(404);
+});
+
+test("another project cannot edit a schedule it does not own", async () => {
+  // Arrange
+  const created = await createSchedule();
+  const other = await addTestProject(ctx.registry, "other");
+
+  // Act
+  const response = await patch<unknown>(
+    ctx.app,
+    `/schedules/${created.id}`,
+    { name: "Renamed from elsewhere" },
+    other.headers,
+  );
+
+  // Assert
+  expect(response.status).toBe(404);
+  const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
+  expect(stored.body.name).toBe("Board poller");
+});
+
+test("another project cannot delete a schedule it does not own", async () => {
+  // Arrange
+  const created = await createSchedule();
+  const other = await addTestProject(ctx.registry, "other");
+
+  // Act
+  const response = await del<unknown>(ctx.app, `/schedules/${created.id}`, other.headers);
+
+  // Assert
+  expect(response.status).toBe(404);
+  expect((await get<ScheduleView[]>(ctx.app, "/schedules")).body).toHaveLength(1);
+});
+
+test("turning a paused schedule back on owes nothing for the windows it slept through", async () => {
+  // Arrange — paused, so it consumed no window while it was off.
+  const created = await createSchedule({ cron: EVERY_MINUTE, enabled: false });
+
+  // Act
+  const resumed = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    enabled: true,
+  });
+
+  // Assert — the anchor moves to the moment it was enabled, so the pause is not
+  // a backlog of paid runs waiting for the first tick.
+  expect(resumed.body.lastWindowAt).toBeDefined();
+  expect(resumed.body.lastWindowAt! >= created.createdAt).toBe(true);
+});
+
+test("a run that fails to start is recorded as failed rather than left reading as a fire", async () => {
+  // Arrange
+  const created = await createSchedule({ cron: EVERY_MINUTE });
+
+  // Anticipate — the run never starts, so no engine is reached.
+  vi.spyOn(ctx.orchestrator, "startComposedRun").mockRejectedValueOnce(
+    new Error("claude-code is not installed"),
+  );
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert — "Last ran" here would be a lie told to nobody who was watching.
+  expect(ticks).toEqual([
+    {
+      scheduleId: created.id,
+      outcome: { kind: "failed", error: "claude-code is not installed" },
+    },
+  ]);
+  const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
+  expect(stored.body.lastFiredAt).toBeUndefined();
+  ctx.engine.verify();
+});
+
+test("one schedule failing to start does not stop the schedules after it from firing", async () => {
+  // Arrange — two due on the same tick; the first one's start throws.
+  await createSchedule({ name: "Broken", cron: EVERY_MINUTE });
+  const healthy = await createSchedule({ name: "Healthy", cron: EVERY_MINUTE });
+  vi.spyOn(ctx.orchestrator, "startComposedRun").mockRejectedValueOnce(
+    new Error("claude-code is not installed"),
+  );
+
+  // Anticipate — the second schedule still reaches an engine.
+  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
+  expect(outcomeKindFor(ticks, healthy.id)).toBe("fired");
+  ctx.engine.verify();
+});
+
+function outcomeKindFor(ticks: ScheduleTick[], scheduleId: string): string | undefined {
+  return ticks.find((tick) => tick.scheduleId === scheduleId)?.outcome.kind;
+}
+
 function scheduleBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     name: "Board poller",
@@ -269,7 +381,7 @@ async function tickWhileARunIsActive(): Promise<ScheduleTick[]> {
 }
 
 function firedRunId(ticks: ScheduleTick[]): string {
-  const fired = ticks.find((tick) => tick.outcome === "fired");
-  assert(fired?.outcome === "fired", "the tick started no run");
-  return fired.runId;
+  const fired = ticks.find((tick) => tick.outcome.kind === "fired");
+  assert(fired?.outcome.kind === "fired", "the tick started no run");
+  return fired.outcome.runId;
 }

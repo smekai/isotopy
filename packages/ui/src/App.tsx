@@ -238,20 +238,22 @@ export function App() {
 
   async function saveSchedule(body: CreateScheduleBody) {
     const editing = editingSchedule?.schedule;
-    if (editing) {
-      await schedules.update(editing.id, body);
-    } else {
-      const created = await schedules.create(body);
-      if (created) {
-        navigate(scheduleRoute(created.id));
-      }
+    const saved = editing
+      ? await schedules.update(editing.id, body)
+      : await schedules.create(body);
+    if (!saved) {
+      return;
+    }
+    if (typeof saved !== "boolean") {
+      navigate(scheduleRoute(saved.id));
     }
     setEditingSchedule(null);
   }
 
   async function removeSchedule(scheduleId: string) {
-    await schedules.remove(scheduleId);
-    navigate(HOME_ROUTE);
+    if (await schedules.remove(scheduleId)) {
+      navigate(HOME_ROUTE);
+    }
   }
 
   function currentRunOptions() {
@@ -457,6 +459,7 @@ export function App() {
     settings.error ??
     runs.error ??
     milestones.error ??
+    schedules.error ??
     orchestration.error;
 
   return (
@@ -540,6 +543,8 @@ export function App() {
               onEdit={() => setEditingSchedule({ schedule: activeSchedule })}
               onDelete={() => void removeSchedule(activeSchedule.id)}
               onOpenRun={attachRun}
+              onRestartRun={(runId, stageId) => void handleRestart(runId, stageId)}
+              onRerunRun={handleRerun}
             />
           ) : activeMilestone ? (
             <MilestoneDashboard

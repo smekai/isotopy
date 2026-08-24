@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScheduleView, UpdateScheduleInput } from "@isotopy/core";
+import { SCHEDULE_TICK_MS } from "@isotopy/core";
 import {
   createSchedule,
   deleteSchedule,
@@ -14,8 +15,8 @@ export interface SchedulesController {
   error: string | null;
   find(scheduleId: string): ScheduleView | undefined;
   create(body: CreateScheduleBody): Promise<ScheduleView | undefined>;
-  update(scheduleId: string, patch: UpdateScheduleInput): Promise<void>;
-  remove(scheduleId: string): Promise<void>;
+  update(scheduleId: string, patch: UpdateScheduleInput): Promise<boolean>;
+  remove(scheduleId: string): Promise<boolean>;
 }
 
 function messageOf(reason: unknown, fallback: string): string {
@@ -28,49 +29,43 @@ export function useSchedules(projectId: string, enabled: boolean): SchedulesCont
   const [error, setError] = useState<string | null>(null);
   const loadedProject = useRef<string | null>(null);
 
-  function forgetPreviousProject() {
-    setSchedules([]);
-    setReady(false);
-    setError(null);
-  }
-
   useEffect(() => {
     if (!enabled) {
       return;
     }
     if (loadedProject.current !== projectId) {
       loadedProject.current = projectId;
-      forgetPreviousProject();
+      setSchedules([]);
+      setReady(false);
+      setError(null);
     }
     let cancelled = false;
-    void fetchSchedules()
-      .then((loaded) => {
-        if (!cancelled) {
-          setSchedules(loaded);
-          setError(null);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled) {
-          setError(messageOf(reason, "Failed to load schedules"));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setReady(true);
-        }
-      });
+    // The ticker fires without any run event a skipped window could ride on, so
+    // the only way this state stays true is to ask again on the ticker's cadence.
+    const load = () =>
+      fetchSchedules()
+        .then((loaded) => {
+          if (!cancelled) {
+            setSchedules(loaded);
+          }
+        })
+        .catch((reason: unknown) => {
+          if (!cancelled) {
+            setError(messageOf(reason, "Failed to load schedules"));
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setReady(true);
+          }
+        });
+    void load();
+    const poll = setInterval(() => void load(), SCHEDULE_TICK_MS);
     return () => {
       cancelled = true;
+      clearInterval(poll);
     };
   }, [projectId, enabled]);
-
-  const replace = useCallback((updated: ScheduleView) => {
-    setSchedules((current) =>
-      current.map((entry) => (entry.id === updated.id ? updated : entry)),
-    );
-    setError(null);
-  }, []);
 
   const create = useCallback(async (body: CreateScheduleBody) => {
     setError(null);
@@ -84,24 +79,29 @@ export function useSchedules(projectId: string, enabled: boolean): SchedulesCont
     }
   }, []);
 
-  const update = useCallback(
-    async (scheduleId: string, patch: UpdateScheduleInput) => {
-      try {
-        replace(await updateSchedule(scheduleId, patch));
-      } catch (reason) {
-        setError(messageOf(reason, "Failed to update the schedule"));
-      }
-    },
-    [replace],
-  );
+  const update = useCallback(async (scheduleId: string, patch: UpdateScheduleInput) => {
+    setError(null);
+    try {
+      const updated = await updateSchedule(scheduleId, patch);
+      setSchedules((current) =>
+        current.map((entry) => (entry.id === updated.id ? updated : entry)),
+      );
+      return true;
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to update the schedule"));
+      return false;
+    }
+  }, []);
 
   const remove = useCallback(async (scheduleId: string) => {
+    setError(null);
     try {
       await deleteSchedule(scheduleId);
       setSchedules((current) => current.filter((entry) => entry.id !== scheduleId));
-      setError(null);
+      return true;
     } catch (reason) {
       setError(messageOf(reason, "Failed to delete the schedule"));
+      return false;
     }
   }, []);
 

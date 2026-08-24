@@ -24,10 +24,12 @@ export function createScheduleRoutes(
   schedules: ScheduleService,
   registry: ProjectRegistry,
 ): Hono {
+  const scopeOf = (c: Context) => projectScope(registry, c).id;
+
   return new Hono()
-    .get("/", (c) => c.json(schedules.listSchedules(projectScope(registry, c).id)))
+    .get("/", (c) => c.json(schedules.listSchedules(scopeOf(c))))
     .get("/:scheduleId", (c) => {
-      const schedule = schedules.getSchedule(c.req.param("scheduleId"));
+      const schedule = schedules.getSchedule(c.req.param("scheduleId"), scopeOf(c));
       return schedule ? c.json(schedule) : c.json({ error: "Unknown schedule" }, 404);
     })
     .post("/", async (c) => {
@@ -38,16 +40,21 @@ export function createScheduleRoutes(
     })
     .patch("/:scheduleId", async (c) => {
       const parsed = await parseRequestBody(c.req, updateScheduleSchema);
-      return parsed.ok
-        ? saved(c, () => schedules.updateSchedule(c.req.param("scheduleId"), parsed.value))
-        : c.json(invalidRequest(parsed.issues), 400);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      if (!schedules.getSchedule(c.req.param("scheduleId"), scopeOf(c))) {
+        return c.json({ error: "Unknown schedule" }, 404);
+      }
+      return saved(c, () =>
+        schedules.updateSchedule(c.req.param("scheduleId"), parsed.value, scopeOf(c)),
+      );
     })
     .delete("/:scheduleId", async (c) => {
-      try {
-        await schedules.deleteSchedule(c.req.param("scheduleId"));
-        return c.json({ ok: true });
-      } catch (error) {
-        return c.json({ error: messageOf(error) }, 404);
+      if (!schedules.getSchedule(c.req.param("scheduleId"), scopeOf(c))) {
+        return c.json({ error: "Unknown schedule" }, 404);
       }
+      await schedules.deleteSchedule(c.req.param("scheduleId"), scopeOf(c));
+      return c.json({ ok: true });
     });
 }

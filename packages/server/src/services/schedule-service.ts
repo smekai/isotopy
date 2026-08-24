@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { Schedule, ScheduleView, RunState } from "@isotopy/core";
-import { isScheduleDue, isTerminalRunStatus, scheduleSchema } from "@isotopy/core";
+import type { Schedule, ScheduleOutcome, ScheduleView, RunState } from "@isotopy/core";
+import {
+  SCHEDULE_TICK_MS,
+  isScheduleDue,
+  isTerminalRunStatus,
+  scheduleSchema,
+} from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
@@ -17,12 +22,10 @@ import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
 
-const TICK_INTERVAL_MS = 30_000;
-
-export type ScheduleTick =
-  | { outcome: "fired"; scheduleId: string; runId: string }
-  | { outcome: "skipped"; scheduleId: string; reason: "run_active" }
-  | { outcome: "failed"; scheduleId: string; error: string };
+export interface ScheduleTick {
+  scheduleId: string;
+  outcome: ScheduleOutcome;
+}
 
 export class ScheduleInvalidError extends Error {
   constructor(readonly issues: ValidationIssue[]) {
@@ -32,6 +35,10 @@ export class ScheduleInvalidError extends Error {
 
 function isRunActive(run: RunState): boolean {
   return !isTerminalRunStatus(run.status);
+}
+
+function resumedFromPause(current: Schedule, patch: UpdateScheduleRequest): boolean {
+  return patch.enabled === true && !current.enabled;
 }
 
 export class ScheduleService {
@@ -63,7 +70,11 @@ export class ScheduleService {
     if (this.ticker) {
       return;
     }
-    this.ticker = setInterval(() => void this.tick(), TICK_INTERVAL_MS);
+    this.ticker = setInterval(() => {
+      this.tick().catch((error: unknown) => {
+        console.warn("Schedule tick failed:", messageOf(error));
+      });
+    }, SCHEDULE_TICK_MS);
     this.ticker.unref();
   }
 
@@ -81,8 +92,8 @@ export class ScheduleService {
       .map((schedule) => this.viewOf(schedule));
   }
 
-  getSchedule(scheduleId: string): ScheduleView | undefined {
-    const schedule = this.schedules.get(scheduleId);
+  getSchedule(scheduleId: string, projectId?: string): ScheduleView | undefined {
+    const schedule = this.ownedSchedule(scheduleId, projectId);
     return schedule ? this.viewOf(schedule) : undefined;
   }
 
@@ -91,7 +102,7 @@ export class ScheduleService {
     input: CreateScheduleInput,
   ): Promise<ScheduleView> {
     const now = nowIso();
-    const schedule: Schedule = {
+    return this.store(projectPath, {
       id: randomUUID().slice(0, 8),
       projectId: projectPath.id,
       name: input.name,
@@ -102,21 +113,25 @@ export class ScheduleService {
       enabled: input.enabled ?? true,
       createdAt: now,
       updatedAt: now,
-    };
-    return this.store(projectPath, schedule);
+    });
   }
 
   async updateSchedule(
     scheduleId: string,
     patch: UpdateScheduleRequest,
+    projectId?: string,
   ): Promise<ScheduleView> {
-    const current = this.requireSchedule(scheduleId);
-    const merged: Schedule = { ...current, ...patch, updatedAt: nowIso() };
+    const current = this.requireSchedule(scheduleId, projectId);
+    const now = nowIso();
+    const merged: Schedule = { ...current, ...patch, updatedAt: now };
+    if (resumedFromPause(current, patch)) {
+      merged.lastWindowAt = now;
+    }
     return this.store(this.registry.resolve(current.projectId), merged);
   }
 
-  async deleteSchedule(scheduleId: string): Promise<void> {
-    const schedule = this.requireSchedule(scheduleId);
+  async deleteSchedule(scheduleId: string, projectId?: string): Promise<void> {
+    const schedule = this.requireSchedule(scheduleId, projectId);
     this.schedules.delete(scheduleId);
     await this.repositoryFor(this.registry.resolve(schedule.projectId)).remove(scheduleId);
   }
@@ -124,7 +139,7 @@ export class ScheduleService {
   async tick(now = nowIso()): Promise<ScheduleTick[]> {
     const ticks: ScheduleTick[] = [];
     for (const schedule of this.dueSchedules(now)) {
-      ticks.push(await this.fire(schedule, now));
+      ticks.push({ scheduleId: schedule.id, outcome: await this.fire(schedule, now) });
     }
     return ticks;
   }
@@ -135,22 +150,26 @@ export class ScheduleService {
     );
   }
 
-  private async fire(schedule: Schedule, now: string): Promise<ScheduleTick> {
+  private async fire(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
     schedule.lastWindowAt = now;
     schedule.updatedAt = now;
+    schedule.lastOutcome = await this.attemptRun(schedule, now);
+    await this.persist(schedule).catch((error: unknown) => {
+      console.warn(`Failed to record the fire of schedule ${schedule.id}:`, messageOf(error));
+    });
+    return schedule.lastOutcome;
+  }
+
+  private async attemptRun(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
     if (this.runs.listRuns(schedule.projectId).some(isRunActive)) {
-      schedule.lastSkipReason = "run_active";
-      await this.persist(schedule);
-      return { outcome: "skipped", scheduleId: schedule.id, reason: "run_active" };
+      return { kind: "skipped", reason: "run_active" };
     }
-    delete schedule.lastSkipReason;
-    schedule.lastFiredAt = now;
-    await this.persist(schedule);
     try {
       const run = await this.startScheduledRun(schedule);
-      return { outcome: "fired", scheduleId: schedule.id, runId: run.id };
+      schedule.lastFiredAt = now;
+      return { kind: "fired", runId: run.id };
     } catch (error) {
-      return { outcome: "failed", scheduleId: schedule.id, error: messageOf(error) };
+      return { kind: "failed", error: messageOf(error) };
     }
   }
 
@@ -189,8 +208,16 @@ export class ScheduleService {
     return { ...structuredClone(schedule), nextFireAt: nextFireForSchedule(schedule) };
   }
 
-  private requireSchedule(scheduleId: string): Schedule {
+  private ownedSchedule(scheduleId: string, projectId?: string): Schedule | undefined {
     const schedule = this.schedules.get(scheduleId);
+    if (!schedule || (projectId !== undefined && schedule.projectId !== projectId)) {
+      return undefined;
+    }
+    return schedule;
+  }
+
+  private requireSchedule(scheduleId: string, projectId?: string): Schedule {
+    const schedule = this.ownedSchedule(scheduleId, projectId);
     if (!schedule) {
       throw new Error(`Unknown schedule: ${scheduleId}`);
     }

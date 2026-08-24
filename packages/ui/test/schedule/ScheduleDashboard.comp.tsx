@@ -45,13 +45,48 @@ test("switching a schedule off reports the state it should become, not the one i
 
 test("a schedule that has been skipped says why, rather than reading as never having run", () => {
   // Arrange — a skip and a never-run look identical without this.
-  const skipped = scheduleView({ id: "s1", lastSkipReason: "run_active" });
+  const skipped = scheduleView({
+    id: "s1",
+    lastOutcome: { kind: "skipped", reason: "run_active" },
+  });
 
   // Act
   render(<ScheduleDashboard {...dashboardProps({ schedule: skipped })} />);
 
   // Assert
   expect(screen.getByTestId("schedule-detail-last").textContent).toContain("already active");
+});
+
+test("a schedule that failed to start says so, instead of reading as having run", () => {
+  // Arrange — the failure nobody is watching for; "Last ran" here would be a lie.
+  const failed = scheduleView({
+    id: "s1",
+    lastFiredAt: undefined,
+    lastOutcome: { kind: "failed", error: "claude-code is not installed" },
+  });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: failed })} />);
+
+  // Assert
+  expect(screen.getByTestId("schedule-detail-last").textContent).toContain(
+    "claude-code is not installed",
+  );
+});
+
+test("a run in the history carries the same actions it has in the rail, not dead buttons", () => {
+  // Arrange
+  const props = dashboardProps({
+    runs: [summary({ id: "scheduled", orchestrationId: "o1", task: "Take the next task" })],
+    orchestrations: [orchestration({ id: "o1", scheduleId: "s1" })],
+  });
+  render(<ScheduleDashboard {...props} />);
+
+  // Act
+  fireEvent.click(screen.getByText("Rerun"));
+
+  // Assert
+  expect(props.onRerunRun).toHaveBeenCalledWith(expect.objectContaining({ id: "scheduled" }));
 });
 
 function dashboardProps(
@@ -66,5 +101,7 @@ function dashboardProps(
     onEdit: overrides.onEdit ?? vi.fn(),
     onDelete: overrides.onDelete ?? vi.fn(),
     onOpenRun: overrides.onOpenRun ?? vi.fn(),
+    onRestartRun: overrides.onRestartRun ?? vi.fn(),
+    onRerunRun: overrides.onRerunRun ?? vi.fn(),
   };
 }
