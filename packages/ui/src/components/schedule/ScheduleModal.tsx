@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { CSSProperties } from "react";
 import { X } from "lucide-react";
 import type { ScheduleView } from "@isotopy/core";
 import type { CreateScheduleBody } from "../../api";
+import { useDialogDismiss } from "../../hooks/useDialogDismiss";
 import type { Dir } from "../../theme";
-import { FONT, ICON, MONO, RADIUS, SANS, SPACE, STATUS_COLORS, WEIGHT, Z } from "../../theme";
-import { mutedLine } from "./schedule-styles";
+import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT, Z } from "../../theme";
+import { ERROR_RED, fieldLabel, mutedCaption } from "../setup/setup-styles";
 import { SOLO_READER } from "./schedule-team";
 
 const SCRIM = "rgba(30,27,75,0.20)";
@@ -48,24 +49,11 @@ function header(d: Dir): CSSProperties {
 }
 
 function closeButton(d: Dir): CSSProperties {
-  return {
-    background: "none",
-    border: "none",
-    padding: 0,
-    cursor: "pointer",
-    color: d.textMuted,
-  };
+  return { background: "none", border: "none", padding: 0, cursor: "pointer", color: d.textMuted };
 }
 
-function fieldLabel(d: Dir): CSSProperties {
-  return {
-    display: "flex",
-    flexDirection: "column",
-    gap: SPACE.xs,
-    color: d.textMid,
-    fontSize: FONT.md,
-    fontWeight: WEIGHT.semibold,
-  };
+function field(d: Dir): CSSProperties {
+  return { ...fieldLabel(d, 0), display: "flex", flexDirection: "column", gap: SPACE.xs };
 }
 
 function input(d: Dir, mono = false): CSSProperties {
@@ -81,9 +69,7 @@ function input(d: Dir, mono = false): CSSProperties {
   };
 }
 
-function actions(): CSSProperties {
-  return { display: "flex", justifyContent: "flex-end", gap: SPACE.md };
-}
+const ACTIONS: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: SPACE.md };
 
 function primaryButton(d: Dir): CSSProperties {
   return {
@@ -112,9 +98,7 @@ function secondaryButton(d: Dir): CSSProperties {
   };
 }
 
-function errorText(): CSSProperties {
-  return { color: STATUS_COLORS.failed.text, fontSize: FONT.md, fontFamily: SANS };
-}
+const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontSize: FONT.md, fontFamily: SANS };
 
 export interface ScheduleModalProps {
   schedule?: ScheduleView;
@@ -124,40 +108,14 @@ export interface ScheduleModalProps {
   onDismiss: () => void;
 }
 
-export function ScheduleModal({
-  schedule,
-  error,
-  d,
-  onSave,
-  onDismiss,
-}: ScheduleModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const restoreFocusTo = useRef<Element | null>(null);
+export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: ScheduleModalProps) {
+  const dialogRef = useDialogDismiss(onDismiss);
   const [name, setName] = useState(schedule?.name ?? "");
   const [cron, setCron] = useState(schedule?.cron ?? "0 9 * * *");
   const [timezone, setTimezone] = useState(
     schedule?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
   const [task, setTask] = useState(schedule?.task ?? "");
-
-  useEffect(() => {
-    restoreFocusTo.current = document.activeElement;
-    dialogRef.current?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      const restore = restoreFocusTo.current;
-      if (restore instanceof HTMLElement) {
-        restore.focus();
-      }
-    };
-  }, [onDismiss]);
-
   const title = schedule ? "Edit schedule" : "New schedule";
 
   return (
@@ -179,7 +137,7 @@ export function ScheduleModal({
           </button>
         </div>
 
-        <label style={fieldLabel(d)}>
+        <label style={field(d)}>
           Name
           <input
             value={name}
@@ -189,7 +147,7 @@ export function ScheduleModal({
           />
         </label>
 
-        <label style={fieldLabel(d)}>
+        <label style={field(d)}>
           Cron expression
           <input
             value={cron}
@@ -199,7 +157,7 @@ export function ScheduleModal({
           />
         </label>
 
-        <label style={fieldLabel(d)}>
+        <label style={field(d)}>
           Time zone
           <input
             value={timezone}
@@ -209,7 +167,7 @@ export function ScheduleModal({
           />
         </label>
 
-        <label style={fieldLabel(d)}>
+        <label style={field(d)}>
           What the team should do
           <textarea
             value={task}
@@ -220,19 +178,19 @@ export function ScheduleModal({
           />
         </label>
 
-        <div style={mutedLine(d)}>
+        <div style={mutedCaption(d)}>
           {schedule
             ? "The next run time is computed by the server and shown in your own zone."
             : "One persona, one step. The Orchestrator reviews each run as it settles."}
         </div>
 
         {error !== null && (
-          <div data-testid="schedule-error" style={errorText()}>
+          <div data-testid="schedule-error" style={ERROR_TEXT}>
             {error}
           </div>
         )}
 
-        <div style={actions()}>
+        <div style={ACTIONS}>
           <button type="button" onClick={onDismiss} style={secondaryButton(d)}>
             Cancel
           </button>

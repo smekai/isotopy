@@ -1,22 +1,34 @@
 import type { CSSProperties } from "react";
-import type { Dir } from "../../theme";
-import { FONT, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
+import type { Dir } from "../theme";
+import { FONT, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
 
-export const SCHEDULE_LIST_MAX_HEIGHT = 200;
+const SECTION_LIST_MAX_HEIGHT = 200;
 
-export const SCHEDULE_LIST: CSSProperties = {
+export function railSectionLabel(d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: SANS,
+    fontSize: FONT.xs,
+    fontWeight: WEIGHT.bold,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.sm}px`,
+  };
+}
+
+export const RAIL_SECTION_LIST: CSSProperties = {
   listStyle: "none",
   margin: 0,
   padding: `0 ${SPACE.md}px`,
   display: "flex",
   flexDirection: "column",
   gap: SPACE.xxs,
-  maxHeight: SCHEDULE_LIST_MAX_HEIGHT,
+  maxHeight: SECTION_LIST_MAX_HEIGHT,
   overflowY: "auto",
   flexShrink: 0,
 };
 
-export function scheduleButton(selected: boolean, d: Dir): CSSProperties {
+export function railRowButton(selected: boolean, d: Dir): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
@@ -33,7 +45,7 @@ export function scheduleButton(selected: boolean, d: Dir): CSSProperties {
   };
 }
 
-export const SCHEDULE_NAME: CSSProperties = {
+export const RAIL_ROW_NAME: CSSProperties = {
   flex: 1,
   minWidth: 0,
   fontSize: FONT.md,
@@ -44,9 +56,9 @@ export const SCHEDULE_NAME: CSSProperties = {
   color: "inherit",
 };
 
-export const SCHEDULE_ICON: CSSProperties = { flexShrink: 0 };
+export const RAIL_ROW_ICON: CSSProperties = { flexShrink: 0 };
 
-export function nextFireText(d: Dir): CSSProperties {
+export function railRowMeta(d: Dir): CSSProperties {
   return { color: d.textMuted, fontSize: FONT.xs, flexShrink: 0 };
 }
 

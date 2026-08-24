@@ -6,7 +6,7 @@ import { formatNextFire, lastOutcomeLabel, scheduleStatusLabel } from "../../sch
 import { RunCard } from "../RunCard";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
-import { mutedLine } from "./schedule-styles";
+import { mutedLine } from "../rail-styles";
 
 function pane(d: Dir): CSSProperties {
   return {

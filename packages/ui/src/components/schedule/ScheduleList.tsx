@@ -2,28 +2,23 @@ import { CalendarClock, Plus } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { ScheduleView } from "@isotopy/core";
 import { formatNextFire } from "../../schedule-view";
-import type { Dir } from "../../theme";
-import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
-  SCHEDULE_ICON,
-  SCHEDULE_LIST,
-  SCHEDULE_NAME,
-  nextFireText,
-  scheduleButton,
-} from "./schedule-styles";
+  RAIL_ROW_ICON,
+  RAIL_ROW_NAME,
+  RAIL_SECTION_LIST,
+  railRowButton,
+  railRowMeta,
+  railSectionLabel,
+} from "../rail-styles";
+import type { Dir } from "../../theme";
+import { ICON, RADIUS } from "../../theme";
 
 function sectionHead(d: Dir): CSSProperties {
   return {
+    ...railSectionLabel(d),
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    color: d.textMuted,
-    fontFamily: SANS,
-    fontSize: FONT.xs,
-    fontWeight: WEIGHT.bold,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.sm}px`,
   };
 }
 
@@ -41,7 +36,7 @@ function addButton(d: Dir): CSSProperties {
 }
 
 function pausedName(paused: boolean): CSSProperties {
-  return paused ? { ...SCHEDULE_NAME, opacity: 0.6 } : SCHEDULE_NAME;
+  return paused ? { ...RAIL_ROW_NAME, opacity: 0.6 } : RAIL_ROW_NAME;
 }
 
 export interface ScheduleListProps {
@@ -73,7 +68,7 @@ export function ScheduleList({
           <Plus size={ICON.sm} />
         </button>
       </div>
-      <ul style={SCHEDULE_LIST}>
+      <ul style={RAIL_SECTION_LIST}>
         {schedules.map((schedule) => {
           const selected = schedule.id === selectedScheduleId;
           return (
@@ -84,11 +79,11 @@ export function ScheduleList({
                 aria-current={selected ? "true" : undefined}
                 data-testid="schedule-card"
                 data-schedule-id={schedule.id}
-                style={scheduleButton(selected, d)}
+                style={railRowButton(selected, d)}
               >
-                <CalendarClock size={ICON.sm} style={SCHEDULE_ICON} />
+                <CalendarClock size={ICON.sm} style={RAIL_ROW_ICON} />
                 <span style={pausedName(!schedule.enabled)}>{schedule.name}</span>
-                <span data-testid="schedule-next-fire" style={nextFireText(d)}>
+                <span data-testid="schedule-next-fire" style={railRowMeta(d)}>
                   {formatNextFire(schedule)}
                 </span>
               </button>

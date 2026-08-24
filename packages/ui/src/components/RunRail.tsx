@@ -8,11 +8,18 @@ import { InitiativeGroup } from "./InitiativeGroup";
 import { ScheduleGroup } from "./schedule/ScheduleGroup";
 import { ScheduleList } from "./schedule/ScheduleList";
 import { RunCard } from "./RunCard";
+import {
+  RAIL_ROW_ICON,
+  RAIL_ROW_NAME,
+  RAIL_SECTION_LIST,
+  railRowButton,
+  railRowMeta,
+  railSectionLabel,
+} from "./rail-styles";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
 
 const RAIL_WIDTH = 280;
-const MILESTONE_LIST_MAX_HEIGHT = 200;
 
 function rail(d: Dir): CSSProperties {
   return {
@@ -53,18 +60,6 @@ function newRunButton(active: boolean, d: Dir): CSSProperties {
   };
 }
 
-function sectionLabel(d: Dir): CSSProperties {
-  return {
-    color: d.textMuted,
-    fontFamily: SANS,
-    fontSize: FONT.xs,
-    fontWeight: WEIGHT.bold,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.sm}px`,
-  };
-}
-
 const LIST: CSSProperties = {
   listStyle: "none",
   margin: 0,
@@ -85,52 +80,6 @@ function placeholder(d: Dir): CSSProperties {
   };
 }
 
-const MILESTONE_LIST: CSSProperties = {
-  listStyle: "none",
-  margin: 0,
-  padding: `0 ${SPACE.md}px`,
-  display: "flex",
-  flexDirection: "column",
-  gap: SPACE.xxs,
-  maxHeight: MILESTONE_LIST_MAX_HEIGHT,
-  overflowY: "auto",
-  flexShrink: 0,
-};
-
-function milestoneButton(selected: boolean, d: Dir): CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: SPACE.sm,
-    width: "100%",
-    textAlign: "left",
-    background: selected ? d.surface : "transparent",
-    border: `1px solid ${selected ? d.borderStrong : "transparent"}`,
-    borderRadius: RADIUS.md,
-    padding: `${SPACE.md}px ${SPACE.lg}px`,
-    cursor: "pointer",
-    fontFamily: SANS,
-    color: selected ? d.text : d.textMid,
-  };
-}
-
-const MILESTONE_NAME: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  fontSize: FONT.md,
-  fontWeight: WEIGHT.semibold,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-  color: "inherit",
-};
-
-const MILESTONE_ICON: CSSProperties = { flexShrink: 0 };
-
-function milestoneCount(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontSize: FONT.xs, flexShrink: 0 };
-}
-
 interface MilestoneListProps {
   milestones: Milestone[];
   selectedMilestoneId: string | null;
@@ -146,8 +95,8 @@ function MilestoneList({
 }: MilestoneListProps) {
   return (
     <>
-      <div style={sectionLabel(d)}>Milestones</div>
-      <ul style={MILESTONE_LIST}>
+      <div style={railSectionLabel(d)}>Milestones</div>
+      <ul style={RAIL_SECTION_LIST}>
         {milestones.map((milestone) => {
           const { completed, total } = milestoneProgress(milestone);
           const selected = milestone.id === selectedMilestoneId;
@@ -159,11 +108,11 @@ function MilestoneList({
                 aria-current={selected ? "true" : undefined}
                 data-testid="milestone-card"
                 data-milestone-id={milestone.id}
-                style={milestoneButton(selected, d)}
+                style={railRowButton(selected, d)}
               >
-                <Flag size={ICON.sm} style={MILESTONE_ICON} />
-                <span style={MILESTONE_NAME}>{milestone.name}</span>
-                <span style={milestoneCount(d)}>
+                <Flag size={ICON.sm} style={RAIL_ROW_ICON} />
+                <span style={RAIL_ROW_NAME}>{milestone.name}</span>
+                <span style={railRowMeta(d)}>
                   {completed}/{total}
                 </span>
               </button>
@@ -251,7 +200,7 @@ export function RunRail({
         onNewSchedule={onNewSchedule}
       />
 
-      <div style={sectionLabel(d)}>Runs</div>
+      <div style={railSectionLabel(d)}>Runs</div>
 
       {!ready && <div style={placeholder(d)}>Loading…</div>}
       {ready && runs.length === 0 && <div style={placeholder(d)}>No runs yet.</div>}

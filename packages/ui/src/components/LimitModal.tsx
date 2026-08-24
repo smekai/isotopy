@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import { BellRing, Play, Plug, RotateCcw, Square, X } from "lucide-react";
 import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@isotopy/core";
@@ -11,6 +11,7 @@ import type {
   RunLimit,
   RunState,
 } from "@isotopy/core";
+import { useDialogDismiss } from "../hooks/useDialogDismiss";
 import { useEngineRoster } from "../hooks/useEngineRoster";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";
@@ -228,8 +229,7 @@ export function LimitModal({
   onOpenConnection,
   onDismiss,
 }: LimitModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const restoreFocusTo = useRef<Element | null>(null);
+  const dialogRef = useDialogDismiss(onDismiss);
   const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
   const { roster } = useEngineRoster(engineId);
   const blockedStage = run.stages.find((stage) => stage.id === limit.stageId);
@@ -245,24 +245,6 @@ export function LimitModal({
   const remaining = remainingMs(limit, now);
   const resetLabel = formatResetAt(limit.resetAt);
   const stageLabel = blockedStage?.label ?? limit.stageId;
-
-  useEffect(() => {
-    restoreFocusTo.current = document.activeElement;
-    dialogRef.current?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      const restore = restoreFocusTo.current;
-      if (restore instanceof HTMLElement) {
-        restore.focus();
-      }
-    };
-  }, [onDismiss]);
 
   return (
     <div style={BACKDROP} onClick={onDismiss}>
