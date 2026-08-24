@@ -9,6 +9,7 @@ import { createMilestoneRoutes } from "./routes/milestones.ts";
 import { createOrchestrationRoutes } from "./routes/orchestrations.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
 import { createRunRoutes } from "./routes/runs.ts";
+import { createScheduleRoutes } from "./routes/schedules.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
 import type { AutomationConfigStore } from "./services/automation-config-store.ts";
 import type { DeploymentRunner } from "./services/deployment-runner.ts";
@@ -18,12 +19,14 @@ import type { OrchestrationService } from "./services/orchestration-service.ts";
 import type { ProductProcessService } from "./services/product-process-service.ts";
 import type { ProjectRegistry } from "./services/project-registry.ts";
 import type { RunService } from "./services/run/run-service.ts";
+import type { ScheduleService } from "./services/schedule-service.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
 
 export interface AppDependencies {
   runs: RunService;
   milestones: MilestoneService;
   orchestrations: OrchestrationService;
+  schedules: ScheduleService;
   registry: ProjectRegistry;
   settings: SettingsStore;
   rosters: ModelRosterService;
@@ -36,6 +39,7 @@ export function createApp({
   runs,
   milestones,
   orchestrations,
+  schedules,
   registry,
   settings,
   rosters,
@@ -60,6 +64,7 @@ export function createApp({
   app.route("/settings", createSettingsRoutes(registry, settings));
   app.route("/automation", createAutomationRoutes(registry, automation, deployment, product));
   app.route("/runs", createRunRoutes(runs, registry));
+  app.route("/schedules", createScheduleRoutes(schedules, registry));
   app.route("/fs", fsRoutes);
 
   return app;

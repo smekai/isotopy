@@ -27,6 +27,12 @@ export const ORCHESTRATIONS_TABLE: JsonTableSpec = {
   migrateLegacyTimestamps: false,
 };
 
+export const SCHEDULES_TABLE: JsonTableSpec = {
+  table: "schedules",
+  idColumn: "schedule_id",
+  migrateLegacyTimestamps: false,
+};
+
 function createTable({ table, idColumn }: JsonTableSpec): string {
   return `
 CREATE TABLE IF NOT EXISTS ${table} (
@@ -135,5 +141,11 @@ export class JsonRecordsTable {
       .prepare(`SELECT data FROM ${this.spec.table}`)
       .all();
     return rows.flatMap((row) => (typeof row.data === "string" ? [row.data] : []));
+  }
+
+  async remove(id: string): Promise<void> {
+    const { table, idColumn } = this.spec;
+    const connection = await this.db.connection();
+    connection.prepare(`DELETE FROM ${table} WHERE ${idColumn} = ?`).run(id);
   }
 }

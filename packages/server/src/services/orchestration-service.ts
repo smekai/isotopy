@@ -122,12 +122,16 @@ export class OrchestrationService implements StageOutputConsumer {
     return orchestration ? structuredClone(orchestration) : undefined;
   }
 
-  async ensureActive(projectPath: ProjectPath, goal: string): Promise<string> {
+  async ensureActive(
+    projectPath: ProjectPath,
+    goal: string,
+    scheduleId?: string,
+  ): Promise<string> {
     const active = this.activeFor(projectPath.id);
     if (active) {
       return active.id;
     }
-    const orchestration = this.newOrchestration(projectPath.id, goal, "running");
+    const orchestration = this.newOrchestration(projectPath.id, goal, "running", scheduleId);
     this.orchestrations.set(orchestration.id, orchestration);
     await this.persist(orchestration);
     return orchestration.id;
@@ -790,11 +794,13 @@ export class OrchestrationService implements StageOutputConsumer {
     projectId: string,
     goal: string,
     status: OrchestrationStatus,
+    scheduleId?: string,
   ): Orchestration {
     const now = nowIso();
     return {
       id: randomUUID().slice(0, 8),
       projectId,
+      scheduleId,
       goal,
       status,
       turns: [],

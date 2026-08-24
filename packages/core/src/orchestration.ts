@@ -169,6 +169,7 @@ export const orchestrationSchema = z
   .object({
     id: requiredText,
     projectId: requiredText,
+    scheduleId: requiredText.optional(),
     goal: requiredText,
     status: z.enum(ORCHESTRATION_STATUSES),
     turns: z.array(orchestrationTurnSchema),

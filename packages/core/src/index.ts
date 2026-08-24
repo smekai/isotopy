@@ -11,5 +11,6 @@ export * from "./run-artifacts.ts";
 export * from "./run-changes.ts";
 export * from "./run-events.ts";
 export * from "./runs.ts";
+export * from "./schedules.ts";
 export * from "./schema.ts";
 export * from "./settings.ts";

@@ -9,6 +9,7 @@ import { OrchestrationService } from "./services/orchestration-service.ts";
 import { ProductProcessService } from "./services/product-process-service.ts";
 import { ProjectRegistry } from "./services/project-registry.ts";
 import { RunService } from "./services/run/run-service.ts";
+import { ScheduleService } from "./services/schedule-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
 
 const registry = new ProjectRegistry();
@@ -28,10 +29,13 @@ const runs = new RunService(
   product,
 );
 const orchestrations = new OrchestrationService(registry, runs, settings, databases);
+const schedules = new ScheduleService(registry, runs, orchestrations, databases);
 runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();
 await runs.init();
+await schedules.init();
+schedules.start();
 
 serve(
   {
@@ -39,6 +43,7 @@ serve(
       runs,
       milestones: runs.milestones,
       orchestrations,
+      schedules,
       registry,
       settings,
       rosters,
@@ -63,6 +68,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   }
   stopping = true;
   console.log(`Isotopy server stopping on ${signal}`);
+  schedules.stop();
   await product.shutdown();
   await runs.shutdown();
   await databases.settleAll();

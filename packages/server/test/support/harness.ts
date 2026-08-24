@@ -15,6 +15,7 @@ import { AutomationConfigStore } from "../../src/services/automation-config-stor
 import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { ModelRosterService } from "../../src/services/model-roster-service.ts";
 import { OrchestrationService } from "../../src/services/orchestration-service.ts";
+import { ScheduleService } from "../../src/services/schedule-service.ts";
 import { ProductProcessService } from "../../src/services/product-process-service.ts";
 import type { ProductProcessDependencies } from "../../src/services/product-process-service.ts";
 import type { SubprocessResult } from "../../src/engines/subprocess.ts";
@@ -30,6 +31,7 @@ export interface TestApp {
   app: Hono;
   orchestrator: RunService;
   orchestrations: OrchestrationService;
+  schedules: ScheduleService;
   registry: ProjectRegistry;
   settings: SettingsStore;
   engine: FakeEngine;
@@ -105,12 +107,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     product,
   );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
+  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   const app = createApp({
     runs: orchestrator,
     milestones: orchestrator.milestones,
     orchestrations,
+    schedules,
     registry,
     settings,
     rosters,
@@ -123,6 +127,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     app,
     orchestrator,
     orchestrations,
+    schedules,
     registry,
     settings,
     engine,
@@ -157,6 +162,7 @@ export interface RestartedApp {
   app: Hono;
   orchestrator: RunService;
   orchestrations: OrchestrationService;
+  schedules: ScheduleService;
   /**
    * Settles every service this rebooted app opened. Each one holds its own
    * SQLite connection to the project's `runs.db`, and on Windows a connection
@@ -185,14 +191,17 @@ export async function restartApp(): Promise<RestartedApp> {
     product,
   );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
+  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
+  await schedules.init();
   return {
     app: createApp({
       runs: orchestrator,
       milestones: orchestrator.milestones,
       orchestrations,
+      schedules,
       registry,
       settings,
       rosters,
@@ -202,7 +211,9 @@ export async function restartApp(): Promise<RestartedApp> {
     }),
     orchestrator,
     orchestrations,
+    schedules,
     shutdown: async () => {
+      schedules.stop();
       await product.shutdown();
       await orchestrator.shutdown();
       await databases.settleAll();

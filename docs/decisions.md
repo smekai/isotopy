@@ -15,6 +15,76 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-24 — A schedule is a record plus a ticker, and cron is parsed by croner
+
+**Context:** `TASK-156` decided that what carries standing intent between Orchestrator episodes is
+a schedule. `TASK-159` had to say what a schedule *is*, and what parses its expression. The server
+had four runtime dependencies, so adding a fifth is a decision, not a detail.
+
+**Decision: a persisted record plus one interval, never a durable workflow.** `WorkflowRuntime`
+registers exactly one workflow and runs its worker at `concurrency: 1`, so a parked run would
+occupy the only slot, and a month-long parked workflow must be cancelled and rebuilt every time
+its expression is edited. Crash safety comes from the record instead — the cron expression plus
+the last window it consumed recompute due-ness deterministically after any restart, with no
+runtime involvement at all. The tick reads the wall clock every time and never accumulates
+elapsed time itself, which is what makes suspend and resume work.
+
+**Decision: `croner` parses the expression.** MIT, zero runtime dependencies, ships its own types,
+and `nextRun()` takes an IANA zone. Timezone arithmetic across a DST boundary is the hazard, and
+it is not worth hand-rolling: an implementation that adds 24 hours to the last fire is wrong twice
+a year, in a direction nobody notices until an unattended team runs at the wrong hour.
+
+**Rejected: OpenWorkflow, which the repo already depends on.** Its only scheduling primitive is
+`WorkflowRunOptions.availableAt` — a one-shot delayed start taking a `Date` or a duration string.
+No cron expression, no recurrence, no timezone. It could not express a schedule even before the
+`concurrency: 1` problem. **Rejected: `cron-parser`**, which carries `luxon` transitively — two
+packages where croner is zero.
+
+**The parser stays server-side.** `packages/core` is aliased straight into the browser build, so
+the record and its predicates live in core while cron evaluation lives in
+`server/src/domain/rules/schedule-cron.ts`. The server computes each schedule's next fire time and
+sends it; the UI never parses an expression, so the two can never disagree.
+
+**A missed window fires once — catch up, never backfill.** A machine asleep for three days owes
+one run, not three, so the window is consumed whatever it produced. A schedule that finds a run
+already active records a skip and waits for its next window: it asks first rather than starting a
+run it expects `admitRun` to refuse, because a caught exception is not a design.
+
+---
+
+## 2026-08-24 — Scheduled work is one initiative in the rail, and the review turn stays board-blind
+
+**Context:** two consequences `TASK-159` had to resolve rather than discover later. Every episode
+that finds no active Orchestrator persists a new Orchestration, and `TASK-149` groups the rail by
+orchestration — an hourly schedule would produce roughly 720 initiative groups a month. Separately,
+`reviewContextFor` passes no board to the post-run decision turn, while the opening turn gets the
+whole board through `goalContext`.
+
+**Decision: the rail groups by schedule, not by orchestration, and caps what a group shows.**
+An Orchestration records the schedule that created it, and `railItems()` — already the pure
+grouping seam — gathers scheduled runs by that id. Every episode of one schedule lands in one
+group showing its most recent fires; the full history is the schedule's own detail route. The
+Orchestrator still dies between episodes exactly as `TASK-156` designed; only the label on the
+group changed, from the episode that served the intention to the intention itself.
+
+The stamp lands **only when `ensureActive` creates** the orchestration. A schedule that fires
+while a manual initiative is open joins that initiative rather than relabelling it, because the
+live Orchestrator genuinely owns the run.
+
+**Rejected: one long-lived Orchestration per schedule.** One group falls out for free, and it
+contradicts the episode-handler design and re-accumulates the digests that design deliberately
+drops.
+
+**Decision: the scheduled agent reads the board and names the next task in its report.** That
+report already reaches the Orchestrator as `stageOutputsOf(run)`, so no review context changes.
+
+**Rejected: adding `boardContext` to `renderRunReviewContext`.** It is more reliable than trusting
+a stage to report well, and it would raise decision-turn cost on every run in every project,
+scheduled or not — the cost `TASK-147` exists to watch. The task said pick one; this is the one
+that charges nothing to work that never asked for it.
+
+---
+
 ## 2026-08-24 — A stage that never reached a verdict is resumed, not restarted
 
 **Context:** `TASK-142`'s dogfood spent 1h 58m on three verification attempts and got no verdict
