@@ -15,6 +15,153 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-24 — A stage that never reached a verdict is resumed, not restarted
+
+**Context:** `TASK-142`'s dogfood spent 1h 58m on three verification attempts and got no verdict
+from any of them. Each began from nothing: the stage's session was discarded, so attempt two
+reinstalled the browser attempt one had already installed, into the same 600s wall.
+
+**Decision:** a stage records the engine session it used, and a restart resumes it — but only when
+the stage **never reached a verdict**. A stage that answered `FAIL` finished its thought; resuming
+that would continue a conversation that had ended. Being cut off is the case worth carrying, and
+it is the one the run record can tell apart, because a verdict is either there or it is not.
+
+Whether the session can be resumed at all is answered by the capability catalog rather than by the
+restart code, so a new engine cannot inherit a claim nobody checked.
+
+**Rejected: replaying the prior attempt's transcript instead.** It was the other option the task
+named. A transcript is lossy where a session is not — the agent's own working state, what it had
+already ruled out, the files it had open — and on an engine that can resume, replaying is strictly
+worse than continuing. Where an engine cannot resume, the existing question-loop replay already
+covers the ground.
+
+**And every stage is now told its time budget.** The deeper cause was not the retry at all: the
+agent had no idea it was on a clock, so it reached for a browser install with four minutes left.
+The stage prompt names the minutes and says what overrunning costs — no verdict, no partial
+credit. A constraint an agent cannot see is one it cannot budget against.
+
+---
+
+## 2026-08-23 — An adapter declares what it can do, as data
+
+**Context:** `implementation-notes.md` confidently described three Cursor behaviours that had
+stopped being true — no accept-edits mode, auto-review only via a config file, no session resume —
+and nothing failed when the CLI grew the flags, because a prose note cannot go red. `TASK-142`'s
+dogfood then paid for the resume half at full price: three verify attempts, each starting cold.
+
+**Decision:** capabilities are **data**, not prose and not a switch in each adapter.
+`ENGINE_CAPABILITY_CATALOG` is an exhaustive `Record<EngineId, Record<EngineCapability, …>>`, so
+adding a capability is a compile error until every engine answers it — the same guarantee a
+`never`-closed switch would give, without asking three adapters to restate a table. Support is not
+a boolean: `supported`, `unsupported`, `probed` (the CLI build varies and something must ask it),
+and `posixOnly`.
+
+**`posixOnly` exists because of a real flag.** `--sandbox enabled` is macOS and Linux only; on
+Windows it exits 1. Mapping `acceptEdits` to it as originally planned would have broken every
+accept-edits run on Windows. Declaring the gap and degrading with a notice is the standing rule —
+name the mechanism, do not infer it — applied to a CLI instead of a skill path.
+
+**Rejected: trusting the plan as written.** `TASK-154` specified `acceptEdits` → `--sandbox
+enabled` outright. Running the flag first is what caught it. The rule that produced this entry is
+worth more than the entry: verify against the installed binary and pin the version verified
+(`cursor-agent 2026.08.11-e8db854`, `claude 2.1.215`).
+
+---
+
+## 2026-08-23 — Milestone F, and what its third dogfood cost to close
+
+**Context:** `TASK-142` ran the Cursor dogfood and closed `FAIL`. The team built the feature
+correctly in 4m 18s — 23 tests green, every clause of the goal verified by hand — and then
+verification ran three times over 1h 58m and never produced a verdict. The cause was ours, not the
+engine's: the Developer stage left a `vite preview` on port 5180, it survived the timeout that
+killed its parent process tree, and Isotopy's own product runner then reported the product
+`exited` while that product answered 200 at the URL Isotopy had configured. A human killed the
+orphan by hand; the Preview then worked in 4.4 seconds.
+
+**Decision:** F stays **open** and the four defects go to Milestone I (`TASK-165`–`TASK-168`)
+rather than into F, consistent with how `TASK-141`'s four defects were routed on 2026-08-17. What
+is *not* decided, and is the product owner's: whether F can close at all on two passes and one
+environment-defect failure, or whether `TASK-165` must come inside F because a demoable MVP is
+precisely the thing that cannot require Task Manager. The "nothing else" rule argues the first;
+the bar's own wording — *points it at a folder, describes a goal, and sees the thing that was
+built* — argues the second.
+
+**Recorded because it will be re-argued:** the run also produced the first *measured* cost of
+Cursor's dropped `session_id` (`TASK-154`). Each retry started cold and redid the whole Playwright
+setup, so the defect stopped being a design argument and became two wasted attempts. And a stage
+reported "Timed out after 600s" after running 5316s, which means no duration in a run record is
+trustworthy until that is fixed.
+
+**Closed 2026-08-24.** The four defects were fixed first (`TASK-165`, `TASK-166`, `TASK-154`,
+`TASK-167`), which removed the reason the milestone had been left open. F closes on: the bar met
+on Claude Code, the feature built correctly on Cursor, and the verification failures fixed and
+regression-tested. **Re-running the Cursor path on the fixed build was declined** — Milestone I
+does the same thing at a larger scale, on a real product carried on a schedule, and would
+re-prove this on better evidence than a second focus timer.
+
+So the honest statement of what F proved: *a first-time user sees the thing that was built* is
+**observed on one engine and inferred on a second**. Milestone I is where that stops being an
+inference.
+
+**The three-engine evidence F closes on**, since this is the comparison and not the narrative:
+
+| | TASK-128 Codex | TASK-141 Claude Code | TASK-142 Cursor |
+| --- | --- | --- | --- |
+| Verdict | `SKIP` | `PASS` | `FAIL` |
+| Feature delivered | yes | yes | yes |
+| Verification reached a verdict | — | yes, caught a real a11y bug | **no, three times** |
+| Recovery | — | one partial retry, then self-stop | two partial retries, then self-stop |
+| Spend | not recorded | $6.69 | not reportable by the product |
+| Wall clock | — | ~35 min | ~2h 03m, of which **4m 18s** was the work |
+
+Cursor's own numbers: baseline `87fe592` restored from the committed bundle (14 files, 9 tests) to
+5 files changed, 2 modules added, **721 insertions, 23 tests green**; runs `3606b6ff` (verify
+5316s), `cf3c8c7b` (600s), `333406ca` (602s); every stage on `--model auto`, which the CLI echoed
+back as `Cursor agent online · Auto`, so the subsidised pool was the one spent. The Orchestrator
+then asked the user rather than attempting a fourth run, and was left unanswered.
+
+**One finding in that run was wrong and is kept here rather than quietly dropped.** It was filed
+as "the composer displays the tier for a run whose model is pinned". The composer does no such
+thing — it already renders *"pinned in Setup, so the model above does not apply"*, tested since
+`TASK-129`. The observation came from reading the tier dropdown before the pin was set. A dogfood
+finding is a hypothesis, and this one reached a filed P1 task before anyone opened the component.
+
+**Rejected: keeping the per-run record file.** `TASK-142`'s evidence lived at
+`docs/dogfood/TASK-142-cursor-2026-08-23.md` in `TASK-141`'s section-for-section format, and was
+deleted on 2026-08-24 with the product owner: three copies of one run — the record, the `DONE.md`
+entry and this entry — bought less than the lines cost. What a run *decided* belongs here and what
+a task *did* belongs in `DONE.md`; a third narrative between them did not earn its place. The cost
+is accepted openly: `TASK-141`'s record survives and this one does not, so the two are no longer
+diffable section for section, and the table above is what remains of that comparison.
+
+---
+
+## 2026-08-23 — A preset for the cheapest thing a harness sells
+
+**Context:** preparing `TASK-142`'s Cursor dogfood, the account had capacity — Auto + Composer at
+11% used, API at 100% — and no preset could reach it. Every Cursor rung was a `gpt-5.3-codex`
+variant, and the tier named `auto` meant "pass no `--model`", which inherits whatever
+`~/.cursor/cli-config.json` names. The cheapest thing Cursor sells was unreachable from every
+preset, including the one called Auto.
+
+**Decision:** `economy` becomes a sixth tier, directly after `auto`, and Cursor's ladder moves to
+Composer plus Anthropic. Economy is a **tier rather than a relabelled `auto`** because
+`MODEL_TIER_OPTIONS` order is the price ladder `LimitModal` slices for escapes, and `auto` is
+excluded from it outright — a cheap pool parked under `auto` can never be offered when a run hits
+a limit. Under `economy` it can, which is the whole value: a run that exhausts one pool falls to
+the subsidised one and keeps going.
+
+Economy takes today's Fast rung on Claude Code and Codex and Fast moves up one notch, so six rungs
+stay monotone. **Rejected: letting Economy duplicate Fast there** — it leaves the picker showing
+two presets with one answer and gives the limit ladder a rung that escapes to nothing cheaper. The
+price is that Fast costs slightly more on two engines that were not the reason for the change.
+
+Stored preferences need no migration. `tierOf` matches on model id alone and returns the first
+tier naming it, so a pre-preset `haiku` pin now adopts Economy rather than Fast — correct, because
+the old Fast *was* `haiku`/low, which is now Economy.
+
+---
+
 ## 2026-08-21 — Milestone I is a product carried on a schedule, not a better seam
 
 **Context:** F, G and H were all inward-facing — stabilise, rename, react to feedback — and H

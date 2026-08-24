@@ -36,6 +36,7 @@ const stageSchema = z
     modelTier: z.enum(MODEL_TIERS).optional(),
     verdict: z.enum(STAGE_VERDICTS).optional(),
     status: z.enum(STAGE_STATUSES),
+    sessionId: text.optional(),
     usage: stageUsageSchema.optional(),
     logs: z.array(stageLogEntrySchema),
     startedAt: timestamp.optional(),

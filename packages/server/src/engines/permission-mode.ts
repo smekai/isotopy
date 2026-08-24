@@ -47,7 +47,7 @@ export async function resolvePermissionPlan(
   autoReviewSupport: () => Promise<AutoReviewSupport>,
 ): Promise<PermissionPlan> {
   const support = ctx.permissionMode === "autoReview" ? await autoReviewSupport() : "unknown";
-  const plan = permissionPlan(engineId, ctx.permissionMode, support);
+  const plan = permissionPlan(engineId, ctx.permissionMode, support, process.platform !== "win32");
   if (plan.notice !== undefined) {
     ctx.onLog({ level: "info", message: plan.notice });
   }

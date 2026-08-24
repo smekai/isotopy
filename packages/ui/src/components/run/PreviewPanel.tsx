@@ -134,13 +134,19 @@ export function PreviewPanel({ status, error, busy, start, stop, restart, d }: P
     return <div style={PANEL}><div style={emptyNote(d)}>Loading the product status…</div></div>;
   }
 
+  const adopted = status.adopted === true;
   const running = status.state === "starting" || status.state === "ready";
   const embeddable = isProductEmbeddable(status);
 
   return (
     <div style={PANEL} data-testid="product-preview">
       <div style={bar(d)}>
-        {running ? (
+        {adopted ? (
+          <span style={addressText(d)} data-testid="product-adopted">
+            Already running here. Isotopy did not start this one and cannot stop it — stop it
+            yourself to hand the port back.
+          </span>
+        ) : running ? (
           <button
             type="button"
             onClick={() => void stop()}
@@ -163,7 +169,7 @@ export function PreviewPanel({ status, error, busy, start, stop, restart, d }: P
             Start the product
           </button>
         )}
-        {status.state === "ready" && (
+        {status.state === "ready" && !adopted && (
           <button
             type="button"
             onClick={() => void restart()}

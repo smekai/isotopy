@@ -24,7 +24,7 @@ test("switching harness re-defaults the model, because a tier names different mo
   );
 
   // Assert
-  expect(onChange).toHaveBeenCalledWith("cursor", "auto");
+  expect(onChange).toHaveBeenCalledWith("cursor", "economy");
 });
 
 test("changing the model keeps the harness rather than re-defaulting it", () => {

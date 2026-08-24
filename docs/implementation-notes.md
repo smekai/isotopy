@@ -60,6 +60,18 @@ grace (`STDIO_FLUSH_GRACE_MS`), and `close` settles it earlier when the stdio
 does drain. The grace window is the whole trade: too short truncates a chatty
 CLI's last lines, too long re-introduces the stall.
 
+**And a timeout settles the stage even when the kill misses
+(`ABANDON_AFTER_KILL_MS`).** Settling on `exit` only helps when the child
+actually exits. `TASK-142`'s dogfood found the other half: the Developer stage
+left `vite preview` running, `taskkill /T` did not take it, the `cursor-agent`
+tree never exited, and a stage with a 600s timeout ran **5316s** while its own
+error message still read "Timed out after 600s". The timeout now starts a
+deadline after killing and settles on it regardless, and the message carries
+both numbers — a timeout that does not stop the clock makes every duration in a
+run record a guess. `taskkill` is also no longer fire-and-forget: its exit code
+and spawn failure are reported into the settled result, because a kill that
+silently fails is how a leaked port outlives three runs.
+
 **Handle-returning start (`startSubprocess`).** A dev server outlives the request
 that asked for it, so `TASK-138` needed the `ChildProcess` rather than a promise
 of its exit — `killProcessTree` takes the object, not a pid. `startSubprocess`
@@ -341,14 +353,35 @@ that path Claude also falls back to prompt-folding via stdin.
 
 ## Engines — CLI-specific quirks
 
-**Cursor (`engines/cursor.ts`).** Headless runs must not stop for confirmation;
-Cursor has no accept-edits-only mode, so every permission mode uses `--force`.
-Its **Auto-review** run mode is real but is selected by the `approvalMode` key in
-`~/.cursor/cli-config.json`, not by a flag, so Isotopy cannot ask for it without
-writing a file it has no business writing (see `decisions.md`). Cursor therefore
-reports `unsupported` as a constant and runs no probe — which is why its `run()`
-calls `resolvePermissionPlan` for the notice alone and discards the plan: no
-strategy changes its argv.
+**Cursor (`engines/cursor.ts`).** Every claim in the three sentences that used to
+stand here was false by 2026-08-23, which is how `TASK-154` came to exist: the CLI
+grew the flags while the note aged. Verified against `cursor-agent`
+**2026.08.11-e8db854**, `--help` in hand: `--auto-review` is a real flag (no
+config file to write), `--sandbox enabled|disabled` exists, `--resume [chatId]`
+exists and genuinely restores context, and `session_id` is on every event
+including `system.init`. So the adapter now honours its `resolvePermissionPlan`
+result — `skip` → `--force`, `autoReview` → `--auto-review`, `acceptEdits` →
+`--sandbox enabled` — and probes `--help` for auto-review like Claude does rather
+than answering `unsupported` from a constant.
+
+**`--sandbox enabled` is macOS and Linux only**, which is the one thing the flag
+list does not tell you. On Windows it exits 1 with *"Sandbox mode is enabled but
+not available on this system. Sandbox requires macOS or Linux."* Mapping
+`acceptEdits` to it unconditionally would therefore have broken every accept-edits
+run on Windows, so the capability catalog declares it `posixOnly` and
+`permissionPlan` degrades to unrestricted with a notice that names the reason.
+That declaration is the point of the catalog: the gap is data, not a comment.
+
+**Cursor's macOS branches are reasoned through and unexercised.** Everything above
+was verified on Windows. Off win32 the adapter resolves via `which` with no
+`.cmd`/`.exe` extensions, so `commandNeedsWindowsShell` is false and the prompt
+goes by **argv** rather than stdin — the opposite path, guarded by
+`PROMPT_ARG_WARN_LENGTH` rather than by the shim's multi-line refusal; `install()`
+refuses outright and returns a manual-install message; and cleanup signals a
+process group instead of `taskkill /T`. That last one is load-bearing and open:
+`TASK-142` leaked a `vite preview` past a Windows `taskkill /T`, and whether a
+POSIX group signal would have taken the same grandchild is unknown. If it would,
+that defect is Windows-only and so is its fix.
 `--trust` is on by default (fresh scratch workspaces would otherwise hit the
 workspace-trust prompt and hang). **The prompt goes on stdin whenever the binary
 is a Windows `.cmd` shim**, which is what `cursor-agent` always resolves to on
@@ -390,9 +423,14 @@ match is bounded to the flag's own block — an unbounded search would pick up a
 later option's choices when a build stops offering any. Windows `.cmd` shims
 print CRLF, so no line anchors.
 
-**Auth probes (detect).** Cursor `status` and Codex `login status` are best-effort:
-Cursor's exits 0 either way so the answer is in the text; Codex's exit code is the
-signal (0 authenticated, 1 not) with text filling the status line.
+**Auth probes (detect).** All three engines answer now, by three different
+mechanisms, and none of them guesses — an unanswerable probe leaves `loggedIn`
+`undefined` rather than assuming. Claude `auth status` prints **JSON**
+(`loggedIn`, `email`, `subscriptionType`), so it is parsed by a Zod schema at the
+boundary (`schemas/engine-auth.ts`) rather than sniffed for words; an older build
+without the subcommand fails the probe and reports unknown. Cursor `status` exits
+0 either way, so the answer is in the text. Codex `login status` uses the exit
+code (0 authenticated, 1 not) with text filling the status line.
 
 ## Engines — output parsing
 
@@ -548,9 +586,19 @@ the workspace is the source of truth, the reports only add what a box *said*.
 - **Effort is a separate axis on two of three CLIs.** Claude takes
   `--effort low|medium|high|xhigh|max`, Codex takes
   `-c model_reasoning_effort="…"`, and Cursor bakes it into the id
-  (`gpt-5.3-codex-high`), so its ladder rides one model family across four rungs
-  and ignores `EngineRunContext.effort`. Codex's accepted values above `high` are
-  unconfirmed, which is why Max shares Deep's effort there.
+  (`claude-opus-5-thinking-xhigh`), so it ignores `EngineRunContext.effort` and
+  its rungs are whole model ids. Cursor's ladder crosses vendors — Composer at the
+  cheap end, Sonnet 5 and Opus 5 above it — because one family across every rung
+  was a poor default, not because the family mattered. Codex's accepted values
+  above `high` are unconfirmed, which is why Max shares Deep's effort there, and
+  is the one place two presets still resolve alike.
+- **`MODEL_TIER_OPTIONS` order is a price ladder, not a display order.**
+  `LimitModal` slices it to find the rungs *cheaper* than the one that hit a
+  limit, and drops `auto` from that list because "whatever the CLI is set to" has
+  no price. `economy` therefore sits directly after `auto`: it is what makes a
+  harness's subsidised allowance — Cursor's Auto/Composer pool — reachable as an
+  escape rather than only as a hand-pinned model. Two rungs may share a model and
+  differ only in effort, so the escape list de-duplicates on both.
 - **A preset is engine-independent; a pinned id is not.** `ProjectPreferences`
   carries one `modelTier` for the project plus `engineModels` as a per-engine
   *override* — the advanced escape hatch. An override wins over the preset, and

@@ -89,6 +89,7 @@ export interface RunProjection {
   stageSkipped(runId: string, stageId: string): void;
   stageFailed(runId: string, stageId: string, message: string): void;
   setVerdict(runId: string, stageId: string, verdict: StageVerdict): void;
+  stageSession(runId: string, stageId: string, sessionId: string): void;
   stageUsage(runId: string, stageId: string, usage: StageUsage): void;
   captureStageOutput(
     runId: string,

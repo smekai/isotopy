@@ -278,6 +278,19 @@ async function resolveSpecialistQuestion(
   return { outcome: STAGE_OUTCOMES.PASSED, answer };
 }
 
+function firstTurn(
+  input: PipelineWorkflowInput,
+  stageDef: StageDefinition,
+  attempt: number,
+): StageTurn {
+  const seeded = input.seeded;
+  const resumable =
+    attempt === 0 &&
+    seeded?.startStageId === stageDef.id &&
+    seeded.resumeSessionId !== undefined;
+  return resumable ? { index: 0, resumeSessionId: seeded?.resumeSessionId } : { index: 0 };
+}
+
 async function runStageTurns(
   step: StepApiLike,
   deps: WorkflowDeps,
@@ -286,7 +299,7 @@ async function runStageTurns(
   attempt: number,
 ): Promise<StageTurnsResult> {
   const { runId } = input;
-  let turn: StageTurn = { index: 0 };
+  let turn: StageTurn = firstTurn(input, stageDef, attempt);
 
   for (;;) {
     const result = await step.run(

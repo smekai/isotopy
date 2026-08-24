@@ -19,6 +19,7 @@ import type { AutomationConfigStore } from "./automation-config-store.ts";
 const STDERR_TAIL_LINES = 10;
 const KILL_SETTLE_MS = 5000;
 const HEADER_PROBE_MS = 5000;
+const ADOPT_PROBE_MS = 2000;
 
 export class ProductNotConfiguredError extends Error {
   constructor() {
@@ -54,6 +55,7 @@ interface RunningProduct {
   readyAt?: string;
   lastError?: string;
   stderrTail: string[];
+  adopted?: boolean;
 }
 
 async function readHeaders(
@@ -90,6 +92,7 @@ function statusOf(current: RunningProduct): ProductProcessStatus {
     framing: current.framing,
     readyAt: current.readyAt,
     lastError: current.lastError,
+    adopted: current.adopted,
   };
 }
 
@@ -261,23 +264,20 @@ export class ProductProcessService {
 
   private async watch(current: RunningProduct): Promise<void> {
     void current.handle.exited.then((result) => noteExit(current, result));
-    const healthy = await pollUntilHealthy(this.deps, {
-      url: current.ui.healthUrl,
-      timeoutMs: current.ui.readyTimeoutMs,
-      intervalMs: readyPollIntervalMs(current.ui.readyTimeoutMs),
-      signal: current.stopping.signal,
-    });
-    if (this.abandoned(current)) {
+    const healthy = await this.reachable(current);
+    if (this.superseded(current)) {
       return;
     }
     if (!healthy) {
-      current.state = "failed";
-      current.lastError = notReadyMessage(current.ui, current.stderrTail);
-      current.handle.kill();
+      if (current.state !== "exited") {
+        current.state = "failed";
+        current.lastError = notReadyMessage(current.ui, current.stderrTail);
+        current.handle.kill();
+      }
       return;
     }
     const framing = await this.framingOf(current.ui.healthUrl, current.stopping.signal);
-    if (this.abandoned(current)) {
+    if (this.superseded(current) || this.diedWhileProbing(current)) {
       return;
     }
     current.framing = framing;
@@ -285,8 +285,37 @@ export class ProductProcessService {
     current.readyAt = this.deps.now().toISOString();
   }
 
-  private abandoned(current: RunningProduct): boolean {
-    return this.current !== current || current.state === "exited";
+  private async reachable(current: RunningProduct): Promise<boolean> {
+    const started = await pollUntilHealthy(this.deps, {
+      url: current.ui.healthUrl,
+      timeoutMs: current.ui.readyTimeoutMs,
+      intervalMs: readyPollIntervalMs(current.ui.readyTimeoutMs),
+      signal: current.stopping.signal,
+    });
+    if (started || current.state !== "exited" || this.superseded(current)) {
+      return started;
+    }
+    const serving = await pollUntilHealthy(this.deps, {
+      url: current.ui.healthUrl,
+      timeoutMs: ADOPT_PROBE_MS,
+      intervalMs: ADOPT_PROBE_MS,
+      signal: AbortSignal.timeout(ADOPT_PROBE_MS),
+    });
+    if (!serving) {
+      return false;
+    }
+    current.adopted = true;
+    current.lastError = undefined;
+    current.stopping = new AbortController();
+    return true;
+  }
+
+  private superseded(current: RunningProduct): boolean {
+    return this.current !== current;
+  }
+
+  private diedWhileProbing(current: RunningProduct): boolean {
+    return current.state === "exited" && current.adopted !== true;
   }
 
   private async framingOf(url: string, stopping: AbortSignal): Promise<ProductFraming> {

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { RunState } from "@isotopy/core";
-import { ENGINES, formatUsage, runUsage } from "@isotopy/core";
+import { ENGINES, runUsage, spendLabel } from "@isotopy/core";
 import { useElapsed } from "../hooks/useElapsed";
 import type { Dir } from "../theme";
 import {
@@ -133,7 +133,7 @@ export function RunStatusBar({ run, d, initiative }: RunStatusBarProps) {
   const elapsed = useElapsed(run.createdAt, run.completedAt);
   const running = run.status === "running";
   const dot = runDot(run.status, d);
-  const spend = formatUsage(runUsage(run));
+  const spend = spendLabel(run.engine, runUsage(run));
 
   return (
     <div style={STACK}>

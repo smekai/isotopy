@@ -1,5 +1,440 @@
 # Done
 
+## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
+**Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
+**Updated:** 2026-08-10 14:10
+
+A fixed point is where a system stops changing under its own operation. That is the goal:
+stop adding, and make what exists hold still and hold up.
+
+**The bar:** someone who is not us installs it, points it at a folder, describes a goal —
+and *sees the thing that was built*. Today the last step barely exists. A run ends and the
+result is somewhere on disk, and you have to already know where.
+
+**Scope, in order:** `TASK-126` (a finished run names what it changed), `TASK-124`
+(permission modes and blast radius), `TASK-138` (run the built product and show it),
+`TASK-115` (per-role presets, pulled out of Milestone H once `TASK-129` made a stage's
+model something an agent can reason about), `TASK-116` (README "How it works"), `TASK-139`
+(the Orchestrator's decision loop stops dead-ending and spinning), `TASK-137` (one dialog
+with the Orchestrator, plus the harness/model question at the start and honest stage
+labels — widened on 2026-08-12, last before the dogfood), and `TASK-128` (the closing
+dogfood). Already
+closed: `TASK-092` (project automation and preview deploy), `TASK-127`
+(a stage must not pass on output nothing could use), and `TASK-129` (model presets rather
+than ids the plan rejects).
+
+**Why `TASK-138` is here, decided with the user on 2026-08-10:** the second half of
+`TASK-126` — starting the product and putting it in front of the user — was split into
+Milestone H that morning and pulled back into F the same day. `TASK-126` delivered the
+weaker reading of F's bar: a run *names* what it built. Seeing it run is the reading a
+first-time user will have, and the demo cannot route around it. It sits after `TASK-124`
+because it starts long-lived processes on someone else's machine, and that is exactly what
+`TASK-124` gives the system an opinion about.
+
+That is the **only** capability admitted after the "nothing else" rule below was written,
+and admitting it is not licence for a second.
+
+Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
+research spikes belong to no milestone at all. `TASK-137` is here because a user asked for
+it and because F's bar is a first-time user meeting the Orchestrator — the one surface the
+demo cannot route around.
+
+**Scope finalised 2026-08-17. All three dogfoods are now run, and the milestone does not close.**
+
+`TASK-128` closed `SKIP` — Codex passed, Cursor was out of quota. `TASK-141` closed **`PASS`** on
+Claude Code: a five-role team built the feature, independent verification caught a real
+accessibility bug in its own work, the Orchestrator recovered with one partial retry and stopped
+itself, and the built product was seen running in the embedded Preview. That is F's bar, met on a
+second engine.
+
+**`TASK-142` then closed `FAIL` on Cursor on 2026-08-23**, earlier than the 2026-09-03 reset it was
+waiting for, because the quota turned out to be two pools with headroom in one. The team built the
+feature correctly in **4m 18s** — 23 tests green, every clause of the goal verified by hand — and
+then **verification ran three times in 1h 58m and never produced a verdict**. A `vite preview` the
+Developer stage left behind survived the timeout that killed its parent, held port 5180 for two
+hours, and made Isotopy's own product runner report `exited` while the app answered 200 at the URL
+Isotopy had configured. A human had to kill it by hand before the Preview could show anything —
+after which it worked in 4.4 seconds.
+
+**That is F's bar failing on its last step, not a Cursor problem.** Every defect is ours: the leaked
+process tree, the runner fighting its own leftover, and a timeout that discards everything it
+interrupts so three attempts bought no information at all. Filed as `TASK-165`, `TASK-166`,
+`TASK-167` and `TASK-168`, in Milestone I.
+
+**Closed 2026-08-24 with the product owner, on the first reading.** F's bar was met on Claude Code,
+the feature was built correctly on Cursor too, and the four defects that stopped its verification —
+`TASK-165`, `TASK-166`, `TASK-154`, `TASK-167` — are fixed and regression-tested. What is *not*
+claimed: the Cursor path was never re-run end to end on the fixed build, so "a first-time user sees
+the thing that was built" is proven on one engine and inferred on another.
+
+**Re-running it was considered and declined**, because Milestone I does the same thing at a larger
+scale — a real product, built by Isotopy and carried on a schedule — and would re-prove this on
+better evidence than a second focus timer. Buying the smaller proof first would delay the bigger one
+for a result it will supersede.
+
+**The four defects `TASK-141` found went to Milestone H, not here** — decided with the user on
+2026-08-17. `TASK-144` and `TASK-145` at P0, `TASK-146` and `TASK-147` at P2. `TASK-144` does
+under-cut `TASK-126`'s bar for the second and later runs of an initiative, which is a real argument
+for fixing it inside F; the user chose H anyway, so F closes on the evidence it has rather than
+growing a tail. That is the "nothing else" rule being kept rather than bent.
+
+Cross-platform: every task here is verified on Windows and reasoned through for macOS, and
+`TASK-126`'s folder reveal and `TASK-124`'s per-CLI mode flags are where that bites.
+
+---
+
+## TASK-166: A verification that runs out of time loses everything it learned
+**Priority:** P0 | **Tags:** server, engine, core, milestone-i
+**Updated:** 2026-08-24 11:30
+
+Closed 2026-08-24. Both halves: the retry stops starting cold, and the agent is told it is on a
+clock. The second turned out to matter more than the first.
+
+**A stage records its session, and a restart resumes it.** `StageState.sessionId` is persisted,
+`runStageWork` records it whatever the outcome, and `seedFromSettledRun` carries it into the
+restarted stage's first turn. The rule lives in `resumableSession`: resume **only when the stage
+never reached a verdict**. A stage that answered `FAIL` finished its thought and starts fresh; a
+stage cut off mid-sentence is the one worth continuing, and a verdict is either present or not, so
+the run record can tell them apart without guessing. Whether the engine can resume at all is
+answered by `TASK-154`'s catalog, not by the restart code.
+
+**A resumed turn is told what happened to it.** `turnPrompt` used to hand a resumed turn
+`turn.answer ?? ""` — an empty prompt, because the only resume that existed was answering a
+question. `buildResumePrompt` now says the previous attempt was stopped by a time limit, that this
+is the same session so what it established is still above, and that if setup is eating the clock it
+should drop the setup and reach the verdict.
+
+**Every stage now knows its time budget, which is the deeper fix.** The agent that burned two hours
+had no idea it had ten minutes; it reached for `playwright install chromium` with four left.
+`buildTimeBudget` puts the minutes into the stage prompt's Environment block along with what
+overrunning costs — stopped where it stands, no verdict, work lost rather than partially credited.
+A constraint an agent cannot see is one it cannot budget against, and no amount of resume machinery
+fixes that.
+
+**Rejected: replaying the prior attempt's transcript instead of resuming.** The task named both. A
+transcript is lossy where a session is not — the agent's own working state, what it had ruled out,
+what it had open — and where an engine cannot resume, the question-loop replay already covers the
+ground.
+
+**Deliberately not done: forbidding `verify-feature` from installing a browser.** The task raised it
+as a question. The assignment already says to use the repository's own Playwright and to install
+only as a last resort, and the Cursor agent ignored that — a firmer prohibition would likely be
+ignored the same way, whereas a stated budget gives it a reason. Left as written rather than
+tightened on a guess; if a later run installs a browser inside a budget it can see, that is evidence
+for a prohibition and this note is the place it starts.
+
+**Gotcha worth keeping:** a timed-out stage settles the run as `failed`, not `needs_attention` — the
+latter is a `quality`-policy verdict, and a timeout produces no verdict at all. The comp test
+asserted the wrong one first and said so plainly, which is the same distinction `resumableSession`
+turns on.
+
+**Tests.** `stage-resume.spec.ts` covers the rule: cut off with a session resumes, a verdict does
+not, no session has nothing to resume, and an engine that cannot resume is never handed one — plus
+the resume prompt and the budget text. The fake engine gained `timesOut(sessionId)`, and
+`orchestration.comp.ts` drives the dogfood's exact shape end to end: build passes, QA times out with
+a session, the Orchestrator restarts QA alone, and the second QA turn is anticipated **with that
+session id**, so a cold restart fails the test.
+
+**Verified:** lint, typecheck, **971 tests passed / 2 skipped** (up from 964), build, `gen:skills`
+with no diff, e2e 70 passed / 4 skipped.
+
+Recorded in [`docs/decisions.md`](../docs/decisions.md) (2026-08-24).
+
+Cross-platform: n/a — a persisted field, a seeding rule and two prompt strings. Nothing here spawns
+a process, resolves a binary or touches a path.
+
+---
+
+## TASK-167: Cursor's token counts arrive and are thrown away, and the composer names a model that will not run
+**Priority:** P1 | **Tags:** server, ui, engine, adapters, milestone-i
+**Updated:** 2026-08-23 23:15
+
+Closed 2026-08-23. **One of the two defects was real; the other was my own misreading, and is
+withdrawn rather than quietly dropped.**
+
+**Real: Cursor's tokens were arriving and being discarded.** Its `result` event carries `usage` with
+`inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens` — confirmed on the wire
+during `TASK-142`'s pre-flight probe — while `resultSchema` in `cursor-protocol.ts` read only
+`duration_ms` and let the rest pass through unread. It now maps them onto `StageUsage` the way Codex
+already does (`tokensIn`, `tokensOut`, `cachedTokensIn`), and the capability catalog flips Cursor's
+`tokenUsage` from `unsupported` to `supported`. `cacheWriteTokens` has no `StageUsage` field and was
+left uncaptured rather than growing the schema for a number nothing reads.
+
+Cursor still emits no **cost**, so `costReporting` stays `unsupported` and `spendLabel` keeps saying
+so. That was always the smaller half of the gap, and it is the vendor's, not ours.
+
+**Withdrawn: the composer was never lying about a pinned model.** The finding said it "displays the
+tier for a run whose model is pinned". It does not. `HomeComposer` already renders *"Engine: Cursor ·
+auto — pinned in Setup, so the model above does not apply"* whenever `modelOverrideFor` returns
+something, and `ui-smoke.e2e.ts` has asserted that since `TASK-129`. The observation came from
+reading the tier dropdown during the dogfood **before** the pin had been set, and mistaking one
+control for the whole disclosure.
+
+**Gotcha worth keeping:** the fix here was to check first and write nothing. A dogfood finding is a
+hypothesis, not a defect report — this one survived into a filed P1 task, a defect list and a
+published record before anyone opened the component. It is kept as a struck-through paragraph in
+[`docs/decisions.md`](../docs/decisions.md), because a record that edits out its own mistakes is
+worth less than one that keeps them.
+
+**Tests.** Two protocol tests: the token counts from the real probe's `result` event land on
+`StageUsage`, and a result without `usage` still reports duration rather than inventing zeroes.
+
+**Verified:** lint, typecheck, **964 tests passed / 2 skipped** (up from 962), build.
+
+Cross-platform: n/a — protocol field capture is pure text logic and the line splitting already
+accepts both LF and CRLF.
+
+---
+
+## TASK-154: An adapter declares what it can do, and Cursor stops lying about three of them
+**Priority:** P1 | **Tags:** core, server, engine, milestone-i
+**Updated:** 2026-08-23 23:10
+
+Closed 2026-08-23. All five steps delivered, and step 3 landed differently than written — for a
+reason worth more than the step.
+
+**1. The capability catalog is data.** `ENGINE_CAPABILITY_CATALOG` in `packages/core/src/engines.ts`
+is an exhaustive `Record<EngineId, Record<EngineCapability, CapabilitySupport>>` over two `as const`
+tuples, so a new capability is a compile error until every engine answers it — the guarantee a
+`never`-closed switch would give, without asking three adapters to restate a table. Support is not a
+boolean: `supported`, `unsupported`, `probed`, `posixOnly`.
+
+**2. Cursor session resume works, verified end to end.** `session_id` is read off `system.init`,
+returned as `sessionId`, and `--resume <id>` is passed when the workflow supplies one. Verified
+against the live CLI before implementing: a first turn was told to remember a word, a second turn
+with `--resume` returned it, same session id both times.
+
+**3. Cursor permission modes — and `--sandbox enabled` is macOS and Linux only.** This is where the
+task's own instruction to verify first paid for itself. `skip` → `--force` and `autoReview` →
+`--auto-review` are exactly as specified, and auto-review is now a real `--help` probe instead of a
+constant `unsupported`. But `acceptEdits` → `--sandbox enabled` **exits 1 on Windows**: *"Sandbox
+mode is enabled but not available on this system. Sandbox requires macOS or Linux."* Implementing
+the mapping as written would have broken every accept-edits run on this platform. The capability is
+declared `posixOnly` and `permissionPlan` degrades to unrestricted with a notice naming the reason —
+the task's own rule, that a flag which behaves differently gets declared rather than faked.
+
+**4. Claude `loggedIn`, and it prints JSON.** `claude auth status` returns
+`{loggedIn, authMethod, email, subscriptionType}`, so it is parsed by a Zod schema at the boundary
+(`schemas/engine-auth.ts`) rather than sniffed for words like Codex's and Cursor's must be. Verified
+live: `loggedIn: true`, *"Logged in as novikovfedor@gmail.com · pro"*. An older build without the
+subcommand fails the probe and reports `undefined` — never a guess.
+
+**5. What is still missing is now said out loud.** `spendLabel` renders *"spend not reported by
+Cursor"* where the catalog says the engine reports neither cost nor tokens, instead of the status bar
+falling silent and leaving the user to wonder.
+
+**Gotcha worth keeping:** the CLI had already moved again. The flags were read on 2026-08-20 for the
+task text and re-read on 2026-08-23 for the work — `cursor-agent` had self-updated from
+`2026.08.04-aaa8809` to `2026.08.11-e8db854` in between. Pinning the version verified is not
+ceremony; it is the only thing that makes a claim in this file checkable later.
+
+**Tests.** Protocol: the session id is kept off init, and an init without one is still valid rather
+than a parse failure. Argv, against a stub binary: auto-review asked for when advertised and degraded
+when not, `--force` only for `skip`, `--resume` on a follow-up turn, and the accept-edits split with
+one test per platform. Round trip: the stub now emits a stdout fixture (`writeStubStdout`), so a run
+whose init announces a session id is proven to hand that id back. Catalog: every engine answers every
+capability, `posixOnly` resolves per platform, `probed` is never claimed unasked.
+
+**Verified:** lint, typecheck, **962 tests passed / 2 skipped** (up from 946), build, `gen:skills`
+with no diff, e2e 70 passed / 4 skipped. Plus live `detect()` against both real CLIs.
+
+Recorded in [`docs/decisions.md`](../docs/decisions.md) (why the catalog is data, why `posixOnly`
+exists, and the rejected alternative of trusting the plan as written) and
+[`docs/implementation-notes.md`](../docs/implementation-notes.md), whose three stale Cursor claims and
+auth-probe paragraph were rewritten rather than patched.
+
+Cross-platform: verified live on **Windows** for both CLIs. The POSIX `--sandbox enabled` branch is
+reasoned through and **untested** — no Mac was used — but it is the branch the catalog declares, and
+it has its own `skipIf` test that will run the moment someone executes the suite on macOS or Linux.
+The prompt-via-stdin behaviour on the Windows `.cmd` shim is unchanged by the new `--resume`
+argument, which the argv tests cover.
+
+---
+
+## TASK-165: A stage's orphans outlive it, and the product runner then fights its own leftovers
+**Priority:** P0 | **Tags:** server, engine, infra, milestone-i
+**Updated:** 2026-08-23 22:30
+
+Closed 2026-08-23. The three-defect chain from `TASK-142`'s dogfood, fixed together.
+
+**A timeout now settles the stage whether or not the child dies.** `ABANDON_AFTER_KILL_MS` (15s)
+starts when the timeout kills the process tree; if `exit` never arrives, the deadline settles
+anyway. That is the 600s-versus-5316s gap closed. The message carries both numbers now —
+`Timed out after 600s, abandoned after 5316s` — because a timeout that silently overran makes every
+duration in a run record a guess.
+
+**`taskkill` is no longer fire-and-forget.** Its spawn error and non-zero exit are reported through
+a `KillProblem` callback into the settled result, so a kill that missed a grandchild says so
+instead of leaving a leaked port to be discovered two hours later.
+
+**The product runner recovers from colliding with its own leftover.** The real mechanism was
+narrower than "it should check the port first": `noteExit` aborts the health poll, so when the
+rival died of `EADDRINUSE` the poll never got to answer and the exit won. `reachable()` now
+re-probes on a *fresh* signal when the child exited, and adopts the product already serving that
+URL — `adopted: true`, `lastError` cleared, a new `AbortController` so the framing probe still runs.
+The Preview says so in the toolbar: *already running here — Isotopy did not start it and cannot stop
+it*.
+
+**Rejected: probing the health URL before launching at all.** It was the first attempt and it broke
+eight existing tests for a good reason — it makes Isotopy never start the product whenever anything
+answers that port, including a stale server serving old code. Recovering from the collision is the
+narrow fix; pre-empting the launch is a different and worse policy.
+
+**Gotcha worth keeping:** the first cut also silently reverted a guard. `abandoned()` meant *either*
+superseded *or* exited, and the exited half is what stops a product that dies mid-header-probe from
+being announced ready. Splitting it into `superseded()` alone lost that, and the existing test
+"a product that dies while its headers are being read is not then announced as ready" caught it
+immediately. It is now `superseded() || diedWhileProbing()`, where the second permits the adopted
+case and nothing else.
+
+**Tests.** `subprocess-timeout.spec.ts` covers the message as a pure function — including the
+dogfood's literal 600s/5316s pair — plus a win32 test that a `taskkill` which cannot reach its pid
+reports rather than fails silently, and a POSIX test that the group signal reaches a detached
+grandchild. Two product-process comp tests: the rival that loses the port is adopted, and the rival
+that dies with nothing serving still reports the exit, so adoption cannot paper over an absent
+product.
+
+**Verified:** lint, typecheck, **946 tests passed / 1 skipped** (up from 940), build, `gen:skills`
+with no diff, e2e 70 passed / 4 skipped.
+
+Cross-platform: the abandon deadline and the adoption are platform-independent. The `taskkill`
+reporting is win32 and tested there; the POSIX group-signal path has its own test. **An unkillable
+child is not portably reproducible**, so the deadline itself is covered through its reporting rather
+than by simulating the hang — stated here rather than implied by a green suite. Whether a POSIX
+process group would have taken the leaked `vite preview` with it is still unestablished; the
+question the task raised stays open and belongs with whoever next has a Mac.
+
+---
+
+## TASK-142: Rerun the Milestone F dogfood with Cursor, on the pool that has headroom
+**Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
+**Updated:** 2026-08-23 22:15
+
+Closed 2026-08-23 **`FAIL`**. **Milestone F does not close on this.** The per-run record this task
+wrote was deleted on 2026-08-24 with the product owner — three narratives of one run cost more than
+they bought — so the three-engine comparison it existed for now lives in
+[`docs/decisions.md`](../docs/decisions.md) and the account below is the fuller one.
+
+**The quota precondition arrived early and in a shape the task did not predict.** It expected a
+monthly reset on 2026-09-03. The dashboard instead showed the limit is two pools — Auto + Composer
+at 11% used, API at 100% — with headroom in one of them. No preset reached it, which became
+`TASK-164`; the run then pinned `auto` anyway, because even after that fix Balanced, Deep and Max
+are Anthropic models on the exhausted pool and per-stage tiers would have spread roles into it.
+
+**The team built the feature and the feature is correct.** Scope, design and implementation took
+**4 minutes 18 seconds**: 5 files modified, 2 modules added, 721 insertions, **23 tests passing**
+(up from 9), clean build. Every clause of the goal verified by hand against the running product —
+1–120 minute durations, reload persistence, automatic focus/break alternation, a history of
+completed *focus* sessions only, Start/Pause/Reset intact, and a live-region announcer.
+
+**Verification then burned 1 hour 58 minutes across three attempts and never produced a verdict.**
+That is the failure, and it is ours, not the engine's:
+
+- The **Developer** stage left `vite preview` running on 5180. The verify timeout killed the
+  `cursor-agent` tree; `taskkill /T` did not take that grandchild, which held the port for two
+  hours.
+- Isotopy's product runner then collided **with its own orphan** — `state: "exited"`,
+  `"Port 5180 is already in use"` — while the app answered 200 at the URL Isotopy had configured.
+- QA burned its budget on that conflict, reached for Playwright and `playwright install chromium`,
+  and hit the 600s wall. The timeout **discards everything**, so each retry began from nothing.
+- Each retry began *cold* because Cursor's `session_id` is dropped, so the same setup was redone
+  twice more into the same wall. That is `TASK-154`'s first defect **measured** rather than argued.
+
+**What worked, and is worth keeping in view.** The Orchestrator recovered twice with precise
+partial retries naming only the Verifying stage and correctly skipping settled work, then **stopped
+itself and asked the user** rather than attempting a fourth — `TASK-139` and `TASK-126` both
+holding. It also reached for `TASK-164`'s brand-new `economy` tier on the role that records and
+`balanced` on the roles that decide, correctly, on first contact. And once a human killed the
+orphan, the embedded Preview reached `ready` in **4.4 seconds** and framed the product — so F's last
+step works; it was blocked by a leftover, not broken.
+
+**Gotcha worth keeping:** a stage reported `Timed out after 600s` after actually running **5316s**.
+The message and the measured duration disagree by 79 minutes, so the stage did not settle when the
+timeout fired — the orphan almost certainly held the pipe open. Every duration in a run record is
+untrustworthy until that is fixed.
+
+**One received belief corrected before it spread further.** "Cursor reports no cost and no tokens"
+is half wrong: its `result` event carries `usage` with input, output and cache token counts, and
+`cursor-protocol.ts` reads only `duration_ms` and drops them. Cursor emits no *cost*; the tokens are
+a defect we own. Spend therefore came from the dashboard, and the record says so.
+
+**Filed, not fixed here** — Milestone F admits nothing else: `TASK-165` (orphaned process tree, the
+product runner fighting its own leftover, the timeout that does not stop the clock), `TASK-166`
+(a timed-out verification loses everything it learned), `TASK-167` (dropped Cursor tokens; the
+composer naming a tier for a pinned run), `TASK-168` (onboarding asks for a project and offers no
+way to add one).
+
+**Deliberately not done:** the Orchestrator's question was left unanswered and the initiative left
+`awaiting_user` — answering it would have spent more on the same trap. No product code was changed
+to make the run pass.
+
+Cross-platform: run live on **Windows**. macOS reasoned through and untested — the Cursor adapter
+there resolves via `which` with no `.cmd` shim, so the prompt goes by **argv** rather than stdin,
+`install()` refuses off win32, and cleanup signals a process group instead of `taskkill /T`. Whether
+a POSIX group signal would have taken the leaked `vite preview` with it is unknown, and `TASK-165`
+is written to establish that before assuming the defect is cross-platform.
+
+---
+
+## TASK-164: A preset for the cheapest thing a harness sells, and Cursor stops riding one OpenAI family
+**Priority:** P1 | **Tags:** core, ui, engine, milestone-i
+**Updated:** 2026-08-23 19:30
+
+Closed 2026-08-23. Opened the same day while preparing `TASK-142`'s Cursor dogfood: the account had
+capacity — **Auto + Composer at 11% used, API at 100%** — and no Isotopy preset could reach it.
+
+**`economy` is a sixth tier, directly after `auto`.** Not a relabelled `auto`, and the reason is
+mechanical rather than cosmetic: `LimitModal` treats `MODEL_TIER_OPTIONS` order as a price ladder,
+slicing it for the rungs cheaper than the one that hit a limit, and drops `auto` from that list
+because "whatever the CLI is set to" has no price. A subsidised allowance parked under `auto` could
+therefore never be offered as an escape. Under `economy` it is.
+
+**Economy took Fast's rung and Fast moved up one notch** on Claude Code (`haiku` low → Economy,
+`haiku` medium → Fast) and Codex (`gpt-5.6-luna` low → Economy, medium → Fast), keeping six rungs
+monotone. **Rejected: letting Economy duplicate Fast there** — two presets with one answer, and a
+limit rung escaping to nothing cheaper.
+
+**Cursor's ladder crossed vendors.** Economy `auto`, Fast `composer-2.5`, Balanced
+`claude-sonnet-5-thinking-high`, Deep `claude-opus-5-thinking-high`, Max
+`claude-opus-5-thinking-xhigh`; `claude-opus-5-thinking-xhigh` joined the bundled roster and
+`STATIC_ROSTER_CHECKED_ON` moved to 2026-08-23, earned by a live `agent models`. `gpt-5.3-codex`
+stayed in the roster as a manual pin and stopped being a preset rung. Cursor's default tier moved
+from `auto` to `economy`.
+
+**Gotcha worth keeping — a new invariant test found a real defect and a documented one.** A sweep
+asserting no two priced rungs resolve alike failed first on **Codex**, where `deep` and `max` are
+both `gpt-5.6-sol`/`high` — pre-existing and deliberate, since efforts above `high` are unconfirmed
+there. The sweep was narrowed to what this task actually decided: Economy must never equal Fast.
+The second find was live code: `cheaperTiers` de-duplicated escape rungs on **model alone**, so
+Economy and Fast — both `haiku`, differing only in effort — collapsed into one offer and Fast
+silently vanished from the limit modal. The key now includes effort. That defect was invisible
+until two rungs shared a model, which is exactly what this change introduced.
+
+**Two ripples nothing in the plan predicted, both caught by existing guards.**
+`orchestrate-assignment.spec.ts` sweeps `MODEL_TIERS` against the orchestrate skill and failed
+because the skill still said "the five tiers", so a tier the assignment never names is a tier the
+model never picks. And the `ui-smoke` e2e asserts what Fast resolves to on screen.
+
+**Verified:** lint, typecheck, **940 tests passed** (up from 933), build, `gen:skills` with no
+resulting diff, **e2e 70 passed / 4 skipped**. Every tier was then resolved against the three
+*live* rosters through `GET /engines/:id/models?refresh=1` — none degraded, and Cursor's Economy
+resolves to `auto`, the pool the dashboard shows free. Setup renders six presets with Economy
+between Auto and Fast. The UI proxy hop was broken during that check (the server bound
+`[::1]` only), so the resolution was read from the API rather than the picker.
+
+Recorded in [`docs/decisions.md`](../docs/decisions.md) (2026-08-23) and
+[`docs/implementation-notes.md`](../docs/implementation-notes.md), which gains the note that
+`MODEL_TIER_OPTIONS` order is a price ladder rather than a display order.
+
+Stored preferences needed no migration. `tierOf` matches on model id alone and returns the first
+tier naming it, so a pre-preset `haiku` or `gpt-5.6-luna` pin now adopts Economy rather than Fast —
+correct, because the old Fast *was* that model at low effort. A legacy `gpt-5.3-codex` pin stops
+being a ladder member and survives as an explicit pin.
+
+Cross-platform: n/a — tier ladders and the bundled roster are pure data. Verified on Windows.
+
+---
+
 ## TASK-155: Reduce backend abstraction ceremony and validate/reduce docs
 **Priority:** P2
 **Tags:** server, core, infra

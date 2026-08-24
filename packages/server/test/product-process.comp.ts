@@ -47,6 +47,52 @@ test("a product that answers its health URL becomes ready and records how it may
   await product.shutdown();
 });
 
+test("a rival that loses the port to an already-serving product is adopted, not reported as exited", async () => {
+  // Arrange — TASK-142's dogfood: a dev server the Developer stage leaked held
+  // 5180, so starting spawned a rival that died with EADDRINUSE. The exit
+  // aborted the health poll, and the service reported the product exited while
+  // it answered 200 at that very URL for another two hours.
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  const stub = stubProcess();
+  const product = new ProductProcessService(new AutomationConfigStore(), {
+    ...stub.deps,
+    probe: servingUntilAborted,
+  });
+  await product.start(ctx.registry.resolve());
+
+  // Act — the rival dies, which aborts the health poll mid-probe; the leftover
+  // goes on serving, which is the whole point.
+  stub.emitStderr("Error: Port 59999 is already in use");
+  stub.exit({ exitCode: 1, errorMessage: "Process exited with code 1" });
+
+  // Assert
+  await product.settle();
+  const status = await product.status(ctx.registry.resolve());
+  expect(status.state).toBe("ready");
+  expect(status.adopted).toBe(true);
+  expect(status.lastError).toBeUndefined();
+  await product.shutdown();
+});
+
+test("a rival that dies with nothing serving the URL still reports the exit", async () => {
+  // Arrange — the same crash, but the port really is dead. Adoption must not
+  // paper over a product that is genuinely not there.
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  const stub = stubProcess();
+  const product = new ProductProcessService(new AutomationConfigStore(), stub.deps);
+  await product.start(ctx.registry.resolve());
+
+  // Act
+  stub.exit({ exitCode: 1, errorMessage: "Process exited with code 1" });
+
+  // Assert
+  await product.settle();
+  const status = await product.status(ctx.registry.resolve());
+  expect(status.state).toBe("exited");
+  expect(status.adopted).toBeUndefined();
+  expect(status.lastError).toContain("code 1");
+});
+
 test("a product that never answers fails with its own stderr, so the reason is not a bare timeout", async () => {
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
@@ -311,6 +357,21 @@ function uiAutomation(overrides: Partial<UiAutomation> = {}): UiAutomation {
     healthUrl: overrides.healthUrl ?? HEALTH_URL,
     readyTimeoutMs: overrides.readyTimeoutMs ?? 200,
   };
+}
+
+const PROBE_LATENCY_MS = 5;
+
+/** A real probe loses to its own abort signal; an immediate stub never does. */
+function servingUntilAborted(_url: string, init: { signal: AbortSignal }): Promise<{ ok: boolean }> {
+  return new Promise((resolve, reject) => {
+    const abort = (): void => reject(new Error("aborted"));
+    if (init.signal.aborted) {
+      abort();
+      return;
+    }
+    init.signal.addEventListener("abort", abort, { once: true });
+    setTimeout(() => resolve({ ok: true }), PROBE_LATENCY_MS).unref();
+  });
 }
 
 function automationConfig(): ProjectAutomationConfig {

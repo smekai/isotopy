@@ -1,5 +1,6 @@
-import { STAGE_OUTCOMES, flattenPipelineStages } from "@isotopy/core";
+import { STAGE_OUTCOMES, engineCapability, flattenPipelineStages } from "@isotopy/core";
 import type {
+  EngineId,
   PipelineDefinition,
   RunState,
   StageOutcome,
@@ -13,6 +14,22 @@ export interface SeededStart {
   outputs: Record<string, string>;
   outcomes: Record<string, StageOutcome>;
   from?: string;
+  resumeSessionId?: string;
+}
+
+export function resumableSession(
+  stage: StageState | undefined,
+  engineId: EngineId | undefined,
+): string | undefined {
+  if (stage?.sessionId === undefined || engineId === undefined) {
+    return undefined;
+  }
+  if (stage.verdict !== undefined) {
+    return undefined;
+  }
+  return engineCapability(engineId, "resumeSession") === "supported"
+    ? stage.sessionId
+    : undefined;
 }
 
 export interface SeededStage {
@@ -41,7 +58,7 @@ export function resetStagesForRestart(
 }
 
 export function seedFromRestart(run: RunState, startStageId: string): SeededStart {
-  return seedStages(
+  const seeded = seedStages(
     stagesBefore(run.stages, startStageId).map((stage) => ({
       id: stage.id,
       outcome: outcomeForRestart(stage),
@@ -49,6 +66,19 @@ export function seedFromRestart(run: RunState, startStageId: string): SeededStar
     })),
     startStageId,
   );
+  return withResumableSession(seeded, run, startStageId);
+}
+
+function withResumableSession(
+  seeded: SeededStart,
+  run: RunState,
+  startStageId: string,
+): SeededStart {
+  const resumeSessionId = resumableSession(
+    run.stages.find((stage) => stage.id === startStageId),
+    run.engine,
+  );
+  return resumeSessionId === undefined ? seeded : { ...seeded, resumeSessionId };
 }
 
 export function seedFromSettledRun(
@@ -78,7 +108,8 @@ export function seedFromSettledRun(
     outcome: stage.settled ? outcomeForRestart(stage.settled) : STAGE_OUTCOMES.PASSED,
     output: settled.stageOutputs?.[stage.id],
   }));
-  return { ok: true, value: { ...seedStages(carried, startStageId), from } };
+  const seeded: SeededStart = { ...seedStages(carried, startStageId), from };
+  return { ok: true, value: withResumableSession(seeded, settled, startStageId) };
 }
 
 function issue(message: string): ValidationResult<SeededStart> {

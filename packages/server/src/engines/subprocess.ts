@@ -7,6 +7,10 @@ import { messageOf } from "../utils/message-of.ts";
 const STDERR_TAIL_LINES = 10;
 const SIGKILL_ESCALATE_MS = 5000;
 
+const ABANDON_AFTER_KILL_MS = 15_000;
+
+type KillProblem = (message: string) => void;
+
 /**
  * `close` waits for every holder of the child's stdio to let go, and a coding
  * CLI that leaves a dev server behind never gets there. `exit` says the process
@@ -58,18 +62,47 @@ function signalGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-export function killProcessTree(child: ChildProcess): void {
+export function killProcessTree(child: ChildProcess, onProblem?: KillProblem): void {
   if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) {
     return;
   }
   if (!ownsProcessGroup()) {
-    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+    const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+    killer.on("error", (error) => onProblem?.(`taskkill could not run: ${error.message}`));
+    killer.on("exit", (code) => {
+      if (code !== 0 && code !== null) {
+        onProblem?.(`taskkill exited ${code}; a child process may still be running`);
+      }
+    });
     return;
   }
   const { pid } = child;
   signalGroup(pid, "SIGTERM");
   const escalate = setTimeout(() => signalGroup(pid, "SIGKILL"), SIGKILL_ESCALATE_MS);
   escalate.unref();
+}
+
+function detachFrom(child: ChildProcess): void {
+  for (const stream of [child.stdout, child.stderr]) {
+    stream?.removeAllListeners("data");
+    stream?.destroy();
+  }
+  child.removeAllListeners("close");
+  child.removeAllListeners("exit");
+  child.unref();
+}
+
+export function timeoutMessage(
+  timeoutMs: number,
+  elapsedMs: number,
+  killProblem?: string,
+): string {
+  const timeoutSeconds = Math.round(timeoutMs / 1000);
+  const elapsedSeconds = Math.round(elapsedMs / 1000);
+  const abandoned =
+    elapsedSeconds > timeoutSeconds ? `, abandoned after ${elapsedSeconds}s` : "";
+  const survivor = killProblem === undefined ? "" : ` — ${killProblem}`;
+  return `Timed out after ${timeoutSeconds}s${abandoned}${survivor}`;
 }
 
 function createLineReader(emit: (line: string) => void): (chunk: string, flush?: boolean) => void {
@@ -191,6 +224,8 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
   let stderrTail: string[] = [];
   let timedOut = false;
   let spawnErrorMessage: string | undefined;
+  let killProblem: string | undefined;
+  let abandonKill: NodeJS.Timeout | undefined;
 
   const readStdout = createLineReader((line) => spec.onLine?.("stdout", line));
   const readStderr = createLineReader((line) => {
@@ -207,13 +242,19 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
     settled = true;
     clearTimeout(timeout);
     clearTimeout(flushGrace);
+    clearTimeout(abandonKill);
     spec.signal?.removeEventListener("abort", onAbort);
+    detachFrom(child);
     resolveExit(result);
   };
 
-  const onAbort = (): void => killProcessTree(child);
+  const noteKillProblem: KillProblem = (message) => {
+    killProblem ??= message;
+  };
+
+  const onAbort = (): void => killProcessTree(child, noteKillProblem);
   if (spec.signal?.aborted) {
-    killProcessTree(child);
+    killProcessTree(child, noteKillProblem);
   } else {
     spec.signal?.addEventListener("abort", onAbort, { once: true });
   }
@@ -223,7 +264,12 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
       ? undefined
       : setTimeout(() => {
           timedOut = true;
-          killProcessTree(child);
+          killProcessTree(child, noteKillProblem);
+          abandonKill = setTimeout(
+            () => settle(child.exitCode, child.signalCode),
+            ABANDON_AFTER_KILL_MS,
+          );
+          abandonKill.unref();
         }, spec.timeoutMs);
   timeout?.unref();
 
@@ -258,7 +304,7 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
     let errorMessage: string | undefined;
     if (!success) {
       if (timedOut) {
-        errorMessage = `Timed out after ${Math.round((spec.timeoutMs ?? 0) / 1000)}s`;
+        errorMessage = timeoutMessage(spec.timeoutMs ?? 0, Date.now() - startedAt, killProblem);
       } else if (aborted) {
         errorMessage = "Aborted";
       } else if (spawnErrorMessage) {

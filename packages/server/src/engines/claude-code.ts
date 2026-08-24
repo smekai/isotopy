@@ -5,6 +5,7 @@ import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import type { PermissionStrategy } from "../domain/rules/permission-plan.ts";
+import { claudeAuthStatus } from "../schemas/engine-auth.ts";
 import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
 import { claudePermissionModeChoices } from "../schemas/engine-cli-help.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
@@ -126,6 +127,28 @@ async function claudeVersion(binary: string): Promise<string> {
   return firstLine(result.stdout) ?? "";
 }
 
+const AUTH_UNKNOWN = "auth status unknown — run `claude auth status` in a terminal";
+
+interface ClaudeAuth {
+  loggedIn?: boolean;
+  message: string;
+}
+
+async function claudeAuth(binary: string): Promise<ClaudeAuth> {
+  const result = await probeCommand(binary, ["auth", "status"]);
+  const status = result.success ? claudeAuthStatus(result.stdout) : undefined;
+  if (status === undefined) {
+    return { message: AUTH_UNKNOWN };
+  }
+  if (!status.loggedIn) {
+    return { loggedIn: false, message: "Not logged in — run `claude auth login` in a terminal" };
+  }
+  return {
+    loggedIn: true,
+    message: truncate(`Logged in${status.account === undefined ? "" : ` as ${status.account}`}`),
+  };
+}
+
 const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /usage credits required|switch to standard context/i,
@@ -192,12 +215,15 @@ export const claudeCodeAdapter: EngineAdapter = {
     }
     try {
       const version = await claudeVersion(resolved.path);
+      const auth = await claudeAuth(resolved.path);
       return {
         engine: "claude-code",
         installed: true,
         path: resolved.path,
         version,
         source: resolved.source,
+        message: auth.message,
+        loggedIn: auth.loggedIn,
       };
     } catch (error) {
       const message = messageOf(error);

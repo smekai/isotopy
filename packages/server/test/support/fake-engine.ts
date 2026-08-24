@@ -62,10 +62,16 @@ export interface AnticipationOutcome {
   /** Blocks until the run is aborted — the vehicle for abort tests. */
   hangsUntilAborted(): FakeEngine;
   /**
+   * The stage runs out of time and reports no verdict, handing back the session
+   * it got as far as. This is what TASK-142 hit three times: a restart that
+   * cannot reach that session repeats the setup the first attempt already did.
+   */
+  timesOut(sessionId?: string): FakeEngine;
+  /**
    * The box stops and asks, handing back a session id. A real CLI would print
    * this on its event stream; the workflow feeds it back as `resumeSessionId`.
-   * Omit the id for a CLI that cannot resume (Cursor) — the next turn then
-   * replays the conversation instead of continuing a session.
+   * Omit the id for a CLI that cannot resume — the next turn then replays the
+   * conversation instead of continuing a session.
    */
   asks(question: string, sessionId?: string, usage?: StageUsage): FakeEngine;
   /**
@@ -169,6 +175,16 @@ export class FakeEngine implements EngineAdapter {
         }),
       fails: (errorMessage) =>
         push(() => Promise.resolve({ success: false, exitCode: 1, errorMessage })),
+      timesOut: (sessionId) =>
+        push(() => {
+          const response: EngineRunResult = {
+            success: false,
+            exitCode: null,
+            errorMessage: "Timed out after 600s",
+          };
+          if (sessionId !== undefined) response.sessionId = sessionId;
+          return Promise.resolve(response);
+        }),
       hitsLimit: (raw) =>
         push(() =>
           Promise.resolve({

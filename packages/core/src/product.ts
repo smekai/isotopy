@@ -22,6 +22,7 @@ export interface ProductProcessStatus {
   startedAt?: string;
   readyAt?: string;
   lastError?: string;
+  adopted?: boolean;
 }
 
 export function isProductLive(state: ProductProcessState): boolean {

@@ -20,6 +20,8 @@ import {
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 
+const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
+
 
 test("the boxes run in order, in one shared workspace, each with its own persona", async () => {
   // Arrange
@@ -289,6 +291,58 @@ test("aborting before the box starts means the engine is never spawned at all", 
   const cancelled = await waitForRunStatus(app, run.id, "cancelled");
   expect(stageOf(cancelled, "intake").status).toBe("skipped");
   // An engine started here would be a CLI doing paid work for a cancelled run.
+  engine.verify();
+});
+
+test("restarting a stage that ran out of time resumes its session rather than starting cold", async () => {
+  // Arrange — the manual half of TASK-166. The Orchestrator's restart resumes;
+  // a human clicking Restart on the same timed-out stage must too, or the
+  // expensive cold retry survives on the path a user actually reaches for.
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "QA, cut off" }).timesOut(CUT_OFF_SESSION);
+  engine.anticipateRunReview({ as: "Review of the timed-out attempt" });
+  const run = await startRun(app, PIPELINE);
+  await approveIntake(app, run.id);
+  await waitForRunStatus(app, run.id, "failed");
+
+  // Anticipate — the retry carries the session the first attempt left behind.
+  engine
+    .anticipate({ as: "QA, resumed", resumeSessionId: CUT_OFF_SESSION })
+    .reports("Finished what was left.\n\nVERDICT: PASS");
+  engine.anticipateRunReview({ as: "Review of the resumed attempt" });
+
+  // Act
+  await post(app, `/runs/${run.id}/restart`, { stageId: "test" });
+
+  // Assert
+  await waitForRunStatus(app, run.id, "completed");
+  engine.verify();
+});
+
+test("restarting a stage that reported a verdict starts fresh, because it finished its thought", async () => {
+  // Arrange — a FAIL is an answer, so resuming would continue a closed conversation.
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "QA, first attempt" }).parks("Broken.\n\nVERDICT: FAIL", CUT_OFF_SESSION);
+  engine.anticipateRunReview({ as: "Review of the failed attempt" });
+  const run = await startRun(app, PIPELINE);
+  await approveIntake(app, run.id);
+  await waitForRunStatus(app, run.id, "needs_attention");
+
+  // Anticipate — no session, so a cold turn carrying the Developer's handoff.
+  engine
+    .anticipate({ as: "QA, restarted cold", prompt: /Developer/ })
+    .reports("Checked it.\n\nVERDICT: PASS");
+  engine.anticipateRunReview({ as: "Review of the restart" });
+
+  // Act
+  await post(app, `/runs/${run.id}/restart`, { stageId: "test" });
+
+  // Assert
+  await waitForRunStatus(app, run.id, "completed");
   engine.verify();
 });
 

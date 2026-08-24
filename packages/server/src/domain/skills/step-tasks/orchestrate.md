@@ -60,7 +60,9 @@ the tier the user chose before starting, which is the right answer whenever you
 have no reason to differ — they picked it deliberately, and the default is the
 cheap end, so departing from it spends their money.
 
-The five tiers are `auto`, `fast`, `balanced`, `deep`, `max`.
+The six tiers are `auto`, `economy`, `fast`, `balanced`, `deep`, `max`, cheapest first.
+`economy` is the cheapest thing the harness sells — reach for it on a role that only
+records, and on a long run where the harness has a subsidised allowance to stay inside.
 
 Spend on the role that **decides** and save on the role that **records**. A
 Software Architect choosing between designs, or a Developer working through a

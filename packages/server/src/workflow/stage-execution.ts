@@ -22,7 +22,12 @@ import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
-import { buildContinuationPrompt, buildStagePrompt } from "../domain/markdown/stage.ts";
+import {
+  buildContinuationPrompt,
+  buildResumePrompt,
+  buildStagePrompt,
+  buildTimeBudget,
+} from "../domain/markdown/stage.ts";
 import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { engineLabel } from "../domain/rules/engine-label.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
@@ -69,7 +74,7 @@ function turnPrompt(
   environment: string | undefined,
 ): string {
   if (turn.resumeSessionId !== undefined) {
-    return turn.answer ?? "";
+    return turn.answer ?? buildResumePrompt(stepTask);
   }
   const task = input.task ?? "";
   const upstream = upstreamFor(run, stageDef.id);
@@ -79,6 +84,15 @@ function turnPrompt(
 }
 
 export const VERIFY_FEATURE_STEP_TASK = "verify-feature";
+
+async function stageEnvironment(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+): Promise<string> {
+  const product = await productEnvironment(deps, run, stageDef);
+  return [buildTimeBudget(config.engineTimeoutMs), product].filter(Boolean).join("\n\n");
+}
 
 async function productEnvironment(
   deps: WorkflowDeps,
@@ -566,7 +580,7 @@ export async function runStageWork(
       message: `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
     });
   }
-  const environment = await productEnvironment(deps, run, stageDef);
+  const environment = await stageEnvironment(deps, run, stageDef);
   const prompt = turnPrompt(input, run, stageDef, turn, stepTask, environment);
 
   if (deps.isCancelled(runId)) {
@@ -586,6 +600,9 @@ export async function runStageWork(
 
   if (outcome.usage) {
     projection.stageUsage(runId, stageDef.id, outcome.usage);
+  }
+  if (outcome.sessionId !== undefined) {
+    projection.stageSession(runId, stageDef.id, outcome.sessionId);
   }
 
   if (deps.isCancelled(runId)) {
