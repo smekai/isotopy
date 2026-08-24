@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, Plus } from "lucide-react";
-import type { Milestone, Orchestration, RunSummary } from "@isotopy/core";
+import type { Milestone, Orchestration, RunSummary, ScheduleView } from "@isotopy/core";
 import { milestoneProgress } from "@isotopy/core";
 import { railItems } from "../run-list";
 import { InitiativeGroup } from "./InitiativeGroup";
+import { ScheduleGroup } from "./schedule/ScheduleGroup";
+import { ScheduleList } from "./schedule/ScheduleList";
 import { RunCard } from "./RunCard";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
@@ -178,13 +180,17 @@ export interface RunRailProps {
   runs: RunSummary[];
   orchestrations: Orchestration[];
   milestones: Milestone[];
+  schedules: ScheduleView[];
   ready: boolean;
   selectedRunId: string | null;
   selectedMilestoneId: string | null;
+  selectedScheduleId: string | null;
   composing: boolean;
   onNewRun: () => void;
   onOpen: (runId: string) => void;
   onOpenMilestone: (milestoneId: string) => void;
+  onOpenSchedule: (scheduleId: string) => void;
+  onNewSchedule: () => void;
   onRestart: (runId: string, stageId: string) => void;
   onRerun: (run: RunSummary) => void;
 }
@@ -194,23 +200,27 @@ export function RunRail({
   runs,
   orchestrations,
   milestones,
+  schedules,
   ready,
   selectedRunId,
   selectedMilestoneId,
+  selectedScheduleId,
   composing,
   onNewRun,
   onOpen,
   onOpenMilestone,
+  onOpenSchedule,
+  onNewSchedule,
   onRestart,
   onRerun,
 }: RunRailProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-  function toggleInitiative(orchestrationId: string) {
+  function toggleGroup(groupId: string) {
     setCollapsed((current) => {
       const next = new Set(current);
-      if (!next.delete(orchestrationId)) {
-        next.add(orchestrationId);
+      if (!next.delete(groupId)) {
+        next.add(groupId);
       }
       return next;
     });
@@ -233,27 +243,56 @@ export function RunRail({
         />
       )}
 
+      <ScheduleList
+        schedules={schedules}
+        selectedScheduleId={selectedScheduleId}
+        d={d}
+        onOpenSchedule={onOpenSchedule}
+        onNewSchedule={onNewSchedule}
+      />
+
       <div style={sectionLabel(d)}>Runs</div>
 
       {!ready && <div style={placeholder(d)}>Loading…</div>}
       {ready && runs.length === 0 && <div style={placeholder(d)}>No runs yet.</div>}
 
       <ul style={LIST}>
-        {railItems(runs, orchestrations).map((item) =>
-          item.kind === "initiative" ? (
-            <InitiativeGroup
-              key={item.orchestration.id}
-              orchestration={item.orchestration}
-              runs={item.runs}
-              collapsed={collapsed.has(item.orchestration.id)}
-              selectedRunId={selectedRunId}
-              d={d}
-              onToggle={() => toggleInitiative(item.orchestration.id)}
-              onOpen={onOpen}
-              onRestart={onRestart}
-              onRerun={onRerun}
-            />
-          ) : (
+        {railItems(runs, orchestrations, schedules).map((item) => {
+          if (item.kind === "initiative") {
+            return (
+              <InitiativeGroup
+                key={item.orchestration.id}
+                orchestration={item.orchestration}
+                runs={item.runs}
+                collapsed={collapsed.has(item.orchestration.id)}
+                selectedRunId={selectedRunId}
+                d={d}
+                onToggle={() => toggleGroup(item.orchestration.id)}
+                onOpen={onOpen}
+                onRestart={onRestart}
+                onRerun={onRerun}
+              />
+            );
+          }
+          if (item.kind === "schedule") {
+            return (
+              <ScheduleGroup
+                key={item.schedule.id}
+                schedule={item.schedule}
+                runs={item.runs}
+                totalRuns={item.totalRuns}
+                collapsed={collapsed.has(item.schedule.id)}
+                selectedRunId={selectedRunId}
+                d={d}
+                onToggle={() => toggleGroup(item.schedule.id)}
+                onOpen={onOpen}
+                onOpenSchedule={onOpenSchedule}
+                onRestart={onRestart}
+                onRerun={onRerun}
+              />
+            );
+          }
+          return (
             <RunCard
               key={item.run.id}
               run={item.run}
@@ -263,8 +302,8 @@ export function RunRail({
               onRestart={(stageId) => onRestart(item.run.id, stageId)}
               onRerun={() => onRerun(item.run)}
             />
-          ),
-        )}
+          );
+        })}
       </ul>
     </nav>
   );

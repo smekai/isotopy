@@ -3,6 +3,7 @@ import type {
   OrchestratorRole,
   OrchestratorTeamProposal,
   RunSummary,
+  ScheduleView,
 } from "@isotopy/core";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import { summary } from "./run-fixtures";
@@ -53,4 +54,20 @@ export function orchestratedRun(
   overrides: Partial<RunSummary> = {},
 ): RunSummary {
   return summary({ id, createdAt, orchestrationId: ORCHESTRATION_ID, ...overrides });
+}
+
+export function scheduleView(overrides: Partial<ScheduleView> = {}): ScheduleView {
+  return {
+    ...overrides,
+    id: overrides.id ?? "s1",
+    projectId: overrides.projectId ?? HOME_PROJECT_ID,
+    name: overrides.name ?? "Board poller",
+    cron: overrides.cron ?? "0 9 * * *",
+    timezone: overrides.timezone ?? "UTC",
+    task: overrides.task ?? "Take the next task off the board",
+    team: overrides.team ?? team(),
+    enabled: overrides.enabled ?? true,
+    createdAt: overrides.createdAt ?? CREATED_AT,
+    updatedAt: overrides.updatedAt ?? CREATED_AT,
+  };
 }

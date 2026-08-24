@@ -28,7 +28,7 @@ by accident and nobody defends them past their usefulness.
 
 | Absent | Why it is fine today | What would change it |
 | --- | --- | --- |
-| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied, so a browser navigation to `/runs/<id>` would be answered with run JSON instead of the app. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. TASK-093 added `#/milestones/:id` as a *sibling* of `#/runs/:id` — two flat patterns over one union, still not nesting. |
+| ~~**Router**~~ | **Fell to TASK-077**, on the trigger it predicted. There is a router now — a hand-rolled one: [`route.ts`](../packages/ui/src/route.ts) (pure, unit-tested) plus [`useRoute`](../packages/ui/src/hooks/useRoute.ts), a `hashchange` listener. **Hash, not path**, because `/runs` belongs to the API and is proxied, so a browser navigation to `/runs/<id>` would be answered with run JSON instead of the app. | A second route pattern with nesting, or route-level data loading, would justify `react-router`. TASK-093 added `#/milestones/:id` as a *sibling* of `#/runs/:id`, and TASK-160 `#/schedules/:id` beside them — three flat patterns over one union, still not nesting. |
 | **State library** | State is either server state (three hooks) or one screen's view state. | State shared between siblings that are not both children of `App`. |
 | **CSS framework** | Theme switching is runtime, driven by a JS token object. | See §7 — the token gap is the real problem, not the absence of Tailwind. |
 | **Data-fetching library** | Every read is one call and one owner; SSE carries updates, so there is no cache to invalidate. | Refetch-on-focus, retries, or two components needing the same request. |
@@ -38,8 +38,8 @@ by accident and nobody defends them past their usefulness.
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
-on ports, and proxies `/projects /runs /milestones /orchestrations /health
-/settings /engines /fs` to the server. **That proxy list must stay in sync with the routes
+on ports, and proxies `/projects /runs /milestones /orchestrations /schedules /health
+/settings /engines /automation /fs` to the server. **That proxy list must stay in sync with the routes
 mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
 dev UI until it is added there.
 
@@ -55,8 +55,9 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`main.tsx`](../packages/ui/src/main.tsx) | Bootstrap: `createRoot` + `StrictMode` + `ThemeProvider`. Nothing else ever goes here. |
 | [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run rail, run view vs. composer, every overlay. See §6 for what it may own. |
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
-| [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union of home, `#/runs/:id` and `#/milestones/:id`. Unit-tested. |
-| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `orchestrationRefreshKey`, `railItems` (groups an initiative's runs under it). Unit-tested. |
+| [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union of home, `#/runs/:id`, `#/milestones/:id` and `#/schedules/:id`. Unit-tested. |
+| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `runsForSchedule`, `orchestrationRefreshKey`, `railItems` (groups an initiative's runs under it, and every episode of one schedule under that schedule). Unit-tested. |
+| [`schedule-view.ts`](../packages/ui/src/schedule-view.ts) | Pure schedule view rules — the next fire time rendered **in the reader's own zone**, the on/paused label, and what a skipped window reads as. The server computes the instant; this only formats it. Unit-tested. |
 | [`orchestration.ts`](../packages/ui/src/orchestration.ts) | Pure orchestrator view rules — `teamAwaitingApproval` (status **and** decision must agree before Approve is offered), `decisionPresentation`, status labels. Unit-tested. |
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
@@ -65,8 +66,8 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`, `stagePresentation`). Unit-tested. |
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
-| `components/` | 14 flat component files, plus three feature folders — `setup/`, `run/` and `home/`. §3. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useSchedules`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
+| `components/` | 14 flat component files, plus four feature folders — `setup/`, `run/`, `home/` and `schedule/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
 

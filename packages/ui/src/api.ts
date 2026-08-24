@@ -8,6 +8,7 @@ import type {
   LimitResolution,
   ModelTier,
   Orchestration,
+  OrchestratorTeamProposal,
   ProductProcessStatus,
   Project,
   ProjectPreferencesUpdate,
@@ -16,8 +17,10 @@ import type {
   RunMessage,
   RunState,
   RunSummary,
+  ScheduleView,
   SettingsView,
   UpdateMilestoneInput,
+  UpdateScheduleInput,
 } from "@isotopy/core";
 import {
   DEFAULT_PIPELINE_ID,
@@ -86,6 +89,38 @@ export function activateProject(projectId: string): Promise<ProjectsView> {
 
 export function removeProject(projectId: string): Promise<ProjectsView> {
   return requestJson<ProjectsView>(`/projects/${projectId}`, { method: "DELETE" });
+}
+
+export interface CreateScheduleBody {
+  name: string;
+  cron: string;
+  timezone: string;
+  task: string;
+  team: OrchestratorTeamProposal;
+  enabled?: boolean;
+}
+
+export function fetchSchedules(): Promise<ScheduleView[]> {
+  return requestJson<ScheduleView[]>("/schedules");
+}
+
+export function fetchSchedule(scheduleId: string): Promise<ScheduleView> {
+  return requestJson<ScheduleView>(`/schedules/${scheduleId}`);
+}
+
+export function createSchedule(body: CreateScheduleBody): Promise<ScheduleView> {
+  return postJson<ScheduleView>("/schedules", body);
+}
+
+export function updateSchedule(
+  scheduleId: string,
+  update: UpdateScheduleInput,
+): Promise<ScheduleView> {
+  return patchJson<ScheduleView>(`/schedules/${scheduleId}`, update);
+}
+
+export function deleteSchedule(scheduleId: string): Promise<void> {
+  return requestJson<void>(`/schedules/${scheduleId}`, { method: "DELETE" });
 }
 
 export function fetchSettings(): Promise<SettingsView> {

@@ -11,6 +11,7 @@ const API_PROXY_PATHS = [
   "/runs",
   "/milestones",
   "/orchestrations",
+  "/schedules",
   "/health",
   "/settings",
   "/engines",

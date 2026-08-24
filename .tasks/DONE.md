@@ -1,5 +1,109 @@
 # Done
 
+## TASK-159: Schedules — a recurring task with a fixed team
+**Priority:** P1 | **Tags:** core, server, milestone-i
+**Updated:** 2026-08-24 14:00
+
+Closed 2026-08-24. The clock the product has never had. Both open questions the task refused to
+assume were answered with the product owner before any code was written, and both are in
+[`docs/decisions.md`](../docs/decisions.md) with their rejected alternative.
+
+**The dependency was confirmed before adoption, and the incumbent was checked first.** The owner
+asked whether OpenWorkflow could already do this. It cannot: `openworkflow@0.9.2`'s only scheduling
+primitive is `WorkflowRunOptions.availableAt`, a one-shot delayed start taking a `Date` or a
+duration string — no cron, no recurrence, no timezone — and `workflow-runtime.ts:55` runs the worker
+at `concurrency: 1`, so a parked run would hold the only slot. `croner@10.0.1` it is: MIT, **zero
+runtime dependencies**, bundled types. `cron-parser` was rejected for carrying `luxon`.
+
+**The parser stays server-side, which changed where the predicates live.** The task asked for
+due-ness and next-fire beside the model in `packages/core`, but core is aliased straight into the
+browser build (`ui/vite.config.ts`), so croner cannot go there. Core holds the record, the anchor
+and `isScheduleDue`; cron arithmetic lives in `server/src/domain/rules/schedule-cron.ts`. The server
+computes each next fire time and sends it, so the UI never parses an expression and the two can
+never disagree.
+
+**A schedule stores the team proposal, not a composed pipeline.** `composedPipelineId` bakes the
+orchestration id into the pipeline id, and a schedule outlives every orchestration it starts. The
+proposal is validated when saved and composed at fire time against that episode's fresh id.
+
+**Validity is checked on the merged record, not on the patch.** A `PATCH` carrying a cron and no
+timezone cannot be judged alone, so the boundary schema does shape only and
+`domain/rules/schedule-validity.ts` judges the result. A bad zone is blamed on the **timezone**
+field and a bad expression on the **cron** field — two fields in one dialog, so the wrong path
+highlights the wrong input. Found by driving the real dialog, not by a test.
+
+**Firing asks rather than catches.** A due schedule whose project already has an active run records
+`lastSkipReason` and waits for its next window; it never starts a run it expects `admitRun` to
+refuse. The window is consumed whatever it produced — catch up, never backfill — which is why the
+anchor is `lastWindowAt` and `lastFiredAt` means only what actually started something.
+
+**Tests.** Cron rules as pure specs: a daily wall-clock time across Europe/Berlin's spring-forward
+(23 hours between fires, where a naive +24h implementation reads 24), two zones disagreeing with the
+runner's, and each issue blamed on its own field. Component: one run per due schedule with the
+pinned team rather than the project default; the orchestration stamped with its schedule; a missed
+three-day window firing once and *not again on the next tick*; a skip when a run is active; a
+disabled schedule accumulating no debt; survival across a server restart; delete. **Every rule was
+mutation-checked** — the anchor advance, the admission check, the schedule stamp, the enabled flag
+and the validity gate were each broken in turn, and only the tests claiming that rule failed.
+
+**Verified:** lint, typecheck, **1017 tests passed / 2 skipped** (up from 995), build, `gen:skills`
+with no diff, e2e 75 passed / 4 skipped. Plus the live app on Windows: created through the real
+dialog, listed with the server's next fire rendered in the browser's own zone
+(`2027-01-01T07:00:00.000Z` → *Fri 09:00* Europe/Tallinn), paused, and deleted, with no console
+errors and all three refusals returning the right field.
+
+**Not done, deliberately: no schedule was allowed to fire in the dev app.** Every shipped pipeline
+drives a real engine, so a live fire spends real tokens. The firing path is covered by the component
+tests against the fake engine; the live check used a far-future expression.
+
+Cross-platform: cron is parsed in-process — no `cron`, no `schtasks`, no second process. The tick
+reads the wall clock every time and never accumulates elapsed time, which is what makes suspend and
+resume work; the three-day catch-up test is that rule expressed as a test rather than a claim. The
+**real** sleep/wake check `TASK-061` reasoned through is still **not** executed — see `TASK-169`.
+
+---
+
+## TASK-160: Schedules in the rail
+**Priority:** P1 | **Tags:** ui, milestone-i
+**Updated:** 2026-08-24 14:00
+
+Closed 2026-08-24, with `TASK-159`.
+
+**A third rail section, built from the styles the second already had.** `ScheduleList` is the same
+labelled, height-capped, `flexShrink: 0` block as `MilestoneList`, with a different icon and an add
+control in its header — the Project panel's dead end (`TASK-168`) is exactly the mistake of naming a
+need with no way to satisfy it, so the section that lists schedules is the section that adds one.
+
+**Grouping reuses the existing seam rather than adding one.** The owner's call was to keep recurring
+work as one group and cap what it shows. `railItems()` in `run-list.ts` — already the pure grouping
+function — now gathers by `orchestration.scheduleId` when present, so every episode of one schedule
+is one group however many Orchestrators served it. The group shows the newest 5 and links to the
+detail view for the rest. Runs of a **deleted** schedule fall back to ordinary initiative groups
+rather than vanishing.
+
+**The browser never parses cron.** `schedule-view.ts` formats the instant the server sent, in the
+reader's own zone. A paused schedule shows no next fire time even though the server still computes
+one, because "next" means nothing for something that will not run.
+
+**Overlay rules, as `LimitModal` implements them:** `role="dialog"`, `aria-modal`, Escape closes,
+focus moved in on open and restored on close — each one its own test, including the restore.
+
+**Tests.** Pure: schedule grouping, the cap, manual work keeping its own group, a deleted schedule's
+runs surviving, and the route round-tripping an id that needs escaping. Render: the section lists
+and opens; a paused row shows no fire time; the dialog's four overlay rules; a save carrying the
+edited expression rather than the default; an edit keeping the pinned team rather than resetting it.
+E2E, seeded so it spends no tokens: the section renders, the runs list is untouched beside it,
+opening routes to `#/schedules/:id`, create posts what was typed, Escape closes.
+
+Docs: [`architecture-ui.md`](../docs/architecture-ui.md) — proxy list, module map, the third route
+pattern, and `schedule-view.ts`; [`architecture.md`](../docs/architecture.md) §2d for the server
+side; [`running-the-app.md`](../docs/running-the-app.md) for the proxy prefix.
+
+Cross-platform: fire times are rendered by `Intl` in the reader's zone, never the server's. Verified
+live on **Windows**; macOS reasoned through and untested.
+
+---
+
 ## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
 **Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
 **Updated:** 2026-08-10 14:10

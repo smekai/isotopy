@@ -8,6 +8,7 @@ import {
   parseRoute,
   routeHash,
   runRoute,
+  scheduleRoute,
 } from "../src/route";
 
 describe("parseRoute", () => {
@@ -42,6 +43,14 @@ describe("parseRoute", () => {
   test("an empty milestone id falls back to home", () => {
     expect(parseRoute("#/milestones/")).toEqual(HOME_ROUTE);
   });
+
+  test("a schedule hash carries the schedule id", () => {
+    expect(parseRoute("#/schedules/s1")).toEqual({ kind: "schedule", scheduleId: "s1" });
+  });
+
+  test("an empty schedule id falls back to home", () => {
+    expect(parseRoute("#/schedules/")).toEqual(HOME_ROUTE);
+  });
 });
 
 describe("routeHash", () => {
@@ -53,6 +62,11 @@ describe("routeHash", () => {
 
   test("a milestone id needing escapes round-trips through the hash", () => {
     const route = milestoneRoute("a/b");
+    expect(parseRoute(routeHash(route))).toEqual(route);
+  });
+
+  test("a schedule id needing escapes round-trips through the hash", () => {
+    const route = scheduleRoute("a/b");
     expect(parseRoute(routeHash(route))).toEqual(route);
   });
 
