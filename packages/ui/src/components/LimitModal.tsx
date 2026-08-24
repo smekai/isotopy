@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import { BellRing, Play, Plug, RotateCcw, Square, X } from "lucide-react";
 import { DEFAULT_ENGINE_ID, ENGINES, MODEL_TIER_OPTIONS, resolveTier } from "@isotopy/core";
@@ -11,6 +11,7 @@ import type {
   RunLimit,
   RunState,
 } from "@isotopy/core";
+import { Dialog } from "./Dialog";
 import { useEngineRoster } from "../hooks/useEngineRoster";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";
@@ -228,8 +229,6 @@ export function LimitModal({
   onOpenConnection,
   onDismiss,
 }: LimitModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const restoreFocusTo = useRef<Element | null>(null);
   const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
   const { roster } = useEngineRoster(engineId);
   const blockedStage = run.stages.find((stage) => stage.id === limit.stageId);
@@ -246,36 +245,14 @@ export function LimitModal({
   const resetLabel = formatResetAt(limit.resetAt);
   const stageLabel = blockedStage?.label ?? limit.stageId;
 
-  useEffect(() => {
-    restoreFocusTo.current = document.activeElement;
-    dialogRef.current?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      const restore = restoreFocusTo.current;
-      if (restore instanceof HTMLElement) {
-        restore.focus();
-      }
-    };
-  }, [onDismiss]);
-
   return (
-    <div style={BACKDROP} onClick={onDismiss}>
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={LIMIT_COPY.headline(limit)}
-        tabIndex={-1}
-        data-testid="limit-modal"
-        onClick={(event) => event.stopPropagation()}
-        style={dialog(d)}
-      >
+    <Dialog
+      label={LIMIT_COPY.headline(limit)}
+      testId="limit-modal"
+      panelStyle={dialog(d)}
+      backdropStyle={BACKDROP}
+      onDismiss={onDismiss}
+    >
         <div style={header(d)}>
           <div>
             <div style={title(d)}>{LIMIT_COPY.headline(limit)}</div>
@@ -361,7 +338,6 @@ export function LimitModal({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

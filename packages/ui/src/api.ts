@@ -7,6 +7,7 @@ import type {
   EngineStatus,
   LimitResolution,
   ModelTier,
+  CreateScheduleInput,
   Orchestration,
   ProductProcessStatus,
   Project,
@@ -16,8 +17,10 @@ import type {
   RunMessage,
   RunState,
   RunSummary,
+  ScheduleView,
   SettingsView,
   UpdateMilestoneInput,
+  UpdateScheduleInput,
 } from "@isotopy/core";
 import {
   DEFAULT_PIPELINE_ID,
@@ -40,14 +43,24 @@ function projectHeaders(extra?: HeadersInit): HeadersInit {
   return { ...(extra as Record<string, string>), [PROJECT_HEADER]: activeProjectId };
 }
 
+export interface ErrorBody {
+  error?: string;
+  issues?: { message: string }[];
+}
+
+export function failureMessage(body: ErrorBody): string | undefined {
+  const issues = body.issues?.map((issue) => issue.message).join("; ");
+  return issues !== undefined && issues.length > 0 ? issues : body.error;
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: projectHeaders(init?.headers),
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `Request failed: ${path}`);
+    const body = (await response.json().catch(() => ({}))) as ErrorBody;
+    throw new Error(failureMessage(body) ?? `Request failed: ${path}`);
   }
   return response.json() as Promise<T>;
 }
@@ -86,6 +99,29 @@ export function activateProject(projectId: string): Promise<ProjectsView> {
 
 export function removeProject(projectId: string): Promise<ProjectsView> {
   return requestJson<ProjectsView>(`/projects/${projectId}`, { method: "DELETE" });
+}
+
+export function fetchSchedules(): Promise<ScheduleView[]> {
+  return requestJson<ScheduleView[]>("/schedules");
+}
+
+export function fetchSchedule(scheduleId: string): Promise<ScheduleView> {
+  return requestJson<ScheduleView>(`/schedules/${scheduleId}`);
+}
+
+export function createSchedule(body: CreateScheduleInput): Promise<ScheduleView> {
+  return postJson<ScheduleView>("/schedules", body);
+}
+
+export function updateSchedule(
+  scheduleId: string,
+  update: UpdateScheduleInput,
+): Promise<ScheduleView> {
+  return patchJson<ScheduleView>(`/schedules/${scheduleId}`, update);
+}
+
+export function deleteSchedule(scheduleId: string): Promise<void> {
+  return requestJson<void>(`/schedules/${scheduleId}`, { method: "DELETE" });
 }
 
 export function fetchSettings(): Promise<SettingsView> {

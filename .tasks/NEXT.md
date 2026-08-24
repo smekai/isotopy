@@ -96,120 +96,85 @@ bites, so it gets tested rather than argued.
 
 ---
 
-## TASK-159: Schedules — a recurring task with a fixed team
-**Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-08-21 12:00
+## TASK-170: A team running unattended has no way to say something went wrong
+**Priority:** P2 | **Tags:** server, infra, milestone-i
+**Updated:** 2026-08-24 15:00
 
-The clock the product has never had. Of **Milestone I — Induction** (`TASK-156`), which carries
-why the Orchestrator dying between episodes is the design rather than a defect.
+Of **Milestone I — Induction** (`TASK-156`). **Lands before the unattended stretch is measured**,
+and before `TASK-161`'s poller is enabled — not because the poller needs it to run, but because the
+first month nobody is watching is the worst possible time to discover the system cannot report.
 
-**A schedule is a persisted record plus a ticker.** Not a durable workflow: `WorkflowRuntime`
-registers exactly one workflow and runs its worker at `concurrency: 1`, and a month-long parked
-workflow would have to be cancelled and rebuilt on every edit. Crash safety comes from the record —
-the cron expression plus `lastFiredAt` recompute due-ness deterministically after any restart, with
-no runtime involvement at all.
+### The state today, counted rather than felt
 
-### The model
+- **17 `console.*` calls, all in `packages/server/src`.** `packages/core` and `packages/ui` have
+  none, so core purity and the UI's single-network-module rule both hold.
+- **15 of the 17 are `console.warn`. Two are `console.log`. There is not one `console.error`.**
+  A database that cannot be closed, a malformed persisted row, and a run whose cleanup failed are
+  all reported at the same severity as "server listening on port 9477" — which is to say, there is
+  no severity signal at all.
+- **133 `catch` blocks across `packages/*/src`; 11 swallow completely.** Most of those 11 are
+  correct — `config.ts` treating a missing `.env` as "no overrides" is the fallback *being* the
+  answer. Some are not.
+- **The convention has no enforcement.** `docs/architecture.md` records "no `console.*` in the new
+  modules" as an upheld convention and there is **no `no-console` ESLint rule**, so it is prose that
+  drifts every time someone needs to report something and finds no sanctioned way to.
 
-`Schedule` in `packages/core/src/schedules.ts`: id, projectId, name, cron expression, IANA
-timezone, the task text, the pinned pipeline, enabled, `lastFiredAt`. Pure predicates live beside
-it as `milestones.ts` does — whether a schedule is due at an instant, and when it next fires — so
-the service and the UI answer the same question the same way.
+**And the ticket everyone deferred to does not exist.** `.tasks/DONE.md:3312` reads *"structured
+logging stays TASK-022"*. There is no `TASK-022` in Backlog, Next, In Progress, Done or Rejected. It
+was never filed. That is the actual reason the silent catches accumulated: every author did the
+right thing by deferring, to a number that was never real.
 
-**The pinned team is `composeTeamPipeline` output** (`domain/rules/team-composition.ts:150`), which
-already validates every `skill` and `stepTask` against the persona and step-task catalogs and gives
-each stage an explicit `executionPolicy`. A run already carries a non-builtin pipeline through
-`RunState.pipeline` and `pipelineForRun`. Nothing new is needed to make a run use a fixed team —
-only somewhere to keep one.
+### Two channels, and the task must not confuse them
 
-**Boundary parse in `packages/server/src/schemas/schedule.ts`.** An invalid cron expression, an
-unknown timezone, or a pipeline naming a persona that does not exist are all rejected *when the
-schedule is saved*, never at fire time. A schedule that cannot fire must not be storable.
+This is the distinction that decides the scope, and getting it wrong produces a logger that solves
+nothing.
 
-**`ScheduleService` is the single writer**, beside `MilestoneService` and `OrchestrationService`,
-over a `JsonRecordRepository` like theirs. `routes/schedules.ts` is a factory taking the service,
-per the routes convention — and its prefix goes in `ui/vite.config.ts`'s proxy list or the browser
-never reaches it.
+| | Operator channel | User-visible record |
+| --- | --- | --- |
+| Who reads it | whoever runs the server | whoever opens the app |
+| Where it lives | stdout, and later a file | the run record, the schedule record, the rail |
+| Answers | "why did the process behave like that" | "what did my team do, and what did it fail to do" |
 
-### Firing
+**A logger alone would not have caught the defect that prompted this task.** Nobody reads stdout on
+an unattended box. `TASK-159`'s scheduled-run failure needed a home in the *record*, and that fix
+belongs with schedules, not here. This task owns the operator channel only, and says so, so the next
+author does not reach for a log line where a persisted field is what the user needs.
 
-- **A missed window fires once. Catch up, never backfill.** A machine that was asleep for three
-  days owes one run, not three.
-- **The project's admission rule is respected by checking, not by catching.** `admitRun`
-  (`services/run/run-service.ts:333`) already refuses a second concurrent run per project; a
-  schedule that finds one active records a skip and waits for its next window. A caught exception
-  is not a design.
-- A disabled schedule does not fire and does not accumulate debt.
+### What this decides
 
-### Two consequences to resolve here, with a reason recorded either way
+- **One `Logger` interface behind a seam** (A2), in its own file, with a console implementation
+  beside it. Services receive it; nothing imports a singleton, which is what lets a component test
+  assert on what was reported instead of scraping stdout.
+- **Levels that mean something.** At minimum `error` must exist and must be used where the code
+  currently warns about a genuine failure. Deciding the level set is part of the work; keeping
+  everything at `warn` is not an outcome.
+- **What a `catch` is allowed to do.** Written down, then enforced: swallow silently *only* where
+  the fallback is itself the answer, and that case should read as a fallback rather than as a
+  rescue. Everything else reports — to the operator channel, the user-visible record, or both, and
+  the rule says which.
+- **An ESLint rule**, so the convention stops being prose. Whether that is `no-console` with an
+  allowlist for the bootstrap's two `console.log`s, or a narrower restriction, is part of the work.
 
-1. **Orchestration records accumulate.** Every tick that finds no active Orchestrator persists a
-   new one, and `TASK-149` groups the rail by orchestration — an hourly schedule would produce
-   roughly 720 initiative groups a month and make the rail unusable. Decide whether scheduled work
-   forms an initiative group at all, or collapses into one.
-2. **The post-run decision turn is board-blind.** `reviewContextFor`
-   (`services/orchestration-service.ts:439`) passes goal, team, run label, status, closeout,
-   artifacts, milestone and rejected decision — no `boardContext` — and `renderRunReviewContext`
-   has no board section, while the *opening* turn gets the whole board through `goalContext`.
-   Either the scheduled agent reads the board itself and names the next task in its report (which
-   reaches the Orchestrator as `stageOutputsOf(run)`), or the review context gains the board.
-   **Pick one and say why. Do not do both.**
+### Explicitly out of scope
 
-### The dependency
-
-Cron needs a parser with timezone support. The server has four dependencies today, so this is a
-real decision and belongs in `docs/decisions.md` (A8), not in a commit message. `croner` is the
-candidate — zero dependencies of its own, TypeScript, `nextRun()` with an IANA zone — but confirm
-that before adopting it rather than after.
+Log files, rotation, log levels driven by configuration, and any external sink. Those need a
+deployment story the product does not have yet — the deploy target is one of the things `TASK-156`
+left unwritten on purpose. A task that grows a transport layer here has stopped being this task.
 
 ### Evidence
 
-Per [`docs/testing.md`](../docs/testing.md), failing-first per behaviour: due-ness across a DST
-boundary and across two zones that disagree with the runner's, a missed window firing exactly once,
-a fire skipped because a run was already admitted, an invalid expression refused at save, and a
-scheduled run reaching the engine with its pinned pipeline rather than the project default. Then
-`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm e2e`.
+Failing-first per behaviour: a service handed a fake logger reports the failure it swallowed today,
+with the context needed to act on it; a fallback that is genuinely the answer stays silent and has a
+test saying so; and the lint rule rejects a bare `console.*` in a module that should be using the
+seam. Then `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm e2e`.
 
-Cross-platform: cron is parsed in-process — no `cron`, no `schtasks`, no second process. Timezone
-resolution follows `domain/rules/engine-limit.ts`: ask ICU through `Intl.DateTimeFormat`, keep
-durations in server logs, and leave clock times to the browser. The sleep/wake check `TASK-061`
-reasoned through and never observed is executed here on Windows and reasoned through for macOS.
+The 17 existing call sites move onto the seam in the same change — per the standing rule that a new
+approach means the old code goes with it, not beside it.
 
----
-
-## TASK-160: Schedules in the rail
-**Priority:** P1 | **Tags:** ui, milestone-i
-**Updated:** 2026-08-21 12:00
-
-Recurring work is not a run, so it does not belong in the run list. Of **Milestone I — Induction**
-(`TASK-156`); needs `TASK-159`'s model and API.
-
-**A third rail section, built exactly like the second.** `MilestoneList` inside
-`components/RunRail.tsx` is already a labelled, height-capped, `flexShrink: 0` block sitting
-between the New run button and the flexible runs list. Schedules is the same shape with a different
-icon, and the rail's existing `sectionLabel`, `MILESTONE_LIST` and `milestoneButton` styles are the
-pattern to follow rather than reinvent. **This is not a new surface.**
-
-Three to five schedules is the design point. A list that needs paging or search is a sign the
-feature grew something nobody asked for.
-
-**Create, edit, enable and disable**, plus each schedule's next fire time and whether it is on.
-**The server computes the next fire time and sends it** — the UI never parses a cron expression, so
-the parser stays a server dependency and the two can never disagree. A cron expression a human has
-to compose by hand deserves a plain-language echo of what it means next to the field.
-
-A schedule's detail view — its recent fires and what each started — gets a route in `route.ts`
-beside `#/runs/:id` and `#/milestones/:id`, following `parseRoute`/`routeHash` and their existing
-pair of accessors.
-
-**Evidence:** a component test that the section renders, toggles, and disables without touching the
-run list; a route test for parse/format round-tripping; and a seeded Playwright path that creates a
-schedule and sees it listed, in the shape of `run-limit.spec.ts` so it spends no tokens. Overlay
-rules apply to any dialog this adds — `role="dialog"`, `aria-modal`, Escape, focus moved in and
-restored — as `LimitModal` and `SetupModal` already do.
-
-Cross-platform: the browser renders the next fire time in the reader's own zone, never the
-server's. Verified on Windows; macOS reasoned through unless a Mac is used.
+Cross-platform: stdout and stderr behave the same on both, but **line endings and console encoding
+do not**. A Windows terminal and a POSIX one disagree on both, and the repo has already been bitten
+by a CRLF assertion in the skill tests, so any test asserting on rendered output normalises rather
+than hardcodes.
 
 ---
 

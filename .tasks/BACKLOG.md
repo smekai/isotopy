@@ -1,5 +1,39 @@
 # Backlog
 
+## TASK-169: Observe a real sleep/wake with a schedule pending, on both OSes
+**Priority:** P2 | **Tags:** testing, infra, milestone-i
+**Updated:** 2026-08-24 14:00
+
+`TASK-061` closed with the machine-suspend behaviour **reasoned through and never observed**, and
+`TASK-159` was written as the work where that gap finally bites — an unattended schedule is the
+first feature whose whole point is surviving the hours nobody is watching.
+
+`TASK-159` did not close it. What it delivered is the rule expressed as a test: the tick reads the
+wall clock every time and never accumulates elapsed time, and a schedule ticked as if the machine
+woke three days later fires exactly once and not again. That is the *logic* proven against a
+simulated clock. It is not the same claim as the OS actually suspending.
+
+**What is still unobserved, and why a simulated clock cannot answer it:** whether the interval
+survives S3/modern standby at all, whether Node's timer fires late or not at all on resume, and
+whether the process is still holding its SQLite handle afterwards. `.unref()` is on the timer, which
+is right for shutdown and says nothing about wake.
+
+**What to do:** put a machine to sleep with an enabled schedule whose window falls inside the sleep,
+wake it, and record what actually happened — how long after resume the first tick ran, whether
+exactly one run started, and whether `lastWindowAt` advanced once. Then the same on macOS, or record
+plainly that no Mac was used.
+
+**This needs a human at the machine**, which is why it is its own task rather than a line item
+someone is expected to fake. A reasoned-through answer here is what `TASK-061` already produced, and
+repeating it would be the same non-answer twice.
+
+Evidence: a short record under `docs/dogfood/` or an entry in
+[`docs/implementation-notes.md`](../docs/implementation-notes.md), naming the OS build and the
+observed timings. If the timer does *not* survive, that is a finding and a follow-up, not a failure
+of this task.
+
+---
+
 ## TASK-168: Onboarding asks for a project and offers no way to add one
 **Priority:** P2 | **Tags:** ui, setup, milestone-i
 **Updated:** 2026-08-23 22:00

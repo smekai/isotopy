@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
-import type { LimitResolution, ModelTier, RunSummary } from "@isotopy/core";
+import type {
+  CreateScheduleInput,
+  LimitResolution,
+  ModelTier,
+  RunSummary,
+  ScheduleView,
+} from "@isotopy/core";
 import { formatUsage, preferredRunOptions } from "@isotopy/core";
 import {
   abortRun,
@@ -20,6 +26,8 @@ import { PipelineRow } from "./components/PipelineRow";
 import { ProjectDrawer } from "./components/ProjectDrawer";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunRail } from "./components/RunRail";
+import { ScheduleDashboard } from "./components/schedule/ScheduleDashboard";
+import { ScheduleModal } from "./components/schedule/ScheduleModal";
 import { RunStatusBar } from "./components/RunStatusBar";
 import type { InitiativeChrome } from "./components/RunStatusBar";
 import { RunTabs } from "./components/run/RunTabs";
@@ -30,6 +38,7 @@ import type { LiveInitiative } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useMilestones } from "./hooks/useMilestones";
+import { useSchedules } from "./hooks/useSchedules";
 import { useOrchestration } from "./hooks/useOrchestration";
 import { useProduct } from "./hooks/useProduct";
 import { useProjects } from "./hooks/useProjects";
@@ -41,6 +50,8 @@ import {
   HOME_ROUTE,
   milestoneRoute,
   routeMilestoneId,
+  routeScheduleId,
+  scheduleRoute,
   routeRunId,
   runRoute,
 } from "./route";
@@ -147,6 +158,10 @@ function mainPane(d: Dir): CSSProperties {
   };
 }
 
+interface ScheduleEdit {
+  schedule?: ScheduleView;
+}
+
 export function App() {
   const { d } = useTheme();
   const projects = useProjects();
@@ -164,6 +179,7 @@ export function App() {
     projects.ready,
     orchestrationRefreshKey(runs.runs),
   );
+  const schedules = useSchedules(projectId, projects.ready);
   const product = useProduct(projectId);
   const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
   const [resubKey, setResubKey] = useState(0);
@@ -177,11 +193,16 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ key: string; task: string } | null>(null);
   const [dismissedLimit, setDismissedLimit] = useState<string | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState<ScheduleEdit | null>(null);
 
   const activeRunId = routeRunId(route);
   const activeMilestoneId = routeMilestoneId(route);
   const activeMilestone = activeMilestoneId
     ? milestones.find(activeMilestoneId)
+    : undefined;
+  const activeScheduleId = routeScheduleId(route);
+  const activeSchedule = activeScheduleId
+    ? schedules.find(activeScheduleId)
     : undefined;
   const { run, error: runError } = useRunEvents(activeRunId, resubKey);
 
@@ -213,6 +234,31 @@ export function App() {
   function openMilestone(milestoneId: string) {
     navigate(milestoneRoute(milestoneId));
     setFocusedId(null);
+  }
+
+  function openSchedule(scheduleId: string) {
+    navigate(scheduleRoute(scheduleId));
+    setFocusedId(null);
+  }
+
+  async function saveSchedule(body: CreateScheduleInput) {
+    const editing = editingSchedule?.schedule;
+    const saved = editing
+      ? await schedules.update(editing.id, body)
+      : await schedules.create(body);
+    if (!saved) {
+      return;
+    }
+    if (typeof saved !== "boolean") {
+      navigate(scheduleRoute(saved.id));
+    }
+    setEditingSchedule(null);
+  }
+
+  async function removeSchedule(scheduleId: string) {
+    if (await schedules.remove(scheduleId)) {
+      navigate(HOME_ROUTE);
+    }
   }
 
   function currentRunOptions() {
@@ -418,6 +464,7 @@ export function App() {
     settings.error ??
     runs.error ??
     milestones.error ??
+    schedules.error ??
     orchestration.error;
 
   return (
@@ -459,13 +506,17 @@ export function App() {
           runs={runs.runs}
           orchestrations={orchestration.orchestrations}
           milestones={milestones.milestones}
+          schedules={schedules.schedules}
           ready={runs.ready}
           selectedRunId={activeRunId}
           selectedMilestoneId={activeMilestoneId}
+          selectedScheduleId={activeScheduleId}
           composing={route.kind === "home"}
           onNewRun={openComposer}
           onOpen={attachRun}
           onOpenMilestone={openMilestone}
+          onOpenSchedule={openSchedule}
+          onNewSchedule={() => setEditingSchedule({})}
           onRestart={(runId, stageId) => void handleRestart(runId, stageId)}
           onRerun={handleRerun}
         />
@@ -484,6 +535,21 @@ export function App() {
               onStart={(task, pipelineId) => void handleStart(task, pipelineId)}
               onPlanMilestone={(goal) => void handlePlanMilestone(goal)}
               starting={starting}
+            />
+          ) : activeSchedule ? (
+            <ScheduleDashboard
+              schedule={activeSchedule}
+              runs={runs.runs}
+              orchestrations={orchestration.orchestrations}
+              d={d}
+              onToggleEnabled={(enabled) =>
+                void schedules.update(activeSchedule.id, { enabled })
+              }
+              onEdit={() => setEditingSchedule({ schedule: activeSchedule })}
+              onDelete={() => void removeSchedule(activeSchedule.id)}
+              onOpenRun={attachRun}
+              onRestartRun={(runId, stageId) => void handleRestart(runId, stageId)}
+              onRerunRun={handleRerun}
             />
           ) : activeMilestone ? (
             <MilestoneDashboard
@@ -563,6 +629,15 @@ export function App() {
           onAbort={() => void handleAbort()}
           onOpenConnection={() => setSetupSection("harness")}
           onDismiss={() => setDismissedLimit(activeLimit.detectedAt)}
+        />
+      )}
+      {editingSchedule && (
+        <ScheduleModal
+          d={d}
+          schedule={editingSchedule.schedule}
+          error={schedules.error}
+          onSave={(body) => void saveSchedule(body)}
+          onDismiss={() => setEditingSchedule(null)}
         />
       )}
       {setupSection && (

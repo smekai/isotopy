@@ -357,7 +357,7 @@ functions only.
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the PM closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the PM closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
 | `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts` and `orchestrator-required-error.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `reveal-folder`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
@@ -633,6 +633,39 @@ Its context is deliberately narrow: active goal, approved team, current upstream
 outputs, and prior outputs owned by the active Orchestrator. Raw transcripts, logs,
 and stopped Orchestrators are excluded. There is no broker queue, secondary workflow
 worker, admission lane, or direct-user fallback when the invariant is broken.
+
+### 2d. Schedules — the standing intention between episodes
+
+A **schedule** is a recurring task with a fixed team. The Orchestrator is an episode
+handler, not a long-lived supervisor: `terminate()` is one-way, and `ensureActive`
+then builds a fresh `Orchestration` for the next episode. What carries intent across
+that gap is not the aggregate but the schedule — a persisted record plus a ticker.
+
+| Layer | Where |
+| --- | --- |
+| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `scheduleAnchor` (the last window consumed, or creation) and `isScheduleDue`. Cron is **not** parsed here: core is aliased straight into the browser build |
+| Cron arithmetic | `server/src/domain/rules/schedule-cron.ts` — croner, server-side only. `nextFireForSchedule` is what the API sends, so the UI never parses an expression |
+| Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming a persona that does not exist are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
+| Boundary schema | `server/src/schemas/schedule.ts` — shape only. Validity is checked on the **merged** record, because a patch carrying a cron and no timezone cannot be judged alone |
+| Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE` |
+| Lifecycle | `ScheduleService` — the single writer, and the owner of the one interval that ticks |
+| API | `server/src/routes/schedules.ts` — CRUD plus enable/disable. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
+| UI | a rail section plus `#/schedules/:id` → `ScheduleDashboard`, fed by `useSchedules` |
+
+**A schedule stores an `OrchestratorTeamProposal`, not a composed pipeline.**
+`composedPipelineId` bakes the orchestration id into the pipeline id, and a schedule
+outlives every orchestration it starts. The proposal is validated when saved and
+composed at fire time against that episode's fresh id.
+
+**Firing is a check, not a catch.** `admitRun` already refuses a second concurrent run
+per project, so a due schedule that finds one active records a skip and waits for its
+next window rather than starting a run it expects to be refused.
+
+**Catch up, never backfill.** The window is consumed whatever it produced, so a
+machine asleep for three days owes one run rather than three. Crash safety comes from
+the record: the expression plus the last window consumed recompute due-ness after any
+restart, with no runtime involvement. Cron is parsed in-process — never `cron`, never
+`schtasks`, never a second process.
 
 ### 3. Workflow state
 

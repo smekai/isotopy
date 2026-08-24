@@ -3,8 +3,8 @@
 Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@isotopy/server` (Hono, port **9477**) and `@isotopy/ui`
 (Vite + React, port **5173**). The UI proxies `/projects`,
-`/runs`, `/milestones`, `/orchestrations`, `/health`, `/settings`,
-`/engines`, `/automation`, `/fs` to the server, so
+`/runs`, `/milestones`, `/orchestrations`, `/schedules`, `/health`,
+`/settings`, `/engines`, `/automation`, `/fs` to the server, so
 `http://localhost:5173/health` proves both are up. The proxy
 list in `packages/ui/vite.config.ts` mirrors the route mounts in
 `packages/server/src/app.ts` — add a mount, add a prefix.

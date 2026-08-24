@@ -1,16 +1,19 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, Plus } from "lucide-react";
-import type { Milestone, Orchestration, RunSummary } from "@isotopy/core";
+import type { Milestone, Orchestration, RunSummary, ScheduleView } from "@isotopy/core";
 import { milestoneProgress } from "@isotopy/core";
 import { railItems } from "../run-list";
 import { InitiativeGroup } from "./InitiativeGroup";
+import { ScheduleGroup } from "./schedule/ScheduleGroup";
+import { ScheduleList } from "./schedule/ScheduleList";
 import { RunCard } from "./RunCard";
+import { RailRow, RailSection, RAIL_ROW_ICON_SIZE } from "./RailSection";
+import { railSectionLabel } from "./rail-styles";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
 
 const RAIL_WIDTH = 280;
-const MILESTONE_LIST_MAX_HEIGHT = 200;
 
 function rail(d: Dir): CSSProperties {
   return {
@@ -51,18 +54,6 @@ function newRunButton(active: boolean, d: Dir): CSSProperties {
   };
 }
 
-function sectionLabel(d: Dir): CSSProperties {
-  return {
-    color: d.textMuted,
-    fontFamily: SANS,
-    fontSize: FONT.xs,
-    fontWeight: WEIGHT.bold,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.sm}px`,
-  };
-}
-
 const LIST: CSSProperties = {
   listStyle: "none",
   margin: 0,
@@ -83,52 +74,6 @@ function placeholder(d: Dir): CSSProperties {
   };
 }
 
-const MILESTONE_LIST: CSSProperties = {
-  listStyle: "none",
-  margin: 0,
-  padding: `0 ${SPACE.md}px`,
-  display: "flex",
-  flexDirection: "column",
-  gap: SPACE.xxs,
-  maxHeight: MILESTONE_LIST_MAX_HEIGHT,
-  overflowY: "auto",
-  flexShrink: 0,
-};
-
-function milestoneButton(selected: boolean, d: Dir): CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: SPACE.sm,
-    width: "100%",
-    textAlign: "left",
-    background: selected ? d.surface : "transparent",
-    border: `1px solid ${selected ? d.borderStrong : "transparent"}`,
-    borderRadius: RADIUS.md,
-    padding: `${SPACE.md}px ${SPACE.lg}px`,
-    cursor: "pointer",
-    fontFamily: SANS,
-    color: selected ? d.text : d.textMid,
-  };
-}
-
-const MILESTONE_NAME: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  fontSize: FONT.md,
-  fontWeight: WEIGHT.semibold,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-  color: "inherit",
-};
-
-const MILESTONE_ICON: CSSProperties = { flexShrink: 0 };
-
-function milestoneCount(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontSize: FONT.xs, flexShrink: 0 };
-}
-
 interface MilestoneListProps {
   milestones: Milestone[];
   selectedMilestoneId: string | null;
@@ -143,33 +88,24 @@ function MilestoneList({
   d,
 }: MilestoneListProps) {
   return (
-    <>
-      <div style={sectionLabel(d)}>Milestones</div>
-      <ul style={MILESTONE_LIST}>
-        {milestones.map((milestone) => {
-          const { completed, total } = milestoneProgress(milestone);
-          const selected = milestone.id === selectedMilestoneId;
-          return (
-            <li key={milestone.id}>
-              <button
-                type="button"
-                onClick={() => onOpenMilestone(milestone.id)}
-                aria-current={selected ? "true" : undefined}
-                data-testid="milestone-card"
-                data-milestone-id={milestone.id}
-                style={milestoneButton(selected, d)}
-              >
-                <Flag size={ICON.sm} style={MILESTONE_ICON} />
-                <span style={MILESTONE_NAME}>{milestone.name}</span>
-                <span style={milestoneCount(d)}>
-                  {completed}/{total}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </>
+    <RailSection label="Milestones" d={d}>
+      {milestones.map((milestone) => {
+        const { completed, total } = milestoneProgress(milestone);
+        return (
+          <RailRow
+            key={milestone.id}
+            name={milestone.name}
+            meta={`${completed}/${total}`}
+            icon={<Flag size={RAIL_ROW_ICON_SIZE} />}
+            selected={milestone.id === selectedMilestoneId}
+            testId="milestone-card"
+            idAttributes={{ "data-milestone-id": milestone.id }}
+            d={d}
+            onOpen={() => onOpenMilestone(milestone.id)}
+          />
+        );
+      })}
+    </RailSection>
   );
 }
 
@@ -178,13 +114,17 @@ export interface RunRailProps {
   runs: RunSummary[];
   orchestrations: Orchestration[];
   milestones: Milestone[];
+  schedules: ScheduleView[];
   ready: boolean;
   selectedRunId: string | null;
   selectedMilestoneId: string | null;
+  selectedScheduleId: string | null;
   composing: boolean;
   onNewRun: () => void;
   onOpen: (runId: string) => void;
   onOpenMilestone: (milestoneId: string) => void;
+  onOpenSchedule: (scheduleId: string) => void;
+  onNewSchedule: () => void;
   onRestart: (runId: string, stageId: string) => void;
   onRerun: (run: RunSummary) => void;
 }
@@ -194,23 +134,27 @@ export function RunRail({
   runs,
   orchestrations,
   milestones,
+  schedules,
   ready,
   selectedRunId,
   selectedMilestoneId,
+  selectedScheduleId,
   composing,
   onNewRun,
   onOpen,
   onOpenMilestone,
+  onOpenSchedule,
+  onNewSchedule,
   onRestart,
   onRerun,
 }: RunRailProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-  function toggleInitiative(orchestrationId: string) {
+  function toggleGroup(groupId: string) {
     setCollapsed((current) => {
       const next = new Set(current);
-      if (!next.delete(orchestrationId)) {
-        next.add(orchestrationId);
+      if (!next.delete(groupId)) {
+        next.add(groupId);
       }
       return next;
     });
@@ -233,27 +177,56 @@ export function RunRail({
         />
       )}
 
-      <div style={sectionLabel(d)}>Runs</div>
+      <ScheduleList
+        schedules={schedules}
+        selectedScheduleId={selectedScheduleId}
+        d={d}
+        onOpenSchedule={onOpenSchedule}
+        onNewSchedule={onNewSchedule}
+      />
+
+      <div style={railSectionLabel(d)}>Runs</div>
 
       {!ready && <div style={placeholder(d)}>Loading…</div>}
       {ready && runs.length === 0 && <div style={placeholder(d)}>No runs yet.</div>}
 
       <ul style={LIST}>
-        {railItems(runs, orchestrations).map((item) =>
-          item.kind === "initiative" ? (
-            <InitiativeGroup
-              key={item.orchestration.id}
-              orchestration={item.orchestration}
-              runs={item.runs}
-              collapsed={collapsed.has(item.orchestration.id)}
-              selectedRunId={selectedRunId}
-              d={d}
-              onToggle={() => toggleInitiative(item.orchestration.id)}
-              onOpen={onOpen}
-              onRestart={onRestart}
-              onRerun={onRerun}
-            />
-          ) : (
+        {railItems(runs, orchestrations, schedules).map((item) => {
+          if (item.kind === "initiative") {
+            return (
+              <InitiativeGroup
+                key={item.orchestration.id}
+                orchestration={item.orchestration}
+                runs={item.runs}
+                collapsed={collapsed.has(item.orchestration.id)}
+                selectedRunId={selectedRunId}
+                d={d}
+                onToggle={() => toggleGroup(item.orchestration.id)}
+                onOpen={onOpen}
+                onRestart={onRestart}
+                onRerun={onRerun}
+              />
+            );
+          }
+          if (item.kind === "schedule") {
+            return (
+              <ScheduleGroup
+                key={item.schedule.id}
+                schedule={item.schedule}
+                runs={item.runs}
+                totalRuns={item.totalRuns}
+                collapsed={collapsed.has(item.schedule.id)}
+                selectedRunId={selectedRunId}
+                d={d}
+                onToggle={() => toggleGroup(item.schedule.id)}
+                onOpen={onOpen}
+                onOpenSchedule={onOpenSchedule}
+                onRestart={onRestart}
+                onRerun={onRerun}
+              />
+            );
+          }
+          return (
             <RunCard
               key={item.run.id}
               run={item.run}
@@ -263,8 +236,8 @@ export function RunRail({
               onRestart={(stageId) => onRestart(item.run.id, stageId)}
               onRerun={() => onRerun(item.run)}
             />
-          ),
-        )}
+          );
+        })}
       </ul>
     </nav>
   );

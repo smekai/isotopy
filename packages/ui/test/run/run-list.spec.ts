@@ -8,6 +8,7 @@ import {
   mergeSummary,
   milestoneRefreshKey,
   orchestrationRefreshKey,
+  SCHEDULE_GROUP_RUNS,
   railItems,
   runsForFeature,
   runsForOrchestration,
@@ -17,6 +18,7 @@ import {
   ORCHESTRATION_ID,
   orchestratedRun,
   orchestration,
+  scheduleView,
 } from "../support/orchestration-fixtures";
 import type { RunSummary } from "@isotopy/core";
 import { stage, summary } from "../support/run-fixtures";
@@ -196,10 +198,101 @@ describe("railItems", () => {
   });
 });
 
+describe("railItems, for recurring work", () => {
+  test("every episode of one schedule is one group, however many Orchestrators served it", () => {
+    // Arrange — two episodes, each with its own Orchestrator, as the design intends.
+    const runs = [
+      summary({ id: "monday", createdAt: "2026-08-01T09:00:00.000Z", orchestrationId: "o1" }),
+      summary({ id: "tuesday", createdAt: "2026-08-02T09:00:00.000Z", orchestrationId: "o2" }),
+    ];
+    const episodes = [
+      orchestration({ id: "o1", scheduleId: "s1", runIds: ["monday"] }),
+      orchestration({ id: "o2", scheduleId: "s1", runIds: ["tuesday"] }),
+    ];
+
+    // Act
+    const items = railItems(runs, episodes, [scheduleView({ id: "s1" })]);
+
+    // Assert
+    expect(items).toHaveLength(1);
+    expect(scheduleRuns(items[0]).map((run) => run.id)).toEqual(["monday", "tuesday"]);
+  });
+
+  test("a long-running schedule shows its most recent fires, not every fire it ever had", () => {
+    // Arrange — a schedule that has fired more times than a rail group may show.
+    const runs = firesOf("s1", SCHEDULE_GROUP_RUNS + 3);
+
+    // Act
+    const items = railItems(runs.summaries, runs.episodes, [scheduleView({ id: "s1" })]);
+
+    // Assert — the oldest fires are reachable from the detail view, not the rail.
+    expect(scheduleRuns(items[0])).toHaveLength(SCHEDULE_GROUP_RUNS);
+    expect(scheduleRuns(items[0]).at(-1)?.id).toBe("fire-7");
+    expect(scheduleTotal(items[0])).toBe(SCHEDULE_GROUP_RUNS + 3);
+  });
+
+  test("manual work keeps its own initiative group, so a schedule never swallows it", () => {
+    // Arrange
+    const runs = [
+      summary({ id: "scheduled", createdAt: "2026-08-01T09:00:00.000Z", orchestrationId: "o1" }),
+      summary({ id: "manual", createdAt: "2026-08-01T10:00:00.000Z", orchestrationId: "o2" }),
+    ];
+    const episodes = [
+      orchestration({ id: "o1", scheduleId: "s1", runIds: ["scheduled"] }),
+      orchestration({ id: "o2", runIds: ["manual"] }),
+    ];
+
+    // Act
+    const items = railItems(runs, episodes, [scheduleView({ id: "s1" })]);
+
+    // Assert
+    expect(items.map((item) => item.kind)).toEqual(["initiative", "schedule"]);
+  });
+
+  test("runs of a deleted schedule stay visible as ordinary initiatives rather than vanishing", () => {
+    // Arrange — the schedule is gone; its history is not.
+    const runs = [summary({ id: "orphaned", createdAt: "2026-08-01T09:00:00.000Z", orchestrationId: "o1" })];
+    const episodes = [orchestration({ id: "o1", scheduleId: "deleted", runIds: ["orphaned"] })];
+
+    // Act
+    const items = railItems(runs, episodes, []);
+
+    // Assert
+    expect(items.map((item) => item.kind)).toEqual(["initiative"]);
+  });
+});
+
+function firesOf(scheduleId: string, count: number) {
+  const indexes = [...Array(count).keys()];
+  return {
+    summaries: indexes.map((index) =>
+      summary({
+        id: `fire-${index}`,
+        createdAt: `2026-08-${String(index + 1).padStart(2, "0")}T09:00:00.000Z`,
+        orchestrationId: `o${index}`,
+      }),
+    ),
+    episodes: indexes.map((index) =>
+      orchestration({ id: `o${index}`, scheduleId, runIds: [`fire-${index}`] }),
+    ),
+  };
+}
+
+function scheduleRuns(item: RailItem | undefined): RunSummary[] {
+  return item?.kind === "schedule" ? item.runs : [];
+}
+
+function scheduleTotal(item: RailItem | undefined): number {
+  return item?.kind === "schedule" ? item.totalRuns : 0;
+}
+
 function initiativeRuns(item: RailItem | undefined): RunSummary[] {
   return item?.kind === "initiative" ? item.runs : [];
 }
 
 function railItemId(item: RailItem): string {
-  return item.kind === "initiative" ? item.orchestration.id : item.run.id;
+  if (item.kind === "initiative") {
+    return item.orchestration.id;
+  }
+  return item.kind === "schedule" ? item.schedule.id : item.run.id;
 }

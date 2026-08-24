@@ -32,4 +32,8 @@ export class JsonRecordRepository<T extends { id: string }> {
       return [];
     });
   }
+
+  async remove(id: string): Promise<void> {
+    await this.table.remove(id);
+  }
 }
