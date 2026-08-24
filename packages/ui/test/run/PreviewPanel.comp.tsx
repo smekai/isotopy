@@ -23,6 +23,30 @@ test("a running product that permits framing is embedded rather than linked", ()
   expect(screen.getByTitle("The running product").getAttribute("src")).toBe(URL);
 });
 
+test("an adopted product offers neither Stop nor Restart, because Isotopy owns neither", () => {
+  // Arrange — a product Isotopy found already serving its URL. Stop would only
+  // forget it and Restart would collide with the port and adopt it again.
+  const status = ready({ adopted: true });
+
+  // Act
+  render(<PreviewPanel {...previewProps({ status })} />);
+
+  // Assert
+  expect(screen.queryByTestId("product-stop")).toBeNull();
+  expect(screen.queryByTestId("product-restart")).toBeNull();
+  expect(screen.getByTestId("product-adopted").textContent).toContain("cannot stop it");
+});
+
+test("a product Isotopy did start keeps both controls", () => {
+  // Act
+  render(<PreviewPanel {...previewProps({ status: ready() })} />);
+
+  // Assert
+  expect(screen.getByTestId("product-stop")).toBeDefined();
+  expect(screen.getByTestId("product-restart")).toBeDefined();
+  expect(screen.queryByTestId("product-adopted")).toBeNull();
+});
+
 test("a product that refuses framing names the header that refused instead of showing a blank frame", () => {
   // Arrange
   const status = ready({ framing: { allowed: false, blockedBy: "X-Frame-Options: DENY" } });
