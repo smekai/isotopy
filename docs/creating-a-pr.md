@@ -5,34 +5,45 @@ make that reading short.
 
 ## 1. The change table is mandatory
 
+Read the per-file counts:
+
 ```bash
-pnpm pr:summary
+git diff --numstat $(git merge-base origin/main HEAD)..HEAD
 ```
 
-It prints a markdown table of lines changed per category — Source, Tests, Task
-board, Run evidence, Docs, Version — against the merge base with `origin/main`.
-Paste it into the PR description **verbatim**, near the top. Pass a ref
-(`pnpm pr:summary <ref>`) when the base is not `main`.
+Then write them up as a table near the top of the description, one row per
+category, with a total:
 
-The table is not decoration. It is the one place a reviewer can see, before
-reading a line of the diff, whether this branch was mostly code, mostly
-housekeeping, or mostly prose about itself.
+| Category | What it holds | Files | Added | Removed |
+| --- | --- | ---: | ---: | ---: |
+| Source | `packages/*/src/**.ts(x)` | | | |
+| Tests | `packages/*/test/**`, `packages/*/e2e/**` | | | |
+| Task board | `.tasks/**` | | | |
+| Docs | any other `.md` | | | |
+| Other | everything left — **look at this row hardest** | | | |
 
-**If prose outweighs code, the script says so and the description must answer
-it.** Either name the reason in one sentence — a dogfood run really is mostly
-evidence, a decision entry really is the deliverable — or go and cut the prose.
-"That is just how it came out" is not a reason. The usual culprit is the same
-text written three times: once in the task, once in the record, once in the
-commit message.
+The table is not decoration. It is the one place a reviewer sees, before reading
+a line of the diff, whether the branch was mostly code, mostly housekeeping, or
+mostly prose about itself.
+
+**Add the two totals underneath — code (source + tests) against prose (board +
+docs) — and if prose wins, the description must say why in one sentence.** A
+dogfood run really is mostly evidence; a decision entry really is the
+deliverable. "That is just how it came out" is not a reason, and the usual cause
+is one piece of work written three times: once in the task, once in a record,
+once in the commit message.
+
+Do not build a script for this. It was tried on 2026-08-24 and removed the same
+day: a hundred lines and a category list that drifts, to reformat output `git`
+already gives you.
 
 ## 2. What does not belong in the PR
 
 **Preparation is not deliverable.** By the time a PR opens, the material that
 existed to get the work done has done its job:
 
-- Scratch files, probe scripts, throwaway fixtures. Check the diff for them —
-  `pnpm pr:summary` puts anything unclassified under **Other**, which is the row
-  to look at hardest.
+- Scratch files, probe scripts, throwaway fixtures. The **Other** row in §1 is
+  where those show up.
 - The task's own planning prose, restated. `.tasks/DONE.md` already holds what
   the task did; the PR links to it rather than repeating it.
 - A blow-by-blow of how the work went. What was tried and rejected belongs in
@@ -65,6 +76,6 @@ already exists in `DONE.md`, a decision entry or a commit message, link to it.
   leaves running.
 - Not on `main`. Branch first if you are.
 
-Cross-platform: `pnpm pr:summary` is a Node script over `git diff --numstat`, so
-it behaves the same on Windows and POSIX; it splits on `/\r?\n/` rather than
-`"\n"` for exactly that reason.
+Cross-platform: nothing here is platform-specific. `git merge-base` and
+`git diff --numstat` behave the same on Windows and POSIX, and the gates in §4
+are the same `pnpm` scripts everywhere.
