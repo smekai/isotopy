@@ -82,6 +82,16 @@ export function killProcessTree(child: ChildProcess, onProblem?: KillProblem): v
   escalate.unref();
 }
 
+function detachFrom(child: ChildProcess): void {
+  for (const stream of [child.stdout, child.stderr]) {
+    stream?.removeAllListeners("data");
+    stream?.destroy();
+  }
+  child.removeAllListeners("close");
+  child.removeAllListeners("exit");
+  child.unref();
+}
+
 export function timeoutMessage(
   timeoutMs: number,
   elapsedMs: number,
@@ -234,6 +244,7 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
     clearTimeout(flushGrace);
     clearTimeout(abandonKill);
     spec.signal?.removeEventListener("abort", onAbort);
+    detachFrom(child);
     resolveExit(result);
   };
 

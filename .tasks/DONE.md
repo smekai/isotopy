@@ -1,5 +1,88 @@
 # Done
 
+## TASK-125: Milestone F — Fixpoint: stabilise to a demoable MVP
+**Priority:** P0 | **Tags:** core, server, ui, engine, infra, milestone-f
+**Updated:** 2026-08-10 14:10
+
+A fixed point is where a system stops changing under its own operation. That is the goal:
+stop adding, and make what exists hold still and hold up.
+
+**The bar:** someone who is not us installs it, points it at a folder, describes a goal —
+and *sees the thing that was built*. Today the last step barely exists. A run ends and the
+result is somewhere on disk, and you have to already know where.
+
+**Scope, in order:** `TASK-126` (a finished run names what it changed), `TASK-124`
+(permission modes and blast radius), `TASK-138` (run the built product and show it),
+`TASK-115` (per-role presets, pulled out of Milestone H once `TASK-129` made a stage's
+model something an agent can reason about), `TASK-116` (README "How it works"), `TASK-139`
+(the Orchestrator's decision loop stops dead-ending and spinning), `TASK-137` (one dialog
+with the Orchestrator, plus the harness/model question at the start and honest stage
+labels — widened on 2026-08-12, last before the dogfood), and `TASK-128` (the closing
+dogfood). Already
+closed: `TASK-092` (project automation and preview deploy), `TASK-127`
+(a stage must not pass on output nothing could use), and `TASK-129` (model presets rather
+than ids the plan rejects).
+
+**Why `TASK-138` is here, decided with the user on 2026-08-10:** the second half of
+`TASK-126` — starting the product and putting it in front of the user — was split into
+Milestone H that morning and pulled back into F the same day. `TASK-126` delivered the
+weaker reading of F's bar: a run *names* what it built. Seeing it run is the reading a
+first-time user will have, and the demo cannot route around it. It sits after `TASK-124`
+because it starts long-lived processes on someone else's machine, and that is exactly what
+`TASK-124` gives the system an opinion about.
+
+That is the **only** capability admitted after the "nothing else" rule below was written,
+and admitting it is not licence for a second.
+
+Nothing else. Features nobody has asked for belong to **Milestone H — Harmonic**; the two
+research spikes belong to no milestone at all. `TASK-137` is here because a user asked for
+it and because F's bar is a first-time user meeting the Orchestrator — the one surface the
+demo cannot route around.
+
+**Scope finalised 2026-08-17. All three dogfoods are now run, and the milestone does not close.**
+
+`TASK-128` closed `SKIP` — Codex passed, Cursor was out of quota. `TASK-141` closed **`PASS`** on
+Claude Code: a five-role team built the feature, independent verification caught a real
+accessibility bug in its own work, the Orchestrator recovered with one partial retry and stopped
+itself, and the built product was seen running in the embedded Preview. That is F's bar, met on a
+second engine.
+
+**`TASK-142` then closed `FAIL` on Cursor on 2026-08-23**, earlier than the 2026-09-03 reset it was
+waiting for, because the quota turned out to be two pools with headroom in one. The team built the
+feature correctly in **4m 18s** — 23 tests green, every clause of the goal verified by hand — and
+then **verification ran three times in 1h 58m and never produced a verdict**. A `vite preview` the
+Developer stage left behind survived the timeout that killed its parent, held port 5180 for two
+hours, and made Isotopy's own product runner report `exited` while the app answered 200 at the URL
+Isotopy had configured. A human had to kill it by hand before the Preview could show anything —
+after which it worked in 4.4 seconds.
+
+**That is F's bar failing on its last step, not a Cursor problem.** Every defect is ours: the leaked
+process tree, the runner fighting its own leftover, and a timeout that discards everything it
+interrupts so three attempts bought no information at all. Filed as `TASK-165`, `TASK-166`,
+`TASK-167` and `TASK-168`, in Milestone I.
+
+**Closed 2026-08-24 with the product owner, on the first reading.** F's bar was met on Claude Code,
+the feature was built correctly on Cursor too, and the four defects that stopped its verification —
+`TASK-165`, `TASK-166`, `TASK-154`, `TASK-167` — are fixed and regression-tested. What is *not*
+claimed: the Cursor path was never re-run end to end on the fixed build, so "a first-time user sees
+the thing that was built" is proven on one engine and inferred on another.
+
+**Re-running it was considered and declined**, because Milestone I does the same thing at a larger
+scale — a real product, built by Isotopy and carried on a schedule — and would re-prove this on
+better evidence than a second focus timer. Buying the smaller proof first would delay the bigger one
+for a result it will supersede.
+
+**The four defects `TASK-141` found went to Milestone H, not here** — decided with the user on
+2026-08-17. `TASK-144` and `TASK-145` at P0, `TASK-146` and `TASK-147` at P2. `TASK-144` does
+under-cut `TASK-126`'s bar for the second and later runs of an initiative, which is a real argument
+for fixing it inside F; the user chose H anyway, so F closes on the evidence it has rather than
+growing a tail. That is the "nothing else" rule being kept rather than bent.
+
+Cross-platform: every task here is verified on Windows and reasoned through for macOS, and
+`TASK-126`'s folder reveal and `TASK-124`'s per-CLI mode flags are where that bites.
+
+---
+
 ## TASK-166: A verification that runs out of time loses everything it learned
 **Priority:** P0 | **Tags:** server, engine, core, milestone-i
 **Updated:** 2026-08-24 11:30

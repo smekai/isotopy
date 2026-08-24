@@ -68,7 +68,7 @@ worth more than the entry: verify against the installed binary and pin the versi
 
 ---
 
-## 2026-08-23 — Milestone F does not close on its third dogfood
+## 2026-08-23 — Milestone F, and what its third dogfood cost to close
 
 **Context:** `TASK-142` ran the Cursor dogfood and closed `FAIL`. The team built the feature
 correctly in 4m 18s — 23 tests green, every clause of the goal verified by hand — and then
@@ -91,6 +91,17 @@ Cursor's dropped `session_id` (`TASK-154`). Each retry started cold and redid th
 setup, so the defect stopped being a design argument and became two wasted attempts. And a stage
 reported "Timed out after 600s" after running 5316s, which means no duration in a run record is
 trustworthy until that is fixed.
+
+**Closed 2026-08-24.** The four defects were fixed first (`TASK-165`, `TASK-166`, `TASK-154`,
+`TASK-167`), which removed the reason the milestone had been left open. F closes on: the bar met
+on Claude Code, the feature built correctly on Cursor, and the verification failures fixed and
+regression-tested. **Re-running the Cursor path on the fixed build was declined** — Milestone I
+does the same thing at a larger scale, on a real product carried on a schedule, and would
+re-prove this on better evidence than a second focus timer.
+
+So the honest statement of what F proved: *a first-time user sees the thing that was built* is
+**observed on one engine and inferred on a second**. Milestone I is where that stops being an
+inference.
 
 **The three-engine evidence F closes on**, since this is the comparison and not the narrative:
 

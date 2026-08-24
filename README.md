@@ -221,8 +221,9 @@ sits outside Full Delivery and milestone autorun, behind an explicit confirmatio
 
 **Where it is going.** Milestone D — the Full Delivery loop — shipped at 0.8.7; **E — Eigen**
 (the Orchestrator) closed at 0.9.23 on live runs against Cursor and Codex; **F — Fixpoint**
-stabilised the product to something a first-time user can install, point at a folder and see
-the result of; **G — Gauge** carried the Isotopy identity through the repository and
+closed at 0.12.12, having stabilised the product to something a first-time user can install,
+point at a folder and see the result of — observed end to end on Claude Code, and inferred on
+Cursor, whose run built the feature but whose verification was defeated by defects since fixed; **G — Gauge** carried the Isotopy identity through the repository and
 filesystem cutover; and **H — Harmonic** took its features from the people who tried it
 rather than from guesses. In progress is **Milestone I — Induction**: prove the base case, then
 prove the step. Isotopy builds one small real product, deploys it, and then carries it forward on

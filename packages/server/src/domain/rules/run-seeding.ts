@@ -58,7 +58,7 @@ export function resetStagesForRestart(
 }
 
 export function seedFromRestart(run: RunState, startStageId: string): SeededStart {
-  return seedStages(
+  const seeded = seedStages(
     stagesBefore(run.stages, startStageId).map((stage) => ({
       id: stage.id,
       outcome: outcomeForRestart(stage),
@@ -66,6 +66,19 @@ export function seedFromRestart(run: RunState, startStageId: string): SeededStar
     })),
     startStageId,
   );
+  return withResumableSession(seeded, run, startStageId);
+}
+
+function withResumableSession(
+  seeded: SeededStart,
+  run: RunState,
+  startStageId: string,
+): SeededStart {
+  const resumeSessionId = resumableSession(
+    run.stages.find((stage) => stage.id === startStageId),
+    run.engine,
+  );
+  return resumeSessionId === undefined ? seeded : { ...seeded, resumeSessionId };
 }
 
 export function seedFromSettledRun(
@@ -95,15 +108,8 @@ export function seedFromSettledRun(
     outcome: stage.settled ? outcomeForRestart(stage.settled) : STAGE_OUTCOMES.PASSED,
     output: settled.stageOutputs?.[stage.id],
   }));
-  const resumeSessionId = resumableSession(
-    settled.stages.find((stage) => stage.id === startStageId),
-    settled.engine,
-  );
   const seeded: SeededStart = { ...seedStages(carried, startStageId), from };
-  return {
-    ok: true,
-    value: resumeSessionId === undefined ? seeded : { ...seeded, resumeSessionId },
-  };
+  return { ok: true, value: withResumableSession(seeded, settled, startStageId) };
 }
 
 function issue(message: string): ValidationResult<SeededStart> {
