@@ -89,9 +89,9 @@ control for the whole disclosure.
 
 **Gotcha worth keeping:** the fix here was to check first and write nothing. A dogfood finding is a
 hypothesis, not a defect report — this one survived into a filed P1 task, a defect list and a
-published record before anyone opened the component. `docs/dogfood/TASK-142-cursor-2026-08-23.md`
-keeps the finding struck through in both §4 and §13 rather than deleted, because a record that edits
-out its own mistakes is worth less than one that keeps them.
+published record before anyone opened the component. It is kept as a struck-through paragraph in
+[`docs/decisions.md`](../docs/decisions.md), because a record that edits out its own mistakes is
+worth less than one that keeps them.
 
 **Tests.** Two protocol tests: the token counts from the real probe's `result` event land on
 `StageUsage`, and a result without `usage` still reports duration rather than inventing zeroes.
@@ -227,9 +227,10 @@ question the task raised stays open and belongs with whoever next has a Mac.
 **Priority:** P0 | **Tags:** testing, engine, ui, milestone-f
 **Updated:** 2026-08-23 22:15
 
-Closed 2026-08-23 **`FAIL`**. Record:
-[`docs/dogfood/TASK-142-cursor-2026-08-23.md`](../docs/dogfood/TASK-142-cursor-2026-08-23.md).
-**Milestone F does not close on this.**
+Closed 2026-08-23 **`FAIL`**. **Milestone F does not close on this.** The per-run record this task
+wrote was deleted on 2026-08-24 with the product owner — three narratives of one run cost more than
+they bought — so the three-engine comparison it existed for now lives in
+[`docs/decisions.md`](../docs/decisions.md) and the account below is the fuller one.
 
 **The quota precondition arrived early and in a shape the task did not predict.** It expected a
 monthly reset on 2026-09-03. The dashboard instead showed the limit is two pools — Auto + Composer

@@ -371,6 +371,17 @@ not available on this system. Sandbox requires macOS or Linux."* Mapping
 run on Windows, so the capability catalog declares it `posixOnly` and
 `permissionPlan` degrades to unrestricted with a notice that names the reason.
 That declaration is the point of the catalog: the gap is data, not a comment.
+
+**Cursor's macOS branches are reasoned through and unexercised.** Everything above
+was verified on Windows. Off win32 the adapter resolves via `which` with no
+`.cmd`/`.exe` extensions, so `commandNeedsWindowsShell` is false and the prompt
+goes by **argv** rather than stdin — the opposite path, guarded by
+`PROMPT_ARG_WARN_LENGTH` rather than by the shim's multi-line refusal; `install()`
+refuses outright and returns a manual-install message; and cleanup signals a
+process group instead of `taskkill /T`. That last one is load-bearing and open:
+`TASK-142` leaked a `vite preview` past a Windows `taskkill /T`, and whether a
+POSIX group signal would have taken the same grandchild is unknown. If it would,
+that defect is Windows-only and so is its fix.
 `--trust` is on by default (fresh scratch workspaces would otherwise hit the
 workspace-trust prompt and hang). **The prompt goes on stdin whenever the binary
 is a Windows `.cmd` shim**, which is what `cursor-agent` always resolves to on

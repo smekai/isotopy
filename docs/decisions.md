@@ -92,6 +92,37 @@ setup, so the defect stopped being a design argument and became two wasted attem
 reported "Timed out after 600s" after running 5316s, which means no duration in a run record is
 trustworthy until that is fixed.
 
+**The three-engine evidence F closes on**, since this is the comparison and not the narrative:
+
+| | TASK-128 Codex | TASK-141 Claude Code | TASK-142 Cursor |
+| --- | --- | --- | --- |
+| Verdict | `SKIP` | `PASS` | `FAIL` |
+| Feature delivered | yes | yes | yes |
+| Verification reached a verdict | — | yes, caught a real a11y bug | **no, three times** |
+| Recovery | — | one partial retry, then self-stop | two partial retries, then self-stop |
+| Spend | not recorded | $6.69 | not reportable by the product |
+| Wall clock | — | ~35 min | ~2h 03m, of which **4m 18s** was the work |
+
+Cursor's own numbers: baseline `87fe592` restored from the committed bundle (14 files, 9 tests) to
+5 files changed, 2 modules added, **721 insertions, 23 tests green**; runs `3606b6ff` (verify
+5316s), `cf3c8c7b` (600s), `333406ca` (602s); every stage on `--model auto`, which the CLI echoed
+back as `Cursor agent online · Auto`, so the subsidised pool was the one spent. The Orchestrator
+then asked the user rather than attempting a fourth run, and was left unanswered.
+
+**One finding in that run was wrong and is kept here rather than quietly dropped.** It was filed
+as "the composer displays the tier for a run whose model is pinned". The composer does no such
+thing — it already renders *"pinned in Setup, so the model above does not apply"*, tested since
+`TASK-129`. The observation came from reading the tier dropdown before the pin was set. A dogfood
+finding is a hypothesis, and this one reached a filed P1 task before anyone opened the component.
+
+**Rejected: keeping the per-run record file.** `TASK-142`'s evidence lived at
+`docs/dogfood/TASK-142-cursor-2026-08-23.md` in `TASK-141`'s section-for-section format, and was
+deleted on 2026-08-24 with the product owner: three copies of one run — the record, the `DONE.md`
+entry and this entry — bought less than the lines cost. What a run *decided* belongs here and what
+a task *did* belongs in `DONE.md`; a third narrative between them did not earn its place. The cost
+is accepted openly: `TASK-141`'s record survives and this one does not, so the two are no longer
+diffable section for section, and the table above is what remains of that comparison.
+
 ---
 
 ## 2026-08-23 — A preset for the cheapest thing a harness sells

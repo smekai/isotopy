@@ -13,6 +13,17 @@ import { killProcessTree, timeoutMessage } from "../../src/engines/subprocess.ts
 
 const NO_SUCH_PID = 999_999;
 
+const REPORT_DEADLINE_MS = 15_000;
+const REPORT_POLL_MS = 100;
+
+/** Spawning taskkill takes as long as a loaded machine takes; a fixed wait flakes. */
+async function reported(problems: string[]): Promise<void> {
+  const deadline = Date.now() + REPORT_DEADLINE_MS;
+  while (problems.length === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, REPORT_POLL_MS));
+  }
+}
+
 test("a timeout that settled on time names only the timeout", () => {
   expect(timeoutMessage(600_000, 600_400)).toBe("Timed out after 600s");
 });
@@ -41,13 +52,13 @@ test.skipIf(process.platform !== "win32")(
 
     // Act
     killProcessTree(absent, (message) => problems.push(message));
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await reported(problems);
 
     // Assert
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/taskkill/);
   },
-  10_000,
+  20_000,
 );
 
 test.skipIf(process.platform === "win32")(
