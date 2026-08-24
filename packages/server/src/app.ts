@@ -57,7 +57,7 @@ export function createApp({
   );
 
   app.route("/health", healthRoutes);
-  app.route("/projects", createProjectRoutes(registry, product));
+  app.route("/projects", createProjectRoutes(registry, product, schedules));
   app.route("/milestones", createMilestoneRoutes(milestones, registry));
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", createEngineRoutes(rosters));

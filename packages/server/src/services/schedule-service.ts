@@ -6,6 +6,7 @@ import {
   isTerminalRunStatus,
   scheduleSchema,
 } from "@isotopy/core";
+import type { CreateScheduleInput, UpdateScheduleInput } from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
@@ -14,7 +15,6 @@ import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
-import type { CreateScheduleInput, UpdateScheduleRequest } from "../schemas/schedule.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
@@ -37,7 +37,7 @@ function isRunActive(run: RunState): boolean {
   return !isTerminalRunStatus(run.status);
 }
 
-function resumedFromPause(current: Schedule, patch: UpdateScheduleRequest): boolean {
+function resumedFromPause(current: Schedule, patch: UpdateScheduleInput): boolean {
   return patch.enabled === true && !current.enabled;
 }
 
@@ -118,7 +118,7 @@ export class ScheduleService {
 
   async updateSchedule(
     scheduleId: string,
-    patch: UpdateScheduleRequest,
+    patch: UpdateScheduleInput,
     projectId?: string,
   ): Promise<ScheduleView> {
     const current = this.requireSchedule(scheduleId, projectId);
@@ -145,19 +145,48 @@ export class ScheduleService {
   }
 
   private dueSchedules(now: string): Schedule[] {
-    return [...this.schedules.values()].filter((schedule) =>
-      isScheduleDue(schedule, nextFireForSchedule(schedule), now),
+    return [...this.schedules.values()].filter(
+      (schedule) =>
+        this.registry.find(schedule.projectId) !== undefined &&
+        isScheduleDue(schedule, nextFireForSchedule(schedule), now),
     );
   }
 
+  unloadProject(projectId: string): void {
+    for (const [id, schedule] of this.schedules) {
+      if (schedule.projectId === projectId) {
+        this.schedules.delete(id);
+      }
+    }
+    this.repositories.delete(projectId);
+  }
+
   private async fire(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
-    schedule.lastWindowAt = now;
-    schedule.updatedAt = now;
+    const claimed = await this.claimWindow(schedule, now);
+    if (claimed !== undefined) {
+      return claimed;
+    }
     schedule.lastOutcome = await this.attemptRun(schedule, now);
     await this.persist(schedule).catch((error: unknown) => {
-      console.warn(`Failed to record the fire of schedule ${schedule.id}:`, messageOf(error));
+      console.warn(`Failed to record the outcome of schedule ${schedule.id}:`, messageOf(error));
     });
     return schedule.lastOutcome;
+  }
+
+  private async claimWindow(
+    schedule: Schedule,
+    now: string,
+  ): Promise<ScheduleOutcome | undefined> {
+    const previousWindow = schedule.lastWindowAt;
+    schedule.lastWindowAt = now;
+    schedule.updatedAt = now;
+    try {
+      await this.persist(schedule);
+      return undefined;
+    } catch (error) {
+      schedule.lastWindowAt = previousWindow;
+      return { kind: "failed", error: messageOf(error) };
+    }
   }
 
   private async attemptRun(schedule: Schedule, now: string): Promise<ScheduleOutcome> {

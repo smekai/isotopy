@@ -12,6 +12,7 @@ import {
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
+import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 
 const EVERY_MINUTE = "* * * * *";
 
@@ -348,6 +349,70 @@ test("one schedule failing to start does not stop the schedules after it from fi
   ctx.engine.verify();
 });
 
+test("a schedule whose project was removed does not run somewhere else instead", async () => {
+  // Arrange — a schedule in its own project, which is then unregistered.
+  const other = await addTestProject(ctx.registry, "removed");
+  await createSchedule({ cron: EVERY_MINUTE }, other.headers);
+  ctx.registry.unregister(other.id);
+
+  // Anticipate — none: an orphaned schedule must not spend money in Home.
+
+  // Act
+  const ticks = await ctx.schedules.tick(THREE_DAYS_ON);
+
+  // Assert
+  expect(ticks).toEqual([]);
+  ctx.engine.verify();
+});
+
+test("removing a project takes its schedules with it, so a restart cannot adopt them", async () => {
+  // Arrange
+  const other = await addTestProject(ctx.registry, "removed");
+  const orphan = await createSchedule({ cron: EVERY_MINUTE }, other.headers);
+
+  // Act
+  await del<unknown>(ctx.app, `/projects/${other.id}`);
+
+  // Assert — left in memory, `loadProject` would later rewrite its projectId.
+  expect(ctx.schedules.getSchedule(orphan.id)).toBeUndefined();
+});
+
+test("a window that cannot be claimed durably starts no paid work", async () => {
+  // Arrange — the claiming write fails, so the window was never recorded.
+  const created = await createSchedule({ cron: EVERY_MINUTE });
+  failTheNextWrite("disk is full");
+
+  // Anticipate — none: an unrecorded window must not become a run that repeats
+  // after a restart.
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  expect(ticks).toEqual([
+    { scheduleId: created.id, outcome: { kind: "failed", error: "disk is full" } },
+  ]);
+  ctx.engine.verify();
+});
+
+test("a failed claim leaves the window unconsumed, so the next tick may still take it", async () => {
+  // Arrange
+  await createSchedule({ cron: EVERY_MINUTE });
+  failTheNextWrite("disk is full");
+  await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Anticipate — the retry is a real fire.
+  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
+  ctx.engine.verify();
+});
+
 function outcomeKindFor(ticks: ScheduleTick[], scheduleId: string): string | undefined {
   return ticks.find((tick) => tick.scheduleId === scheduleId)?.outcome.kind;
 }
@@ -365,10 +430,20 @@ function scheduleBody(overrides: Record<string, unknown> = {}): Record<string, u
 
 async function createSchedule(
   overrides: Record<string, unknown> = {},
+  headers: Record<string, string> = {},
 ): Promise<ScheduleView> {
-  const response = await post<ScheduleView>(ctx.app, "/schedules", scheduleBody(overrides));
+  const response = await post<ScheduleView>(
+    ctx.app,
+    "/schedules",
+    scheduleBody(overrides),
+    headers,
+  );
   expect(response.status, "creating the schedule").toBe(200);
   return response.body;
+}
+
+function failTheNextWrite(message: string): void {
+  vi.spyOn(JsonRecordRepository.prototype, "write").mockRejectedValueOnce(new Error(message));
 }
 
 async function tickWhileARunIsActive(): Promise<ScheduleTick[]> {

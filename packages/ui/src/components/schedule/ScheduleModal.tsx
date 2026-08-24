@@ -1,26 +1,14 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { X } from "lucide-react";
-import type { ScheduleView } from "@isotopy/core";
-import type { CreateScheduleBody } from "../../api";
-import { useDialogDismiss } from "../../hooks/useDialogDismiss";
+import { Dialog } from "../Dialog";
+import type { CreateScheduleInput, ScheduleView } from "@isotopy/core";
 import type { Dir } from "../../theme";
-import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT, Z } from "../../theme";
+import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import { ERROR_RED, fieldLabel, mutedCaption } from "../setup/setup-styles";
 import { SOLO_READER } from "./schedule-team";
 
-const SCRIM = "rgba(30,27,75,0.20)";
 const DIALOG_WIDTH = 520;
-
-const BACKDROP: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: SCRIM,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: Z.overlay,
-};
 
 function dialog(d: Dir): CSSProperties {
   return {
@@ -104,12 +92,11 @@ export interface ScheduleModalProps {
   schedule?: ScheduleView;
   error: string | null;
   d: Dir;
-  onSave: (body: CreateScheduleBody) => void;
+  onSave: (body: CreateScheduleInput) => void;
   onDismiss: () => void;
 }
 
 export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: ScheduleModalProps) {
-  const dialogRef = useDialogDismiss(onDismiss);
   const [name, setName] = useState(schedule?.name ?? "");
   const [cron, setCron] = useState(schedule?.cron ?? "0 9 * * *");
   const [timezone, setTimezone] = useState(
@@ -119,17 +106,12 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
   const title = schedule ? "Edit schedule" : "New schedule";
 
   return (
-    <div style={BACKDROP} onClick={onDismiss}>
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-        data-testid="schedule-modal"
-        onClick={(event) => event.stopPropagation()}
-        style={dialog(d)}
-      >
+    <Dialog
+      label={title}
+      testId="schedule-modal"
+      panelStyle={dialog(d)}
+      onDismiss={onDismiss}
+    >
         <div style={header(d)}>
           {title}
           <button type="button" onClick={onDismiss} aria-label="Close" style={closeButton(d)}>
@@ -204,8 +186,7 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
           >
             Save
           </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

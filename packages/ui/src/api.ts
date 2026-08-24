@@ -7,8 +7,8 @@ import type {
   EngineStatus,
   LimitResolution,
   ModelTier,
+  CreateScheduleInput,
   Orchestration,
-  OrchestratorTeamProposal,
   ProductProcessStatus,
   Project,
   ProjectPreferencesUpdate,
@@ -101,15 +101,6 @@ export function removeProject(projectId: string): Promise<ProjectsView> {
   return requestJson<ProjectsView>(`/projects/${projectId}`, { method: "DELETE" });
 }
 
-export interface CreateScheduleBody {
-  name: string;
-  cron: string;
-  timezone: string;
-  task: string;
-  team: OrchestratorTeamProposal;
-  enabled?: boolean;
-}
-
 export function fetchSchedules(): Promise<ScheduleView[]> {
   return requestJson<ScheduleView[]>("/schedules");
 }
@@ -118,7 +109,7 @@ export function fetchSchedule(scheduleId: string): Promise<ScheduleView> {
   return requestJson<ScheduleView>(`/schedules/${scheduleId}`);
 }
 
-export function createSchedule(body: CreateScheduleBody): Promise<ScheduleView> {
+export function createSchedule(body: CreateScheduleInput): Promise<ScheduleView> {
   return postJson<ScheduleView>("/schedules", body);
 }
 

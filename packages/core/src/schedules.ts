@@ -42,13 +42,24 @@ export const scheduleViewSchema = scheduleSchema
 
 export type ScheduleView = z.infer<typeof scheduleViewSchema>;
 
-export interface UpdateScheduleInput {
-  name?: string;
-  cron?: string;
-  timezone?: string;
-  task?: string;
-  enabled?: boolean;
-}
+const inputText = z.string().trim().min(1);
+
+export const createScheduleSchema = z
+  .object({
+    name: inputText,
+    cron: inputText,
+    timezone: inputText,
+    task: inputText,
+    team: orchestratorTeamProposalSchema,
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
+
+export const updateScheduleSchema = createScheduleSchema.partial().strict();
+
+export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
 
 export function scheduleAnchor(schedule: Schedule): string {
   return schedule.lastWindowAt ?? schedule.createdAt;

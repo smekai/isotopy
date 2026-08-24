@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { ScheduleView } from "@isotopy/core";
+import { createScheduleSchema, updateScheduleSchema } from "@isotopy/core";
 import { invalidRequest } from "../domain/validation.ts";
-import { createScheduleSchema, updateScheduleSchema } from "../schemas/schedule.ts";
 import { ScheduleInvalidError } from "../services/schedule-service.ts";
 import type { ScheduleService } from "../services/schedule-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";

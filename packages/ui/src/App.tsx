@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
-import type { LimitResolution, ModelTier, RunSummary, ScheduleView } from "@isotopy/core";
+import type {
+  CreateScheduleInput,
+  LimitResolution,
+  ModelTier,
+  RunSummary,
+  ScheduleView,
+} from "@isotopy/core";
 import { formatUsage, preferredRunOptions } from "@isotopy/core";
 import {
   abortRun,
@@ -13,7 +19,6 @@ import {
   startMilestonePlanning,
   startRun,
 } from "./api";
-import type { CreateScheduleBody } from "./api";
 import { HomeComposer } from "./components/home/HomeComposer";
 import { LimitModal } from "./components/LimitModal";
 import { MilestoneDashboard } from "./components/MilestoneDashboard";
@@ -236,7 +241,7 @@ export function App() {
     setFocusedId(null);
   }
 
-  async function saveSchedule(body: CreateScheduleBody) {
+  async function saveSchedule(body: CreateScheduleInput) {
     const editing = editingSchedule?.schedule;
     const saved = editing
       ? await schedules.update(editing.id, body)

@@ -88,6 +88,21 @@ test("a rejected expression is shown in the dialog, not swallowed on the way bac
   expect(screen.getByTestId("schedule-error").textContent).toContain("invalid configuration");
 });
 
+test("a parent re-render does not steal focus from the field being edited", () => {
+  // Arrange — App passes an inline onDismiss, and useSchedules polls every 30s,
+  // so the parent re-renders while someone is mid-expression.
+  const props = modalProps();
+  const view = render(<ScheduleModal {...props} />);
+  const cron = screen.getByTestId("schedule-cron");
+  cron.focus();
+
+  // Act — a new closure identity, exactly as a parent render produces.
+  view.rerender(<ScheduleModal {...props} onDismiss={() => undefined} />);
+
+  // Assert
+  expect(document.activeElement).toBe(cron);
+});
+
 function modalProps(overrides: Partial<ScheduleModalProps> = {}): ScheduleModalProps {
   return {
     schedule: overrides.schedule,

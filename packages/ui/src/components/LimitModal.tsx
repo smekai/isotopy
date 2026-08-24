@@ -11,7 +11,7 @@ import type {
   RunLimit,
   RunState,
 } from "@isotopy/core";
-import { useDialogDismiss } from "../hooks/useDialogDismiss";
+import { Dialog } from "./Dialog";
 import { useEngineRoster } from "../hooks/useEngineRoster";
 import { useLimitNotification } from "../hooks/useLimitNotification";
 import { useNow } from "../hooks/useNow";
@@ -229,7 +229,6 @@ export function LimitModal({
   onOpenConnection,
   onDismiss,
 }: LimitModalProps) {
-  const dialogRef = useDialogDismiss(onDismiss);
   const engineId = limit.engine ?? DEFAULT_ENGINE_ID;
   const { roster } = useEngineRoster(engineId);
   const blockedStage = run.stages.find((stage) => stage.id === limit.stageId);
@@ -247,17 +246,13 @@ export function LimitModal({
   const stageLabel = blockedStage?.label ?? limit.stageId;
 
   return (
-    <div style={BACKDROP} onClick={onDismiss}>
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={LIMIT_COPY.headline(limit)}
-        tabIndex={-1}
-        data-testid="limit-modal"
-        onClick={(event) => event.stopPropagation()}
-        style={dialog(d)}
-      >
+    <Dialog
+      label={LIMIT_COPY.headline(limit)}
+      testId="limit-modal"
+      panelStyle={dialog(d)}
+      backdropStyle={BACKDROP}
+      onDismiss={onDismiss}
+    >
         <div style={header(d)}>
           <div>
             <div style={title(d)}>{LIMIT_COPY.headline(limit)}</div>
@@ -343,7 +338,6 @@ export function LimitModal({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -8,14 +8,8 @@ import { InitiativeGroup } from "./InitiativeGroup";
 import { ScheduleGroup } from "./schedule/ScheduleGroup";
 import { ScheduleList } from "./schedule/ScheduleList";
 import { RunCard } from "./RunCard";
-import {
-  RAIL_ROW_ICON,
-  RAIL_ROW_NAME,
-  RAIL_SECTION_LIST,
-  railRowButton,
-  railRowMeta,
-  railSectionLabel,
-} from "./rail-styles";
+import { RailRow, RailSection, RAIL_ROW_ICON_SIZE } from "./RailSection";
+import { railSectionLabel } from "./rail-styles";
 import type { Dir } from "../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../theme";
 
@@ -94,33 +88,24 @@ function MilestoneList({
   d,
 }: MilestoneListProps) {
   return (
-    <>
-      <div style={railSectionLabel(d)}>Milestones</div>
-      <ul style={RAIL_SECTION_LIST}>
-        {milestones.map((milestone) => {
-          const { completed, total } = milestoneProgress(milestone);
-          const selected = milestone.id === selectedMilestoneId;
-          return (
-            <li key={milestone.id}>
-              <button
-                type="button"
-                onClick={() => onOpenMilestone(milestone.id)}
-                aria-current={selected ? "true" : undefined}
-                data-testid="milestone-card"
-                data-milestone-id={milestone.id}
-                style={railRowButton(selected, d)}
-              >
-                <Flag size={ICON.sm} style={RAIL_ROW_ICON} />
-                <span style={RAIL_ROW_NAME}>{milestone.name}</span>
-                <span style={railRowMeta(d)}>
-                  {completed}/{total}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </>
+    <RailSection label="Milestones" d={d}>
+      {milestones.map((milestone) => {
+        const { completed, total } = milestoneProgress(milestone);
+        return (
+          <RailRow
+            key={milestone.id}
+            name={milestone.name}
+            meta={`${completed}/${total}`}
+            icon={<Flag size={RAIL_ROW_ICON_SIZE} />}
+            selected={milestone.id === selectedMilestoneId}
+            testId="milestone-card"
+            idAttributes={{ "data-milestone-id": milestone.id }}
+            d={d}
+            onOpen={() => onOpenMilestone(milestone.id)}
+          />
+        );
+      })}
+    </RailSection>
   );
 }
 
