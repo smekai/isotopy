@@ -1,40 +1,5 @@
 # Backlog
 
-## TASK-166: A verification that runs out of time loses everything it learned
-**Priority:** P0 | **Tags:** server, engine, core, milestone-i
-**Updated:** 2026-08-23 22:00
-
-Found by `TASK-142`'s Cursor dogfood. Verification was attempted **three times** and produced no
-verdict any of those times: 5316s, 600s, 602s. Each attempt began from nothing, redid the same
-Playwright and Chromium setup, and hit the same wall. Nearly two hours bought no information at all
-about a feature that was already built, already green, and — checked by hand afterwards — correct.
-
-**A timeout currently discards the stage.** There is no partial capture: no per-criterion evidence,
-no note of what was checked before the clock ran out, nothing for the next attempt to stand on. The
-Orchestrator's retry is precise — it named only the Verifying stage and correctly skipped the three
-settled ones — and it is precise about resuming a stage that left nothing behind.
-
-**Cursor's dropped session is what made the retries cold**, which is `TASK-154`'s first defect
-finally *measured* rather than argued. With session resume the second attempt would have continued
-the QA agent's own context instead of reinstalling a browser. That is the ordering argument for
-`TASK-154` restated as evidence, and this task should land after it.
-
-Two directions, and the choice is the work: either a stage records progress as it goes so a retry
-resumes from it, or the retry carries the prior attempt's transcript forward. Whichever is chosen,
-the bar is that a second attempt at a timed-out verification must not begin by redoing the first
-attempt's setup.
-
-Worth deciding alongside: whether `verify-feature` should be allowed to install a browser at all,
-or whether browser verification needs a prepared harness rather than an agent improvising one
-inside a 600s budget.
-
-Cross-platform: n/a for the mechanism — a stage's progress record and a resumed session are
-platform-independent. The browser-install question is not: `playwright install chromium` differs in
-cache location by OS (`%LOCALAPPDATA%\ms-playwright` versus `~/.cache/ms-playwright`), so any
-prepared harness reads that from Playwright rather than hardcoding either.
-
----
-
 ## TASK-168: Onboarding asks for a project and offers no way to add one
 **Priority:** P2 | **Tags:** ui, setup, milestone-i
 **Updated:** 2026-08-23 22:00

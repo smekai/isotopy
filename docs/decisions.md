@@ -15,6 +15,33 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-24 — A stage that never reached a verdict is resumed, not restarted
+
+**Context:** `TASK-142`'s dogfood spent 1h 58m on three verification attempts and got no verdict
+from any of them. Each began from nothing: the stage's session was discarded, so attempt two
+reinstalled the browser attempt one had already installed, into the same 600s wall.
+
+**Decision:** a stage records the engine session it used, and a restart resumes it — but only when
+the stage **never reached a verdict**. A stage that answered `FAIL` finished its thought; resuming
+that would continue a conversation that had ended. Being cut off is the case worth carrying, and
+it is the one the run record can tell apart, because a verdict is either there or it is not.
+
+Whether the session can be resumed at all is answered by the capability catalog rather than by the
+restart code, so a new engine cannot inherit a claim nobody checked.
+
+**Rejected: replaying the prior attempt's transcript instead.** It was the other option the task
+named. A transcript is lossy where a session is not — the agent's own working state, what it had
+already ruled out, the files it had open — and on an engine that can resume, replaying is strictly
+worse than continuing. Where an engine cannot resume, the existing question-loop replay already
+covers the ground.
+
+**And every stage is now told its time budget.** The deeper cause was not the retry at all: the
+agent had no idea it was on a clock, so it reached for a browser install with four minutes left.
+The stage prompt names the minutes and says what overrunning costs — no verdict, no partial
+credit. A constraint an agent cannot see is one it cannot budget against.
+
+---
+
 ## 2026-08-23 — An adapter declares what it can do, as data
 
 **Context:** `implementation-notes.md` confidently described three Cursor behaviours that had

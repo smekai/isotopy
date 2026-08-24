@@ -47,6 +47,8 @@ const TEAM: OrchestratorTeamProposal = {
   roles: [DEVELOPER_ROLE, QA_ROLE],
 };
 
+const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
+
 const TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
   rationale: "One Developer and one QA Engineer cover this",
@@ -1048,6 +1050,45 @@ test("a rejected decision is quoted back on the restart, so the second attempt c
   );
   expect(orchestration.status).toBe("awaiting_approval");
   expect(orchestration.decisionError).toBeUndefined();
+  ctx.engine.verify();
+});
+
+test("a stage that ran out of time is resumed on the restart, not started from nothing", async () => {
+  // Anticipate — TASK-142's shape exactly: the build stands, QA is cut off by the
+  // timeout before any verdict, and the Orchestrator restarts QA alone. The second
+  // QA turn must carry the session the first one left behind, or it repeats the
+  // setup that ate the clock in the first place.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).timesOut(CUT_OFF_SESSION);
+  ctx.engine.anticipateRunReview({
+    as: "review restarting QA alone",
+    decision: {
+      action: "start_run",
+      rationale: "Verification never delivered a verdict",
+      task: "Finish verifying",
+      fromStage: "test",
+    },
+  });
+  ctx.engine
+    .anticipate({ as: "resumed QA Engineer", resumeSessionId: CUT_OFF_SESSION })
+    .reports("Finished what was left.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the resumed run" });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, composed.id, "failed");
+  const second = await waitForOrchestrationRuns(conversation.orchestrationId ?? "", 3);
+  await waitForRunStatus(ctx.app, second, "completed");
   ctx.engine.verify();
 });
 

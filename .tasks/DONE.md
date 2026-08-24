@@ -1,5 +1,67 @@
 # Done
 
+## TASK-166: A verification that runs out of time loses everything it learned
+**Priority:** P0 | **Tags:** server, engine, core, milestone-i
+**Updated:** 2026-08-24 11:30
+
+Closed 2026-08-24. Both halves: the retry stops starting cold, and the agent is told it is on a
+clock. The second turned out to matter more than the first.
+
+**A stage records its session, and a restart resumes it.** `StageState.sessionId` is persisted,
+`runStageWork` records it whatever the outcome, and `seedFromSettledRun` carries it into the
+restarted stage's first turn. The rule lives in `resumableSession`: resume **only when the stage
+never reached a verdict**. A stage that answered `FAIL` finished its thought and starts fresh; a
+stage cut off mid-sentence is the one worth continuing, and a verdict is either present or not, so
+the run record can tell them apart without guessing. Whether the engine can resume at all is
+answered by `TASK-154`'s catalog, not by the restart code.
+
+**A resumed turn is told what happened to it.** `turnPrompt` used to hand a resumed turn
+`turn.answer ?? ""` — an empty prompt, because the only resume that existed was answering a
+question. `buildResumePrompt` now says the previous attempt was stopped by a time limit, that this
+is the same session so what it established is still above, and that if setup is eating the clock it
+should drop the setup and reach the verdict.
+
+**Every stage now knows its time budget, which is the deeper fix.** The agent that burned two hours
+had no idea it had ten minutes; it reached for `playwright install chromium` with four left.
+`buildTimeBudget` puts the minutes into the stage prompt's Environment block along with what
+overrunning costs — stopped where it stands, no verdict, work lost rather than partially credited.
+A constraint an agent cannot see is one it cannot budget against, and no amount of resume machinery
+fixes that.
+
+**Rejected: replaying the prior attempt's transcript instead of resuming.** The task named both. A
+transcript is lossy where a session is not — the agent's own working state, what it had ruled out,
+what it had open — and where an engine cannot resume, the question-loop replay already covers the
+ground.
+
+**Deliberately not done: forbidding `verify-feature` from installing a browser.** The task raised it
+as a question. The assignment already says to use the repository's own Playwright and to install
+only as a last resort, and the Cursor agent ignored that — a firmer prohibition would likely be
+ignored the same way, whereas a stated budget gives it a reason. Left as written rather than
+tightened on a guess; if a later run installs a browser inside a budget it can see, that is evidence
+for a prohibition and this note is the place it starts.
+
+**Gotcha worth keeping:** a timed-out stage settles the run as `failed`, not `needs_attention` — the
+latter is a `quality`-policy verdict, and a timeout produces no verdict at all. The comp test
+asserted the wrong one first and said so plainly, which is the same distinction `resumableSession`
+turns on.
+
+**Tests.** `stage-resume.spec.ts` covers the rule: cut off with a session resumes, a verdict does
+not, no session has nothing to resume, and an engine that cannot resume is never handed one — plus
+the resume prompt and the budget text. The fake engine gained `timesOut(sessionId)`, and
+`orchestration.comp.ts` drives the dogfood's exact shape end to end: build passes, QA times out with
+a session, the Orchestrator restarts QA alone, and the second QA turn is anticipated **with that
+session id**, so a cold restart fails the test.
+
+**Verified:** lint, typecheck, **971 tests passed / 2 skipped** (up from 964), build, `gen:skills`
+with no diff, e2e 70 passed / 4 skipped.
+
+Recorded in [`docs/decisions.md`](../docs/decisions.md) (2026-08-24).
+
+Cross-platform: n/a — a persisted field, a seeding rule and two prompt strings. Nothing here spawns
+a process, resolves a binary or touches a path.
+
+---
+
 ## TASK-167: Cursor's token counts arrive and are thrown away, and the composer names a model that will not run
 **Priority:** P1 | **Tags:** server, ui, engine, adapters, milestone-i
 **Updated:** 2026-08-23 23:15

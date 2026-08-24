@@ -117,6 +117,34 @@ export function buildContinuationPrompt({
   ]);
 }
 
+const MS_PER_MINUTE = 60_000;
+
+export function buildTimeBudget(timeoutMs: number): string {
+  const minutes = Math.round(timeoutMs / MS_PER_MINUTE);
+  return [
+    `You have about ${minutes} minutes. A step that runs past it is stopped where it stands and`,
+    "reports no verdict at all, so the work is lost rather than partially credited.",
+    "",
+    "Budget for that. Reaching a verdict with the tools already here beats reaching for better",
+    "ones and running out — if setup is eating the clock, abandon the setup, not the verdict.",
+  ].join("\n");
+}
+
+export function buildResumePrompt(stepTask: string | undefined): string {
+  return markdownBlocks([
+    "# Continue where you were cut off",
+    "",
+    "Your previous attempt at this stage was stopped by a time limit before it reported a " +
+      "verdict. This is the same session, so what you had already established is still above — " +
+      "do not repeat it, and do not start the stage over.",
+    "",
+    "Take stock of what you had finished, finish only what is left, and end with your verdict. " +
+      "If you were part-way through setting something up and it is not essential to reaching a " +
+      "verdict, drop it and reach the verdict instead.",
+    stepTask ? STAGE_NOTES_INVITATION : undefined,
+  ]);
+}
+
 export function formatHandoff(meta: HandoffMeta, output: string): string {
   const engine = `${structuralText(meta.engine)}${
     meta.model ? ` · ${structuralText(meta.model)}` : ""

@@ -1,5 +1,6 @@
-import { STAGE_OUTCOMES, flattenPipelineStages } from "@isotopy/core";
+import { STAGE_OUTCOMES, engineCapability, flattenPipelineStages } from "@isotopy/core";
 import type {
+  EngineId,
   PipelineDefinition,
   RunState,
   StageOutcome,
@@ -13,6 +14,22 @@ export interface SeededStart {
   outputs: Record<string, string>;
   outcomes: Record<string, StageOutcome>;
   from?: string;
+  resumeSessionId?: string;
+}
+
+export function resumableSession(
+  stage: StageState | undefined,
+  engineId: EngineId | undefined,
+): string | undefined {
+  if (stage?.sessionId === undefined || engineId === undefined) {
+    return undefined;
+  }
+  if (stage.verdict !== undefined) {
+    return undefined;
+  }
+  return engineCapability(engineId, "resumeSession") === "supported"
+    ? stage.sessionId
+    : undefined;
 }
 
 export interface SeededStage {
@@ -78,7 +95,15 @@ export function seedFromSettledRun(
     outcome: stage.settled ? outcomeForRestart(stage.settled) : STAGE_OUTCOMES.PASSED,
     output: settled.stageOutputs?.[stage.id],
   }));
-  return { ok: true, value: { ...seedStages(carried, startStageId), from } };
+  const resumeSessionId = resumableSession(
+    settled.stages.find((stage) => stage.id === startStageId),
+    settled.engine,
+  );
+  const seeded: SeededStart = { ...seedStages(carried, startStageId), from };
+  return {
+    ok: true,
+    value: resumeSessionId === undefined ? seeded : { ...seeded, resumeSessionId },
+  };
 }
 
 function issue(message: string): ValidationResult<SeededStart> {

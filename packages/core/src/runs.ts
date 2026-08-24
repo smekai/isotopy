@@ -179,6 +179,7 @@ export interface StageState {
   modelTier?: ModelTier;
   verdict?: StageVerdict;
   status: StageStatus;
+  sessionId?: string;
   usage?: StageUsage;
   logs: StageLogEntry[];
   startedAt?: string;

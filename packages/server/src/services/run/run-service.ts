@@ -745,6 +745,13 @@ export class RunService implements RunProjection {
     if (stage) stage.verdict = verdict;
   }
 
+  stageSession(runId: string, stageId: string, sessionId: string): void {
+    const stage = this.findStage(runId, stageId);
+    if (!stage) return;
+    stage.sessionId = sessionId;
+    void this.store.flushPersist(runId);
+  }
+
   stageUsage(runId: string, stageId: string, usage: StageUsage): void {
     const stage = this.findStage(runId, stageId);
     if (!stage) return;
