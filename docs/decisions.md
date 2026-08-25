@@ -15,6 +15,84 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-08-25 — A scheduled task is a prompt, and the team it pins is optional
+
+**Context:** `TASK-161` specified the board poller as a bespoke feature: a server-side board
+reader with a documented pick order, wired to its own preference. The owner's direction was that
+the poller is **one instance of a general mechanism**, and that there may be many.
+
+**Decision: a scheduled task carries a prompt, and may or may not pin a team.** With a team it
+starts that team, unchanged from `TASK-159`. Without one it hands its prompt to
+`OrchestrationService.start`, and the Orchestrator decides what to do — including composing a team
+for it. `schedulePinsTeam` is the fork.
+
+**This removed roughly half of what the task asked for.** `orchestrations.start` is the same entry
+point the UI's *Start Orchestrator* uses, and `goalContext` already renders the whole board into the
+opening turn. So there is no board parser, no priority extraction and no server-side task selection:
+a prompt-only schedule sees the board because every Orchestrator conversation does.
+
+**Rejected: the poller picks the task itself, deterministically.** The task argued for it, and the
+argument was good — an unattended team applies the pick rule thousands of times with nobody
+watching, and a rule in code is a property while a rule in a prompt is a tendency. It was rejected
+because it makes the poller a special case that no other schedule can reuse, and because the
+Orchestrator is the thing that already reads boards. **The cost is recorded rather than argued
+away:** the read order now lives in the poller's prompt, and it is a model's judgement. That is
+exactly the class of thing `TASK-162` exists to bound, and it is why `TASK-162` must land before
+this is enabled.
+
+**Backlog is in scope**, per the owner: Next first, then Backlog. That is where spikes (`TASK-069`,
+`TASK-036`) and work needing a human at the machine (`TASK-169`) sit today, which is a second reason
+`TASK-162` comes first.
+
+**A guard the task did not mention.** `orchestrations.start()` terminates any active Orchestrator —
+*"Superseded by a new Orchestrator"* — and `admitRun` only refuses concurrent **runs**. A
+conversation parked awaiting a human answer has no run in flight, so unattended, a schedule would
+have killed it silently. A prompt-only schedule now skips with `orchestrator_busy`. The loop
+therefore turns only when the Orchestrator finishes its episode, which is the episode-handler design
+from `TASK-156` rather than a limitation.
+
+**Built-ins are a catalog, and off twice.** `BUILT_IN_SCHEDULES` is an `as const` catalog seeded per
+project; the board poller is its only entry today and a product variant adds a row. Firing needs
+both `ProjectPreferences.builtInSchedules` and the record's own `enabled`. A fresh install is off
+because the default is off; an upgrade is off because `normalizeProjectPreferences` falls back to
+that default for a key older settings never wrote. Two switches is one more than strictly needed —
+chosen deliberately so the gate answers *may this project poll at all* while the record stays
+editable like any other schedule.
+
+---
+
+## 2026-08-25 — The scheduling mechanism is a package, not a layer inside the server
+
+**Context:** `TASK-171`, whose first half landed with `TASK-161`. `packages/server/src` had grown to
+~15,000 lines behind one flat `services/` directory, and the scheduling code split along a seam
+already visible in the file.
+
+**Decision: `@isotopy/scheduler` owns the mechanism.** Given a cron expression, a timezone, the
+window last consumed and a now, it answers what is due and claims it durably. Nothing in it knows
+what a run, a team or an Orchestrator is, and `croner` moved with it — the server no longer depends
+on a cron parser.
+
+**The policy stayed, because it cannot leave.** Reading live run state to record a skip, and
+chaining `ensureActive`, `composeTeamPipeline` and `startComposedRun`, are Isotopy concerns.
+Persistence crosses as an **injected callback**: the package decides *when* and asks to claim, while
+the SQLite write stays in the server where the update path already touches that row.
+
+**`isScheduleDue` left `packages/core` too.** Due-ness needs cron arithmetic, and core is aliased
+into the browser build, so core was the wrong owner. The tick interval stayed in core, because the
+UI's poll cadence and the server's ticker must agree and neither should own the other.
+
+**Rejected: splitting the backend into services.** No new process, no new port, no IPC. This is a
+boundary change; a topology change would buy deployment complexity the product has no use for yet.
+Recorded so it is not re-proposed each time the server grows a feature.
+
+**A lint rule rejects importing past a package's public surface**, which is what stops the boundary
+rotting back one convenient import at a time.
+
+**`@isotopy/engines` is still open** — 2,409 lines across 17 call sites including `subprocess.ts`,
+the highest platform-risk file in the repo. It has nothing to do with schedules and gets its own PR.
+
+---
+
 ## 2026-08-24 — A schedule is a record plus a ticker, and cron is parsed by croner
 
 **Context:** `TASK-156` decided that what carries standing intent between Orchestrator episodes is

@@ -178,6 +178,52 @@ than hardcodes.
 
 ---
 
+## TASK-172: A task worked unattended never leaves Next, so the next episode can pick it up again
+**Priority:** P1 | **Tags:** server, core, milestone-i
+**Updated:** 2026-08-25 16:00
+
+Found while building `TASK-161`, and named there rather than fixed, because it is not about
+schedules. **It has to close before the unattended stretch is measured.**
+
+**The transition is gated on a human.** `run-service.ts` moves a run's `sourceTaskIds` to **In
+Progress** only inside `approveGate`, and only for the stage id `intake`:
+
+```ts
+if (stageId === "intake" && run.sourceTaskIds?.length) { … transitionTasks(…, "In Progress", …) }
+```
+
+With gates off — `gates: {}`, the default — `approveGate` is never called, so **nothing ever
+moves**. The Done transition has the same shape one step later: `closeout-consumer.ts` moves
+`completedTaskIds`, which only exists if a closeout stage ran and reported them.
+
+**Why that matters more now than it did.** Every episode starts with empty `runIds`
+(`ensureActive` builds a fresh Orchestration, and `priorArtifacts()` filters by them), so the next
+episode has no memory of the last. A task being worked still reads as *next* on the board, and
+nothing in the record contradicts that. `TASK-161`'s poller prompt tells the Orchestrator to skip
+what is already In Progress — which is worth having and is **not** a fix, because nothing put it
+there.
+
+**Two things this must decide rather than assume:**
+
+1. **What marks a task as taken, and when.** Moving it at run start is the obvious answer and the
+   wrong one if the run is refused a moment later; claiming it the way `TASK-159`'s window is
+   claimed — durably, before the work it authorises — is the shape that already exists in this repo.
+2. **What un-marks it when the run does not finish.** A crashed or aborted run currently leaves
+   nothing behind to correct the board. A task stuck in In Progress forever is a worse failure than
+   one picked twice, because no later episode will ever consider it again.
+
+**Not in scope:** deciding *which* task is next. That is the Orchestrator's, per the decision
+recorded for `TASK-161`.
+
+**Evidence:** failing-first — a run started with `sourceTaskIds` and no gates moves its task to In
+Progress; a second episode with the same board does not pick a task already In Progress; an aborted
+run leaves the board in a state a later episode can act on. Then the full gate set.
+
+Cross-platform: board files are plain markdown through `TaskBoardAdapter`, which already carries the
+repo's line-ending handling; nothing new is introduced.
+
+---
+
 ## TASK-162: Work the team may draft but not start
 **Priority:** P1 | **Tags:** core, server, milestone-i
 **Updated:** 2026-08-21 12:00

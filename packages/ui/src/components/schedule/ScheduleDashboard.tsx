@@ -143,14 +143,20 @@ export function ScheduleDashboard({
         <button type="button" onClick={onEdit} data-testid="edit-schedule" style={iconButton(d)}>
           <Pencil size={ICON.sm} /> Edit
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          data-testid="delete-schedule"
-          style={iconButton(d)}
-        >
-          <Trash2 size={ICON.sm} /> Delete
-        </button>
+        {schedule.builtIn === undefined ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            data-testid="delete-schedule"
+            style={iconButton(d)}
+          >
+            <Trash2 size={ICON.sm} /> Delete
+          </button>
+        ) : (
+          <span data-testid="built-in-badge" style={mutedLine(d)}>
+            Built in
+          </span>
+        )}
       </div>
 
       <div style={facts()}>

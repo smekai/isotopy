@@ -1,5 +1,111 @@
 # Done
 
+## TASK-161: The built-in board poller, shipped disabled
+**Priority:** P1 | **Tags:** core, server, milestone-i
+**Updated:** 2026-08-25 17:00
+
+Closed 2026-08-25. The loop turns without a human. **Landed differently from how it was written**,
+on the owner's direction, and the difference removed roughly half the work.
+
+**A scheduled task is a prompt; the team is optional.** The poller is one instance of a general
+mechanism rather than a bespoke feature. Pin a team and the schedule starts it, unchanged from
+`TASK-159`; omit one and the prompt goes to `OrchestrationService.start` and the Orchestrator
+decides — including composing a team for it. `schedulePinsTeam` is the fork.
+
+**The board reader the task asked for was not needed.** `orchestrations.start` is the same entry
+point the UI's *Start Orchestrator* uses, and `goalContext` already renders the whole board into the
+opening turn. No parser, no priority extraction, no server-side selection. The read order — Next
+before Backlog, priority first, skip what is In Progress, skip what needs a person — lives in the
+poller's prompt, and [`docs/decisions.md`](../docs/decisions.md) records that this trades the task's
+determinism for generality, and that it is a model's judgement of exactly the kind `TASK-162` bounds.
+
+**A guard the task did not mention, and the sharpest thing found here.**
+`orchestrations.start()` terminates any active Orchestrator, and `admitRun` only refuses concurrent
+**runs** — a conversation parked awaiting a human answer has no run in flight. Unattended, a
+schedule would have killed it silently. A prompt-only schedule now skips with `orchestrator_busy`.
+The loop therefore turns only when the Orchestrator finishes its episode, which is `TASK-156`'s
+episode-handler design rather than a limitation.
+
+**Built-ins are a catalog, and off twice.** `BUILT_IN_SCHEDULES` is an `as const` catalog seeded per
+project with every entry disabled; the board poller is its only entry today and a variant adds a
+row. Firing needs both `ProjectPreferences.builtInSchedules` and the record's own `enabled`. Fresh
+installs are off by default; upgrades are off because `normalizeProjectPreferences` falls back to
+that default for a key older settings never wrote — **verified live** against a project whose
+settings predate the flag. The detail view labels a built-in and withholds Delete, because deleting
+one reseeds it on the next load and a button that lies is worse than no button.
+
+**Tests.** Prompt-only reaches the Orchestrator rather than a composed team; a pinned team still
+runs its team (regression); the board reaches the opening turn, checked against a seeded `.tasks/`;
+a prompt-only schedule skips while a conversation is open; off by default on a fresh project and on
+one upgraded from older settings; a deleted built-in returns on reload.
+
+**Two tests of my own were wrong and the mutation check caught both.** The default-off tests were
+enabling the poller with a daily `0 9 * * *` cron and ticking an hour out — the schedule was never
+due, so removing the gate entirely still passed. And `createTestApp` was never calling
+`schedules.init()` while the real bootstrap does, so nothing was seeded under test. Both fixed;
+removing the gate now fails exactly the two tests that claim it.
+
+**Verified:** lint, typecheck, **1060 tests passed / 2 skipped** (up from 1040), build,
+`gen:skills` with no diff, e2e 75 passed / 4 skipped. Plus the live app on Windows: the poller
+listed as paused with no fire time, its detail view showing the *Built in* badge, no Delete, and the
+read-order prompt.
+
+**Not done, deliberately.** No schedule was allowed to fire in the dev app — every pipeline drives a
+real CLI and a live fire spends real tokens; firing is proven against `FakeEngine`. And a task
+worked unattended never leaves Next, so a later episode can pick it up again: named here and filed
+as `TASK-172`, which must close before the unattended stretch is measured.
+
+Cross-platform: nothing OS-specific beyond `TASK-159`'s ticker, which carries the bar for both. The
+real sleep/wake observation remains `TASK-169`.
+
+---
+
+## TASK-171: Two packages the server should never have owned
+**Priority:** P2 | **Tags:** core, server, engine, infra
+**Updated:** 2026-08-25 17:00
+
+Closed 2026-08-25 for **the scheduler half only**; `@isotopy/engines` is still open and stated below.
+The package is `@isotopy/scheduler`, renamed from `cadence` by the owner — "cron" would name only one
+input format, and the package is the mechanism.
+
+**Why it rode along with `TASK-161`.** The task named `domain/rules/schedule-validity.ts` as its
+prerequisite: cron validity was welded to team-composition validity in one function. Making a
+schedule's team optional forced that function open regardless, so the split was the same edit either
+way. `teamProposalIssues` moved beside `composeTeamPipeline`, leaving `scheduleIssues` composing two
+independent rules.
+
+**What moved.** Given a cron expression, a timezone, the window last consumed and a now, the package
+answers what is due and claims it durably — `recurrence.ts`, `ticker.ts`, `claim.ts`. Nothing in it
+knows what a run, a team or an Orchestrator is, and `croner` moved with it: the server no longer
+depends on a cron parser.
+
+**What stayed, because it cannot leave.** Reading live run state to record a skip, and chaining
+`ensureActive`, `composeTeamPipeline` and `startComposedRun`. Persistence crosses as an **injected
+callback** — the package decides *when* and asks to claim, while the SQLite write stays where the
+update path already touches that row.
+
+**`isScheduleDue` left `packages/core` too.** Due-ness needs cron arithmetic and core is aliased into
+the browser build, so core was the wrong owner; `scheduleIsDue` in the server composes the package's
+answer with the enabled flag. The tick interval stayed in core, because the UI's poll cadence and the
+ticker's must agree and neither should own the other.
+
+**Tests moved rather than shrank:** the DST, cross-zone and issue-path specs are the package's; what
+stayed is the one rule about a *schedule* rather than a recurrence — which instant its next fire is
+measured from. A lint rule now rejects importing past a package's public surface.
+
+**Still open: `@isotopy/engines`.** 2,409 lines across 17 call sites, including `subprocess.ts` — the
+highest platform-risk file in the repo, carrying the win32 tree-kill against the POSIX signal path.
+It has nothing to do with schedules and gets its own PR. The six back-references the task enumerates
+are untouched and still accurate.
+
+**Verified** with `TASK-161` above: the same gate set, and the existing suites moved intact.
+
+Cross-platform: the package depends on `Intl` time-zone data rather than anything OS-specific, and
+`.unref()` behaves identically on both. It declares `@types/node` because `unref` is the point — a
+ticker that holds the process open is a bug.
+
+---
+
 ## TASK-159: Schedules — a recurring task with a fixed team
 **Priority:** P1 | **Tags:** core, server, milestone-i
 **Updated:** 2026-08-24 14:00

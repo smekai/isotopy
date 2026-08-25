@@ -89,6 +89,43 @@ test("a run in the history carries the same actions it has in the rail, not dead
   expect(props.onRerunRun).toHaveBeenCalledWith(expect.objectContaining({ id: "scheduled" }));
 });
 
+test("a built-in says so instead of offering a delete that would not stick", () => {
+  // Arrange — deleting a built-in reseeds it on the next load, so a Delete button
+  // there would promise something the server undoes.
+  const poller = scheduleView({ id: "s1", builtIn: "board-poller" });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: poller })} />);
+
+  // Assert
+  expect(screen.getByTestId("built-in-badge")).toBeTruthy();
+  expect(screen.queryByTestId("delete-schedule")).toBeNull();
+});
+
+test("a schedule the user made keeps its delete", () => {
+  // Act
+  render(<ScheduleDashboard {...dashboardProps()} />);
+
+  // Assert
+  expect(screen.getByTestId("delete-schedule")).toBeTruthy();
+  expect(screen.queryByTestId("built-in-badge")).toBeNull();
+});
+
+test("a skip caused by a live conversation is not reported as a busy run", () => {
+  // Arrange — two skip reasons now exist, and they mean different things to
+  // whoever is deciding whether the loop is stuck.
+  const skipped = scheduleView({
+    id: "s1",
+    lastOutcome: { kind: "skipped", reason: "orchestrator_busy" },
+  });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: skipped })} />);
+
+  // Assert
+  expect(screen.getByTestId("schedule-detail-last").textContent).toContain("Orchestrator");
+});
+
 function dashboardProps(
   overrides: Partial<ScheduleDashboardProps> = {},
 ): ScheduleDashboardProps {
