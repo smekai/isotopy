@@ -26,6 +26,7 @@ export const scheduleSchema = z
     timezone: requiredText,
     task: requiredText,
     team: orchestratorTeamProposalSchema.optional(),
+    builtIn: requiredText.optional(),
     enabled: z.boolean(),
     lastWindowAt: timestamp.optional(),
     lastFiredAt: timestamp.optional(),
@@ -61,6 +62,10 @@ export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 export const updateScheduleSchema = createScheduleSchema.partial().strict();
 
 export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
+
+export function scheduleIsBuiltIn(schedule: Schedule): boolean {
+  return schedule.builtIn !== undefined;
+}
 
 export function schedulePinsTeam(
   schedule: Schedule,

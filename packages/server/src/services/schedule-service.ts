@@ -4,6 +4,7 @@ import {
   SCHEDULE_TICK_MS,
   isScheduleDue,
   isTerminalRunStatus,
+  scheduleIsBuiltIn,
   scheduleSchema,
   schedulePinsTeam,
 } from "@isotopy/core";
@@ -14,6 +15,7 @@ import type {
 } from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
+import { BUILT_IN_SCHEDULES } from "../domain/rules/built-in-schedules.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
 import { nextFireForSchedule } from "../domain/rules/schedule-cron.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
@@ -25,6 +27,7 @@ import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import type { SettingsStore } from "./settings-store.ts";
 import type { RunService } from "./run/run-service.ts";
 
 export interface ScheduleTick {
@@ -56,6 +59,7 @@ export class ScheduleService {
     private readonly runs: RunService,
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
+    private readonly settings: SettingsStore,
   ) {}
 
   async init(): Promise<void> {
@@ -69,6 +73,36 @@ export class ScheduleService {
       schedule.projectId = projectPath.id;
       this.schedules.set(schedule.id, schedule);
     }
+    await this.seedBuiltIns(projectPath);
+  }
+
+  private async seedBuiltIns(projectPath: ProjectPath): Promise<void> {
+    for (const definition of BUILT_IN_SCHEDULES) {
+      if (this.builtInFor(projectPath.id, definition.key)) {
+        continue;
+      }
+      const now = nowIso();
+      const schedule: Schedule = {
+        id: randomUUID().slice(0, 8),
+        projectId: projectPath.id,
+        name: definition.name,
+        cron: definition.cron,
+        timezone: definition.timezone,
+        task: definition.task,
+        builtIn: definition.key,
+        enabled: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.schedules.set(schedule.id, schedule);
+      await this.repositoryFor(projectPath).write(schedule);
+    }
+  }
+
+  private builtInFor(projectId: string, key: string): Schedule | undefined {
+    return [...this.schedules.values()].find(
+      (schedule) => schedule.projectId === projectId && schedule.builtIn === key,
+    );
   }
 
   start(): void {
@@ -153,7 +187,15 @@ export class ScheduleService {
     return [...this.schedules.values()].filter(
       (schedule) =>
         this.registry.find(schedule.projectId) !== undefined &&
+        this.builtInAllowed(schedule) &&
         isScheduleDue(schedule, nextFireForSchedule(schedule), now),
+    );
+  }
+
+  private builtInAllowed(schedule: Schedule): boolean {
+    return (
+      !scheduleIsBuiltIn(schedule) ||
+      this.settings.getPreferences(schedule.projectId).builtInSchedules
     );
   }
 

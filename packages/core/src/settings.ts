@@ -19,6 +19,7 @@ export interface ProjectPreferences {
   permissionMode: EnginePermissionMode;
   pipelineId: string;
   gates: Record<string, boolean>;
+  builtInSchedules: boolean;
 }
 
 export type ProjectPreferencesUpdate = Partial<
@@ -41,6 +42,7 @@ export function defaultProjectPreferences(): ProjectPreferences {
     permissionMode: DEFAULT_PERMISSION_MODE,
     pipelineId: DEFAULT_PIPELINE_ID,
     gates: {},
+    builtInSchedules: false,
   };
 }
 

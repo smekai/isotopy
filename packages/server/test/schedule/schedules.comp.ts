@@ -253,7 +253,7 @@ test("a deleted schedule is gone from the project rather than merely switched of
 
   // Assert
   expect(response.status).toBe(200);
-  expect((await get<ScheduleView[]>(ctx.app, "/schedules")).body).toEqual([]);
+  expect(await userSchedules()).toEqual([]);
 });
 
 test("a schedule belongs to its project, and another project cannot read it", async () => {
@@ -297,7 +297,7 @@ test("another project cannot delete a schedule it does not own", async () => {
 
   // Assert
   expect(response.status).toBe(404);
-  expect((await get<ScheduleView[]>(ctx.app, "/schedules")).body).toHaveLength(1);
+  expect(await userSchedules()).toHaveLength(1);
 });
 
 test("turning a paused schedule back on owes nothing for the windows it slept through", async () => {
@@ -515,6 +515,13 @@ async function seedBoard(root: string, tasks: string): Promise<void> {
   await writeFile(path.join(dir, "BACKLOG.md"), `# Backlog
 
 ${tasks}`);
+}
+
+// Every project is seeded with the built-in schedules, so a test about the ones
+// someone created has to say so.
+async function userSchedules(): Promise<ScheduleView[]> {
+  const { body } = await get<ScheduleView[]>(ctx.app, "/schedules");
+  return body.filter((schedule) => schedule.builtIn === undefined);
 }
 
 function outcomeKindFor(ticks: ScheduleTick[], scheduleId: string): string | undefined {

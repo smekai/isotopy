@@ -42,6 +42,7 @@ export const projectPreferencesUpdateSchema: z.ZodType<ProjectPreferencesUpdate>
     permissionMode: permissionModeSchema.optional(),
     pipelineId: pipelineIdSchema.optional(),
     gates: z.record(z.string(), z.boolean().nullable()).optional(),
+    builtInSchedules: z.boolean().optional(),
   })
   .strict();
 
