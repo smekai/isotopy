@@ -29,7 +29,7 @@ const runs = new RunService(
   product,
 );
 const orchestrations = new OrchestrationService(registry, runs, settings, databases);
-const schedules = new ScheduleService(registry, runs, orchestrations, databases);
+const schedules = new ScheduleService(registry, runs, orchestrations, databases, settings);
 runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();

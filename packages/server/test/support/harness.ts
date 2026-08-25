@@ -107,9 +107,10 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     product,
   );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
-  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases);
+  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases, settings);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
+  await schedules.init();
   const app = createApp({
     runs: orchestrator,
     milestones: orchestrator.milestones,
@@ -191,7 +192,7 @@ export async function restartApp(): Promise<RestartedApp> {
     product,
   );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
-  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases);
+  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases, settings);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();

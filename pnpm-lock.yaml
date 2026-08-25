@@ -42,6 +42,16 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/scheduler:
+    dependencies:
+      croner:
+        specifier: ^10.0.1
+        version: 10.0.1
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+
   packages/server:
     dependencies:
       '@hono/node-server':
@@ -50,9 +60,9 @@ importers:
       '@isotopy/core':
         specifier: workspace:*
         version: link:../core
-      croner:
-        specifier: ^10.0.1
-        version: 10.0.1
+      '@isotopy/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
       hono:
         specifier: ^4.7.6
         version: 4.12.28

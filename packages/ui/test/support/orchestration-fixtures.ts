@@ -65,7 +65,7 @@ export function scheduleView(overrides: Partial<ScheduleView> = {}): ScheduleVie
     cron: overrides.cron ?? "0 9 * * *",
     timezone: overrides.timezone ?? "UTC",
     task: overrides.task ?? "Take the next task off the board",
-    team: overrides.team ?? team(),
+    team: "team" in overrides ? overrides.team : team(),
     enabled: overrides.enabled ?? true,
     createdAt: overrides.createdAt ?? CREATED_AT,
     updatedAt: overrides.updatedAt ?? CREATED_AT,

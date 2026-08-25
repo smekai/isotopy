@@ -2,15 +2,22 @@ import { randomUUID } from "node:crypto";
 import type { Schedule, ScheduleOutcome, ScheduleView, RunState } from "@isotopy/core";
 import {
   SCHEDULE_TICK_MS,
-  isScheduleDue,
   isTerminalRunStatus,
+  scheduleIsBuiltIn,
   scheduleSchema,
+  schedulePinsTeam,
 } from "@isotopy/core";
-import type { CreateScheduleInput, UpdateScheduleInput } from "@isotopy/core";
+import { Ticker, claimWindow } from "@isotopy/scheduler";
+import type {
+  CreateScheduleInput,
+  ScheduleSkipReason,
+  UpdateScheduleInput,
+} from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
+import { BUILT_IN_SCHEDULES } from "../domain/rules/built-in-schedules.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
-import { nextFireForSchedule } from "../domain/rules/schedule-cron.ts";
+import { nextFireForSchedule, scheduleIsDue } from "../domain/rules/schedule-timing.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -20,6 +27,7 @@ import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import type { SettingsStore } from "./settings-store.ts";
 import type { RunService } from "./run/run-service.ts";
 
 export interface ScheduleTick {
@@ -44,13 +52,20 @@ function resumedFromPause(current: Schedule, patch: UpdateScheduleInput): boolea
 export class ScheduleService {
   private readonly repositories = new Map<string, JsonRecordRepository<Schedule>>();
   private readonly schedules = new Map<string, Schedule>();
-  private ticker?: NodeJS.Timeout;
+  private readonly ticker = new Ticker(
+    SCHEDULE_TICK_MS,
+    () => this.tick(),
+    (error: unknown) => {
+      console.warn("Schedule tick failed:", messageOf(error));
+    },
+  );
 
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: RunService,
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
+    private readonly settings: SettingsStore,
   ) {}
 
   async init(): Promise<void> {
@@ -64,25 +79,44 @@ export class ScheduleService {
       schedule.projectId = projectPath.id;
       this.schedules.set(schedule.id, schedule);
     }
+    await this.seedBuiltIns(projectPath);
+  }
+
+  private async seedBuiltIns(projectPath: ProjectPath): Promise<void> {
+    for (const definition of BUILT_IN_SCHEDULES) {
+      if (this.builtInFor(projectPath.id, definition.key)) {
+        continue;
+      }
+      const now = nowIso();
+      const schedule: Schedule = {
+        id: randomUUID().slice(0, 8),
+        projectId: projectPath.id,
+        name: definition.name,
+        cron: definition.cron,
+        timezone: definition.timezone,
+        task: definition.task,
+        builtIn: definition.key,
+        enabled: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.schedules.set(schedule.id, schedule);
+      await this.repositoryFor(projectPath).write(schedule);
+    }
+  }
+
+  private builtInFor(projectId: string, key: string): Schedule | undefined {
+    return [...this.schedules.values()].find(
+      (schedule) => schedule.projectId === projectId && schedule.builtIn === key,
+    );
   }
 
   start(): void {
-    if (this.ticker) {
-      return;
-    }
-    this.ticker = setInterval(() => {
-      this.tick().catch((error: unknown) => {
-        console.warn("Schedule tick failed:", messageOf(error));
-      });
-    }, SCHEDULE_TICK_MS);
-    this.ticker.unref();
+    this.ticker.start();
   }
 
   stop(): void {
-    if (this.ticker) {
-      clearInterval(this.ticker);
-      this.ticker = undefined;
-    }
+    this.ticker.stop();
   }
 
   listSchedules(projectId: string): ScheduleView[] {
@@ -148,7 +182,15 @@ export class ScheduleService {
     return [...this.schedules.values()].filter(
       (schedule) =>
         this.registry.find(schedule.projectId) !== undefined &&
-        isScheduleDue(schedule, nextFireForSchedule(schedule), now),
+        this.builtInAllowed(schedule) &&
+        scheduleIsDue(schedule, now),
+    );
+  }
+
+  private builtInAllowed(schedule: Schedule): boolean {
+    return (
+      !scheduleIsBuiltIn(schedule) ||
+      this.settings.getPreferences(schedule.projectId).builtInSchedules
     );
   }
 
@@ -164,6 +206,8 @@ export class ScheduleService {
   private async fire(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
     const claimed = await this.claimWindow(schedule, now);
     if (claimed !== undefined) {
+      schedule.lastOutcome = claimed;
+      console.warn(`Schedule ${schedule.id} could not claim its window:`, claimed);
       return claimed;
     }
     schedule.lastOutcome = await this.attemptRun(schedule, now);
@@ -177,21 +221,14 @@ export class ScheduleService {
     schedule: Schedule,
     now: string,
   ): Promise<ScheduleOutcome | undefined> {
-    const previousWindow = schedule.lastWindowAt;
-    schedule.lastWindowAt = now;
-    schedule.updatedAt = now;
-    try {
-      await this.persist(schedule);
-      return undefined;
-    } catch (error) {
-      schedule.lastWindowAt = previousWindow;
-      return { kind: "failed", error: messageOf(error) };
-    }
+    const claim = await claimWindow(schedule, now, (record) => this.persist(record));
+    return claim.ok ? undefined : { kind: "failed", error: messageOf(claim.error) };
   }
 
   private async attemptRun(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
-    if (this.runs.listRuns(schedule.projectId).some(isRunActive)) {
-      return { kind: "skipped", reason: "run_active" };
+    const skip = this.skipReasonFor(schedule);
+    if (skip !== undefined) {
+      return { kind: "skipped", reason: skip };
     }
     try {
       const run = await this.startScheduledRun(schedule);
@@ -202,8 +239,21 @@ export class ScheduleService {
     }
   }
 
+  private skipReasonFor(schedule: Schedule): ScheduleSkipReason | undefined {
+    if (this.runs.listRuns(schedule.projectId).some(isRunActive)) {
+      return "run_active";
+    }
+    if (!schedulePinsTeam(schedule) && this.orchestrations.hasActive(schedule.projectId)) {
+      return "orchestrator_busy";
+    }
+    return undefined;
+  }
+
   private async startScheduledRun(schedule: Schedule): Promise<RunState> {
     const projectPath = this.registry.resolve(schedule.projectId);
+    if (!schedulePinsTeam(schedule)) {
+      return this.orchestrations.start(projectPath, schedule.task, {});
+    }
     const orchestrationId = await this.orchestrations.ensureActive(
       projectPath,
       schedule.task,
@@ -234,7 +284,12 @@ export class ScheduleService {
   }
 
   private viewOf(schedule: Schedule): ScheduleView {
-    return { ...structuredClone(schedule), nextFireAt: nextFireForSchedule(schedule) };
+    const blocked = this.builtInAllowed(schedule) ? undefined : "built_ins_disabled";
+    return {
+      ...structuredClone(schedule),
+      nextFireAt: blocked === undefined ? nextFireForSchedule(schedule) : undefined,
+      blockedBy: blocked,
+    };
   }
 
   private ownedSchedule(scheduleId: string, projectId?: string): Schedule | undefined {

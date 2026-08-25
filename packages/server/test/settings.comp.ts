@@ -60,6 +60,7 @@ test("a preference set through the API is visible to a second server over the sa
     permissionMode: "acceptEdits",
     pipelineId: "solo",
     gates: {},
+    builtInSchedules: false,
   });
   await shutdown();
 });

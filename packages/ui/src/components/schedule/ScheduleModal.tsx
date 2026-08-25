@@ -104,6 +104,7 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
   );
   const [task, setTask] = useState(schedule?.task ?? "");
   const title = schedule ? "Edit schedule" : "New schedule";
+  const team = schedule === undefined ? SOLO_READER : schedule.team;
 
   return (
     <Dialog
@@ -180,7 +181,7 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
             type="button"
             data-testid="schedule-save"
             onClick={() =>
-              onSave({ name, cron, timezone, task, team: schedule?.team ?? SOLO_READER })
+              onSave({ name, cron, timezone, task, team })
             }
             style={primaryButton(d)}
           >

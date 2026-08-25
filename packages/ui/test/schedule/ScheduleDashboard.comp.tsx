@@ -89,6 +89,62 @@ test("a run in the history carries the same actions it has in the rail, not dead
   expect(props.onRerunRun).toHaveBeenCalledWith(expect.objectContaining({ id: "scheduled" }));
 });
 
+test("a built-in says so instead of offering a delete that would not stick", () => {
+  // Arrange — deleting a built-in reseeds it on the next load, so a Delete button
+  // there would promise something the server undoes.
+  const poller = scheduleView({ id: "s1", builtIn: "board-poller" });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: poller })} />);
+
+  // Assert
+  expect(screen.getByTestId("built-in-badge")).toBeTruthy();
+  expect(screen.queryByTestId("delete-schedule")).toBeNull();
+});
+
+test("a schedule the user made keeps its delete", () => {
+  // Act
+  render(<ScheduleDashboard {...dashboardProps()} />);
+
+  // Assert
+  expect(screen.getByTestId("delete-schedule")).toBeTruthy();
+  expect(screen.queryByTestId("built-in-badge")).toBeNull();
+});
+
+test("a skip caused by a live conversation is not reported as a busy run", () => {
+  // Arrange — two skip reasons now exist, and they mean different things to
+  // whoever is deciding whether the loop is stuck.
+  const skipped = scheduleView({
+    id: "s1",
+    lastOutcome: { kind: "skipped", reason: "orchestrator_busy" },
+  });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: skipped })} />);
+
+  // Assert
+  expect(screen.getByTestId("schedule-detail-last").textContent).toContain("Orchestrator");
+});
+
+test("a schedule that reads On but cannot run says why, instead of showing a fire time it will miss", () => {
+  // Arrange — the record is on and the project-level gate is not. Showing "On"
+  // with a next fire here is the app lying about what it will do.
+  const blocked = scheduleView({
+    id: "s1",
+    builtIn: "board-poller",
+    enabled: true,
+    nextFireAt: undefined,
+    blockedBy: "built_ins_disabled",
+  });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: blocked })} />);
+
+  // Assert
+  expect(screen.getByTestId("schedule-blocked").textContent).toContain("Setup");
+  expect(screen.getByTestId("schedule-detail-next").textContent).toBe("—");
+});
+
 function dashboardProps(
   overrides: Partial<ScheduleDashboardProps> = {},
 ): ScheduleDashboardProps {

@@ -1,5 +1,5 @@
 {
-  "name": "@isotopy/core",
+  "name": "@isotopy/scheduler",
   "version": "0.12.25",
   "private": true,
   "type": "module",
@@ -17,6 +17,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "croner": "^10.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
   }
 }

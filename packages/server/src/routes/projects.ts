@@ -22,6 +22,7 @@ export function createProjectRoutes(
       }
       try {
         const project = await registry.add(parsed.value.root);
+        await schedules.loadProject(registry.resolve(project.id));
         return c.json({ project, ...registry.list() }, 201);
       } catch (error) {
         return c.json({ error: messageOf(error) }, 400);

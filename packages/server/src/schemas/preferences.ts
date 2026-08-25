@@ -37,6 +37,7 @@ export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
     permissionMode: stored.permissionMode ?? defaults.permissionMode,
     pipelineId: stored.pipelineId ?? defaults.pipelineId,
     gates: withoutClearedGates(stored.gates ?? {}),
+    builtInSchedules: stored.builtInSchedules ?? defaults.builtInSchedules,
   };
 }
 

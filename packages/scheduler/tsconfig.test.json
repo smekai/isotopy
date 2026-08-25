@@ -1,0 +1,10 @@
+// Unit specs. Kept apart from tsconfig.json so test/ is typechecked but never
+// compiled into dist/ — this package emits, and rootDir is src.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["test", "src"]
+}

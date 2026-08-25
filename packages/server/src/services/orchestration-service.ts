@@ -122,6 +122,10 @@ export class OrchestrationService implements StageOutputConsumer {
     return orchestration ? structuredClone(orchestration) : undefined;
   }
 
+  hasActive(projectId: string): boolean {
+    return this.activeFor(projectId) !== undefined;
+  }
+
   async ensureActive(
     projectPath: ProjectPath,
     goal: string,

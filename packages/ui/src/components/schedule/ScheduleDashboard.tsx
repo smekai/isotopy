@@ -2,7 +2,12 @@ import type { CSSProperties } from "react";
 import { CalendarClock, Pencil, Trash2 } from "lucide-react";
 import type { Orchestration, RunSummary, ScheduleView } from "@isotopy/core";
 import { runsForSchedule } from "../../run-list";
-import { formatNextFire, lastOutcomeLabel, scheduleStatusLabel } from "../../schedule-view";
+import {
+  formatNextFire,
+  lastOutcomeLabel,
+  scheduleBlockedLabel,
+  scheduleStatusLabel,
+} from "../../schedule-view";
 import { RunCard } from "../RunCard";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
@@ -143,14 +148,20 @@ export function ScheduleDashboard({
         <button type="button" onClick={onEdit} data-testid="edit-schedule" style={iconButton(d)}>
           <Pencil size={ICON.sm} /> Edit
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          data-testid="delete-schedule"
-          style={iconButton(d)}
-        >
-          <Trash2 size={ICON.sm} /> Delete
-        </button>
+        {schedule.builtIn === undefined ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            data-testid="delete-schedule"
+            style={iconButton(d)}
+          >
+            <Trash2 size={ICON.sm} /> Delete
+          </button>
+        ) : (
+          <span data-testid="built-in-badge" style={mutedLine(d)}>
+            Built in
+          </span>
+        )}
       </div>
 
       <div style={facts()}>
@@ -182,6 +193,11 @@ export function ScheduleDashboard({
           >
             {scheduleStatusLabel(schedule)}
           </button>
+          {scheduleBlockedLabel(schedule) !== undefined && (
+            <span data-testid="schedule-blocked" style={mutedLine(d)}>
+              {scheduleBlockedLabel(schedule)}
+            </span>
+          )}
         </div>
       </div>
 

@@ -103,6 +103,36 @@ test("a parent re-render does not steal focus from the field being edited", () =
   expect(document.activeElement).toBe(cron);
 });
 
+test("editing a prompt-only schedule keeps it prompt-only, rather than attaching a starter team", () => {
+  // Arrange — the built-in poller has no team on purpose: its prompt goes to the
+  // Orchestrator. Saving an edit must not quietly move it to the fixed-team path.
+  const promptOnly = scheduleView({ team: undefined, builtIn: "board-poller" });
+  const props = modalProps({ schedule: promptOnly });
+  render(<ScheduleModal {...props} />);
+
+  // Act
+  fireEvent.click(screen.getByTestId("schedule-save"));
+
+  // Assert
+  expect(props.onSave).toHaveBeenCalledWith(
+    expect.objectContaining({ team: undefined }),
+  );
+});
+
+test("a brand new schedule still gets a starter team, since the dialog offers no team picker", () => {
+  // Arrange
+  const props = modalProps();
+  render(<ScheduleModal {...props} />);
+
+  // Act
+  fireEvent.click(screen.getByTestId("schedule-save"));
+
+  // Assert
+  expect(props.onSave).toHaveBeenCalledWith(
+    expect.objectContaining({ team: expect.objectContaining({ roles: expect.any(Array) }) }),
+  );
+});
+
 function modalProps(overrides: Partial<ScheduleModalProps> = {}): ScheduleModalProps {
   return {
     schedule: overrides.schedule,

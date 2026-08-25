@@ -643,14 +643,21 @@ that gap is not the aggregate but the schedule — a persisted record plus a tic
 
 | Layer | Where |
 | --- | --- |
-| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `scheduleAnchor` (the last window consumed, or creation) and `isScheduleDue`. Cron is **not** parsed here: core is aliased straight into the browser build |
-| Cron arithmetic | `server/src/domain/rules/schedule-cron.ts` — croner, server-side only. `nextFireForSchedule` is what the API sends, so the UI never parses an expression |
+| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `scheduleAnchor`, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
+| Mechanism | `@isotopy/scheduler` — given a cron, a timezone, the window last consumed and a now, what is due and how to claim it durably. Knows nothing about runs, teams or the Orchestrator; `croner` lives here |
+| Timing | `server/src/domain/rules/schedule-timing.ts` — composes the package's answer with the record. `nextFireForSchedule` is what the API sends, so the UI never parses an expression |
+| Built-ins | `server/src/domain/rules/built-in-schedules.ts` — an `as const` catalog seeded per project, every entry disabled. The board poller is its only entry today |
 | Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming a persona that does not exist are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
 | Boundary schema | `server/src/schemas/schedule.ts` — shape only. Validity is checked on the **merged** record, because a patch carrying a cron and no timezone cannot be judged alone |
 | Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE` |
 | Lifecycle | `ScheduleService` — the single writer, and the owner of the one interval that ticks |
 | API | `server/src/routes/schedules.ts` — CRUD plus enable/disable. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 | UI | a rail section plus `#/schedules/:id` → `ScheduleDashboard`, fed by `useSchedules` |
+
+**A scheduled task is a prompt, and the team is optional.** Pin a team and the schedule starts it;
+omit one and the prompt goes to `OrchestrationService.start`, which is how the Orchestrator gets to
+decide. A prompt-only schedule skips while an Orchestrator is mid-conversation, because
+`start` supersedes an active one and `admitRun` cannot see a parked conversation.
 
 **A schedule stores an `OrchestratorTeamProposal`, not a composed pipeline.**
 `composedPipelineId` bakes the orchestration id into the pipeline id, and a schedule
