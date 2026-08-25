@@ -7,6 +7,10 @@ export const SCHEDULE_TICK_MS = 30_000;
 
 export const SCHEDULE_SKIP_REASONS = ["run_active", "orchestrator_busy"] as const;
 
+export const SCHEDULE_BLOCK_REASONS = ["built_ins_disabled"] as const;
+
+export type ScheduleBlockReason = (typeof SCHEDULE_BLOCK_REASONS)[number];
+
 export type ScheduleSkipReason = (typeof SCHEDULE_SKIP_REASONS)[number];
 
 export const scheduleOutcomeSchema = z.discriminatedUnion("kind", [
@@ -39,7 +43,10 @@ export const scheduleSchema = z
 export type Schedule = z.infer<typeof scheduleSchema>;
 
 export const scheduleViewSchema = scheduleSchema
-  .extend({ nextFireAt: timestamp.optional() })
+  .extend({
+    nextFireAt: timestamp.optional(),
+    blockedBy: z.enum(SCHEDULE_BLOCK_REASONS).optional(),
+  })
   .strict();
 
 export type ScheduleView = z.infer<typeof scheduleViewSchema>;

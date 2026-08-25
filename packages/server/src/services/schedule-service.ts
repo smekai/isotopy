@@ -206,6 +206,8 @@ export class ScheduleService {
   private async fire(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
     const claimed = await this.claimWindow(schedule, now);
     if (claimed !== undefined) {
+      schedule.lastOutcome = claimed;
+      console.warn(`Schedule ${schedule.id} could not claim its window:`, claimed);
       return claimed;
     }
     schedule.lastOutcome = await this.attemptRun(schedule, now);
@@ -282,7 +284,12 @@ export class ScheduleService {
   }
 
   private viewOf(schedule: Schedule): ScheduleView {
-    return { ...structuredClone(schedule), nextFireAt: nextFireForSchedule(schedule) };
+    const blocked = this.builtInAllowed(schedule) ? undefined : "built_ins_disabled";
+    return {
+      ...structuredClone(schedule),
+      nextFireAt: blocked === undefined ? nextFireForSchedule(schedule) : undefined,
+      blockedBy: blocked,
+    };
   }
 
   private ownedSchedule(scheduleId: string, projectId?: string): Schedule | undefined {

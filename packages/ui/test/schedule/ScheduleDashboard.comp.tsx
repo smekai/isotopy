@@ -126,6 +126,25 @@ test("a skip caused by a live conversation is not reported as a busy run", () =>
   expect(screen.getByTestId("schedule-detail-last").textContent).toContain("Orchestrator");
 });
 
+test("a schedule that reads On but cannot run says why, instead of showing a fire time it will miss", () => {
+  // Arrange — the record is on and the project-level gate is not. Showing "On"
+  // with a next fire here is the app lying about what it will do.
+  const blocked = scheduleView({
+    id: "s1",
+    builtIn: "board-poller",
+    enabled: true,
+    nextFireAt: undefined,
+    blockedBy: "built_ins_disabled",
+  });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: blocked })} />);
+
+  // Assert
+  expect(screen.getByTestId("schedule-blocked").textContent).toContain("Setup");
+  expect(screen.getByTestId("schedule-detail-next").textContent).toBe("—");
+});
+
 function dashboardProps(
   overrides: Partial<ScheduleDashboardProps> = {},
 ): ScheduleDashboardProps {

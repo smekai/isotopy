@@ -55,10 +55,37 @@ export interface GatesSectionProps {
 }
 
 export function GatesSection({ d, settings }: GatesSectionProps) {
-  const { gates } = settings.preferences;
+  const { gates, builtInSchedules } = settings.preferences;
 
   return (
     <div>
+      <div style={sectionTitle(d)}>Unattended work</div>
+      <div style={sectionSubtitle(d)}>
+        Whether this project may run the schedules that ship with the product. Off by default; each
+        built-in still has its own switch, and both must be on before anything runs.
+      </div>
+      <button
+        data-testid="built-in-schedules-toggle"
+        aria-pressed={builtInSchedules}
+        onClick={() => settings.update({ builtInSchedules: !builtInSchedules })}
+        style={optionCard(builtInSchedules, d)}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={GATE_CARD_HEADER}>
+            <div style={optionLabel(d)}>Allow built-in schedules</div>
+            <div style={builtInSchedules ? accentBadge(d) : mutedBadge(d)}>
+              {builtInSchedules ? "ALLOWED" : "OFF"}
+            </div>
+          </div>
+          <div style={builtInSchedules ? mutedBody(d) : mutedCaption(d)}>
+            The board poller starts work on its own when nothing is running. Leave this off unless
+            you want the team acting without you.
+          </div>
+        </div>
+      </button>
+
+      <div style={{ height: SPACE.xxl }} />
+
       <div style={sectionTitle(d)}>Human Gates</div>
       <div style={sectionSubtitle(d)}>
         Approval checkpoints that pause the pipeline until a human reviews. A gate can go after any

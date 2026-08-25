@@ -5,7 +5,12 @@
 import { afterEach, assert, beforeEach, expect, test } from "vitest";
 import type { ScheduleView, SettingsView } from "@isotopy/core";
 import { BUILT_IN_SCHEDULES } from "../../src/domain/rules/built-in-schedules.ts";
-import { createTestApp, del, get, put, restartApp } from "../support/harness.ts";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp } from "node:fs/promises";
+import { vi } from "vitest";
+import { createTestApp, del, get, post, put, restartApp } from "../support/harness.ts";
+import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import type { TestApp } from "../support/harness.ts";
 
 const AN_HOUR_ON = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -17,6 +22,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await ctx.dispose();
 });
 
@@ -107,6 +113,51 @@ test("a deleted built-in returns on the next load, because every project has one
   await restarted.shutdown();
 });
 
+test("a project added while the server is running gets its built-ins straight away", async () => {
+  // Arrange — POST /projects previously only touched the registry, so a project
+  // created at runtime had no poller until the next restart.
+  const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-added-"));
+
+  // Act
+  const created = await post<{ project: { id: string } }>(ctx.app, "/projects", { root });
+
+  // Assert
+  expect(created.status).toBe(201);
+  const listed = ctx.schedules.listSchedules(created.body.project.id);
+  expect(listed.map((schedule) => schedule.builtIn)).toContain("board-poller");
+});
+
+test("a schedule blocked by the project gate says so and offers no fire time", async () => {
+  // Arrange — the record is on while the project-level gate is not.
+  const poller = await builtInPoller();
+  await enable(poller.id);
+
+  // Act
+  const { body: schedules } = await get<ScheduleView[]>(ctx.app, "/schedules");
+
+  // Assert — the view has to match what the scheduler will actually do.
+  const blocked = schedules.find((schedule) => schedule.builtIn === "board-poller");
+  expect(blocked?.blockedBy).toBe("built_ins_disabled");
+  expect(blocked?.nextFireAt).toBeUndefined();
+});
+
+test("a window that could not be claimed is recorded, so the dashboard does not show stale state", async () => {
+  // Arrange — the claiming write fails; the ticker discards what tick() returns,
+  // so the record is the only place an operator can see this.
+  const created = await createUserSchedule();
+  failTheNextWrite("disk is full");
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  expect(ticks[0]?.outcome).toEqual({ kind: "failed", error: "disk is full" });
+  expect(ctx.schedules.getSchedule(created.id)?.lastOutcome).toEqual({
+    kind: "failed",
+    error: "disk is full",
+  });
+});
+
 function preferencesOf(response: { body: SettingsView }): boolean {
   return response.body.preferences.builtInSchedules;
 }
@@ -116,6 +167,20 @@ async function builtInPoller(): Promise<ScheduleView> {
   const poller = schedules.find((schedule) => schedule.builtIn === "board-poller");
   assert(poller, "every project is seeded with the board poller");
   return poller;
+}
+
+async function createUserSchedule(): Promise<ScheduleView> {
+  const { body } = await post<ScheduleView>(ctx.app, "/schedules", {
+    name: "User schedule",
+    cron: "* * * * *",
+    timezone: "UTC",
+    task: "Do the thing",
+  });
+  return body;
+}
+
+function failTheNextWrite(message: string): void {
+  vi.spyOn(JsonRecordRepository.prototype, "write").mockRejectedValueOnce(new Error(message));
 }
 
 async function enable(scheduleId: string, cron = "* * * * *"): Promise<void> {

@@ -13,14 +13,24 @@ export function scheduleStatusLabel(schedule: ScheduleView): string {
   return schedule.enabled ? "On" : "Paused";
 }
 
+export function scheduleBlockedLabel(schedule: ScheduleView): string | undefined {
+  return schedule.blockedBy === undefined
+    ? undefined
+    : "Built-in schedules are off for this project — turn them on in Setup → Gates";
+}
+
 export function formatNextFire(schedule: ScheduleView): string {
-  if (!schedule.enabled || schedule.nextFireAt === undefined) {
+  if (!schedule.enabled || schedule.blockedBy !== undefined || schedule.nextFireAt === undefined) {
     return NEVER;
   }
   return new Intl.DateTimeFormat(undefined, FIRE_FORMAT).format(new Date(schedule.nextFireAt));
 }
 
 export function scheduleFireEcho(schedule: ScheduleView): string {
+  const blocked = scheduleBlockedLabel(schedule);
+  if (blocked !== undefined) {
+    return blocked;
+  }
   return schedule.enabled && schedule.nextFireAt !== undefined
     ? `Next run ${formatNextFire(schedule)}, your time`
     : "Paused — this schedule will not run";
