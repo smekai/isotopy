@@ -77,10 +77,3 @@ export function scheduleAnchor(schedule: Schedule): string {
   return schedule.lastWindowAt ?? schedule.createdAt;
 }
 
-export function isScheduleDue(
-  schedule: Schedule,
-  nextFireAt: string | undefined,
-  now: string,
-): boolean {
-  return schedule.enabled && nextFireAt !== undefined && nextFireAt <= now;
-}

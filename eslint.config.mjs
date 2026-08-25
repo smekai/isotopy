@@ -72,6 +72,24 @@ export default tseslint.config(
     },
   },
   {
+    // A package has a public surface for a reason: reaching past it re-welds the
+    // boundary the extraction removed, one convenient import at a time.
+    files: ["packages/*/src/**/*.{ts,tsx}", "packages/*/test/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@isotopy/*/src/*", "@isotopy/*/dist/*"],
+              message: "Import a package through its public surface, not a path inside it.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["packages/*/test/**/*.{ts,tsx}", "packages/ui/e2e/**/*.ts"],
     ignores: ["**/support/**"],
     rules: {
