@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { orchestratorTeamProposalSchema } from "./orchestration.ts";
+import type { OrchestratorTeamProposal } from "./orchestration.ts";
 import { requiredText, timestamp } from "./schema.ts";
 
 export const SCHEDULE_TICK_MS = 30_000;
 
-export const SCHEDULE_SKIP_REASONS = ["run_active"] as const;
+export const SCHEDULE_SKIP_REASONS = ["run_active", "orchestrator_busy"] as const;
 
 export type ScheduleSkipReason = (typeof SCHEDULE_SKIP_REASONS)[number];
 
@@ -24,7 +25,7 @@ export const scheduleSchema = z
     cron: requiredText,
     timezone: requiredText,
     task: requiredText,
-    team: orchestratorTeamProposalSchema,
+    team: orchestratorTeamProposalSchema.optional(),
     enabled: z.boolean(),
     lastWindowAt: timestamp.optional(),
     lastFiredAt: timestamp.optional(),
@@ -50,7 +51,7 @@ export const createScheduleSchema = z
     cron: inputText,
     timezone: inputText,
     task: inputText,
-    team: orchestratorTeamProposalSchema,
+    team: orchestratorTeamProposalSchema.optional(),
     enabled: z.boolean().optional(),
   })
   .strict();
@@ -60,6 +61,12 @@ export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 export const updateScheduleSchema = createScheduleSchema.partial().strict();
 
 export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
+
+export function schedulePinsTeam(
+  schedule: Schedule,
+): schedule is Schedule & { team: OrchestratorTeamProposal } {
+  return schedule.team !== undefined;
+}
 
 export function scheduleAnchor(schedule: Schedule): string {
   return schedule.lastWindowAt ?? schedule.createdAt;

@@ -1,5 +1,12 @@
+import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import { afterEach, assert, beforeEach, expect, test, vi } from "vitest";
-import type { Orchestration, OrchestratorTeamProposal, ScheduleView } from "@isotopy/core";
+import type {
+  Orchestration,
+  OrchestratorTeamProposal,
+  RunState,
+  ScheduleView,
+} from "@isotopy/core";
 import type { ScheduleTick } from "../../src/services/schedule-service.ts";
 import {
   addTestProject,
@@ -8,6 +15,7 @@ import {
   get,
   patch,
   post,
+  getRun,
   restartApp,
   waitForRunStatus,
 } from "../support/harness.ts";
@@ -15,6 +23,9 @@ import type { TestApp } from "../support/harness.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 
 const EVERY_MINUTE = "* * * * *";
+
+// Which pipeline a scheduled run lands on is how the two paths are told apart.
+const ORCHESTRATION_PIPELINE = "orchestration";
 
 // Fixed at module load so a tick and the assertion about it name the same
 // instant; every schedule under test is created later, and so is due at both.
@@ -412,6 +423,99 @@ test("a failed claim leaves the window unconsumed, so the next tick may still ta
   await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
   ctx.engine.verify();
 });
+
+test("a schedule with no team hands its prompt to the Orchestrator rather than a fixed team", async () => {
+  // Arrange — a scheduled task that says what it wants, not who does it.
+  await createSchedule({ cron: EVERY_MINUTE, team: undefined });
+
+  // Anticipate — the Orchestrator opens the conversation; no composed team runs.
+  ctx.engine.anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ }).parks("Thinking.");
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  await ctx.engine.waitForCall();
+  const run = await getRun(ctx.app, firedRunId(ticks));
+  expect(run.pipelineId).toBe(ORCHESTRATION_PIPELINE);
+  ctx.engine.verify();
+});
+
+test("the Orchestrator's opening turn carries the board, so the prompt need not repeat it", async () => {
+  // Arrange — a project that actually has a board to carry.
+  const boarded = await addTestProject(ctx.registry, "boarded");
+  await seedBoard(boarded.root, "## TASK-421: Rename the widget\n**Priority:** P1\n\n---\n");
+  await createSchedule({ cron: EVERY_MINUTE, team: undefined }, boarded.headers);
+
+  // Anticipate — the board reaches the prompt the Orchestrator is handed.
+  ctx.engine.anticipate({ as: "Orchestrator", prompt: /TASK-421/ }).parks("Thinking.");
+
+  // Act
+  await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  await ctx.engine.waitForCall();
+  ctx.engine.verify();
+});
+
+test("a schedule that pins a team still runs that team, not a conversation", async () => {
+  // Arrange — the regression: pinning a team must not have become a prompt.
+  await createSchedule({ cron: EVERY_MINUTE });
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  const run = await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
+  expect(run.pipeline?.groups[0]?.stages.map((stage) => stage.skill)).toEqual([
+    "project-manager",
+  ]);
+  ctx.engine.verify();
+});
+
+test("a prompt-only schedule waits rather than superseding a conversation someone is mid-way through", async () => {
+  // Arrange — orchestrations.start() terminates an active Orchestrator, and a
+  // parked conversation is not a run, so admitRun cannot see it.
+  const created = await createSchedule({ cron: EVERY_MINUTE, team: undefined });
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports("Still weighing it up.");
+  const { body: conversation } = await post<RunState>(ctx.app, "/orchestrations", {
+    goal: "Ship the settings screen",
+    engine: "claude-code",
+  });
+  // The run settles while the conversation stays open, so admitRun sees nothing.
+  await waitForRunStatus(ctx.app, conversation.id, "needs_attention");
+
+  // Act
+  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  expect(ticks).toEqual([
+    { scheduleId: created.id, outcome: { kind: "skipped", reason: "orchestrator_busy" } },
+  ]);
+  ctx.engine.verify();
+});
+
+async function seedBoard(root: string, tasks: string): Promise<void> {
+  const dir = path.join(root, ".tasks");
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, "config.json"),
+    JSON.stringify({
+      version: 2,
+      idPrefix: "TASK",
+      nextId: 422,
+      states: [{ name: "Backlog", fileName: "BACKLOG.md" }],
+      insertPosition: "top",
+    }),
+  );
+  await writeFile(path.join(dir, "BACKLOG.md"), `# Backlog
+
+${tasks}`);
+}
 
 function outcomeKindFor(ticks: ScheduleTick[], scheduleId: string): string | undefined {
   return ticks.find((tick) => tick.scheduleId === scheduleId)?.outcome.kind;

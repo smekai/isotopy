@@ -5,8 +5,13 @@ import {
   isScheduleDue,
   isTerminalRunStatus,
   scheduleSchema,
+  schedulePinsTeam,
 } from "@isotopy/core";
-import type { CreateScheduleInput, UpdateScheduleInput } from "@isotopy/core";
+import type {
+  CreateScheduleInput,
+  ScheduleSkipReason,
+  UpdateScheduleInput,
+} from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
@@ -190,8 +195,9 @@ export class ScheduleService {
   }
 
   private async attemptRun(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
-    if (this.runs.listRuns(schedule.projectId).some(isRunActive)) {
-      return { kind: "skipped", reason: "run_active" };
+    const skip = this.skipReasonFor(schedule);
+    if (skip !== undefined) {
+      return { kind: "skipped", reason: skip };
     }
     try {
       const run = await this.startScheduledRun(schedule);
@@ -202,8 +208,21 @@ export class ScheduleService {
     }
   }
 
+  private skipReasonFor(schedule: Schedule): ScheduleSkipReason | undefined {
+    if (this.runs.listRuns(schedule.projectId).some(isRunActive)) {
+      return "run_active";
+    }
+    if (!schedulePinsTeam(schedule) && this.orchestrations.hasActive(schedule.projectId)) {
+      return "orchestrator_busy";
+    }
+    return undefined;
+  }
+
   private async startScheduledRun(schedule: Schedule): Promise<RunState> {
     const projectPath = this.registry.resolve(schedule.projectId);
+    if (!schedulePinsTeam(schedule)) {
+      return this.orchestrations.start(projectPath, schedule.task, {});
+    }
     const orchestrationId = await this.orchestrations.ensureActive(
       projectPath,
       schedule.task,

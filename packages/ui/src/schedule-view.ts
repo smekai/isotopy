@@ -35,7 +35,9 @@ export function lastOutcomeLabel(schedule: ScheduleView): string {
     case "fired":
       return "Last ran";
     case "skipped":
-      return "Skipped — a run was already active";
+      return outcome.reason === "run_active"
+        ? "Skipped — a run was already active"
+        : "Skipped — the Orchestrator was mid-conversation";
     case "failed":
       return `Failed to start — ${outcome.error}`;
   }

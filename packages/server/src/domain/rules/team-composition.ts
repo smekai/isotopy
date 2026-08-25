@@ -51,6 +51,8 @@ function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
   return issues;
 }
 
+const VALIDATION_ORCHESTRATION_ID = "00000000";
+
 const ORCHESTRATOR_PERSONA = "orchestrator";
 
 const CLOSEOUT_STEP_TASK = "closeout-feature";
@@ -168,4 +170,14 @@ export function composeTeamPipeline(
       groups: [{ stages: team.roles.map(toStage) }],
     },
   };
+}
+
+export function teamProposalIssues(team: OrchestratorTeamProposal): ValidationIssue[] {
+  const composed = composeTeamPipeline(team, VALIDATION_ORCHESTRATION_ID);
+  return composed.ok
+    ? []
+    : composed.issues.map((issue) => ({
+        path: ["team", ...issue.path],
+        message: issue.message,
+      }));
 }
