@@ -16,6 +16,10 @@ Each state has its own file:
 Auxiliary file (optional rolling log, not a task state):
 - **Work Log** → `WORK_LOG.md`
 
+Completed work may be archived out of `DONE.md` into `.tasks/archive/` once a project sets
+`archiveDoneAfterDays`. Those files are plain markdown in the same format but are not board states —
+if a task is not in `DONE.md`, grep the archive before concluding it never existed.
+
 ## Task Format
 
 Each task is a `## ` heading section separated by `---`:
@@ -32,14 +36,40 @@ Description text in markdown.
 - **ID prefix:** `TASK`
 - **Priorities:** P0, P1, P2, P3, P4
 
+## Tools
+
+TaskPlanner ships an MCP server, and this repository wires it in `.mcp.json` — `node
+node_modules/@smekai/taskplanner/dist/mcp-server.js`, running the version pinned in
+`package.json`. If your host exposes these tools, **use them instead of editing the task files by
+hand** — they allocate IDs, keep `nextId` and timestamps correct, and rewrite the markdown without
+touching its encoding:
+
+| Tool | Use for |
+| --- | --- |
+| `taskplanner_list` / `taskplanner_board` | Find work and see the current state. |
+| `taskplanner_get` | Read one task in full. |
+| `taskplanner_create` | Create a task; the ID is allocated for you. |
+| `taskplanner_move` | Move a task between states. |
+| `taskplanner_update` | Change title, description, priority, tags, epic, assignee, waiting-until, or plan. |
+
+Check once at the start of a session whether the tools are available, and say which way you are
+working. **If they are available, do not hand-edit these files.** Every instruction below that
+describes editing markdown directly is the fallback for when they are not.
+
+The files stay plain markdown on purpose, and a human is free to edit them in any editor at any
+time. That freedom is not an invitation for an agent with working tools to do the same: hand-edits
+are what desynchronise `nextId` and corrupt encodings.
+
 ## Workflow for Implementing a Task
 
 When asked to implement a task:
 
-1. **Pick the task** from BACKLOG.md or NEXT.md (highest priority first, or as specified by the user).
-2. **Move the task** to IN_PROGRESS.md by cutting it from the source file and pasting it into IN_PROGRESS.md.
+1. **Pick the task** from BACKLOG.md or NEXT.md (highest priority first, or as specified by the user). Skip any task carrying a `**Waiting until:**` date that has not arrived — it is blocked on something outside the repository and cannot be started, whatever its priority. The tools mark these for you.
+2. **Move the task** to IN_PROGRESS.md — `taskplanner_move` if it is available, otherwise cut the section from the source file and paste it into IN_PROGRESS.md.
 3. **Implement** the task.
-4. **Move the task** to DONE.md when complete — trim `### Plan` to a done-summary, append a short entry to `.tasks/WORK_LOG.md` if that file exists, and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
+4. **Move the task** to DONE.md when complete — trim any `### Plan` to a done-summary, append a short entry to `.tasks/WORK_LOG.md` if that file exists, and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
+
+This project sets `aiPlanRequired: false`, so a `### Plan` block is not required before coding. Tasks that carry one keep it, trimmed to a done-summary on the way to Done.
 
 ### Work Log
 
@@ -60,14 +90,16 @@ Keep it to 3–5 lines total. Skip empty fields rather than writing "N/A". Detai
 
 These steps are **part of the work**, not optional housekeeping:
 
-- **In Progress:** You must **physically move** the task markdown (the whole `##` section and its `---`) from BACKLOG/NEXT into **IN_PROGRESS.md** before substantive implementation — not only describe that you will.
+- **In Progress:** The task must actually **move** out of BACKLOG/NEXT into **IN_PROGRESS.md** before substantive implementation — not only be described as moving. Use `taskplanner_move`; without it, cut the whole `##` section and its `---` across by hand.
 - **Done:** When the implementation is finished, **move** the same task section from IN_PROGRESS.md into **DONE.md** and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
-- **Plan:** If this project requires a plan (check the **aiPlanRequired** field in .tasks/config.json), the `### Plan` block must exist in IN_PROGRESS **before** coding, and should be **trimmed to a short done-summary** when you move the task to DONE.
 - **Work log:** If `.tasks/WORK_LOG.md` exists, append one short entry at the top when moving a task to Done (see **Work Log** above).
 
 ## Creating a New Task
 
-When the user asks you to create a task:
+When the user asks you to create a task, call `taskplanner_create` if it is available. It allocates
+the ID and advances `nextId` itself, so neither is yours to manage.
+
+Without the tools, do it by hand:
 
 1. **Read** `.tasks/config.json` to get the current `nextId` and `idPrefix`.
 2. **Generate the ID** — format: `{idPrefix}-{nextId padded to 3 digits}` (e.g. `TASK-015`).
@@ -87,18 +119,20 @@ Description of the task in markdown.
 
 Rules for new tasks:
 - **Priority** is required. If not specified by the user, default to `P2`.
-- **Tags** are optional. Pick from the project's tag list if relevant: core, ui, server, adapters, engine, infra, setup, testing, milestone-c.
+- **Waiting until** is optional — `**Waiting until:** YYYY-MM-DD` on its own line marks a task that cannot start before that date. Use it when work is blocked on something outside the repository, rather than lowering its priority.
+- **Tags** are optional. Pick from the project's tag list if relevant: core, ui, server, adapters, engine, infra, setup, testing, milestone-c, milestone-d, milestone-e, milestone-f, milestone-g, milestone-h, milestone-i.
 - **Updated** — set to the current date/time.
-- Add the task at the **top** of the file (after the `# Heading` line).
+- Add the task at the **top** of the file (after the `# Heading` line). Beyond that, the order of tasks within a file carries no meaning — never reorder a file to match priority.
 - Always end the task section with a `---` separator.
 - If the user asks to create multiple tasks at once, increment the ID for each one.
 
 ## Important Rules
 
+- Prefer the TaskPlanner tools over editing these files by hand whenever they are available.
 - Do NOT change task IDs.
 - Do NOT modify tasks you are not working on.
 - Keep the `---` separator between tasks.
-- When moving a task, remove it entirely from the source file (including the trailing `---`).
+- When moving a task by hand, remove it entirely from the source file (including the trailing `---`), and read and write the file as UTF-8 so dashes and quotes survive the round-trip.
 
 <!-- TASKPLANNER:END -->
 

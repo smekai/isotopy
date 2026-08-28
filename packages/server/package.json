@@ -1,6 +1,6 @@
 {
   "name": "@isotopy/server",
-  "version": "0.12.25",
+  "version": "0.12.28",
   "private": true,
   "type": "module",
   "scripts": {

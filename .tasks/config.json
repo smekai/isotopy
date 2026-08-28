@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "taskplannerVersion": "2.1.4",
+  "version": 3,
+  "taskplannerVersion": "2.3.0",
   "idPrefix": "TASK",
   "nextId": 173,
   "states": [
@@ -56,6 +56,5 @@
   ],
   "insertPosition": "top",
   "aiPlanRequired": false,
-  "readmeAttribution": true,
-  "sortBy": "priority"
+  "readmeAttribution": true
 }
