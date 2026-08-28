@@ -67,7 +67,7 @@ When asked to implement a task:
 1. **Pick the task** from BACKLOG.md or NEXT.md (highest priority first, or as specified by the user). Skip any task carrying a `**Waiting until:**` date that has not arrived — it is blocked on something outside the repository and cannot be started, whatever its priority. The tools mark these for you.
 2. **Move the task** to IN_PROGRESS.md — `taskplanner_move` if it is available, otherwise cut the section from the source file and paste it into IN_PROGRESS.md.
 3. **Implement** the task.
-4. **Move the task** to DONE.md when complete — trim any `### Plan` to a done-summary, append a short entry to `.tasks/WORK_LOG.md` if that file exists, and add a **CHANGELOG.md** entry under `## [Unreleased]`.
+4. **Move the task** to DONE.md when complete — trim any `### Plan` to a done-summary, append a short entry to `.tasks/WORK_LOG.md` if that file exists, and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
 
 This project sets `aiPlanRequired: false`, so a `### Plan` block is not required before coding. Tasks that carry one keep it, trimmed to a done-summary on the way to Done.
 
@@ -91,7 +91,7 @@ Keep it to 3–5 lines total. Skip empty fields rather than writing "N/A". Detai
 These steps are **part of the work**, not optional housekeeping:
 
 - **In Progress:** The task must actually **move** out of BACKLOG/NEXT into **IN_PROGRESS.md** before substantive implementation — not only be described as moving. Use `taskplanner_move`; without it, cut the whole `##` section and its `---` across by hand.
-- **Done:** When the implementation is finished, **move** the same task section from IN_PROGRESS.md into **DONE.md** and add a **CHANGELOG.md** entry under `## [Unreleased]`.
+- **Done:** When the implementation is finished, **move** the same task section from IN_PROGRESS.md into **DONE.md** and add a **CHANGELOG.md** entry under `## [Unreleased]` if the project uses this changelog rule.
 - **Work log:** If `.tasks/WORK_LOG.md` exists, append one short entry at the top when moving a task to Done (see **Work Log** above).
 
 ## Creating a New Task

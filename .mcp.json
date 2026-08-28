@@ -2,7 +2,7 @@
   "mcpServers": {
     "taskplanner": {
       "command": "node",
-      "args": ["node_modules/@smekai/taskplanner/dist/mcp-server.js"]
+      "args": ["-e", "require('@smekai/taskplanner/mcp-server')"]
     }
   }
 }

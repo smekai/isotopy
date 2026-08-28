@@ -228,7 +228,7 @@ repo's line-ending handling; nothing new is introduced.
 
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-08-28 12:47
+**Updated:** 2026-08-28 18:25
 
 The owner's boundary, as data on a task rather than a judgment in a prompt. Of **Milestone I —
 Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
@@ -312,6 +312,10 @@ findings, none of which were available when this task was rescoped:
    library. `domain/markdown/task-board.ts` goes **entirely**, not just its two read functions.
    `parseTasks` reads this repo's own `NEXT.md` with zero warnings today, returning `assignee`,
    `epic`, `waitingUntil` and `updatedAt` as typed fields.
+   **Package boundary:** the root `devDependency` covers this repository's own `.mcp.json` and
+   nothing else. The moment `TaskBoardAdapter` imports the library, `@smekai/taskplanner` must be
+   declared in `packages/server`'s own `dependencies` — a filtered or production install of
+   `@isotopy/server` is not entitled to a root devDependency.
 2. **`waitingUntil` is a second skip axis.** `**Waiting until:** YYYY-MM-DD` (`TASK-052`) marks work
    blocked on something outside the repository, and the tools flag it. The poller must skip a task
    that is date-blocked as well as one that is `@owner`-marked; these are different reasons and the
@@ -320,7 +324,15 @@ findings, none of which were available when this task was rescoped:
    changelog names the exact anti-pattern it retires: projects that "encoded milestones in tags and
    prose". That is this board — `milestone-c` through `milestone-i` are tags today. Migrating them
    is not this task's job, but this task must not add more.
-4. **Done tasks may not be in `DONE.md`.** Archiving (`TASK-053`, `TASK-058`) moves completed work
+4. **The parser cannot read CRLF, and that is a blocker.** Measured 2026-08-28 against 2.3.0: the
+   same board content parses to 1 task with 0 warnings as LF and to **0 tasks with 4 warnings** as
+   CRLF. It is not a distinguishable failure — a CRLF board reads as an empty one. Git for Windows
+   defaults to `core.autocrlf=true`, and `TaskBoardAdapter` reads the *user's* repository, so a
+   naive swap would be a regression: today's `taskSummariesIn` splits on `/\r?\n/` and copes.
+   Isotopy normalises at the read boundary and restores the file's own ending on write — verified
+   byte-identical round-trip for both endings. **One board reader** therefore means one parser plus
+   that boundary, not one function. Worth reporting upstream.
+5. **Done tasks may not be in `DONE.md`.** Archiving (`TASK-053`, `TASK-058`) moves completed work
    into `.tasks/archive/DONE-YYYY.md` once `archiveDoneAfterDays` is set. Any board reader that
    concludes a task does not exist must check the archive first.
 
@@ -365,9 +377,14 @@ follow-up; and the poller's prompt names the `@owner` rule. Then the full gate s
 app with a marked task on the board that the agent reads and leaves alone. **No schedule fires
 against a real CLI in the dev app** — firing is proven against `FakeEngine`, as `TASK-161` did.
 
-Cross-platform: the MCP server is spawned as `node <resolved module path>`, never a bare bin name —
-on Windows that resolves to a `.cmd` shim and needs the Node ≥20 shell rule that `runSubprocess`
-owns. MCP config files are written with `path.join` under `os.tmpdir()` or the project data dir.
+Cross-platform: `require.resolve('@smekai/taskplanner/mcp-server')` yields `dist/mcp-server.js`, and
+handing that JavaScript path to Node is exactly what **avoids** the Windows `.cmd` shim and the
+`shell: true` that the Node >= 20 rule would otherwise force. Only the bare `taskplanner-mcp` bin
+resolves to a `.cmd`, and nothing here spawns it. A repository-relative path is no good either: a
+host resolves `command` and `args` from its own launch directory rather than from `.mcp.json`, so
+starting an agent in `packages/server` would look for a `node_modules` that is not there. The
+repository config therefore launches `node -e` with a `require` of the package export and lets Node
+resolution walk up; verified from a subdirectory against the real board. MCP config files are written with `path.join` under `os.tmpdir()` or the project data dir.
 Front matter and CLI output split on `/\r?\n/`. Tested live on Windows; macOS reasoned through and
 recorded untested unless a Mac is used.
 
