@@ -12,8 +12,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.7.0)
       '@smekai/taskplanner':
-        specifier: 2.1.14
-        version: 2.1.14
+        specifier: 2.3.0
+        version: 2.3.0
       concurrently:
         specifier: ^9.1.2
         version: 9.2.3
@@ -802,8 +802,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@smekai/taskplanner@2.1.14':
-    resolution: {integrity: sha512-hB+0hLdqWj0IONu4yr0Yd1lZmBgFA4TSMgqVC2WPpPmJy2RTcQnNvlEWFJu0HsndrV06lYLdCyZN53yQujf7JQ==}
+  '@smekai/taskplanner@2.3.0':
+    resolution: {integrity: sha512-fVyQRf28kV9IhMUVsUsuivXeIdxMQui1ujy42227ZjDEAbIxCeGzFbRvnb3/wj3W+AUgJ9MqWmXCmNFaQcBgxg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -2251,7 +2251,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@smekai/taskplanner@2.1.14': {}
+  '@smekai/taskplanner@2.3.0': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:

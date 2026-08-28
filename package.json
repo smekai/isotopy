@@ -1,7 +1,7 @@
 {
   "name": "isotopy",
   "private": true,
-  "version": "0.12.26",
+  "version": "0.12.27",
   "description": "Isotopy — The last mile for your ideas, turning them into working businesses",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@smekai/taskplanner": "2.1.14",
+    "@smekai/taskplanner": "2.3.0",
     "concurrently": "^9.1.2",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -228,7 +228,7 @@ repo's line-ending handling; nothing new is introduced.
 
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-08-26 12:00
+**Updated:** 2026-08-28 12:47
 
 The owner's boundary, as data on a task rather than a judgment in a prompt. Of **Milestone I —
 Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
@@ -295,9 +295,34 @@ Cursor turns out to accept when probed. **A step declaring a tool on an engine t
 runs without it and says so in the run log** rather than failing or pretending.
 
 **Isotopy is not an MCP client — the engine CLI is.** Isotopy renders config and passes flags, so no
-MCP SDK enters this repo. The first and only tool is `taskplanner`, which depends on TaskPlanner's
-`TASK-046` publishing its MCP server as a package; until then there is nothing resolvable to point
-at.
+MCP SDK enters this repo. The first and only tool is `taskplanner`, published as `@smekai/taskplanner`
+by TaskPlanner's `TASK-046` and pinned in this repo's `package.json`.
+
+### What TaskPlanner 2.3.0 changes about this task
+
+**Reviewed 2026-08-28, against 2.3.0.** The blocker is gone and the scope moved with it. Four
+findings, none of which were available when this task was rescoped:
+
+1. **There are two entry points, not one.** `@smekai/taskplanner` ships an MCP server *and* a
+   library with TypeScript declarations (`TASK-047`) — `parseTasks`, `TaskStore`, `FileStore`,
+   `ConfigManager`, `serializeTask`. The README's own rule: the MCP server is for when **a model**
+   picks the tools, the library for when **your own code** is the caller. Isotopy is both. So
+   "one board reader" gets stronger than this task originally wrote it: the agent reads over MCP,
+   and `TaskBoardAdapter`'s own writes — `createFollowUpTasks`, `transitionTasks` — call the
+   library. `domain/markdown/task-board.ts` goes **entirely**, not just its two read functions.
+   `parseTasks` reads this repo's own `NEXT.md` with zero warnings today, returning `assignee`,
+   `epic`, `waitingUntil` and `updatedAt` as typed fields.
+2. **`waitingUntil` is a second skip axis.** `**Waiting until:** YYYY-MM-DD` (`TASK-052`) marks work
+   blocked on something outside the repository, and the tools flag it. The poller must skip a task
+   that is date-blocked as well as one that is `@owner`-marked; these are different reasons and the
+   run log should say which applied.
+3. **`epic` replaces the milestone tags.** `epic` became settable in `TASK-051`, and TaskPlanner's
+   changelog names the exact anti-pattern it retires: projects that "encoded milestones in tags and
+   prose". That is this board — `milestone-c` through `milestone-i` are tags today. Migrating them
+   is not this task's job, but this task must not add more.
+4. **Done tasks may not be in `DONE.md`.** Archiving (`TASK-053`, `TASK-058`) moves completed work
+   into `.tasks/archive/DONE-YYYY.md` once `archiveDoneAfterDays` is set. Any board reader that
+   concludes a task does not exist must check the archive first.
 
 ### The boundary
 
@@ -316,8 +341,9 @@ stating what it skipped and why.
 in `orchestration-service.ts` and `milestone-service.ts` — the standing rule is that a new approach
 takes the old code with it. Isotopy's built-in board already writes TaskPlanner's exact format under
 `<dataDir>/tasks`, so naming that directory `.tasks` lets one reader serve both backends.
-**The server-side writer stays**: `createFollowUpTasks` and `transitionTasks` are Isotopy's own path,
-not the agent's, and routing them through MCP would make the server a client for no gain.
+**The server-side writer stays Isotopy's own path** — `createFollowUpTasks` and `transitionTasks` are
+not the agent's, and routing them through MCP would make the server a client for no gain. They call
+the library instead.
 
 **Rejected, and recorded in `docs/decisions.md` with the rest:** a tag (TaskPlanner's config
 allowlist filters drafted tags, so a mark could be silently dropped); a priority (it overloads an
@@ -333,7 +359,8 @@ and a malformed one is rejected with a stated reason; a project override and add
 the bundled step task, and a project step task the bundled catalog never knew is selectable by a
 role; a step declaring `tools: [taskplanner]` produces the right MCP config per adapter, and an
 engine without the capability runs anyway and logs why; `**Assignee:** owner` round-trips a write
-and re-read and TaskPlanner's own parser reads back the same assignee; a closeout creates a marked
+and re-read and TaskPlanner's own parser reads back the same assignee; a date-blocked task is
+skipped for a different stated reason than an owner-marked one; a closeout creates a marked
 follow-up; and the poller's prompt names the `@owner` rule. Then the full gate set, then the live
 app with a marked task on the board that the agent reads and leaves alone. **No schedule fires
 against a real CLI in the dev app** — firing is proven against `FakeEngine`, as `TASK-161` did.
