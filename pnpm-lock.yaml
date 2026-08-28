@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.7.0)
+      '@smekai/taskplanner':
+        specifier: 2.1.14
+        version: 2.1.14
       concurrently:
         specifier: ^9.1.2
         version: 9.2.3
@@ -798,6 +801,11 @@ packages:
     resolution: {integrity: sha512-BfzEnDJOt9T8M989/lA37EcJgat01wLRnoi5dQf3QzOH7jzpqTAzdDbVfRljVr5r+jzKqpbHeyOfAaXxAd0PAA==}
     cpu: [x64]
     os: [win32]
+
+  '@smekai/taskplanner@2.1.14':
+    resolution: {integrity: sha512-hB+0hLdqWj0IONu4yr0Yd1lZmBgFA4TSMgqVC2WPpPmJy2RTcQnNvlEWFJu0HsndrV06lYLdCyZN53yQujf7JQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -2242,6 +2250,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
+
+  '@smekai/taskplanner@2.1.14': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:
