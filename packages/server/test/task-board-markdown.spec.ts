@@ -54,15 +54,24 @@ describe("Task board Markdown", () => {
 
   // The mark the owner writes was invisible to the reader this replaces: it dropped
   // every `**`-prefixed line before the Orchestrator saw a task.
-  it("shows the marks that decide whether a task is the team's to start", () => {
+  it("says an assigned task is not the team's to start, and who holds it", () => {
     const digest = renderBoardDigest(
       "taskplanner",
-      [{ name: "Next", tasks: [task({ assignee: "owner", waitingUntil: "2026-12-01" })] }],
+      [{ name: "Next", tasks: [task({ assignee: "owner" })] }],
       TODAY,
     );
 
-    expect(digest).toContain("@owner");
-    expect(digest).toContain("waiting until 2026-12-01");
+    expect(digest).toContain("assigned to @owner — theirs to start, not the team's");
+  });
+
+  it("gives a date-blocked task a different reason from an assigned one", () => {
+    const digest = renderBoardDigest(
+      "taskplanner",
+      [{ name: "Next", tasks: [task({ waitingUntil: "2026-12-01" })] }],
+      TODAY,
+    );
+
+    expect(digest).toContain("blocked until 2026-12-01 on something outside the repository");
   });
 
   it("does not mark a waiting date that has already arrived", () => {
@@ -72,7 +81,7 @@ describe("Task board Markdown", () => {
       TODAY,
     );
 
-    expect(digest).not.toContain("waiting until");
+    expect(digest).not.toContain("blocked until");
   });
 
   it("says the board is empty rather than listing nothing", () => {

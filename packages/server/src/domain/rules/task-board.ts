@@ -40,3 +40,15 @@ export function nextTaskNumber(
 export function isDateBlocked(waitingUntil: string | undefined, today: string): boolean {
   return waitingUntil !== undefined && waitingUntil > today;
 }
+
+// Two axes, two reasons. A task assigned to a person is not the team's to start;
+// a date-blocked one is nobody's yet. One reason covering both would leave the run
+// log unable to say which rule applied.
+export function taskSkipReason(task: Task, today: string): string | undefined {
+  if (task.assignee) {
+    return `assigned to @${task.assignee} — theirs to start, not the team's`;
+  }
+  return isDateBlocked(task.waitingUntil, today)
+    ? `blocked until ${task.waitingUntil ?? ""} on something outside the repository`
+    : undefined;
+}

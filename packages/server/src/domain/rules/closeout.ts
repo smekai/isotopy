@@ -35,6 +35,8 @@ const findingSchema = z
   })
   .strict();
 
+// A follow-up carrying an assignee that this mirror did not know would be dropped
+// whole by `salvageItems`, losing the task rather than the field.
 const followUpTaskSchema = z
   .object({
     findingId: requiredText,
@@ -42,6 +44,7 @@ const followUpTaskSchema = z
     description: requiredText,
     priority: z.enum(TASK_PRIORITIES),
     tags: uniqueStrings,
+    assignee: requiredText.optional(),
   })
   .strict();
 

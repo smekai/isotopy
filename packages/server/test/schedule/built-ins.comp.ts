@@ -87,15 +87,40 @@ test("with the gate on and the record enabled, the poller opens one Orchestrator
   ctx.engine.verify();
 });
 
-test("the poller's prompt says which board states it may draw from", async () => {
-  // Arrange — the read order is the only place this rule lives, so it is the
-  // only thing that can be checked.
+// The boundary is respected by the agent, not enforced by the scheduler, so the
+// prompt is where it lives — and the two skip axes have to stay distinguishable
+// there or the run log cannot say which rule applied.
+test("the poller is told an assigned task belongs to the person named", async () => {
+  // Arrange
   const poller = await builtInPoller();
 
   // Assert
-  expect(poller.task).toContain("Next");
-  expect(poller.task).toContain("Backlog");
-  expect(poller.task).toContain("In Progress");
+  expect(poller.task).toContain("Skip a task with an assignee");
+});
+
+test("the poller is told a waiting date is a different reason from an assignee", async () => {
+  // Arrange
+  const poller = await builtInPoller();
+
+  // Assert
+  expect(poller.task).toContain("waiting-until date");
+  expect(poller.task).toContain("different reason");
+});
+
+test("the poller may mark work for the owner but never unmark it", async () => {
+  // Arrange
+  const poller = await builtInPoller();
+
+  // Assert
+  expect(poller.task).toContain("Never change or clear an assignee");
+});
+
+test("the poller reads the board through the tool rather than a prose summary", async () => {
+  // Arrange
+  const poller = await builtInPoller();
+
+  // Assert
+  expect(poller.task).toContain("`taskplanner` tools");
 });
 
 test("a deleted built-in returns on the next load, because every project has one", async () => {

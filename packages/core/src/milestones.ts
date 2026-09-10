@@ -47,6 +47,7 @@ export const milestoneTaskDraftSchema = z
     description: requiredText,
     priority: z.enum(TASK_PRIORITIES),
     tags: requiredTexts,
+    assignee: requiredText.optional(),
     createdTaskId: requiredText.optional(),
   })
   .strict();

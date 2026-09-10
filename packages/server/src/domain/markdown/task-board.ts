@@ -1,6 +1,7 @@
 import type { Task } from "@smekai/taskplanner";
 import { lineEndingOf, withLineEnding } from "./line-endings.ts";
 import { structuralText } from "./format.ts";
+import { taskSkipReason } from "../rules/task-board.ts";
 
 export type BoardInsertPosition = "top" | "bottom";
 
@@ -92,12 +93,10 @@ function digestLine(task: Task, today: string): string {
 }
 
 function marks(task: Task, today: string): string[] {
+  const skip = taskSkipReason(task, today);
   return [
     `[${task.priority}]`,
     ...(task.epic ? [`epic ${structuralText(task.epic)}`] : []),
-    ...(task.assignee ? [`@${structuralText(task.assignee)}`] : []),
-    ...(task.waitingUntil && task.waitingUntil > today
-      ? [`waiting until ${task.waitingUntil}`]
-      : []),
+    ...(skip ? [`(${skip})`] : []),
   ];
 }
