@@ -963,6 +963,38 @@ per project and an id-keyed cache would leak one project's persona into another.
 See [`architecture.md`](./architecture.md) for how the `architect`
 persona is generated from a single source.
 
+## Step tasks (`services/step-tasks.ts`, `schemas/step-task.ts`, `domain/markdown/front-matter.ts`)
+
+A step task is an assignment that **declares itself**: front matter carries
+`agent`, `summary`, `internal` and `context`, and the prose below it is what the
+agent is handed. Layers 1–4 above apply unchanged — bundled, user override,
+project override, project addendum — under `step-tasks/` rather than `skills/`,
+so a project step task called `developer.md` cannot shadow the Developer persona.
+There is no layer 5: notes are a *role's* memory, not an assignment's.
+
+**Compose, then parse.** `composeSkill` runs first so an addendum's prose is
+appended to the body while the bundled front matter still governs; a project
+override replaces the file wholesale, front matter included. Front matter must
+therefore start at line 1 of whatever layer wins.
+
+**The reader refuses what it cannot represent.** `splitFrontMatter` reads
+`key: value` and `key: [a, b]` and nothing else, so a block sequence, an indented
+continuation, a `|` or `>` scalar, a duplicate key, or a `#` comment is reported
+with the line that carried it rather than half-read. The schema is `.strict()`,
+so a typo'd `agents:` is refused too. A file with **no** front matter stays a
+valid step task whose whole text is the assignment — every user override written
+before this change is one.
+
+**The library is discovered, not listed.** `stepTaskLibrary(projectPath)` unions
+the bundled ids with the `.md` files in the user and project directories; the
+`.md` filter plus the `SKILL_ID` shape is also what keeps `.DS_Store`,
+`Thumbs.db`, `<id>.project.md` and `<id>.notes.md` out. `composable` drops
+anything declaring `internal: true`, which is what the Orchestrator is offered.
+
+**A malformed step task warns and runs without its assignment** rather than
+failing the stage: the typo is the project's, and losing a paid run to it is the
+worse outcome. The notice names the issues.
+
 ## A role's memory of the project (`services/persona-notes-store.ts`, `domain/rules/persona-notes.ts`)
 
 The fifth skill layer above. Four properties are load-bearing and none is obvious

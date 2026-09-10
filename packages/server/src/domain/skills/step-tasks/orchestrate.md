@@ -1,3 +1,8 @@
+---
+agent: orchestrator
+summary: Decide what the team is and what runs next.
+internal: true
+---
 # Assignment: Orchestrate the goal
 
 Read the supplied goal, persona catalog, step task catalog, task board, and prior
@@ -16,6 +21,9 @@ block. The block is the only thing the system reads:
 
 Propose the team that should do the work. The user approves it before anything
 runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
+
+`skill` is **optional**: every step task names the agent it expects, and leaving
+`skill` out takes that one. Name a `skill` only to override it deliberately.
 
 ```json
 {

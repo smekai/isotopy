@@ -1,3 +1,7 @@
+---
+agent: sre
+summary: Deploy the configured preview environment, or record that none exists.
+---
 # Assignment: Deploy the preview environment
 
 Isotopy runs this assignment itself, from the project's automation configuration —

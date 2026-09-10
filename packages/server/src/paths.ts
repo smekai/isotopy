@@ -35,6 +35,10 @@ export function userSkillsDir(): string {
   return path.join(userIsotopyDir(), "skills");
 }
 
+export function userStepTasksDir(): string {
+  return path.join(userIsotopyDir(), "step-tasks");
+}
+
 export function homeProjectPaths(): ProjectPath {
   const override = process.env.ISOTOPY_HOME;
   const dataDir =
@@ -58,6 +62,10 @@ export function runsDir(projectPath: ProjectPath): string {
 
 export function skillsDir(projectPath: ProjectPath): string {
   return path.join(projectPath.dataDir, "skills");
+}
+
+export function stepTasksDir(projectPath: ProjectPath): string {
+  return path.join(projectPath.dataDir, "step-tasks");
 }
 
 export function runWorkspaceDir(projectPath: ProjectPath, runId: string): string {

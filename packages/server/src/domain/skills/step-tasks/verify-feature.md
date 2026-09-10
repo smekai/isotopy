@@ -1,3 +1,8 @@
+---
+agent: tester
+summary: Independently verify the implementation against the approved requirements.
+context: [product-environment]
+---
 # Assignment: Verify the implemented feature
 
 Independently verify the implementation on disk against the approved

@@ -5,7 +5,7 @@ import {
   orchestratorDecisionSchema,
 } from "@isotopy/core";
 import { expect, test } from "vitest";
-import { loadBundledStepTask } from "../../src/services/skills.ts";
+import { loadBundledStepTask } from "../../src/services/skill-assets.ts";
 
 const PROFESSIONS = Object.values(AGENTS).map((agent) => agent.profession);
 

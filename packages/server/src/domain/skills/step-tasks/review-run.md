@@ -1,3 +1,8 @@
+---
+agent: orchestrator
+summary: Review a finished run and record what it produced.
+internal: true
+---
 # Assignment: Review a settled run and decide what happens next
 
 A run you own has finished. Read the orchestration goal, the approved team, the

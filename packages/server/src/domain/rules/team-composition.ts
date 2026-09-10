@@ -6,49 +6,100 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@isotopy/core";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../skills/catalog.ts";
+import { PERSONA_CATALOG } from "../skills/catalog.ts";
+import type { StepTaskDeclaration } from "../../schemas/step-task.ts";
 import type { ValidationIssue, ValidationResult } from "../validation.ts";
 import { SKILL_ID } from "./persona-notes.ts";
 
-
+export type StepTaskVocabulary = ReadonlyMap<string, StepTaskDeclaration>;
 
 const PERSONA_IDS = new Set(PERSONA_CATALOG.map((entry) => entry.id));
 
-const STEP_TASK_IDS = new Set(STEP_TASK_CATALOG.map((entry) => entry.id));
+export function personaFor(
+  role: OrchestratorRole,
+  stepTasks: StepTaskVocabulary,
+): string | undefined {
+  return role.skill ?? stepTasks.get(role.stepTask)?.agent;
+}
 
-function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  if (!SKILL_ID.test(role.id)) {
-    issues.push({
-      path: ["roles", index, "id"],
-      message: "Role id must contain only lowercase letters, digits, and hyphens",
-    });
+function roleIssues(
+  role: OrchestratorRole,
+  index: number,
+  stepTasks: StepTaskVocabulary,
+): ValidationIssue[] {
+  return [
+    ...roleIdIssues(role, index),
+    ...stepTaskIssues(role, index, stepTasks),
+    ...personaIssues(role, index, stepTasks),
+  ];
+}
+
+function roleIdIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
+  return SKILL_ID.test(role.id)
+    ? []
+    : [
+        {
+          path: ["roles", index, "id"],
+          message: "Role id must contain only lowercase letters, digits, and hyphens",
+        },
+      ];
+}
+
+function stepTaskIssues(
+  role: OrchestratorRole,
+  index: number,
+  stepTasks: StepTaskVocabulary,
+): ValidationIssue[] {
+  const declaration = stepTasks.get(role.stepTask);
+  if (declaration === undefined) {
+    return [
+      { path: ["roles", index, "stepTask"], message: `Unknown step task: ${role.stepTask}` },
+    ];
   }
-  if (!PERSONA_IDS.has(role.skill)) {
-    issues.push({
-      path: ["roles", index, "skill"],
-      message: `Unknown persona: ${role.skill}`,
-    });
+  return declaration.internal
+    ? [
+        {
+          path: ["roles", index, "stepTask"],
+          message: `${role.stepTask} is Isotopy's own step; a composed team cannot take it`,
+        },
+      ]
+    : [];
+}
+
+function personaIssues(
+  role: OrchestratorRole,
+  index: number,
+  stepTasks: StepTaskVocabulary,
+): ValidationIssue[] {
+  const persona = personaFor(role, stepTasks);
+  if (persona === undefined) {
+    return [
+      {
+        path: ["roles", index, "skill"],
+        message: `Role ${role.id} names no persona and step task ${role.stepTask} declares no agent`,
+      },
+    ];
   }
-  if (!STEP_TASK_IDS.has(role.stepTask)) {
-    issues.push({
-      path: ["roles", index, "stepTask"],
-      message: `Unknown step task: ${role.stepTask}`,
-    });
+  if (!PERSONA_IDS.has(persona)) {
+    return [{ path: ["roles", index, "skill"], message: `Unknown persona: ${persona}` }];
   }
-  if (role.skill === ORCHESTRATOR_PERSONA && role.stepTask !== CLOSEOUT_STEP_TASK) {
-    issues.push({
-      path: ["roles", index, "skill"],
-      message: `The Orchestrator composes the team and closes it out; it cannot take ${role.stepTask}`,
-    });
+  if (persona === ORCHESTRATOR_PERSONA && role.stepTask !== CLOSEOUT_STEP_TASK) {
+    return [
+      {
+        path: ["roles", index, "skill"],
+        message: `The Orchestrator composes the team and closes it out; it cannot take ${role.stepTask}`,
+      },
+    ];
   }
-  if (role.stepTask === CLOSEOUT_STEP_TASK && role.skill !== ORCHESTRATOR_PERSONA) {
-    issues.push({
-      path: ["roles", index, "skill"],
-      message: `Only the Orchestrator closes a run out; ${role.skill} saw one step of it`,
-    });
+  if (role.stepTask === CLOSEOUT_STEP_TASK && persona !== ORCHESTRATOR_PERSONA) {
+    return [
+      {
+        path: ["roles", index, "skill"],
+        message: `Only the Orchestrator closes a run out; ${persona} saw one step of it`,
+      },
+    ];
   }
-  return issues;
+  return [];
 }
 
 const VALIDATION_ORCHESTRATION_ID = "00000000";
@@ -70,11 +121,11 @@ function duplicateIdIssues(roles: OrchestratorRole[]): ValidationIssue[] {
   });
 }
 
-function toStage(role: OrchestratorRole): StageDefinition {
+function toStage(role: OrchestratorRole, stepTasks: StepTaskVocabulary): StageDefinition {
   return {
     id: role.id,
     label: role.label,
-    skill: role.skill,
+    skill: personaFor(role, stepTasks),
     stepTask: role.stepTask,
     modelTier: role.modelTier,
     executionPolicy:
@@ -151,11 +202,12 @@ function chosenTier(
 
 export function composeTeamPipeline(
   team: OrchestratorTeamProposal,
+  stepTasks: StepTaskVocabulary,
   orchestrationId: string,
   generation = 1,
 ): ValidationResult<PipelineDefinition> {
   const issues = [
-    ...team.roles.flatMap(roleIssues),
+    ...team.roles.flatMap((role, index) => roleIssues(role, index, stepTasks)),
     ...duplicateIdIssues(team.roles),
   ];
   if (issues.length > 0) {
@@ -167,13 +219,16 @@ export function composeTeamPipeline(
       id: composedPipelineId(orchestrationId, generation),
       name: generation > 1 ? `${team.name} (team ${generation})` : team.name,
       description: team.summary,
-      groups: [{ stages: team.roles.map(toStage) }],
+      groups: [{ stages: team.roles.map((role) => toStage(role, stepTasks)) }],
     },
   };
 }
 
-export function teamProposalIssues(team: OrchestratorTeamProposal): ValidationIssue[] {
-  const composed = composeTeamPipeline(team, VALIDATION_ORCHESTRATION_ID);
+export function teamProposalIssues(
+  team: OrchestratorTeamProposal,
+  stepTasks: StepTaskVocabulary,
+): ValidationIssue[] {
+  const composed = composeTeamPipeline(team, stepTasks, VALIDATION_ORCHESTRATION_ID);
   return composed.ok
     ? []
     : composed.issues.map((issue) => ({

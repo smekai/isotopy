@@ -493,7 +493,7 @@ to the conversation that asked for it.
 | Boundary schema | `server/src/schemas/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunService` is for runs |
-| Composition | `server/src/schemas/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
+| Composition | `server/src/domain/rules/team-composition.ts` — an approved proposal and the step-task vocabulary in, a `PipelineDefinition` or path-aware issues out; pure |
 | API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
@@ -536,9 +536,12 @@ side-effect errors: a report that would not parse fails the stage, while a task-
 that failed afterwards is recorded on the record and does not.
 
 **An approved team becomes a pipeline, and the run keeps it.** `composeTeamPipeline`
-validates every `skill` and `stepTask` against the persona and step-task catalogs —
-which is also what stops the Orchestrator composing itself, since neither
-`orchestrator` nor `orchestrate` is listed — requires unique role ids matching
+validates every persona against `PERSONA_CATALOG` and every `stepTask` against the
+step-task library the service hands it — the library is discovered from disk, so what
+stops the Orchestrator composing itself is now `internal: true` in the front matter of
+`orchestrate`, `mediate-question` and `review-run`, where the absence of those ids from
+a hand-written array used to. A role that names no `skill` takes the one its step task
+declares as its `agent`. It requires unique role ids matching
 `/^[a-z0-9-]+$/`, and gives every composed stage an explicit `executionPolicy` so
 the quality, delivery and closeout suppression rules apply to a composed run exactly
 as they do to `full-delivery`. The id guard is not tidiness: a stage id becomes a
@@ -857,10 +860,13 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
+| `<project>/.isotopy/step-tasks/<id>.project.md` | Step-task **addendum** — project tweaks only | One project |
+| `<project>/.isotopy/step-tasks/<id>.md` | Full step-task replacement, or a step task Isotopy never shipped | One project |
 | `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
 | `~/.isotopy/skills/<id>.md` | User-level persona override of the bundled default | User |
+| `~/.isotopy/step-tasks/<id>.md` | User-level step-task override of the bundled default | User |
 | `~/.isotopy/home/runs/<run-id>/workspace/` | Scratch working folder — **home runs only** | User |
 | `~/.isotopy/home/` | Data root of the **home** project — the fallback when no project is selected | User |
 

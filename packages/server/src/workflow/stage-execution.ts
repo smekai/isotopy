@@ -21,14 +21,7 @@ import type {
 import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
-import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
-import {
-  buildContinuationPrompt,
-  buildResumePrompt,
-  buildStagePrompt,
-  buildTimeBudget,
-} from "../domain/markdown/stage.ts";
-import type { UpstreamOutput } from "../domain/markdown/stage.ts";
+import { buildStagePrompt } from "../domain/markdown/stage.ts";
 import { engineLabel } from "../domain/rules/engine-label.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
 import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
@@ -37,7 +30,8 @@ import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
-import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
+import { loadSkill } from "../services/skills.ts";
+import { loadAssignment, resolveStageInputs } from "./stage-inputs.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -63,66 +57,6 @@ function canAsk(stageDef: StageDefinition, turn: number): boolean {
 
 function recordsOutputWhileAsking(stageDef: StageDefinition): boolean {
   return stageDef.outputProtocol === STAGE_OUTPUT_PROTOCOLS.DECISION;
-}
-
-function turnPrompt(
-  input: PipelineWorkflowInput,
-  run: RunState,
-  stageDef: StageDefinition,
-  turn: StageTurn,
-  stepTask: string | undefined,
-  environment: string | undefined,
-): string {
-  if (turn.resumeSessionId !== undefined) {
-    return turn.answer ?? buildResumePrompt(stepTask);
-  }
-  const task = input.task ?? "";
-  const upstream = upstreamFor(run, stageDef.id);
-  return turn.exchanges === undefined || turn.exchanges.length === 0
-    ? buildStagePrompt(task, upstream, stepTask, environment)
-    : buildContinuationPrompt({ task, upstream, exchanges: turn.exchanges, stepTask, environment });
-}
-
-export const VERIFY_FEATURE_STEP_TASK = "verify-feature";
-
-async function stageEnvironment(
-  deps: WorkflowDeps,
-  run: RunState,
-  stageDef: StageDefinition,
-): Promise<string> {
-  const product = await productEnvironment(deps, run, stageDef);
-  return [buildTimeBudget(config.engineTimeoutMs), product].filter(Boolean).join("\n\n");
-}
-
-async function productEnvironment(
-  deps: WorkflowDeps,
-  run: RunState,
-  stageDef: StageDefinition,
-): Promise<string | undefined> {
-  if (stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK) {
-    return undefined;
-  }
-  const project = deps.registry.resolve(run.projectId);
-  if ((await deps.automation.get(project)).ui === undefined) {
-    return undefined;
-  }
-  return buildProductEnvironment({
-    apiBaseUrl: `http://localhost:${config.port}`,
-    projectId: run.projectId,
-    runningUrl: deps.product?.urlFor(run.projectId),
-  });
-}
-
-function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
-  const index = run.stages.findIndex((stage) => stage.id === stageId);
-  if (index <= 0) {
-    return [];
-  }
-  const outputs = run.stageOutputs ?? {};
-  return run.stages
-    .slice(0, index)
-    .map((stage) => ({ label: stage.label, output: outputs[stage.id] ?? "" }))
-    .filter((entry) => entry.output !== "");
 }
 
 export const PREVIEW_DEPLOY_STEP_TASK = "deploy-preview";
@@ -374,7 +308,7 @@ export async function runQuestionMediationWork(
   }
   const projectPath = deps.registry.resolve(run.projectId);
   const persona = await loadSkill(projectPath, "orchestrator");
-  const stepTask = await loadBundledStepTask("mediate-question");
+  const stepTask = await loadAssignment(projectPath, "mediate-question");
   deps.projection.log(run.id, stageDef.id, {
     level: "run",
     message: `Orchestrator mediating · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
@@ -480,7 +414,11 @@ export async function runOrchestratorReviewWork(
     run,
     run.engine,
     stageId,
-    buildStagePrompt(context.prompt, [], await loadBundledStepTask("review-run")),
+    buildStagePrompt(
+      context.prompt,
+      [],
+      await loadAssignment(deps.registry.resolve(run.projectId), "review-run"),
+    ),
     await loadSkill(deps.registry.resolve(run.projectId), "orchestrator"),
     undefined,
   );
@@ -538,7 +476,7 @@ export async function runStageWork(
   stageDef: StageDefinition,
   turn: StageTurn,
 ): Promise<StageResult> {
-  const { projection, registry } = deps;
+  const { projection } = deps;
   const { runId } = input;
   const startedAt = nowIso();
   const run = projection.getRun(runId);
@@ -565,23 +503,10 @@ export async function runStageWork(
     });
   }
 
-  const projectPath = registry.resolve(run.projectId);
-  const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
-  const stepTask = stageDef.stepTask ? await loadBundledStepTask(stageDef.stepTask) : undefined;
-  if (stageDef.skill && !persona) {
-    projection.log(runId, stageDef.id, {
-      level: "warn",
-      message: `No skill "${stageDef.skill}" found — running without a persona`,
-    });
+  const inputs = await resolveStageInputs(deps, input, run, stageDef, turn);
+  for (const notice of inputs.notices) {
+    projection.log(runId, stageDef.id, notice);
   }
-  if (stageDef.stepTask && !stepTask) {
-    projection.log(runId, stageDef.id, {
-      level: "warn",
-      message: `No step task "${stageDef.stepTask}" found — running without assignment instructions`,
-    });
-  }
-  const environment = await stageEnvironment(deps, run, stageDef);
-  const prompt = turnPrompt(input, run, stageDef, turn, stepTask, environment);
 
   if (deps.isCancelled(runId)) {
     return { outcome: STAGE_OUTCOMES.CANCELLED, startedAt, completedAt: nowIso() };
@@ -593,8 +518,8 @@ export async function runStageWork(
     run,
     run.engine,
     stageDef.id,
-    prompt,
-    persona,
+    inputs.prompt,
+    inputs.persona,
     turn.resumeSessionId,
   );
 

@@ -27,6 +27,7 @@ import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import { stepTaskLibrary } from "./step-tasks.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { RunService } from "./run/run-service.ts";
 
@@ -259,7 +260,11 @@ export class ScheduleService {
       schedule.task,
       schedule.id,
     );
-    const composed = composeTeamPipeline(schedule.team, orchestrationId);
+    const composed = composeTeamPipeline(
+      schedule.team,
+      (await stepTaskLibrary(projectPath)).byId,
+      orchestrationId,
+    );
     if (!composed.ok) {
       throw new ScheduleInvalidError(composed.issues);
     }
@@ -270,7 +275,7 @@ export class ScheduleService {
   }
 
   private async store(projectPath: ProjectPath, schedule: Schedule): Promise<ScheduleView> {
-    const issues = scheduleIssues(schedule);
+    const issues = scheduleIssues(schedule, (await stepTaskLibrary(projectPath)).byId);
     if (issues.length > 0) {
       throw new ScheduleInvalidError(issues);
     }

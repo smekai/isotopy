@@ -15,6 +15,49 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-10 — A step task declares itself, and twenty lines read its front matter
+
+**Context:** the pairing of persona to assignment was chosen by the *role*, and what a step needed
+beyond its prose was a branch in the workflow — `stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK`
+in `stage-execution.ts` decided who was told how to reach the running product. `STEP_TASK_CATALOG`
+was a hand-maintained array of ten `{id, summary}` pairs beside thirteen files on disk, so adding a
+step task meant editing two places and the array was already three entries out of date.
+
+**Decision:** the step task is the main point, and the file declares what it needs. YAML-style front
+matter carries `agent`, `summary`, `internal` and `context`; the split is pure
+(`domain/markdown/front-matter.ts`), the schema strict (`schemas/step-task.ts`), the reading a
+service (`services/step-tasks.ts`). `role.skill` is optional and defaults to the declared `agent`.
+`context` is a **closed vocabulary** derived from one `as const` tuple, not a plugin surface, and
+`productEnvironment()` now asks the declaration instead of comparing an id. Step tasks layer exactly
+as personas do — bundled → user → project override → project addendum — which is what makes the
+library the user's to grow. Persona *notes* stay persona-only.
+
+**Rejected: a YAML dependency.** The vocabulary is four keys, two of them ids from closed tuples. A
+full parser is not only cost — `gray-matter` pulls `js-yaml` and two more — it is *more* dangerous:
+YAML 1.1 implicit typing reads `agent: no` as `false`. A reader that hands zod nothing but strings
+and string arrays cannot do that. The price is that it must **refuse** what it cannot represent — a
+block sequence, an indented continuation, a `|` scalar, a duplicate or unknown key — each with the
+line that carried it. The repo already hand-*builds* front matter in `scripts/generate-skills.mjs`;
+reading it back with a splitter keeps the two symmetrical, and a root `.mjs` could never import a TS
+parser anyway.
+
+**Rejected: sharing `skills/` with personas.** `TASK-162` specified reuse of `userSkillsDir()` and
+`skillsDir()`. That puts 23 ids in one flat namespace, where a project adding a step task
+`developer.md` would silently replace the Developer **persona**. The bundled side already keeps them
+in separate directories; the user and project layers now do too.
+
+**Rejected: `setup` as a second vocabulary.** Its only member would have been `preview-deployment`,
+and that branch does not *prepare* what a step needs — it replaces the agent with a deterministic
+deployment. A one-member closed vocabulary with a strained name is itself a smell, so
+`PREVIEW_DEPLOY_STEP_TASK` stays an id literal until a second member earns the key.
+
+**`internal: true` is now what stops the Orchestrator composing itself.** The old guard was the
+absence of `orchestrate`, `mediate-question` and `review-run` from a hand-written array. Discovery
+reads the whole directory, so the guard had to become a declaration — and it is enforced where the
+old one was, in `team-composition.ts`, with its own test.
+
+---
+
 ## 2026-08-25 — A scheduled task is a prompt, and the team it pins is optional
 
 **Context:** `TASK-161` specified the board poller as a bespoke feature: a server-side board

@@ -48,7 +48,8 @@ import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
+import { PERSONA_CATALOG } from "../domain/skills/catalog.ts";
+import { stepTaskLibrary } from "./step-tasks.ts";
 import {
   composeTeamPipeline,
   generationOf,
@@ -222,6 +223,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const composed = composeTeamPipeline(
       approved.value,
+      (await stepTaskLibrary(projectPath)).byId,
       orchestration.id,
       nextGeneration(orchestration),
     );
@@ -597,7 +599,12 @@ export class OrchestrationService implements StageOutputConsumer {
     const running = orchestration.composedPipeline;
     const approved = withRoleTiers(decision.team, undefined);
     const composed = approved.ok
-      ? composeTeamPipeline(approved.value, orchestration.id, currentGeneration(orchestration))
+      ? composeTeamPipeline(
+          approved.value,
+          (await stepTaskLibrary(projectPath)).byId,
+          orchestration.id,
+          currentGeneration(orchestration),
+        )
       : undefined;
     if (!running || !composed?.ok || !sameComposition(composed.value, running)) {
       return undefined;
@@ -761,15 +768,16 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [boardContext, closeoutContext, personaNotes] = await Promise.all([
+    const [boardContext, closeoutContext, personaNotes, stepTasks] = await Promise.all([
       taskBoardFor(projectPath).planningContext(),
       milestoneCloseoutContext(projectPath),
       personaNotesByRole(projectPath),
+      stepTaskLibrary(projectPath),
     ]);
     return {
       goal,
       personas: PERSONA_CATALOG,
-      stepTasks: STEP_TASK_CATALOG,
+      stepTasks: stepTasks.composable,
       boardContext,
       closeoutContext,
       gatePreference: renderGatePreference(

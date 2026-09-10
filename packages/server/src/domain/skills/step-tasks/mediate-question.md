@@ -1,3 +1,8 @@
+---
+agent: orchestrator
+summary: Answer one worker's question on the user's behalf.
+internal: true
+---
 # Assignment: Mediate a specialist question
 
 Read the orchestration goal, approved team, specialist question, and prior run
