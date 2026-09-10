@@ -15,6 +15,50 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-10 — One board parser, and Isotopy's own surgical writer beside it
+
+**Context:** Isotopy maintained a second board parser — `taskSummariesIn` — that was strictly worse
+than the one TaskPlanner ships, and it dropped every `**`-prefixed line, which is exactly where the
+owner's mark lives. `@smekai/taskplanner` 2.3.0 ships a library beside its MCP server, so the agent
+can read the board through the tool while Isotopy's own writes call the library.
+
+**Decision:** **TaskPlanner parses; Isotopy writes.** `parseTasks` reads a state file and
+`serializeTask` renders one task in TaskPlanner's exact metadata order, so `**Assignee:**`,
+`**Epic:**` and `**Waiting until:**` round-trip through its own parser unchanged. Everything else
+about a board file stays Isotopy's: `insertTaskSection` and `takeTaskSection` edit *around* a task
+rather than rebuilding the file.
+
+**Rejected: `serializeStateFile`, and with it `ConfigManager`, `FileStore` and `TaskStore`.**
+Measured, not assumed. `serializeStateFile` rebuilds a whole state file from the tasks it parsed: a
+`<!-- keep -->` comment above a task is **dropped**, and a task headed `## task-002:` — legal to
+Isotopy's board, illegal to TaskPlanner's uppercase-only heading regex — is **deleted outright**.
+`ConfigManager.load()` **rewrote the user's `config.json` on a read**: reformatted it, injected eight
+fields, flipped `aiPlanRequired`, and added a `Rejected` state the project never declared.
+`FileStore.readState` hands `parseTasks` raw bytes, which is the CRLF bug below. Each has a test
+standing over it now, because each would be a silent data loss in someone's repository.
+
+**CRLF is a boundary, not a detail.** The same content parses to one task as LF and to **zero tasks
+with warnings** as CRLF — indistinguishable from an empty board, on a parser reading the *user's*
+repository, where Git for Windows checks out CRLF by default. Isotopy normalises at the read
+boundary and restores each file's own ending on write, per file rather than per board. Worth
+reporting upstream, along with the config rewrite and the silent `P9 → P4` priority coercion.
+
+**Rejected: deleting the board digest with the parser it used.** `TASK-162` said
+`renderTaskBoardPlanningContext` and its callers go. That would make milestone planning board-blind —
+`plan-milestone` does not declare the tool — and would leave any engine that cannot carry a tool with
+no board at all. It is **replaced** instead: `renderBoardDigest` renders typed `Task[]`, so it shows
+the `@owner`, epic and waiting-until marks the old summary stripped. The tool is authoritative; the
+digest is the summary every engine gets.
+
+**The built-in board moves to `<dataDir>/.tasks`,** so one reader serves both backends without
+special-casing a directory name — but nothing is moved on disk. `resolveLocation` probes the
+project's `.tasks`, then `<dataDir>/.tasks`, then the legacy `<dataDir>/tasks`, because a silent
+rename would orphan every board created before this and then create an empty one beside it. New
+built-in boards also get a **Next** state, which the poller prompt has always assumed and which
+`createBuiltInBoard` never created.
+
+---
+
 ## 2026-09-10 — Isotopy renders MCP config; the engine CLI is the client
 
 **Context:** `TASK-162`'s boundary is a mark the agent must read *through a tool*, and there was no

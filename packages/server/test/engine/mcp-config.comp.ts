@@ -18,6 +18,8 @@ import {
   runArgv,
   runStubAdapter,
 } from "../support/engine-stub.ts";
+import type { McpToolRequest } from "../../src/engines/types.ts";
+import type { ToolId } from "../../src/domain/rules/tool-catalog.ts";
 
 const SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
@@ -175,7 +177,7 @@ interface WrittenConfig {
   mcpServers: Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>;
 }
 
-function request(tools: string[]): { tools: string[]; runDir: string; workspaceRoot: string } {
+function request(tools: ToolId[]): McpToolRequest {
   return { tools, runDir: path.join(scratch, "run"), workspaceRoot: scratch };
 }
 

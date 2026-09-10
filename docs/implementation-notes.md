@@ -341,6 +341,44 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   that basename at any depth. The cost is one download per home run, which is
   the price of a scratch workspace that is thrown away anyway.
 
+## Task board — one parser, two writers (`services/task-board-adapter.ts`)
+
+`@smekai/taskplanner` parses; Isotopy writes. `parseTasks` reads a state file,
+`serializeTask` renders one task in TaskPlanner's metadata order, and
+`insertTaskSection` / `takeTaskSection` edit around a task without touching a byte
+of what surrounds it.
+
+**Three of the library's classes are refused, and each has a test saying why.**
+`serializeStateFile` rebuilds a file from what it parsed, dropping an unrecognised
+comment and deleting a lowercase-prefix task. `ConfigManager.load()` rewrites the
+config it reads — reformatting, injecting eight fields, adding a `Rejected` state.
+`FileStore.readState` feeds `parseTasks` raw bytes, so a CRLF board reads as empty.
+`TaskStore` composes the last two.
+
+**The CRLF boundary is per file, not per board.** `readBoardFile` normalises and
+remembers the ending it found; `writeBoardFile` restores it. Two state files in one
+repository can legitimately differ, so remembering one ending for the board would
+convert the other on the first write.
+
+**Isotopy's own markers live inside `Task.description`.** `**Isotopy source:** …`
+and the `<!-- ISOTOPY-FINDING:… -->` fingerprint sit after the blank line that ends
+metadata, so TaskPlanner parses them as body and returns them unchanged. That is
+what keeps follow-up creation idempotent across a re-run.
+
+**A priority the parser does not know is coerced silently** — `P9` reads back as
+`P4` with no warning. Nothing rewrites a task Isotopy did not touch, so the coercion
+never reaches disk; a spec holds that line.
+
+**Done tasks may not be in `DONE.md`.** Once a project sets `archiveDoneAfterDays`,
+TaskPlanner moves them to `.tasks/archive/DONE-YYYY.md`. `knownTasks` reads the
+archive too, so `approveMilestoneTasks` does not reject an archived id as missing
+and `transitionTasks` does not re-move one that is already done.
+
+**The built-in board is `<dataDir>/.tasks`, and `<dataDir>/tasks` is still probed.**
+Boards created before the rename keep working where they are; only new ones land at
+the new name. New built-in boards carry a **Next** state, which the poller prompt
+assumes and `createBuiltInBoard` previously never created.
+
 ## Engines — MCP tool config (`engines/mcp-config.ts`, `domain/rules/tool-catalog.ts`)
 
 A step declares `tools: [...]`; Isotopy renders the launch spec and the engine CLI

@@ -862,6 +862,7 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
 | `<project>/.isotopy/step-tasks/<id>.project.md` | Step-task **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/step-tasks/<id>.md` | Full step-task replacement, or a step task Isotopy never shipped | One project |
+| `<project>/.isotopy/.tasks/` | The built-in task board, in TaskPlanner's own format, when the project has no `.tasks/` of its own (`<dataDir>/tasks` is still read where an older board lives) | One project |
 | `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |

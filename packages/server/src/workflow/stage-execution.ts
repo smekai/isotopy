@@ -31,6 +31,7 @@ import { formatValidationIssues } from "../domain/validation.ts";
 import { runDir, toolCacheDir } from "../paths.ts";
 import type { ToolId } from "../domain/rules/tool-catalog.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
+import { taskBoardFor } from "../services/task-board-adapter.ts";
 import { loadSkill } from "../services/skills.ts";
 import { loadInternalStepTask, resolveStageInputs } from "./stage-inputs.ts";
 import { messageOf } from "../utils/message-of.ts";
@@ -206,7 +207,11 @@ async function runAdapter(
       connection: deps.settings.getEngineConnection(run.projectId, engine),
       resumeSessionId,
       toolCacheDir: toolCacheDir(projectPath, cwd),
-      mcpTools: { tools, runDir: runDir(projectPath, run.id), workspaceRoot: cwd },
+      mcpTools: {
+        tools,
+        runDir: runDir(projectPath, run.id),
+        workspaceRoot: (await taskBoardFor(projectPath).boardWorkspaceRoot()) ?? cwd,
+      },
       timeoutMs: config.engineTimeoutMs,
       signal: controller.signal,
       onLog: (log) => deps.projection.log(run.id, stageId, log),
