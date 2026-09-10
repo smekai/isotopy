@@ -5,6 +5,9 @@ import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import type { PermissionStrategy } from "../domain/rules/permission-plan.ts";
+import { deniedToolNames } from "../domain/rules/tool-catalog.ts";
+import { openMcpSetup } from "./mcp-config.ts";
+import type { McpSetup } from "./mcp-config.ts";
 import { claudeAuthStatus } from "../schemas/engine-auth.ts";
 import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
 import { claudePermissionModeChoices } from "../schemas/engine-cli-help.ts";
@@ -63,6 +66,21 @@ function permissionArgs(strategy: PermissionStrategy): string[] {
       return unreachable;
     }
   }
+}
+
+// --strict-mcp-config is what makes `tools: [...]` mean these and no others: without
+// it the CLI also loads whatever MCP servers the user's own project configured.
+function mcpArgs(setup: McpSetup): string[] {
+  if (setup.servers.length === 0) {
+    return [];
+  }
+  const denied = deniedToolNames(setup.servers);
+  return [
+    "--mcp-config",
+    setup.configPath,
+    "--strict-mcp-config",
+    ...(denied.length > 0 ? ["--disallowedTools", ...denied] : []),
+  ];
 }
 
 function findIdeExtensionBinary(): string | undefined {
@@ -251,6 +269,8 @@ export const claudeCodeAdapter: EngineAdapter = {
       probeAutoReview(binary, AUTO_REVIEW_PROBE),
     );
 
+    const mcp = await openMcpSetup("claude-code", ctx);
+
     const personaViaFlag =
       ctx.appendSystemPrompt !== undefined && !commandNeedsWindowsShell(binary);
     const runCtx = personaViaFlag ? ctx : withPersonaPrompt(ctx);
@@ -268,13 +288,14 @@ export const claudeCodeAdapter: EngineAdapter = {
         ? ["--append-system-prompt", ctx.appendSystemPrompt]
         : []),
       ...permissionArgs(plan.strategy),
+      ...mcpArgs(mcp),
     ];
 
     const capture: EngineProtocolUpdate = {
       sessionId: ctx.resumeSessionId,
       logs: [],
     };
-    const result = await runSubprocess({
+    const spawn = runSubprocess({
       command: binary,
       args,
       cwd: ctx.cwd,
@@ -298,6 +319,7 @@ export const claudeCodeAdapter: EngineAdapter = {
         applyProtocolUpdate(capture, parsed.event, ctx.onLog);
       },
     });
+    const result = await spawn.finally(() => mcp.release());
 
     const success = result.success && capture.terminal === "success";
     let errorMessage: string | undefined;

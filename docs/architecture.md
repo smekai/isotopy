@@ -857,7 +857,7 @@ only for loading the tool's own `.env`.
 
 | Location | Holds | Scope |
 |----------|-------|-------|
-| `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
+| `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}`, `mcp.json` when the step declared tools | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
 | `<project>/.isotopy/step-tasks/<id>.project.md` | Step-task **addendum** — project tweaks only | One project |

@@ -47,12 +47,12 @@ export async function resolveStageInputs(
   };
 }
 
-export async function loadAssignment(
+export async function loadInternalStepTask(
   projectPath: ProjectPath,
   id: string,
-): Promise<string | undefined> {
+): Promise<StepTask | undefined> {
   const loaded = await loadStepTask(projectPath, id);
-  return loaded?.ok ? loaded.value.assignment : undefined;
+  return loaded?.ok ? loaded.value : undefined;
 }
 
 function personaNotices(

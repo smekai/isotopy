@@ -21,12 +21,12 @@ const STEP_TASKS: StepTaskVocabulary = new Map<string, StepTaskDeclaration>([
   ["implement-feature", declaredBy("developer")],
   ["closeout-feature", declaredBy("orchestrator")],
   ["verify-feature", declaredBy("tester")],
-  ["deploy-preview", { internal: false, context: [] }],
+  ["deploy-preview", { internal: false, context: [], tools: [] }],
   ["orchestrate", { ...declaredBy("orchestrator"), internal: true }],
 ]);
 
 function declaredBy(agent: string): StepTaskDeclaration {
-  return { agent, internal: false, context: [] };
+  return { agent, internal: false, context: [], tools: [] };
 }
 
 function compose(

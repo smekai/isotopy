@@ -66,6 +66,9 @@ importers:
       '@isotopy/scheduler':
         specifier: workspace:*
         version: link:../scheduler
+      '@smekai/taskplanner':
+        specifier: 2.3.0
+        version: 2.3.0
       hono:
         specifier: ^4.7.6
         version: 4.12.28

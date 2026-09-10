@@ -15,6 +15,54 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-10 — Isotopy renders MCP config; the engine CLI is the client
+
+**Context:** `TASK-162`'s boundary is a mark the agent must read *through a tool*, and there was no
+MCP anywhere in Isotopy — one incidental `mcp_tool_call` case in `codex-protocol.ts` and nothing
+else. A step that declares `tools: [taskplanner]` needs the CLI it runs on to carry that server.
+
+**Decision:** no MCP SDK enters this repository. A pure tool catalog maps a tool id to a launch
+spec, `mcpServers` and `deniedTools` join `ENGINE_CAPABILITY_CATALOG` — so adding either was a
+compile error until all three engines answered — and each adapter renders the spec into its own
+CLI's shape. Verified against the installed binaries, per the rule the 2026-08-23 entry produced:
+`claude 2.1.263`, `codex-cli 0.144.6`, `cursor-agent 2026.08.11-e8db854`.
+
+**The module path is resolved from the server, never from the engine's cwd.** A run works in the
+*user's* project, which has no `node_modules/@smekai/taskplanner`, so `createRequire(import.meta.url)`
+resolves the absolute `dist/mcp-server.js` and the config names `node` plus that path. That is also
+what avoids the Windows `.cmd` shim and the `shell: true` the Node >= 20 rule would otherwise force —
+only the bare `taskplanner-mcp` bin resolves to a `.cmd`, and nothing spawns it. **Rejected: the
+`node -e` form this repository's own `.mcp.json` uses.** That is right for a host that launches from
+the repository root and wrong for a run: `-e` is a code string, and resolution would start from the
+user's project.
+
+**`--strict-mcp-config` is load-bearing, not tidiness.** Without it a run in this repository would
+load our server *plus* the repository's own `.mcp.json` under the same name, and a run in an
+arbitrary project would silently inherit whatever that user configured. `tools: [taskplanner]` has
+to mean these and no others. Both flags go on **only when the step declares tools**, so a step
+declaring none keeps today's behaviour and a user who configured MCP deliberately is not broken.
+
+**Cursor takes no MCP flag at all.** Probed: `agent mcp` manages only `.cursor/mcp.json` or
+`~/.cursor/mcp.json`. The machine file is out — 2026-08-17 settled that a run installs tooling into
+the project, never into the machine. So Isotopy writes the **project** file for the run and puts
+back exactly what was there, keeping the original bytes in the run's own directory; a config the
+project never had is deleted again. That narrows, rather than breaks, the standing rule
+`permission-modes.comp.ts` asserts: *machine-level* CLI config is read and never written. The
+accepted cost is a window: a hard process kill between writing and restoring leaves the file behind,
+and the next run on that project puts it back rather than backing up Isotopy's own config as if it
+were the user's. **Rejected: an inline JSON argv string.** Claude accepts one, but a 250-character
+blob of quotes and braces through `quoteWindowsArg` → `cmd.exe /d /s /c` is the class of thing
+`MULTILINE_SHIM_MESSAGE` exists to guard, and a file is inspectable run evidence when a tool
+silently fails to load.
+
+**The boundary is only as strong as the tools the agent gets.** `taskplanner_update` can set an
+assignee, so a step's declared tools are rendered read-only where the CLI can express that:
+`--disallowedTools mcp__taskplanner__*` on Claude Code. Codex `exec` and cursor-agent have no
+verified per-tool deny, and each says so in the run log rather than letting the run imply the mark
+is protected. `deniedTools` is a capability row precisely so that gap is data, not prose.
+
+---
+
 ## 2026-09-10 — A step task declares itself, and twenty lines read its front matter
 
 **Context:** the pairing of persona to assignment was chosen by the *role*, and what a step needed

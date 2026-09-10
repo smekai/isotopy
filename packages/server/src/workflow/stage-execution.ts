@@ -28,10 +28,11 @@ import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
-import { toolCacheDir } from "../paths.ts";
+import { runDir, toolCacheDir } from "../paths.ts";
+import type { ToolId } from "../domain/rules/tool-catalog.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
 import { loadSkill } from "../services/skills.ts";
-import { loadAssignment, resolveStageInputs } from "./stage-inputs.ts";
+import { loadInternalStepTask, resolveStageInputs } from "./stage-inputs.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -187,12 +188,14 @@ async function runAdapter(
   prompt: string,
   persona: string | undefined,
   resumeSessionId: string | undefined,
+  tools: readonly ToolId[] = [],
 ): Promise<EngineRunResult> {
   const controller = deps.beginEngineStage(run.id);
   try {
     const adapter = getEngineAdapter(engine);
     const selection = await selectModel(deps, run, stageId, engine);
     const cwd = run.workspacePath ?? process.cwd();
+    const projectPath = deps.registry.resolve(run.projectId);
     return await adapter.run({
       runId: run.id,
       prompt,
@@ -202,7 +205,8 @@ async function runAdapter(
       permissionMode: input.permissionMode ?? DEFAULT_PERMISSION_MODE,
       connection: deps.settings.getEngineConnection(run.projectId, engine),
       resumeSessionId,
-      toolCacheDir: toolCacheDir(deps.registry.resolve(run.projectId), cwd),
+      toolCacheDir: toolCacheDir(projectPath, cwd),
+      mcpTools: { tools, runDir: runDir(projectPath, run.id), workspaceRoot: cwd },
       timeoutMs: config.engineTimeoutMs,
       signal: controller.signal,
       onLog: (log) => deps.projection.log(run.id, stageId, log),
@@ -308,13 +312,13 @@ export async function runQuestionMediationWork(
   }
   const projectPath = deps.registry.resolve(run.projectId);
   const persona = await loadSkill(projectPath, "orchestrator");
-  const stepTask = await loadAssignment(projectPath, "mediate-question");
+  const stepTask = await loadInternalStepTask(projectPath, "mediate-question");
   deps.projection.log(run.id, stageDef.id, {
     level: "run",
     message: `Orchestrator mediating · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
     activity: { kind: "engine", name: engineLabel(run) },
   });
-  const prompt = buildStagePrompt(context.prompt, [], stepTask);
+  const prompt = buildStagePrompt(context.prompt, [], stepTask?.assignment);
   const outcome = await runAdapter(
     deps,
     input,
@@ -324,6 +328,7 @@ export async function runQuestionMediationWork(
     prompt,
     persona,
     resumeSessionId,
+    stepTask?.tools,
   );
   if (outcome.usage) {
     await orchestration.recordDecisionUsage(context.orchestrationId, outcome.usage);
@@ -408,19 +413,18 @@ export async function runOrchestratorReviewWork(
     message: `Orchestrator reviewing the run · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
     activity: { kind: "engine", name: engineLabel(run) },
   });
+  const projectPath = deps.registry.resolve(run.projectId);
+  const stepTask = await loadInternalStepTask(projectPath, "review-run");
   const outcome = await runAdapter(
     deps,
     input,
     run,
     run.engine,
     stageId,
-    buildStagePrompt(
-      context.prompt,
-      [],
-      await loadAssignment(deps.registry.resolve(run.projectId), "review-run"),
-    ),
-    await loadSkill(deps.registry.resolve(run.projectId), "orchestrator"),
+    buildStagePrompt(context.prompt, [], stepTask?.assignment),
+    await loadSkill(projectPath, "orchestrator"),
     undefined,
+    stepTask?.tools,
   );
   if (outcome.usage) {
     await orchestration.recordDecisionUsage(context.orchestrationId, outcome.usage);
@@ -521,6 +525,7 @@ export async function runStageWork(
     inputs.prompt,
     inputs.persona,
     turn.resumeSessionId,
+    inputs.stepTask?.tools,
   );
 
   if (outcome.usage) {

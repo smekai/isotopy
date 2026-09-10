@@ -14,6 +14,9 @@ import { withPersonaPrompt } from "./persona.ts";
 import { resolvePermissionPlan } from "./permission-mode.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { probeCommand, runSubprocess } from "./subprocess.ts";
+import { tomlString, tomlStringArray, tomlStringTable } from "../domain/rules/toml-value.ts";
+import { openMcpSetup } from "./mcp-config.ts";
+import type { McpSetup } from "./mcp-config.ts";
 import {
   applyProtocolUpdate,
   protocolProblemMessage,
@@ -163,9 +166,9 @@ function resumePermissionArgs(strategy: PermissionStrategy): string[] {
   }
 }
 
-function buildArgs(ctx: EngineRunContext, plan: PermissionPlan): string[] {
+function buildArgs(ctx: EngineRunContext, plan: PermissionPlan, mcp: McpSetup): string[] {
   if (ctx.resumeSessionId) {
-    return buildResumeArgs(ctx, ctx.resumeSessionId, plan);
+    return buildResumeArgs(ctx, ctx.resumeSessionId, plan, mcp);
   }
   return [
     "exec",
@@ -174,6 +177,7 @@ function buildArgs(ctx: EngineRunContext, plan: PermissionPlan): string[] {
     ...permissionArgs(plan.strategy),
     ...(ctx.model ? ["--model", ctx.model] : []),
     ...reasoningEffortArgs(ctx),
+    ...mcpArgs(mcp),
     "-",
   ];
 }
@@ -182,10 +186,24 @@ function reasoningEffortArgs(ctx: EngineRunContext): string[] {
   return ctx.effort ? ["-c", `model_reasoning_effort="${ctx.effort}"`] : [];
 }
 
+// A `-c` value is parsed as TOML, so a Windows path in a basic string would be a
+// run of invalid escapes; `tomlString` reaches for a literal string instead.
+function mcpArgs(setup: McpSetup): string[] {
+  return setup.servers.flatMap((server) => [
+    "-c",
+    `mcp_servers.${server.id}.command=${tomlString(server.command)}`,
+    "-c",
+    `mcp_servers.${server.id}.args=${tomlStringArray(server.args)}`,
+    "-c",
+    `mcp_servers.${server.id}.env=${tomlStringTable(server.env)}`,
+  ]);
+}
+
 function buildResumeArgs(
   ctx: EngineRunContext,
   sessionId: string,
   plan: PermissionPlan,
+  mcp: McpSetup,
 ): string[] {
   return [
     "exec",
@@ -196,6 +214,7 @@ function buildResumeArgs(
     ...resumePermissionArgs(plan.strategy),
     ...(ctx.model ? ["--model", ctx.model] : []),
     ...reasoningEffortArgs(ctx),
+    ...mcpArgs(mcp),
     "-",
   ];
 }
@@ -295,14 +314,15 @@ export const codexAdapter: EngineAdapter = {
     const plan = await resolvePermissionPlan("codex", ctx, AUTO_REVIEW_CONFIGURABLE);
 
     const runCtx = withPersonaPrompt(ctx);
+    const mcp = await openMcpSetup("codex", ctx);
 
     const capture: EngineProtocolUpdate = {
       sessionId: ctx.resumeSessionId,
       logs: [],
     };
-    const result = await runSubprocess({
+    const spawn = runSubprocess({
       command: binary,
-      args: buildArgs(runCtx, plan),
+      args: buildArgs(runCtx, plan, mcp),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection, ctx.toolCacheDir),
       input: runCtx.prompt,
@@ -324,6 +344,7 @@ export const codexAdapter: EngineAdapter = {
         applyProtocolUpdate(capture, parsed.event, ctx.onLog);
       },
     });
+    const result = await spawn.finally(() => mcp.release());
 
     const success =
       result.success &&

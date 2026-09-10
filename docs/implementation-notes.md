@@ -341,6 +341,54 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   that basename at any depth. The cost is one download per home run, which is
   the price of a scratch workspace that is thrown away anyway.
 
+## Engines — MCP tool config (`engines/mcp-config.ts`, `domain/rules/tool-catalog.ts`)
+
+A step declares `tools: [...]`; Isotopy renders the launch spec and the engine CLI
+is the MCP client. `mcpTools` is required on `EngineRunContext` for the same reason
+`toolCacheDir` is: every run has one, and an optional field only lets a future call
+site opt out silently. An empty `tools` array is the meaningful "this step declared
+nothing".
+
+**The module path is resolved once, on the server.** `createRequire(import.meta.url)`
+in `engines/mcp-config.ts` resolves `@smekai/taskplanner/mcp-server` to an absolute
+`dist/mcp-server.js`, memoised, and **at plan time rather than module load** so a
+resolution failure is a run-log notice instead of a boot crash. The engine's `cwd`
+is the user's project, which has no `node_modules` for it — resolving from there
+would fail on every real run. Handing Node a `.js` path is also what avoids the
+Windows `.cmd` shim: only the bare `taskplanner-mcp` bin resolves to one.
+
+**Per CLI, measured against the installed binary:**
+
+| Engine | How a tool is carried |
+| --- | --- |
+| Claude Code | `--mcp-config <run>/mcp.json --strict-mcp-config`, plus `--disallowedTools mcp__<server>__<tool>` for each mutating tool |
+| Codex | `-c mcp_servers.<id>.command=…`, `.args=…`, `.env=…`, on `exec` **and** on `exec resume` |
+| Cursor | no flag exists — the config is written to `<cwd>/.cursor/mcp.json` for the run, plus `--approve-mcps` |
+
+**TOML quoting is a correctness question on Windows.** A Codex `-c` value is parsed
+as TOML, so `C:\Users\…` inside a *basic* string is a run of invalid escapes.
+`tomlString` renders a literal string (single quotes, no escape processing) and
+falls back to an escaped basic string only for a value containing an apostrophe,
+which a literal string cannot express.
+
+**Isolation is asymmetric, and only Claude Code has it.** `--strict-mcp-config`
+shuts out every other configured server. Codex has no equivalent (`--strict-config`
+only rejects unknown fields in the user's `config.toml`), so it merges
+`~/.codex/config.toml`'s `mcp_servers` with ours; Cursor still loads
+`~/.cursor/mcp.json`. Recorded here rather than logged per run.
+
+**The Cursor project config is written and put back.** The original bytes go to
+`<run>/cursor-mcp.backup.json` before the file is replaced, and `release()` — called
+from the adapter as the subprocess settles — restores them, or deletes the file when
+the project never had one. The run-end `RunChangeCollector` therefore never sees it.
+The uncovered window is a hard process kill between write and restore; the next run
+on that project restores from the backup before taking its own, so Isotopy's config
+is never mistaken for the user's.
+
+**`workspace_root` outranks the environment.** The taskplanner MCP tools accept a
+`workspace_root` argument that wins over `TASKPLANNER_WORKSPACE_ROOT`, so the step
+task's prose tells the agent not to pass it. There is no server-side way to forbid it.
+
 ## Engines — persona delivery (`engines/persona.ts`)
 
 Claude Code takes the stage persona natively via `--append-system-prompt`, so it

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { splitFrontMatter } from "../domain/markdown/front-matter.ts";
+import { TOOL_IDS } from "../domain/rules/tool-catalog.ts";
+import type { ToolId } from "../domain/rules/tool-catalog.ts";
 import { validate } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 
@@ -14,6 +16,7 @@ export interface StepTaskDeclaration {
   summary?: string;
   internal: boolean;
   context: StepTaskContext[];
+  tools: ToolId[];
 }
 
 export interface ParsedStepTask extends StepTaskDeclaration {
@@ -24,12 +27,15 @@ const flag = z.preprocess(readFlag, z.boolean());
 
 const contexts = z.preprocess(readList, z.array(z.enum(STEP_TASK_CONTEXTS)));
 
+const tools = z.preprocess(readList, z.array(z.enum(TOOL_IDS)));
+
 export const stepTaskFrontMatterSchema = z
   .object({
     agent: text.optional(),
     summary: text.optional(),
     internal: flag.optional(),
     context: contexts.optional(),
+    tools: tools.optional(),
   })
   .strict();
 
@@ -49,6 +55,7 @@ export function parseStepTask(source: string): ValidationResult<ParsedStepTask> 
       summary: declared.value.summary,
       internal: declared.value.internal ?? false,
       context: declared.value.context ?? [],
+      tools: declared.value.tools ?? [],
       assignment: document.value.body,
     },
   };
