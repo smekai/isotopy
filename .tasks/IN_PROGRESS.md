@@ -2,7 +2,7 @@
 
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-09-10 11:21
+**Updated:** 2026-09-10 12:03
 
 The owner's boundary, as data on a task rather than a judgment in a prompt. Of **Milestone I —
 Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
@@ -161,5 +161,27 @@ repository config therefore launches `node -e` with a `require` of the package e
 resolution walk up; verified from a subdirectory against the real board. MCP config files are written with `path.join` under `os.tmpdir()` or the project data dir.
 Front matter and CLI output split on `/\r?\n/`. Tested live on Windows; macOS reasoned through and
 recorded untested unless a Mac is used.
+
+### Plan
+
+Delivered in four commits on `feature/task-162-step-declares-itself` (0.12.29 → 0.12.32):
+
+1. **A step task declares its own agent and the context it needs** — front matter (`agent`, `summary`, `internal`, `context`), a pure splitter in `domain/markdown/front-matter.ts`, a strict schema in `schemas/step-task.ts`, layering in `services/step-tasks.ts`. `role.skill` optional, `STEP_TASK_CATALOG` gone, `resolveStageInputs` extracted.
+2. **A step's declared tools reach the CLI that can carry them** — `mcpServers` and `deniedTools` join the capability catalog; `tool-catalog.ts`, `mcp-plan.ts`, `toml-value.ts`, `engines/mcp-config.ts`, and per-adapter rendering.
+3. **One board parser** — `parseTasks`/`serializeTask` read and render; Isotopy edits around a task; CRLF normalised in and restored out; `boardDigest` replaces the planning context; built-in board moves to `<dataDir>/.tasks` with the legacy path still probed.
+4. **A marked task is not the team's to start** — `assignee` on both drafts and the salvaging mirror, two stated skip reasons in the digest, `orchestrate` declares `tools: [taskplanner]`, and a rewritten poller prompt.
+
+**Six amendments to this task, measured against 2.3.0 rather than assumed:**
+
+1. `domain/markdown/task-board.ts` does **not** go entirely. `serializeStateFile` rebuilds a file from what it parsed: it drops a comment above a task and deletes a lowercase-prefix task outright. Six exports survive as the surgical writer.
+2. `ConfigManager`, `FileStore` and `TaskStore` are all unusable. `ConfigManager.load()` rewrote the user's `config.json` on a **read** — reformatted, eight fields injected, a `Rejected` state that was never declared.
+3. `renderTaskBoardPlanningContext` is **replaced, not deleted**. Deleting it makes milestone planning board-blind and leaves any engine without a tool with no board at all. `renderBoardDigest` renders typed tasks and shows the marks the old summary stripped.
+4. The step-task library is discovered from disk, so `internal: true` — not absence from a hand-written array — is what stops the Orchestrator composing itself.
+5. Step tasks get their own directories rather than sharing `skills/`, where a project step task named `developer.md` would silently replace the Developer persona.
+6. `setup` was dropped. Its one member would have been `preview-deployment`, which does not *prepare* what a step needs — it replaces the agent. `PREVIEW_DEPLOY_STEP_TASK` stays an id literal until a second member earns the key.
+
+**Probe results that settled open questions** (`claude 2.1.263`, `codex-cli 0.144.6`, `cursor-agent 2026.08.11-e8db854`): Cursor has no `--mcp-config` at all — it reads only `.cursor/mcp.json`, so Isotopy writes the project file for the run and restores it. `node -e` is right for this repo's own `.mcp.json` and wrong at runtime, because the engine's cwd is the user's project. And the skip predicate is *any* assignee, not the literal `owner` — this repo's own board already carries `@Fedor`.
+
+**Evidence:** `pnpm lint`, `pnpm typecheck`, `pnpm test` (1135 passing, 41 new), `pnpm build`, `pnpm e2e` (75 passing). The rendered launch spec was run for real: `node <absolute dist/mcp-server.js>` started from `C:\`, pinned by `TASKPLANNER_WORKSPACE_ROOT`, listed its eight tools and read this repository's own board back. Tested on Windows; macOS reasoned through and recorded untested.
 
 ---
