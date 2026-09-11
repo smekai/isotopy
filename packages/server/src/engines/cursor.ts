@@ -215,8 +215,7 @@ function buildArgs(
   ];
 }
 
-// The CLI takes no MCP flag — it reads the `.cursor/mcp.json` that `openMcpSetup`
-// wrote beside the code, and would otherwise stop to ask about each server.
+// The config came from `openMcpSetup`; without this the CLI stops to ask about each server.
 function mcpArgs(setup: McpSetup): string[] {
   return setup.servers.length > 0 ? ["--approve-mcps"] : [];
 }

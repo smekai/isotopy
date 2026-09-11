@@ -210,6 +210,7 @@ async function runAdapter(
       mcpTools: {
         tools,
         runDir: runDir(projectPath, run.id),
+        projectDir: projectPath.dataDir,
         workspaceRoot: (await taskBoardFor(projectPath).boardWorkspaceRoot()) ?? cwd,
       },
       timeoutMs: config.engineTimeoutMs,

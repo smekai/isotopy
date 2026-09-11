@@ -54,6 +54,7 @@ import {
   composeTeamPipeline,
   generationOf,
   sameComposition,
+  withResolvedPersonas,
   withRoleTiers,
 } from "../domain/rules/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
@@ -320,12 +321,13 @@ export class OrchestrationService implements StageOutputConsumer {
         `${profession} decided something that cannot be acted on — ${refusal}`,
       );
     }
+    const decided = await this.withPersonasResolved(run.projectId, parsed.value);
     orchestration.turns.push({
       runId: run.id,
-      decision: parsed.value,
+      decision: decided,
       at: nowIso(),
     });
-    orchestration.latestDecision = parsed.value;
+    orchestration.latestDecision = decided;
     delete orchestration.decisionError;
     if (parsed.value.action === "stop") {
       await this.terminate(orchestration, parsed.value.reason, run.id);
@@ -335,6 +337,17 @@ export class OrchestrationService implements StageOutputConsumer {
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return undefined;
+  }
+
+  private async withPersonasResolved(
+    projectId: string,
+    decision: OrchestratorDecision,
+  ): Promise<OrchestratorDecision> {
+    if (decision.action !== "propose_team") {
+      return decision;
+    }
+    const library = await stepTaskLibrary(this.registry.resolve(projectId));
+    return { ...decision, team: withResolvedPersonas(decision.team, library.byId) };
   }
 
   private async refuse(

@@ -18,8 +18,9 @@ import {
   runArgv,
   runStubAdapter,
 } from "../support/engine-stub.ts";
-import type { McpToolRequest } from "../../src/engines/types.ts";
+import type { EngineRunContext, McpToolRequest } from "../../src/engines/types.ts";
 import type { ToolId } from "../../src/domain/rules/tool-catalog.ts";
+import { openMcpSetup } from "../../src/engines/mcp-config.ts";
 
 const SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
@@ -150,6 +151,32 @@ test("a Cursor config Isotopy created is taken away again, leaving the repositor
   expect(existsSync(cursorConfigPath())).toBe(false);
 });
 
+// A server killed mid-run leaves the project config replaced. The run that finds it
+// always carries a different id, because a restart marks the interrupted run failed.
+test("a Cursor config left behind by a killed run is recovered by the next run", async () => {
+  // Arrange — run A replaces the project config and never releases it.
+  mkdirSync(path.join(scratch, ".cursor"), { recursive: true });
+  writeFileSync(cursorConfigPath(), USER_CURSOR_CONFIG, "utf8");
+  await openMcpSetup("cursor", killedRunContext());
+
+  // Act — run B, a different id, runs and releases normally.
+  await runWithTaskplanner("cursor", { runId: "run-b" });
+
+  // Assert
+  expect(readFileSync(cursorConfigPath(), "utf8")).toBe(USER_CURSOR_CONFIG);
+});
+
+test("a killed run's own generated config is never mistaken for the user's", async () => {
+  // Arrange — no config of the project's own, and run A leaves Isotopy's behind.
+  await openMcpSetup("cursor", killedRunContext());
+
+  // Act
+  await runWithTaskplanner("cursor", { runId: "run-b" });
+
+  // Assert
+  expect(existsSync(cursorConfigPath())).toBe(false);
+});
+
 test("a step declaring no tool passes no MCP flag and writes no config", async () => {
   // Arrange — nothing.
   // Act
@@ -177,19 +204,40 @@ interface WrittenConfig {
   mcpServers: Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>;
 }
 
-function request(tools: ToolId[]): McpToolRequest {
-  return { tools, runDir: path.join(scratch, "run"), workspaceRoot: scratch };
+function request(tools: ToolId[], runId = "run"): McpToolRequest {
+  return {
+    tools,
+    runDir: path.join(scratch, runId),
+    projectDir: scratch,
+    workspaceRoot: scratch,
+  };
 }
 
 function runWithTaskplanner(
   engine: EngineId,
-  overrides: { resumeSessionId?: string } = {},
+  overrides: { resumeSessionId?: string; runId?: string } = {},
 ): Promise<StageLogDraft[]> {
+  const { runId, ...rest } = overrides;
   return runStubAdapter(engine, {
     cwd: scratch,
-    mcpTools: request(["taskplanner"]),
-    ...overrides,
+    mcpTools: request(["taskplanner"], runId),
+    ...rest,
   });
+}
+
+function killedRunContext(): EngineRunContext {
+  return {
+    runId: "run-a",
+    prompt: "say hello",
+    cwd: scratch,
+    permissionMode: "skip",
+    connection: { mode: "subscription" },
+    toolCacheDir: path.join(scratch, "cache"),
+    mcpTools: request(["taskplanner"], "run-a"),
+    timeoutMs: 15_000,
+    signal: new AbortController().signal,
+    onLog: () => {},
+  };
 }
 
 function configPath(): string {

@@ -68,8 +68,7 @@ function permissionArgs(strategy: PermissionStrategy): string[] {
   }
 }
 
-// --strict-mcp-config is what makes `tools: [...]` mean these and no others: without
-// it the CLI also loads whatever MCP servers the user's own project configured.
+// --strict-mcp-config is what makes a declared tool list mean these and no others.
 function mcpArgs(setup: McpSetup): string[] {
   if (setup.servers.length === 0) {
     return [];

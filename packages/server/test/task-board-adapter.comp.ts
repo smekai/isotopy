@@ -146,26 +146,18 @@ test("a task archived out of Done still counts as existing, so approval does not
   expect(links.featureTaskIds.f1).toContain("TASK-004");
 });
 
-test("a built-in board created before the rename is still the one the project uses", async () => {
-  // Arrange — the pre-rename location, which no longer gets created but still exists.
-  const legacyDir = path.join(project.dataDir, "tasks");
-  await mkdir(legacyDir, { recursive: true });
-  await writeFile(
-    path.join(legacyDir, "config.json"),
-    JSON.stringify({
-      idPrefix: "TASK",
-      nextId: 4,
-      states: [{ name: "Backlog", fileName: "BACKLOG.md" }],
-      insertPosition: "top",
-    }),
-  );
-
+// One directory name, so the board an agent reads through the MCP tool and the board
+// Isotopy writes are always the same one. The tool searches for `.tasks/config.json`,
+// so a board anywhere else would be readable by half the product.
+test("the built-in board is created where the taskplanner tools also look for it", async () => {
+  // Arrange — no board of any kind.
   // Act
-  const created = await new TaskBoardAdapter(project).createFollowUpTasks(run(), [draft("f1")]);
+  await new TaskBoardAdapter(project).createFollowUpTasks(run(), [draft("f1")]);
 
   // Assert
-  expect(created.map((task) => task.id)).toEqual(["TASK-004"]);
-  expect(await readFile(path.join(legacyDir, "BACKLOG.md"), "utf8")).toContain("TASK-004");
+  expect(await readFile(path.join(project.dataDir, ".tasks", "config.json"), "utf8")).toContain(
+    "TASK",
+  );
 });
 
 test("a priority the shipped parser silently coerces never reaches disk, because nothing rewrites what it read", async () => {

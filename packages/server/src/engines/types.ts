@@ -18,6 +18,7 @@ export interface EngineConnection {
 export interface McpToolRequest {
   tools: readonly ToolId[];
   runDir: string;
+  projectDir: string;
   workspaceRoot: string;
 }
 

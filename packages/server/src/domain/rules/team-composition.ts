@@ -22,6 +22,18 @@ export function personaFor(
   return role.skill ?? stepTasks.get(role.stepTask)?.agent;
 }
 
+// The approval card shows what the Orchestrator proposed, so a role that left its
+// persona to the step task has to carry the resolved one before the user sees it.
+export function withResolvedPersonas(
+  team: OrchestratorTeamProposal,
+  stepTasks: StepTaskVocabulary,
+): OrchestratorTeamProposal {
+  return {
+    ...team,
+    roles: team.roles.map((role) => ({ ...role, skill: personaFor(role, stepTasks) })),
+  };
+}
+
 function roleIssues(
   role: OrchestratorRole,
   index: number,

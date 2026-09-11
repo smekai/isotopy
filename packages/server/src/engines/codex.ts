@@ -186,8 +186,7 @@ function reasoningEffortArgs(ctx: EngineRunContext): string[] {
   return ctx.effort ? ["-c", `model_reasoning_effort="${ctx.effort}"`] : [];
 }
 
-// A `-c` value is parsed as TOML, so a Windows path in a basic string would be a
-// run of invalid escapes; `tomlString` reaches for a literal string instead.
+// A `-c` value is parsed as TOML, where a Windows path in a basic string is invalid escapes.
 function mcpArgs(setup: McpSetup): string[] {
   return setup.servers.flatMap((server) => [
     "-c",

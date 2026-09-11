@@ -47,8 +47,6 @@ export interface ApprovedTaskLinks {
 
 const BOARD_DIR = ".tasks";
 
-const LEGACY_BOARD_DIR = "tasks";
-
 const ARCHIVE_DIR = "archive";
 
 const SECTION_SEPARATOR = "\n\n---\n";
@@ -232,7 +230,6 @@ export class TaskBoardAdapter {
     const candidates: BoardLocation[] = [
       locationAt(path.join(this.projectPath.root, BOARD_DIR), "taskplanner"),
       locationAt(path.join(this.projectPath.dataDir, BOARD_DIR), "isotopy"),
-      locationAt(path.join(this.projectPath.dataDir, LEGACY_BOARD_DIR), "isotopy"),
     ];
     for (const candidate of candidates) {
       if (await readText(candidate.configPath)) {
@@ -273,8 +270,7 @@ async function readText(filePath: string): Promise<string | undefined> {
   return readFile(filePath, "utf8").catch(() => undefined);
 }
 
-// TaskPlanner's parser splits on "\n" alone, so a CRLF board would read as an
-// empty one — the same shape as a board that genuinely has no tasks.
+// The ending is remembered per file, because two state files in one repository can differ.
 async function readBoardFile(filePath: string): Promise<BoardFile | undefined> {
   const raw = await readText(filePath);
   return raw === undefined
@@ -305,8 +301,7 @@ async function stateFiles(board: Board): Promise<Map<string, BoardFile>> {
   return files;
 }
 
-// Completed work may have been archived out of DONE.md, so a reader concluding a
-// task does not exist has to look there before saying so.
+// Completed work may have been archived out of DONE.md, so "absent" has to look here too.
 async function archiveTasks(board: Board): Promise<Task[]> {
   const dir = path.join(board.dir, ARCHIVE_DIR);
   const entries = await readdir(dir).catch(() => []);

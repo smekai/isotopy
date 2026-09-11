@@ -35,8 +35,7 @@ const findingSchema = z
   })
   .strict();
 
-// A follow-up carrying an assignee that this mirror did not know would be dropped
-// whole by `salvageItems`, losing the task rather than the field.
+// An unknown field here loses the whole follow-up to `salvageItems`, not just the field.
 const followUpTaskSchema = z
   .object({
     findingId: requiredText,

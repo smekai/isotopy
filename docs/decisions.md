@@ -83,12 +83,15 @@ no board at all. It is **replaced** instead: `renderBoardDigest` renders typed `
 the `@owner`, epic and waiting-until marks the old summary stripped. The tool is authoritative; the
 digest is the summary every engine gets.
 
-**The built-in board moves to `<dataDir>/.tasks`,** so one reader serves both backends without
-special-casing a directory name — but nothing is moved on disk. `resolveLocation` probes the
-project's `.tasks`, then `<dataDir>/.tasks`, then the legacy `<dataDir>/tasks`, because a silent
-rename would orphan every board created before this and then create an empty one beside it. New
-built-in boards also get a **Next** state, which the poller prompt has always assumed and which
-`createBuiltInBoard` never created.
+**The built-in board moves to `<dataDir>/.tasks`, and that is its only name.** One reader serves
+both backends without special-casing a directory, and — the reason the rename is not optional — the
+MCP server finds a board by searching for `.tasks/config.json`. A board under the old
+`<dataDir>/tasks` would be read by Isotopy and invisible to the agent reading through the tool, and
+a board half the product can see is worse than one it cannot. **Rejected: probing the old name too.**
+It looks like kindness and delivers exactly that half-board. Nothing outside this repository holds
+one, which is why the break lands now rather than after someone does. New built-in boards also get a
+**Next** state, which the poller prompt has always assumed and which `createBuiltInBoard` never
+created.
 
 ---
 

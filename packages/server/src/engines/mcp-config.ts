@@ -19,10 +19,11 @@ interface CursorBackup {
   content?: string;
 }
 
-const MCP_DELIVERY: Record<EngineId, "flag" | "inlineConfig" | "projectFile"> = {
-  "claude-code": "flag",
-  codex: "inlineConfig",
-  cursor: "projectFile",
+// Cursor takes no MCP flag at all: it reads only `.cursor/mcp.json` beside the code.
+const READS_A_PROJECT_CONFIG: Record<EngineId, boolean> = {
+  "claude-code": false,
+  codex: false,
+  cursor: true,
 };
 
 const CONFIG_FILE = "mcp.json";
@@ -49,7 +50,7 @@ export async function openMcpSetup(
     return { servers: [], configPath, release: released };
   }
   await writeConfig(configPath, plan.servers);
-  return MCP_DELIVERY[engineId] === "projectFile"
+  return READS_A_PROJECT_CONFIG[engineId]
     ? openProjectConfig(ctx, configPath, plan.servers)
     : { servers: plan.servers, configPath, release: released };
 }
@@ -87,17 +88,14 @@ async function writeConfig(configPath: string, servers: McpLaunchSpec[]): Promis
   await writeFile(configPath, mcpConfigDocument(servers), "utf8");
 }
 
-// Cursor takes no MCP flag: it reads only `.cursor/mcp.json` beside the code it is
-// working on. Isotopy writes that file for the run and puts back whatever was there,
-// so a step's declared tools mean those and no others, the way --strict-mcp-config
-// does for Claude Code.
+// Keyed to the project, not the run: whoever recovers a killed run's backup has a different id.
 async function openProjectConfig(
   ctx: EngineRunContext,
   configPath: string,
   servers: McpLaunchSpec[],
 ): Promise<McpSetup> {
   const projectConfig = path.join(ctx.cwd, CURSOR_DIR, CONFIG_FILE);
-  const backupPath = path.join(ctx.mcpTools.runDir, CURSOR_BACKUP_FILE);
+  const backupPath = path.join(ctx.mcpTools.projectDir, CURSOR_BACKUP_FILE);
   await restoreProjectConfig(projectConfig, backupPath);
   const existing = await readText(projectConfig);
   await writeFile(backupPath, backupOf(existing), "utf8");
