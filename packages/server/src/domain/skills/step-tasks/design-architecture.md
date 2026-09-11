@@ -1,3 +1,7 @@
+---
+agent: software-architect
+summary: Design the architecture for an approved feature.
+---
 # Assignment: Design the software architecture
 
 Decide whether the approved feature is cross-cutting, data-heavy,

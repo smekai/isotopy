@@ -117,6 +117,7 @@ function runAdapter(engine: EngineId): Promise<EngineRunResult> {
     permissionMode: "skip",
     connection: { mode: "subscription" },
     toolCacheDir: path.join(stubDir, "cache"),
+    mcpTools: { tools: [], runDir: path.join(stubDir, "run"), projectDir: stubDir, workspaceRoot: stubDir },
     timeoutMs: 15_000,
     signal: new AbortController().signal,
     onLog: () => {},

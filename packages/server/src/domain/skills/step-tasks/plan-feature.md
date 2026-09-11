@@ -1,3 +1,7 @@
+---
+agent: project-manager
+summary: Turn a request into one coherent, implementable feature.
+---
 # Assignment: Plan a feature
 
 Turn the user's request into one coherent feature a Developer can implement

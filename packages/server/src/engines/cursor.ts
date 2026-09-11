@@ -15,6 +15,8 @@ import type { AutoReviewProbe } from "./permission-mode.ts";
 import type { PermissionPlan, PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { commandNeedsWindowsShell, probeCommand, runSubprocess } from "./subprocess.ts";
+import { openMcpSetup } from "./mcp-config.ts";
+import type { McpSetup } from "./mcp-config.ts";
 import {
   applyProtocolUpdate,
   protocolProblemMessage,
@@ -196,6 +198,7 @@ function buildArgs(
   ctx: EngineRunContext,
   plan: PermissionPlan,
   promptViaArg: boolean,
+  mcp: McpSetup,
 ): string[] {
   const extra = (process.env.ISOTOPY_CURSOR_ARGS ?? "").split(/\s+/).filter(Boolean);
   return [
@@ -206,9 +209,15 @@ function buildArgs(
     ...(process.env.ISOTOPY_CURSOR_TRUST === "0" ? [] : ["--trust"]),
     ...(ctx.resumeSessionId ? ["--resume", ctx.resumeSessionId] : []),
     ...(ctx.model ? ["--model", ctx.model] : []),
+    ...mcpArgs(mcp),
     ...extra,
     ...(promptViaArg ? [ctx.prompt] : []),
   ];
+}
+
+// The config came from `openMcpSetup`; without this the CLI stops to ask about each server.
+function mcpArgs(setup: McpSetup): string[] {
+  return setup.servers.length > 0 ? ["--approve-mcps"] : [];
 }
 
 export const cursorAdapter: EngineAdapter = {
@@ -353,10 +362,11 @@ export const cursorAdapter: EngineAdapter = {
       ctx.onLog({ level: "warn", message: "Prompt near the command-line length limit — set ISOTOPY_CURSOR_PROMPT_VIA=stdin" });
     }
 
+    const mcp = await openMcpSetup("cursor", ctx);
     const capture: EngineProtocolUpdate = { sessionId: ctx.resumeSessionId, logs: [] };
-    const result = await runSubprocess({
+    const spawn = runSubprocess({
       command: binary,
-      args: buildArgs(runCtx, plan, promptViaArg),
+      args: buildArgs(runCtx, plan, promptViaArg, mcp),
       cwd: ctx.cwd,
       env: buildChildEnv(ctx.connection, ctx.toolCacheDir),
       input: promptViaArg ? undefined : runCtx.prompt,
@@ -378,6 +388,7 @@ export const cursorAdapter: EngineAdapter = {
         applyProtocolUpdate(capture, parsed.event, ctx.onLog);
       },
     });
+    const result = await spawn.finally(() => mcp.release());
 
     const success = result.success && capture.terminal === "success";
     let errorMessage: string | undefined;

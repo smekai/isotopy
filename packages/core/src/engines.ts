@@ -53,6 +53,8 @@ export const ENGINE_CAPABILITIES = [
   "costReporting",
   "autoReviewMode",
   "acceptEditsMode",
+  "mcpServers",
+  "deniedTools",
 ] as const;
 
 export type EngineCapability = (typeof ENGINE_CAPABILITIES)[number];
@@ -73,6 +75,8 @@ export const ENGINE_CAPABILITY_CATALOG: Record<
     costReporting: "supported",
     autoReviewMode: "probed",
     acceptEditsMode: "supported",
+    mcpServers: "supported",
+    deniedTools: "supported",
   },
   cursor: {
     resumeSession: "supported",
@@ -82,6 +86,8 @@ export const ENGINE_CAPABILITY_CATALOG: Record<
     costReporting: "unsupported",
     autoReviewMode: "supported",
     acceptEditsMode: "posixOnly",
+    mcpServers: "supported",
+    deniedTools: "unsupported",
   },
   codex: {
     resumeSession: "supported",
@@ -91,6 +97,8 @@ export const ENGINE_CAPABILITY_CATALOG: Record<
     costReporting: "unsupported",
     autoReviewMode: "supported",
     acceptEditsMode: "supported",
+    mcpServers: "supported",
+    deniedTools: "unsupported",
   },
 };
 

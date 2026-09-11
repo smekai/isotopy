@@ -341,6 +341,95 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   that basename at any depth. The cost is one download per home run, which is
   the price of a scratch workspace that is thrown away anyway.
 
+## Task board — one parser, two writers (`services/task-board-adapter.ts`)
+
+`@smekai/taskplanner` parses; Isotopy writes. `parseTasks` reads a state file,
+`serializeTask` renders one task in TaskPlanner's metadata order, and
+`insertTaskSection` / `takeTaskSection` edit around a task without touching a byte
+of what surrounds it.
+
+**Three of the library's classes are refused, and each has a test saying why.**
+`serializeStateFile` rebuilds a file from what it parsed, dropping an unrecognised
+comment and deleting a lowercase-prefix task. `ConfigManager.load()` rewrites the
+config it reads — reformatting, injecting eight fields, adding a `Rejected` state.
+`FileStore.readState` feeds `parseTasks` raw bytes, so a CRLF board reads as empty.
+`TaskStore` composes the last two.
+
+**The CRLF boundary is per file, not per board.** `readBoardFile` normalises and
+remembers the ending it found; `writeBoardFile` restores it. Two state files in one
+repository can legitimately differ, so remembering one ending for the board would
+convert the other on the first write.
+
+**Isotopy's own markers live inside `Task.description`.** `**Isotopy source:** …`
+and the `<!-- ISOTOPY-FINDING:… -->` fingerprint sit after the blank line that ends
+metadata, so TaskPlanner parses them as body and returns them unchanged. That is
+what keeps follow-up creation idempotent across a re-run.
+
+**A priority the parser does not know is coerced silently** — `P9` reads back as
+`P4` with no warning. Nothing rewrites a task Isotopy did not touch, so the coercion
+never reaches disk; a spec holds that line.
+
+**Done tasks may not be in `DONE.md`.** Once a project sets `archiveDoneAfterDays`,
+TaskPlanner moves them to `.tasks/archive/DONE-YYYY.md`. `knownTasks` reads the
+archive too, so `approveMilestoneTasks` does not reject an archived id as missing
+and `transitionTasks` does not re-move one that is already done.
+
+**The built-in board is `<dataDir>/.tasks`, and that is the only name.** The MCP
+server locates a board by searching for `.tasks/config.json`, so a board under any
+other directory would be readable by Isotopy and invisible to the agent — half a
+board is worse than none. The pre-rename `<dataDir>/tasks` is not probed; a project
+holding one gets a fresh board, which is why the rename landed before any project
+outside this repository had one. New built-in boards carry a **Next** state, which
+the poller prompt assumes and `createBuiltInBoard` previously never created.
+
+## Engines — MCP tool config (`engines/mcp-config.ts`, `domain/rules/tool-catalog.ts`)
+
+A step declares `tools: [...]`; Isotopy renders the launch spec and the engine CLI
+is the MCP client. `mcpTools` is required on `EngineRunContext` for the same reason
+`toolCacheDir` is: every run has one, and an optional field only lets a future call
+site opt out silently. An empty `tools` array is the meaningful "this step declared
+nothing".
+
+**The module path is resolved once, on the server.** `createRequire(import.meta.url)`
+in `engines/mcp-config.ts` resolves `@smekai/taskplanner/mcp-server` to an absolute
+`dist/mcp-server.js`, memoised, and **at plan time rather than module load** so a
+resolution failure is a run-log notice instead of a boot crash. The engine's `cwd`
+is the user's project, which has no `node_modules` for it — resolving from there
+would fail on every real run. Handing Node a `.js` path is also what avoids the
+Windows `.cmd` shim: only the bare `taskplanner-mcp` bin resolves to one.
+
+**Per CLI, measured against the installed binary:**
+
+| Engine | How a tool is carried |
+| --- | --- |
+| Claude Code | `--mcp-config <run>/mcp.json --strict-mcp-config`, plus `--disallowedTools mcp__<server>__<tool>` for each mutating tool |
+| Codex | `-c mcp_servers.<id>.command=…`, `.args=…`, `.env=…`, on `exec` **and** on `exec resume` |
+| Cursor | no flag exists — the config is written to `<cwd>/.cursor/mcp.json` for the run, plus `--approve-mcps` |
+
+**TOML quoting is a correctness question on Windows.** A Codex `-c` value is parsed
+as TOML, so `C:\Users\…` inside a *basic* string is a run of invalid escapes.
+`tomlString` renders a literal string (single quotes, no escape processing) and
+falls back to an escaped basic string only for a value containing an apostrophe,
+which a literal string cannot express.
+
+**Isolation is asymmetric, and only Claude Code has it.** `--strict-mcp-config`
+shuts out every other configured server. Codex has no equivalent (`--strict-config`
+only rejects unknown fields in the user's `config.toml`), so it merges
+`~/.codex/config.toml`'s `mcp_servers` with ours; Cursor still loads
+`~/.cursor/mcp.json`. Recorded here rather than logged per run.
+
+**The Cursor project config is written and put back.** The original bytes go to
+`<run>/cursor-mcp.backup.json` before the file is replaced, and `release()` — called
+from the adapter as the subprocess settles — restores them, or deletes the file when
+the project never had one. The run-end `RunChangeCollector` therefore never sees it.
+The uncovered window is a hard process kill between write and restore; the next run
+on that project restores from the backup before taking its own, so Isotopy's config
+is never mistaken for the user's.
+
+**`workspace_root` outranks the environment.** The taskplanner MCP tools accept a
+`workspace_root` argument that wins over `TASKPLANNER_WORKSPACE_ROOT`, so the step
+task's prose tells the agent not to pass it. There is no server-side way to forbid it.
+
 ## Engines — persona delivery (`engines/persona.ts`)
 
 Claude Code takes the stage persona natively via `--append-system-prompt`, so it
@@ -962,6 +1051,38 @@ The cache is keyed by resolved path, not skill id, because the data roots differ
 per project and an id-keyed cache would leak one project's persona into another.
 See [`architecture.md`](./architecture.md) for how the `architect`
 persona is generated from a single source.
+
+## Step tasks (`services/step-tasks.ts`, `schemas/step-task.ts`, `domain/markdown/front-matter.ts`)
+
+A step task is an assignment that **declares itself**: front matter carries
+`agent`, `summary`, `internal` and `context`, and the prose below it is what the
+agent is handed. Layers 1–4 above apply unchanged — bundled, user override,
+project override, project addendum — under `step-tasks/` rather than `skills/`,
+so a project step task called `developer.md` cannot shadow the Developer persona.
+There is no layer 5: notes are a *role's* memory, not an assignment's.
+
+**Compose, then parse.** `composeSkill` runs first so an addendum's prose is
+appended to the body while the bundled front matter still governs; a project
+override replaces the file wholesale, front matter included. Front matter must
+therefore start at line 1 of whatever layer wins.
+
+**The reader refuses what it cannot represent.** `splitFrontMatter` reads
+`key: value` and `key: [a, b]` and nothing else, so a block sequence, an indented
+continuation, a `|` or `>` scalar, a duplicate key, or a `#` comment is reported
+with the line that carried it rather than half-read. The schema is `.strict()`,
+so a typo'd `agents:` is refused too. A file with **no** front matter stays a
+valid step task whose whole text is the assignment — every user override written
+before this change is one.
+
+**The library is discovered, not listed.** `stepTaskLibrary(projectPath)` unions
+the bundled ids with the `.md` files in the user and project directories; the
+`.md` filter plus the `SKILL_ID` shape is also what keeps `.DS_Store`,
+`Thumbs.db`, `<id>.project.md` and `<id>.notes.md` out. `composable` drops
+anything declaring `internal: true`, which is what the Orchestrator is offered.
+
+**A malformed step task warns and runs without its assignment** rather than
+failing the stage: the typo is the project's, and losing a paid run to it is the
+worse outcome. The notice names the issues.
 
 ## A role's memory of the project (`services/persona-notes-store.ts`, `domain/rules/persona-notes.ts`)
 

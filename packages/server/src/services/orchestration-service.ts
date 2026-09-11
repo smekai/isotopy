@@ -48,11 +48,13 @@ import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
+import { PERSONA_CATALOG } from "../domain/skills/catalog.ts";
+import { stepTaskLibrary } from "./step-tasks.ts";
 import {
   composeTeamPipeline,
   generationOf,
   sameComposition,
+  withResolvedPersonas,
   withRoleTiers,
 } from "../domain/rules/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
@@ -222,6 +224,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const composed = composeTeamPipeline(
       approved.value,
+      (await stepTaskLibrary(projectPath)).byId,
       orchestration.id,
       nextGeneration(orchestration),
     );
@@ -318,12 +321,13 @@ export class OrchestrationService implements StageOutputConsumer {
         `${profession} decided something that cannot be acted on — ${refusal}`,
       );
     }
+    const decided = await this.withPersonasResolved(run.projectId, parsed.value);
     orchestration.turns.push({
       runId: run.id,
-      decision: parsed.value,
+      decision: decided,
       at: nowIso(),
     });
-    orchestration.latestDecision = parsed.value;
+    orchestration.latestDecision = decided;
     delete orchestration.decisionError;
     if (parsed.value.action === "stop") {
       await this.terminate(orchestration, parsed.value.reason, run.id);
@@ -333,6 +337,17 @@ export class OrchestrationService implements StageOutputConsumer {
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return undefined;
+  }
+
+  private async withPersonasResolved(
+    projectId: string,
+    decision: OrchestratorDecision,
+  ): Promise<OrchestratorDecision> {
+    if (decision.action !== "propose_team") {
+      return decision;
+    }
+    const library = await stepTaskLibrary(this.registry.resolve(projectId));
+    return { ...decision, team: withResolvedPersonas(decision.team, library.byId) };
   }
 
   private async refuse(
@@ -597,7 +612,12 @@ export class OrchestrationService implements StageOutputConsumer {
     const running = orchestration.composedPipeline;
     const approved = withRoleTiers(decision.team, undefined);
     const composed = approved.ok
-      ? composeTeamPipeline(approved.value, orchestration.id, currentGeneration(orchestration))
+      ? composeTeamPipeline(
+          approved.value,
+          (await stepTaskLibrary(projectPath)).byId,
+          orchestration.id,
+          currentGeneration(orchestration),
+        )
       : undefined;
     if (!running || !composed?.ok || !sameComposition(composed.value, running)) {
       return undefined;
@@ -761,15 +781,16 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [boardContext, closeoutContext, personaNotes] = await Promise.all([
-      taskBoardFor(projectPath).planningContext(),
+    const [boardContext, closeoutContext, personaNotes, stepTasks] = await Promise.all([
+      taskBoardFor(projectPath).boardDigest(),
       milestoneCloseoutContext(projectPath),
       personaNotesByRole(projectPath),
+      stepTaskLibrary(projectPath),
     ]);
     return {
       goal,
       personas: PERSONA_CATALOG,
-      stepTasks: STEP_TASK_CATALOG,
+      stepTasks: stepTasks.composable,
       boardContext,
       closeoutContext,
       gatePreference: renderGatePreference(

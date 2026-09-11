@@ -15,6 +15,177 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-10 — `**Assignee:**` is the boundary, and no Isotopy writer clears it
+
+**Context:** `orchestrator.md` already says to escalate *"when it commits money, credentials, or
+destructive action"* — and that instinct is right. It is also **a judgment a model makes per
+question**: one interruption with a human watching, a coin flip that spends money without one. The
+owner's boundary has to be data on a task, not prose in a prompt.
+
+**Decision:** the mark is TaskPlanner's own `**Assignee:**`, which its board already parses,
+serializes, renders as `@assignee` and filters on. `FollowUpTaskDraft` and `MilestoneTaskDraft` gain
+the optional field, so **a closeout may create a marked follow-up** — the team may propose the
+monetisation experiment, the pricing change, the credential-bearing integration; it may not start
+one. That asymmetry is the whole boundary: an agent that can mark its own work is useful, one that
+can unmark it has removed the boundary.
+
+**Two axes, two stated reasons.** An assigned task belongs to the person named; a task whose
+`**Waiting until:**` date has not arrived is blocked on something outside the repository. The board
+digest states the reason rather than showing a raw mark, so the agent reads a stated rule instead of
+inferring one — boundaries as data, in the form the reader actually receives.
+
+**Rejected, as `TASK-162` recorded:** a tag (TaskPlanner's config allowlist filters drafted tags, so
+the mark could be silently dropped); a priority (it overloads an axis a marked task still needs); an
+Isotopy-invented field (a second vocabulary for a field TaskPlanner already has); and a server-side
+claim gate refusing to start a run against a marked task — that is `TASK-172`'s problem, and
+respecting a stated boundary is the agent's job, not the scheduler's.
+
+**The honest limit of the claim.** No Isotopy writer clears the mark: there is no update path, and
+`transitionTasks` moves a section verbatim. The *tool* is a different matter —
+`taskplanner_update` can set an assignee — so a step's tools are rendered read-only where the CLI
+can express it (`--disallowedTools` on Claude Code) and the gap is logged where it cannot (Codex,
+Cursor). Anywhere the mark rests on prose alone, the run log says so.
+
+---
+
+## 2026-09-10 — One board parser, and Isotopy's own surgical writer beside it
+
+**Context:** Isotopy maintained a second board parser — `taskSummariesIn` — that was strictly worse
+than the one TaskPlanner ships, and it dropped every `**`-prefixed line, which is exactly where the
+owner's mark lives. `@smekai/taskplanner` 2.3.0 ships a library beside its MCP server, so the agent
+can read the board through the tool while Isotopy's own writes call the library.
+
+**Decision:** **TaskPlanner parses; Isotopy writes.** `parseTasks` reads a state file and
+`serializeTask` renders one task in TaskPlanner's exact metadata order, so `**Assignee:**`,
+`**Epic:**` and `**Waiting until:**` round-trip through its own parser unchanged. Everything else
+about a board file stays Isotopy's: `insertTaskSection` and `takeTaskSection` edit *around* a task
+rather than rebuilding the file.
+
+**Rejected: `serializeStateFile`, and with it `ConfigManager`, `FileStore` and `TaskStore`.**
+Measured, not assumed. `serializeStateFile` rebuilds a whole state file from the tasks it parsed: a
+`<!-- keep -->` comment above a task is **dropped**, and a task headed `## task-002:` — legal to
+Isotopy's board, illegal to TaskPlanner's uppercase-only heading regex — is **deleted outright**.
+`ConfigManager.load()` **rewrote the user's `config.json` on a read**: reformatted it, injected eight
+fields, flipped `aiPlanRequired`, and added a `Rejected` state the project never declared.
+`FileStore.readState` hands `parseTasks` raw bytes, which is the CRLF bug below. Each has a test
+standing over it now, because each would be a silent data loss in someone's repository.
+
+**CRLF is a boundary, not a detail.** The same content parses to one task as LF and to **zero tasks
+with warnings** as CRLF — indistinguishable from an empty board, on a parser reading the *user's*
+repository, where Git for Windows checks out CRLF by default. Isotopy normalises at the read
+boundary and restores each file's own ending on write, per file rather than per board. Worth
+reporting upstream, along with the config rewrite and the silent `P9 → P4` priority coercion.
+
+**Rejected: deleting the board digest with the parser it used.** `TASK-162` said
+`renderTaskBoardPlanningContext` and its callers go. That would make milestone planning board-blind —
+`plan-milestone` does not declare the tool — and would leave any engine that cannot carry a tool with
+no board at all. It is **replaced** instead: `renderBoardDigest` renders typed `Task[]`, so it shows
+the `@owner`, epic and waiting-until marks the old summary stripped. The tool is authoritative; the
+digest is the summary every engine gets.
+
+**The built-in board moves to `<dataDir>/.tasks`, and that is its only name.** One reader serves
+both backends without special-casing a directory, and — the reason the rename is not optional — the
+MCP server finds a board by searching for `.tasks/config.json`. A board under the old
+`<dataDir>/tasks` would be read by Isotopy and invisible to the agent reading through the tool, and
+a board half the product can see is worse than one it cannot. **Rejected: probing the old name too.**
+It looks like kindness and delivers exactly that half-board. Nothing outside this repository holds
+one, which is why the break lands now rather than after someone does. New built-in boards also get a
+**Next** state, which the poller prompt has always assumed and which `createBuiltInBoard` never
+created.
+
+---
+
+## 2026-09-10 — Isotopy renders MCP config; the engine CLI is the client
+
+**Context:** `TASK-162`'s boundary is a mark the agent must read *through a tool*, and there was no
+MCP anywhere in Isotopy — one incidental `mcp_tool_call` case in `codex-protocol.ts` and nothing
+else. A step that declares `tools: [taskplanner]` needs the CLI it runs on to carry that server.
+
+**Decision:** no MCP SDK enters this repository. A pure tool catalog maps a tool id to a launch
+spec, `mcpServers` and `deniedTools` join `ENGINE_CAPABILITY_CATALOG` — so adding either was a
+compile error until all three engines answered — and each adapter renders the spec into its own
+CLI's shape. Verified against the installed binaries, per the rule the 2026-08-23 entry produced:
+`claude 2.1.263`, `codex-cli 0.144.6`, `cursor-agent 2026.08.11-e8db854`.
+
+**The module path is resolved from the server, never from the engine's cwd.** A run works in the
+*user's* project, which has no `node_modules/@smekai/taskplanner`, so `createRequire(import.meta.url)`
+resolves the absolute `dist/mcp-server.js` and the config names `node` plus that path. That is also
+what avoids the Windows `.cmd` shim and the `shell: true` the Node >= 20 rule would otherwise force —
+only the bare `taskplanner-mcp` bin resolves to a `.cmd`, and nothing spawns it. **Rejected: the
+`node -e` form this repository's own `.mcp.json` uses.** That is right for a host that launches from
+the repository root and wrong for a run: `-e` is a code string, and resolution would start from the
+user's project.
+
+**`--strict-mcp-config` is load-bearing, not tidiness.** Without it a run in this repository would
+load our server *plus* the repository's own `.mcp.json` under the same name, and a run in an
+arbitrary project would silently inherit whatever that user configured. `tools: [taskplanner]` has
+to mean these and no others. Both flags go on **only when the step declares tools**, so a step
+declaring none keeps today's behaviour and a user who configured MCP deliberately is not broken.
+
+**Cursor takes no MCP flag at all.** Probed: `agent mcp` manages only `.cursor/mcp.json` or
+`~/.cursor/mcp.json`. The machine file is out — 2026-08-17 settled that a run installs tooling into
+the project, never into the machine. So Isotopy writes the **project** file for the run and puts
+back exactly what was there, keeping the original bytes in the run's own directory; a config the
+project never had is deleted again. That narrows, rather than breaks, the standing rule
+`permission-modes.comp.ts` asserts: *machine-level* CLI config is read and never written. The
+accepted cost is a window: a hard process kill between writing and restoring leaves the file behind,
+and the next run on that project puts it back rather than backing up Isotopy's own config as if it
+were the user's. **Rejected: an inline JSON argv string.** Claude accepts one, but a 250-character
+blob of quotes and braces through `quoteWindowsArg` → `cmd.exe /d /s /c` is the class of thing
+`MULTILINE_SHIM_MESSAGE` exists to guard, and a file is inspectable run evidence when a tool
+silently fails to load.
+
+**The boundary is only as strong as the tools the agent gets.** `taskplanner_update` can set an
+assignee, so a step's declared tools are rendered read-only where the CLI can express that:
+`--disallowedTools mcp__taskplanner__*` on Claude Code. Codex `exec` and cursor-agent have no
+verified per-tool deny, and each says so in the run log rather than letting the run imply the mark
+is protected. `deniedTools` is a capability row precisely so that gap is data, not prose.
+
+---
+
+## 2026-09-10 — A step task declares itself, and twenty lines read its front matter
+
+**Context:** the pairing of persona to assignment was chosen by the *role*, and what a step needed
+beyond its prose was a branch in the workflow — `stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK`
+in `stage-execution.ts` decided who was told how to reach the running product. `STEP_TASK_CATALOG`
+was a hand-maintained array of ten `{id, summary}` pairs beside thirteen files on disk, so adding a
+step task meant editing two places and the array was already three entries out of date.
+
+**Decision:** the step task is the main point, and the file declares what it needs. YAML-style front
+matter carries `agent`, `summary`, `internal` and `context`; the split is pure
+(`domain/markdown/front-matter.ts`), the schema strict (`schemas/step-task.ts`), the reading a
+service (`services/step-tasks.ts`). `role.skill` is optional and defaults to the declared `agent`.
+`context` is a **closed vocabulary** derived from one `as const` tuple, not a plugin surface, and
+`productEnvironment()` now asks the declaration instead of comparing an id. Step tasks layer exactly
+as personas do — bundled → user → project override → project addendum — which is what makes the
+library the user's to grow. Persona *notes* stay persona-only.
+
+**Rejected: a YAML dependency.** The vocabulary is four keys, two of them ids from closed tuples. A
+full parser is not only cost — `gray-matter` pulls `js-yaml` and two more — it is *more* dangerous:
+YAML 1.1 implicit typing reads `agent: no` as `false`. A reader that hands zod nothing but strings
+and string arrays cannot do that. The price is that it must **refuse** what it cannot represent — a
+block sequence, an indented continuation, a `|` scalar, a duplicate or unknown key — each with the
+line that carried it. The repo already hand-*builds* front matter in `scripts/generate-skills.mjs`;
+reading it back with a splitter keeps the two symmetrical, and a root `.mjs` could never import a TS
+parser anyway.
+
+**Rejected: sharing `skills/` with personas.** `TASK-162` specified reuse of `userSkillsDir()` and
+`skillsDir()`. That puts 23 ids in one flat namespace, where a project adding a step task
+`developer.md` would silently replace the Developer **persona**. The bundled side already keeps them
+in separate directories; the user and project layers now do too.
+
+**Rejected: `setup` as a second vocabulary.** Its only member would have been `preview-deployment`,
+and that branch does not *prepare* what a step needs — it replaces the agent with a deterministic
+deployment. A one-member closed vocabulary with a strained name is itself a smell, so
+`PREVIEW_DEPLOY_STEP_TASK` stays an id literal until a second member earns the key.
+
+**`internal: true` is now what stops the Orchestrator composing itself.** The old guard was the
+absence of `orchestrate`, `mediate-question` and `review-run` from a hand-written array. Discovery
+reads the whole directory, so the guard had to become a declaration — and it is enforced where the
+old one was, in `team-composition.ts`, with its own test.
+
+---
+
 ## 2026-08-25 — A scheduled task is a prompt, and the team it pins is optional
 
 **Context:** `TASK-161` specified the board poller as a bespoke feature: a server-side board

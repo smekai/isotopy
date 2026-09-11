@@ -11,6 +11,7 @@ export const followUpTaskDraftSchema = z
     description: requiredText,
     priority: z.enum(TASK_PRIORITIES),
     tags: requiredTexts,
+    assignee: requiredText.optional(),
   })
   .strict();
 

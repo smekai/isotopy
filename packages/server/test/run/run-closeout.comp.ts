@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@isotopy/core";
+import { parseTasks } from "@smekai/taskplanner";
 import type { StageDefinition } from "@isotopy/core";
 import type { ProjectPath } from "../../src/paths.ts";
 import {
@@ -115,6 +116,62 @@ test("only the tasks the report calls completed move to Done", async () => {
       "utf8",
     ),
   ).toContain("# Run closeout");
+});
+
+// The team may propose the work that spends money or needs a credential; it may
+// not start it. Nothing in the product clears the mark once it is written.
+test("a closeout may create a follow-up marked for the owner", async () => {
+  // Arrange
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    run,
+    closeoutOutput(markedDelivery(), "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors).toEqual([]);
+  expect(record.createdTasks).toMatchObject([{ id: "TASK-003" }]);
+  expect(await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8"))
+    .toContain("**Assignee:** owner");
+});
+
+test("the mark round-trips, so the parser that reads the board back sees the same owner", async () => {
+  // Arrange
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
+  await applyCloseoutReport(project, run, closeoutOutput(markedDelivery(), "PASS"));
+
+  // Act
+  const parsed = parseTasks(
+    await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8"),
+  );
+
+  // Assert
+  expect(parsed.tasks.map((task) => task.assignee)).toEqual(["owner"]);
+});
+
+test("moving a marked task to Done leaves the mark, because a transition moves a section", async () => {
+  // Arrange
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
+  await writeFile(
+    path.join(project.root, ".tasks", "IN_PROGRESS.md"),
+    "# In Progress\n\n## TASK-001: Marked\n**Priority:** P1 | **Assignee:** owner\n\nBody.\n\n---\n",
+  );
+
+  // Act
+  await applyCloseoutReport(project, run, closeoutOutput(PARTIAL_DELIVERY, "FAIL"));
+
+  // Assert
+  expect(await readFile(path.join(project.root, ".tasks", "DONE.md"), "utf8"))
+    .toContain("**Assignee:** owner");
 });
 
 test("cleanup deletes inside the run directory and refuses to escape it", async () => {
@@ -302,6 +359,15 @@ function makeCloseoutRun() {
     featureId: "feature",
     sourceTaskIds: ["TASK-001", "TASK-002"],
   });
+}
+
+function markedDelivery(): object {
+  return {
+    ...PARTIAL_DELIVERY,
+    tasks: [{ ...PARTIAL_DELIVERY.tasks[0], assignee: "owner" }],
+    completedTaskIds: [],
+    unresolvedTaskIds: ["TASK-001", "TASK-002"],
+  };
 }
 
 function closeoutOutput(report: object, verdict: "PASS" | "FAIL"): string {

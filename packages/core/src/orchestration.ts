@@ -22,7 +22,7 @@ export const orchestratorRoleSchema = z
   .object({
     id: requiredText,
     label: requiredText,
-    skill: requiredText,
+    skill: requiredText.optional(),
     stepTask: requiredText,
     rationale: requiredText.optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),

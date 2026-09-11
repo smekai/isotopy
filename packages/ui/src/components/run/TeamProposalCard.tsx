@@ -109,7 +109,7 @@ function RoleList({ roles, roleTiers, editable, d, onRoleTierChange }: RoleListP
         <div key={role.id} style={roleRow(d)}>
           <span style={roleName(d)}>{role.label}</span>
           <span style={roleSkill(d)}>
-            {role.skill} · {role.stepTask}
+            {role.skill ? `${role.skill} · ${role.stepTask}` : role.stepTask}
           </span>
           {editable ? (
             <select

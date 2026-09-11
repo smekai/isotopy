@@ -49,6 +49,16 @@ const TEAM: OrchestratorTeamProposal = {
 
 const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
+const UNSKILLED_TEAM_PROPOSAL: OrchestratorDecision = {
+  action: "propose_team",
+  rationale: "The step task already names who does this",
+  team: {
+    name: "Solo build",
+    summary: "Build the search endpoint",
+    roles: [{ id: "implementation", label: "Implementing", stepTask: "implement-feature" }],
+  },
+};
+
 const TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
   rationale: "One Developer and one QA Engineer cover this",
@@ -529,6 +539,25 @@ test("an orchestration parked on the user survives a server restart with its tur
     runIds: [run.id],
   });
   await restarted.shutdown();
+});
+
+// A role may leave its persona to the step task, but the user approving the team has
+// to see who will actually do the work — so it is resolved before it is recorded.
+test("a role that names no persona is recorded with the one its step task declares", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(UNSKILLED_TEAM_PROPOSAL));
+
+  // Act
+  const conversation = await proposedTeam();
+
+  // Assert
+  const { body: orchestration } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}`,
+  );
+  expect(proposedRoles(orchestration).map((role) => role.skill)).toEqual(["developer"]);
 });
 
 test("approving a proposed team starts a composed run carrying its own pipeline definition", async () => {
@@ -1517,6 +1546,11 @@ async function waitForOrchestrationRuns(
     `Orchestration ${orchestrationId} had runs ${runIds.join(", ")}`,
   ).toBe(count);
   return last ?? "";
+}
+
+function proposedRoles(orchestration: Orchestration): OrchestratorTeamProposal["roles"] {
+  const decision = orchestration.latestDecision;
+  return decision?.action === "propose_team" ? decision.team.roles : [];
 }
 
 async function proposedTeam(): Promise<RunState> {

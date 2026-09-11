@@ -4,9 +4,16 @@ import { describe, expect, test } from "vitest";
 import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
 import { REPO_ROOT } from "../src/paths.ts";
 import {
+  listBundledStepTaskIds,
   loadBundledPersona,
   loadBundledStepTask,
-} from "../src/services/skills.ts";
+} from "../src/services/skill-assets.ts";
+import { parseStepTask } from "../src/schemas/step-task.ts";
+
+async function agentOf(id: string): Promise<string | undefined> {
+  const parsed = parseStepTask((await loadBundledStepTask(id)) ?? "");
+  return parsed.ok ? parsed.value.agent : undefined;
+}
 
 const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
@@ -50,6 +57,31 @@ describe("skill generation", () => {
     expect(
       referenced.filter((_, index) => !loaded[index]),
       "pipeline stages naming a step task with no bundled assignment",
+    ).toEqual([]);
+  });
+
+  test("every bundled step task declares itself, so none reaches a stage half-read", async () => {
+    const ids = await listBundledStepTaskIds();
+
+    const declared = await Promise.all(
+      ids.map(async (id) => parseStepTask((await loadBundledStepTask(id)) ?? "")),
+    );
+
+    expect(ids.length).toBeGreaterThan(0);
+    expect(
+      ids.filter((_, index) => !declared[index]?.ok),
+      "bundled step tasks whose front matter does not parse",
+    ).toEqual([]);
+  });
+
+  test("every bundled step task names the agent a role may default to", async () => {
+    const ids = await listBundledStepTaskIds();
+
+    const agents = await Promise.all(ids.map((id) => agentOf(id)));
+
+    expect(
+      ids.filter((_, index) => agents[index] === undefined),
+      "bundled step tasks declaring no agent",
     ).toEqual([]);
   });
 

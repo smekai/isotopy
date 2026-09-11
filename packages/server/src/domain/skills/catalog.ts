@@ -55,16 +55,3 @@ export const PERSONA_CATALOG: CatalogEntry[] = [
       "Agent — the whole team in one box, for work too small to justify a team.",
   },
 ];
-
-export const STEP_TASK_CATALOG: CatalogEntry[] = [
-  { id: "plan-feature", summary: "Turn a request into one coherent, implementable feature." },
-  { id: "plan-milestone", summary: "Turn a goal into a milestone and an ordered delivery backlog." },
-  { id: "design-experience", summary: "Design the user-facing interaction for an approved feature." },
-  { id: "design-architecture", summary: "Design the architecture for an approved feature." },
-  { id: "implement-feature", summary: "Implement the approved scope in the project directory." },
-  { id: "review-implementation", summary: "Independently review the working-tree diff against the approved scope." },
-  { id: "verify-feature", summary: "Independently verify the implementation against the approved requirements." },
-  { id: "prepare-release", summary: "Produce the change manifest, changelog fragment, and release checklist." },
-  { id: "deploy-preview", summary: "Deploy the configured preview environment, or record that none exists." },
-  { id: "closeout-feature", summary: "Consolidate decisions, knowledge, findings, and the next recommendation." },
-];

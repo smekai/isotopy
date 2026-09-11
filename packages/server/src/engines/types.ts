@@ -8,10 +8,18 @@ import type {
   StageLogDraft,
   StageUsage,
 } from "@isotopy/core";
+import type { ToolId } from "../domain/rules/tool-catalog.ts";
 
 export interface EngineConnection {
   mode: string;
   apiKey?: string;
+}
+
+export interface McpToolRequest {
+  tools: readonly ToolId[];
+  runDir: string;
+  projectDir: string;
+  workspaceRoot: string;
 }
 
 export interface EngineRunContext {
@@ -26,6 +34,7 @@ export interface EngineRunContext {
   /** Continue this CLI session instead of starting a new one. */
   resumeSessionId?: string;
   toolCacheDir: string;
+  mcpTools: McpToolRequest;
   timeoutMs: number;
   signal: AbortSignal;
   onLog: (log: StageLogDraft) => void;
