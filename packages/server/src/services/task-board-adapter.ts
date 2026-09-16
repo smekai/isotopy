@@ -416,6 +416,7 @@ function milestoneTask(
     ),
     priority: toBoardPriority(draft.priority),
     tags: allowedTags(board, draft.tags),
+    assignee: draft.assignee,
     updatedAt: stamp(),
   };
 }
@@ -455,6 +456,7 @@ function followUpTask(
     description: bodyWithSource(draft.description, source, sourceMarker),
     priority: toBoardPriority(draft.priority),
     tags: allowedTags(board, draft.tags),
+    assignee: draft.assignee,
     updatedAt: stamp(),
   };
 }

@@ -15,6 +15,39 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-10 — `**Assignee:**` is the boundary, and no Isotopy writer clears it
+
+**Context:** `orchestrator.md` already says to escalate *"when it commits money, credentials, or
+destructive action"* — and that instinct is right. It is also **a judgment a model makes per
+question**: one interruption with a human watching, a coin flip that spends money without one. The
+owner's boundary has to be data on a task, not prose in a prompt.
+
+**Decision:** the mark is TaskPlanner's own `**Assignee:**`, which its board already parses,
+serializes, renders as `@assignee` and filters on. `FollowUpTaskDraft` and `MilestoneTaskDraft` gain
+the optional field, so **a closeout may create a marked follow-up** — the team may propose the
+monetisation experiment, the pricing change, the credential-bearing integration; it may not start
+one. That asymmetry is the whole boundary: an agent that can mark its own work is useful, one that
+can unmark it has removed the boundary.
+
+**Two axes, two stated reasons.** An assigned task belongs to the person named; a task whose
+`**Waiting until:**` date has not arrived is blocked on something outside the repository. The board
+digest states the reason rather than showing a raw mark, so the agent reads a stated rule instead of
+inferring one — boundaries as data, in the form the reader actually receives.
+
+**Rejected, as `TASK-162` recorded:** a tag (TaskPlanner's config allowlist filters drafted tags, so
+the mark could be silently dropped); a priority (it overloads an axis a marked task still needs); an
+Isotopy-invented field (a second vocabulary for a field TaskPlanner already has); and a server-side
+claim gate refusing to start a run against a marked task — that is `TASK-172`'s problem, and
+respecting a stated boundary is the agent's job, not the scheduler's.
+
+**The honest limit of the claim.** No Isotopy writer clears the mark: there is no update path, and
+`transitionTasks` moves a section verbatim. The agent reads the mark in the digest and is told the
+rule, which is where a stated boundary belongs — but nothing yet *prevents* an agent that acquires a
+board-writing tool from clearing it. That gap belongs to whatever gives a step such a tool, and it
+has to close there rather than here.
+
+---
+
 ## 2026-09-10 — One board parser, and Isotopy's own surgical writer beside it
 
 **Context:** Isotopy maintained a second board parser — `taskSummariesIn` — that was strictly worse

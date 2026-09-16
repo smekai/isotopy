@@ -35,6 +35,7 @@ const findingSchema = z
   })
   .strict();
 
+// An unknown field here loses the whole follow-up to `salvageItems`, not just the field.
 const followUpTaskSchema = z
   .object({
     findingId: requiredText,
@@ -42,6 +43,7 @@ const followUpTaskSchema = z
     description: requiredText,
     priority: z.enum(TASK_PRIORITIES),
     tags: uniqueStrings,
+    assignee: requiredText.optional(),
   })
   .strict();
 

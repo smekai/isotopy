@@ -46,6 +46,27 @@ describe("parseCloseoutReport", () => {
     expect(parsed.report.tasks).toHaveLength(1);
   });
 
+  // The mirror is strict and `salvageItems` drops an item that fails whole, so a
+  // field it does not know would lose the follow-up rather than the assignee.
+  it("keeps a follow-up marked for the owner, rather than dropping the task with it", () => {
+    const parsed = parseBlock({
+      ...VALID_CLOSEOUT,
+      tasks: [
+        {
+          findingId: "finding",
+          title: "Buy the domain",
+          description: "Spends money, so it is not the team's to start",
+          priority: "P1",
+          tags: [],
+          assignee: "owner",
+        },
+      ],
+    });
+
+    expect(parsed.validationErrors).toEqual([]);
+    expect(parsed.report.tasks[0]?.assignee).toBe("owner");
+  });
+
   it("keeps every field and element that parsed, and names each one that did not", () => {
     const parsed = parseBlock({
       ...VALID_CLOSEOUT,
