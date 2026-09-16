@@ -1,6 +1,6 @@
 # Competitor Matrix: Isotopy
 
-**Last updated:** August 2026 (added Open SWE; added Guild.ai; refreshed CrewAI; added launch resolution)  
+**Last updated:** September 2026 (new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where Isotopy wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -16,6 +16,7 @@
 | **Agent frameworks** | Build custom multi-agent graphs | Building blocks, not product |
 | **Coding-agent runtimes** | Single-session implementation | Harnesses we would orchestrate |
 | **Agent-workforce platforms** | Horizontal agent org coordination | Indirect but high-gravity (same buyer) |
+| **Parallel-agent orchestrators** | Running many coding CLIs at once, visibly | **Newest and most direct overlap** |
 
 ---
 
@@ -128,7 +129,7 @@
 | **Claude Code** | CLI/IDE | High | Yes | Implementation harness |
 | **OpenHands** | Web/CLI/SDK | High (sandboxed) | Yes | Implementation harness |
 | **Aider** | Terminal | Medium (pair programmer) | Yes | Implementation harness |
-| **Cline** | VS Code ext | Medium (plan/act) | Yes | Implementation harness |
+| **Cline** | VS Code + JetBrains ext, desktop app, CLI, SDK | Medium–high (plan/act, headless CI, cron, teams) | Yes | **Both**: an adapter candidate *and*, via Kanban, a rival orchestrator — see §8 |
 | **SWE-agent** | Headless | High (benchmark-oriented) | Yes | Research / CI harness |
 | **Codex (OpenAI)** | CLI/API | High | Partial | Implementation harness |
 | **Open SWE (LangChain)** | Async bot (Slack / Linear / GitHub) | High ("no confirmation prompts") | Self-hostable, but executes in a remote sandbox | **Rival at the implement stage** — not an adapter |
@@ -169,21 +170,106 @@
 
 ---
 
+## 8. Parallel-Agent Orchestrators (Agent Multiplexers)
+
+**This category did not meaningfully exist when the matrix was last written.** Between March and July 2026 a dozen tools converged on one shape: a board or TUI **on your machine** that runs several coding CLIs at once, each in its own **git worktree**, with dependency links between cards. Not app builders, not frameworks — they sit exactly where we claimed "visual run control over any harness, locally" was unclaimed.
+
+| Product | Local | OSS | Harnesses driven | Isolation | Dependencies | Visual | Verify gate | Deploy | Maturity |
+|---------|-------|-----|------------------|-----------|--------------|--------|-------------|--------|----------|
+| **Cline Kanban** | Yes | Yes (Apache-2.0) | Claude Code, Codex, Cline ("more coming") | Ephemeral worktree + branch per card | Linked cards auto-start | Browser board | No (human diff review) | No | Beta, Mar 2026 |
+| **Bernstein** | Yes (on-prem, air-gap) | Yes (Apache-2.0) | 40+ adapters (Claude Code, Codex, Gemini, Cursor, Aider, Copilot…) | Worktree per task | LLM-planned task graph | **No** (CLI + MCP) | **Yes — Janitor: lint, types, tests per diff** | No | Beta, one maintainer (v3.19.x) |
+| **Conductor** | Yes (macOS) | No (commercial) | Claude Code, Codex | Worktree per agent | Manual | Native app | No | No | Commercial |
+| **Vibe Kanban** | Yes | Yes | 10+ (Claude Code, Codex, Gemini, Copilot, Amp, Cursor, OpenCode…) | Worktree | MCP task decomposition | Web board | No | No | **Sunsetting Jul 2026**, community-maintained |
+| **Emdash** | Yes | Yes | Claude Code, Codex, Gemini, Copilot, Amp, Cursor, Goose… (34 providers) | Worktree | Manual | Electron app | No | No | Active |
+| **Agent Orchestrator (AO)** | Yes | Yes | 10+ incl. Claude Code, Codex, Aider, Cursor, Droid | Worktree, a PR each | PR lifecycle automation | Desktop app | CI-gated; auto-fixes CI failures | No | Active |
+| **Nimbalyst** | Yes | Yes | Claude Code, Codex | Worktree | Manual | Desktop app | No | No | Successor to Crystal |
+| **Claude Squad** | Yes | Yes | Claude Code, Codex, Aider, Gemini, OpenCode, Amp | tmux + worktree | Manual merge | TUI | No | No | Active |
+| **Baton** | Yes | Yes | Claude Code (configurable) | Worktree | GitHub Issue queue | No | No | No | Early |
+| **Microsoft Conductor** | Local/cloud | Yes | Copilot, Claude | — | YAML workflows | Web dashboard | No | No | Early |
+| **Code Conductor** | Yes | Yes | Claude Code only | Branch | `conductor:task` label queue | No | No | No | Early |
+
+**What the whole category misses — and it is strikingly consistent:** *not one of them deploys the product.* None covers requirements or design, none runs browser E2E inside the loop, none carries a persona across stages, none has a v1 to v2 evolution story. A card is a task; a task becomes a diff or a PR; a human takes it from there. **They multiply the *implement* stage — the one stage Isotopy delegates wholesale to an adapter.**
+
+**What the category took from us — state it plainly.** Three rows we listed as differentiators in August are now table stakes:
+
+| Former differentiator | Status September 2026 |
+|---|---|
+| Worktree isolation per run | **Commoditised** — every surveyed orchestrator does it |
+| Harness-agnostic adapters | **Commoditised** — Bernstein 40+, Emdash 34, Vibe Kanban 10+ |
+| Visual board over parallel agents | **Commoditised** — Cline Kanban, Conductor, Vibe Kanban, Nimbalyst, Emdash, AO |
+
+"No polished unified product does harness adapters" is no longer a true sentence and must come out of the pitch. What survives is not the plumbing but the **opinion**: prepared professions, stage contracts with handoffs and verdicts, E2E against a running product, a deploy stage the tool owns, and the milestone loop after v1.
+
+**Source caution:** the nine-orchestrator roundup used to seed this table is published by **Augment Code**, itself listed in §4 — a competitor's survey of competitors. Treat its feature claims as leads to verify, not findings. Cline Kanban, Bernstein, and Vibe Kanban's sunset were confirmed against primary sources; the remaining rows are single-sourced and marked for verification.
+
+---
+
+### Cline — head-to-head (September 2026)
+
+**Cline outgrew its §6 row.** It is no longer "a VS Code extension with plan/act." Apache-2.0, ~68k GitHub stars, 5M+ Marketplace installs, shipping **five surfaces off one agent runtime**: VS Code extension, JetBrains plugin, desktop app (macOS/Windows), a **CLI** (`npm i -g cline`, Node 22+, headless with machine-readable output and exit codes for CI), and a **Node SDK**. Three things on top of that runtime reach into our territory: **Kanban**, **Agent Teams**, and **scheduled/connector agents**.
+
+| Dimension | Cline | Isotopy |
+|-----------|-------|---------|
+| Model access | **Calls model APIs itself** — BYO key across 30+ providers (Anthropic, OpenAI, Google, Bedrock, Vertex, Ollama, any OpenAI-compatible), plus its own Cline Provider | **Never calls a model API.** Spawns a coding CLI you are already logged into — your models, your auth, your subscription |
+| Harness relationship | *Is* a harness; Kanban additionally drives Claude Code and Codex | Is not a harness; drives Claude Code, Cursor, Codex as adapters |
+| Unit of work | A task/card, becoming a diff or a branch | A **run**: an ordered pipeline of stages with upstream handoffs and a `VERDICT:` per stage |
+| Roles | **Improvised** — a coordinator spawns teammates via `team_spawn_teammate` with a role string it invents at runtime | **Prepared professions** — a persona catalog (PM, Designer, Architect, Developer, Reviewer, QA, Release Manager, SRE) as overridable Markdown, per user and per project |
+| Who decides what is next | The coordinator, inside one task; board dependency links are static | An **Orchestrator above the runs** — reads outputs, verdicts, findings and changed files, then picks `start_run` / `plan_milestone` / `continue_milestone` / `ask_user` / `stop` |
+| Human gates | Per-step approval in the IDE; diff review on the board; full auto-approve in CI | Explicit stage gates, plus a **question broker** — a specialist never interrupts you directly, it asks the Orchestrator, which answers or escalates a rewritten question |
+| Persistence | Team state in `~/.cline/data/teams/<name>/` (`task-board.json`, `mailbox.json`, `mission-log.json`); mission logs survive restarts | Durable OpenWorkflow runtime on SQLite: kill the server mid-run and it resumes **without re-running completed stages**; restart a single stage |
+| Verification | Runs your tests when asked; a human reviews the diff | Quality stages inside the pipeline; a blocking finding marks the run **needs attention** rather than killing it, and closeout still writes follow-up tasks |
+| E2E | Browser automation via Puppeteer as an agent *tool* (click, screenshot, debug) | **Playwright E2E as a pipeline stage**, against a product the run starts through declared automation |
+| Deploy | The agent can run deploy commands if you ask it to | **A `deploy` stage run by Isotopy itself**, not by an agent: per-environment target in `.isotopy/automation.json`, health-checks the URL it printed, `VERDICT: SKIP` when no target is configured, production behind explicit confirmation |
+| Beyond one feature | Cron agents; Slack/Discord/Telegram connectors | **Milestones** — a planned feature queue, auto-run next feature, dashboard with per-feature run history and blocking findings |
+| Backlog | Board cards; GitHub via connectors | Repo-native `.isotopy/tasks/` backlog that closeout writes into |
+| Business model | Free OSS; Teams $20/mo; Enterprise (SSO, audit logging, VPC) | Open source, local |
+
+**Where Cline genuinely beats us — do not pretend otherwise.** Distribution (68k stars, 5M installs, against our pre-launch zero), surface count (five entry points to our one web UI), provider breadth (30+ model providers against three CLIs), an IDE-native inner loop we do not have at all, messaging connectors, and a mature MCP and rules ecosystem. With headless CLI plus cron agents it also has a better *unattended automation* story than ours today — which is exactly what Milestone I is aimed at.
+
+**Where the difference is structural rather than feature-count:**
+
+1. **Cline is a thing we should orchestrate, and it is not on our adapter list.** Claude Code, Cursor and Codex are. Cline's CLI has headless output and branchable exit codes — exactly the adapter contract we already satisfy three times over. **Adding it converts our loudest competitor into a supported engine, and it is the cheapest fourth adapter on the table.**
+2. **Cline's teams are improvised; ours are prepared.** `team_spawn_teammate` invents a role at runtime. Our value is that somebody already decided what a QA Engineer does, what it receives from Architecture, and what it must hand to Release. That is the "ready dev team" claim, and Cline cannot make it without shipping a persona catalog of its own.
+3. **Cline stops at the diff.** Board, worktree, review, merge — then a human. Our half of the market is everything after the diff: E2E against the running product, deploy with a health check, closeout findings into a backlog, and the next feature after that.
+4. **The API-key seam.** Cline is a model-API client; we are a CLI supervisor. For a user whose spend already lives in a Claude Code or Cursor subscription we add nothing to the bill, while Cline meters per token. The mirror of that: for a user with no such subscription Cline works and we do not.
+
+**Threat vector, ranked.** Kanban grows *downstream* — a card type that runs tests, then one that deploys, then saved multi-card templates — and Cline arrives at Full Delivery with 68k stars behind it. It already owns the board, the worktrees, the dependency chains, the persistence and the harness-agnosticism. What it lacks is the opinion: prepared professions, stage contracts, and a deploy stage the tool owns rather than the agent. **That opinion is now the entire wedge.** Second vector: a community `.clinerules` pack plus a Kanban template approximating an SDLC — the Paperclip-plugin threat repeating in a much closer neighbourhood.
+
+**Positioning response:** never compare boards; we lose that comparison on maturity and always will. Cline orchestrates *tasks*; Isotopy runs a *delivery process*. The line is: **"Cline gives you many agents. Isotopy gives you a team that already knows the job — and doesn't stop at the pull request."**
+
+---
+
+### Bernstein — the closest structural rival
+
+Of everything surveyed, **Bernstein** has the most similar spine: goal, to an LLM planner, to a task graph, to an orchestrator, to parallel agents in worktrees, to Janitor verification, to merge. Apache-2.0; local, on-prem or air-gapped; 40+ CLI adapters; MCP server mode; and a **Janitor that gates merges on lint, types and tests per diff** — a real quality gate, which the rest of §8 lacks entirely. Its distinctive bet is **determinism**: no model in the coordination loop, so the same plan replays byte-identically, with signed lineage and an HMAC-chained audit log a reviewer can check offline.
+
+**Where it is not us:** no prepared professions (manager, scheduler and janitor are components, not personas), **no visual dashboard at all** (CLI + MCP), no requirements or design stages, no browser E2E, **no product deployment** — its "air-gap deploy" means deploying Bernstein, not your app — and no v1-to-evolution or milestone story. Beta, one maintainer.
+
+**Why it matters anyway:** it is the only competitor whose verification gate is genuinely comparable to ours, and its determinism argument is sharp in a way we have no stock answer to — our Orchestrator *is* a model in the coordination loop, deliberately. Expect the question "why is your scheduler an LLM?" and answer it: because the next decision after a run depends on what the run *found*, not merely on whether it passed, and a byte-identical replay of the wrong next step is not a feature. **Watch for:** a dashboard, or a `deploy` verb. Either one moves Bernstein into §1.
+
+---
+
 ## Feature Comparison (Our Target vs Best-in-Class)
 
-| Capability | Our target | Closest existing | Notes |
-|------------|-----------|------------------|-------|
+**Re-scored September 2026.** The "Status" column is the honest one: a capability the new §8 crowd
+now ships is no longer something to sell, however well we do it.
+
+| Capability | Our target | Closest existing | Status |
+|------------|-----------|------------------|--------|
 | Local artifact store (git-native) | Required | spec-manager, Sikula | Table stakes |
 | Built-in task backlog (feeds runs) | Required | spec-intelligence (kanban), spec-manager (task lifecycle) | Intake only; we execute full pipeline |
-| Predefined lifecycle stages | Required | autonomous-sdlc, aiagentflow | Need editable templates |
-| Restart one failed stage | Required | Sikula (partial), LangGraph (DIY) | Key differentiator |
-| Adapter: Cursor / Claude Code | Required | OpenCastle, skillfold (config) | No polished unified product |
-| Playwright E2E in pipeline | Required | Locode, Open Orchestra | App builders partial; orchestrators rare |
-| Deploy to any platform | Required | Tinykit, Singulary (limited) | Hosted builders = platform lock-in |
-| Ongoing evolution (v2+) | Required | None cleanly | **Core wedge** |
-| Human approval gates | Required | spec-manager, autonomous-sdlc | Common in spec tools |
-| Visual run dashboard | Required | aiagentflow TUI, Factory web | CLI-only is common |
-| Worktree isolation per run | Required | Sikula, AI-SDLC | Not universal |
+| Predefined lifecycle stages | Required | autonomous-sdlc, aiagentflow | **Still differentiating** — §8 has cards, not stages |
+| Restart one failed stage | Required | Sikula (partial), LangGraph (DIY) | **Still differentiating** — §8 restarts a *card*, not a stage inside a pipeline |
+| Adapter: Cursor / Claude Code | Required | **Bernstein (40+), Emdash (34), Vibe Kanban (10+), Cline Kanban** | **Table stakes** — stop selling it |
+| Playwright E2E in pipeline | Required | Locode, Open Orchestra | **Still differentiating** — no §8 orchestrator runs browser E2E in the loop |
+| Deploy to any platform | Required | Tinykit, Singulary (limited) | **Strongest remaining moat** — *zero* of the eleven §8 orchestrators deploy the product |
+| Ongoing evolution (v2+) | Required | None cleanly | **Core wedge, still unclaimed** |
+| Human approval gates | Required | spec-manager, autonomous-sdlc | Common in spec tools; §8 reviews diffs, it does not gate between stages |
+| Prepared professions (persona catalog) | Required | None (Cline improvises roles at runtime) | **Newly load-bearing** — the claim §8 cannot make |
+| Cross-stage handoff + verdict | Required | Bernstein (signals), Cline (mailbox) | **Still differentiating** — nobody carries design into QA |
+| Never calls a model API | Required | None — §8 tools are mostly API clients | **Unique**: your CLI subscription, your auth |
+| Visual run dashboard | Required | **Cline Kanban, Conductor, Vibe Kanban, Nimbalyst, Emdash, AO** | **Table stakes** — "CLI-only is common" is no longer true |
+| Worktree isolation per run | Required | Every §8 orchestrator | **Table stakes** — now universal |
 | Release / PR automation | Required | Codegen, Factory | Often cloud-only |
 
 ---
@@ -210,6 +296,10 @@ High control / low-level                    High speed / low-level
         │   Paperclip                                  │
         │   (horizontal agent workforce, self-host)    │
         │                                              │
+        │   Cline Kanban, Bernstein, Conductor,        │
+        │   Vibe Kanban, Emdash, AO, Claude Squad      │
+        │   (many agents, one stage: implement)        │
+        │                                              │
 Low abstraction                             High abstraction
 ```
 
@@ -217,7 +307,7 @@ Low abstraction                             High abstraction
 
 ## Strategic Takeaways
 
-1. **The idea is validated** — hosted app builders prove demand for AI app building; Dyad/Locode prove local OSS appetite; Sikula/autonomous-sdlc prove lifecycle orchestration demand; Paperclip (73k+ stars) proves self-hosters want role-named agent teams with governance. The gap is **combining them** into a dev-lifecycle product.
+1. **The idea is validated — and the validation got loud.** Hosted app builders prove demand for AI app building; Dyad/Locode prove local OSS appetite; Sikula/autonomous-sdlc prove lifecycle orchestration demand; Paperclip (73k+ stars) proves self-hosters want role-named agent teams with governance; and the whole of §8 — eleven tools in five months, led by Cline at 68k stars — proves that **local, visual, harness-agnostic orchestration of coding CLIs is now a real market.** The gap is still **combining them** into a dev-lifecycle product: §8 stops at the diff.
 
 2. **Compete on iteration, not just v1 speed** — message: "build the first version, then keep building without losing control." Against Paperclip specifically: **the dev pipeline, not the company**.
 
@@ -233,6 +323,9 @@ Low abstraction                             High abstraction
    - **beads** — dependency-aware task graph + "ready work" detection + semantic compaction for the repo-native backlog
    - **Artel (NicolasPrimeau/artel)** — ambient shared memory, archivist compaction of session captures, session handoffs, confidence decay; coordination layer under the pipeline, not a substitute for it
    - **Open SWE** — pluggable execution backends behind one interface, per-task sandboxes that auto-recreate, and middleware hooks around the agent call as the extension seam
+   - **Cline** — headless CLI contract (machine-readable output, branchable exit codes) as the adapter shape; cron agents and messaging connectors as the unattended-operation pattern; five surfaces off one runtime as a distribution lesson
+   - **Cline Kanban** — dependency links that auto-start the next card, and diff review scoped to a message range
+   - **Bernstein** — a verification gate expressed as concrete signals (lint, types, tests *per diff*), and audit lineage a reviewer checks offline without re-running the work
 
 4. **MVP wedge:** "Capture tasks in repo-native backlog, run a feature through requirements → design → implement → review → test (Playwright E2E) → release → deploy" on your machine, with one-click restart of any stage.
 
@@ -267,6 +360,41 @@ Three reasons the timing argument favors launching, not waiting:
 
 ---
 
+## September 2026 Re-check: the multiplexers arrived
+
+**Question:** §8 did not exist in August. Does an eleven-tool category — led by Cline at 68k stars — invalidate the launch resolution?
+
+**Answer: no, but it costs us three claims and narrows the pitch.**
+
+**What changed.** Between March and July 2026 the market built, in parallel and without coordinating, exactly the substrate we assumed we would have to build alone: worktree isolation per task, adapters for every coding CLI, and a visual board over parallel agents. Cline Kanban shipped it with 68k stars of distribution behind it; Bernstein shipped it with 40+ adapters and a real verification gate; nine others shipped variations. **Three rows of our feature table became table stakes in five months.**
+
+**What did not change.** Every one of those eleven tools stops at the same place: a diff, or at most a PR. Not one of them:
+
+- covers requirements or design before the code;
+- carries a **prepared profession** across stages — Cline literally invents its roles at runtime;
+- runs **browser E2E against the running product** inside the loop;
+- **deploys** the product anywhere, with or without a health check;
+- has any notion of **what happens after v1** — no milestones, no feature queue, no closeout findings feeding a backlog.
+
+The category multiplies the implement stage. We are the only entrant claiming the stages on either side of it.
+
+**The revised one-line position.** Not "local visual orchestration of any harness" — that is now a crowded sentence. It is: **"the prepared team and the stages after the diff."**
+
+**Actions this re-check generates:**
+
+| # | Action | Why now |
+|---|--------|---------|
+| 1 | **Cut the three commoditised claims** from README, product-brief and any launch copy: harness-agnostic adapters, worktree isolation, visual board over parallel agents. Keep them as *features*; stop using them as *differentiators*. | They are now unremarkable, and a reader who knows §8 reads them as us being late |
+| 2 | **Lead with deploy + E2E + prepared professions + milestones.** | Verified as unclaimed across all eleven §8 tools |
+| 3 | **Add Cline as the fourth engine adapter.** Its CLI is headless with machine-readable output and branchable exit codes — the contract we already satisfy for Claude Code, Cursor and Codex. | Cheapest adapter available, and it turns the loudest competitor into a supported engine. Note it is the one adapter that brings its own API key rather than a CLI subscription |
+| 4 | **Answer the determinism question before Bernstein asks it in public.** Ours is an LLM in the coordination loop on purpose; write the paragraph for `docs/decisions.md`. | Bernstein's byte-identical replay is a sharper compliance story than ours |
+| 5 | **Verify the single-sourced §8 rows** (Emdash, AO, Nimbalyst, Baton, Code Conductor, Microsoft Conductor) against their repos before any of this reaches public copy. | The roundup that seeded them is published by Augment Code, a §4 competitor |
+| 6 | **Watch three specific moves**, any one of which puts a §8 tool into §1: a Cline Kanban card type that deploys; a Bernstein dashboard or `deploy` verb; a community `.clinerules` + Kanban template pack that approximates an SDLC. | These are 6–12 month threats, not theoretical ones |
+
+**On timing.** The August resolution argued the window was a window. It has narrowed, not closed: the neighbours built our plumbing and skipped our opinion. Milestone I — proving unattended, scheduled evolution of a real deployed product — is now the single most differentiating thing in flight, because it is the half of the claim *nobody else is even attempting*.
+
+---
+
 ## Sources & Links
 
 | Product | URL |
@@ -295,3 +423,13 @@ Three reasons the timing argument favors launching, not waiting:
 | LangGraph | https://langchain.com/langgraph |
 | Open SWE | https://github.com/langchain-ai/open-swe |
 | OpenHands | https://www.openhands.dev |
+| Cline (repo) | https://github.com/cline/cline |
+| Cline CLI + Kanban | https://cline.bot/cli |
+| Cline Kanban announcement | https://cline.bot/blog/announcing-kanban |
+| Cline multi-agent teams | https://docs.cline.bot/sdk/guides/multi-agent-teams |
+| Bernstein | https://bernstein.run |
+| Bernstein (repo) | https://github.com/fenghaitao/bernstein |
+| Vibe Kanban | https://github.com/BloopAI/vibe-kanban |
+| Conductor | https://conductor.build |
+| Nimbalyst | https://nimbalyst.com |
+| Emdash / AO / Claude Squad / Baton (roundup — verify individually) | https://www.augmentcode.com/tools/open-source-agent-orchestrators |
