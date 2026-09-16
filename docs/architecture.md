@@ -857,6 +857,7 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
+| `<project>/.isotopy/.tasks/` | The built-in task board, in TaskPlanner's own format, when the project has no `.tasks/` of its own | One project |
 | `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |

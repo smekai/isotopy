@@ -762,7 +762,7 @@ export class OrchestrationService implements StageOutputConsumer {
     goal: string,
   ): Promise<OrchestrationContext> {
     const [boardContext, closeoutContext, personaNotes] = await Promise.all([
-      taskBoardFor(projectPath).planningContext(),
+      taskBoardFor(projectPath).boardDigest(),
       milestoneCloseoutContext(projectPath),
       personaNotesByRole(projectPath),
     ]);

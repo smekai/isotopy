@@ -1,67 +1,30 @@
+// TaskPlanner parses a board and serializes one task; Isotopy edits the file around
+// it. What earns a spec here is the editing — inserting and taking a section without
+// disturbing a byte of what surrounds it — and the digest, which is the only board an
+// engine that cannot carry a tool ever sees.
+import { Priority } from "@smekai/taskplanner";
+import type { Task } from "@smekai/taskplanner";
 import { describe, expect, it } from "vitest";
 import {
-  existingTaskIdForMarker,
   insertTaskSection,
-  nextTaskNumber,
-  renderTaskBoardPlanningContext,
-  renderTaskSection,
+  renderBoardDigest,
   renderWorkLogEntry,
   takeTaskSection,
-  taskIdsIn,
 } from "../src/domain/markdown/task-board.ts";
 
-describe("Task board Markdown", () => {
-  it("renders normalized structure while preserving the description body", () => {
-    expect(
-      renderTaskSection({
-        id: " TASK-101 ",
-        title: "Repair\n  milestone   planning",
-        priority: "P1",
-        tags: [" server ", "testing"],
-        updatedAt: "2026-07-29 16:00",
-        description: "\r\nFirst paragraph.\r\n\r\n- keep this list\r\n",
-        source: "milestone  one\n feature two",
-        marker: "<!-- ISOTOPY-FINDING:abc -->",
-      }),
-    ).toBe(
-      [
-        "## TASK-101: Repair milestone planning",
-        "**Priority:** P1 | **Tags:** server, testing",
-        "**Updated:** 2026-07-29 16:00",
-        "",
-        "First paragraph.",
-        "",
-        "- keep this list",
-        "",
-        "**Isotopy source:** milestone one feature two",
-        "<!-- ISOTOPY-FINDING:abc -->",
-        "",
-        "---",
-        "",
-      ].join("\n"),
-    );
-  });
+const TODAY = "2026-09-10";
 
+describe("Task board Markdown", () => {
   it("preserves CRLF and unrelated board bytes when inserting at the top", () => {
     const original =
       "# Backlog\r\n\r\n<!-- keep -->\r\n## TASK-001: Existing\r\n\r\n---\r\n";
-    const section = renderTaskSection({
-      id: "TASK-002",
-      title: "New",
-      priority: "P2",
-      tags: [],
-      updatedAt: "2026-07-29 16:00",
-      description: "Body",
-      source: "run one",
-      marker: "<!-- ISOTOPY-FINDING:def -->",
-    });
+    const section = "## TASK-002: New\n**Priority:** P2\n\nBody\n\n---\n";
+
     const result = insertTaskSection(original, section, "top");
 
     expect(result).not.toMatch(/(?<!\r)\n/);
     expect(result).toContain("## TASK-002: New\r\n");
-    expect(result).toContain(
-      "<!-- keep -->\r\n## TASK-001: Existing\r\n\r\n---\r\n",
-    );
+    expect(result).toContain("<!-- keep -->\r\n## TASK-001: Existing\r\n\r\n---\r\n");
   });
 
   it("takes CRLF task sections without rewriting surrounding content", () => {
@@ -76,33 +39,58 @@ describe("Task board Markdown", () => {
     });
   });
 
-  it("discovers tasks, markers, and the next available number", () => {
-    const first =
-      "# Backlog\n\n## TASK-004: Existing\n<!-- ISOTOPY-FINDING:abc -->\n\n---\n";
-    const second = "# Done\n\n## TASK-009: Finished\n\n---\n";
-
-    expect(taskIdsIn([first, second])).toEqual(
-      new Set(["TASK-004", "TASK-009"]),
-    );
-    expect(existingTaskIdForMarker(first, "<!-- ISOTOPY-FINDING:abc -->")).toBe(
-      "TASK-004",
-    );
-    expect(nextTaskNumber("TASK", 7, `${first}\n${second}`)).toBe(10);
+  it("renders a digest of what each state holds", () => {
+    expect(
+      renderBoardDigest(
+        "taskplanner",
+        [
+          { name: "Backlog", tasks: [task({ description: "Description." })] },
+          { name: "Done", tasks: [] },
+        ],
+        TODAY,
+      ),
+    ).toBe("Existing taskplanner tasks:\nBacklog:\n- TASK-004: Existing [P1] — Description.");
   });
 
-  it("renders planning context and work-log entries deterministically", () => {
-    expect(
-      renderTaskBoardPlanningContext("taskplanner", [
-        {
-          name: "Backlog",
-          content:
-            "# Backlog\r\n\r\n## TASK-004: Existing\r\n**Priority:** P1\r\n\r\nDescription.\r\n\r\n---\r\n",
-        },
-        { name: "Done", content: "# Done\r\n" },
-      ]),
-    ).toBe(
-      "Existing taskplanner tasks:\nBacklog:\n- TASK-004: Existing — Description.",
+  // The mark the owner writes was invisible to the reader this replaces: it dropped
+  // every `**`-prefixed line before the Orchestrator saw a task.
+  it("says an assigned task is not the team's to start, and who holds it", () => {
+    const digest = renderBoardDigest(
+      "taskplanner",
+      [{ name: "Next", tasks: [task({ assignee: "owner" })] }],
+      TODAY,
     );
+
+    expect(digest).toContain("assigned to @owner — theirs to start, not the team's");
+  });
+
+  it("gives a date-blocked task a different reason from an assigned one", () => {
+    const digest = renderBoardDigest(
+      "taskplanner",
+      [{ name: "Next", tasks: [task({ waitingUntil: "2026-12-01" })] }],
+      TODAY,
+    );
+
+    expect(digest).toContain("blocked until 2026-12-01 on something outside the repository");
+  });
+
+  it("does not mark a waiting date that has already arrived", () => {
+    const digest = renderBoardDigest(
+      "taskplanner",
+      [{ name: "Next", tasks: [task({ waitingUntil: "2026-01-01" })] }],
+      TODAY,
+    );
+
+    expect(digest).not.toContain("blocked until");
+  });
+
+  it("says the board is empty rather than listing nothing", () => {
+    expect(renderBoardDigest("isotopy", [{ name: "Backlog", tasks: [] }], TODAY)).toBe(
+      "The isotopy task board is empty.",
+    );
+  });
+
+  it("renders work-log entries deterministically", () => {
     expect(renderWorkLogEntry("TASK-004", "2026-07-29", "run-1")).toBe(
       "## TASK-004 — 2026-07-29\n" +
         "**What:** Completed by Full Delivery run run-1.\n" +
@@ -111,3 +99,14 @@ describe("Task board Markdown", () => {
     );
   });
 });
+
+function task(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "TASK-004",
+    title: "Existing",
+    description: "",
+    priority: Priority.P1,
+    tags: [],
+    ...overrides,
+  };
+}
