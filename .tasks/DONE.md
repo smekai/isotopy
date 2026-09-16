@@ -1,5 +1,77 @@
 # Done
 
+## TASK-173: One board reader, and a marked task is not the team's to start
+**Priority:** P1 | **Tags:** core, server, milestone-i
+**Updated:** 2026-09-16 13:56
+
+Split out of `TASK-162` on 2026-09-16, which had grown to +3345/−834 across four mechanisms. This
+is the half the milestone actually blocks on, and the half that needs nothing new: **one board
+reader, and the owner's mark as data on a task**. `TASK-162` keeps the other half — a step declaring
+its agent and its tools.
+
+Of **Milestone I — Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
+
+### Why it is separable
+
+`TASK-162` assumed the agent must read the owner's mark **through an MCP tool**, because
+`taskSummariesIn` stripped every `**`-prefixed line and so hid `**Assignee:**`. The direct fix for
+"the agent cannot see the mark" is to make the digest show it — which is this task, and which works
+on both platforms today. The tool path is a product capability worth having, but it is not what the
+boundary needs, and it carries a dependency this half does not: Isotopy normalises line endings
+before calling `parseTasks` and never touches `ConfigManager`, so neither TaskPlanner defect found
+by the review reaches this code.
+
+### One board reader
+
+`parseTasks` reads a state file and `serializeTask` renders one task in TaskPlanner's exact metadata
+order, so `**Assignee:**`, `**Epic:**` and `**Waiting until:**` round-trip through its own parser.
+Everything else about a board file stays Isotopy's: `insertTaskSection` and `takeTaskSection` edit
+*around* a task rather than rebuilding the file.
+
+**Three of the library's classes are refused, measured rather than assumed.** `serializeStateFile`
+rebuilds a state file from what it parsed — it drops a comment above a task and deletes a
+lowercase-prefix task outright. `ConfigManager.load()` rewrote the user's `config.json` on a *read*:
+reformatted, eight fields injected, a `Rejected` state never declared. `FileStore` composes the
+second. Each now has a test standing over it.
+
+CRLF is a boundary, not a detail: reads normalise, writes restore each file's own ending, per file
+rather than per board, because two state files in one repository can legitimately differ.
+
+`renderTaskBoardPlanningContext` is **replaced, not deleted** — `renderBoardDigest` renders typed
+tasks, so it shows the marks the old summary stripped. The built-in board moves to
+`<dataDir>/.tasks` and that is its only name; the old location is not probed, because a board
+Isotopy can read and the tools cannot find is worse than none.
+
+### The boundary
+
+`**Assignee:**` is TaskPlanner's own field. `FollowUpTaskDraft` and `MilestoneTaskDraft` gain it —
+and so does the **salvaging mirror** in `domain/rules/closeout.ts`, or an agent that writes the field
+loses the whole follow-up rather than the field. A closeout may therefore create a marked follow-up:
+the team may propose the monetisation experiment or the credential-bearing integration; it may not
+start one. Nothing in Isotopy clears the mark.
+
+Two axes, two stated reasons — an assigned task belongs to the person named, a date-blocked one
+waits on something outside the repository — and the digest states the reason rather than showing a
+raw mark. **Skipping is on any assignee, not the literal `owner`:** this repository's board already
+carries `@Fedor`.
+
+The poller prompt replaces its vague *"skip anything that needs a person"* with those two rules, an
+instruction never to unmark, and an explicit exclusion of finished work — walking every state and
+excluding only In Progress would let an empty Next hand the team a task off Done or Rejected.
+
+### Evidence
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (1089 passing, up from 1069 on main), `pnpm build`,
+`pnpm e2e` (75 passing). The CRLF round-trip, the surviving comment, the surviving lowercase-prefix
+task and the untouched board config each have a test; the two skip reasons are asserted separately
+so they cannot collapse into one.
+
+Cross-platform: reads normalise and writes restore per file, so a CRLF checkout round-trips
+byte-identically. Windows is the meaningful platform — it is where Git converts endings by default —
+and the LF path is covered by the same suite. macOS reasoned through, recorded untested.
+
+---
+
 ## TASK-161: The built-in board poller, shipped disabled
 **Priority:** P1 | **Tags:** core, server, milestone-i
 **Updated:** 2026-08-25 17:00
@@ -646,8 +718,7 @@ Cross-platform: n/a — tier ladders and the bundled roster are pure data. Verif
 ---
 
 ## TASK-155: Reduce backend abstraction ceremony and validate/reduce docs
-**Priority:** P2
-**Tags:** server, core, infra
+**Priority:** P2 | **Tags:** server, core, infra
 **Updated:** 2026-08-21
 
 An audit of `packages/server/src` and `docs/` found layering that cost more than it
@@ -767,8 +838,7 @@ Rationale, rejected alternatives and the back-compat read for older runs are in 
 ---
 
 ## TASK-149: Group an initiative's runs visually in the UI
-**Priority:** P2
-**Tags:** ui, milestone-h
+**Priority:** P2 | **Tags:** ui, milestone-h
 **Updated:** 2026-08-20 15:45
 
 The rail is no longer a flat list. An initiative's runs sit under a collapsible header carrying its
