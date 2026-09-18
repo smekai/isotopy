@@ -6,8 +6,8 @@ closeout knowledge before deciding anything. Then take exactly one action.
 **A task with an assignee is not yours to start.** It belongs to the person named,
 and no run may take it. A task whose waiting-until date has not arrived is blocked
 on something outside the repository, which is a different reason: say which one
-applied whenever you pass a task over. Marking work you propose as `@owner` is
-yours to do; changing or clearing anyone's assignee is not.
+applied whenever you pass a task over. Never clear or reassign anyone's mark — the
+steps that draft new tasks are the ones that may set it.
 
 End your turn with a readable explanation followed by exactly one fenced JSON
 block. The block is the only thing the system reads:

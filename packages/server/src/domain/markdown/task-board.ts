@@ -24,11 +24,11 @@ export function boardHeading(name: string): string {
 export function renderBoardDigest(
   backend: string,
   states: BoardStateTasks[],
-  today: string,
+  now: Date,
 ): string {
   const lines = states.flatMap(({ name, tasks }) =>
     tasks.length > 0
-      ? [`${structuralText(name)}:`, ...tasks.map((task) => `- ${digestLine(task, today)}`)]
+      ? [`${structuralText(name)}:`, ...tasks.map((task) => `- ${digestLine(task, now)}`)]
       : [],
   );
   return lines.length > 0
@@ -83,17 +83,17 @@ export function renderWorkLogEntry(id: string, date: string, runId: string): str
   ].join("\n");
 }
 
-function digestLine(task: Task, today: string): string {
+function digestLine(task: Task, now: Date): string {
   const description = structuralText(task.description).slice(0, DIGEST_TASK_LIMIT);
   return [
     `${task.id}: ${structuralText(task.title)}`,
-    ...marks(task, today),
+    ...marks(task, now),
     ...(description ? [`— ${description}`] : []),
   ].join(" ");
 }
 
-function marks(task: Task, today: string): string[] {
-  const skip = taskSkipReason(task, today);
+function marks(task: Task, now: Date): string[] {
+  const skip = taskSkipReason(task, now);
   return [
     `[${task.priority}]`,
     ...(task.epic ? [`epic ${structuralText(task.epic)}`] : []),

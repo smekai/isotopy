@@ -84,14 +84,16 @@ the `@owner`, epic and waiting-until marks the old summary stripped. The tool is
 digest is the summary every engine gets.
 
 **The built-in board moves to `<dataDir>/.tasks`, and that is its only name.** One reader serves
-both backends without special-casing a directory, and — the reason the rename is not optional — the
-MCP server finds a board by searching for `.tasks/config.json`. A board under the old
-`<dataDir>/tasks` would be read by Isotopy and invisible to the agent reading through the tool, and
-a board half the product can see is worse than one it cannot. **Rejected: probing the old name too.**
-It looks like kindness and delivers exactly that half-board. Nothing outside this repository holds
-one, which is why the break lands now rather than after someone does. New built-in boards also get a
-**Next** state, which the poller prompt has always assumed and which `createBuiltInBoard` never
-created.
+both backends without special-casing a directory, and the board carries TaskPlanner's own directory
+name — which is what any TaskPlanner-shaped reader looks for. **It does not make the board
+discoverable on its own:** the MCP server walks *upward* for `.tasks/config.json`, and a normal
+project runs its agents at `<root>` while `dataDir` is `<root>/.isotopy`, so nothing walking up from
+`<root>` ever reaches it. Discovery needs the reader pointed at the board's own parent, and that
+belongs to whatever gives a step a tool. The rename is what makes that pointer possible; it is not
+the pointer. **Rejected: probing the old name too** — two names for one board is a second thing to
+keep in step for no gain, and nothing outside this repository holds one, which is why the break
+lands now rather than after someone does. New built-in boards also get a **Next** state, which the
+poller prompt has always assumed and which `createBuiltInBoard` never created.
 
 ---
 

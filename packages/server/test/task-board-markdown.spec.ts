@@ -12,7 +12,7 @@ import {
   takeTaskSection,
 } from "../src/domain/markdown/task-board.ts";
 
-const TODAY = "2026-09-10";
+const TODAY = new Date("2026-09-10T12:00:00.000Z");
 
 describe("Task board Markdown", () => {
   it("preserves CRLF and unrelated board bytes when inserting at the top", () => {

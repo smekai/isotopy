@@ -41,7 +41,8 @@ which platform was tested and any Windows/macOS gap. Return exactly one
       "title": "Follow-up task",
       "description": "Decision-complete work",
       "priority": "P1",
-      "tags": ["server"]
+      "tags": ["server"],
+      "assignee": "owner"
     }
   ],
   "completedTaskIds": ["TASK-001"],
@@ -57,6 +58,12 @@ which platform was tested and any Windows/macOS gap. Return exactly one
 ```
 
 `severity` is exactly `blocking` or `non_blocking` — those two spellings only.
+
+`assignee` is optional, and `owner` is the value to use. Set it on work the team may
+propose but must not start by itself: anything that spends money, needs a credential,
+takes a destructive action, or settles a preference only the user holds. A task
+carrying an assignee is that person's to begin; nothing clears the mark afterwards, so
+leave it off work the team can simply do.
 Only list source tasks actually completed by this run in `completedTaskIds`;
 everything selected but unfinished belongs in `unresolvedTaskIds`. Cleanup paths
 are relative to this run's temporary directory and must be `.` or one immediate

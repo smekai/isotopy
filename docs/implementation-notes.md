@@ -374,13 +374,15 @@ TaskPlanner moves them to `.tasks/archive/DONE-YYYY.md`. `knownTasks` reads the
 archive too, so `approveMilestoneTasks` does not reject an archived id as missing
 and `transitionTasks` does not re-move one that is already done.
 
-**The built-in board is `<dataDir>/.tasks`, and that is the only name.** The MCP
-server locates a board by searching for `.tasks/config.json`, so a board under any
-other directory would be readable by Isotopy and invisible to the agent — half a
-board is worse than none. The pre-rename `<dataDir>/tasks` is not probed; a project
-holding one gets a fresh board, which is why the rename landed before any project
-outside this repository had one. New built-in boards carry a **Next** state, which
-the poller prompt assumes and `createBuiltInBoard` previously never created.
+**The built-in board is `<dataDir>/.tasks`, and that is the only name** — TaskPlanner's
+own directory name, so any reader of that shape knows what it is looking at. A reader
+still has to be *pointed* at it: the MCP server walks upward for `.tasks/config.json`,
+and a normal project runs agents at `<root>` while `dataDir` is `<root>/.isotopy`, so
+a walk up from `<root>` never reaches the built-in board. Whatever hands a step a
+board tool has to pass the board's own parent. The pre-rename `<dataDir>/tasks` is not
+probed; a project holding one gets a fresh board, which is why the rename landed before
+any project outside this repository had one. New built-in boards carry a **Next** state,
+which the poller prompt assumes and `createBuiltInBoard` previously never created.
 
 ## Engines — persona delivery (`engines/persona.ts`)
 

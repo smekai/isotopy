@@ -27,8 +27,10 @@ import {
 import {
   nextTaskNumber,
   taskIdForMarker,
+  taskIdsIn,
   toBoardPriority,
 } from "../domain/rules/task-board.ts";
+import { structuralText } from "../domain/markdown/format.ts";
 import {
   boardConfigSchema,
   ownedBoardConfigSchema,
@@ -72,7 +74,7 @@ export class TaskBoardAdapter {
       name: state.name,
       tasks: tasksIn(files.get(state.name)),
     }));
-    return renderBoardDigest(board.backend, states, today());
+    return renderBoardDigest(board.backend, states, new Date());
   }
 
   async approveMilestoneTasks(
@@ -84,8 +86,8 @@ export class TaskBoardAdapter {
       throw new Error("Task board is unavailable");
     }
     const files = await stateFiles(board);
-    const known = await knownTasks(board, files);
-    const knownIds = new Set(known.map((task) => task.id));
+    const known = await knownTexts(board, files);
+    const knownIds = taskIdsIn(known);
     const requestedIds = proposal.features.flatMap((feature) => feature.existingTaskIds);
     const missing = [...new Set(requestedIds)].filter((id) => !knownIds.has(id));
     if (missing.length > 0) {
@@ -110,7 +112,7 @@ export class TaskBoardAdapter {
             sectionOf(task),
             board.config.insertPosition ?? "top",
           );
-          known.push(task);
+          known.push(sectionOf(task));
           next += 1;
         }
         draft.createdTaskId = id;
@@ -132,7 +134,7 @@ export class TaskBoardAdapter {
     const board = await this.board(true);
     if (!board) throw new Error("Task board is unavailable");
     const files = await stateFiles(board);
-    const known = await knownTasks(board, files);
+    const known = await knownTexts(board, files);
     const backlog = backlogState(board);
     const backlogFile = fileFor(files, backlog);
     let next = nextTaskNumber(board.config.idPrefix, board.config.nextId, known);
@@ -150,7 +152,7 @@ export class TaskBoardAdapter {
         sectionOf(task),
         board.config.insertPosition ?? "top",
       );
-      known.push(task);
+      known.push(sectionOf(task));
       created.push({ id, title: draft.title, backend: board.backend });
       next += 1;
     }
@@ -173,7 +175,7 @@ export class TaskBoardAdapter {
     const targetPath = path.join(board.dir, targetState.fileName);
     const destination =
       (await readBoardFile(targetPath)) ?? emptyBoardFile(targetStateName);
-    const archived = new Set((await archiveTasks(board)).map((task) => task.id));
+    const archived = taskIdsIn(await archiveTexts(board));
     const moved: string[] = [];
 
     for (const id of [...new Set(ids)]) {
@@ -297,7 +299,7 @@ async function stateFiles(board: Board): Promise<Map<string, BoardFile>> {
 }
 
 // Completed work may have been archived out of DONE.md, so "absent" has to look here too.
-async function archiveTasks(board: Board): Promise<Task[]> {
+async function archiveTexts(board: Board): Promise<string[]> {
   const dir = path.join(board.dir, ARCHIVE_DIR);
   const entries = await readdir(dir).catch(() => []);
   const files = await Promise.all(
@@ -305,11 +307,11 @@ async function archiveTasks(board: Board): Promise<Task[]> {
       .filter((entry) => entry.endsWith(".md"))
       .map((entry) => readBoardFile(path.join(dir, entry))),
   );
-  return files.flatMap((file) => tasksIn(file));
+  return files.flatMap((file) => (file ? [file.text] : []));
 }
 
-async function knownTasks(board: Board, files: Map<string, BoardFile>): Promise<Task[]> {
-  return [...[...files.values()].flatMap((file) => tasksIn(file)), ...(await archiveTasks(board))];
+async function knownTexts(board: Board, files: Map<string, BoardFile>): Promise<string[]> {
+  return [...[...files.values()].map((file) => file.text), ...(await archiveTexts(board))];
 }
 
 function fileFor(files: Map<string, BoardFile>, state: StateConfig): BoardFile {
@@ -389,9 +391,15 @@ function backlogState(board: Board): StateConfig {
   );
 }
 
+// A draft is model output, and `serializeTask` writes these fields verbatim — so a
+// newline in one would close the section and open a second task on the next line.
+function oneLine(value: string): string {
+  return structuralText(value);
+}
+
 function allowedTags(board: Board, tags: string[]): string[] {
   const allowed = new Set(board.config.tags ?? []);
-  return tags.filter((tag) => allowed.size === 0 || allowed.has(tag));
+  return tags.map(oneLine).filter((tag) => tag && (allowed.size === 0 || allowed.has(tag)));
 }
 
 function bodyWithSource(description: string, source: string, sourceMarker: string): string {
@@ -408,7 +416,7 @@ function milestoneTask(
 ): Task {
   return {
     id,
-    title: draft.title,
+    title: oneLine(draft.title),
     description: bodyWithSource(
       draft.description,
       `milestone ${milestone.id} · feature ${featureId}`,
@@ -416,7 +424,7 @@ function milestoneTask(
     ),
     priority: toBoardPriority(draft.priority),
     tags: allowedTags(board, draft.tags),
-    assignee: draft.assignee,
+    assignee: draft.assignee && oneLine(draft.assignee),
     updatedAt: stamp(),
   };
 }
@@ -452,11 +460,11 @@ function followUpTask(
     .join(" · ");
   return {
     id,
-    title: draft.title,
+    title: oneLine(draft.title),
     description: bodyWithSource(draft.description, source, sourceMarker),
     priority: toBoardPriority(draft.priority),
     tags: allowedTags(board, draft.tags),
-    assignee: draft.assignee,
+    assignee: draft.assignee && oneLine(draft.assignee),
     updatedAt: stamp(),
   };
 }
