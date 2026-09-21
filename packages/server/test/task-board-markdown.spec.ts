@@ -57,6 +57,31 @@ describe("Task board Markdown", () => {
     expect(digest).not.toContain("blocked until");
   });
 
+  // The parser keeps a section it cannot read, but it is not a task, so a digest that
+  // showed only tasks would state a board the file does not hold.
+  it("names a section that could not be read, rather than omitting it in silence", () => {
+    const digest = renderBoardDigest(
+      "taskplanner",
+      [
+        {
+          name: "Backlog",
+          tasks: [task()],
+          issues: [{ line: 9, message: '"## task-007: Lowercase" is not a task heading' }],
+        },
+      ],
+      TODAY,
+    );
+
+    expect(digest).toContain("Sections left on the board that could not be read as tasks:");
+    expect(digest).toContain("- Backlog line 9: \"## task-007: Lowercase\" is not a task heading");
+  });
+
+  it("says nothing about unreadable sections when there are none", () => {
+    expect(
+      renderBoardDigest("taskplanner", [{ name: "Backlog", tasks: [task()] }], TODAY),
+    ).not.toContain("could not be read");
+  });
+
   it("says the board is empty rather than listing nothing", () => {
     expect(renderBoardDigest("isotopy", [{ name: "Backlog", tasks: [] }], TODAY)).toBe(
       "The isotopy task board is empty.",

@@ -8,6 +8,7 @@ import type {
   MilestoneProposal,
   RunState,
 } from "@isotopy/core";
+import { parseTasks } from "@smekai/taskplanner";
 import { TaskBoardAdapter } from "../src/services/task-board-adapter.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
@@ -99,6 +100,39 @@ test("a comment above a task survives a write, because the file is edited and ne
 
   // Assert
   expect(await backlogText()).toContain("<!-- keep this -->");
+});
+
+// A draft title is model output, and a newline in one would close the section and open a
+// second task on the line after it. The serializer collapses every single-line field, and
+// that is a guarantee worth standing a test over rather than trusting.
+test("a draft title carrying a task heading is written as one task, not two", async () => {
+  // Arrange
+  const adapter = new TaskBoardAdapter(project);
+  await writeTaskPlannerBoard(1);
+
+  // Act
+  await adapter.createFollowUpTasks(run(), [
+    draft("f1", { title: "Safe title\n## TASK-999: Injected" }),
+  ]);
+
+  // Assert
+  expect(parseTasks(await backlogText()).tasks.map((task) => task.id)).toEqual(["TASK-001"]);
+});
+
+// The section stays on the board, so the agent reading the digest has to be told it is
+// there — otherwise work nobody can see is work nobody does.
+test("a section the parser refuses is named in the digest, not dropped from it", async () => {
+  // Arrange
+  const adapter = new TaskBoardAdapter(project);
+  await writeTaskPlannerBoard(1);
+  await seedBacklog("## task-004: Lowercase\n**Priority:** P1\n\n---\n");
+
+  // Act
+  const digest = await adapter.boardDigest();
+
+  // Assert
+  expect(digest).toContain("could not be read as tasks");
+  expect(digest).toContain("task-004");
 });
 
 // A board edited by hand can hold an id its nextId never advanced past, and reissuing

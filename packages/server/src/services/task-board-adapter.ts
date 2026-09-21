@@ -10,7 +10,7 @@ import type {
   RunState,
 } from "@isotopy/core";
 import { parseTasks, serializeBoard, taskIdsIn } from "@smekai/taskplanner";
-import type { BoardSegment, Task } from "@smekai/taskplanner";
+import type { BoardSegment, ParseIssue, Task } from "@smekai/taskplanner";
 import {
   boardHeading,
   prependWorkLogEntries,
@@ -62,6 +62,7 @@ export class TaskBoardAdapter {
     const states = board.config.states.map((state) => ({
       name: state.name,
       tasks: files.get(state.name)?.tasks ?? [],
+      issues: files.get(state.name)?.issues,
     }));
     return renderBoardDigest(board.backend, states, new Date());
   }
@@ -241,6 +242,7 @@ interface BoardFile {
   segments: BoardSegment[];
   tasks: Task[];
   ids: Set<string>;
+  issues: ParseIssue[];
 }
 
 interface KnownBoard {
@@ -256,9 +258,11 @@ async function readText(filePath: string): Promise<string | undefined> {
   return readFile(filePath, "utf8").catch(() => undefined);
 }
 
+// `ids` is deliberately not `tasks.map(id)`: `taskIdsIn` also finds a heading nested
+// inside another task's body, and an id that exists anywhere must not be reissued.
 function parsedBoard(raw: string): BoardFile {
-  const { segments, tasks } = parseTasks(raw);
-  return { segments, tasks, ids: taskIdsIn(raw) };
+  const { segments, tasks, errors } = parseTasks(raw);
+  return { segments, tasks, ids: taskIdsIn(raw), issues: errors };
 }
 
 async function readBoardFile(filePath: string): Promise<BoardFile | undefined> {

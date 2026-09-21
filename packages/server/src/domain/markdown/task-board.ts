@@ -1,13 +1,16 @@
-import type { Task } from "@smekai/taskplanner";
+import type { ParseIssue, Task } from "@smekai/taskplanner";
 import { structuralText } from "./format.ts";
 import { taskSkipReason } from "../rules/task-board.ts";
 
 export interface BoardStateTasks {
   name: string;
   tasks: Task[];
+  issues?: ParseIssue[];
 }
 
 const DIGEST_TASK_LIMIT = 320;
+
+const DIGEST_ISSUE_LIMIT = 5;
 
 export function boardHeading(name: string): string {
   return `# ${structuralText(name)}\n`;
@@ -23,9 +26,33 @@ export function renderBoardDigest(
       ? [`${structuralText(name)}:`, ...tasks.map((task) => `- ${digestLine(task, now)}`)]
       : [],
   );
-  return lines.length > 0
-    ? `Existing ${structuralText(backend)} tasks:\n${lines.join("\n")}`
-    : `The ${structuralText(backend)} task board is empty.`;
+  const board =
+    lines.length > 0
+      ? `Existing ${structuralText(backend)} tasks:\n${lines.join("\n")}`
+      : `The ${structuralText(backend)} task board is empty.`;
+  return [board, ...unreadableSections(states)].join("\n");
+}
+
+// A section the parser refuses is kept on the board verbatim but is not a task, so
+// without this the agent reads a board that silently omits it.
+function unreadableSections(states: BoardStateTasks[]): string[] {
+  const issues = states.flatMap(({ name, issues }) =>
+    (issues ?? []).map(
+      (issue) =>
+        `- ${structuralText(name)} line ${issue.line}: ` +
+        structuralText(issue.message).slice(0, DIGEST_TASK_LIMIT),
+    ),
+  );
+  if (issues.length === 0) {
+    return [];
+  }
+  const shown = issues.slice(0, DIGEST_ISSUE_LIMIT);
+  const remaining = issues.length - shown.length;
+  return [
+    "Sections left on the board that could not be read as tasks:",
+    ...shown,
+    ...(remaining > 0 ? [`- and ${remaining} more`] : []),
+  ];
 }
 
 export function prependWorkLogEntries(current: string, entries: string): string {
