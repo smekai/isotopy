@@ -9,28 +9,15 @@ import type {
   MilestoneTaskDraft,
   RunState,
 } from "@isotopy/core";
-import { parseTasks, serializeTask } from "@smekai/taskplanner";
-import type { Task } from "@smekai/taskplanner";
-import {
-  lineEndingOf,
-  normalizeLineEndings,
-  withLineEnding,
-} from "../domain/markdown/line-endings.ts";
-import type { LineEnding } from "../domain/markdown/line-endings.ts";
+import { parseTasks, serializeBoard, taskIdsIn } from "@smekai/taskplanner";
+import type { BoardSegment, Task } from "@smekai/taskplanner";
 import {
   boardHeading,
-  insertTaskSection,
+  prependWorkLogEntries,
   renderBoardDigest,
   renderWorkLogEntry,
-  takeTaskSection,
 } from "../domain/markdown/task-board.ts";
-import {
-  nextTaskNumber,
-  taskIdForMarker,
-  taskIdsIn,
-  toBoardPriority,
-} from "../domain/rules/task-board.ts";
-import { structuralText } from "../domain/markdown/format.ts";
+import { toBoardPriority } from "../domain/rules/task-board.ts";
 import {
   boardConfigSchema,
   ownedBoardConfigSchema,
@@ -51,7 +38,9 @@ const BOARD_DIR = ".tasks";
 
 const ARCHIVE_DIR = "archive";
 
-const SECTION_SEPARATOR = "\n\n---\n";
+const SOURCE_ATTRIBUTE = "Isotopy source";
+
+const ORIGIN_ATTRIBUTE = "Isotopy origin";
 
 const adapters = new Map<string, TaskBoardAdapter>();
 
@@ -72,7 +61,7 @@ export class TaskBoardAdapter {
     const files = await stateFiles(board);
     const states = board.config.states.map((state) => ({
       name: state.name,
-      tasks: tasksIn(files.get(state.name)),
+      tasks: files.get(state.name)?.tasks ?? [],
     }));
     return renderBoardDigest(board.backend, states, new Date());
   }
@@ -86,34 +75,30 @@ export class TaskBoardAdapter {
       throw new Error("Task board is unavailable");
     }
     const files = await stateFiles(board);
-    const known = await knownTexts(board, files);
-    const knownIds = taskIdsIn(known);
+    const known = await knownBoard(board, files);
     const requestedIds = proposal.features.flatMap((feature) => feature.existingTaskIds);
-    const missing = [...new Set(requestedIds)].filter((id) => !knownIds.has(id));
+    const missing = [...new Set(requestedIds)].filter((id) => !known.ids.has(id));
     if (missing.length > 0) {
       throw new Error(`Existing task IDs were not found: ${missing.join(", ")}`);
     }
 
     const backlog = backlogState(board);
     const backlogFile = fileFor(files, backlog);
-    let next = nextTaskNumber(board.config.idPrefix, board.config.nextId, known);
+    let next = board.config.nextId;
     const featureTaskIds: Record<string, string[]> = {};
 
     for (const feature of proposal.features) {
       const ids = [...feature.existingTaskIds];
       for (const draft of feature.taskDrafts) {
-        const sourceMarker = marker(fingerprint(milestone.id, feature.id, draft.id));
-        let id = taskIdForMarker(known, sourceMarker);
+        const origin = fingerprint(milestone.id, feature.id, draft.id);
+        let id = taskIdForOrigin(known.tasks, origin);
         if (!id) {
-          id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
-          const task = milestoneTask(board, id, draft, sourceMarker, milestone, feature.id);
-          backlogFile.text = insertTaskSection(
-            backlogFile.text,
-            sectionOf(task),
-            board.config.insertPosition ?? "top",
-          );
-          known.push(sectionOf(task));
-          next += 1;
+          const allocated = allocate(board, known.ids, next);
+          id = allocated.id;
+          next = allocated.next;
+          const task = milestoneTask(board, id, draft, origin, milestone, feature.id);
+          backlogFile.tasks = placed(backlogFile.tasks, task, board.config.insertPosition);
+          remember(known, task);
         }
         draft.createdTaskId = id;
         ids.push(id);
@@ -134,27 +119,23 @@ export class TaskBoardAdapter {
     const board = await this.board(true);
     if (!board) throw new Error("Task board is unavailable");
     const files = await stateFiles(board);
-    const known = await knownTexts(board, files);
+    const known = await knownBoard(board, files);
     const backlog = backlogState(board);
     const backlogFile = fileFor(files, backlog);
-    let next = nextTaskNumber(board.config.idPrefix, board.config.nextId, known);
+    let next = board.config.nextId;
     const created: CreatedTaskReference[] = [];
 
     for (const draft of tasks) {
-      const sourceMarker = `<!-- ISOTOPY-FINDING:${findingFingerprint(run, draft.findingId)} -->`;
-      if (taskIdForMarker(known, sourceMarker)) {
+      const origin = findingFingerprint(run, draft.findingId);
+      if (taskIdForOrigin(known.tasks, origin)) {
         continue;
       }
-      const id = `${board.config.idPrefix}-${String(next).padStart(3, "0")}`;
-      const task = followUpTask(board, id, draft, sourceMarker, run);
-      backlogFile.text = insertTaskSection(
-        backlogFile.text,
-        sectionOf(task),
-        board.config.insertPosition ?? "top",
-      );
-      known.push(sectionOf(task));
-      created.push({ id, title: draft.title, backend: board.backend });
-      next += 1;
+      const allocated = allocate(board, known.ids, next);
+      next = allocated.next;
+      const task = followUpTask(board, allocated.id, draft, origin, run);
+      backlogFile.tasks = placed(backlogFile.tasks, task, board.config.insertPosition);
+      remember(known, task);
+      created.push({ id: allocated.id, title: draft.title, backend: board.backend });
     }
     if (created.length === 0) return [];
     await writeBoardFile(path.join(board.dir, backlog.fileName), backlogFile);
@@ -173,16 +154,16 @@ export class TaskBoardAdapter {
     const targetState = stateFor(board, targetStateName);
     if (!targetState) return [];
     const targetPath = path.join(board.dir, targetState.fileName);
-    const destination =
-      (await readBoardFile(targetPath)) ?? emptyBoardFile(targetStateName);
-    const archived = taskIdsIn(await archiveTexts(board));
+    const destination = (await readBoardFile(targetPath)) ?? emptyBoard(targetStateName);
+    const archived = await archiveIds(board);
     const moved: string[] = [];
 
     for (const id of [...new Set(ids)]) {
-      if (destination.text.includes(`## ${id}:`) || archived.has(id)) continue;
-      const section = await this.takeSection(board, targetState, id);
-      if (!section) continue;
-      destination.text = insertTaskSection(destination.text, section, "top");
+      if (destination.ids.has(id) || archived.has(id)) continue;
+      const task = await this.takeTask(board, targetState, id);
+      if (!task) continue;
+      destination.tasks = [task, ...destination.tasks];
+      destination.ids.add(id);
       moved.push(id);
     }
     if (moved.length === 0) return [];
@@ -193,20 +174,22 @@ export class TaskBoardAdapter {
     return moved;
   }
 
-  private async takeSection(
+  private async takeTask(
     board: Board,
     targetState: StateConfig,
     id: string,
-  ): Promise<string | undefined> {
+  ): Promise<Task | undefined> {
     for (const state of board.config.states) {
       if (state.fileName === targetState.fileName) continue;
       const sourcePath = path.join(board.dir, state.fileName);
       const source = await readBoardFile(sourcePath);
-      if (!source) continue;
-      const taken = takeTaskSection(source.text, id);
-      if (!taken.section) continue;
-      await writeBoardFile(sourcePath, { ...source, text: taken.text });
-      return taken.section;
+      const task = source?.tasks.find((candidate) => candidate.id === id);
+      if (!source || !task) continue;
+      await writeBoardFile(sourcePath, {
+        ...source,
+        tasks: source.tasks.filter((candidate) => candidate.id !== id),
+      });
+      return task;
     }
     return undefined;
   }
@@ -255,8 +238,14 @@ interface Board extends BoardLocation {
 }
 
 interface BoardFile {
-  text: string;
-  lineEnding: LineEnding;
+  segments: BoardSegment[];
+  tasks: Task[];
+  ids: Set<string>;
+}
+
+interface KnownBoard {
+  tasks: Task[];
+  ids: Set<string>;
 }
 
 function locationAt(dir: string, backend: BoardLocation["backend"]): BoardLocation {
@@ -267,24 +256,56 @@ async function readText(filePath: string): Promise<string | undefined> {
   return readFile(filePath, "utf8").catch(() => undefined);
 }
 
-// The ending is remembered per file, because two state files in one repository can differ.
+function parsedBoard(raw: string): BoardFile {
+  const { segments, tasks } = parseTasks(raw);
+  return { segments, tasks, ids: taskIdsIn(raw) };
+}
+
 async function readBoardFile(filePath: string): Promise<BoardFile | undefined> {
   const raw = await readText(filePath);
-  return raw === undefined
-    ? undefined
-    : { text: normalizeLineEndings(raw), lineEnding: lineEndingOf(raw) };
+  return raw === undefined ? undefined : parsedBoard(raw);
 }
 
 function writeBoardFile(filePath: string, file: BoardFile): Promise<void> {
-  return writeFile(filePath, withLineEnding(file.text, file.lineEnding));
+  return writeFile(filePath, serializeBoard(file.segments, file.tasks));
 }
 
-function emptyBoardFile(stateName: string): BoardFile {
-  return { text: boardHeading(stateName), lineEnding: "\n" };
+function emptyBoard(stateName: string): BoardFile {
+  return parsedBoard(boardHeading(stateName));
 }
 
-function tasksIn(file: BoardFile | undefined): Task[] {
-  return file ? parseTasks(file.text).tasks : [];
+function placed(tasks: Task[], task: Task, position: BoardConfig["insertPosition"]): Task[] {
+  return position === "bottom" ? [...tasks, task] : [task, ...tasks];
+}
+
+// The persisted nextId is the source of truth, but a board edited by hand may hold an
+// id it never advanced past, and reissuing one would put two tasks under one number.
+function allocate(
+  board: Board,
+  knownIds: Set<string>,
+  from: number,
+): { id: string; next: number } {
+  let number = from;
+  let id = `${board.config.idPrefix}-${String(number).padStart(3, "0")}`;
+  while (knownIds.has(id)) {
+    number += 1;
+    id = `${board.config.idPrefix}-${String(number).padStart(3, "0")}`;
+  }
+  return { id, next: number + 1 };
+}
+
+function remember(known: KnownBoard, task: Task): void {
+  known.tasks.push(task);
+  known.ids.add(task.id);
+}
+
+function taskIdForOrigin(tasks: Iterable<Task>, origin: string): string | undefined {
+  for (const task of tasks) {
+    if (task.attributes?.[ORIGIN_ATTRIBUTE] === origin) {
+      return task.id;
+    }
+  }
+  return undefined;
 }
 
 async function stateFiles(board: Board): Promise<Map<string, BoardFile>> {
@@ -292,14 +313,14 @@ async function stateFiles(board: Board): Promise<Map<string, BoardFile>> {
   await Promise.all(
     board.config.states.map(async (state) => {
       const file = await readBoardFile(path.join(board.dir, state.fileName));
-      files.set(state.name, file ?? emptyBoardFile(state.name));
+      files.set(state.name, file ?? emptyBoard(state.name));
     }),
   );
   return files;
 }
 
 // Completed work may have been archived out of DONE.md, so "absent" has to look here too.
-async function archiveTexts(board: Board): Promise<string[]> {
+async function archiveFiles(board: Board): Promise<BoardFile[]> {
   const dir = path.join(board.dir, ARCHIVE_DIR);
   const entries = await readdir(dir).catch(() => []);
   const files = await Promise.all(
@@ -307,19 +328,24 @@ async function archiveTexts(board: Board): Promise<string[]> {
       .filter((entry) => entry.endsWith(".md"))
       .map((entry) => readBoardFile(path.join(dir, entry))),
   );
-  return files.flatMap((file) => (file ? [file.text] : []));
+  return files.filter((file): file is BoardFile => file !== undefined);
 }
 
-async function knownTexts(board: Board, files: Map<string, BoardFile>): Promise<string[]> {
-  return [...[...files.values()].map((file) => file.text), ...(await archiveTexts(board))];
+async function archiveIds(board: Board): Promise<Set<string>> {
+  const files = await archiveFiles(board);
+  return new Set(files.flatMap((file) => [...file.ids]));
+}
+
+async function knownBoard(board: Board, files: Map<string, BoardFile>): Promise<KnownBoard> {
+  const all = [...files.values(), ...(await archiveFiles(board))];
+  return {
+    tasks: all.flatMap((file) => file.tasks),
+    ids: new Set(all.flatMap((file) => [...file.ids])),
+  };
 }
 
 function fileFor(files: Map<string, BoardFile>, state: StateConfig): BoardFile {
-  return files.get(state.name) ?? emptyBoardFile(state.name);
-}
-
-function sectionOf(task: Task): string {
-  return `${serializeTask(task)}${SECTION_SEPARATOR}`;
+  return files.get(state.name) ?? emptyBoard(state.name);
 }
 
 function today(): string {
@@ -378,10 +404,6 @@ function fingerprint(milestoneId: string, featureId: string, taskId: string): st
     .slice(0, 16);
 }
 
-function marker(value: string): string {
-  return `<!-- ISOTOPY-MILESTONE-TASK:${value} -->`;
-}
-
 function backlogState(board: Board): StateConfig {
   return (
     board.config.states.find((state) => state.name.toLowerCase() === "backlog") ?? {
@@ -391,41 +413,31 @@ function backlogState(board: Board): StateConfig {
   );
 }
 
-// A draft is model output, and `serializeTask` writes these fields verbatim — so a
-// newline in one would close the section and open a second task on the next line.
-function oneLine(value: string): string {
-  return structuralText(value);
-}
-
 function allowedTags(board: Board, tags: string[]): string[] {
   const allowed = new Set(board.config.tags ?? []);
-  return tags.map(oneLine).filter((tag) => tag && (allowed.size === 0 || allowed.has(tag)));
-}
-
-function bodyWithSource(description: string, source: string, sourceMarker: string): string {
-  return [description.trim(), "", `**Isotopy source:** ${source}`, sourceMarker].join("\n");
+  return tags.filter((tag) => allowed.size === 0 || allowed.has(tag));
 }
 
 function milestoneTask(
   board: Board,
   id: string,
   draft: MilestoneTaskDraft,
-  sourceMarker: string,
+  origin: string,
   milestone: Milestone,
   featureId: string,
 ): Task {
   return {
     id,
-    title: oneLine(draft.title),
-    description: bodyWithSource(
-      draft.description,
-      `milestone ${milestone.id} · feature ${featureId}`,
-      sourceMarker,
-    ),
+    title: draft.title,
+    description: draft.description.trim(),
     priority: toBoardPriority(draft.priority),
     tags: allowedTags(board, draft.tags),
-    assignee: draft.assignee && oneLine(draft.assignee),
+    assignee: draft.assignee,
     updatedAt: stamp(),
+    attributes: {
+      [SOURCE_ATTRIBUTE]: `milestone ${milestone.id} · feature ${featureId}`,
+      [ORIGIN_ATTRIBUTE]: origin,
+    },
   };
 }
 
@@ -447,7 +459,7 @@ function followUpTask(
   board: Board,
   id: string,
   draft: FollowUpTaskDraft,
-  sourceMarker: string,
+  origin: string,
   run: RunState,
 ): Task {
   const source = [
@@ -460,12 +472,13 @@ function followUpTask(
     .join(" · ");
   return {
     id,
-    title: oneLine(draft.title),
-    description: bodyWithSource(draft.description, source, sourceMarker),
+    title: draft.title,
+    description: draft.description.trim(),
     priority: toBoardPriority(draft.priority),
     tags: allowedTags(board, draft.tags),
-    assignee: draft.assignee && oneLine(draft.assignee),
+    assignee: draft.assignee,
     updatedAt: stamp(),
+    attributes: { [SOURCE_ATTRIBUTE]: source, [ORIGIN_ATTRIBUTE]: origin },
   };
 }
 
@@ -475,13 +488,12 @@ function stateFor(board: Board, name: string): StateConfig | undefined {
   );
 }
 
+// WORK_LOG.md is Isotopy's own file, not a task board: its headings carry a dash
+// rather than a colon, so nothing in it parses as a task.
 async function appendWorkLog(board: Board, runId: string, ids: string[]): Promise<void> {
   const target = path.join(board.dir, "WORK_LOG.md");
-  const current = await readBoardFile(target);
+  const current = await readText(target);
   if (!current) return;
   const entries = ids.map((id) => renderWorkLogEntry(id, today(), runId)).join("\n");
-  await writeBoardFile(target, {
-    ...current,
-    text: insertTaskSection(current.text, entries, "top"),
-  });
+  await writeFile(target, prependWorkLogEntries(current, entries));
 }

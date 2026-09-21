@@ -2,7 +2,7 @@
 
 ## TASK-173: One board reader, and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-09-16 13:56
+**Updated:** 2026-09-21 19:28
 
 Split out of `TASK-162` on 2026-09-16, which had grown to +3345/−834 across four mechanisms. This
 is the half the milestone actually blocks on, and the half that needs nothing new: **one board
@@ -17,25 +17,30 @@ Of **Milestone I — Induction** (`TASK-156`). **Lands before `TASK-161` is ever
 `taskSummariesIn` stripped every `**`-prefixed line and so hid `**Assignee:**`. The direct fix for
 "the agent cannot see the mark" is to make the digest show it — which is this task, and which works
 on both platforms today. The tool path is a product capability worth having, but it is not what the
-boundary needs, and it carries a dependency this half does not: Isotopy normalises line endings
-before calling `parseTasks` and never touches `ConfigManager`, so neither TaskPlanner defect found
-by the review reaches this code.
+boundary needs.
 
-### One board reader
+### One board reader, and it is TaskPlanner's
 
-`parseTasks` reads a state file and `serializeTask` renders one task in TaskPlanner's exact metadata
-order, so `**Assignee:**`, `**Epic:**` and `**Waiting until:**` round-trip through its own parser.
-Everything else about a board file stays Isotopy's: `insertTaskSection` and `takeTaskSection` edit
-*around* a task rather than rebuilding the file.
+The first cut of this task reimplemented half a board parser inside Isotopy: a line-ending boundary,
+a surgical `insertTaskSection`/`takeTaskSection` pair, a second lax `taskIdsIn`, and the finding
+fingerprint smuggled into the task body as an HTML comment found by substring. Every one of them
+existed because the shipped library could not do the job — which made **the library the place to fix
+it**, and TaskPlanner is a smekai project too.
 
-**Three of the library's classes are refused, measured rather than assumed.** `serializeStateFile`
-rebuilds a state file from what it parsed — it drops a comment above a task and deletes a
-lowercase-prefix task outright. `ConfigManager.load()` rewrote the user's `config.json` on a *read*:
-reformatted, eight fields injected, a `Rejected` state never declared. `FileStore` composes the
-second. Each now has a test standing over it.
+`@smekai/taskplanner` **2.4.1** reads CRLF, preserves each file's own endings on write, normalises
+single-line fields itself, exports a strict `taskIdsIn`, models `attributes` as real round-tripped
+metadata, and adds `serializeBoard(segments, tasks)` — a byte-identical edit that keeps prose,
+comments and the sections its own parser refuses. Adopting it deleted roughly 120 lines of Isotopy:
+`domain/markdown/line-endings.ts` entirely, both section editors, and most of
+`domain/rules/task-board.ts`, now two functions — the priority map and the skip reason, which are
+Isotopy's own. `**Isotopy source:**` and the finding fingerprint became `attributes`, so finding a
+task by its origin is a field read rather than a substring search.
 
-CRLF is a boundary, not a detail: reads normalise, writes restore each file's own ending, per file
-rather than per board, because two state files in one repository can legitimately differ.
+**What is still refused, measured rather than assumed.** `serializeStateFile` rebuilds a state file
+from what it parsed and so drops a comment above a task; `serializeBoard` is used instead.
+`ConfigManager.load()` rewrote the user's `config.json` on a *read* — reformatted, eight fields
+injected, a `Rejected` state never declared — so the board config is read directly. A test stands
+over each.
 
 `renderTaskBoardPlanningContext` is **replaced, not deleted** — `renderBoardDigest` renders typed
 tasks, so it shows the marks the old summary stripped. The built-in board moves to
@@ -59,16 +64,26 @@ The poller prompt replaces its vague *"skip anything that needs a person"* with 
 instruction never to unmark, and an explicit exclusion of finished work — walking every state and
 excluding only In Progress would let an empty Next hand the team a task off Done or Rejected.
 
+### The one thing added rather than deleted
+
+2.4.1 **throws** where 2.3.0 silently corrupted: a task description holding a line that is just a
+horizontal rule, or a task heading, ends the section and loses everything after it. Closeout
+findings and milestone drafts are model prose, and prose plausibly contains a rule. `taskSectionText`
+refuses it at the schemas that own agent output, where the closeout's salvaging mirror already turns
+a refusal into a reason the agent can act on — rather than at the serializer, where it would arrive
+as a caught side-effect error nobody reads.
+
 ### Evidence
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (1089 passing, up from 1069 on main), `pnpm build`,
-`pnpm e2e` (75 passing). The CRLF round-trip, the surviving comment, the surviving lowercase-prefix
-task and the untouched board config each have a test; the two skip reasons are asserted separately
-so they cannot collapse into one.
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (1089 passing, 2 skipped), `pnpm build`, `pnpm e2e` (75
+passing, 4 skipped). The tests kept are the ones asserting outcomes through the adapter rather than
+the layer that delivers them: a CRLF board reads and round-trips, a comment above a task survives a
+write, a read leaves the board config untouched, an id already on the board is not reissued. They
+passed **unchanged** across the move, which is what makes it a move rather than a rewrite.
 
-Cross-platform: reads normalise and writes restore per file, so a CRLF checkout round-trips
-byte-identically. Windows is the meaningful platform — it is where Git converts endings by default —
-and the LF path is covered by the same suite. macOS reasoned through, recorded untested.
+The digest was re-run against this repository's own board: three tasks marked `@Fedor`, three stated
+skip reasons. Windows is the meaningful platform — it is where Git converts endings by default — and
+the LF path is covered by the same suite. macOS reasoned through, recorded untested.
 
 ---
 

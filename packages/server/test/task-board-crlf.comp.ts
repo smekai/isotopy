@@ -1,8 +1,8 @@
-// Measured against @smekai/taskplanner 2.3.0: the same board content parses to one
-// task as LF and to **zero tasks with warnings** as CRLF. That is not a
-// distinguishable failure — a CRLF board reads exactly like an empty one — and Git
-// for Windows checks out CRLF by default, on the *user's* repository. One parser
-// therefore means one parser plus a boundary that normalises in and restores out.
+// Reading and writing CRLF is TaskPlanner's job now, and its own specs cover the
+// parser. These stay because the behaviour is still Isotopy's to deliver: they go
+// through the adapter and assert outcomes, so they catch a regression in the wiring —
+// reaching for `serializeStateFile`, which always emits LF, rather than
+// `serializeBoard`, which keeps each file's own endings.
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

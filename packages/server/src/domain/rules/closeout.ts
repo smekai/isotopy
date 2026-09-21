@@ -3,6 +3,7 @@ import {
   FINDING_SEVERITIES,
   TASK_PRIORITIES,
   refineDeclaredFindings,
+  taskSectionText,
   type CloseoutFinding,
   type FollowUpTaskDraft,
   type CloseoutReport,
@@ -40,7 +41,7 @@ const followUpTaskSchema = z
   .object({
     findingId: requiredText,
     title: requiredText,
-    description: requiredText,
+    description: taskSectionText,
     priority: z.enum(TASK_PRIORITIES),
     tags: uniqueStrings,
     assignee: requiredText.optional(),

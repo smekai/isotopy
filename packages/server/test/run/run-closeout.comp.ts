@@ -216,7 +216,7 @@ test("closing the same run out twice does not file the follow-up task again", as
   // Assert
   expect(second.createdTasks).toEqual([]);
   const backlog = await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8");
-  expect(backlog.match(/ISOTOPY-FINDING:/g)).toHaveLength(1);
+  expect([...backlog.matchAll(/\*\*Isotopy origin:\*\*/g)]).toHaveLength(1);
 });
 
 test("keeps findings and follow-up tasks when the agent writes a hyphenated severity", async () => {

@@ -1,18 +1,10 @@
 import type { Task } from "@smekai/taskplanner";
-import { lineEndingOf, withLineEnding } from "./line-endings.ts";
 import { structuralText } from "./format.ts";
 import { taskSkipReason } from "../rules/task-board.ts";
-
-export type BoardInsertPosition = "top" | "bottom";
 
 export interface BoardStateTasks {
   name: string;
   tasks: Task[];
-}
-
-export interface TakenTaskSection {
-  text: string;
-  section?: string;
 }
 
 const DIGEST_TASK_LIMIT = 320;
@@ -36,40 +28,11 @@ export function renderBoardDigest(
     : `The ${structuralText(backend)} task board is empty.`;
 }
 
-export function insertTaskSection(
-  current: string,
-  section: string,
-  position: BoardInsertPosition,
-): string {
-  const lineEnding = lineEndingOf(current);
-  const rendered = withLineEnding(section, lineEnding);
-  if (position === "bottom") {
-    const separator = current.endsWith(lineEnding)
-      ? current.endsWith(`${lineEnding}${lineEnding}`)
-        ? ""
-        : lineEnding
-      : `${lineEnding}${lineEnding}`;
-    return `${current}${separator}${rendered}`;
-  }
-  const lineEnd = current.indexOf(lineEnding);
+export function prependWorkLogEntries(current: string, entries: string): string {
+  const lineEnd = current.indexOf("\n");
   return lineEnd === -1
-    ? `${current}${lineEnding}${lineEnding}${rendered}`
-    : `${current.slice(0, lineEnd + lineEnding.length)}${lineEnding}${rendered}${current.slice(lineEnd + lineEnding.length)}`;
-}
-
-export function takeTaskSection(text: string, id: string): TakenTaskSection {
-  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const heading = new RegExp(`^##\\s+${escaped}:.*$`, "m").exec(text);
-  if (!heading) return { text };
-  const separator = /^---[ \t]*(?:\r?\n|$)/gm;
-  separator.lastIndex = heading.index + heading[0].length;
-  const end = separator.exec(text);
-  if (!end) return { text };
-  const sectionEnd = end.index + end[0].length;
-  return {
-    text: `${text.slice(0, heading.index)}${text.slice(sectionEnd)}`,
-    section: text.slice(heading.index, sectionEnd),
-  };
+    ? `${current}\n\n${entries}`
+    : `${current.slice(0, lineEnd + 1)}\n${entries}${current.slice(lineEnd + 1)}`;
 }
 
 export function renderWorkLogEntry(id: string, date: string, runId: string): string {

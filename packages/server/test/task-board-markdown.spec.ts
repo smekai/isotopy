@@ -1,44 +1,17 @@
-// TaskPlanner parses a board and serializes one task; Isotopy edits the file around
-// it. What earns a spec here is the editing — inserting and taking a section without
-// disturbing a byte of what surrounds it — and the digest, which is the only board an
-// engine that cannot carry a tool ever sees.
+// Reading and writing a board file is TaskPlanner's, and its own round-trip specs
+// cover it. What earns a spec here is the digest — how Isotopy states a board, and its
+// two skip reasons, to the agent reading it.
 import { Priority } from "@smekai/taskplanner";
 import type { Task } from "@smekai/taskplanner";
 import { describe, expect, it } from "vitest";
 import {
-  insertTaskSection,
   renderBoardDigest,
   renderWorkLogEntry,
-  takeTaskSection,
 } from "../src/domain/markdown/task-board.ts";
 
 const TODAY = new Date("2026-09-10T12:00:00.000Z");
 
 describe("Task board Markdown", () => {
-  it("preserves CRLF and unrelated board bytes when inserting at the top", () => {
-    const original =
-      "# Backlog\r\n\r\n<!-- keep -->\r\n## TASK-001: Existing\r\n\r\n---\r\n";
-    const section = "## TASK-002: New\n**Priority:** P2\n\nBody\n\n---\n";
-
-    const result = insertTaskSection(original, section, "top");
-
-    expect(result).not.toMatch(/(?<!\r)\n/);
-    expect(result).toContain("## TASK-002: New\r\n");
-    expect(result).toContain("<!-- keep -->\r\n## TASK-001: Existing\r\n\r\n---\r\n");
-  });
-
-  it("takes CRLF task sections without rewriting surrounding content", () => {
-    const before = "# Backlog\r\n\r\n<!-- before -->\r\n";
-    const section =
-      "## TASK-010: Move me\r\n**Priority:** P1\r\n\r\nBody\r\n\r\n---\r\n";
-    const after = "\r\n<!-- after -->\r\n## TASK-011: Stay\r\n\r\n---\r\n";
-
-    expect(takeTaskSection(`${before}${section}${after}`, "TASK-010")).toEqual({
-      text: `${before}${after}`,
-      section,
-    });
-  });
-
   it("renders a digest of what each state holds", () => {
     expect(
       renderBoardDigest(

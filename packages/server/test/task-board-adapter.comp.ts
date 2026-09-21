@@ -8,7 +8,6 @@ import type {
   MilestoneProposal,
   RunState,
 } from "@isotopy/core";
-import { parseTasks } from "@smekai/taskplanner";
 import { TaskBoardAdapter } from "../src/services/task-board-adapter.ts";
 import type { ProjectPath } from "../src/paths.ts";
 
@@ -102,62 +101,19 @@ test("a comment above a task survives a write, because the file is edited and ne
   expect(await backlogText()).toContain("<!-- keep this -->");
 });
 
-// A draft is model output and `serializeTask` writes a title verbatim, so a newline
-// in one closes the section and opens a second task on the line after it.
-test("a draft title carrying a task heading is written as one task, not two", async () => {
+// A board edited by hand can hold an id its nextId never advanced past, and reissuing
+// one would put two tasks under one number.
+test("an id already on the board is not reissued, whatever nextId says", async () => {
   // Arrange
   const adapter = new TaskBoardAdapter(project);
   await writeTaskPlannerBoard(1);
+  await seedBacklog("## TASK-001: Added by hand\n**Priority:** P1\n\n---\n");
 
   // Act
-  await adapter.createFollowUpTasks(run(), [
-    draft("f1", { title: "Safe title\n## TASK-999: Injected" }),
-  ]);
+  const created = await adapter.createFollowUpTasks(run(), [draft("f1")]);
 
   // Assert
-  expect(parseTasks(await backlogText()).tasks.map((task) => task.id)).toEqual(["TASK-001"]);
-});
-
-// A section the parser refuses is preserved, but its identity has to survive too, or
-// its id gets reissued and its marker missed — which mints a duplicate of live work.
-test("a section the parser refuses is still a known id, so approval does not reject it", async () => {
-  // Arrange
-  const adapter = new TaskBoardAdapter(project);
-  await writeTaskPlannerBoard(1);
-  await seedBacklog("## task-004: Lowercase\n**Priority:** P1\n\n---\n");
-
-  // Act
-  const links = await adapter.approveMilestoneTasks(milestone(), proposal(["task-004"]));
-
-  // Assert
-  expect(links.featureTaskIds.f1).toContain("task-004");
-});
-
-test("a task that later stops parsing still owns its marker, so a re-run adds no duplicate", async () => {
-  // Arrange
-  const adapter = new TaskBoardAdapter(project);
-  await writeTaskPlannerBoard(1);
-  await adapter.createFollowUpTasks(run(), [draft("f1")]);
-  await seedBacklog((await backlogText()).replace("# Backlog\n\n", "").replace("## TASK-001:", "## task-001:"));
-
-  // Act
-  const again = await adapter.createFollowUpTasks(run(), [draft("f1")]);
-
-  // Assert
-  expect(again).toEqual([]);
-});
-
-test("a task whose prefix the shipped parser refuses is left where it is, not deleted", async () => {
-  // Arrange — TaskPlanner's heading regex takes an uppercase prefix only.
-  const adapter = new TaskBoardAdapter(project);
-  await writeTaskPlannerBoard(1);
-  await seedBacklog("## task-004: Lowercase\n**Priority:** P1\n\n---\n");
-
-  // Act
-  await adapter.createFollowUpTasks(run(), [draft("f1")]);
-
-  // Assert
-  expect(await backlogText()).toContain("## task-004: Lowercase");
+  expect(created.map((task) => task.id)).toEqual(["TASK-002"]);
 });
 
 // TaskPlanner's own ConfigManager rewrites the file it reads — reformatting it and
