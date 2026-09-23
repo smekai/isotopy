@@ -40,6 +40,34 @@ describe("extractMilestonePlan", () => {
     });
   });
 
+  // A description is prose a model wrote, and prose plausibly contains a rule. Written
+  // to the board it would end the task section, so it is refused here with a reason the
+  // agent can act on rather than thrown from the serializer where nobody reads it.
+  it("refuses a draft description that would end the task section on the board", () => {
+    const feature = VALID_PLAN.features[0]!;
+    const parsed = extractMilestonePlan(
+      fenced({
+        ...VALID_PLAN,
+        features: [
+          {
+            ...feature,
+            taskDrafts: [
+              {
+                ...feature.taskDrafts[0]!,
+                description: "Before the change:\n---\nAfter the change:",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
+      "features.0.taskDrafts.0.description",
+    );
+  });
+
   it("reports a missing fenced block rather than throwing", () => {
     const parsed = extractMilestonePlan("The plan is in my head.");
 

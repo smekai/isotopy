@@ -229,11 +229,13 @@ of the source. When you strip or avoid a comment, that is where its content goes
   Where a conditional guarded a falsy value rather than an absent one, keep that
   meaning explicit (`apiKey: stored?.apiKey || undefined`) rather than letting an
   empty string through. Runtime schemas own untrusted HTTP, persisted JSON,
-  settings, project-registry, TaskPlanner, and engine-protocol input. Routes and
+  settings, project-registry, and engine-protocol input. Routes and
   adapters receive only parsed values; services and repositories do not rebuild
   types through hand-written record traversal. Isotopy-owned records reject
-  unknown fields. TaskPlanner and engine codecs permit unrelated external
-  fields while validating every consumed field. Relative imports use `.ts`
+  unknown fields; engine codecs permit unrelated external fields while
+  validating every consumed field. The task board is the exception that proves
+  the rule: its format is `@smekai/taskplanner`'s, so its own `ConfigManager`
+  parses it and Isotopy does not restate the schema. Relative imports use `.ts`
   extensions (like `@isotopy/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 

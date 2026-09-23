@@ -84,9 +84,9 @@ test("approving a draft mints the task its feature only proposed", async () => {
       },
     ],
   });
-  const backlog = await readFile(path.join(ctx.home, "tasks", "BACKLOG.md"), "utf8");
+  const backlog = await readFile(path.join(ctx.home, ".tasks", "BACKLOG.md"), "utf8");
   expect(backlog).toContain("## TASK-001: Build milestone planner");
-  expect(backlog).toContain("ISOTOPY-MILESTONE-TASK:");
+  expect(backlog).toContain("**Isotopy origin:**");
   ctx.engine.verify();
 });
 

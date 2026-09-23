@@ -12,7 +12,7 @@ export interface OrchestrationContext {
   goal: string;
   personas: CatalogEntry[];
   stepTasks: CatalogEntry[];
-  boardContext: string;
+  tasksContext: string;
   closeoutContext: string;
   gatePreference?: string;
   personaConstraints?: string;
@@ -57,7 +57,7 @@ export function renderOrchestrationContext({
   goal,
   personas,
   stepTasks,
-  boardContext,
+  tasksContext,
   closeoutContext,
   gatePreference,
   personaConstraints,
@@ -72,7 +72,7 @@ export function renderOrchestrationContext({
     personaConstraints === undefined
       ? undefined
       : `## What each role already knows about this project\n\n${markdownBody(personaConstraints)}`,
-    markdownBody(boardContext),
+    markdownBody(tasksContext),
     markdownBody(closeoutContext),
   ]);
 }

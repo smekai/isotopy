@@ -15,6 +15,82 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-10 — `**Assignee:**` is the boundary, and no Isotopy writer clears it
+
+**Context:** `orchestrator.md` already says to escalate *"when it commits money, credentials, or
+destructive action"* — and that instinct is right. It is also **a judgment a model makes per
+question**: one interruption with a human watching, a coin flip that spends money without one. The
+owner's boundary has to be data on a task, not prose in a prompt.
+
+**Decision:** the mark is TaskPlanner's own `**Assignee:**`, which its board already parses,
+serializes, renders as `@assignee` and filters on. `FollowUpTaskDraft` and `MilestoneTaskDraft` gain
+the optional field, so **a closeout may create a marked follow-up** — the team may propose the
+monetisation experiment, the pricing change, the credential-bearing integration; it may not start
+one. That asymmetry is the whole boundary: an agent that can mark its own work is useful, one that
+can unmark it has removed the boundary.
+
+**Two axes, two stated reasons.** An assigned task belongs to the person named; a task whose
+`**Waiting until:**` date has not arrived is blocked on something outside the repository. The board
+digest states the reason rather than showing a raw mark, so the agent reads a stated rule instead of
+inferring one — boundaries as data, in the form the reader actually receives.
+
+**Rejected, as `TASK-162` recorded:** a tag (TaskPlanner's config allowlist filters drafted tags, so
+the mark could be silently dropped); a priority (it overloads an axis a marked task still needs); an
+Isotopy-invented field (a second vocabulary for a field TaskPlanner already has); and a server-side
+claim gate refusing to start a run against a marked task — that is `TASK-172`'s problem, and
+respecting a stated boundary is the agent's job, not the scheduler's.
+
+**The honest limit of the claim.** No Isotopy writer clears the mark: there is no update path, and
+`transitionTasks` moves a section verbatim. The agent reads the mark in the digest and is told the
+rule, which is where a stated boundary belongs — but nothing yet *prevents* an agent that acquires a
+board-writing tool from clearing it. That gap belongs to whatever gives a step such a tool, and it
+has to close there rather than here.
+
+---
+
+## 2026-09-22 — Isotopy holds no board-format code; the gaps went upstream
+
+**Context:** Isotopy maintained a second board parser — `taskSummariesIn` — strictly worse than the
+one TaskPlanner ships, and it dropped every `**`-prefixed line, which is exactly where the owner's
+mark lives. Replacing it was the easy half. The hard half took three attempts and the product
+owner asking the same question three times: *why is Isotopy redefining this at all?*
+
+**The first two attempts were wrong, and the reason is worth keeping.** Both kept a second
+implementation in Isotopy and justified it by measuring defects in the library: `serializeStateFile`
+rebuilt a state file and dropped a comment above a task; `ConfigManager.load()` rewrote the user's
+`config.json` on a *read*; CRLF boards parsed as empty. Every measurement was correct and every
+conclusion was wrong. **A defect in a dependency you own is not a reason to reimplement it — it is a
+bug report.** TaskPlanner is a smekai project; the fixes belonged there, and 2.4.x carries them:
+`FileStore.prepareState` is `serializeBoard(parseTasks(original).segments, tasks)`, `load()` takes
+`persistMigration: false`, and the parser reads CRLF.
+
+**Decision: Isotopy consumes `TaskStore`, `FileStore` and `ConfigManager`, and owns no board
+format.** `openBoard` opens or creates, `createTask` allocates the id and reconciles `nextId`,
+`moveTask` moves, `findTaskByAttribute` finds Isotopy's own tasks by the origin it wrote,
+`knownTaskIds` answers whether an id is spent across the board *and* the archive,
+`prependWorkLogEntry` writes the work log, and `renderBoardDigest` renders the board into the
+prompt. What remains in Isotopy is the seam: locate the board, turn a draft into a `Task`, and
+refuse model prose that would end a task section.
+
+**Six things moved upstream rather than being written here** (TaskPlanner TASK-067, TASK-069),
+including two that TaskPlanner itself had twice — opening a board, and rendering one to text.
+`taskplanner_board` now calls the same renderer Isotopy does.
+
+**Rejected: keeping Isotopy's own skip wording per task.** The digest said *"assigned to @owner —
+theirs to start, not the team's"* on every line. TaskPlanner marks `@owner` and `⏳ waiting until`,
+and the **rule** is already stated once in the Orchestrator's step task. Repeating it per line was
+prose duplicating a prompt.
+
+**The built-in board is gone; a project with no board gets one at `<project>/.tasks/`.** The
+previous design put it under `<dataDir>/.tasks`, which made it invisible to every TaskPlanner
+client: the MCP server walks *upward* for `.tasks/config.json`, and a project runs its agents at
+`<root>` while `dataDir` is `<root>/.isotopy`. Isotopy now writes into the user's own repository,
+where their tools already look. That also deletes the `backend: "taskplanner" | "isotopy"`
+distinction, which existed only to name the built-in board — including from the stored closeout
+record and the UI badge.
+
+---
+
 ## 2026-08-25 — A scheduled task is a prompt, and the team it pins is optional
 
 **Context:** `TASK-161` specified the board poller as a bespoke feature: a server-side board

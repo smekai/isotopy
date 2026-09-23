@@ -46,6 +46,50 @@ describe("parseCloseoutReport", () => {
     expect(parsed.report.tasks).toHaveLength(1);
   });
 
+  // The mirror is strict and `salvageItems` drops an item that fails whole, so a
+  // field it does not know would lose the follow-up rather than the assignee.
+  it("keeps a follow-up marked for the owner, rather than dropping the task with it", () => {
+    const parsed = parseBlock({
+      ...VALID_CLOSEOUT,
+      tasks: [
+        {
+          findingId: "finding",
+          title: "Buy the domain",
+          description: "Spends money, so it is not the team's to start",
+          priority: "P1",
+          tags: [],
+          assignee: "owner",
+        },
+      ],
+    });
+
+    expect(parsed.validationErrors).toEqual([]);
+    expect(parsed.report.tasks[0]?.assignee).toBe("owner");
+  });
+
+  // A description is prose an agent wrote, and prose plausibly contains a rule. Written
+  // to the board it would end the task section, so it is refused here with a reason the
+  // agent can act on rather than thrown from the serializer where nobody reads it.
+  it("refuses a follow-up whose description would end the task section", () => {
+    const parsed = parseBlock({
+      ...VALID_CLOSEOUT,
+      tasks: [
+        {
+          findingId: "finding",
+          title: "Split the parser",
+          description: "Before the change:\n---\nAfter the change:",
+          priority: "P1",
+          tags: [],
+        },
+      ],
+    });
+
+    expect(parsed.report.tasks).toEqual([]);
+    expect(parsed.validationErrors).toContainEqual(
+      expect.stringContaining("tasks.0.description: cannot contain a line that is just"),
+    );
+  });
+
   it("keeps every field and element that parsed, and names each one that did not", () => {
     const parsed = parseBlock({
       ...VALID_CLOSEOUT,

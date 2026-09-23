@@ -22,13 +22,19 @@ return a readable summary followed by exactly one fenced JSON block:
           "title": "Missing implementation task",
           "description": "Decision-complete scope and acceptance criteria",
           "priority": "P1",
-          "tags": ["server"]
+          "tags": ["server"],
+          "assignee": "owner"
         }
       ]
     }
   ]
 }
 ```
+
+`assignee` is optional, and `owner` is the value to use. Set it on a draft the team may
+propose but must not start by itself: anything that spends money, needs a credential,
+takes a destructive action, or settles a preference only the user holds. Nothing clears
+the mark afterwards, so leave it off work the team can simply do.
 
 Reuse matching existing tasks rather than duplicating them. Every feature must
 have acceptance criteria and at least one existing task or task draft. Order

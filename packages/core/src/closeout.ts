@@ -11,6 +11,7 @@ export const followUpTaskDraftSchema = z
     description: requiredText,
     priority: z.enum(TASK_PRIORITIES),
     tags: requiredTexts,
+    assignee: requiredText.optional(),
   })
   .strict();
 
@@ -60,7 +61,6 @@ export const createdTaskReferenceSchema = z
   .object({
     id: requiredText,
     title: requiredText,
-    backend: z.enum(["taskplanner", "isotopy"]),
   })
   .strict();
 

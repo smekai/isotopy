@@ -341,6 +341,35 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   that basename at any depth. The cost is one download per home run, which is
   the price of a scratch workspace that is thrown away anyway.
 
+## Task board — a seam over TaskPlanner (`services/task-board-adapter.ts`)
+
+Isotopy holds no board-format code. `openBoard(tasksDir, { initialize })` returns
+`{ configManager, fileStore, taskStore }`, and every read and write goes through
+those: `createTask` allocates the id and reconciles `nextId`, `moveTask` moves,
+`knownTaskIds` spans the board and the archive, `prependWorkLogEntry` writes the
+work log, `renderBoardDigest` renders the prompt.
+
+**The board is opened on every call, never cached.** A board edited by hand or by
+another agent mid-session is read as it is now. `openBoard` defaults to
+`persistMigration: false`, so a read never rewrites the owner's `config.json`; the
+adapter refuses outright when `isConfigUnreadable()` says the file could not be
+read, rather than writing a default board over it.
+
+**Isotopy's own marks are `Task.attributes`**, not prose in the body:
+`Isotopy source` records where a task came from and `Isotopy origin` is a
+fingerprint of the milestone/feature/finding it was minted for.
+`findTaskByAttribute(ORIGIN_ATTRIBUTE, …)` is what keeps follow-up creation
+idempotent across a re-run.
+
+**The board lives at `<project>/.tasks/`**, created there when the project has
+none. That is where every TaskPlanner client — its MCP server walks upward for
+`.tasks/config.json` — already looks, so Isotopy and the user's own tools read one
+board rather than two.
+
+**Deferred states have to be asked for.** `TaskStore` loads `Done` and `Rejected`
+lazily, so the adapter calls `ensureAllDeferredStatesLoaded()` after opening;
+without it the digest would report them as empty.
+
 ## Engines — persona delivery (`engines/persona.ts`)
 
 Claude Code takes the stage persona natively via `--append-system-prompt`, so it

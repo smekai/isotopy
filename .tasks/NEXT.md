@@ -228,7 +228,7 @@ repo's line-ending handling; nothing new is introduced.
 
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-08-28 18:25
+**Updated:** 2026-09-16 13:56
 
 The owner's boundary, as data on a task rather than a judgment in a prompt. Of **Milestone I —
 Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
@@ -387,6 +387,34 @@ repository config therefore launches `node -e` with a `require` of the package e
 resolution walk up; verified from a subdirectory against the real board. MCP config files are written with `path.join` under `os.tmpdir()` or the project data dir.
 Front matter and CLI output split on `/\r?\n/`. Tested live on Windows; macOS reasoned through and
 recorded untested unless a Mac is used.
+
+### Plan
+
+**Split on 2026-09-16.** This task had grown to +3345/−834 across four mechanisms, and the two halves
+turned out to have different scope and different readiness:
+
+- **`TASK-173` took the board reader and the owner's mark** — the half the milestone blocks on. It
+  needs nothing new, works on both platforms today, and is already delivered.
+- **This task keeps the mechanism** — a step task that declares its own agent, tools and context, and
+  the MCP plumbing that lets a step carry a tool. That is roughly +1900/−143: 12 new modules and 7
+  new test suites, almost pure addition, because it is new capability rather than a change to
+  existing code.
+
+The premise that joined them was that the agent must read `**Assignee:**` *through* an MCP tool,
+because `taskSummariesIn` stripped every `**`-prefixed line. Making the digest show the mark is the
+direct fix, and `TASK-173` did it. The tool path remains worth having on its own terms — a step
+declaring what it needs is a product capability the owner asked for on 2026-08-26 — but it is no
+longer the boundary's blocker.
+
+**Gated on `@smekai/taskplanner` 2.3.1.** The MCP server is the agent's reader here, and 2.3.0 has
+two defects that only reach that path: a CRLF board parses to zero tasks (indistinguishable from an
+empty board), and any read tool rewrites the caller's `config.json`. Both are fixed in
+smekai/taskplanner#10 and need publishing before this can land.
+
+Two open questions for the owner on this half: whether to replace the hand-rolled front-matter
+grammar with JSON metadata (~119 lines plus the coercions and the summary fallback — a format change
+to 13 shipped files), and confirmation that `agent` defaults stay, given the approval card now
+resolves the persona into the proposal.
 
 ---
 

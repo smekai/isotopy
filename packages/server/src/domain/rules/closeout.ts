@@ -9,6 +9,7 @@ import {
   type RunState,
 } from "@isotopy/core";
 import { z } from "zod";
+import { taskSectionText } from "../../schemas/task-text.ts";
 
 const CLOSEOUT_BLOCK = /```isotopy-closeout\s*([\s\S]*?)```/i;
 const closeoutRecordSchema = z.record(z.string(), z.unknown());
@@ -39,9 +40,10 @@ const followUpTaskSchema = z
   .object({
     findingId: requiredText,
     title: requiredText,
-    description: requiredText,
+    description: taskSectionText,
     priority: z.enum(TASK_PRIORITIES),
     tags: uniqueStrings,
+    assignee: requiredText.optional(),
   })
   .strict();
 
