@@ -341,48 +341,34 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   that basename at any depth. The cost is one download per home run, which is
   the price of a scratch workspace that is thrown away anyway.
 
-## Task board — one parser, two writers (`services/task-board-adapter.ts`)
+## Task board — a seam over TaskPlanner (`services/task-board-adapter.ts`)
 
-`@smekai/taskplanner` parses; Isotopy writes. `parseTasks` reads a state file,
-`serializeTask` renders one task in TaskPlanner's metadata order, and
-`insertTaskSection` / `takeTaskSection` edit around a task without touching a byte
-of what surrounds it.
+Isotopy holds no board-format code. `openBoard(tasksDir, { initialize })` returns
+`{ configManager, fileStore, taskStore }`, and every read and write goes through
+those: `createTask` allocates the id and reconciles `nextId`, `moveTask` moves,
+`knownTaskIds` spans the board and the archive, `prependWorkLogEntry` writes the
+work log, `renderBoardDigest` renders the prompt.
 
-**Three of the library's classes are refused, and each has a test saying why.**
-`serializeStateFile` rebuilds a file from what it parsed, dropping an unrecognised
-comment and deleting a lowercase-prefix task. `ConfigManager.load()` rewrites the
-config it reads — reformatting, injecting eight fields, adding a `Rejected` state.
-`FileStore.readState` feeds `parseTasks` raw bytes, so a CRLF board reads as empty.
-`TaskStore` composes the last two.
+**The board is opened on every call, never cached.** A board edited by hand or by
+another agent mid-session is read as it is now. `openBoard` defaults to
+`persistMigration: false`, so a read never rewrites the owner's `config.json`; the
+adapter refuses outright when `isConfigUnreadable()` says the file could not be
+read, rather than writing a default board over it.
 
-**The CRLF boundary is per file, not per board.** `readBoardFile` normalises and
-remembers the ending it found; `writeBoardFile` restores it. Two state files in one
-repository can legitimately differ, so remembering one ending for the board would
-convert the other on the first write.
+**Isotopy's own marks are `Task.attributes`**, not prose in the body:
+`Isotopy source` records where a task came from and `Isotopy origin` is a
+fingerprint of the milestone/feature/finding it was minted for.
+`findTaskByAttribute(ORIGIN_ATTRIBUTE, …)` is what keeps follow-up creation
+idempotent across a re-run.
 
-**Isotopy's own markers live inside `Task.description`.** `**Isotopy source:** …`
-and the `<!-- ISOTOPY-FINDING:… -->` fingerprint sit after the blank line that ends
-metadata, so TaskPlanner parses them as body and returns them unchanged. That is
-what keeps follow-up creation idempotent across a re-run.
+**The board lives at `<project>/.tasks/`**, created there when the project has
+none. That is where every TaskPlanner client — its MCP server walks upward for
+`.tasks/config.json` — already looks, so Isotopy and the user's own tools read one
+board rather than two.
 
-**A priority the parser does not know is coerced silently** — `P9` reads back as
-`P4` with no warning. Nothing rewrites a task Isotopy did not touch, so the coercion
-never reaches disk; a spec holds that line.
-
-**Done tasks may not be in `DONE.md`.** Once a project sets `archiveDoneAfterDays`,
-TaskPlanner moves them to `.tasks/archive/DONE-YYYY.md`. `knownTasks` reads the
-archive too, so `approveMilestoneTasks` does not reject an archived id as missing
-and `transitionTasks` does not re-move one that is already done.
-
-**The built-in board is `<dataDir>/.tasks`, and that is the only name** — TaskPlanner's
-own directory name, so any reader of that shape knows what it is looking at. A reader
-still has to be *pointed* at it: the MCP server walks upward for `.tasks/config.json`,
-and a normal project runs agents at `<root>` while `dataDir` is `<root>/.isotopy`, so
-a walk up from `<root>` never reaches the built-in board. Whatever hands a step a
-board tool has to pass the board's own parent. The pre-rename `<dataDir>/tasks` is not
-probed; a project holding one gets a fresh board, which is why the rename landed before
-any project outside this repository had one. New built-in boards carry a **Next** state,
-which the poller prompt assumes and `createBuiltInBoard` previously never created.
+**Deferred states have to be asked for.** `TaskStore` loads `Done` and `Rejected`
+lazily, so the adapter calls `ensureAllDeferredStatesLoaded()` after opening;
+without it the digest would report them as empty.
 
 ## Engines — persona delivery (`engines/persona.ts`)
 

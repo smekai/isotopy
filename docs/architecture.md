@@ -229,11 +229,13 @@ of the source. When you strip or avoid a comment, that is where its content goes
   Where a conditional guarded a falsy value rather than an absent one, keep that
   meaning explicit (`apiKey: stored?.apiKey || undefined`) rather than letting an
   empty string through. Runtime schemas own untrusted HTTP, persisted JSON,
-  settings, project-registry, TaskPlanner, and engine-protocol input. Routes and
+  settings, project-registry, and engine-protocol input. Routes and
   adapters receive only parsed values; services and repositories do not rebuild
   types through hand-written record traversal. Isotopy-owned records reject
-  unknown fields. TaskPlanner and engine codecs permit unrelated external
-  fields while validating every consumed field. Relative imports use `.ts`
+  unknown fields; engine codecs permit unrelated external fields while
+  validating every consumed field. The task board is the exception that proves
+  the rule: its format is `@smekai/taskplanner`'s, so its own `ConfigManager`
+  parses it and Isotopy does not restate the schema. Relative imports use `.ts`
   extensions (like `@isotopy/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 
@@ -857,7 +859,6 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
-| `<project>/.isotopy/.tasks/` | The built-in task board, in TaskPlanner's own format, when the project has no `.tasks/` of its own | One project |
 | `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |

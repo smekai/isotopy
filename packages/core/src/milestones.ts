@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  requiredText,
-  requiredTexts,
-  taskSectionText,
-  timestamp,
-} from "./schema.ts";
+import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const MILESTONE_STATUSES = [
   "draft",
@@ -49,7 +44,7 @@ export const milestoneTaskDraftSchema = z
   .object({
     id: requiredText,
     title: requiredText,
-    description: taskSectionText,
+    description: requiredText,
     priority: z.enum(TASK_PRIORITIES),
     tags: requiredTexts,
     assignee: requiredText.optional(),

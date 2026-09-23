@@ -396,7 +396,7 @@ export class MilestoneService {
     userContext: string,
     options: Omit<StartRunOptions, "task" | "milestoneId" | "featureId">,
   ): Promise<RunState> {
-    const boardContext = await taskBoardFor(projectPath).boardDigest();
+    const tasksContext = await taskBoardFor(projectPath).tasksContext();
     const storedCloseoutContext = await milestoneCloseoutContext(projectPath);
     const priorKnowledge = [...this.milestones.values()]
       .filter(
@@ -414,7 +414,7 @@ export class MilestoneService {
       }));
     const task = renderMilestonePlanningContext(
       userContext,
-      boardContext,
+      tasksContext,
       storedCloseoutContext,
       priorKnowledge,
     );

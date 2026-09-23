@@ -105,7 +105,7 @@ test("only the tasks the report calls completed move to Done", async () => {
   // Assert
   expect(reportErrors).toEqual([]);
   expect(record.validationErrors).toEqual([]);
-  expect(record.createdTasks).toMatchObject([{ id: "TASK-003", backend: "taskplanner" }]);
+  expect(record.createdTasks).toMatchObject([{ id: "TASK-003" }]);
   expect(await readFile(path.join(project.root, ".tasks", "DONE.md"), "utf8"))
     .toContain("## TASK-001:");
   expect(await readFile(path.join(project.root, ".tasks", "IN_PROGRESS.md"), "utf8"))
@@ -262,7 +262,7 @@ test("keeps findings and follow-up tasks when the agent writes a hyphenated seve
   expect(reportErrors).toEqual([]);
   expect(record.validationErrors).toEqual([]);
   expect(record.report.findings).toMatchObject([{ severity: "non_blocking" }]);
-  expect(record.createdTasks).toMatchObject([{ id: "TASK-003", backend: "taskplanner" }]);
+  expect(record.createdTasks).toMatchObject([{ id: "TASK-003" }]);
   expect(
     await readFile(path.join(project.root, ".tasks", "BACKLOG.md"), "utf8"),
   ).toContain("Fix the dashboard spacing");

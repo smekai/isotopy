@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   CreatedTaskReference,
@@ -9,38 +8,25 @@ import type {
   MilestoneTaskDraft,
   RunState,
 } from "@isotopy/core";
-import { parseTasks, serializeBoard, taskIdsIn } from "@smekai/taskplanner";
-import type { BoardSegment, ParseIssue, Task } from "@smekai/taskplanner";
-import {
-  boardHeading,
-  prependWorkLogEntries,
-  renderBoardDigest,
-  renderWorkLogEntry,
-} from "../domain/markdown/task-board.ts";
-import { toBoardPriority } from "../domain/rules/task-board.ts";
-import {
-  boardConfigSchema,
-  ownedBoardConfigSchema,
-  type BoardConfig,
-  type StateConfig,
-} from "../schemas/task-board-config.ts";
-import { formatValidationIssues, parseJson } from "../domain/validation.ts";
+import { Priority, boardExists, openBoard, renderBoardDigest } from "@smekai/taskplanner";
+import type { OpenedBoard, Task, TaskPlannerConfig } from "@smekai/taskplanner";
 import type { ProjectPath } from "../paths.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { nowIso } from "../utils/time.ts";
 
 export interface ApprovedTaskLinks {
-  backend: "taskplanner" | "isotopy";
   featureTaskIds: Record<string, string[]>;
 }
 
 const BOARD_DIR = ".tasks";
 
-const ARCHIVE_DIR = "archive";
+const BACKLOG_STATE = "Backlog";
 
 const SOURCE_ATTRIBUTE = "Isotopy source";
 
 const ORIGIN_ATTRIBUTE = "Isotopy origin";
+
+const CONTEXT_DESCRIPTION_LIMIT = 320;
 
 const adapters = new Map<string, TaskBoardAdapter>();
 
@@ -49,99 +35,69 @@ export function taskBoardFor(projectPath: ProjectPath): TaskBoardAdapter {
 }
 
 export class TaskBoardAdapter {
-  private location?: BoardLocation;
-
   constructor(private readonly projectPath: ProjectPath) {}
 
-  async boardDigest(): Promise<string> {
-    const board = await this.board(false);
+  async tasksContext(): Promise<string> {
+    const board = this.open(false);
     if (!board) {
       return "No existing task board is configured.";
     }
-    const files = await stateFiles(board);
-    const states = board.config.states.map((state) => ({
+    const states = board.taskStore.config.states.map((state) => ({
       name: state.name,
-      tasks: files.get(state.name)?.tasks ?? [],
-      issues: files.get(state.name)?.issues,
+      tasks: board.taskStore.getTasksByState(state.name),
     }));
-    return renderBoardDigest(board.backend, states, new Date());
+    return renderBoardDigest(states, {
+      includeTasks: true,
+      descriptionLimit: CONTEXT_DESCRIPTION_LIMIT,
+    });
   }
 
   async approveMilestoneTasks(
     milestone: Milestone,
     proposal: MilestoneProposal,
   ): Promise<ApprovedTaskLinks> {
-    const board = await this.board(true);
-    if (!board) {
-      throw new Error("Task board is unavailable");
-    }
-    const files = await stateFiles(board);
-    const known = await knownBoard(board, files);
-    const requestedIds = proposal.features.flatMap((feature) => feature.existingTaskIds);
-    const missing = [...new Set(requestedIds)].filter((id) => !known.ids.has(id));
+    const board = this.openOrThrow();
+    const known = board.taskStore.knownTaskIds();
+    const requested = proposal.features.flatMap((feature) => feature.existingTaskIds);
+    const missing = [...new Set(requested)].filter((id) => !known.has(id));
     if (missing.length > 0) {
       throw new Error(`Existing task IDs were not found: ${missing.join(", ")}`);
     }
 
-    const backlog = backlogState(board);
-    const backlogFile = fileFor(files, backlog);
-    let next = board.config.nextId;
     const featureTaskIds: Record<string, string[]> = {};
-
     for (const feature of proposal.features) {
       const ids = [...feature.existingTaskIds];
       for (const draft of feature.taskDrafts) {
         const origin = fingerprint(milestone.id, feature.id, draft.id);
-        let id = taskIdForOrigin(known.tasks, origin);
-        if (!id) {
-          const allocated = allocate(board, known.ids, next);
-          id = allocated.id;
-          next = allocated.next;
-          const task = milestoneTask(board, id, draft, origin, milestone, feature.id);
-          backlogFile.tasks = placed(backlogFile.tasks, task, board.config.insertPosition);
-          remember(known, task);
-        }
-        draft.createdTaskId = id;
-        ids.push(id);
+        const source = `milestone ${milestone.id} · feature ${feature.id}`;
+        draft.createdTaskId = this.upsert(board, origin, () =>
+          task(board.taskStore.config, draft, source, origin),
+        );
+        ids.push(draft.createdTaskId);
       }
       featureTaskIds[feature.id] = [...new Set(ids)];
     }
-
-    await writeBoardFile(path.join(board.dir, backlog.fileName), backlogFile);
-    await this.writeNextId(board, next);
-    return { backend: board.backend, featureTaskIds };
+    return { featureTaskIds };
   }
 
   async createFollowUpTasks(
     run: RunState,
-    tasks: FollowUpTaskDraft[],
+    drafts: FollowUpTaskDraft[],
   ): Promise<CreatedTaskReference[]> {
-    if (tasks.length === 0) return [];
-    const board = await this.board(true);
-    if (!board) throw new Error("Task board is unavailable");
-    const files = await stateFiles(board);
-    const known = await knownBoard(board, files);
-    const backlog = backlogState(board);
-    const backlogFile = fileFor(files, backlog);
-    let next = board.config.nextId;
-    const created: CreatedTaskReference[] = [];
+    if (drafts.length === 0) return [];
+    const board = this.openOrThrow();
 
-    for (const draft of tasks) {
+    return drafts.flatMap((draft) => {
       const origin = findingFingerprint(run, draft.findingId);
-      if (taskIdForOrigin(known.tasks, origin)) {
-        continue;
+      if (board.taskStore.findTaskByAttribute(ORIGIN_ATTRIBUTE, origin)) {
+        return [];
       }
-      const allocated = allocate(board, known.ids, next);
-      next = allocated.next;
-      const task = followUpTask(board, allocated.id, draft, origin, run);
-      backlogFile.tasks = placed(backlogFile.tasks, task, board.config.insertPosition);
-      remember(known, task);
-      created.push({ id: allocated.id, title: draft.title, backend: board.backend });
-    }
-    if (created.length === 0) return [];
-    await writeBoardFile(path.join(board.dir, backlog.fileName), backlogFile);
-    await this.writeNextId(board, next);
-    return created;
+      const created = board.taskStore.createTask(
+        task(board.taskStore.config, draft, followUpSource(run, draft), origin),
+        BACKLOG_STATE,
+      );
+      return [{ id: created.id, title: draft.title }];
+    });
   }
 
   async transitionTasks(
@@ -150,323 +106,80 @@ export class TaskBoardAdapter {
     runId: string,
   ): Promise<string[]> {
     if (ids.length === 0) return [];
-    const board = await this.board(false);
+    const board = this.open(false);
     if (!board) return [];
-    const targetState = stateFor(board, targetStateName);
-    if (!targetState) return [];
-    const targetPath = path.join(board.dir, targetState.fileName);
-    const destination = (await readBoardFile(targetPath)) ?? emptyBoard(targetStateName);
-    const archived = await archiveIds(board);
-    const moved: string[] = [];
 
-    for (const id of [...new Set(ids)]) {
-      if (destination.ids.has(id) || archived.has(id)) continue;
-      const task = await this.takeTask(board, targetState, id);
-      if (!task) continue;
-      destination.tasks = [task, ...destination.tasks];
-      destination.ids.add(id);
-      moved.push(id);
-    }
-    if (moved.length === 0) return [];
-    await writeBoardFile(targetPath, destination);
+    const moved = [...new Set(ids)].filter(
+      (id) => board.taskStore.moveTask(id, targetStateName) !== null,
+    );
     if (targetStateName === "Done") {
-      await appendWorkLog(board, runId, moved);
+      for (const id of [...moved].reverse()) {
+        board.fileStore.prependWorkLogEntry({
+          id,
+          date: nowIso().slice(0, 10),
+          what: `Completed by Full Delivery run ${runId}.`,
+          outcome: "Evidence and follow-ups are recorded in the run closeout.",
+        });
+      }
     }
     return moved;
   }
 
-  private async takeTask(
-    board: Board,
-    targetState: StateConfig,
-    id: string,
-  ): Promise<Task | undefined> {
-    for (const state of board.config.states) {
-      if (state.fileName === targetState.fileName) continue;
-      const sourcePath = path.join(board.dir, state.fileName);
-      const source = await readBoardFile(sourcePath);
-      const task = source?.tasks.find((candidate) => candidate.id === id);
-      if (!source || !task) continue;
-      await writeBoardFile(sourcePath, {
-        ...source,
-        tasks: source.tasks.filter((candidate) => candidate.id !== id),
-      });
-      return task;
-    }
-    return undefined;
+  private upsert(board: OpenedBoard, origin: string, build: () => Omit<Task, "id">): string {
+    const existing = board.taskStore.findTaskByAttribute(ORIGIN_ATTRIBUTE, origin);
+    return existing ? existing.task.id : board.taskStore.createTask(build(), BACKLOG_STATE).id;
   }
 
-  private async board(create: boolean): Promise<Board | undefined> {
-    const location = this.location ?? (await this.resolveLocation(create));
-    if (!location) {
+  private openOrThrow(): OpenedBoard {
+    const board = this.open(true);
+    if (!board) {
+      throw new Error("Task board is unavailable");
+    }
+    return board;
+  }
+
+  // Opened every call so a board edited by hand or by another agent mid-session is read
+  // as it is now, not as it was when this adapter first saw it.
+  private open(create: boolean): OpenedBoard | undefined {
+    const tasksDir = path.join(this.projectPath.root, BOARD_DIR);
+    if (!create && !boardExists(tasksDir)) {
       return undefined;
     }
-    this.location = location;
-    return {
-      ...location,
-      config: await readConfig(location.configPath, location.backend === "taskplanner"),
-    };
-  }
-
-  private async resolveLocation(create: boolean): Promise<BoardLocation | undefined> {
-    const candidates: BoardLocation[] = [
-      locationAt(path.join(this.projectPath.root, BOARD_DIR), "taskplanner"),
-      locationAt(path.join(this.projectPath.dataDir, BOARD_DIR), "isotopy"),
-    ];
-    for (const candidate of candidates) {
-      if (await readText(candidate.configPath)) {
-        return candidate;
-      }
+    const board = openBoard(tasksDir, { initialize: create });
+    if (board.configManager.isConfigUnreadable()) {
+      throw new Error(
+        `Invalid task board config ${path.join(tasksDir, "config.json")}: ${board.configManager
+          .getDiagnostics()
+          .map((diagnostic) => diagnostic.message)
+          .join("; ")}`,
+      );
     }
-    return create ? createBuiltInBoard(this.projectPath) : undefined;
+    board.taskStore.ensureAllDeferredStatesLoaded();
+    return board;
   }
-
-  private async writeNextId(board: Board, nextId: number): Promise<void> {
-    await writeFile(
-      board.configPath,
-      `${JSON.stringify({ ...board.config, nextId }, null, 2)}\n`,
-    );
-  }
-}
-
-interface BoardLocation {
-  backend: "taskplanner" | "isotopy";
-  dir: string;
-  configPath: string;
-}
-
-interface Board extends BoardLocation {
-  config: BoardConfig;
-}
-
-interface BoardFile {
-  segments: BoardSegment[];
-  tasks: Task[];
-  ids: Set<string>;
-  issues: ParseIssue[];
-}
-
-interface KnownBoard {
-  tasks: Task[];
-  ids: Set<string>;
-}
-
-function locationAt(dir: string, backend: BoardLocation["backend"]): BoardLocation {
-  return { backend, dir, configPath: path.join(dir, "config.json") };
-}
-
-async function readText(filePath: string): Promise<string | undefined> {
-  return readFile(filePath, "utf8").catch(() => undefined);
-}
-
-// `ids` is deliberately not `tasks.map(id)`: `taskIdsIn` also finds a heading nested
-// inside another task's body, and an id that exists anywhere must not be reissued.
-function parsedBoard(raw: string): BoardFile {
-  const { segments, tasks, errors } = parseTasks(raw);
-  return { segments, tasks, ids: taskIdsIn(raw), issues: errors };
-}
-
-async function readBoardFile(filePath: string): Promise<BoardFile | undefined> {
-  const raw = await readText(filePath);
-  return raw === undefined ? undefined : parsedBoard(raw);
-}
-
-function writeBoardFile(filePath: string, file: BoardFile): Promise<void> {
-  return writeFile(filePath, serializeBoard(file.segments, file.tasks));
-}
-
-function emptyBoard(stateName: string): BoardFile {
-  return parsedBoard(boardHeading(stateName));
-}
-
-function placed(tasks: Task[], task: Task, position: BoardConfig["insertPosition"]): Task[] {
-  return position === "bottom" ? [...tasks, task] : [task, ...tasks];
-}
-
-// The persisted nextId is the source of truth, but a board edited by hand may hold an
-// id it never advanced past, and reissuing one would put two tasks under one number.
-function allocate(
-  board: Board,
-  knownIds: Set<string>,
-  from: number,
-): { id: string; next: number } {
-  let number = from;
-  let id = `${board.config.idPrefix}-${String(number).padStart(3, "0")}`;
-  while (knownIds.has(id)) {
-    number += 1;
-    id = `${board.config.idPrefix}-${String(number).padStart(3, "0")}`;
-  }
-  return { id, next: number + 1 };
-}
-
-function remember(known: KnownBoard, task: Task): void {
-  known.tasks.push(task);
-  known.ids.add(task.id);
-}
-
-function taskIdForOrigin(tasks: Iterable<Task>, origin: string): string | undefined {
-  for (const task of tasks) {
-    if (task.attributes?.[ORIGIN_ATTRIBUTE] === origin) {
-      return task.id;
-    }
-  }
-  return undefined;
-}
-
-async function stateFiles(board: Board): Promise<Map<string, BoardFile>> {
-  const files = new Map<string, BoardFile>();
-  await Promise.all(
-    board.config.states.map(async (state) => {
-      const file = await readBoardFile(path.join(board.dir, state.fileName));
-      files.set(state.name, file ?? emptyBoard(state.name));
-    }),
-  );
-  return files;
-}
-
-// Completed work may have been archived out of DONE.md, so "absent" has to look here too.
-async function archiveFiles(board: Board): Promise<BoardFile[]> {
-  const dir = path.join(board.dir, ARCHIVE_DIR);
-  const entries = await readdir(dir).catch(() => []);
-  const files = await Promise.all(
-    entries
-      .filter((entry) => entry.endsWith(".md"))
-      .map((entry) => readBoardFile(path.join(dir, entry))),
-  );
-  return files.filter((file): file is BoardFile => file !== undefined);
-}
-
-async function archiveIds(board: Board): Promise<Set<string>> {
-  const files = await archiveFiles(board);
-  return new Set(files.flatMap((file) => [...file.ids]));
-}
-
-async function knownBoard(board: Board, files: Map<string, BoardFile>): Promise<KnownBoard> {
-  const all = [...files.values(), ...(await archiveFiles(board))];
-  return {
-    tasks: all.flatMap((file) => file.tasks),
-    ids: new Set(all.flatMap((file) => [...file.ids])),
-  };
-}
-
-function fileFor(files: Map<string, BoardFile>, state: StateConfig): BoardFile {
-  return files.get(state.name) ?? emptyBoard(state.name);
-}
-
-function today(): string {
-  return nowIso().slice(0, 10);
-}
-
-function stamp(): string {
-  return nowIso().slice(0, 16).replace("T", " ");
-}
-
-async function readConfig(configPath: string, external: boolean): Promise<BoardConfig> {
-  const parsed = parseJson(
-    external ? boardConfigSchema : ownedBoardConfigSchema,
-    await readFile(configPath, "utf8"),
-  );
-  if (!parsed.ok) {
-    throw new Error(
-      `Invalid task board config ${configPath}: ${formatValidationIssues(parsed.issues)}`,
-    );
-  }
-  return parsed.value;
-}
-
-async function createBuiltInBoard(projectPath: ProjectPath): Promise<BoardLocation> {
-  const location = locationAt(path.join(projectPath.dataDir, BOARD_DIR), "isotopy");
-  await mkdir(location.dir, { recursive: true });
-  if (await readText(location.configPath)) {
-    return location;
-  }
-  const config: BoardConfig = {
-    idPrefix: "TASK",
-    nextId: 1,
-    states: [
-      { name: "Backlog", fileName: "BACKLOG.md" },
-      { name: "Next", fileName: "NEXT.md" },
-      { name: "In Progress", fileName: "IN_PROGRESS.md" },
-      { name: "Done", fileName: "DONE.md" },
-    ],
-    insertPosition: "top",
-  };
-  await writeFile(location.configPath, `${JSON.stringify(config, null, 2)}\n`);
-  await Promise.all(
-    config.states.map((state) =>
-      writeFile(path.join(location.dir, state.fileName), boardHeading(state.name), {
-        flag: "wx",
-      }).catch(() => undefined),
-    ),
-  );
-  return location;
 }
 
 function fingerprint(milestoneId: string, featureId: string, taskId: string): string {
-  return createHash("sha256")
-    .update(`${milestoneId}:${featureId}:${taskId}`)
-    .digest("hex")
-    .slice(0, 16);
-}
-
-function backlogState(board: Board): StateConfig {
-  return (
-    board.config.states.find((state) => state.name.toLowerCase() === "backlog") ?? {
-      name: "Backlog",
-      fileName: "BACKLOG.md",
-    }
-  );
-}
-
-function allowedTags(board: Board, tags: string[]): string[] {
-  const allowed = new Set(board.config.tags ?? []);
-  return tags.filter((tag) => allowed.size === 0 || allowed.has(tag));
-}
-
-function milestoneTask(
-  board: Board,
-  id: string,
-  draft: MilestoneTaskDraft,
-  origin: string,
-  milestone: Milestone,
-  featureId: string,
-): Task {
-  return {
-    id,
-    title: draft.title,
-    description: draft.description.trim(),
-    priority: toBoardPriority(draft.priority),
-    tags: allowedTags(board, draft.tags),
-    assignee: draft.assignee,
-    updatedAt: stamp(),
-    attributes: {
-      [SOURCE_ATTRIBUTE]: `milestone ${milestone.id} · feature ${featureId}`,
-      [ORIGIN_ATTRIBUTE]: origin,
-    },
-  };
+  return digest(`${milestoneId}:${featureId}:${taskId}`);
 }
 
 function findingFingerprint(run: RunState, findingId: string): string {
-  return createHash("sha256")
-    .update(
-      [
-        run.milestoneId ?? "no-milestone",
-        run.featureId ?? "no-feature",
-        run.id,
-        findingId,
-      ].join(":"),
-    )
-    .digest("hex")
-    .slice(0, 16);
+  return digest(
+    [
+      run.milestoneId ?? "no-milestone",
+      run.featureId ?? "no-feature",
+      run.id,
+      findingId,
+    ].join(":"),
+  );
 }
 
-function followUpTask(
-  board: Board,
-  id: string,
-  draft: FollowUpTaskDraft,
-  origin: string,
-  run: RunState,
-): Task {
-  const source = [
+function digest(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
+
+function followUpSource(run: RunState, draft: FollowUpTaskDraft): string {
+  return [
     run.milestoneId ? `milestone ${run.milestoneId}` : undefined,
     run.featureId ? `feature ${run.featureId}` : undefined,
     `run ${run.id}`,
@@ -474,30 +187,21 @@ function followUpTask(
   ]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
+}
+
+function task(
+  config: TaskPlannerConfig,
+  draft: MilestoneTaskDraft | FollowUpTaskDraft,
+  source: string,
+  origin: string,
+): Omit<Task, "id"> {
+  const allowed = new Set(config.tags ?? []);
   return {
-    id,
     title: draft.title,
     description: draft.description.trim(),
-    priority: toBoardPriority(draft.priority),
-    tags: allowedTags(board, draft.tags),
+    priority: Priority[draft.priority],
+    tags: draft.tags.filter((tag) => allowed.size === 0 || allowed.has(tag)),
     assignee: draft.assignee,
-    updatedAt: stamp(),
     attributes: { [SOURCE_ATTRIBUTE]: source, [ORIGIN_ATTRIBUTE]: origin },
   };
-}
-
-function stateFor(board: Board, name: string): StateConfig | undefined {
-  return board.config.states.find(
-    (state) => state.name.toLowerCase() === name.toLowerCase(),
-  );
-}
-
-// WORK_LOG.md is Isotopy's own file, not a task board: its headings carry a dash
-// rather than a colon, so nothing in it parses as a task.
-async function appendWorkLog(board: Board, runId: string, ids: string[]): Promise<void> {
-  const target = path.join(board.dir, "WORK_LOG.md");
-  const current = await readText(target);
-  if (!current) return;
-  const entries = ids.map((id) => renderWorkLogEntry(id, today(), runId)).join("\n");
-  await writeFile(target, prependWorkLogEntries(current, entries));
 }

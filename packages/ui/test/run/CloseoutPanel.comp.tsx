@@ -41,14 +41,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-test("created tasks show their id, title and which backend wrote them", () => {
+test("created tasks show their id and title", () => {
   // Act
   render(
     <CloseoutPanel
       closeout={closeout({
         createdTasks: [
-          { id: "TASK-101", title: "Cover the milestone e2e gap", backend: "taskplanner" },
-          { id: "isotopy-3", title: "Chase the flaky teardown", backend: "isotopy" },
+          { id: "TASK-101", title: "Cover the milestone e2e gap" },
+          { id: "TASK-102", title: "Chase the flaky teardown" },
         ],
       })}
       d={d}
@@ -60,8 +60,7 @@ test("created tasks show their id, title and which backend wrote them", () => {
   expect(chips).toHaveLength(2);
   expect(chips[0]?.textContent).toContain("TASK-101");
   expect(chips[0]?.textContent).toContain("Cover the milestone e2e gap");
-  expect(chips[0]?.textContent).toContain("TaskPlanner");
-  expect(chips[1]?.textContent).toContain("Isotopy");
+  expect(chips[1]?.textContent).toContain("TASK-102");
 });
 
 test("a blocking finding is labelled as such and keeps its evidence", () => {

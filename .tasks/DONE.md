@@ -2,88 +2,82 @@
 
 ## TASK-173: One board reader, and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
-**Updated:** 2026-09-21 19:28
+**Updated:** 2026-09-22 17:18
 
 Split out of `TASK-162` on 2026-09-16, which had grown to +3345/−834 across four mechanisms. This
-is the half the milestone actually blocks on, and the half that needs nothing new: **one board
-reader, and the owner's mark as data on a task**. `TASK-162` keeps the other half — a step declaring
-its agent and its tools.
+is the half the milestone actually blocks on: **one board reader, and the owner's mark as data on a
+task**. `TASK-162` keeps the other half — a step declaring its agent and its tools.
 
 Of **Milestone I — Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
 
-### Why it is separable
+### What it took three attempts to get right
 
-`TASK-162` assumed the agent must read the owner's mark **through an MCP tool**, because
-`taskSummariesIn` stripped every `**`-prefixed line and so hid `**Assignee:**`. The direct fix for
-"the agent cannot see the mark" is to make the digest show it — which is this task, and which works
-on both platforms today. The tool path is a product capability worth having, but it is not what the
-boundary needs.
+The first two cuts kept a second board implementation inside Isotopy and justified it by measuring
+defects in the library — `serializeStateFile` dropped a comment above a task, `ConfigManager.load()`
+rewrote the user's `config.json` on a read, CRLF boards parsed as empty. Every measurement was
+correct and every conclusion was wrong.
 
-### One board reader, and it is TaskPlanner's
+**A defect in a dependency you own is a bug report, not a licence to reimplement.** TaskPlanner is a
+smekai project. The product owner asked three times why Isotopy was redefining any of this; the
+third time the premise finally got tested rather than defended, and it did not survive.
 
-The first cut of this task reimplemented half a board parser inside Isotopy: a line-ending boundary,
-a surgical `insertTaskSection`/`takeTaskSection` pair, a second lax `taskIdsIn`, and the finding
-fingerprint smuggled into the task body as an HTML comment found by substring. Every one of them
-existed because the shipped library could not do the job — which made **the library the place to fix
-it**, and TaskPlanner is a smekai project too.
+### Isotopy holds no board-format code
 
-`@smekai/taskplanner` **2.4.1** reads CRLF, preserves each file's own endings on write, normalises
-single-line fields itself, exports a strict `taskIdsIn`, models `attributes` as real round-tripped
-metadata, and adds `serializeBoard(segments, tasks)` — a byte-identical edit that keeps prose,
-comments and the sections its own parser refuses. Adopting it deleted roughly 120 lines of Isotopy:
-`domain/markdown/line-endings.ts` entirely, both section editors, and most of
-`domain/rules/task-board.ts`, now two functions — the priority map and the skip reason, which are
-Isotopy's own. `**Isotopy source:**` and the finding fingerprint became `attributes`, so finding a
-task by its origin is a field read rather than a substring search.
+`openBoard(tasksDir, { initialize })` opens or creates, `createTask` allocates the id and reconciles
+`nextId`, `moveTask` moves, `findTaskByAttribute` finds Isotopy's own tasks by the origin it wrote,
+`knownTaskIds` answers whether an id is spent across the board *and* the archive,
+`prependWorkLogEntry` writes the work log, and `renderBoardDigest` renders the board into the
+prompt. What is left here is the seam: locate the board, turn a draft into a `Task`, and refuse
+model prose that would end a task section.
 
-**What is still refused, measured rather than assumed.** `serializeStateFile` rebuilds a state file
-from what it parsed and so drops a comment above a task; `serializeBoard` is used instead.
-`ConfigManager.load()` rewrote the user's `config.json` on a *read* — reformatted, eight fields
-injected, a `Rejected` state never declared — so the board config is read directly. A test stands
-over each.
+Deleted: `domain/markdown/task-board.ts`, `domain/markdown/tasks-context.ts`,
+`domain/markdown/line-endings.ts`, `domain/rules/task-board.ts`, `schemas/task-board-config.ts`, and
+roughly two hundred lines of the adapter. Source across the change is **+225/−501**.
 
-`renderTaskBoardPlanningContext` is **replaced, not deleted** — `renderBoardDigest` renders typed
-tasks, so it shows the marks the old summary stripped. The built-in board moves to
-`<dataDir>/.tasks` and that is its only name; the old location is not probed, because a board
-Isotopy can read and the tools cannot find is worse than none.
+### Six things went upstream instead of being written here
+
+TaskPlanner **TASK-067** exported `endsTaskSection` (so a consumer stops copying the grammar),
+stopped publishing declarations for deleted modules, and added `isConfigUnreadable()` so a writer
+can refuse before it puts defaults where a broken config was. **TASK-069** added `openBoard` /
+`boardExists`, `findTaskByAttribute`, `knownTaskIds`, `renderWorkLogEntry` /
+`prependWorkLogEntry`, and `renderBoardDigest` — two of which TaskPlanner itself had twice, since
+its MCP server carried its own board opener and its own board renderer. `taskplanner_board` now
+calls the same renderer Isotopy does.
 
 ### The boundary
 
 `**Assignee:**` is TaskPlanner's own field. `FollowUpTaskDraft` and `MilestoneTaskDraft` gain it —
-and so does the **salvaging mirror** in `domain/rules/closeout.ts`, or an agent that writes the field
-loses the whole follow-up rather than the field. A closeout may therefore create a marked follow-up:
-the team may propose the monetisation experiment or the credential-bearing integration; it may not
-start one. Nothing in Isotopy clears the mark.
+and so does the **salvaging mirror** in `domain/rules/closeout.ts`, or an agent that writes the
+field loses the whole follow-up rather than the field. A closeout may therefore create a marked
+follow-up: the team may propose the monetisation experiment or the credential-bearing integration;
+it may not start one. Nothing in Isotopy clears the mark.
 
-Two axes, two stated reasons — an assigned task belongs to the person named, a date-blocked one
-waits on something outside the repository — and the digest states the reason rather than showing a
-raw mark. **Skipping is on any assignee, not the literal `owner`:** this repository's board already
-carries `@Fedor`.
+The digest marks a held task `@owner` and `⏳ waiting until`, and the **rule** is stated once in the
+Orchestrator's step task rather than repeated on every line. The poller prompt replaces its vague
+*"skip anything that needs a person"* with the two rules, an instruction never to unmark, and an
+explicit exclusion of finished work.
 
-The poller prompt replaces its vague *"skip anything that needs a person"* with those two rules, an
-instruction never to unmark, and an explicit exclusion of finished work — walking every state and
-excluding only In Progress would let an empty Next hand the team a task off Done or Rejected.
+### The board moved into the user's repository
 
-### The one thing added rather than deleted
+A project with no board gets one at `<project>/.tasks/`, not under `<dataDir>`. The old location
+was invisible to every TaskPlanner client — the MCP server walks *upward* for `.tasks/config.json`,
+and a project runs its agents at `<root>` — so Isotopy and the user's own tools were reading two
+different boards. That also deletes the `backend` distinction, which existed only to name the
+built-in board, including from the stored closeout record and the UI badge.
 
-2.4.1 **throws** where 2.3.0 silently corrupted: a task description holding a line that is just a
-horizontal rule, or a task heading, ends the section and loses everything after it. Closeout
-findings and milestone drafts are model prose, and prose plausibly contains a rule. `taskSectionText`
-refuses it at the schemas that own agent output, where the closeout's salvaging mirror already turns
-a refusal into a reason the agent can act on — rather than at the serializer, where it would arrive
-as a caught side-effect error nobody reads.
+### One thing added rather than deleted
+
+The serializer throws where 2.3.0 silently corrupted: a description holding a bare rule line or a
+task heading ends the section and loses what follows. `taskSectionText` refuses it at the schemas
+that own agent output, where a refusal already becomes a reason the agent can act on.
 
 ### Evidence
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (1089 passing, 2 skipped), `pnpm build`, `pnpm e2e` (75
-passing, 4 skipped). The tests kept are the ones asserting outcomes through the adapter rather than
-the layer that delivers them: a CRLF board reads and round-trips, a comment above a task survives a
-write, a read leaves the board config untouched, an id already on the board is not reissued. They
-passed **unchanged** across the move, which is what makes it a move rather than a rewrite.
-
-The digest was re-run against this repository's own board: three tasks marked `@Fedor`, three stated
-skip reasons. Windows is the meaningful platform — it is where Git converts endings by default — and
-the LF path is covered by the same suite. macOS reasoned through, recorded untested.
+`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm gen:skills` (no diff), `pnpm e2e`.
+The board tests that asserted TaskPlanner's guarantees were **deleted, not ported** — they live in
+TaskPlanner now. What remains here is one end-to-end check that an Isotopy draft reaches the
+project's own board and reads back. The digest was re-run against this repository's real board: 168
+tasks, three held, and `config.json` unchanged by the read.
 
 ---
 

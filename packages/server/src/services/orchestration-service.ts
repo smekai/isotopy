@@ -761,8 +761,8 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [boardContext, closeoutContext, personaNotes] = await Promise.all([
-      taskBoardFor(projectPath).boardDigest(),
+    const [tasksContext, closeoutContext, personaNotes] = await Promise.all([
+      taskBoardFor(projectPath).tasksContext(),
       milestoneCloseoutContext(projectPath),
       personaNotesByRole(projectPath),
     ]);
@@ -770,7 +770,7 @@ export class OrchestrationService implements StageOutputConsumer {
       goal,
       personas: PERSONA_CATALOG,
       stepTasks: STEP_TASK_CATALOG,
-      boardContext,
+      tasksContext,
       closeoutContext,
       gatePreference: renderGatePreference(
         this.settings.getPreferences(projectPath.id).gates,

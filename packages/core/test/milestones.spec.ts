@@ -4,7 +4,6 @@ import {
   canStartNextFeature,
   milestoneFindings,
   milestoneProgress,
-  milestoneTaskDraftSchema,
 } from "../src/milestones.ts";
 import type {
   Milestone,
@@ -135,24 +134,5 @@ describe("milestoneFindings", () => {
         ]),
       ),
     ).toEqual([blocking, advisory]);
-  });
-});
-
-describe("milestoneTaskDraftSchema", () => {
-  // The same refusal the closeout mirror applies, on the other path onto the board.
-  test("refuses a description that would end the task section on the board", () => {
-    const draft = {
-      id: "d1",
-      title: "Split the parser",
-      description: "Before:\n---\nAfter:",
-      priority: "P1",
-      tags: [],
-    };
-
-    expect(milestoneTaskDraftSchema.safeParse(draft).success).toBe(false);
-    expect(
-      milestoneTaskDraftSchema.safeParse({ ...draft, description: "Before: after." })
-        .success,
-    ).toBe(true);
   });
 });

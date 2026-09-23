@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type {
   CloseoutFinding,
-  CreatedTaskReference,
   RunArtifacts,
   RunCloseoutRecord,
 } from "@isotopy/core";
@@ -10,11 +9,6 @@ import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT, WARN_AMBER } from "../../theme
 import { FAIL_RED, SCROLL_BODY } from "./run-styles";
 
 const CONTENT_MAX_WIDTH = 820;
-
-const BACKEND_LABEL: Record<CreatedTaskReference["backend"], string> = {
-  taskplanner: "TaskPlanner",
-  isotopy: "Isotopy",
-};
 
 const CONTENT: CSSProperties = {
   maxWidth: CONTENT_MAX_WIDTH,
@@ -81,10 +75,6 @@ function taskChip(d: Dir): CSSProperties {
 
 function taskId(d: Dir): CSSProperties {
   return { color: d.accent, fontFamily: MONO, fontSize: FONT.xxs, fontWeight: WEIGHT.bold };
-}
-
-function backendBadge(d: Dir): CSSProperties {
-  return { color: d.textMuted, fontFamily: MONO, fontSize: FONT.xxs };
 }
 
 function idChip(d: Dir): CSSProperties {
@@ -306,7 +296,6 @@ export function CloseoutPanel({ closeout, d }: CloseoutPanelProps) {
               <span key={task.id} style={taskChip(d)} data-testid="closeout-created-task">
                 <span style={taskId(d)}>{task.id}</span>
                 {task.title}
-                <span style={backendBadge(d)}>{BACKEND_LABEL[task.backend]}</span>
               </span>
             ))}
           </div>

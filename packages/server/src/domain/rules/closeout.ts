@@ -3,13 +3,13 @@ import {
   FINDING_SEVERITIES,
   TASK_PRIORITIES,
   refineDeclaredFindings,
-  taskSectionText,
   type CloseoutFinding,
   type FollowUpTaskDraft,
   type CloseoutReport,
   type RunState,
 } from "@isotopy/core";
 import { z } from "zod";
+import { taskSectionText } from "../../schemas/task-text.ts";
 
 const CLOSEOUT_BLOCK = /```isotopy-closeout\s*([\s\S]*?)```/i;
 const closeoutRecordSchema = z.record(z.string(), z.unknown());
@@ -36,7 +36,6 @@ const findingSchema = z
   })
   .strict();
 
-// An unknown field here loses the whole follow-up to `salvageItems`, not just the field.
 const followUpTaskSchema = z
   .object({
     findingId: requiredText,

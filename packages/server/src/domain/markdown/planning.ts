@@ -52,7 +52,7 @@ export function renderPriorMilestoneCloseouts(
 
 export function renderMilestonePlanningContext(
   userContext: string,
-  boardContext: string,
+  tasksContext: string,
   storedCloseoutContext: string,
   priorKnowledge: MilestoneKnowledge[],
 ): string {
@@ -70,7 +70,7 @@ export function renderMilestonePlanningContext(
       : undefined;
   return markdownBlocks([
     markdownBody(userContext),
-    markdownBody(boardContext),
+    markdownBody(tasksContext),
     markdownBody(storedCloseoutContext),
     knowledge,
   ]);

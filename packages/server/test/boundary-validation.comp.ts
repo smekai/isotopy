@@ -3,7 +3,6 @@ import path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { defaultProjectPreferences } from "@isotopy/core";
 import type { ProjectsView, SettingsView } from "@isotopy/core";
-import { boardConfigSchema } from "../src/schemas/task-board-config.ts";
 import type { InvalidInput } from "../src/domain/validation.ts";
 import {
   createTestApp,
@@ -129,31 +128,6 @@ test("an invalid project registry is ignored as a whole and left untouched", asy
   expect(await readFile(registryPath, "utf8")).toBe(contents);
   expect(warn).toHaveBeenCalledWith(expect.stringContaining("projects.1.id"));
   await shutdown();
-});
-
-test("TaskPlanner config validates consumed fields and preserves plugin fields", () => {
-  // Act
-  const parsed = boardConfigSchema.parse({
-    version: 2,
-    idPrefix: "TASK",
-    nextId: 99,
-    states: [
-      {
-        name: "Backlog",
-        fileName: "BACKLOG.md",
-        order: 0,
-      },
-    ],
-    pluginSpecific: { enabled: true },
-  });
-
-  // Assert — an external format: every consumed field validated, the rest kept.
-  expect(parsed.states[0]).toMatchObject({
-    name: "Backlog",
-    fileName: "BACKLOG.md",
-    order: 0,
-  });
-  expect(parsed).toMatchObject({ pluginSpecific: { enabled: true } });
 });
 
 async function rawJsonRequest(

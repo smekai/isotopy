@@ -48,52 +48,46 @@ has to close there rather than here.
 
 ---
 
-## 2026-09-10 — One board parser, and Isotopy's own surgical writer beside it
+## 2026-09-22 — Isotopy holds no board-format code; the gaps went upstream
 
-**Context:** Isotopy maintained a second board parser — `taskSummariesIn` — that was strictly worse
-than the one TaskPlanner ships, and it dropped every `**`-prefixed line, which is exactly where the
-owner's mark lives. `@smekai/taskplanner` 2.3.0 ships a library beside its MCP server, so the agent
-can read the board through the tool while Isotopy's own writes call the library.
+**Context:** Isotopy maintained a second board parser — `taskSummariesIn` — strictly worse than the
+one TaskPlanner ships, and it dropped every `**`-prefixed line, which is exactly where the owner's
+mark lives. Replacing it was the easy half. The hard half took three attempts and the product
+owner asking the same question three times: *why is Isotopy redefining this at all?*
 
-**Decision:** **TaskPlanner parses; Isotopy writes.** `parseTasks` reads a state file and
-`serializeTask` renders one task in TaskPlanner's exact metadata order, so `**Assignee:**`,
-`**Epic:**` and `**Waiting until:**` round-trip through its own parser unchanged. Everything else
-about a board file stays Isotopy's: `insertTaskSection` and `takeTaskSection` edit *around* a task
-rather than rebuilding the file.
+**The first two attempts were wrong, and the reason is worth keeping.** Both kept a second
+implementation in Isotopy and justified it by measuring defects in the library: `serializeStateFile`
+rebuilt a state file and dropped a comment above a task; `ConfigManager.load()` rewrote the user's
+`config.json` on a *read*; CRLF boards parsed as empty. Every measurement was correct and every
+conclusion was wrong. **A defect in a dependency you own is not a reason to reimplement it — it is a
+bug report.** TaskPlanner is a smekai project; the fixes belonged there, and 2.4.x carries them:
+`FileStore.prepareState` is `serializeBoard(parseTasks(original).segments, tasks)`, `load()` takes
+`persistMigration: false`, and the parser reads CRLF.
 
-**Rejected: `serializeStateFile`, and with it `ConfigManager`, `FileStore` and `TaskStore`.**
-Measured, not assumed. `serializeStateFile` rebuilds a whole state file from the tasks it parsed: a
-`<!-- keep -->` comment above a task is **dropped**, and a task headed `## task-002:` — legal to
-Isotopy's board, illegal to TaskPlanner's uppercase-only heading regex — is **deleted outright**.
-`ConfigManager.load()` **rewrote the user's `config.json` on a read**: reformatted it, injected eight
-fields, flipped `aiPlanRequired`, and added a `Rejected` state the project never declared.
-`FileStore.readState` hands `parseTasks` raw bytes, which is the CRLF bug below. Each has a test
-standing over it now, because each would be a silent data loss in someone's repository.
+**Decision: Isotopy consumes `TaskStore`, `FileStore` and `ConfigManager`, and owns no board
+format.** `openBoard` opens or creates, `createTask` allocates the id and reconciles `nextId`,
+`moveTask` moves, `findTaskByAttribute` finds Isotopy's own tasks by the origin it wrote,
+`knownTaskIds` answers whether an id is spent across the board *and* the archive,
+`prependWorkLogEntry` writes the work log, and `renderBoardDigest` renders the board into the
+prompt. What remains in Isotopy is the seam: locate the board, turn a draft into a `Task`, and
+refuse model prose that would end a task section.
 
-**CRLF is a boundary, not a detail.** The same content parses to one task as LF and to **zero tasks
-with warnings** as CRLF — indistinguishable from an empty board, on a parser reading the *user's*
-repository, where Git for Windows checks out CRLF by default. Isotopy normalises at the read
-boundary and restores each file's own ending on write, per file rather than per board. Worth
-reporting upstream, along with the config rewrite and the silent `P9 → P4` priority coercion.
+**Six things moved upstream rather than being written here** (TaskPlanner TASK-067, TASK-069),
+including two that TaskPlanner itself had twice — opening a board, and rendering one to text.
+`taskplanner_board` now calls the same renderer Isotopy does.
 
-**Rejected: deleting the board digest with the parser it used.** `TASK-162` said
-`renderTaskBoardPlanningContext` and its callers go. That would make milestone planning board-blind —
-`plan-milestone` does not declare the tool — and would leave any engine that cannot carry a tool with
-no board at all. It is **replaced** instead: `renderBoardDigest` renders typed `Task[]`, so it shows
-the `@owner`, epic and waiting-until marks the old summary stripped. The tool is authoritative; the
-digest is the summary every engine gets.
+**Rejected: keeping Isotopy's own skip wording per task.** The digest said *"assigned to @owner —
+theirs to start, not the team's"* on every line. TaskPlanner marks `@owner` and `⏳ waiting until`,
+and the **rule** is already stated once in the Orchestrator's step task. Repeating it per line was
+prose duplicating a prompt.
 
-**The built-in board moves to `<dataDir>/.tasks`, and that is its only name.** One reader serves
-both backends without special-casing a directory, and the board carries TaskPlanner's own directory
-name — which is what any TaskPlanner-shaped reader looks for. **It does not make the board
-discoverable on its own:** the MCP server walks *upward* for `.tasks/config.json`, and a normal
-project runs its agents at `<root>` while `dataDir` is `<root>/.isotopy`, so nothing walking up from
-`<root>` ever reaches it. Discovery needs the reader pointed at the board's own parent, and that
-belongs to whatever gives a step a tool. The rename is what makes that pointer possible; it is not
-the pointer. **Rejected: probing the old name too** — two names for one board is a second thing to
-keep in step for no gain, and nothing outside this repository holds one, which is why the break
-lands now rather than after someone does. New built-in boards also get a **Next** state, which the
-poller prompt has always assumed and which `createBuiltInBoard` never created.
+**The built-in board is gone; a project with no board gets one at `<project>/.tasks/`.** The
+previous design put it under `<dataDir>/.tasks`, which made it invisible to every TaskPlanner
+client: the MCP server walks *upward* for `.tasks/config.json`, and a project runs its agents at
+`<root>` while `dataDir` is `<root>/.isotopy`. Isotopy now writes into the user's own repository,
+where their tools already look. That also deletes the `backend: "taskplanner" | "isotopy"`
+distinction, which existed only to name the built-in board — including from the stored closeout
+record and the UI badge.
 
 ---
 
