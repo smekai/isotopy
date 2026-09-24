@@ -1,6 +1,6 @@
 # Competitor Matrix: Isotopy
 
-**Last updated:** September 2026 (new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
+**Last updated:** September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where Isotopy wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -125,7 +125,7 @@
 
 | Runtime | Mode | Autonomy | Local | Role in our stack |
 |---------|------|----------|-------|-------------------|
-| **Cursor** | IDE | Medium (agent in editor) | Yes | Implementation harness |
+| **Cursor** | IDE + cloud **Projects** (coordinator over subagents) | Medium in the editor; high in Projects | Editor yes; Projects cloud-first | Implementation harness — and, via Projects, a rival coordinator |
 | **Claude Code** | CLI/IDE | High | Yes | Implementation harness |
 | **OpenHands** | Web/CLI/SDK | High (sandboxed) | Yes | Implementation harness |
 | **Aider** | Terminal | Medium (pair programmer) | Yes | Implementation harness |
@@ -144,6 +144,22 @@
 **Why it matters anyway:** it owns the *"file a ticket, get a PR while you do something else"* story — the front half of Full Delivery — with LangChain's distribution behind it, and it validates the same primitives we build on (per-task isolation, parallel runs, pluggable execution backends, harness-agnostic middleware). **Threat vector:** it grows *backwards* into spec/design or *forwards* into test-and-deploy and lands in §1. **Positioning response:** ours is a pipeline you watch and restart stage-by-stage on your own machine; theirs is a fire-and-forget teammate in Slack whose sandbox lives in someone else's cloud. Note the harness relationship is competitive rather than complementary — unlike Claude Code or Codex, Open SWE wants to own the sandbox, the branch and the PR, so it is not an adapter candidate. Runtime evaluation of its LangGraph substrate is a separate question, settled in [`workflow-runtime-options.md`](workflow-runtime-options.md).
 
 **sandcastle note:** Not a competitor — the **closest-fit build-on candidate for our implementation-stage adapter**. A TypeScript library (`sandcastle.run()`) that runs a coding agent in an isolated sandbox and merges commits back: pluggable sandbox providers (Docker, Podman, Vercel Firecracker VMs), git-worktree isolation, branch strategies, session capture/resume, typed structured-output extraction, TUI, and lifecycle hooks — provider-agnostic (Claude Code, Codex, Cursor, etc.). It has **no SDLC stages, no requirements/design/review, no Playwright, no deploy, no visual run control, no v1→evolution story** — orchestration on top is *our* value. Same TS stack as us, so it directly covers several "required" rows below (worktree isolation, harness adapter, session resume). See TASK-036: evaluate wrapping `sandcastle.run()` for the implement stage vs. building the subprocess harness (TASK-006) ourselves.
+
+**Cursor Projects note (Sep 2026):** Launched in beta on 10 September 2026, from the left-hand navigation. A **Project** is a long-lived container for a body of work. A **coordinator agent** that never writes code hands the work to (in their words) thousands of subagents, so it "is never blocked". Three foundations: **cloud by default**, with local agents when a test needs the developer's machine; **shared context that persists** and compounds (codebase patterns, testing procedures, preferences, synced across machines); and **subscriptions**: the coordinator watches Slack channels, follows PRs, or runs on a schedule. Usage patterns: features (research → plan → parallel implement/test), migrations (review gets lighter as confidence builds), and "gardening" (a design-system Project on track to touch 20–100 PRs a day). Cursor reports that primary Project users merge six times as many PRs.
+
+**Why it matters:** this is the closest statement yet of Milestone I (`TASK-156`), from a vendor with a distribution we will never have. Their pitch is that developers "direct the work" instead of managing agents, which is our "keeps going without you". It moves Cursor out of the harness row and towards §1, still without prepared professions, without E2E against the running product, and without deploy.
+
+**What we take, and what we do not** (decided with the product owner, 2026-09-24):
+
+| Cursor Projects | Isotopy | Decision |
+|---|---|---|
+| Coordinator whose context compounds | Orchestrator cleared each episode; memory in board, persona notes, runs, schedules | **Take.** The Orchestrator keeps its own small context, curated and rewritten whole, not appended. Scoped into `TASK-156` |
+| Review gets lighter as confidence builds | Gates are an on/off preference | **Take, later.** A schedule earns its way out of the gate after N clean runs and loses it on the first failure. `TASK-174`, P3 |
+| Slack / PR / schedule subscriptions | Schedules (`TASK-159`) | **Reject for outside triggers.** Cron is the only thing that starts work. Reacting to a PR comment, CI or a new task is a schedule whose task goes and looks. **Inside**, Isotopy raises its own events (product ready, task Done, run settled) and a waiting workflow resumes on them. `TASK-175`, P2 |
+| Thousands of parallel subagents | Stages run in sequence, `concurrency: 1` | **Not now.** Worth having, deferred |
+| Cloud by default | Local, your own CLI and auth | **Reject.** Local-first is the wedge. Cloud-held context is also opaque; ours is markdown in git |
+
+**Positioning response:** Projects is a coordinator over Cursor's own agents, in Cursor's cloud. Ours is a prepared team over whichever CLI you already pay for, on your machine, with memory you can diff. **Threat vector:** a Projects template that runs E2E against a preview deploy would put it squarely in §1.
 
 ---
 
@@ -417,6 +433,7 @@ The category multiplies the implement stage. We are the only entrant claiming th
 | Guild.ai | https://www.guild.ai |
 | CrewAI | https://github.com/crewaiinc/crewai |
 | sandcastle | https://github.com/mattpocock/sandcastle |
+| Cursor Projects | https://cursor.com/blog/projects |
 | beads (bd) | https://github.com/gastownhall/beads |
 | Artel | https://github.com/NicolasPrimeau/artel |
 | Manifold | https://github.com/intelligencedev/manifold |

@@ -4,7 +4,7 @@
 
 **Tagline:** The last mile for your ideas — turning them into working businesses.
 
-**One-liner:** An open-source, local AI development team that turns ideas into working products, tests them end-to-end, deploys them anywhere, and keeps them evolving with prepared agents and your choice of coding tools.
+**One-liner:** The last mile for your ideas: an open-source, local AI dev team that takes a product from idea to running, and keeps it running through every change.
 
 ---
 
