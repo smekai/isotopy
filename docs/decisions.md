@@ -884,13 +884,16 @@ filesystem paths could move in separate green changes. Forcing another expansion
 the wording drive the product rather than describe it.
 
 **Decision:** the product name is **Isotopy**, with no expanded form. Its tagline is **“The
-last mile for your ideas — turning them into working businesses.”** The short description is
-an open-source, local AI development team that turns ideas into working products and keeps
-them evolving. Visible surfaces adopt that identity first; technical identifiers and
+last mile for your ideas — turning them into working businesses.”** The short description,
+also the GitHub repository description since 2026-09-24, is *“The last mile for your ideas: an
+open-source, local AI dev team that takes a product from idea to running, and keeps it running
+through every change.”* Visible surfaces adopt that identity first; technical identifiers and
 physical paths remain unchanged until their later Milestone G cutovers.
 
 **Rejected:** inventing a replacement backronym. It would preserve a constraint that belongs
-to the former name and make otherwise plain product copy harder to understand.
+to the former name and make otherwise plain product copy harder to understand. Also rejected,
+2026-09-24: describing Isotopy as an *app builder for the first version of a product*. A first
+version is the narrow part; the product is aimed at everything after it.
 
 ---
 
