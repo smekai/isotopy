@@ -155,7 +155,7 @@
 |---|---|---|
 | Coordinator whose context compounds | Orchestrator cleared each episode; memory in board, persona notes, runs, schedules | **Take.** The Orchestrator keeps its own small context, curated and rewritten whole, not appended. Scoped into `TASK-156` |
 | Review gets lighter as confidence builds | Gates are an on/off preference | **Take, later.** A schedule earns its way out of the gate after N clean runs and loses it on the first failure. `TASK-174`, P3 |
-| Slack / PR / schedule subscriptions | Schedules (`TASK-159`) | **Reject.** Cron is the only trigger. Reacting to a PR comment, CI or a new task is a schedule whose task goes and looks |
+| Slack / PR / schedule subscriptions | Schedules (`TASK-159`) | **Reject for outside triggers.** Cron is the only thing that starts work. Reacting to a PR comment, CI or a new task is a schedule whose task goes and looks. **Inside**, Isotopy raises its own events (product ready, task Done, run settled) and a waiting workflow resumes on them. `TASK-175`, P2 |
 | Thousands of parallel subagents | Stages run in sequence, `concurrency: 1` | **Not now.** Worth having, deferred |
 | Cloud by default | Local, your own CLI and auth | **Reject.** Local-first is the wedge. Cloud-held context is also opaque; ours is markdown in git |
 

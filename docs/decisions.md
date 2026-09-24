@@ -175,10 +175,16 @@ the highest platform-risk file in the repo. It has nothing to do with schedules 
 a schedule. `TASK-159` had to say what a schedule *is*, and what parses its expression. The server
 had four runtime dependencies, so adding a fifth is a decision, not a detail.
 
-**Decision: a persisted record plus one interval, never a durable workflow.** `WorkflowRuntime`
-registers exactly one workflow and runs its worker at `concurrency: 1`, so a parked run would
-occupy the only slot, and a month-long parked workflow must be cancelled and rebuilt every time
-its expression is edited. Crash safety comes from the record instead — the cron expression plus
+**Decision: a persisted record plus one interval, never a durable workflow.** A month-long
+parked workflow must be cancelled and rebuilt every time its expression is edited, and OpenWorkflow
+has no recurrence to offer (below).
+
+**Corrected 2026-09-24:** this entry also said a parked run "would occupy the only slot" of the
+`concurrency: 1` worker. It does not. In OpenWorkflow 0.9.2 a waiting step throws `SleepSignal`,
+the run is parked with `sleepWorkflowRun` and the worker slot is freed, and `sendSignal` pulls the
+parked run's `available_at` forward so it wakes at once. That was read in the library's source,
+not observed in a test. The decision stands on the other two reasons. `TASK-175` builds on the
+corrected reading. Crash safety comes from the record instead — the cron expression plus
 the last window it consumed recompute due-ness deterministically after any restart, with no
 runtime involvement at all. The tick reads the wall clock every time and never accumulates
 elapsed time itself, which is what makes suspend and resume work.

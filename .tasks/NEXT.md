@@ -2,7 +2,7 @@
 
 ## TASK-156: Milestone I — Induction: a product the team carries on its own
 **Priority:** P1 | **Tags:** core, server, ui, engine, testing, milestone-i
-**Updated:** 2026-09-24 16:52
+**Updated:** 2026-09-24 17:07
 
 Induction proves a base case, then proves each step follows from the last. The base case is a
 product built once with a human watching. The inductive step is the team building the next
@@ -32,11 +32,13 @@ A recurring, clock-driven task runs on a schedule. It carries **one task and a f
 in: *check the board, and if nothing is running, start the next thing.* It is **off by default**.
 Users add their own; product variants may ship their own.
 
-**Cron is the only trigger, on purpose.** Reacting to a PR comment, a red CI run or a new task on
-the board is a schedule whose task says *go and look* — not a webhook, a watcher or a second kind
-of trigger. Decided with the product owner on 2026-09-24, after Cursor Projects shipped
-event subscriptions (Slack, PR follow, schedules) as three separate mechanisms; see
-[`docs/competitor-matrix.md`](../docs/competitor-matrix.md) §6.
+**Cron is the only trigger from outside, on purpose.** Reacting to a PR comment, a red CI run or
+a new task on the board is a schedule whose task says *go and look* — not a webhook, a watcher or
+a second kind of trigger. Decided with the product owner on 2026-09-24, after Cursor Projects
+shipped event subscriptions (Slack, PR follow, schedules) as three separate mechanisms; see
+[`docs/competitor-matrix.md`](../docs/competitor-matrix.md) §6. **Inside**, Isotopy may raise its
+own events for a workflow that is already waiting — the product came up, a task reached Done, a
+run settled. That resumes work; it never starts it. Filed as `TASK-175`, outside this milestone.
 
 A scheduled run is an ordinary run. It calls `ensureActive` like every other, so it is **owned and
 reviewed by the Orchestrator on settle**, and closeout plus artifact capture are the normal run
@@ -114,11 +116,10 @@ yet: the deploy target, the measured unattended stretch, and the MVP gap list th
 milestone and opens the launch. Relaxing gates as a schedule earns trust is filed separately as
 `TASK-174`, deliberately outside this milestone.
 
-**A schedule is a record plus a ticker, not a durable workflow.** `step.waitForSignal({ timeoutMs })`
-is right for one wait of known length — a plan-limit reset — and wrong for a recurring one:
-`WorkflowRuntime` registers exactly one workflow and runs `concurrency: 1`, and a month-long parked
-workflow must be cancelled and rebuilt every time its expression is edited. Crash safety comes from
-the record instead: the cron expression plus `lastFiredAt` recompute due-ness after any restart.
+**A schedule is a record plus a ticker, not a durable workflow.** OpenWorkflow has no recurrence —
+its only scheduling primitive is a one-shot `availableAt` — and a month-long parked workflow must be
+cancelled and rebuilt every time its expression is edited. Crash safety comes from the record
+instead: the cron expression plus `lastFiredAt` recompute due-ness after any restart.
 
 **Product variants — Isotopy.gaming, Isotopy.travel — may ship their own schedules**, and remain
 the milestone *after* MVP, decided with the product owner on 2026-08-21. A fork of a core that

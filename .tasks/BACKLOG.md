@@ -1,5 +1,67 @@
 # Backlog
 
+## TASK-175: Isotopy raises its own events, and a long-running workflow awaits them
+**Priority:** P2 | **Tags:** server, core, engine
+**Updated:** 2026-09-24 17:07
+
+The durable runtime can already park a workflow until a named signal arrives, and resume it after
+a restart. Isotopy uses that three times: `gateSignal`, `answerSignal` and `limitSignal` in
+`workflow/pipeline-workflow.ts`, sent by `WorkflowRuntime.approveGate` / `answerQuestion` /
+`resolveLimit`. **Every one of them is sent because a person clicked something.** The code never
+sends a signal on its own behalf. So long-running work that depends on something *Isotopy itself*
+does has only three options: finish and hope a later tick notices, poll inline, or be chained by
+hand through a settle callback.
+
+**Raised 2026-09-24** by the product owner while reviewing Cursor Projects
+(`docs/competitor-matrix.md` §6). This does not reverse the cron decision in `TASK-156`. **Cron
+remains the only thing that starts work from outside.** An internal event only *resumes* a
+workflow that is already waiting, and Isotopy's own code is the only thing that raises one.
+
+### What to build
+
+- **One event catalogue.** Event names come from a single exported `as const` tuple, and the union
+  type is derived from it. Each event has a strict payload schema, parsed at the workflow boundary
+  when the signal is delivered, as the runtime-validation rule requires. The three existing
+  signals move into the same catalogue as its first entries.
+- **A raising seam for services.** An interface in its own file, e.g. `WorkflowEvents.raise(event)`,
+  that services receive rather than import. `WorkflowRuntime` implements it with `sendSignal`.
+  Domain code decides *that* an event happened. Only the seam knows how it is delivered.
+- **An awaiting helper for workflow code.** A `waitForEvent` step wrapper that takes the event
+  name, its scope (run, stage, task) and a **mandatory timeout**, and returns the parsed payload or
+  a timeout. The timeout is not optional: a wait that never ends is how a run silently stops.
+- **Deterministic names.** A signal name is built from the event name and its scope, as
+  `gateSignal(runId, stageId)` is today. Raising the same event twice is idempotent, and raising it
+  before anyone waits is not lost. Check both against OpenWorkflow's delivery semantics in the plan
+  and record the answer in `docs/implementation-notes.md`.
+
+### Candidate first consumers. The plan picks one and proves the seam on it
+
+- **The product is ready.** A stage that needs the running product (QA, preview) awaits a
+  `product-ready` event raised by the preview service once its health check passes, instead of
+  checking health inline.
+- **A task is Done.** Work that depends on another task awaits `task-done`, raised when a closeout
+  moves a task (`TASK-172` makes that move actually happen).
+- **A run settled.** A run started behind another one awaits `run-settled` for it, rather than the
+  schedule skipping with `run_active` and trying again on the next tick.
+
+### The constraint to design around
+
+Waiting costs the runtime nothing: OpenWorkflow 0.9.2 parks a waiting run and frees the worker, and
+`sendSignal` wakes it immediately (see the 2026-08-24 entry in `docs/decisions.md`, corrected in
+this change). **The cost is in our own rule.** `ScheduleService.skipReasonFor` counts every
+non-terminal run as busy (`isRunActive`), so a run parked on an event blocks every schedule in the
+project. A run waiting on an event needs a status that says so, and the plan decides whether that
+status counts as busy.
+
+**Evidence:** a spec for the catalogue (a payload that fails its schema is refused, not coerced),
+and a comp test of the chosen consumer: the workflow parks, the service raises the event, the stage
+resumes with the payload. The same test with the server restarted while parked, and a timeout
+path that ends the stage with a named reason.
+
+Cross-platform: n/a — pure logic. Signals go through the SQLite backend that runs already use. No
+process, path or shell surface is touched.
+
+---
 ## TASK-174: A schedule earns its way out of the human gate, and loses it on the first failure
 **Priority:** P3 | **Tags:** server, core, ui
 **Updated:** 2026-09-24 16:53
