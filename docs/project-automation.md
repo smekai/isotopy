@@ -38,6 +38,16 @@ automation file.
 | `preview` | The deployment Full Delivery runs itself once quality has passed |
 | `production` | The deployment only a human can trigger, from Setup |
 
+## Showing a built product
+
+With `ui` set (**Setup → Automation → Start the product**), a run gains a
+**Preview** tab that starts the product, waits for its health URL, and shows it
+inside Isotopy. Isotopy owns that process. It survives switching between runs,
+restarts when a run changes files so you never look at the previous build, and
+stops on Stop, on switching project, and when the server shuts down. The QA agent
+asks for the same product through the same mechanism rather than starting a
+server of its own.
+
 ## Preview deployment
 
 The `deploy` box of Full Delivery does not start an agent. Any stage whose step

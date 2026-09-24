@@ -22,7 +22,7 @@ const API_PROXY_PATHS = [
 export default defineConfig(({ mode }) => {
   // Read the shared .env at the repo root so UI and server agree on ports.
   const env = loadEnv(mode, REPO_ROOT, "");
-  const serverPort = env.ISOTOPY_PORT ?? env.PORT ?? "9477";
+  const serverPort = env.ISOTOPY_PORT ?? "9477";
   const serverUrl = env.ISOTOPY_SERVER_URL ?? `http://localhost:${serverPort}`;
   const uiPort = Number(env.ISOTOPY_UI_PORT ?? 5173);
 

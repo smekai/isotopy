@@ -28,10 +28,14 @@ later you carry on against an app that cannot load anything.
 If the proxied URL stays dead while `http://localhost:9477/health` answers, the
 API server is up and something between you and it is not: either the Vite
 process never started, or the *proxy hop* is failing. Check both ports are
-listening before blaming the app. A harness that starts the two `pnpm --filter`
-commands itself can produce a broken hop with both processes alive —
-`[vite] http proxy error … EADDRINUSE` in the UI log — while a plain `pnpm dev`
-on the same machine is fine.
+listening before blaming the app.
+
+The UI reads the server's port from `ISOTOPY_PORT` only, never `PORT`. A
+harness that starts the UI process usually sets `PORT` to that process's *own*
+port, 5173. When the Vite config also accepted `PORT` as the server's port, the
+proxy forwarded every API call back to Vite itself: `connect EADDRINUSE
+::1:5173` in the UI log, and a rail stuck on "Loading…". The server still
+accepts `PORT` as a legacy alias, because there it names the server's own port.
 
 Stop: kill the `pnpm dev` task, then confirm ports 9477/5173 are
 released (a stray `tsx watch`/`vite` child sometimes survives —

@@ -480,7 +480,9 @@ tabs must not start it twice.
 
 **A feature ends `needs_attention`, not `failed`, when quality found something.** The
 run continues to closeout either way, so the feature keeps the findings that blocked
-it and `finalizeMilestone` refuses while any feature is unfinished.
+it and `finalizeMilestone` refuses while any feature is unfinished. The dashboard
+resolves such a feature with **Accept findings & complete**, which records who
+accepted it and over which open findings, rather than silently flipping a status.
 
 ### 2c. Orchestration — the entry point above milestones
 
