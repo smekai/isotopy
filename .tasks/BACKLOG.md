@@ -1,5 +1,58 @@
 # Backlog
 
+## TASK-174: A schedule earns its way out of the human gate, and loses it on the first failure
+**Priority:** P3 | **Tags:** server, core, ui
+**Updated:** 2026-09-24 16:53
+
+A gate today is a boolean: `gateEnabled(pipelineId, stage, gates)` reads
+`ProjectPreferences.gates` and the stage's `gateAfter`, and it stays whatever the owner set until
+they change it. For an unattended schedule that leaves two bad choices. Gate on, and nothing runs
+while nobody is watching. Gate off from the first firing, and the owner has trusted a team they
+have never seen work.
+
+**Found 2026-09-24** in the Cursor Projects review (`docs/competitor-matrix.md` §6). Their
+migration pattern lowers the amount of review as confidence builds. The product owner agreed it
+is worth doing, and not at the top of the queue, so it sits outside Milestone I (`TASK-156`).
+
+### What to build
+
+A **trust ramp per schedule**. It replaces nothing for runs a human starts.
+
+- A schedule may be set to **earn autonomy**. While it is earning, its runs keep their human gates,
+  exactly as today.
+- After **N consecutive clean runs** the gates stop applying to that schedule's runs. A clean run
+  is one that settled `PASS`, whose closeout reported no blocking findings, and that the owner
+  approved at every gate without editing. N is set per schedule, with a small default.
+- The **first run that is not clean** puts the gates back and resets the count to zero: a
+  `needs attention` verdict, a blocking finding, a failed stage, or a gate the owner rejected or
+  edited. Losing trust is automatic. Earning it back takes the same N runs again.
+- The owner can **pin** a schedule as always gated, or as never gated. A pin skips the ramp.
+- The counter lives on the **schedule record**, beside `lastFiredAt`. It is not kept in memory, so
+  a restart does not reset trust and a crash cannot grant it.
+- The rail and the schedule editor show where the schedule is (`3 / 5 clean`, `trusted`,
+  `gated — reset by run <id>`) and which run reset it.
+
+### Open questions for the plan
+
+- Should trust be counted per schedule, or per (team × step task)? Per schedule is simpler and
+  matches how the owner thinks about "that job". Per team would carry across schedules that share
+  a team. Start per schedule unless evidence says otherwise.
+- Does an Orchestrator-reported `ask_user` count as not clean? Probably not: asking is not
+  failing. Decide it and write it down in `docs/decisions.md`.
+
+### Depends on
+
+`TASK-159` (the schedule record) and `TASK-172` (tasks worked unattended actually move on the
+board). Without `TASK-172` a trusted schedule could keep picking up the same task.
+
+**Evidence:** domain specs for the counter (clean increments it, each not-clean kind resets it,
+pins bypass it), and a comp test in which a schedule's runs gate until N clean runs, then run
+without gates, then gate again after one blocked run.
+
+Cross-platform: n/a — pure logic/UI. The counter is persisted through the existing schedule
+record. No process, path or shell surface is touched.
+
+---
 ## TASK-169: Observe a real sleep/wake with a schedule pending, on both OSes
 **Priority:** P2 | **Tags:** testing, infra, milestone-i
 **Updated:** 2026-08-24 14:00

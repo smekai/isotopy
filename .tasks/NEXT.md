@@ -2,7 +2,7 @@
 
 ## TASK-156: Milestone I — Induction: a product the team carries on its own
 **Priority:** P1 | **Tags:** core, server, ui, engine, testing, milestone-i
-**Updated:** 2026-08-21 12:00
+**Updated:** 2026-09-24 16:52
 
 Induction proves a base case, then proves each step follows from the last. The base case is a
 product built once with a human watching. The inductive step is the team building the next
@@ -32,17 +32,23 @@ A recurring, clock-driven task runs on a schedule. It carries **one task and a f
 in: *check the board, and if nothing is running, start the next thing.* It is **off by default**.
 Users add their own; product variants may ship their own.
 
+**Cron is the only trigger, on purpose.** Reacting to a PR comment, a red CI run or a new task on
+the board is a schedule whose task says *go and look* — not a webhook, a watcher or a second kind
+of trigger. Decided with the product owner on 2026-09-24, after Cursor Projects shipped
+event subscriptions (Slack, PR follow, schedules) as three separate mechanisms; see
+[`docs/competitor-matrix.md`](../docs/competitor-matrix.md) §6.
+
 A scheduled run is an ordinary run. It calls `ensureActive` like every other, so it is **owned and
 reviewed by the Orchestrator on settle**, and closeout plus artifact capture are the normal run
 lifecycle. The schedule is not a second path into run creation; it simply is not a conversation.
 
-### The Orchestrator still dies, and that is the design
+### The Orchestrator still dies — but it keeps a small context
 
 `terminate()` is one-way, and `ensureActive` then builds a fresh Orchestration — empty `turns`,
 empty `runIds`, the scheduled task's text as its goal. Each episode therefore starts without the
 previous one's digests, because `priorArtifacts()` filters by `orchestration.runIds`.
 
-That is intended, because **the project's memory was never in the Orchestrator**:
+That stays, because **most of the project's memory was never in the Orchestrator**:
 
 | Memory | Where it lives | Survives |
 | --- | --- | --- |
@@ -50,15 +56,41 @@ That is intended, because **the project's memory was never in the Orchestrator**
 | What each role learned | `<skills>/<id>.notes.md`, per persona (`TASK-113`) | Yes |
 | What each run produced | `.isotopy/runs/<id>/`, closeout records | Yes |
 | Standing intent | **A schedule** — a persisted, recurring intention | Yes |
+| **What the Orchestrator has come to understand** | **Its own small context, curated by it** | **Yes** |
 
 So the Orchestrator is an **episode handler**, not a long-lived supervisor, and a schedule is what
-carries intent between episodes. This is why a standing goal never needed a home on the
-`Orchestration` record: the recurring task *is* the standing goal, in a form the system already
-executes.
+carries intent between episodes. A standing goal still needs no home on the `Orchestration`
+record: the recurring task *is* the standing goal.
 
-**The accepted cost, recorded rather than smoothed over:** an episode cannot cite the previous
-episode's artifacts directly; it reads the board and the persona notes instead. If that turns out
-to matter, the evidence comes from the unattended stretch, not from arguing about it now.
+**What changed (2026-09-24, with the product owner).** The earlier text accepted that an episode
+starts knowing only what the board and the persona notes tell it. Every role already keeps a
+context of its own; the one agent that sees every run did not. Cursor Projects makes the opposite
+bet — its coordinator's value is context that compounds across turns — and the owner's intent was
+always that the Orchestrator, like every agent, keeps a context it maintains. The Orchestrator
+still dies each episode; its understanding no longer does.
+
+**How it differs from persona notes.** Persona notes are append-only: merged, deduped, the oldest
+evicted past 40 (`mergePersonaNotes`). Nobody ever deletes a wrong one. The Orchestrator's context
+is **curated, not accumulated** — the Orchestrator cleans it, weighs what to keep and rewrites it:
+
+- **Written whole.** When the Orchestrator reviews a settled run it may return a complete revised
+  context in a fenced block; that version *replaces* the previous one. Removing a stale line, or
+  merging three into one, is as ordinary as adding one. No block means no change.
+- **Small, by a hard limit.** A byte/line cap enforced when the block is parsed at its boundary. A
+  revision over the cap is refused, the previous context kept, and the refusal recorded on the
+  review — the cap is what forces the curating.
+- **Read at every episode's start.** `goalContext` loads it beside the board, closeout context and
+  persona digest, so a fresh Orchestration begins from what the last one understood.
+- **Its own lane.** It holds what nothing else does: the owner's standing preferences heard in
+  conversation, what recent episodes tried and how they ended, what to avoid, open threads. Not
+  the task list (the board), not role craft (persona notes), not run output (`.isotopy/runs/`).
+  The prompt says so, or it duplicates all three and hits the cap with noise.
+- **A plain file in the repo**, beside the persona notes, written atomically like them (temp file
+  plus `rename`). The owner can read and edit it; an edit is simply the next version.
+
+**Evidence:** a spec for the parse/cap/replace rules (a revision that deletes a line leaves it
+deleted; an over-cap revision leaves the file untouched) and a comp test that a second episode's
+opening prompt carries what the first episode's review wrote.
 
 ### Scope, in order
 
@@ -72,12 +104,15 @@ to matter, the evidence comes from the unattended stretch, not from arguing abou
 5. **`TASK-162`** — a step names its agent, its tools and what it needs, and work the team
    may draft but not start. Rescoped 2026-08-26; depends on TaskPlanner's `TASK-046` publishing
    its MCP server as a package. Lands before the poller is enabled.
-6. **`TASK-163`** — what Isotopy is for, restated.
-7. **`TASK-157`** — the arcade, built by the finished mechanism and then carried by it.
+6. **The Orchestrator's own context**, as specified above. Lands before the unattended stretch is
+   measured, so the stretch measures episodes that remember.
+7. **`TASK-163`** — what Isotopy is for, restated.
+8. **`TASK-157`** — the arcade, built by the finished mechanism and then carried by it.
 
 Left unwritten on purpose, because they are scoped from evidence this milestone has not produced
 yet: the deploy target, the measured unattended stretch, and the MVP gap list that closes the
-milestone and opens the launch.
+milestone and opens the launch. Relaxing gates as a schedule earns trust is filed separately as
+`TASK-174`, deliberately outside this milestone.
 
 **A schedule is a record plus a ticker, not a durable workflow.** `step.waitForSignal({ timeoutMs })`
 is right for one wait of known length — a plan-limit reset — and wrong for a recurring one:
@@ -94,7 +129,9 @@ Cross-platform: cron is parsed in-process, never delegated to the OS — no `cro
 Timezones are the known hazard and were accepted when cron was chosen; follow
 `domain/rules/engine-limit.ts`. And `TASK-061` closed with the real sleep/wake check on both OSes
 **reasoned through and not observed** — this is the first work in the repo where that gap actually
-bites, so it gets tested rather than argued.
+bites, so it gets tested rather than argued. The Orchestrator's context file is written with UTF-8
+and LF, through the same temp-file-plus-`rename` as persona notes, which is atomic on both NTFS
+and APFS for a same-directory rename.
 
 ---
 
