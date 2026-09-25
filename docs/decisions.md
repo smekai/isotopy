@@ -15,6 +15,32 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-25 — A run claims its source tasks before launch, and releases them when it does not finish
+
+**Context:** Moving `sourceTaskIds` to In Progress lived inside `approveGate` for the intake
+stage. With gates off — the default for unattended schedules — `approveGate` never runs, so a
+task being worked still reads as Next. The next episode has empty `runIds` and picks it again.
+Leaving a crashed run's tasks in In Progress forever is worse: no later episode will consider
+them.
+
+**Decision:** claim is a durable board write that happens *before* the work it authorises —
+the same shape as `claimWindow` for schedules. `startRunWith` awaits
+`transitionTasks(..., "In Progress")` after the run is persisted and before `launch`. The
+intake `approveGate` transition is removed; gated and ungated runs share one claim point.
+
+**Release:** when a run settles as cancelled, or as failed/needs_attention without a closeout
+record, unfinished source tasks still in In Progress move back to Next. A completed run leaves
+the board to closeout (`Done` for completed ids). A run that wrote a closeout is left as that
+closeout left it — releasing would undo intentional Done / unresolved dispositions. Only tasks
+still in In Progress are moved (`onlyFrom`), so Done is never pulled back.
+
+**Rejected:** claiming at admit time (no `runId` yet, and engine refusal would strand a claim);
+releasing every non-completed status including those with closeout (conflicts with closeout's
+board writes); a server-side refusal to start against `@owner` (that remains the agent's job per
+the 2026-09-10 entry).
+
+---
+
 ## 2026-09-10 — `**Assignee:**` is the boundary, and no Isotopy writer clears it
 
 **Context:** `orchestrator.md` already says to escalate *"when it commits money, credentials, or

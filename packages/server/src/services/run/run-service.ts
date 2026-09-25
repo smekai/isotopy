@@ -69,7 +69,6 @@ import type {
 } from "../../workflow/types.ts";
 import type { OrchestrationService } from "../orchestration-service.ts";
 import type { ProductProcessService } from "../product-process-service.ts";
-import { taskBoardFor } from "../task-board-adapter.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
 import { LIMIT_ERRORS, LIMIT_LOG } from "../../domain/rules/limit-copy.ts";
@@ -93,6 +92,10 @@ import {
 import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
 import { RunStore } from "./run-store.ts";
+import {
+  claimSourceTasks,
+  releaseUnfinishedSourceTasks,
+} from "./source-task-claim.ts";
 
 export interface InheritedRunOptions {
   engine?: string;
@@ -200,6 +203,7 @@ export class RunService implements RunProjection {
     }
     if (status === "canceled") {
       this.markCancelled(run.id);
+      await releaseUnfinishedSourceTasks(this.registry, run);
     } else if (status === "failed") {
       this.markInterrupted(run.id);
     } else {
@@ -415,6 +419,9 @@ export class RunService implements RunProjection {
     if (activeOrchestrationId && this.orchestration) {
       await this.orchestration.attachRun(projectPath.id, runId);
     }
+    if (sourceTaskIds?.length) {
+      await claimSourceTasks(projectPath, sourceTaskIds, runId);
+    }
     await this.launch(projectPath, run, {
       startedMessage: `Started pipeline: ${pipeline.name}`,
       seeded,
@@ -436,13 +443,6 @@ export class RunService implements RunProjection {
       throw new Error(`Run ${runId} has no durable run to approve`);
     }
     this.gateApproved(runId, stageId);
-    if (stageId === "intake" && run.sourceTaskIds?.length) {
-      void taskBoardFor(this.registry.resolve(run.projectId))
-        .transitionTasks(run.sourceTaskIds, "In Progress", run.id)
-        .catch((error: unknown) =>
-        console.warn(`Failed to move source tasks for run ${runId}:`, error),
-      );
-    }
     void this.runtimes.forProject(run.projectId).approveGate(runId, stageId);
     return structuredClone(run);
   }
@@ -921,6 +921,7 @@ export class RunService implements RunProjection {
   }
 
   private async settleCompletedRun(run: RunState): Promise<void> {
+    await releaseUnfinishedSourceTasks(this.registry, run);
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.captureRunChanges(run);
     await this.milestones.completeMilestoneRun(run);

@@ -18,6 +18,10 @@ export interface ApprovedTaskLinks {
   featureTaskIds: Record<string, string[]>;
 }
 
+export interface TransitionTasksOptions {
+  onlyFrom?: string;
+}
+
 const BOARD_DIR = ".tasks";
 
 const BACKLOG_STATE = "Backlog";
@@ -102,16 +106,23 @@ export class TaskBoardAdapter {
 
   async transitionTasks(
     ids: string[],
-    targetStateName: "In Progress" | "Done",
+    targetStateName: "In Progress" | "Done" | "Next",
     runId: string,
+    options: TransitionTasksOptions = {},
   ): Promise<string[]> {
     if (ids.length === 0) return [];
     const board = this.open(false);
     if (!board) return [];
 
-    const moved = [...new Set(ids)].filter(
-      (id) => board.taskStore.moveTask(id, targetStateName) !== null,
-    );
+    const moved = [...new Set(ids)].filter((id) => {
+      if (options.onlyFrom !== undefined) {
+        const found = board.taskStore.findTask(id);
+        if (!found || found.stateName !== options.onlyFrom) {
+          return false;
+        }
+      }
+      return board.taskStore.moveTask(id, targetStateName) !== null;
+    });
     if (targetStateName === "Done") {
       for (const id of [...moved].reverse()) {
         board.fileStore.prependWorkLogEntry({
