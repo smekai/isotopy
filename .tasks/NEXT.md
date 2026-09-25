@@ -218,7 +218,6 @@ than hardcodes.
 
 ---
 
-
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P1 | **Tags:** core, server, milestone-i
 **Updated:** 2026-09-16 13:56

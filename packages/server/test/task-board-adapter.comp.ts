@@ -39,21 +39,12 @@ test("a follow-up reaches the project's own board and reads back through the ada
   expect(await adapter.tasksContext()).toContain("TASK-001");
 });
 
-test("transitionTasks claims a Next task into In Progress and can release it back", async () => {
+test("releasing a claimed task moves it from In Progress back to Next", async () => {
   // Arrange
-  await writeBoardWithNextTask();
+  await writeBoardWithTaskIn("In Progress");
   const adapter = new TaskBoardAdapter(project);
 
   // Act
-  const claimed = await adapter.transitionTasks(["TASK-001"], "In Progress", "run-1");
-
-  // Assert
-  expect(claimed).toEqual(["TASK-001"]);
-  expect(await readFile(path.join(root, ".tasks", "IN_PROGRESS.md"), "utf8")).toContain(
-    "TASK-001",
-  );
-
-  // Act — release
   const released = await adapter.transitionTasks(["TASK-001"], "Next", "run-1", {
     onlyFrom: "In Progress",
   });
@@ -68,7 +59,7 @@ test("transitionTasks claims a Next task into In Progress and can release it bac
 
 test("release with onlyFrom skips a task that is already Done", async () => {
   // Arrange
-  await writeBoardWithDoneTask();
+  await writeBoardWithTaskIn("Done");
   const adapter = new TaskBoardAdapter(project);
 
   // Act
@@ -117,28 +108,14 @@ const BOARD_CONFIG = {
   insertPosition: "top",
 };
 
-async function writeBoardWithNextTask(): Promise<void> {
-  const tasksDir = path.join(root, ".tasks");
-  await mkdir(tasksDir, { recursive: true });
-  await writeFile(path.join(tasksDir, "config.json"), `${JSON.stringify(BOARD_CONFIG, null, 2)}\n`);
-  await writeFile(path.join(tasksDir, "BACKLOG.md"), "# Backlog\n");
-  await writeFile(
-    path.join(tasksDir, "NEXT.md"),
-    "# Next\n\n## TASK-001: Claim me\n**Priority:** P1\n\nBody.\n\n---\n",
-  );
-  await writeFile(path.join(tasksDir, "IN_PROGRESS.md"), "# In Progress\n");
-  await writeFile(path.join(tasksDir, "DONE.md"), "# Done\n");
-}
+const TASK_SECTION = "\n## TASK-001: Source work\n**Priority:** P1\n\nBody.\n\n---\n";
 
-async function writeBoardWithDoneTask(): Promise<void> {
+async function writeBoardWithTaskIn(stateName: string): Promise<void> {
   const tasksDir = path.join(root, ".tasks");
   await mkdir(tasksDir, { recursive: true });
   await writeFile(path.join(tasksDir, "config.json"), `${JSON.stringify(BOARD_CONFIG, null, 2)}\n`);
-  await writeFile(path.join(tasksDir, "BACKLOG.md"), "# Backlog\n");
-  await writeFile(path.join(tasksDir, "NEXT.md"), "# Next\n");
-  await writeFile(path.join(tasksDir, "IN_PROGRESS.md"), "# In Progress\n");
-  await writeFile(
-    path.join(tasksDir, "DONE.md"),
-    "# Done\n\n## TASK-001: Already done\n**Priority:** P1\n\nBody.\n\n---\n",
-  );
+  for (const state of BOARD_CONFIG.states) {
+    const section = state.name === stateName ? TASK_SECTION : "";
+    await writeFile(path.join(tasksDir, state.fileName), `# ${state.name}\n${section}`);
+  }
 }

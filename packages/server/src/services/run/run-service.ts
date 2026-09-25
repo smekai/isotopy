@@ -94,6 +94,7 @@ import { nowIso } from "../../utils/time.ts";
 import { RunStore } from "./run-store.ts";
 import {
   claimSourceTasks,
+  reclaimReleasedSourceTasks,
   releaseUnfinishedSourceTasks,
 } from "./source-task-claim.ts";
 
@@ -419,9 +420,7 @@ export class RunService implements RunProjection {
     if (activeOrchestrationId && this.orchestration) {
       await this.orchestration.attachRun(projectPath.id, runId);
     }
-    if (sourceTaskIds?.length) {
-      await claimSourceTasks(projectPath, sourceTaskIds, runId);
-    }
+    await claimSourceTasks(projectPath, run);
     await this.launch(projectPath, run, {
       startedMessage: `Started pipeline: ${pipeline.name}`,
       seeded,
@@ -523,6 +522,7 @@ export class RunService implements RunProjection {
       throw new Error(`Stage not found: ${stageId}`);
     }
     const seeded = seedFromRestart(run, stageId);
+    await reclaimReleasedSourceTasks(this.registry.resolve(run.projectId), run);
     this.cancelled.delete(runId);
     run.stageOutputs = resetStagesForRestart(run.stages.slice(startIndex), run.stageOutputs);
     run.status = "running";

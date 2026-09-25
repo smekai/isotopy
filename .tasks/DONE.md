@@ -2,7 +2,7 @@
 
 ## TASK-172: A task worked unattended never leaves Next, so the next episode can pick it up again
 **Priority:** P1 | **Tags:** server, core, milestone-i
-**Updated:** 2026-09-25 19:52
+**Updated:** 2026-09-25 19:20
 
 Of **Milestone I — Induction** (`TASK-156`). Closed 2026-09-25.
 
@@ -14,9 +14,12 @@ The intake `approveGate` transition is removed; gated and ungated runs share one
 source tasks still in In Progress move back to Next (`onlyFrom`). Completed runs leave the board to
 closeout. A reconcile cancel path that skipped settle also releases.
 
-**Evidence:** gates-off claim at start; abort returns the task to Next; gated claim before intake
-approval; adapter claim/release round-trip; Done not pulled back. Related closeout and gate suites
-still pass.
+**Re-claim on restart.** `restartRun` moves source tasks sitting in Next back to In Progress before
+relaunching — the inverse of the release — so a restarted run is not invisible to the next episode.
+
+**Evidence:** gates-off claim at start; abort returns the task to Next; restart after abort claims it
+again; gated claim before intake approval; adapter release from In Progress; Done not pulled back.
+Related closeout and gate suites still pass.
 
 ---
 

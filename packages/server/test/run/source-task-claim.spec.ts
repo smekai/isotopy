@@ -1,39 +1,36 @@
 import { expect, test } from "vitest";
 import type { RunCloseoutRecord, RunState } from "@isotopy/core";
-import { shouldReleaseSourceTasks } from "../../src/services/run/source-task-claim.ts";
+import { sourceTasksToRelease } from "../../src/domain/rules/run-lifecycle.ts";
 
-test("a completed run does not release its source tasks", () => {
-  expect(shouldReleaseSourceTasks(run({ status: "completed" }))).toBe(false);
+test("a completed run leaves its source tasks to closeout", () => {
+  expect(sourceTasksToRelease(run({ status: "completed" }))).toEqual([]);
 });
 
-test("a cancelled run without closeout releases its source tasks", () => {
-  expect(shouldReleaseSourceTasks(run({ status: "cancelled" }))).toBe(true);
+test("a cancelled run without a closeout releases its source tasks", () => {
+  expect(sourceTasksToRelease(run({ status: "cancelled" }))).toEqual(["TASK-001"]);
 });
 
-test("a failed run that already wrote a closeout leaves the board alone", () => {
-  expect(
-    shouldReleaseSourceTasks(run({ status: "failed", closeout: CLOSEOUT })),
-  ).toBe(false);
+test("a failed run that already wrote a closeout leaves the board as closeout left it", () => {
+  expect(sourceTasksToRelease(run({ status: "failed", closeout: CLOSEOUT }))).toEqual([]);
 });
 
-test("a run with no source tasks never releases", () => {
-  expect(shouldReleaseSourceTasks(run({ sourceTaskIds: undefined }))).toBe(false);
-});
-
-const CLOSEOUT = {
+const CLOSEOUT: RunCloseoutRecord = {
   report: {
     summary: "done",
-    outcome: "delivered",
+    deliveredScope: [],
+    decisions: [],
+    knowledge: [],
     findings: [],
     tasks: [],
     completedTaskIds: [],
     unresolvedTaskIds: [],
+    cleanup: [],
   },
   createdTasks: [],
   cleanup: { removed: [], rejected: [] },
   validationErrors: [],
   completedAt: "2026-09-25T00:00:00.000Z",
-} as RunCloseoutRecord;
+};
 
 function run(overrides: Partial<RunState>): RunState {
   return {

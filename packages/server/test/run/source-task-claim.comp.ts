@@ -104,6 +104,36 @@ test("aborting a claimed run returns its source task to Next", async () => {
   expect(await boardFile(projectRoot, "IN_PROGRESS.md")).not.toContain("TASK-001");
 });
 
+test("restarting an aborted run claims the source task its abort released", async () => {
+  // Arrange — the abort put TASK-001 back in Next
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } }, headers);
+  ctx.engine.anticipate({ as: "Project Manager" }).hangsUntilAborted();
+  const run = await startRun(
+    ctx.app,
+    {
+      pipelineId: "pm-dev-test",
+      task: "Source work",
+      engine: "claude-code",
+      sourceTaskIds: ["TASK-001"],
+    },
+    headers,
+  );
+  await ctx.engine.waitForCall(1);
+  await post(ctx.app, `/runs/${run.id}/abort`, {}, headers);
+  await waitForRunStatus(ctx.app, run.id, "cancelled");
+  await waitForBoard(projectRoot, "NEXT.md", "TASK-001");
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Project Manager" }).hangsUntilAborted();
+
+  // Act
+  await post(ctx.app, `/runs/${run.id}/restart`, { stageId: "intake" }, headers);
+
+  // Assert
+  expect(await boardFile(projectRoot, "IN_PROGRESS.md")).toContain("TASK-001");
+  expect(await boardFile(projectRoot, "NEXT.md")).not.toContain("TASK-001");
+});
+
 test("a gated run still claims at start, before the intake gate is approved", async () => {
   // Arrange — default gates leave intake parked
   ctx.engine.anticipate({ as: "Project Manager" }).reports("Intake done.");
@@ -124,9 +154,6 @@ test("a gated run still claims at start, before the intake gate is approved", as
   // Assert — claimed without approving the gate
   expect(await boardFile(projectRoot, "IN_PROGRESS.md")).toContain("TASK-001");
   expect(await boardFile(projectRoot, "NEXT.md")).not.toContain("TASK-001");
-
-  await post(ctx.app, `/runs/${run.id}/abort`, {}, headers);
-  await waitForRunStatus(ctx.app, run.id, "cancelled");
 });
 
 function anticipatePipeline(): void {

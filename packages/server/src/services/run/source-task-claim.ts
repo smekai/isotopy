@@ -1,29 +1,32 @@
 import type { RunState } from "@isotopy/core";
+import { sourceTasksToRelease } from "../../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../../paths.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 
-export async function claimSourceTasks(
+export async function claimSourceTasks(projectPath: ProjectPath, run: RunState): Promise<void> {
+  await taskBoardFor(projectPath).transitionTasks(run.sourceTaskIds ?? [], "In Progress", run.id);
+}
+
+export async function reclaimReleasedSourceTasks(
   projectPath: ProjectPath,
-  sourceTaskIds: string[],
-  runId: string,
+  run: RunState,
 ): Promise<void> {
-  if (sourceTaskIds.length === 0) {
-    return;
-  }
-  await taskBoardFor(projectPath).transitionTasks(sourceTaskIds, "In Progress", runId);
+  await taskBoardFor(projectPath).transitionTasks(
+    run.sourceTaskIds ?? [],
+    "In Progress",
+    run.id,
+    { onlyFrom: "Next" },
+  );
 }
 
 export async function releaseUnfinishedSourceTasks(
   registry: ProjectRegistry,
   run: RunState,
 ): Promise<void> {
-  if (!shouldReleaseSourceTasks(run)) {
-    return;
-  }
   try {
     await taskBoardFor(registry.resolve(run.projectId)).transitionTasks(
-      run.sourceTaskIds!,
+      sourceTasksToRelease(run),
       "Next",
       run.id,
       { onlyFrom: "In Progress" },
@@ -31,17 +34,4 @@ export async function releaseUnfinishedSourceTasks(
   } catch (error: unknown) {
     console.warn(`Failed to release source tasks for run ${run.id}:`, error);
   }
-}
-
-export function shouldReleaseSourceTasks(run: RunState): boolean {
-  if (!run.sourceTaskIds?.length) {
-    return false;
-  }
-  if (run.status === "completed") {
-    return false;
-  }
-  if (run.closeout) {
-    return false;
-  }
-  return true;
 }

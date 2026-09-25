@@ -45,6 +45,13 @@ export function applyInterruption(run: RunState, ts: string): string[] {
   return interrupted.map((stage) => stage.id);
 }
 
+export function sourceTasksToRelease(run: RunState): string[] {
+  if (run.status === "completed" || run.closeout !== undefined) {
+    return [];
+  }
+  return run.sourceTaskIds ?? [];
+}
+
 export const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
   "succeeded",
   "completed",

@@ -18,8 +18,10 @@ export interface ApprovedTaskLinks {
   featureTaskIds: Record<string, string[]>;
 }
 
+export type TaskTransitionState = "Next" | "In Progress" | "Done";
+
 export interface TransitionTasksOptions {
-  onlyFrom?: string;
+  onlyFrom?: TaskTransitionState;
 }
 
 const BOARD_DIR = ".tasks";
@@ -106,7 +108,7 @@ export class TaskBoardAdapter {
 
   async transitionTasks(
     ids: string[],
-    targetStateName: "In Progress" | "Done" | "Next",
+    targetStateName: TaskTransitionState,
     runId: string,
     options: TransitionTasksOptions = {},
   ): Promise<string[]> {

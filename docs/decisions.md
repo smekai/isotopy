@@ -34,6 +34,10 @@ the board to closeout (`Done` for completed ids). A run that wrote a closeout is
 closeout left it — releasing would undo intentional Done / unresolved dispositions. Only tasks
 still in In Progress are moved (`onlyFrom`), so Done is never pulled back.
 
+**Re-claim:** `restartRun` is allowed exactly from the statuses that release, so it moves source
+tasks still in Next back to In Progress before relaunching. It re-claims only from Next — the
+inverse of the release — so a task a human or a closeout has since moved elsewhere stays there.
+
 **Rejected:** claiming at admit time (no `runId` yet, and engine refusal would strand a claim);
 releasing every non-completed status including those with closeout (conflicts with closeout's
 board writes); a server-side refusal to start against `@owner` (that remains the agent's job per
