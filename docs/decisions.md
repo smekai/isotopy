@@ -15,6 +15,23 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-09-26 — `pnpm test` proves the product; repo checks run under `pnpm check`
+
+**Context:** the suite mixed two kinds of failure. A component test goes red when the product
+broke. A check on the repo itself — domain code importing `node:fs`, a file over the line cap, a
+TaskPlanner pin that drifted, a pipeline naming a persona that is not bundled, generated skills
+out of sync — goes red when the repo drifted from its own rules. One red suite could mean either.
+
+**Decision:** repo checks live in `packages/*/test/checks/*.check.ts`, a third Vitest project
+(`checks`) that only `pnpm check` runs. `pnpm check` also runs `generate-skills.mjs --check`
+directly instead of through a test that shells out to it. CI runs `pnpm check` in the Linux job
+and in the Windows/macOS matrix, where these checks already ran as part of `pnpm test`.
+
+**Rejected:** keeping them in `pnpm test` (a red suite stays ambiguous); turning each into an
+ESLint rule (the bundled-content checks read files at runtime, which a lint rule cannot).
+
+---
+
 ## 2026-09-25 — A run claims its source tasks before launch, and releases them when it does not finish
 
 **Context:** Moving `sourceTaskIds` to In Progress lived inside `approveGate` for the intake

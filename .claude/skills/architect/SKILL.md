@@ -214,7 +214,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
 **Verify a change** (from the repo root, shell-neutral):
 
 ```
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm build
 ```
 
 For UI structural changes, also `pnpm --filter @isotopy/ui e2e`. If you touched the

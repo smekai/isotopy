@@ -18,8 +18,8 @@ the single source the two Architect consumers are generated from.
 > hand-edit [`.claude/skills/architect/SKILL.md`](../.claude/skills/architect/SKILL.md)
 > or `packages/server/src/domain/skills/personas/architect.md` — both are emitted
 > by [`scripts/generate-skills.mjs`](../scripts/generate-skills.mjs). Edit the
-> `gen:` blocks below and run `pnpm gen:skills`. A drift test
-> (`skill-generation.spec.ts`) fails the build if the committed outputs diverge.
+> `gen:` blocks below and run `pnpm gen:skills`. `pnpm check` fails the build if
+> the committed outputs diverge.
 >
 > The other personas are plain markdown in
 > `packages/server/src/domain/skills/personas/`. Only the Architect is composed
@@ -242,7 +242,7 @@ of the source. When you strip or avoid a comment, that is where its content goes
 **Verify a change** (from the repo root, shell-neutral):
 
 ```
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm build
 ```
 
 For UI structural changes, also `pnpm --filter @isotopy/ui e2e`. If you touched the

@@ -1,13 +1,12 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
+import { REPO_ROOT } from "../../src/paths.ts";
 import {
   domainFilesImportingNodeFs,
   misnamedClassFiles,
   sourceFilesOverLineCap,
-} from "./support/structure-scan.ts";
+} from "../support/structure-scan.ts";
 
-const REPO_ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 const PACKAGES_SRC = path.join(REPO_ROOT, "packages");
 
 test("domain code never imports node:fs", () => {
