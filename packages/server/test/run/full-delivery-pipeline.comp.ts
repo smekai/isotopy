@@ -1,5 +1,8 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
+  addTestProject,
   approveIntake,
   createTestApp,
   post,
@@ -227,6 +230,30 @@ test("restart keeps an earlier blocking review in the final outcome", async () =
   ctx.engine.verify();
 });
 
+test("a run that needs attention after its closeout keeps the unresolved source task In Progress", async () => {
+  // Arrange
+  const project = await addTestProject(ctx.registry, "closeout-claim");
+  await writeBoardWithNextTask(project.root);
+  await put(ctx.app, "/settings/preferences", { gates: { "full-delivery:intake": false } }, project.headers);
+
+  // Anticipate — the review blocks, and a closeout that names no task leaves TASK-001 unresolved.
+  anticipatePlanningAndImplementation();
+  ctx.engine
+    .anticipate({ as: "Software Architect review" })
+    .reports("Missing rollback boundary\n\nVERDICT: FAIL");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports(QA_PASS);
+  ctx.engine.anticipate({ as: "Orchestrator closeout" }).reports(CLOSEOUT);
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(ctx.app, { ...PIPELINE, sourceTaskIds: ["TASK-001"] }, project.headers);
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "needs_attention");
+  expect(await boardFile(project.root, "IN_PROGRESS.md")).toContain("TASK-001");
+  expect(await boardFile(project.root, "NEXT.md")).not.toContain("TASK-001");
+});
+
 test("a closeout the Product Manager wrote as prose leaves the run needing attention, not completed", async () => {
   // Anticipate — a closeout that reads like a report and carries no closeout block.
   anticipatePlanningAndImplementation();
@@ -416,4 +443,31 @@ function anticipateDeliveryAndCloseout(): void {
       prompt: /# Assignment: Close out the feature run/,
     })
     .reports(CLOSEOUT);
+}
+
+const BOARD_CONFIG = {
+  idPrefix: "TASK",
+  nextId: 2,
+  states: [
+    { name: "Next", fileName: "NEXT.md" },
+    { name: "In Progress", fileName: "IN_PROGRESS.md" },
+    { name: "Done", fileName: "DONE.md" },
+  ],
+  insertPosition: "top",
+};
+
+async function writeBoardWithNextTask(root: string): Promise<void> {
+  const tasksDir = path.join(root, ".tasks");
+  await mkdir(tasksDir, { recursive: true });
+  await writeFile(path.join(tasksDir, "config.json"), `${JSON.stringify(BOARD_CONFIG, null, 2)}\n`);
+  await writeFile(
+    path.join(tasksDir, "NEXT.md"),
+    "# Next\n\n## TASK-001: Milestone progress\n**Priority:** P1\n\nBody.\n\n---\n",
+  );
+  await writeFile(path.join(tasksDir, "IN_PROGRESS.md"), "# In Progress\n");
+  await writeFile(path.join(tasksDir, "DONE.md"), "# Done\n");
+}
+
+function boardFile(root: string, name: string): Promise<string> {
+  return readFile(path.join(root, ".tasks", name), "utf8");
 }
