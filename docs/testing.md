@@ -183,19 +183,27 @@ logic *in the body*, not in the file.
 
 A test exists for logic complicated enough to get wrong — a parser, a reducer,
 an ordering rule, a platform difference. **If you cannot name the bug a test
-would catch, it is not a test.** Three patterns fail that question every time:
+would catch, it is not a test.** Five patterns fail that question every time:
 
 | Anti-pattern | Why it is worthless |
 | --- | --- |
 | Asserting a **constant** back | The test and the code are the same edit. It fails when a value legitimately changes, never when behaviour breaks. |
-| Asserting on **prose** | Passes until someone writes a perfectly good sentence. |
+| Asserting on **prose** | Passes until someone writes a perfectly good sentence. Assert the value a message names — the id, the harness — not the sentence around it. |
 | Covering a **one-line expression** | A ternary or a delegation has no room for a bug the type system does not already catch. |
+| Asserting that **two lists agree** | Derive one from the other, or type it as `Record<Union, …>`, and the compiler holds the rule. The test only restates the derivation. |
+| Rejecting **one bad value per schema field** | That tests Zod. One test per boundary *policy* — unknown fields refused, a bad record ignored whole — is enough. A **migration** keeps its own test: it protects data users already have. |
 
 The cost of a worthless test is not the milliseconds. It is that every future
 change drags it along, and that a red suite stops meaning something is broken.
 
 Deleting a test is therefore a legitimate outcome of writing one. Weakening an
 assertion to make a suite pass is not.
+
+**Before deleting one, prove what covers it.** Break the rule it names in `src/`
+and run the tests of that subject: one must go red. If none does, write that test
+first. A test that survives its own mutation is not coverage — and a guard whose
+mutation nothing notices is either dead code or a second copy of the same rule,
+which is worth knowing too.
 <!-- gen:testing-shared:end -->
 
 <!-- gen:testing-skill:start -->

@@ -86,25 +86,4 @@ describe("extractMilestonePlan", () => {
     );
   });
 
-  it("rejects malformed nested task data instead of dropping it", () => {
-    const parsed = extractMilestonePlan(
-      fenced({
-        ...VALID_PLAN,
-        features: [
-          {
-            ...VALID_PLAN.features[0]!,
-            taskDrafts: [
-              { ...VALID_PLAN.features[0]!.taskDrafts[0]!, priority: "urgent" },
-            ],
-          },
-        ],
-      }),
-    );
-
-    expect(parsed.ok).toBe(false);
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "priority",
-    );
-  });
-
 });
