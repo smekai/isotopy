@@ -8,6 +8,7 @@ import type { RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,
+  post,
   put,
   restartApp,
   stageOf,
@@ -43,6 +44,29 @@ test("a gate the project turned off does not park the run", async () => {
   // Assert — no approval is posted, so a live gate would hold this forever.
   const finished = await waitForRunStatus(ctx.app, run.id, "completed");
   expect(stageOf(finished, "intake").status).toBe("passed");
+});
+
+test("a gate stored against the Orchestrator's own pipeline is ignored, so the Orchestrator never parks on one", async () => {
+  // Arrange — nothing in the UI offers this key, but the preferences API accepts any.
+  await put(ctx.app, "/settings/preferences", { gates: { "orchestration:orchestrate": true } });
+
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(
+      "Nothing to do.\n\n```isotopy-orchestrator-decision\n" +
+        JSON.stringify({ action: "stop", reason: "goal met" }) +
+        "\n```",
+    );
+
+  // Act
+  const { body: run } = await post<RunState>(ctx.app, "/orchestrations", {
+    goal: "Add search to the product",
+    engine: "claude-code",
+  });
+
+  // Assert — a live gate would hold the conversation run at "awaiting" forever.
+  await waitForRunStatus(ctx.app, run.id, "completed");
 });
 
 test("a gate the project added parks a stage that ships without one", async () => {

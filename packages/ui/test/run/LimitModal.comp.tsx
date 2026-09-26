@@ -39,6 +39,31 @@ test("the countdown says how long is left, not just that something is wrong", ()
   expect(screen.getByTestId("limit-countdown").textContent).toBe("1h 30m 00s");
 });
 
+test("a wait under an hour drops the hour so the number stays readable", () => {
+  // Act
+  render(<LimitModal {...limitProps({ limit: limit({ resetAt: "2026-07-21T12:25:00.000Z" }) })} />);
+
+  // Assert
+  expect(screen.getByTestId("limit-countdown").textContent).toBe("25m 00s");
+});
+
+test("a reset already passed reads as zero rather than counting backwards", () => {
+  // Act
+  render(<LimitModal {...limitProps({ limit: limit({ resetAt: "2026-07-21T11:00:00.000Z" }) })} />);
+
+  // Assert
+  expect(screen.getByTestId("limit-countdown").textContent).toBe("00m 00s");
+});
+
+test("a reset instant that cannot be read shows no countdown rather than a broken one", () => {
+  // Act
+  render(<LimitModal {...limitProps({ limit: limit({ resetAt: "not-a-date" }) })} />);
+
+  // Assert
+  expect(screen.queryByTestId("limit-countdown")).toBeNull();
+  expect(screen.getByText(LIMIT_COPY.noResetTime)).toBeTruthy();
+});
+
 test("a limit with no parsed reset time says so instead of showing a blank countdown", () => {
   // Act
   render(<LimitModal {...limitProps({ limit: limit({ resetAt: undefined }) })} />);
