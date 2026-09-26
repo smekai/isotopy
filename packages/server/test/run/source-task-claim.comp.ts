@@ -78,6 +78,59 @@ test("a run with sourceTaskIds and gates off moves its task to In Progress at st
   await waitForRunStatus(ctx.app, run.id, "completed");
 });
 
+test("a completed run leaves its source task In Progress rather than returning it to Next", async () => {
+  // Arrange
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } }, headers);
+
+  // Anticipate
+  anticipatePipeline();
+
+  // Act
+  const run = await startRun(
+    ctx.app,
+    {
+      pipelineId: "pm-dev-test",
+      task: "Source work",
+      engine: "claude-code",
+      sourceTaskIds: ["TASK-001"],
+    },
+    headers,
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  expect(await boardFile(projectRoot, "IN_PROGRESS.md")).toContain("TASK-001");
+  expect(await boardFile(projectRoot, "NEXT.md")).not.toContain("TASK-001");
+});
+
+test("a run that needs attention returns its source task to Next when no closeout classified it", async () => {
+  // Arrange
+  await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } }, headers);
+
+  // Anticipate — the Orchestrator's run review still records a closeout, one that names no task.
+  ctx.engine.anticipate({ as: "Project Manager" }).reports("Intake done.");
+  ctx.engine.anticipate({ as: "Developer" }).reports("Implemented.\nMARKER-DEVELOPER");
+  ctx.engine.anticipate({ as: "Tester" }).reports("Broken.\n\nVERDICT: FAIL");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(
+    ctx.app,
+    {
+      pipelineId: "pm-dev-test",
+      task: "Source work",
+      engine: "claude-code",
+      sourceTaskIds: ["TASK-001"],
+    },
+    headers,
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "needs_attention");
+  expect(await boardFile(projectRoot, "NEXT.md")).toContain("TASK-001");
+  expect(await boardFile(projectRoot, "IN_PROGRESS.md")).not.toContain("TASK-001");
+});
+
 test("aborting a claimed run returns its source task to Next", async () => {
   // Arrange
   await put(ctx.app, "/settings/preferences", { gates: { "pm-dev-test:intake": false } }, headers);

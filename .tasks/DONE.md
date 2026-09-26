@@ -2,7 +2,7 @@
 
 ## TASK-172: A task worked unattended never leaves Next, so the next episode can pick it up again
 **Priority:** P1 | **Tags:** server, core, milestone-i
-**Updated:** 2026-09-25 19:20
+**Updated:** 2026-09-26 08:16
 
 Of **Milestone I — Induction** (`TASK-156`). Closed 2026-09-25.
 
@@ -10,16 +10,18 @@ Of **Milestone I — Induction** (`TASK-156`). Closed 2026-09-25.
 is persisted and before `launch` — the same durable-before-work shape as `claimWindow` for schedules.
 The intake `approveGate` transition is removed; gated and ungated runs share one claim point.
 
-**Release when unfinished.** On settle as cancelled, or as failed/needs_attention without a closeout,
-source tasks still in In Progress move back to Next (`onlyFrom`). Completed runs leave the board to
-closeout. A reconcile cancel path that skipped settle also releases.
+**Release when unfinished.** On settle as anything but completed, source tasks still in In Progress
+move back to Next (`onlyFrom`), except those a closeout classified as completed or unresolved. The
+Orchestrator's run review records a closeout that classifies no task, so it does not hold one back.
+Completed runs leave the board to closeout. A reconcile cancel path that skipped settle also releases.
 
 **Re-claim on restart.** `restartRun` moves source tasks sitting in Next back to In Progress before
 relaunching — the inverse of the release — so a restarted run is not invisible to the next episode.
 
-**Evidence:** gates-off claim at start; abort returns the task to Next; restart after abort claims it
+**Evidence (component tests only):** gates-off claim at start; a completed run keeps its task In
+Progress; a run needing attention with only a review closeout returns it to Next; a closeout's
+unresolved task stays In Progress; abort returns the task to Next; restart after abort claims it
 again; gated claim before intake approval; adapter release from In Progress; Done not pulled back.
-Related closeout and gate suites still pass.
 
 ---
 

@@ -28,11 +28,12 @@ the same shape as `claimWindow` for schedules. `startRunWith` awaits
 `transitionTasks(..., "In Progress")` after the run is persisted and before `launch`. The
 intake `approveGate` transition is removed; gated and ungated runs share one claim point.
 
-**Release:** when a run settles as cancelled, or as failed/needs_attention without a closeout
-record, unfinished source tasks still in In Progress move back to Next. A completed run leaves
-the board to closeout (`Done` for completed ids). A run that wrote a closeout is left as that
-closeout left it — releasing would undo intentional Done / unresolved dispositions. Only tasks
-still in In Progress are moved (`onlyFrom`), so Done is never pulled back.
+**Release:** when a run settles as anything but completed, its source tasks still in In Progress
+move back to Next — except those a closeout classified as completed or unresolved, which stay as
+that closeout left them; releasing those would undo an intentional disposition. The
+Orchestrator's run review records a closeout too, but one that classifies no task, so it does not
+hold a task back. A completed run leaves the board to closeout (`Done` for completed ids). Only
+tasks still in In Progress are moved (`onlyFrom`), so Done is never pulled back.
 
 **Re-claim:** `restartRun` is allowed exactly from the statuses that release, so it moves source
 tasks still in Next back to In Progress before relaunching. It re-claims only from Next — the
@@ -40,7 +41,9 @@ inverse of the release — so a task a human or a closeout has since moved elsew
 
 **Rejected:** claiming at admit time (no `runId` yet, and engine refusal would strand a claim);
 releasing every non-completed status including those with closeout (conflicts with closeout's
-board writes); a server-side refusal to start against `@owner` (that remains the agent's job per
+board writes); keeping every task of a run that has any closeout record (the run review writes
+one for nearly every run, naming no task, so a failed run's task stayed In Progress forever); a
+server-side refusal to start against `@owner` (that remains the agent's job per
 the 2026-09-10 entry).
 
 ---

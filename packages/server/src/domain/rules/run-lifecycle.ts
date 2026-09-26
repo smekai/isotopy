@@ -46,10 +46,15 @@ export function applyInterruption(run: RunState, ts: string): string[] {
 }
 
 export function sourceTasksToRelease(run: RunState): string[] {
-  if (run.status === "completed" || run.closeout !== undefined) {
+  if (run.status === "completed") {
     return [];
   }
-  return run.sourceTaskIds ?? [];
+  const report = run.closeout?.report;
+  const classified = new Set([
+    ...(report?.completedTaskIds ?? []),
+    ...(report?.unresolvedTaskIds ?? []),
+  ]);
+  return (run.sourceTaskIds ?? []).filter((id) => !classified.has(id));
 }
 
 export const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
