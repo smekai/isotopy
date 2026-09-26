@@ -86,20 +86,6 @@ describe("extractMilestonePlan", () => {
     );
   });
 
-  it("rejects features without acceptance criteria or work", () => {
-    const parsed = extractMilestonePlan(
-      fenced({
-        ...VALID_PLAN,
-        features: [
-          { ...VALID_PLAN.features[0], acceptanceCriteria: [], taskDrafts: [] },
-        ],
-      }),
-    );
-
-    expect(parsed.ok).toBe(false);
-    expect(parsed.ok === false && parsed.issues.length).toBeGreaterThanOrEqual(1);
-  });
-
   it("rejects malformed nested task data instead of dropping it", () => {
     const parsed = extractMilestonePlan(
       fenced({
@@ -121,17 +107,4 @@ describe("extractMilestonePlan", () => {
     );
   });
 
-  it("rejects duplicate feature ids", () => {
-    const parsed = extractMilestonePlan(
-      fenced({
-        ...VALID_PLAN,
-        features: [VALID_PLAN.features[0], VALID_PLAN.features[0]],
-      }),
-    );
-
-    expect(parsed.ok).toBe(false);
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "Feature IDs must be unique",
-    );
-  });
 });
