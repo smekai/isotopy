@@ -49,16 +49,6 @@ describe("extractRunArtifacts", () => {
     );
   });
 
-  it("rejects a report carrying closeout's task-board fields", () => {
-    const parsed = extractRunArtifacts(
-      artifactsBlock({ ...ARTIFACTS, completedTaskIds: ["TASK-001"] }),
-    );
-
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "completedTaskIds",
-    );
-  });
-
   it("names the offending field when a required one is missing", () => {
     const { summary: _omitted, ...withoutSummary } = ARTIFACTS;
     const parsed = extractRunArtifacts(artifactsBlock(withoutSummary));

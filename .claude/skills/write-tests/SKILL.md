@@ -178,19 +178,27 @@ logic *in the body*, not in the file.
 
 A test exists for logic complicated enough to get wrong — a parser, a reducer,
 an ordering rule, a platform difference. **If you cannot name the bug a test
-would catch, it is not a test.** Three patterns fail that question every time:
+would catch, it is not a test.** Five patterns fail that question every time:
 
 | Anti-pattern | Why it is worthless |
 | --- | --- |
 | Asserting a **constant** back | The test and the code are the same edit. It fails when a value legitimately changes, never when behaviour breaks. |
-| Asserting on **prose** | Passes until someone writes a perfectly good sentence. |
+| Asserting on **prose** | Passes until someone writes a perfectly good sentence. Assert the value a message names — the id, the harness — not the sentence around it. |
 | Covering a **one-line expression** | A ternary or a delegation has no room for a bug the type system does not already catch. |
+| Asserting that **two lists agree** | Derive one from the other, or type it as `Record<Union, …>`, and the compiler holds the rule. The test only restates the derivation. |
+| Rejecting **one bad value per schema field** | That tests Zod. One test per boundary *policy* — unknown fields refused, a bad record ignored whole — is enough. A **migration** keeps its own test: it protects data users already have. |
 
 The cost of a worthless test is not the milliseconds. It is that every future
 change drags it along, and that a red suite stops meaning something is broken.
 
 Deleting a test is therefore a legitimate outcome of writing one. Weakening an
 assertion to make a suite pass is not.
+
+**Before deleting one, prove what covers it.** Break the rule it names in `src/`
+and run the tests of that subject: one must go red. If none does, write that test
+first. A test that survives its own mutation is not coverage — and a guard whose
+mutation nothing notices is either dead code or a second copy of the same rule,
+which is worth knowing too.
 
 ## Applying this in the Isotopy repo
 
@@ -204,6 +212,7 @@ indirect, and harder to diagnose when it breaks.
 | **Component** | `packages/*/test/**/*.comp.ts` | Vitest (`node`) | `pnpm test` | The default. Request in → behaviour out, through the real routes, services, orchestrator and run-store. |
 | **Component (render)** | `packages/ui/test/**/*.comp.tsx` | Vitest (`jsdom`) | `pnpm test` | The same, for React code that must render — hooks and components, deps mocked. |
 | **Spec** | `packages/*/test/**/*.spec.ts` | Vitest (`node`) | `pnpm test` | Complicated *pure* functions only. No I/O, no HTTP. |
+| **Check** | `packages/*/test/checks/*.check.ts` | Vitest (`checks`) | `pnpm check` | Repo drift, not product behaviour: structure, dependency pins, bundled personas and step tasks, generated skills in sync. |
 | **E2E** | `packages/ui/e2e/**/*.e2e.ts` | Playwright | `pnpm e2e` | Only what needs a browser: rendering, focus, tab wiring. |
 | **Live** | `e2e/run/live-dev-test.e2e.ts` | Playwright | `ISOTOPY_E2E_LIVE=1 …` | Opt-in canary that the real CLI still integrates. Costs money. |
 
@@ -243,7 +252,10 @@ from one root config: `node` takes `packages/*/test/**/*.{comp,spec}.ts`, and
 `ui` takes `packages/ui/test/**/*.comp.tsx` under `jsdom`. So a UI check that
 needs to render is a `.comp.tsx`; a UI check over a pure function stays a
 `.spec.ts` and runs in `node` with everything else. Run one project at a time
-with `pnpm vitest run --project ui`. React state updates must go through
+with `pnpm vitest run --project ui`. A third project, `checks`, takes
+`*.check.ts` and runs only under `pnpm check`, so a red `pnpm test` means the
+product broke and a red `pnpm check` means the repo drifted from its own rules.
+React state updates must go through
 `renderHook`/`render` — `react-hooks/rules-of-hooks` is an **error** across
 `packages/ui/**`, so calling a hook directly in a test body fails lint.
 
@@ -340,5 +352,6 @@ engine.` — because the absence is the point.
 ```bash
 pnpm test          # component tests + specs (fast, free, no CLI needed)
 pnpm test:watch    # same, in watch mode
+pnpm check         # repo checks + generated skills in sync
 pnpm e2e           # Playwright, free + seeded tiers
 ```

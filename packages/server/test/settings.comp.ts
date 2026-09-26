@@ -158,6 +158,62 @@ test("a legacy model id stored on disk is migrated on read, onto the preset that
   expect(body.preferences.engineModels).toEqual({});
 });
 
+test("a retired model an older browser still sends is stored as Auto, not carried into a run", async () => {
+  // Act
+  await put<SettingsView>(ctx.app, "/settings/preferences", {
+    engineModels: { codex: "gpt-5-mini" },
+  });
+
+  // Assert
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+  expect(body.preferences.engineModels).toEqual({});
+});
+
+test("a retired model already stored on disk reads back as Auto rather than refusing the next run", async () => {
+  // Arrange
+  await writeUserSettings(ctx.userHome, {
+    version: 1,
+    defaults: { engines: {} },
+    projects: { home: { engines: {}, preferences: { modelTier: "balanced", engineModels: { cursor: "composer-1" } } } },
+  });
+
+  // Act
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+
+  // Assert
+  expect(body.preferences.engineModels).toEqual({ cursor: "" });
+});
+
+test("a settings file written before presets adopts its own engine's economical default", async () => {
+  // Arrange — Cursor's cheap path is its own routing, which `economy` names, not Claude Code's `fast`.
+  await writeUserSettings(ctx.userHome, {
+    version: 1,
+    defaults: { engines: {} },
+    projects: { home: { engines: {}, preferences: { engine: "cursor" } } },
+  });
+
+  // Act
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+
+  // Assert
+  expect(body.preferences.modelTier).toBe("economy");
+});
+
+test("a stored tier wins over the engine's default", async () => {
+  // Arrange
+  await writeUserSettings(ctx.userHome, {
+    version: 1,
+    defaults: { engines: {} },
+    projects: { home: { engines: {}, preferences: { engine: "cursor", modelTier: "max" } } },
+  });
+
+  // Act
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+
+  // Assert
+  expect(body.preferences.modelTier).toBe("max");
+});
+
 test("an unknown engine is rejected and nothing is stored", async () => {
   // Act
   const { status, body } = await put<{
@@ -169,22 +225,6 @@ test("an unknown engine is rejected and nothing is stored", async () => {
   expect(status).toBe(400);
   expect(body.error).toBe("Invalid request");
   expect(body.issues[0]).toMatchObject({ path: ["engine"] });
-});
-
-test("an unknown pipeline is rejected", async () => {
-  // Act
-  const { status } = await put(ctx.app, "/settings/preferences", { pipelineId: "no-such" });
-
-  // Assert
-  expect(status).toBe(400);
-});
-
-test("an unknown permission mode is rejected", async () => {
-  // Act
-  const { status } = await put(ctx.app, "/settings/preferences", { permissionMode: "yolo" });
-
-  // Assert
-  expect(status).toBe(400);
 });
 
 test("storing preferences leaves the engine connection untouched", async () => {

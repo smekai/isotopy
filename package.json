@@ -1,7 +1,7 @@
 {
   "name": "isotopy",
   "private": true,
-  "version": "0.12.43",
+  "version": "0.12.49",
   "description": "Isotopy — The last mile for your ideas, turning them into working businesses",
   "repository": {
     "type": "git",
@@ -16,8 +16,9 @@
     "build": "pnpm -r build",
     "start": "concurrently -n server,ui -c blue,green \"pnpm --filter @isotopy/server start\" \"pnpm --filter @isotopy/ui preview\"",
     "typecheck": "pnpm -r typecheck",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --project node --project ui",
+    "test:watch": "vitest --project node --project ui",
+    "check": "node scripts/generate-skills.mjs --check && vitest run --project checks",
     "e2e": "pnpm --filter @isotopy/ui e2e",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

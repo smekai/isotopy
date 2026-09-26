@@ -1,5 +1,40 @@
 # Done
 
+## TASK-176: The suite proves behaviour: specs only for intricate logic, repo checks in their own gate
+**Priority:** P2 | **Tags:** testing
+**Updated:** 2026-09-26 15:34
+
+Closed 2026-09-26. Found while reviewing `TASK-172`: a green spec over a two-condition rule hid a
+real bug that only a component test through the route exposed.
+
+**Result:** specs 56 → 29 files (~6.3k → ~4.0k lines); component files 60 → 68; repo checks 6 files
+under the new `pnpm check`. `pnpm test` 1077 → 926 tests, `pnpm check` 50. Every deletion was
+preceded by breaking its rule in `src/` and watching a component test go red; where none did, the
+component test was written first.
+
+| Verdict | Files | Reason |
+| --- | --- | --- |
+| **Move → check** | `structure`, `taskplanner-pin`, `skill-generation` → `bundled-skills`, `orchestrate-assignment`, shipped-pipeline invariants, tier ladders | Repo drift, not product behaviour; `pnpm check` also runs the generator's `--check` directly |
+| **Rename → comp** | `run-database`, `database-timestamps` → `json-records-table`, `subprocess-lifetime`, `subprocess-timeout`, `skills` | Touch SQLite, disk or processes |
+| **Delete (covered)** | `run-repository`, `milestones`, `orchestration`, `pipelines`, `runs`, `usage`, `schedule-timing`, `api-errors`, `limit` | Each rule red in a component test (some newly written) |
+| **Delete (schema shape, group 3)** | `preferences`, `run-persistence`, `milestone-boundaries`, core `run-artifacts`, `closeout`, `schedules`, `run-events`, `run-schemas`; single tests in `milestone-plan`, `run-review`; enum twins in `settings.comp`, `runs.comp`, `engine-models.comp` | Tests Zod; policies kept in `boundary-validation.comp`, migrations moved to `settings.comp` / `persistence.comp` |
+| **Delete (constant / derived, groups 1–2)** | `run-status`; single tests in `engines`, `runs`, `stage-resume`, `markdown-renderers` | Restate a constant or a list the compiler already holds |
+| **Keep** | scheduler `recurrence`; core `engines`; server `deployment-rules`, `engine-cli-config`, `engine-cli-help`, `engine-limit`, `engine-protocols`, `permission-plan`, `markdown-renderers`, `milestone-plan`, `orchestrator-decision`, `run-review`, `team-composition`, `persona-notes`, `product-preview`, `project-domain`, `reveal-folder`, `run-changes`, `run/closeout`, `stage-context`, `stage-resume`; ui `orchestration`, `orchestration-tiers`, `route`, `run-events`, `run-list`, `run-thread`, `run-utils`, `transcript` | Parsers, reducers, time zones, platform branches |
+
+**Rules no component test caught, now proven through a route or a render:** retired models become
+Auto on the way in and on read; a pre-tier settings file adopts its engine's default and a stored
+tier wins; a run saved before log activities still loads; a stored run in an unread shape is
+skipped; an undeclared-finding follow-up is not filed; a milestone feature must link or draft a
+task, and feature and draft ids are each unique; Start/Finalize guards; escalate_to_user parks the
+Orchestrator; a gate on the Orchestrator's own pipeline is ignored; the time budget is in minutes;
+spend formatting and no confident $0.00; failure messages; countdown formatting and clamping; no
+"Invalid Date" in the limit notification.
+
+**Found along the way:** `milestoneFindings`, `isRetiredPipeline` and `RETIRED_PIPELINE_IDS` were
+dead code (removed); the duplicate-feature-ids test passed for the wrong reason (fixed); legacy
+model aliases are applied twice on read (spun off as its own task).
+
+---
 ## TASK-172: A task worked unattended never leaves Next, so the next episode can pick it up again
 **Priority:** P1 | **Tags:** server, core, milestone-i
 **Updated:** 2026-09-26 08:16

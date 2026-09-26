@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { RunState } from "@isotopy/core";
+import { JsonRecordsTable, RUNS_TABLE } from "../../src/db/json-records-table.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { RunRepository } from "../../src/repository/run-repository.ts";
 import {
@@ -83,6 +84,56 @@ test("a needs-attention run remains terminal when the server comes back", async 
   expect(body.status).toBe("needs_attention");
   expect(stageOf(body, "test").status).toBe("failed");
   expect(stageOf(body, "test").verdict).toBe("FAIL");
+  await restarted.shutdown();
+});
+
+test("a run saved before log entries carried an activity still loads", async () => {
+  // Arrange — snapshots once stored their logs, and those entries had no activity field.
+  const { home } = ctx;
+  const runId = "preactivity1";
+  await seedHomeRun(home, {
+    id: runId,
+    number: 3,
+    projectId: HOME_PROJECT_ID,
+    pipelineId: "solo",
+    pipelineName: "Solo",
+    status: "completed",
+    task: "comp pre-activity log",
+    stages: [
+      {
+        id: "solo",
+        label: "Developer",
+        status: "passed",
+        logs: [{ ts: new Date().toISOString(), level: "run", message: "▶ Read src/index.ts" }],
+      },
+    ],
+    messages: [],
+    createdAt: new Date().toISOString(),
+  });
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const { status, body } = await get<RunState>(restarted.app, `/runs/${runId}`);
+  expect(status).toBe(200);
+  expect(body.status).toBe("completed");
+  await restarted.shutdown();
+});
+
+test("a stored run in a shape Isotopy no longer reads is skipped, and the others still load", async () => {
+  // Arrange — a record from before messages existed is dropped, not migrated.
+  const { home } = ctx;
+  await seedHomeRun(home, storedRun({ id: "current1" }));
+  const { messages: _dropped, ...withoutMessages } = storedRun({ id: "legacy1" });
+  await seedHomeRunRow(home, "legacy1", { version: 1, run: withoutMessages });
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  expect((await get<RunState>(restarted.app, "/runs/current1")).status).toBe(200);
+  expect((await get<RunState>(restarted.app, "/runs/legacy1")).status).toBe(404);
   await restarted.shutdown();
 });
 
@@ -225,4 +276,29 @@ async function seedHomeRun(home: string, run: RunState): Promise<void> {
   const repository = new RunRepository(projectPath, databases.for(projectPath));
   await repository.writeState(run.id, { version: 1, run });
   await databases.settleAll();
+}
+
+async function seedHomeRunRow(home: string, runId: string, record: unknown): Promise<void> {
+  const databases = new ProjectDatabases();
+  const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
+  await new JsonRecordsTable(databases.for(projectPath), RUNS_TABLE).upsert(
+    runId,
+    JSON.stringify(record),
+  );
+  await databases.settleAll();
+}
+
+function storedRun(overrides: Partial<RunState> = {}): RunState {
+  return {
+    id: "stored1",
+    number: 1,
+    projectId: HOME_PROJECT_ID,
+    pipelineId: "solo",
+    pipelineName: "Solo",
+    status: "completed",
+    stages: [{ id: "solo", label: "Developer", status: "passed", logs: [] }],
+    messages: [],
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
 }

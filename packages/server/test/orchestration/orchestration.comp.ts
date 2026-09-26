@@ -154,6 +154,24 @@ test("an ask_user decision parks the Orchestrator on the user instead of finishi
   ctx.engine.verify();
 });
 
+test("an escalate_to_user decision parks the Orchestrator on the user just as ask_user does", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator escalation", persona: /# Role: Orchestrator/ })
+    .reports(fenced({ action: "escalate_to_user", question: "Which database?", originStageId: "orchestrate" }));
+
+  // Act
+  const run = await startOrchestration();
+
+  // Assert
+  await waitForStageStatus(ctx.app, run.id, "orchestrate", "asking");
+  const { body: parked } = await get<Orchestration>(
+    ctx.app,
+    `/orchestrations/${run.orchestrationId}`,
+  );
+  expect(parked.status).toBe("awaiting_user");
+});
+
 test("answering the parked question resumes the same session and records both turns", async () => {
   // Anticipate — the answer arrives on the session the question was asked from.
   ctx.engine

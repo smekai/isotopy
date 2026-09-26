@@ -67,8 +67,8 @@ already exists in `DONE.md`, a decision entry or a commit message, link to it.
 
 ## 4. Before opening it
 
-- Every gate green: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
-  `pnpm gen:skills` (no resulting diff), `pnpm e2e`.
+- Every gate green: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm check`,
+  `pnpm build`, `pnpm gen:skills` (no resulting diff), `pnpm e2e`.
 - The version sequence is complete: every commit bumps the shared patch across
   the root and all `packages/*`, so a three-commit branch carries three numbers.
   See **Versioning** in `AGENTS.md`.

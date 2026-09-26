@@ -202,6 +202,24 @@ test("cleanup deletes inside the run directory and refuses to escape it", async 
   expect(await readFile(path.join(project.root, "user-work.txt"), "utf8")).toBe("preserve");
 });
 
+test("a follow-up naming a finding the report never declared is not filed on the board", async () => {
+  // Arrange
+  const project = await makeProject();
+  const run = makeCloseoutRun();
+  await writeTaskBoard(project);
+  const report = {
+    ...PARTIAL_DELIVERY,
+    tasks: [{ ...PARTIAL_DELIVERY.tasks[0], findingId: "never-declared" }],
+  };
+
+  // Act
+  const { record } = await applyCloseoutReport(project, run, closeoutOutput(report, "FAIL"));
+
+  // Assert
+  expect(record.createdTasks).toEqual([]);
+  expect(record.validationErrors.join("\n")).toContain("never-declared");
+});
+
 test("closing the same run out twice does not file the follow-up task again", async () => {
   // Arrange — a run already closed out once.
   const project = await makeProject();

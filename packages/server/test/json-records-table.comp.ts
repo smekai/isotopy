@@ -12,13 +12,14 @@ import type { ProjectPath } from "../src/paths.ts";
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const LEGACY_TIMESTAMP = "2026-07-01T10:20:30.456Z";
+const RUN_TIMESTAMPS = "SELECT created_at, updated_at FROM runs WHERE run_id = 'run-1'";
 
 let dir: string;
 let projectPath: ProjectPath;
 let database: Database | undefined;
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-timestamps-"));
+  dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-json-records-"));
   projectPath = { id: "p", root: dir, dataDir: dir };
 });
 
@@ -32,74 +33,74 @@ afterEach(async () => {
   });
 });
 
-function createTables(): {
-  runs: JsonRecordsTable;
-  milestones: JsonRecordsTable;
-} {
-  database = new Database(projectPath);
-  return {
-    runs: new JsonRecordsTable(database, RUNS_TABLE),
-    milestones: new JsonRecordsTable(database, MILESTONES_TABLE),
-  };
-}
-
 test("SQLite supplies UTC creation and update timestamps on insert", async () => {
+  // Arrange
   const { runs, milestones } = createTables();
 
+  // Act
   await runs.upsert("run-1", '{"version":1}');
   await milestones.upsert("milestone-1", '{"id":"milestone-1"}');
 
+  // Assert
   const connection = await database?.connection();
-  const run = connection
-    ?.prepare(
-      "SELECT created_at, updated_at FROM runs WHERE run_id = 'run-1'",
-    )
-    .get();
+  const run = connection?.prepare(RUN_TIMESTAMPS).get();
   const milestone = connection
     ?.prepare(
       "SELECT created_at, updated_at FROM milestones WHERE milestone_id = 'milestone-1'",
     )
     .get();
-
   expect(run?.created_at).toMatch(ISO_UTC);
   expect(run?.updated_at).toBe(run?.created_at);
   expect(milestone?.created_at).toMatch(ISO_UTC);
   expect(milestone?.updated_at).toBe(milestone?.created_at);
 });
 
-test("updates advance updated_at while reads leave both timestamps unchanged", async () => {
+test("reading records leaves both timestamps unchanged", async () => {
+  // Arrange
   const { runs } = createTables();
   await runs.upsert("run-1", '{"version":1}');
   const connection = await database?.connection();
-  connection
-    ?.prepare("UPDATE runs SET updated_at = ? WHERE run_id = ?")
-    .run(LEGACY_TIMESTAMP, "run-1");
-  const beforeRead = connection
-    ?.prepare(
-      "SELECT created_at, updated_at FROM runs WHERE run_id = 'run-1'",
-    )
-    .get();
+  connection?.prepare("UPDATE runs SET updated_at = ? WHERE run_id = ?").run(LEGACY_TIMESTAMP, "run-1");
+  const beforeRead = connection?.prepare(RUN_TIMESTAMPS).get();
 
+  // Act
   await runs.all();
-  const afterRead = connection
-    ?.prepare(
-      "SELECT created_at, updated_at FROM runs WHERE run_id = 'run-1'",
-    )
-    .get();
-  await runs.upsert("run-1", '{"version":2}');
-  const afterUpdate = connection
-    ?.prepare(
-      "SELECT created_at, updated_at FROM runs WHERE run_id = 'run-1'",
-    )
-    .get();
 
-  expect(afterRead).toEqual(beforeRead);
-  expect(afterUpdate?.created_at).toBe(beforeRead?.created_at);
+  // Assert
+  expect(connection?.prepare(RUN_TIMESTAMPS).get()).toEqual(beforeRead);
+});
+
+test("an update advances updated_at and keeps created_at", async () => {
+  // Arrange
+  const { runs } = createTables();
+  await runs.upsert("run-1", '{"version":1}');
+  const connection = await database?.connection();
+  connection?.prepare("UPDATE runs SET updated_at = ? WHERE run_id = ?").run(LEGACY_TIMESTAMP, "run-1");
+  const beforeUpdate = connection?.prepare(RUN_TIMESTAMPS).get();
+
+  // Act
+  await runs.upsert("run-1", '{"version":2}');
+
+  // Assert
+  const afterUpdate = connection?.prepare(RUN_TIMESTAMPS).get();
+  expect(afterUpdate?.created_at).toBe(beforeUpdate?.created_at);
   expect(afterUpdate?.updated_at).toMatch(ISO_UTC);
   expect(afterUpdate?.updated_at).not.toBe(LEGACY_TIMESTAMP);
 });
 
+test("a record that is not JSON is refused by the table itself", async () => {
+  // Arrange
+  const { milestones } = createTables();
+
+  // Act
+  const written = milestones.upsert("milestone", "not JSON");
+
+  // Assert
+  await expect(written).rejects.toThrow();
+});
+
 test("legacy run and milestone tables migrate transactionally", async () => {
+  // Arrange
   const { DatabaseSync } = await import("node:sqlite");
   const legacy = new DatabaseSync(path.join(dir, "runs.db"));
   legacy.exec(`
@@ -120,19 +121,19 @@ VALUES('milestone-1', '{"id":"milestone-1"}', '${LEGACY_TIMESTAMP}');
 `);
   legacy.close();
 
+  // Act
   createTables();
+
+  // Assert
   const connection = await database?.connection();
   const run = connection
-    ?.prepare(
-      "SELECT data, created_at, updated_at FROM runs WHERE run_id = 'run-1'",
-    )
+    ?.prepare("SELECT data, created_at, updated_at FROM runs WHERE run_id = 'run-1'")
     .get();
   const milestone = connection
     ?.prepare(
       "SELECT data, created_at, updated_at FROM milestones WHERE milestone_id = 'milestone-1'",
     )
     .get();
-
   expect(run).toMatchObject({
     data: '{"version":1}',
     created_at: LEGACY_TIMESTAMP,
@@ -150,6 +151,7 @@ VALUES('milestone-1', '{"id":"milestone-1"}', '${LEGACY_TIMESTAMP}');
 // unified schema must not fail on it: the migration runs on every connection()
 // until it succeeds, so one bad row would take the whole project database down.
 test("a legacy row that is not JSON is dropped rather than failing the migration", async () => {
+  // Arrange
   const { DatabaseSync } = await import("node:sqlite");
   const legacy = new DatabaseSync(path.join(dir, "runs.db"));
   legacy.exec(`
@@ -166,9 +168,11 @@ VALUES('run-corrupt', 'this is not json', '${LEGACY_TIMESTAMP}');
   legacy.close();
   const warnings = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
+  // Act
   createTables();
-  const connection = await database?.connection();
 
+  // Assert
+  const connection = await database?.connection();
   const rows = connection?.prepare("SELECT run_id FROM runs ORDER BY run_id").all();
   expect(rows).toEqual([{ run_id: "run-ok" }]);
   expect(warnings).toHaveBeenCalledWith(
@@ -176,3 +180,14 @@ VALUES('run-corrupt', 'this is not json', '${LEGACY_TIMESTAMP}');
   );
   warnings.mockRestore();
 });
+
+function createTables(): {
+  runs: JsonRecordsTable;
+  milestones: JsonRecordsTable;
+} {
+  database = new Database(projectPath);
+  return {
+    runs: new JsonRecordsTable(database, RUNS_TABLE),
+    milestones: new JsonRecordsTable(database, MILESTONES_TABLE),
+  };
+}

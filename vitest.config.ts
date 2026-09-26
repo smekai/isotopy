@@ -22,6 +22,8 @@ const NODE_TEST_TIMEOUT_MS = 15_000;
 //   *.comp.tsx — the same, for code that needs to render (React hooks and
 //                components); jsdom rather than node, hence its own project
 //   *.spec.ts  — unit specs: complicated pure functions
+//   *.check.ts — repo checks (structure, pins, bundled content): `pnpm check`,
+//                never `pnpm test`, so a red suite means the product broke
 // Playwright keeps its own directory (packages/ui/e2e) and its own runner,
 // so its *.spec.ts files are never matched here.
 export default defineConfig({
@@ -43,6 +45,16 @@ export default defineConfig({
           name: "ui",
           environment: "jsdom",
           include: ["packages/ui/test/**/*.comp.tsx"],
+          exclude: EXCLUDE,
+        },
+      },
+      {
+        resolve: RESOLVE,
+        test: {
+          name: "checks",
+          environment: "node",
+          testTimeout: NODE_TEST_TIMEOUT_MS,
+          include: ["packages/*/test/**/*.check.ts"],
           exclude: EXCLUDE,
         },
       },
