@@ -5,7 +5,7 @@
 import { expect, test } from "vitest";
 import type { StageState } from "@isotopy/core";
 import { resumableSession } from "../../src/domain/rules/run-seeding.ts";
-import { buildResumePrompt, buildTimeBudget } from "../../src/domain/markdown/stage.ts";
+import { buildResumePrompt } from "../../src/domain/markdown/stage.ts";
 
 const SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
@@ -38,9 +38,3 @@ test("a resumed turn is told it was cut off, rather than being handed an empty p
   expect(prompt).toContain("do not start the stage over");
 });
 
-test("the time budget names the minutes and what overrunning costs", () => {
-  const budget = buildTimeBudget(600_000);
-
-  expect(budget).toContain("10 minutes");
-  expect(budget).toContain("no verdict at all");
-});

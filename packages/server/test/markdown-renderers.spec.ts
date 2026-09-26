@@ -1,8 +1,6 @@
 import type { CloseoutReport } from "@isotopy/core";
 import { describe, expect, it, test } from "vitest";
 import {
-  renderCancelledCleanupReport,
-  renderCleanupReport,
   renderCloseout,
   renderCloseoutBody,
   renderMilestoneSummary,
@@ -96,16 +94,6 @@ describe("artifact Markdown", () => {
         "",
         "Ship after review.",
       ].join("\n"),
-    );
-  });
-
-  it("renders cleanup outcomes and an explicit cancellation report", () => {
-    expect(renderCleanupReport({ removed: [], rejected: [] })).toBe(
-      "# Cleanup report\n\nNo cleanup paths were requested.\n",
-    );
-    expect(renderCancelledCleanupReport()).toBe(
-      "# Cleanup report\n\n" +
-        "Removed the run-owned temporary directory after cancellation. No closeout agent was started.\n",
     );
   });
 

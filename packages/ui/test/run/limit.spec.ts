@@ -2,7 +2,6 @@
 // unattended user when the run comes back, and a wrong one reads as "stuck".
 import { describe, expect, test } from "vitest";
 import { formatCountdown, formatResetAt, remainingMs } from "../../src/limit";
-import { LIMIT_COPY } from "../../src/limit-copy";
 import { limit } from "../support/run-fixtures";
 
 const SECOND = 1000;
@@ -47,17 +46,5 @@ describe("remainingMs", () => {
   test("a limit with no parsed reset has no countdown at all", () => {
     const now = Date.parse("2026-07-21T12:00:00.000Z");
     expect(remainingMs(limit({ resetAt: undefined }), now)).toBeUndefined();
-  });
-});
-
-describe("LIMIT_COPY.headline", () => {
-  test("names the harness that hit the wall", () => {
-    expect(LIMIT_COPY.headline(limit())).toBe("Claude Code hit its plan limit");
-  });
-
-  test("a repeat limit says so, so a mis-detection is visible rather than silent", () => {
-    expect(LIMIT_COPY.headline(limit({ attempt: 3 }))).toBe(
-      "Claude Code hit its plan limit again (3 times on this step)",
-    );
   });
 });

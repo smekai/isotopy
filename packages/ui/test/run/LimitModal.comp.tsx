@@ -48,6 +48,14 @@ test("a limit with no parsed reset time says so instead of showing a blank count
   expect(screen.getByText(LIMIT_COPY.noResetTime)).toBeTruthy();
 });
 
+test("a limit hit again on the same step says so and names the harness, so a mis-detection is visible", () => {
+  // Act
+  render(<LimitModal {...limitProps({ limit: limit({ engine: "codex", attempt: 3 }) })} />);
+
+  // Assert
+  expect(screen.getByText(/Codex hit its plan limit again \(3 times/)).toBeTruthy();
+});
+
 test("the raw harness line is shown so the parsed reset can be checked against it", () => {
   // Act
   render(<LimitModal {...limitProps({ limit: limit({ raw: RAW_LINE }) })} />);

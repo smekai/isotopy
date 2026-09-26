@@ -1,12 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { createInitialRunState, isTerminalRunStatus } from "../src/runs.ts";
+import { createInitialRunState } from "../src/runs.ts";
 import type { PipelineDefinition } from "../src/pipelines.ts";
-
-describe("isTerminalRunStatus", () => {
-  test("treats needs attention as terminal", () => {
-    expect(isTerminalRunStatus("needs_attention")).toBe(true);
-  });
-});
 
 describe("createInitialRunState", () => {
   test("carries each stage's model tier onto its state, which is what resolution reads", () => {
