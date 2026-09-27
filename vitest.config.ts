@@ -35,6 +35,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           testTimeout: NODE_TEST_TIMEOUT_MS,
+          globalSetup: ["packages/server/test/support/temp-root.ts"],
           include: ["packages/*/test/**/*.{comp,spec}.ts"],
           exclude: EXCLUDE,
         },

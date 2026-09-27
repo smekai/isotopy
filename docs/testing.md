@@ -448,10 +448,16 @@ understands: `try again in 20 seconds`.
 ## Cross-platform notes
 
 - Temp roots come from `os.tmpdir()` + `mkdtemp`, never a hardcoded `/tmp`.
-- `dispose()` shuts the orchestrator down (cancelling in-flight runs and
-  draining queued writes) **before** deleting the temp directory. On Windows a
-  rename still in flight makes `fs.rm` throw `EBUSY`; the delete also retries and
-  tolerates failure, since a stray temp directory is untidy, not a test failure.
+- A `globalSetup` (`test/support/temp-root.ts`) makes one temp root per run and
+  deletes it once at the end. `createTestApp` and `addTestProject` make their
+  folders under it (`inject("testTempRoot")`), and `dispose()` only shuts the
+  orchestrator down — cancelling in-flight runs and draining queued writes — so
+  nothing from one test still writes when the next starts. Deleting per test put
+  Windows `EBUSY` retries inside the hook timeout, and project folders were never
+  deleted at all.
+- The Windows CI job runs `pnpm test` on 2 workers. Its runner has 4 vCPUs and
+  runs a component test 20–25× slower than a developer machine; one worker less
+  keeps the tests off their 10 s hook and 15 s test limits when the runner stalls.
 - The component suite never reaches `engines/subprocess.ts`, so it has no
   platform-specific behaviour to diverge on.
 

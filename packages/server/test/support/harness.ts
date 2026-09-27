@@ -1,9 +1,8 @@
 // AAAAA forbids branching or inline logic in a test body, so every loop, poll
 // and retry in a component test lives here instead.
-import { assert, expect } from "vitest";
+import { assert, expect, inject } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
+import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import type { Hono } from "hono";
 import { PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
@@ -82,8 +81,8 @@ function killedProcess(): SubprocessResult {
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
   const engineId = options.engineId ?? "claude-code";
-  const home = await mkdtemp(path.join(os.tmpdir(), "isotopy-comp-"));
-  const userHome = await mkdtemp(path.join(os.tmpdir(), "isotopy-user-"));
+  const home = await mkdtemp(path.join(inject("testTempRoot"), "comp-"));
+  const userHome = await mkdtemp(path.join(inject("testTempRoot"), "user-"));
   process.env.ISOTOPY_HOME = home;
   process.env.ISOTOPY_USER_HOME = userHome;
 
@@ -137,24 +136,15 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     home,
     userHome,
     dispose: async () => {
-      // Order matters: stop the orchestrator (which cancels in-flight runs and
-      // waits for queued writes) before removing the directory those writes
-      // target, or Windows fails the delete with EBUSY.
+      // Stop the orchestrator (which cancels in-flight runs and waits for queued
+      // writes) so nothing from this test still writes once the next one starts.
+      // The folders stay: temp-root.ts deletes them all once the run ends.
       await product.shutdown();
       await orchestrator.shutdown();
       await databases.settleAll();
       resetEngineAdapters();
       delete process.env.ISOTOPY_HOME;
       delete process.env.ISOTOPY_USER_HOME;
-      // maxRetries covers the Windows case where a handle is still closing.
-      // A temp directory that survives is untidy, never a test failure.
-      await Promise.all(
-        [home, userHome].map((dir) =>
-          rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(
-            () => undefined,
-          ),
-        ),
-      );
     },
   };
 }
@@ -226,7 +216,7 @@ export async function addTestProject(
   registry: ProjectRegistry,
   label: string,
 ): Promise<{ id: string; root: string; headers: Record<string, string> }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), `isotopy-${label}-`));
+  const root = await mkdtemp(path.join(inject("testTempRoot"), `${label}-`));
   const project = await registry.add(root);
   return { id: project.id, root, headers: { [PROJECT_HEADER]: project.id } };
 }

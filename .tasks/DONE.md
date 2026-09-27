@@ -1,5 +1,32 @@
 # Done
 
+## TASK-177: Windows CI runs the suite on fewer workers, and tests share one temp root deleted once
+**Priority:** P2 | **Tags:** testing, infra
+**Updated:** 2026-09-27 10:33
+
+Closed 2026-09-27. PR #77's first Windows CI run failed 12 tests in 4 files, all timeouts: the
+runner stalled for about 40 seconds, and component tests there already run 20–25× slower than
+locally (~2 s each against 10 s hook and 15 s test limits). A re-run of the same code passed in 173 s,
+so it was a runner stall, not a regression — but the margin is thin. The one non-timeout failure was a
+cascade: a timed-out test's run reached the next test's `FakeEngine` through the global engine registry.
+
+**Less parallelism.** The Windows CI job runs `pnpm test --maxWorkers=2` instead of vitest's default
+(cores − 1 = 3 on a 4-vCPU runner). macOS keeps the default. Locally the flag takes the suite from
+22 s to 71 s, because that machine loses 13 of 15 workers; the runner loses one of three.
+
+**Less teardown.** `test/support/temp-root.ts` is a vitest `globalSetup` that makes one temp root per run
+and deletes it once at the end. `createTestApp`, `addTestProject` and the one test that made its own
+project folder (`built-ins.comp`) create under it via `inject("testTempRoot")`; `dispose` no longer
+deletes two folders per test with EBUSY retries inside the hook timeout. Project folders were never
+deleted before — the developer machine had 9,118 `isotopy-*` entries in its temp folder.
+
+**Evidence:** `pnpm test` 926 passed, 2 skipped, and no `isotopy-tests-*` root left behind; `pnpm check`
+50 passed; lint, typecheck, build, gen:skills clean. `docs/testing.md` "Cross-platform notes" updated.
+
+**Not in scope:** moving temp to D: on the runner, the SQLite handle leak on a corrupt database (still
+leaves one `isotopy-db-*` folder per run), and injecting engine adapters instead of a global registry.
+
+---
 ## TASK-176: The suite proves behaviour: specs only for intricate logic, repo checks in their own gate
 **Priority:** P2 | **Tags:** testing
 **Updated:** 2026-09-26 15:34
