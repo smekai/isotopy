@@ -238,11 +238,3 @@ export function canFinalizeMilestone(milestone: Milestone): boolean {
     milestone.features.every((feature) => feature.status === "completed")
   );
 }
-
-export function milestoneFindings(milestone: Milestone): MilestoneFinding[] {
-  const findings = milestone.features.flatMap((feature) => feature.findings);
-  return [
-    ...findings.filter((finding) => finding.severity === "blocking"),
-    ...findings.filter((finding) => finding.severity !== "blocking"),
-  ];
-}

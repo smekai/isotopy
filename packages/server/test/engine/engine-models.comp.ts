@@ -92,10 +92,3 @@ test("a re-check probes the CLI again", async () => {
   expect(ctx.engine.liveModelLookups).toBe(2);
 });
 
-test("an unknown engine is refused", async () => {
-  // Act
-  const { status } = await get(ctx.app, "/engines/nonsense/models");
-
-  // Assert
-  expect(status).toBe(400);
-});

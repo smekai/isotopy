@@ -1,41 +1,5 @@
 # Backlog
 
-## TASK-176: A spec survives only where a component test cannot localise the failure
-**Priority:** P2 | **Tags:** testing
-**Updated:** 2026-09-26 08:16
-
-Found while reviewing `TASK-172`. Its spec over `sourceTasksToRelease` — a two-condition
-predicate — was green, yet neither guard had a component test. Proving each guard end to end is
-what exposed a real bug: the Orchestrator's run review writes a closeout that names no task, so a
-failed run's source task stayed In Progress forever. The spec could not see that; the route could.
-
-`docs/testing.md` already says component tests are primary and a spec earns its place only for
-intricate pure logic. The suite has drifted from that: **56 `*.spec.ts`** (core 11, scheduler 1,
-server 33, ui 11 — about 6.3k lines) against 60 component files.
-
-**For each spec, one verdict:**
-
-- **Keep** — intricate pure logic (a parser, a reducer, an ordering rule, a platform difference)
-  where a component test would not localise the failure. Name the bug it catches.
-- **Convert** — the rule is reachable through a route or a render. Write the component test, check
-  that it fails with the rule broken, then delete the spec.
-- **Delete** — asserts a constant, prose, or a one-line expression, or duplicates a component test.
-
-**Method.** Before deleting a spec, break the rule it covers and confirm a component test goes red.
-A spec whose rule no component test catches is converted, not deleted.
-
-`packages/core` has only specs, because it is pure and imported by the UI. Its specs may
-legitimately stay, but each still has to name its bug.
-
-**Evidence:** a verdict table (file → keep / convert / delete, one-line reason) in the Done summary;
-the spec and component counts before and after; the full gate set. One PR per package keeps each
-review small.
-
-**Not in scope:** restructuring component tests beyond what a conversion needs.
-
-Cross-platform: n/a — test code only, no new platform surface.
-
----
 ## TASK-175: Isotopy raises its own events, and a long-running workflow awaits them
 **Priority:** P2 | **Tags:** server, core, engine
 **Updated:** 2026-09-24 17:07

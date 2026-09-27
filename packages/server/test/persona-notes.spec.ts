@@ -69,10 +69,6 @@ test("a hand-edited notes file keeps only its bullets, so prose around them is i
   expect(parsePersonaNotes(edited)).toEqual(["A real fact"]);
 });
 
-test("a missing notes file reads as no notes rather than throwing", () => {
-  expect(parsePersonaNotes(undefined)).toEqual([]);
-});
-
 // The block is a message to Isotopy, not to the next box. Reading it and leaving
 // it in the report would replay one role's private notes to every role after it.
 test("the block is taken out of the report it arrived in", () => {

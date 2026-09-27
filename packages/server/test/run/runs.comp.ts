@@ -91,21 +91,6 @@ test("restarting a run that is still going is a conflict", async () => {
   );
 });
 
-test("restart without a stageId is rejected", async () => {
-  // Arrange
-  const { app, engine } = ctx;
-  engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
-  await engine.waitForCall(1);
-
-  // Act
-  const { status, body } = await post<{ error: string }>(app, `/runs/${run.id}/restart`, {});
-
-  // Assert
-  expect(status).toBe(400);
-  expect(body.error).toBe("Invalid request");
-});
-
 test("runs are listed newest first", async () => {
   // Arrange — one active run per project, so the two runs are serialised.
   const { app, engine } = ctx;

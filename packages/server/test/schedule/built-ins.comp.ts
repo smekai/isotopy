@@ -2,10 +2,9 @@
 // reason it is safe to ship it — a fresh install and an upgraded project both
 // behave exactly as they did before it existed. An unattended loop that turns
 // itself on is the failure this file exists to prevent.
-import { afterEach, assert, beforeEach, expect, test } from "vitest";
+import { afterEach, assert, beforeEach, expect, inject, test } from "vitest";
 import type { ScheduleView, SettingsView } from "@isotopy/core";
 import { BUILT_IN_SCHEDULES } from "../../src/domain/rules/built-in-schedules.ts";
-import os from "node:os";
 import path from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { vi } from "vitest";
@@ -153,7 +152,7 @@ test("a deleted built-in returns on the next load, because every project has one
 test("a project added while the server is running gets its built-ins straight away", async () => {
   // Arrange — POST /projects previously only touched the registry, so a project
   // created at runtime had no poller until the next restart.
-  const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-added-"));
+  const root = await mkdtemp(path.join(inject("testTempRoot"), "added-"));
 
   // Act
   const created = await post<{ project: { id: string } }>(ctx.app, "/projects", { root });

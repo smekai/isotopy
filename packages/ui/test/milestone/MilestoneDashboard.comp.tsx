@@ -65,6 +65,48 @@ test("Start next is dead once a feature is already running", () => {
   expect(control("milestone-start-next").disabled).toBe(true);
 });
 
+test("Start next is dead when no feature is ready to start", () => {
+  // Act
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "completed"), feature("f2", "needs_attention")]),
+      })}
+    />,
+  );
+
+  // Assert
+  expect(control("milestone-start-next").disabled).toBe(true);
+});
+
+test("Start next is dead on a milestone that is no longer active", () => {
+  // Act
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "ready")], { status: "completed" }),
+      })}
+    />,
+  );
+
+  // Assert
+  expect(control("milestone-start-next").disabled).toBe(true);
+});
+
+test("Finalize is dead on a milestone already finalized", () => {
+  // Act
+  render(
+    <MilestoneDashboard
+      {...dashboardProps({
+        milestone: milestone([feature("f1", "completed")], { status: "completed" }),
+      })}
+    />,
+  );
+
+  // Assert
+  expect(control("milestone-finalize").disabled).toBe(true);
+});
+
 test("Finalize stays dead while any feature is unfinished", () => {
   // Act
   render(

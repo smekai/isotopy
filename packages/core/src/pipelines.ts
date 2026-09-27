@@ -231,8 +231,6 @@ export const DEMO_PIPELINES: PipelineDefinition[] = [
   ORCHESTRATION_PIPELINE,
 ];
 
-export const RETIRED_PIPELINE_IDS: string[] = ["one-box", "dev-test", "gated-dev-test"];
-
 export function flattenPipelineStages(
   pipeline: PipelineDefinition,
 ): StageDefinition[] {
@@ -275,10 +273,6 @@ export function applyGatePreferences(
 }
 
 export const DEFAULT_PIPELINE_ID: string = PM_DEV_TEST_PIPELINE.id;
-
-export function isRetiredPipeline(pipelineId: string): boolean {
-  return RETIRED_PIPELINE_IDS.includes(pipelineId);
-}
 
 export function pipelineUsesEngine(pipeline: PipelineDefinition): boolean {
   return flattenPipelineStages(pipeline).some((stage) => stage.skill !== undefined);

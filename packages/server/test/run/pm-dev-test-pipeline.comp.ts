@@ -19,7 +19,9 @@ import {
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
+import { config } from "../../src/config.ts";
 
+const MS_PER_MINUTE = 60_000;
 const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
 
@@ -98,6 +100,21 @@ test("each prompt quotes every upstream report under a handoff heading", async (
   // with the user's request while its stable identity stays in the persona.
   expect(engine.callAt(0).prompt).toContain("# Assignment: Plan a feature");
   expect(engine.callAt(0).prompt).toContain(`## Task\n\n${TASK}`);
+});
+
+test("a box is told its time budget in minutes, the unit it can plan with", async () => {
+  // Arrange
+  const { app, engine } = ctx;
+
+  // Anticipate
+  engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
+
+  // Act
+  await startRun(app, PIPELINE);
+
+  // Assert
+  const call = await engine.waitForCall(1);
+  expect(call.prompt).toContain(`about ${config.engineTimeoutMs / MS_PER_MINUTE} minutes`);
 });
 
 test("each box's output is stored per stage and written as its own handoff.md", async () => {

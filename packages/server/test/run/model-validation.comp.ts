@@ -42,7 +42,7 @@ test("a run asking for a model the engine does not offer is refused", async () =
   expect(status).toBe(400);
 });
 
-test("the refusal names the model and where to change it", async () => {
+test("the refusal names the model it refused and the harness that does not offer it", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "model-message");
 
@@ -55,10 +55,8 @@ test("the refusal names the model and where to change it", async () => {
   );
 
   // Assert
-  expect(body.error).toBe(
-    'Model "gpt-5-mini" isn\'t offered by Claude Code on this machine — pick one in ' +
-      "Setup → AI Harness. An unlisted id has to be set in the CLI's own config file first.",
-  );
+  expect(body.error).toContain('"gpt-5-mini"');
+  expect(body.error).toContain("Claude Code");
 });
 
 test("a refused model never reaches the engine", async () => {

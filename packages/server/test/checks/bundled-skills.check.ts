@@ -1,14 +1,10 @@
-import { spawnSync } from "node:child_process";
-import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
-import { REPO_ROOT } from "../src/paths.ts";
 import {
   loadBundledPersona,
   loadBundledStepTask,
-} from "../src/services/skills.ts";
+} from "../../src/services/skills.ts";
 
-const GENERATOR = path.join(REPO_ROOT, "scripts", "generate-skills.mjs");
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
 const PROTOCOL_ASSIGNMENTS = [
   ["closeout-feature", "isotopy-closeout"],
@@ -20,15 +16,7 @@ const PROTOCOL_ASSIGNMENTS = [
   ["review-run", "isotopy-orchestrator-decision"],
 ] as const;
 
-describe("skill generation", () => {
-  test("committed outputs are in sync with their sources (gen:skills --check)", () => {
-    const result = spawnSync(process.execPath, [GENERATOR, "--check"], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-    });
-    expect(result.status, result.stderr || result.stdout).toBe(0);
-  });
-
+describe("bundled skills", () => {
   test("every persona a shipped pipeline references is bundled", async () => {
     const referenced = STAGES.map((stage) => stage.skill).filter((id) => id !== undefined);
 

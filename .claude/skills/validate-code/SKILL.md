@@ -1,6 +1,6 @@
 ---
 name: validate-code
-description: Validate a change against this repo's architecture standard before calling it done — the A1–A9 review pass (comments, layering, seams, named types), the automated gates (lint, typecheck, test, build, e2e, gen:skills), and where "why" belongs. Load after writing or refactoring code here, and when reviewing a diff.
+description: Validate a change against this repo's architecture standard before calling it done — the A1–A9 review pass (comments, layering, seams, named types), the automated gates (lint, typecheck, test, check, build, e2e, gen:skills), and where "why" belongs. Load after writing or refactoring code here, and when reviewing a diff.
 ---
 
 # Validating a change
@@ -20,7 +20,7 @@ should have been a rename.
 From the repo root, shell-neutral:
 
 ```
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm build
 ```
 
 Then, conditionally:

@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { REPO_ROOT } from "../src/paths.ts";
+import { REPO_ROOT } from "../../src/paths.ts";
 
 const PACKAGE = "@smekai/taskplanner";
 

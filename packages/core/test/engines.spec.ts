@@ -1,10 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  CAPABILITY_SUPPORTS,
-  ENGINE_CAPABILITIES,
-  ENGINE_IDS,
-  MODEL_TIERS,
-  bundledRosterFor,
   capabilityReachable,
   engineCapability,
   mergeModelLayers,
@@ -16,7 +11,6 @@ import type {
   EngineModelOption,
   EngineModelRoster,
   ModelOptionDraft,
-  ModelTier,
   StaticModelRoster,
   TierCandidate,
 } from "../src/engines.ts";
@@ -141,14 +135,6 @@ describe("resolveTier", () => {
 });
 
 describe("the capability catalog", () => {
-  test.each(ENGINE_IDS)("%s answers every capability, so a new one cannot be forgotten", (engineId) => {
-    const answered = ENGINE_CAPABILITIES.filter(
-      (capability) => CAPABILITY_SUPPORTS.includes(engineCapability(engineId, capability)),
-    );
-
-    expect(answered).toEqual([...ENGINE_CAPABILITIES]);
-  });
-
   test("a POSIX-only capability is reachable there and not on Windows", () => {
     // Cursor exits 1 on Windows: "Sandbox requires macOS or Linux."
     expect(engineCapability("cursor", "acceptEditsMode")).toBe("posixOnly");
@@ -159,36 +145,4 @@ describe("the capability catalog", () => {
   test("a probed capability is not claimed until something has actually asked the CLI", () => {
     expect(capabilityReachable("probed", true)).toBe(false);
   });
-
-  test("Cursor declares the cost it cannot report, rather than showing a confident zero", () => {
-    expect(engineCapability("cursor", "costReporting")).toBe("unsupported");
-    expect(engineCapability("claude-code", "costReporting")).toBe("supported");
-  });
-});
-
-describe("the tier ladders as data", () => {
-  test.each(ENGINE_IDS)(
-    "%s separates Economy from Fast, so the cheapest preset is a real choice and not a second name for Fast",
-    (engineId) => {
-      const roster = bundledRosterFor(engineId);
-
-      const rung = (tier: ModelTier) => {
-        const { model, effort } = resolveTier(engineId, tier, roster);
-        return model + " " + (effort ?? "");
-      };
-
-      expect(rung("economy")).not.toBe(rung("fast"));
-    },
-  );
-
-  test.each(ENGINE_IDS)(
-    "%s resolves every preset from the bundled roster alone, so a harness that cannot list models never degrades",
-    (engineId) => {
-      const degraded = MODEL_TIERS.filter(
-        (tier) => resolveTier(engineId, tier, bundledRosterFor(engineId)).degraded,
-      );
-
-      expect(degraded).toEqual([]);
-    },
-  );
 });

@@ -213,27 +213,27 @@ test("a feature already in progress cannot be started a second time", async () =
   ctx.engine.verify();
 });
 
+const EDITOR_DRAFT = {
+  id: "editor-api",
+  title: "Add the editor endpoint",
+  description: "Accept an edited proposal.",
+  priority: "P1",
+  tags: ["server"],
+};
+
+const EDITOR_FEATURE = {
+  id: "editor",
+  title: "Proposal editor",
+  description: "Edit a draft proposal before approving it",
+  acceptanceCriteria: ["The proposal is editable"],
+  existingTaskIds: [],
+  taskDrafts: [EDITOR_DRAFT],
+};
+
 const DRAFT_PLAN = {
   name: "Milestone E",
   goal: "Ship the editor",
-  features: [
-    {
-      id: "editor",
-      title: "Proposal editor",
-      description: "Edit a draft proposal before approving it",
-      acceptanceCriteria: ["The proposal is editable"],
-      existingTaskIds: [],
-      taskDrafts: [
-        {
-          id: "editor-api",
-          title: "Add the editor endpoint",
-          description: "Accept an edited proposal.",
-          priority: "P1",
-          tags: ["server"],
-        },
-      ],
-    },
-  ],
+  features: [EDITOR_FEATURE],
 };
 
 
@@ -264,14 +264,48 @@ test("a proposal with duplicate feature ids is refused with a path-aware issue",
     issues: { path: (string | number)[]; message: string }[];
   }>(ctx.app, `/milestones/${milestone.id}/proposal`, {
     ...DRAFT_PLAN,
-    features: [DRAFT_PLAN.features[0], DRAFT_PLAN.features[0]],
+    features: [EDITOR_FEATURE, { ...EDITOR_FEATURE, taskDrafts: [{ ...EDITOR_DRAFT, id: "editor-ui" }] }],
   });
 
   // Assert
   expect(status).toBe(400);
   expect(body.error).toBe("Invalid request");
   expect(body.issues[0]?.path).toEqual(["features"]);
-  expect(body.issues[0]?.message).toContain("unique");
+  expect(body.issues[0]?.message).toContain("Feature IDs");
+});
+
+test("a proposal that drafts the same task id under two features is refused", async () => {
+  // Arrange
+  const milestone = await draftMilestone();
+
+  // Act
+  const { status, body } = await patch<{
+    issues: { path: (string | number)[]; message: string }[];
+  }>(ctx.app, `/milestones/${milestone.id}/proposal`, {
+    ...DRAFT_PLAN,
+    features: [EDITOR_FEATURE, { ...EDITOR_FEATURE, id: "viewer" }],
+  });
+
+  // Assert
+  expect(status).toBe(400);
+  expect(body.issues[0]?.message).toContain("Draft task IDs");
+});
+
+test("a proposal whose feature neither links nor drafts a task is refused", async () => {
+  // Arrange
+  const milestone = await draftMilestone();
+
+  // Act
+  const { status, body } = await patch<{
+    issues: { path: (string | number)[] }[];
+  }>(ctx.app, `/milestones/${milestone.id}/proposal`, {
+    ...DRAFT_PLAN,
+    features: [{ ...EDITOR_FEATURE, existingTaskIds: [], taskDrafts: [] }],
+  });
+
+  // Assert
+  expect(status).toBe(400);
+  expect(body.issues[0]?.path).toEqual(["features", 0]);
 });
 
 test("a proposal whose feature has no acceptance criteria is refused", async () => {
@@ -283,7 +317,7 @@ test("a proposal whose feature has no acceptance criteria is refused", async () 
     issues: { path: (string | number)[] }[];
   }>(ctx.app, `/milestones/${milestone.id}/proposal`, {
     ...DRAFT_PLAN,
-    features: [{ ...DRAFT_PLAN.features[0], acceptanceCriteria: [] }],
+    features: [{ ...EDITOR_FEATURE, acceptanceCriteria: [] }],
   });
 
   // Assert
