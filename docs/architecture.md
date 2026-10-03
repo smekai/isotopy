@@ -241,8 +241,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
 
 - **What a catch may do (A2):** a failure has two possible readers. Whoever runs
   the server reads the **operator channel**: the `Logger` seam
-  (`server/src/utils/logger.ts`), handed to each service by the composition root,
-  with `ConsoleLogger` the only source file allowed to touch `console`. Whoever
+  (`server/src/utils/logger.ts`), backed by pino (`PinoLogger`), which writes
+  readable lines to the console and JSON lines to `<user .isotopy>/logs/server.log`.
+  The composition root builds one; every class that reports takes it as a
+  constructor parameter and keeps its own `logger.child("<ClassName>")`, so each
+  line names its component. A logger is never a default inside a dependencies
+  object. Whoever
   opens the app reads the **user-visible record**: the run log, a schedule's
   `lastOutcome`, an orchestration's `decisionError`. A `catch` reports to one or
   both. It stays silent **only when the fallback is the answer** — a missing
@@ -431,7 +435,7 @@ Recommended next steps, in rough priority order:
 1. ~~**CI gate**~~ — done. `.github/workflows/ci.yml` runs the gate on every PR, and `main` merges only on green; see [`decisions.md`](./decisions.md) (2026-08-04).
 2. **Formatter** — add Prettier (or Biome) with a pre-commit hook (`husky` + `lint-staged`) so style never reaches review.
 3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
-4. ~~**Structured logger**~~ — done in TASK-170 as the operator channel: one `Logger` seam with `info`, `warn` and `error`, and lint that keeps `console` out of source. Log files, rotation and a configurable `LOG_LEVEL` wait for a deployment story.
+4. ~~**Structured logger**~~ — done in TASK-170 as the operator channel: one `Logger` seam with `info`, `warn`, `error` and `child`, backed by pino with a console and a file sink, and lint that keeps `console` out of source. Rotation and a configurable `LOG_LEVEL` wait for a deployment story.
 5. ~~**Request validation**~~ — done. `packages/server/src/schemas/` owns every untrusted boundary and the parsed types flow into services; see [`decisions.md`](./decisions.md) (2026-07-29).
 6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because Isotopy intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).

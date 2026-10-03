@@ -11,7 +11,6 @@ import type { ProductResponseHeaders } from "../domain/rules/product-preview.ts"
 import { startSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessHandle, SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
-import { ConsoleLogger } from "../utils/console-logger.ts";
 import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { pollUntilHealthy } from "../utils/health-poll.ts";
@@ -44,7 +43,6 @@ export interface ProductProcessDependencies {
   headers: HeaderProbe;
   now: () => Date;
   sleep: (milliseconds: number) => Promise<void>;
-  logger: Logger;
 }
 
 interface RunningProduct {
@@ -82,7 +80,6 @@ function defaultDependencies(): ProductProcessDependencies {
     headers: readHeaders,
     now: () => new Date(),
     sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
-    logger: new ConsoleLogger(),
   };
 }
 
@@ -117,6 +114,7 @@ function notReadyMessage(ui: UiAutomation, stderrTail: string[]): string {
 
 export class ProductProcessService {
   private readonly deps: ProductProcessDependencies;
+  private readonly logger: Logger;
   private current?: RunningProduct;
   private pending?: Promise<void>;
   private abandonedError?: string;
@@ -124,8 +122,10 @@ export class ProductProcessService {
 
   constructor(
     private readonly automation: AutomationConfigStore,
+    logger: Logger,
     deps: Partial<ProductProcessDependencies> = {},
   ) {
+    this.logger = logger.child("ProductProcessService");
     this.deps = { ...defaultDependencies(), ...deps };
   }
 
@@ -267,7 +267,7 @@ export class ProductProcessService {
   }
 
   private watchFailed(current: RunningProduct, error: unknown): void {
-    this.deps.logger.error(`Watching the product of project ${current.project.id} failed`, {
+    this.logger.error(`Watching the product of project ${current.project.id} failed`, {
       error,
     });
     if (this.superseded(current)) {

@@ -53,8 +53,9 @@ export function createApp({
 }: AppDependencies): Hono {
   const app = new Hono();
 
+  const httpLogger = logger.child("http");
   app.onError((error, c) => {
-    logger.error(`Unhandled error on ${c.req.method} ${c.req.path}`, { error });
+    httpLogger.error(`Unhandled error on ${c.req.method} ${c.req.path}`, { error });
     return c.json({ error: messageOf(error) }, 500);
   });
 

@@ -103,12 +103,6 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/server/src/utils/console-logger.ts"],
-    rules: {
-      "no-console": "off",
-    },
-  },
-  {
     files: ["packages/*/test/**/*.{ts,tsx}", "packages/ui/e2e/**/*.ts"],
     ignores: ["**/support/**"],
     rules: {

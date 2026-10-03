@@ -32,6 +32,10 @@ export function userSettingsPath(): string {
   return path.join(userIsotopyDir(), "settings.json");
 }
 
+export function serverLogPath(): string {
+  return path.join(userIsotopyDir(), "logs", "server.log");
+}
+
 export function userSkillsDir(): string {
   return path.join(userIsotopyDir(), "skills");
 }

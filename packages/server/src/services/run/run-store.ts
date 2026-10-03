@@ -24,7 +24,7 @@ export class RunStore {
   constructor(registry: ProjectRegistry, databases: ProjectDatabases, logger: Logger) {
     this.registry = registry;
     this.databases = databases;
-    this.logger = logger;
+    this.logger = logger.child("RunStore");
   }
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
@@ -92,7 +92,7 @@ export class RunStore {
     return getOrCreate(
       this.repositories,
       projectPath.id,
-      () => new RunRepository(projectPath, this.databases.for(projectPath)),
+      () => new RunRepository(projectPath, this.databases.for(projectPath), this.logger),
     );
   }
 

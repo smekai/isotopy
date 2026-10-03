@@ -19,7 +19,11 @@ export class ProjectRegistry {
   private file: RegistryFile = { version: 1, activeProjectId: HOME_PROJECT_ID, projects: [] };
   private loaded = false;
 
-  constructor(private readonly logger: Logger) {}
+  private readonly logger: Logger;
+
+  constructor(logger: Logger) {
+    this.logger = logger.child("ProjectRegistry");
+  }
 
   private read(): RegistryFile {
     if (this.loaded) {

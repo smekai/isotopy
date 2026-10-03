@@ -15,9 +15,10 @@ export class JsonRecordRepository<T extends { id: string }> {
     spec: JsonTableSpec,
     private readonly schema: ZodType<T>,
     private readonly label: string,
+    logger: Logger,
   ) {
     this.table = new JsonRecordsTable(db, spec);
-    this.logger = db.logger;
+    this.logger = logger.child("JsonRecordRepository");
   }
 
   async write(record: T): Promise<void> {

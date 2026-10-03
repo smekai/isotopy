@@ -1,5 +1,4 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { DirectoryListing } from "../src/utils/directory-browser.ts";
@@ -29,22 +28,19 @@ test("a pasted folder path lists that folder's sub-folders under its resolved pa
   expect(body.entries).toContain("app");
 });
 
-test("a path pasted inside quotes, as Windows' Copy as path gives it, is the same folder", async () => {
+test("a typed path is listed under the folder it resolves to, not the text that was typed", async () => {
+  // Arrange
+  await mkdir(path.join(ctx.home, "app"), { recursive: true });
+
   // Act
-  const { status, body } = await get<DirectoryListing>(ctx.app, dirsOf(`"${ctx.home}"`));
+  const { status, body } = await get<DirectoryListing>(
+    ctx.app,
+    dirsOf(`  ${ctx.home}${path.sep}app${path.sep}..  `),
+  );
 
   // Assert
   expect(status).toBe(200);
   expect(body.path).toBe(path.resolve(ctx.home));
-});
-
-test("a path starting with ~ is under the user's home folder", async () => {
-  // Act
-  const { status, body } = await get<DirectoryListing>(ctx.app, dirsOf("~"));
-
-  // Assert
-  expect(status).toBe(200);
-  expect(body.path).toBe(path.resolve(os.homedir()));
 });
 
 test("a folder that does not exist is refused, naming the path it resolved to", async () => {

@@ -11,16 +11,17 @@ import { ProjectRegistry } from "./services/project-registry.ts";
 import { RunService } from "./services/run/run-service.ts";
 import { ScheduleService } from "./services/schedule-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
-import { ConsoleLogger } from "./utils/console-logger.ts";
+import { serverLogPath } from "./paths.ts";
+import { PinoLogger } from "./utils/pino-logger.ts";
 
-const logger = new ConsoleLogger();
+const logger = PinoLogger.toConsoleAndFile(serverLogPath());
 const registry = new ProjectRegistry(logger);
 const settings = new SettingsStore(logger);
 const rosters = new ModelRosterService(logger);
 const automation = new AutomationConfigStore();
 const deployment = new DeploymentRunner();
 const databases = new ProjectDatabases(logger);
-const product = new ProductProcessService(automation, { logger });
+const product = new ProductProcessService(automation, logger);
 const runs = new RunService(
   registry,
   settings,
@@ -31,7 +32,7 @@ const runs = new RunService(
   logger,
   product,
 );
-const orchestrations = new OrchestrationService(registry, runs, settings, databases);
+const orchestrations = new OrchestrationService(registry, runs, settings, databases, logger);
 const schedules = new ScheduleService(
   registry,
   runs,

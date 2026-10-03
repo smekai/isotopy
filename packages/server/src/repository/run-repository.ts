@@ -23,11 +23,14 @@ export class RunRepository {
   private readonly events: EventsTable;
   private readonly active: ActiveRunsTable;
   private readonly handoffs = new Set<Promise<void>>();
+  private readonly logger: Logger;
 
   constructor(
     private readonly path: ProjectPath,
     private readonly db: Database,
+    logger: Logger,
   ) {
+    this.logger = logger.child("RunRepository");
     this.runs = new JsonRecordsTable(this.db, RUNS_TABLE);
     this.events = new EventsTable(this.db);
     this.active = new ActiveRunsTable(this.db);
@@ -48,7 +51,7 @@ export class RunRepository {
       if (parsed.ok) {
         return [parsed.value];
       }
-      this.db.logger.warn(
+      this.logger.warn(
         `Skipping malformed event row for run ${runId}: ${formatValidationIssues(parsed.issues)}`,
       );
       return [];
@@ -64,7 +67,7 @@ export class RunRepository {
   }
 
   writeHandoff(runId: string, stageId: string, content: string): Promise<void> {
-    const op = persistHandoff(this.db.logger, this.path, runId, stageId, content);
+    const op = persistHandoff(this.logger, this.path, runId, stageId, content);
     this.handoffs.add(op);
     void op.finally(() => this.handoffs.delete(op));
     return op;
@@ -75,7 +78,7 @@ export class RunRepository {
     try {
       rows = await this.runs.all();
     } catch (error) {
-      this.db.logger.error(`Failed to read runs from ${this.db.describe()}`, { error });
+      this.logger.error(`Failed to read runs from ${this.db.describe()}`, { error });
       return [];
     }
     return rows.flatMap((data) => this.parseRunData(data));
@@ -86,7 +89,7 @@ export class RunRepository {
     if (parsed.ok) {
       return [parsed.value];
     }
-    this.db.logger.warn(
+    this.logger.warn(
       `Skipping malformed run row in the run database: ${formatValidationIssues(parsed.issues)}`,
     );
     return [];

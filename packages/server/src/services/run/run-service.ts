@@ -122,6 +122,7 @@ export class RunService implements RunProjection {
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
   private readonly changes: RunChangeCollector;
+  private readonly logger: Logger;
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
@@ -135,12 +136,13 @@ export class RunService implements RunProjection {
     private readonly automation: AutomationConfigStore,
     private readonly deployment: DeploymentRunner,
     databases: ProjectDatabases,
-    private readonly logger: Logger,
+    logger: Logger,
     private readonly product?: ProductProcessService,
   ) {
-    this.changes = new RunChangeCollector({ logger });
+    this.logger = logger.child("RunService");
+    this.changes = new RunChangeCollector(logger);
     this.store = new RunStore(registry, databases, logger);
-    this.milestones = new MilestoneService(registry, () => this, databases);
+    this.milestones = new MilestoneService(registry, () => this, databases, logger);
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
       new ReleaseConsumer(this.registry),

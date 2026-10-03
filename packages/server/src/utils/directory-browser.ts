@@ -35,15 +35,8 @@ function isFilesystemRoot(dir: string): boolean {
   return path.dirname(dir) === dir;
 }
 
-function typedPath(input: string | undefined): string {
-  const trimmed = (input ?? "").trim();
-  const unquoted = /^"(.*)"$/.test(trimmed) ? trimmed.slice(1, -1).trim() : trimmed;
-  const underHome = unquoted === "~" || unquoted.startsWith("~/") || unquoted.startsWith("~\\");
-  return underHome ? path.join(os.homedir(), unquoted.slice(1)) : unquoted;
-}
-
 export async function listDirectories(targetPath?: string): Promise<DirectoryListing> {
-  const typed = typedPath(targetPath);
+  const typed = (targetPath ?? "").trim();
   if (typed === "") {
     return listRoots();
   }

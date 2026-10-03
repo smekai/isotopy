@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { ArrowUp, Folder, HardDrive, X } from "lucide-react";
 import { fetchDirectories } from "../api";
@@ -182,6 +182,10 @@ interface ListTarget {
   entry?: string;
 }
 
+function fieldTextFor(listing: DirectoryListing | null): string {
+  return !listing || listing.isRootList ? "" : listing.path;
+}
+
 export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPickerProps) {
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -191,21 +195,32 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
     entry: undefined,
   });
   const [typed, setTyped] = useState(initialPath ?? "");
+  const typedNow = useRef(typed);
+  const listingNow = useRef(listing);
+
+  useEffect(() => {
+    typedNow.current = typed;
+    listingNow.current = listing;
+  });
 
   useEffect(() => {
     let cancelled = false;
+    const sentWith = typedNow.current;
     setLoading(true);
     fetchDirectories(target.path, target.entry)
       .then((result) => {
         if (!cancelled) {
           setListing(result);
           setError(null);
-          setTyped(result.isRootList ? "" : result.path);
+          if (typedNow.current === sentWith) {
+            setTyped(fieldTextFor(result));
+          }
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to read directory");
+          setTyped(fieldTextFor(listingNow.current));
         }
       })
       .finally(() => {

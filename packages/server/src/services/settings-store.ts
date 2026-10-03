@@ -32,7 +32,11 @@ import { readOptionalTextSync } from "../utils/read-optional-text.ts";
 export type { EngineConnectionUpdate } from "../schemas/request-schemas.ts";
 
 export class SettingsStore {
-  constructor(private readonly logger: Logger) {}
+  private readonly logger: Logger;
+
+  constructor(logger: Logger) {
+    this.logger = logger.child("SettingsStore");
+  }
 
   private read(): SettingsFile {
     const raw = readOptionalTextSync(userSettingsPath());

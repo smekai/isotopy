@@ -32,6 +32,7 @@ export async function seedOrchestration(
     ORCHESTRATIONS_TABLE,
     orchestrationSchema,
     "orchestration",
+    new RecordingLogger(),
   );
   await repository.write(seed);
   await databases.settleAll();

@@ -53,6 +53,7 @@ function resumedFromPause(current: Schedule, patch: UpdateScheduleInput): boolea
 export class ScheduleService {
   private readonly repositories = new Map<string, JsonRecordRepository<Schedule>>();
   private readonly schedules = new Map<string, Schedule>();
+  private readonly logger: Logger;
   private readonly ticker = new Ticker(
     SCHEDULE_TICK_MS,
     () => this.tick(),
@@ -67,8 +68,10 @@ export class ScheduleService {
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
     private readonly settings: SettingsStore,
-    private readonly logger: Logger,
-  ) {}
+    logger: Logger,
+  ) {
+    this.logger = logger.child("ScheduleService");
+  }
 
   async init(): Promise<void> {
     for (const project of this.registry.all()) {
@@ -320,6 +323,7 @@ export class ScheduleService {
           SCHEDULES_TABLE,
           scheduleSchema,
           "schedule",
+          this.logger,
         ),
     );
   }

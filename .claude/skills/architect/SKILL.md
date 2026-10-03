@@ -213,8 +213,12 @@ of the source. When you strip or avoid a comment, that is where its content goes
 
 - **What a catch may do (A2):** a failure has two possible readers. Whoever runs
   the server reads the **operator channel**: the `Logger` seam
-  (`server/src/utils/logger.ts`), handed to each service by the composition root,
-  with `ConsoleLogger` the only source file allowed to touch `console`. Whoever
+  (`server/src/utils/logger.ts`), backed by pino (`PinoLogger`), which writes
+  readable lines to the console and JSON lines to `<user .isotopy>/logs/server.log`.
+  The composition root builds one; every class that reports takes it as a
+  constructor parameter and keeps its own `logger.child("<ClassName>")`, so each
+  line names its component. A logger is never a default inside a dependencies
+  object. Whoever
   opens the app reads the **user-visible record**: the run log, a schedule's
   `lastOutcome`, an orchestration's `decisionError`. A `catch` reports to one or
   both. It stays silent **only when the fallback is the answer** — a missing

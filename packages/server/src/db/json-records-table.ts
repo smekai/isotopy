@@ -121,11 +121,9 @@ export class JsonRecordsTable {
       spec.migrateLegacyTimestamps
         ? (connection) => {
             const abandoned = migrateLegacyTimestamps(connection, spec);
-            if (abandoned > 0) {
-              db.logger.warn(
-                `Dropped ${abandoned} malformed ${spec.table} row(s) during timestamp migration; they could not be read before it either`,
-              );
-            }
+            return abandoned > 0
+              ? `Dropped ${abandoned} malformed ${spec.table} row(s) during timestamp migration; they could not be read before it either`
+              : undefined;
           }
         : undefined,
     );

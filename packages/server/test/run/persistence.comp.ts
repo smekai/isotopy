@@ -248,7 +248,7 @@ test("the persisted run snapshot does not store stage.logs", async () => {
   // Act
   const databases = new ProjectDatabases(new RecordingLogger());
   const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
-  const repository = new RunRepository(projectPath, databases.for(projectPath));
+  const repository = new RunRepository(projectPath, databases.for(projectPath), new RecordingLogger());
   const [persisted] = await repository.loadAll();
   await databases.settleAll();
 
@@ -298,7 +298,7 @@ test("run numbering continues from the highest number on disk", async () => {
 async function seedHomeRun(home: string, run: RunState): Promise<void> {
   const databases = new ProjectDatabases(new RecordingLogger());
   const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
-  const repository = new RunRepository(projectPath, databases.for(projectPath));
+  const repository = new RunRepository(projectPath, databases.for(projectPath), new RecordingLogger());
   await repository.writeState(run.id, { version: 1, run });
   await databases.settleAll();
 }

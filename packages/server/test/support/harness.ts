@@ -98,7 +98,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
   const databases = new ProjectDatabases(logger);
-  const product = new ProductProcessService(automation, { ...unspawnedProduct(), logger });
+  const product = new ProductProcessService(automation, logger, unspawnedProduct());
   const orchestrator = new RunService(
     registry,
     settings,
@@ -109,7 +109,13 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     logger,
     product,
   );
-  const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
+  const orchestrations = new OrchestrationService(
+    registry,
+    orchestrator,
+    settings,
+    databases,
+    logger,
+  );
   const schedules = new ScheduleService(
     registry,
     orchestrator,
@@ -186,7 +192,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
   const databases = new ProjectDatabases(logger);
-  const product = new ProductProcessService(automation, { ...unspawnedProduct(), logger });
+  const product = new ProductProcessService(automation, logger, unspawnedProduct());
   const orchestrator = new RunService(
     registry,
     settings,
@@ -197,7 +203,13 @@ export async function restartApp(): Promise<RestartedApp> {
     logger,
     product,
   );
-  const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
+  const orchestrations = new OrchestrationService(
+    registry,
+    orchestrator,
+    settings,
+    databases,
+    logger,
+  );
   const schedules = new ScheduleService(
     registry,
     orchestrator,

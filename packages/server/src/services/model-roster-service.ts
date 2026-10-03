@@ -7,8 +7,11 @@ import { messageOf } from "../utils/message-of.ts";
 
 export class ModelRosterService {
   private readonly cached = new Map<EngineId, Promise<EngineModelRoster>>();
+  private readonly logger: Logger;
 
-  constructor(private readonly logger: Logger) {}
+  constructor(logger: Logger) {
+    this.logger = logger.child("ModelRosterService");
+  }
 
   roster(engineId: EngineId): Promise<EngineModelRoster> {
     return this.cached.get(engineId) ?? this.refresh(engineId);

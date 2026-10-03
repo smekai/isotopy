@@ -35,17 +35,23 @@ import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 import type { RunService, StartRunOptions } from "./run/run-service.ts";
+import type { Logger } from "../utils/logger.ts";
 
 export class MilestoneService {
   private readonly milestoneRepositories = new Map<string, JsonRecordRepository<Milestone>>();
   private readonly milestones = new Map<string, Milestone>();
   private readonly completingMilestoneRuns = new Set<string>();
 
+  private readonly logger: Logger;
+
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: () => RunService,
     private readonly databases: ProjectDatabases,
-  ) {}
+    logger: Logger,
+  ) {
+    this.logger = logger.child("MilestoneService");
+  }
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
     for (const milestone of await this.milestoneRepositoryFor(projectPath).loadAll()) {
@@ -548,6 +554,7 @@ export class MilestoneService {
           MILESTONES_TABLE,
           milestoneSchema,
           "milestone",
+          this.logger,
         ),
     );
   }
