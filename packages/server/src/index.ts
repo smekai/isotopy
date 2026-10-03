@@ -11,14 +11,17 @@ import { ProjectRegistry } from "./services/project-registry.ts";
 import { RunService } from "./services/run/run-service.ts";
 import { ScheduleService } from "./services/schedule-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
+import { serverLogPath } from "./paths.ts";
+import { PinoLogger } from "./utils/pino-logger.ts";
 
-const registry = new ProjectRegistry();
-const settings = new SettingsStore();
-const rosters = new ModelRosterService();
+const logger = PinoLogger.toConsoleAndFile(serverLogPath());
+const registry = new ProjectRegistry(logger);
+const settings = new SettingsStore(logger);
+const rosters = new ModelRosterService(logger);
 const automation = new AutomationConfigStore();
 const deployment = new DeploymentRunner();
-const databases = new ProjectDatabases();
-const product = new ProductProcessService(automation);
+const databases = new ProjectDatabases(logger);
+const product = new ProductProcessService(automation, logger);
 const runs = new RunService(
   registry,
   settings,
@@ -26,10 +29,18 @@ const runs = new RunService(
   automation,
   deployment,
   databases,
+  logger,
   product,
 );
-const orchestrations = new OrchestrationService(registry, runs, settings, databases);
-const schedules = new ScheduleService(registry, runs, orchestrations, databases, settings);
+const orchestrations = new OrchestrationService(registry, runs, settings, databases, logger);
+const schedules = new ScheduleService(
+  registry,
+  runs,
+  orchestrations,
+  databases,
+  settings,
+  logger,
+);
 runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();
@@ -50,13 +61,14 @@ serve(
       automation,
       deployment,
       product,
+      logger,
     }).fetch,
     hostname: config.host,
     port: config.port,
   },
   (info) => {
     const address = info.family === "IPv6" ? `[${info.address}]` : info.address;
-    console.log(`Isotopy server listening on http://${address}:${info.port}`);
+    logger.info(`Isotopy server listening on http://${address}:${info.port}`);
   },
 );
 
@@ -67,7 +79,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     return;
   }
   stopping = true;
-  console.log(`Isotopy server stopping on ${signal}`);
+  logger.info(`Isotopy server stopping on ${signal}`);
   schedules.stop();
   await product.shutdown();
   await runs.shutdown();

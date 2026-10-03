@@ -11,6 +11,7 @@ import type { ProductResponseHeaders } from "../domain/rules/product-preview.ts"
 import { startSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessHandle, SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { pollUntilHealthy } from "../utils/health-poll.ts";
 import type { HealthProbe } from "../utils/health-poll.ts";
@@ -113,6 +114,7 @@ function notReadyMessage(ui: UiAutomation, stderrTail: string[]): string {
 
 export class ProductProcessService {
   private readonly deps: ProductProcessDependencies;
+  private readonly logger: Logger;
   private current?: RunningProduct;
   private pending?: Promise<void>;
   private abandonedError?: string;
@@ -120,8 +122,10 @@ export class ProductProcessService {
 
   constructor(
     private readonly automation: AutomationConfigStore,
+    logger: Logger,
     deps: Partial<ProductProcessDependencies> = {},
   ) {
+    this.logger = logger.child("ProductProcessService");
     this.deps = { ...defaultDependencies(), ...deps };
   }
 
@@ -258,8 +262,20 @@ export class ProductProcessService {
       stderrTail,
     };
     this.current = current;
-    this.pending = this.watch(current).catch(() => undefined);
+    this.pending = this.watch(current).catch((error: unknown) => this.watchFailed(current, error));
     return statusOf(current);
+  }
+
+  private watchFailed(current: RunningProduct, error: unknown): void {
+    this.logger.error(`Watching the product of project ${current.project.id} failed`, {
+      error,
+    });
+    if (this.superseded(current)) {
+      return;
+    }
+    current.state = "failed";
+    current.lastError = `Isotopy stopped watching the product: ${messageOf(error)}`;
+    current.handle.kill();
   }
 
   private async watch(current: RunningProduct): Promise<void> {

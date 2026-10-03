@@ -2,7 +2,7 @@
 // everything a user sees after the server comes back has to have been
 // reconstructed from the project's run repository (a SQLite DB under .isotopy/) —
 // this suite is what proves that round trip.
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { RunState } from "@isotopy/core";
 import { JsonRecordsTable, RUNS_TABLE } from "../../src/db/json-records-table.ts";
@@ -18,6 +18,7 @@ import {
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
+import { RecordingLogger } from "../support/recording-logger.ts";
 
 let ctx: TestApp;
 
@@ -26,6 +27,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await ctx.dispose();
 });
 
@@ -56,6 +58,29 @@ test("runs are restored when the server comes back", async () => {
   expect(restoredRun?.task).toBe("comp survives restart");
   expect(restoredRun?.status).toBe("completed");
   await restarted.shutdown();
+});
+
+test("a run whose state cannot be written is reported to whoever runs the server", async () => {
+  // Arrange — the first state write fails, the way a full disk would fail it.
+  vi.spyOn(RunRepository.prototype, "writeState").mockRejectedValueOnce(new Error("disk is full"));
+
+  // Anticipate
+  ctx.engine.anticipate().reports("done");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "comp unwritable state",
+    engine: "claude-code",
+  });
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  expect(ctx.logger.at("error")).toEqual([
+    expect.objectContaining({ message: expect.stringContaining(run.id) }),
+  ]);
+  ctx.engine.verify();
 });
 
 test("a needs-attention run remains terminal when the server comes back", async () => {
@@ -221,9 +246,9 @@ test("the persisted run snapshot does not store stage.logs", async () => {
   await ctx.orchestrator.shutdown();
 
   // Act
-  const databases = new ProjectDatabases();
+  const databases = new ProjectDatabases(new RecordingLogger());
   const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
-  const repository = new RunRepository(projectPath, databases.for(projectPath));
+  const repository = new RunRepository(projectPath, databases.for(projectPath), new RecordingLogger());
   const [persisted] = await repository.loadAll();
   await databases.settleAll();
 
@@ -271,15 +296,15 @@ test("run numbering continues from the highest number on disk", async () => {
  * would have left it — used to drive the crash-recovery path on restart.
  */
 async function seedHomeRun(home: string, run: RunState): Promise<void> {
-  const databases = new ProjectDatabases();
+  const databases = new ProjectDatabases(new RecordingLogger());
   const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
-  const repository = new RunRepository(projectPath, databases.for(projectPath));
+  const repository = new RunRepository(projectPath, databases.for(projectPath), new RecordingLogger());
   await repository.writeState(run.id, { version: 1, run });
   await databases.settleAll();
 }
 
 async function seedHomeRunRow(home: string, runId: string, record: unknown): Promise<void> {
-  const databases = new ProjectDatabases();
+  const databases = new ProjectDatabases(new RecordingLogger());
   const projectPath = { id: HOME_PROJECT_ID, root: home, dataDir: home };
   await new JsonRecordsTable(databases.for(projectPath), RUNS_TABLE).upsert(
     runId,

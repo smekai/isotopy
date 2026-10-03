@@ -239,6 +239,24 @@ of the source. When you strip or avoid a comment, that is where its content goes
   extensions (like `@isotopy/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 
+- **What a catch may do (A2):** a failure has two possible readers. Whoever runs
+  the server reads the **operator channel**: the `Logger` seam
+  (`server/src/utils/logger.ts`), backed by pino (`PinoLogger`), which writes
+  readable lines to the console and JSON lines to `<user .isotopy>/logs/server.log`.
+  The composition root builds one; every class that reports takes it as a
+  constructor parameter and keeps its own `logger.child("<ClassName>")`, so each
+  line names its component. A logger is never a default inside a dependencies
+  object. Whoever
+  opens the app reads the **user-visible record**: the run log, a schedule's
+  `lastOutcome`, an orchestration's `decisionError`. A `catch` reports to one or
+  both. It stays silent **only when the fallback is the answer** — a missing
+  file, a probe that found nothing, a command absent from `PATH` — and then it
+  reads as a fallback: narrowed to the expected error code
+  (`readOptionalText`, `errorCodeOf`) or a named function that returns the
+  fallback value (`lookupOnPath`). An error nothing catches reaches `app.onError`,
+  which logs it and answers `{ error }`. ESLint enforces `no-console` across
+  `packages/*/src` and bans empty catches outside the UI.
+
 **Verify a change** (from the repo root, shell-neutral):
 
 ```
@@ -396,7 +414,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 | `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
 | `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
 
-Conventions upheld: `@isotopy/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; no `console.*` in the new modules; no hardcoded paths or secrets.
+Conventions upheld: `@isotopy/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; every report goes through the `Logger` seam; no hardcoded paths or secrets.
 
 **Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunService` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunService` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
 
@@ -410,14 +428,14 @@ Already in place:
 - **`import type`** for type-only imports (enforced by lint).
 - **UI-safe views**: the server never serializes secrets to the client (`SettingsView`).
 - **Layered tests** — component tests (Vitest, `pnpm test`) are the primary level; specs cover complicated pure functions; Playwright covers only the browser; one opt-in live canary. See [`testing.md`](./testing.md) for the policy and the AAAAA convention (TASK-062).
-- **Testable seams** — `ISOTOPY_HOME` and `ISOTOPY_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, and `createApp({ runs, milestones, registry, settings })` injects services instead of routes reaching for a module singleton.
+- **Testable seams** — `ISOTOPY_HOME` and `ISOTOPY_USER_HOME` move the data roots, `setEngineAdapter()` substitutes a harness, `createApp({ runs, milestones, registry, settings })` injects services instead of routes reaching for a module singleton, and a `Logger` handed to every service that reports lets a test record what was reported instead of scraping stdout.
 
 Recommended next steps, in rough priority order:
 
 1. ~~**CI gate**~~ — done. `.github/workflows/ci.yml` runs the gate on every PR, and `main` merges only on green; see [`decisions.md`](./decisions.md) (2026-08-04).
 2. **Formatter** — add Prettier (or Biome) with a pre-commit hook (`husky` + `lint-staged`) so style never reaches review.
 3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
-4. **Structured logger** — replace `console.*` (tracked as TASK-022; `LOG_LEVEL` should join `config.ts`).
+4. ~~**Structured logger**~~ — done in TASK-170 as the operator channel: one `Logger` seam with `info`, `warn`, `error` and `child`, backed by pino with a console and a file sink, and lint that keeps `console` out of source. Rotation and a configurable `LOG_LEVEL` wait for a deployment story.
 5. ~~**Request validation**~~ — done. `packages/server/src/schemas/` owns every untrusted boundary and the parsed types flow into services; see [`decisions.md`](./decisions.md) (2026-07-29).
 6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because Isotopy intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).

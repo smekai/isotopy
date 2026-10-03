@@ -68,7 +68,10 @@ Real server, real navigation, no run that reaches an engine.
   the folder picker, and Escape closes both. Setup names the active project.
 - **`project-drawer.e2e.ts`** — the Project button opens a drawer naming the
   active project's folder (stated, never editable), summarising engine and
-  permission mode and linking into the Setup section it summarises.
+  permission mode and linking into the Setup section it summarises. Its Add
+  project opens the folder picker, and a folder path pasted into the picker
+  becomes the active project — the one free-tier spec that really registers a
+  project, so it unregisters it afterwards (`e2e/support/projects.ts`).
 - **`milestone/milestone-dashboard.e2e.ts`** — the milestone is seeded by
   `POST /milestones` rather than planned by an agent, so no engine runs. The
   milestone reaches the rail with its progress count and opens its dashboard at

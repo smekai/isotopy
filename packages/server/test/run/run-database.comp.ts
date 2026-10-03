@@ -11,6 +11,7 @@ import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { RunRepository } from "../../src/repository/run-repository.ts";
 import type { PersistedRun } from "../../src/repository/run-repository.ts";
 import { makePersistedRun } from "../support/run-fixtures.ts";
+import { RecordingLogger } from "../support/recording-logger.ts";
 
 let dir: string;
 let projectPath: ProjectPath;
@@ -68,8 +69,8 @@ function dbPath(): string {
 }
 
 async function withRepository(fn: (repo: RunRepository) => Promise<void>): Promise<void> {
-  const databases = new ProjectDatabases();
-  const repository = new RunRepository(projectPath, databases.for(projectPath));
+  const databases = new ProjectDatabases(new RecordingLogger());
+  const repository = new RunRepository(projectPath, databases.for(projectPath), new RecordingLogger());
   try {
     await fn(repository);
   } finally {

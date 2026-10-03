@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AutoReviewSupport, EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import { lookupOnPath } from "../utils/lookup-on-path.ts";
 import type { PermissionPlan, PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { codexConfigModel } from "../schemas/engine-cli-config.ts";
 import { NO_LIVE_LISTING, configuredModelFrom } from "./cli-config.ts";
@@ -82,15 +82,11 @@ function resolveCodexBinary(): ResolvedBinary {
     cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;
   }
-  try {
-    const lookup = process.platform === "win32" ? "where" : "which";
-    const output = execFileSync(lookup, ["codex"], { encoding: "utf8" });
-    const first = pickBinaryLine(output);
-    if (first) {
-      cachedBinary = { path: first, source: "path" };
-      return cachedBinary;
-    }
-  } catch {}
+  const onPath = pickBinaryLine(lookupOnPath("codex") ?? "");
+  if (onPath) {
+    cachedBinary = { path: onPath, source: "path" };
+    return cachedBinary;
+  }
   throw new Error(INSTALL_HINT);
 }
 

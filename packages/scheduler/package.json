@@ -1,6 +1,6 @@
 {
   "name": "@isotopy/scheduler",
-  "version": "0.12.51",
+  "version": "0.12.55",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

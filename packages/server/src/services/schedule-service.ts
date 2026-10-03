@@ -23,6 +23,7 @@ import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
+import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
@@ -52,11 +53,12 @@ function resumedFromPause(current: Schedule, patch: UpdateScheduleInput): boolea
 export class ScheduleService {
   private readonly repositories = new Map<string, JsonRecordRepository<Schedule>>();
   private readonly schedules = new Map<string, Schedule>();
+  private readonly logger: Logger;
   private readonly ticker = new Ticker(
     SCHEDULE_TICK_MS,
     () => this.tick(),
     (error: unknown) => {
-      console.warn("Schedule tick failed:", messageOf(error));
+      this.logger.error("Schedule tick failed", { error });
     },
   );
 
@@ -66,7 +68,10 @@ export class ScheduleService {
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
     private readonly settings: SettingsStore,
-  ) {}
+    logger: Logger,
+  ) {
+    this.logger = logger.child("ScheduleService");
+  }
 
   async init(): Promise<void> {
     for (const project of this.registry.all()) {
@@ -207,12 +212,12 @@ export class ScheduleService {
     const claimed = await this.claimWindow(schedule, now);
     if (claimed !== undefined) {
       schedule.lastOutcome = claimed;
-      console.warn(`Schedule ${schedule.id} could not claim its window:`, claimed);
+      this.logger.error(`Schedule ${schedule.id} could not claim its window`, { outcome: claimed });
       return claimed;
     }
     schedule.lastOutcome = await this.attemptRun(schedule, now);
     await this.persist(schedule).catch((error: unknown) => {
-      console.warn(`Failed to record the outcome of schedule ${schedule.id}:`, messageOf(error));
+      this.logger.error(`Failed to record the outcome of schedule ${schedule.id}`, { error });
     });
     return schedule.lastOutcome;
   }
@@ -318,6 +323,7 @@ export class ScheduleService {
           SCHEDULES_TABLE,
           scheduleSchema,
           "schedule",
+          this.logger,
         ),
     );
   }

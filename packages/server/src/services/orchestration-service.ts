@@ -80,6 +80,7 @@ import type {
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
+import type { Logger } from "../utils/logger.ts";
 
 export type StartOrchestrationOptions = InheritedRunOptions;
 
@@ -92,12 +93,17 @@ export class OrchestrationService implements StageOutputConsumer {
   private readonly repositories = new Map<string, JsonRecordRepository<Orchestration>>();
   private readonly settledRuns = new Set<string>();
 
+  private readonly logger: Logger;
+
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: RunService,
     private readonly settings: SettingsStore,
     private readonly databases: ProjectDatabases,
-  ) {}
+    logger: Logger,
+  ) {
+    this.logger = logger.child("OrchestrationService");
+  }
 
   async init(): Promise<void> {
     for (const project of this.registry.all()) {
@@ -884,6 +890,7 @@ export class OrchestrationService implements StageOutputConsumer {
           ORCHESTRATIONS_TABLE,
           orchestrationSchema,
           "orchestration",
+          this.logger,
         ),
     );
   }

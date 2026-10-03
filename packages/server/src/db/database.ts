@@ -2,10 +2,11 @@ import path from "node:path";
 import type { DatabaseSync as SqliteConnection } from "node:sqlite";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { Logger } from "../utils/logger.ts";
 
 const BUSY_TIMEOUT_MS = 5000;
 
-type Migration = (connection: SqliteConnection) => void;
+type Migration = (connection: SqliteConnection) => string | undefined;
 
 interface Registration {
   schema: string;
@@ -17,7 +18,14 @@ export class Database {
   private readonly registrations: Registration[] = [];
   private applied = 0;
 
-  constructor(private readonly path: ProjectPath) {}
+  private readonly logger: Logger;
+
+  constructor(
+    private readonly path: ProjectPath,
+    logger: Logger,
+  ) {
+    this.logger = logger.child("Database");
+  }
 
   register(schema: string, migrate?: Migration): void {
     this.registrations.push({ schema, migrate });
@@ -57,10 +65,16 @@ export class Database {
       const registration = this.registrations[this.applied];
       if (registration) {
         db.exec(registration.schema);
-        registration.migrate?.(db);
+        this.reportMigration(registration.migrate?.(db));
         db.exec(registration.schema);
       }
       this.applied += 1;
+    }
+  }
+
+  private reportMigration(problem: string | undefined): void {
+    if (problem !== undefined) {
+      this.logger.warn(problem);
     }
   }
 
@@ -76,7 +90,7 @@ export class Database {
       db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       db.close();
     } catch (error) {
-      console.warn(`Failed to close run database at ${this.describe()}:`, error);
+      this.logger.error(`Failed to close run database at ${this.describe()}`, { error });
     }
   }
 }

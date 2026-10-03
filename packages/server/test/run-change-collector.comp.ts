@@ -9,6 +9,7 @@ import {
   commitEverything,
   initGitRepository,
 } from "./support/git-project.ts";
+import { RecordingLogger } from "./support/recording-logger.ts";
 
 const RUN_ID = "run-0001";
 
@@ -26,7 +27,7 @@ async function project(): Promise<ProjectPath> {
 }
 
 test("a folder that is not a repository still reports what the run created", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await collector.captureBaseline(scope, RUN_ID, scope.root);
   await writeFile(path.join(scope.root, "app.ts"), "export const app = 1;\n");
@@ -38,7 +39,7 @@ test("a folder that is not a repository still reports what the run created", asy
 });
 
 test("a file the run rewrote is reported as edited, not as new", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await collector.captureBaseline(scope, RUN_ID, scope.root);
   await writeFile(path.join(scope.root, "README.md"), "# app\n\nNow with prose.\n");
@@ -49,7 +50,7 @@ test("a file the run rewrote is reported as edited, not as new", async () => {
 });
 
 test("a file the run removed is reported as deleted", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await collector.captureBaseline(scope, RUN_ID, scope.root);
   await rm(path.join(scope.root, "README.md"));
@@ -60,7 +61,7 @@ test("a file the run removed is reported as deleted", async () => {
 });
 
 test("work the agent committed is still reported, even though the tree is clean", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await initGitRepository(scope.root);
   await commitEverything(scope.root, "initial");
@@ -75,7 +76,7 @@ test("work the agent committed is still reported, even though the tree is clean"
 });
 
 test("the first commit in a fresh repository is reported, not swallowed by the missing baseline", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await initGitRepository(scope.root);
   await collector.captureBaseline(scope, RUN_ID, scope.root);
@@ -88,7 +89,7 @@ test("the first commit in a fresh repository is reported, not swallowed by the m
 });
 
 test("a file already dirty before the run started is not claimed as the run's work", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await initGitRepository(scope.root);
   await commitEverything(scope.root, "initial");
@@ -99,7 +100,7 @@ test("a file already dirty before the run started is not claimed as the run's wo
 });
 
 test("a file already dirty before the run started is claimed once the run rewrites it", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await initGitRepository(scope.root);
   await commitEverything(scope.root, "initial");
@@ -114,7 +115,7 @@ test("a file already dirty before the run started is claimed once the run rewrit
 });
 
 test("an untracked file already present before the run is claimed once the run rewrites it", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await initGitRepository(scope.root);
   await commitEverything(scope.root, "initial");
@@ -129,7 +130,7 @@ test("an untracked file already present before the run is claimed once the run r
 });
 
 test("a dirty submodule cannot hide the run's edits, because it is unhashable and the rest are not", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await initGitRepository(scope.root);
   await commitEverything(scope.root, "initial");
@@ -145,14 +146,14 @@ test("a dirty submodule cannot hide the run's edits, because it is unhashable an
 }, 30_000);
 
 test("a run with no baseline reports nothing rather than inventing a change set", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
 
   expect(await collector.capture(scope, RUN_ID, scope.root)).toBeUndefined();
 });
 
 test("the change set is written beside the run as readable markdown", async () => {
-  const collector = new RunChangeCollector();
+  const collector = new RunChangeCollector(new RecordingLogger());
   const scope = await project();
   await collector.captureBaseline(scope, RUN_ID, scope.root);
   await writeFile(path.join(scope.root, "app.ts"), "export const app = 1;\n");

@@ -21,6 +21,8 @@ import type { ProjectRegistry } from "./services/project-registry.ts";
 import type { RunService } from "./services/run/run-service.ts";
 import type { ScheduleService } from "./services/schedule-service.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
+import type { Logger } from "./utils/logger.ts";
+import { messageOf } from "./utils/message-of.ts";
 
 export interface AppDependencies {
   runs: RunService;
@@ -33,6 +35,7 @@ export interface AppDependencies {
   automation: AutomationConfigStore;
   deployment: DeploymentRunner;
   product: ProductProcessService;
+  logger: Logger;
 }
 
 export function createApp({
@@ -46,8 +49,15 @@ export function createApp({
   automation,
   deployment,
   product,
+  logger,
 }: AppDependencies): Hono {
   const app = new Hono();
+
+  const httpLogger = logger.child("http");
+  app.onError((error, c) => {
+    httpLogger.error(`Unhandled error on ${c.req.method} ${c.req.path}`, { error });
+    return c.json({ error: messageOf(error) }, 500);
+  });
 
   app.use(
     "/*",

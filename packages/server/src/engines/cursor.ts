@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import { lookupOnPath } from "../utils/lookup-on-path.ts";
 import { cursorCliConfigModel, parseCursorModels } from "../schemas/engine-cli-config.ts";
 import { configuredModelFrom } from "./cli-config.ts";
 import { parseCursorProtocolLine } from "./cursor-protocol.ts";
@@ -100,17 +100,11 @@ function resolveCursorBinary(): ResolvedBinary {
     cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;
   }
-  const lookup = process.platform === "win32" ? "where" : "which";
   for (const name of PATH_CANDIDATES) {
-    try {
-      const output = execFileSync(lookup, [name], { encoding: "utf8" });
-      const first = firstLine(output);
-      if (first) {
-        cachedBinary = { path: first, source: "path" };
-        return cachedBinary;
-      }
-    } catch {
-      continue;
+    const onPath = firstLine(lookupOnPath(name) ?? "");
+    if (onPath) {
+      cachedBinary = { path: onPath, source: "path" };
+      return cachedBinary;
     }
   }
   const fromInstallDir = findInstallDirBinary();

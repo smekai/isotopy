@@ -4,17 +4,21 @@ import type { Database } from "../db/database.ts";
 import { JsonRecordsTable } from "../db/json-records-table.ts";
 import type { JsonTableSpec } from "../db/json-records-table.ts";
 import { parsePersistedRecord } from "../schemas/persisted-record.ts";
+import type { Logger } from "../utils/logger.ts";
 
 export class JsonRecordRepository<T extends { id: string }> {
   private readonly table: JsonRecordsTable;
+  private readonly logger: Logger;
 
   constructor(
     db: Database,
     spec: JsonTableSpec,
     private readonly schema: ZodType<T>,
     private readonly label: string,
+    logger: Logger,
   ) {
     this.table = new JsonRecordsTable(db, spec);
+    this.logger = logger.child("JsonRecordRepository");
   }
 
   async write(record: T): Promise<void> {
@@ -28,7 +32,7 @@ export class JsonRecordRepository<T extends { id: string }> {
       if (record) {
         return [record];
       }
-      console.warn(`Skipping malformed ${this.label} row in the project database`);
+      this.logger.warn(`Skipping malformed ${this.label} row in the project database`);
       return [];
     });
   }

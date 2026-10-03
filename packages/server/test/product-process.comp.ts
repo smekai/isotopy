@@ -9,6 +9,7 @@ import type { ProductProcessDependencies } from "../src/services/product-process
 import type { SubprocessHandle, SubprocessResult, SubprocessSpec } from "../src/engines/subprocess.ts";
 import { addTestProject, createTestApp, get, post, put } from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
+import { RecordingLogger } from "./support/recording-logger.ts";
 
 const HEALTH_URL = "http://127.0.0.1:59999/";
 
@@ -29,7 +30,7 @@ test("a product that answers its health URL becomes ready and records how it may
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
     headers: () => Promise.resolve({ xFrameOptions: "DENY" }),
@@ -54,7 +55,7 @@ test("a rival that loses the port to an already-serving product is adopted, not 
   // it answered 200 at that very URL for another two hours.
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: servingUntilAborted,
   });
@@ -79,7 +80,7 @@ test("a rival that dies with nothing serving the URL still reports the exit", as
   // paper over a product that is genuinely not there.
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), stub.deps);
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), stub.deps);
   await product.start(ctx.registry.resolve());
 
   // Act
@@ -97,7 +98,7 @@ test("a product that never answers fails with its own stderr, so the reason is n
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), stub.deps);
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), stub.deps);
 
   // Act
   await product.start(ctx.registry.resolve());
@@ -116,7 +117,7 @@ test("a second start reuses the running product rather than spawning a rival for
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -137,7 +138,7 @@ test("two starts racing each other spawn one product, not two fighting over the 
   // arriving while the first is still reading the config must not spawn a rival.
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new GatedConfigStore(), {
+  const product = new ProductProcessService(new GatedConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -156,7 +157,7 @@ test("a refresh whose start command vanished reports why instead of rejecting in
   // would surface as an unhandled rejection and take the server down.
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -178,7 +179,7 @@ test("a product that dies while its headers are being read is not then announced
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
     headers: () => dyingDuringProbe(stub),
@@ -197,7 +198,7 @@ test("a product that exits on its own is reported as exited rather than left loo
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -219,7 +220,7 @@ test("starting the product for another project stops the one already running", a
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -242,7 +243,7 @@ test("a fresh build restarts the running product, so the preview is never the pr
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -264,7 +265,7 @@ test("a run finishing in another project leaves this project's preview alone", a
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = stubProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });
@@ -285,7 +286,7 @@ test("stopping waits for the process to actually go, so a shutting-down server d
   // which on Windows is what `taskkill /T /F` really does.
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
   const stub = lingeringProcess();
-  const product = new ProductProcessService(new AutomationConfigStore(), {
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
     probe: () => Promise.resolve({ ok: true }),
   });

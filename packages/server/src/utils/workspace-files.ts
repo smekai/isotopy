@@ -120,7 +120,9 @@ async function walkWorkspace(
         try {
           visit(toPosix(path.relative(root, absolute)), await stat(absolute));
           visited += 1;
-        } catch {}
+        } catch {
+          continue;
+        }
       }
     }
   }

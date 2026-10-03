@@ -1,6 +1,7 @@
 import type { RunState } from "@isotopy/core";
 import { sourceTasksToRelease } from "../../domain/rules/run-lifecycle.ts";
 import type { ProjectPath } from "../../paths.ts";
+import type { Logger } from "../../utils/logger.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import { taskBoardFor } from "../task-board-adapter.ts";
 
@@ -23,6 +24,7 @@ export async function reclaimReleasedSourceTasks(
 export async function releaseUnfinishedSourceTasks(
   registry: ProjectRegistry,
   run: RunState,
+  logger: Logger,
 ): Promise<void> {
   try {
     await taskBoardFor(registry.resolve(run.projectId)).transitionTasks(
@@ -32,6 +34,6 @@ export async function releaseUnfinishedSourceTasks(
       { onlyFrom: "In Progress" },
     );
   } catch (error: unknown) {
-    console.warn(`Failed to release source tasks for run ${run.id}:`, error);
+    logger.error(`Failed to release source tasks for run ${run.id}`, { error });
   }
 }

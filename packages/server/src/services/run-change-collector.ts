@@ -13,6 +13,7 @@ import type { SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts"
 import type { ProjectPath } from "../paths.ts";
 import { RUN_CHANGE_BASELINE_VERSION } from "../schemas/run-change-baseline.ts";
 import type { DirtyFile, RunChangeBaseline } from "../schemas/run-change-baseline.ts";
+import type { Logger } from "../utils/logger.ts";
 import { snapshotWorkspace } from "../utils/workspace-files.ts";
 import type { WorkspaceSnapshot } from "../utils/workspace-files.ts";
 import {
@@ -100,8 +101,10 @@ function restoreSnapshot(baseline: RunChangeBaseline): WorkspaceSnapshot {
 
 export class RunChangeCollector {
   private readonly deps: RunChangeCollectorDependencies;
+  private readonly logger: Logger;
 
-  constructor(deps: Partial<RunChangeCollectorDependencies> = {}) {
+  constructor(logger: Logger, deps: Partial<RunChangeCollectorDependencies> = {}) {
+    this.logger = logger.child("RunChangeCollector");
     this.deps = { ...defaultDependencies(), ...deps };
   }
 
@@ -116,7 +119,7 @@ export class RunChangeCollector {
     try {
       await this.captureBaseline(project, runId, workspacePath);
     } catch (error) {
-      console.warn(`Failed to record the file baseline for run ${runId}:`, error);
+      this.logger.error(`Failed to record the file baseline for run ${runId}`, { error });
     }
   }
 
@@ -132,7 +135,7 @@ export class RunChangeCollector {
       run.changes = changes;
       return true;
     } catch (error) {
-      console.warn(`Failed to capture file changes for run ${run.id}:`, error);
+      this.logger.error(`Failed to capture file changes for run ${run.id}`, { error });
       return false;
     }
   }

@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { EMPTY_AUTOMATION_CONFIG } from "@isotopy/core";
 import type { ProjectAutomationConfig } from "@isotopy/core";
@@ -10,6 +10,7 @@ import { validate } from "../domain/validation.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import { readOptionalText } from "../utils/read-optional-text.ts";
 
 const FILE_NAME = "automation.json";
 
@@ -25,14 +26,9 @@ export function automationConfigPath(project: ProjectPath): string {
 
 export class AutomationConfigStore {
   async get(project: ProjectPath): Promise<ProjectAutomationConfig> {
-    let content: string;
-    try {
-      content = await readFile(automationConfigPath(project), "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return structuredClone(EMPTY_AUTOMATION_CONFIG);
-      }
-      throw error;
+    const content = await readOptionalText(automationConfigPath(project));
+    if (content === undefined) {
+      return structuredClone(EMPTY_AUTOMATION_CONFIG);
     }
     const parsed = parseAutomationConfig(content);
     if (!parsed.ok) {

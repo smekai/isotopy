@@ -13,6 +13,7 @@ import type { PersistedRun } from "../schemas/run-persistence.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { Logger } from "../utils/logger.ts";
 import { nowIso } from "../utils/time.ts";
 
 export type { PersistedRun } from "../schemas/run-persistence.ts";
@@ -22,11 +23,14 @@ export class RunRepository {
   private readonly events: EventsTable;
   private readonly active: ActiveRunsTable;
   private readonly handoffs = new Set<Promise<void>>();
+  private readonly logger: Logger;
 
   constructor(
     private readonly path: ProjectPath,
     private readonly db: Database,
+    logger: Logger,
   ) {
+    this.logger = logger.child("RunRepository");
     this.runs = new JsonRecordsTable(this.db, RUNS_TABLE);
     this.events = new EventsTable(this.db);
     this.active = new ActiveRunsTable(this.db);
@@ -47,7 +51,7 @@ export class RunRepository {
       if (parsed.ok) {
         return [parsed.value];
       }
-      console.warn(
+      this.logger.warn(
         `Skipping malformed event row for run ${runId}: ${formatValidationIssues(parsed.issues)}`,
       );
       return [];
@@ -63,7 +67,7 @@ export class RunRepository {
   }
 
   writeHandoff(runId: string, stageId: string, content: string): Promise<void> {
-    const op = persistHandoff(this.path, runId, stageId, content);
+    const op = persistHandoff(this.logger, this.path, runId, stageId, content);
     this.handoffs.add(op);
     void op.finally(() => this.handoffs.delete(op));
     return op;
@@ -74,7 +78,7 @@ export class RunRepository {
     try {
       rows = await this.runs.all();
     } catch (error) {
-      console.warn(`Failed to read runs from ${this.db.describe()}:`, error);
+      this.logger.error(`Failed to read runs from ${this.db.describe()}`, { error });
       return [];
     }
     return rows.flatMap((data) => this.parseRunData(data));
@@ -85,7 +89,7 @@ export class RunRepository {
     if (parsed.ok) {
       return [parsed.value];
     }
-    console.warn(
+    this.logger.warn(
       `Skipping malformed run row in the run database: ${formatValidationIssues(parsed.issues)}`,
     );
     return [];
@@ -97,6 +101,7 @@ export class RunRepository {
 }
 
 async function persistHandoff(
+  logger: Logger,
   path: ProjectPath,
   runId: string,
   stageId: string,
@@ -107,6 +112,6 @@ async function persistHandoff(
     await mkdir(dir, { recursive: true });
     await writeFile(nodepath.join(dir, "handoff.md"), content);
   } catch (error) {
-    console.warn(`Failed to write handoff for run ${runId}/${stageId}:`, error);
+    logger.error(`Failed to write handoff for run ${runId}/${stageId}`, { error });
   }
 }

@@ -90,6 +90,19 @@ export default tseslint.config(
     },
   },
   {
+    // Source reports through the Logger seam (docs/architecture.md, "What a catch may do").
+    files: ["packages/*/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    files: ["packages/{core,scheduler,server}/src/**/*.ts"],
+    rules: {
+      "no-empty": ["error", { allowEmptyCatch: false }],
+    },
+  },
+  {
     files: ["packages/*/test/**/*.{ts,tsx}", "packages/ui/e2e/**/*.ts"],
     ignores: ["**/support/**"],
     rules: {

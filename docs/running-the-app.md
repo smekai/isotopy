@@ -37,6 +37,11 @@ proxy forwarded every API call back to Vite itself: `connect EADDRINUSE
 ::1:5173` in the UI log, and a rail stuck on "Loading…". The server still
 accepts `PORT` as a legacy alias, because there it names the server's own port.
 
+Server log: the API server writes readable lines to its console and the same
+lines as JSON to `~/.isotopy/logs/server.log` (under `ISOTOPY_USER_HOME` when that
+is set), each naming the component that wrote it. That file is where to look
+first when an unattended run went wrong and nobody was watching the console.
+
 Stop: kill the `pnpm dev` task, then confirm ports 9477/5173 are
 released (a stray `tsx watch`/`vite` child sometimes survives —
 `Get-NetTCPConnection -LocalPort 9477,5173 -State Listen` and stop the

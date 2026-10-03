@@ -2,10 +2,16 @@ import { mergeModelLayers, staticModelsFor } from "@isotopy/core";
 import type { EngineId, EngineModelRoster } from "@isotopy/core";
 import { findEngineAdapter } from "../engines/registry.ts";
 import type { EngineAdapter, LiveModelLayer } from "../engines/types.ts";
+import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 
 export class ModelRosterService {
   private readonly cached = new Map<EngineId, Promise<EngineModelRoster>>();
+  private readonly logger: Logger;
+
+  constructor(logger: Logger) {
+    this.logger = logger.child("ModelRosterService");
+  }
 
   roster(engineId: EngineId): Promise<EngineModelRoster> {
     return this.cached.get(engineId) ?? this.refresh(engineId);
@@ -29,10 +35,19 @@ export class ModelRosterService {
     const live = await liveModels(adapter);
     return mergeModelLayers({
       live: live.options,
-      configured: configuredModel(adapter),
+      configured: this.configuredModel(engineId, adapter),
       bundled: staticModelsFor(engineId),
       note: live.note,
     });
+  }
+
+  private configuredModel(engineId: EngineId, adapter: EngineAdapter | undefined) {
+    try {
+      return adapter?.configuredModel();
+    } catch (error) {
+      this.logger.warn(`Could not read the configured ${engineId} model`, { error });
+      return undefined;
+    }
   }
 }
 
@@ -45,10 +60,3 @@ async function liveModels(adapter: EngineAdapter | undefined): Promise<LiveModel
   }
 }
 
-function configuredModel(adapter: EngineAdapter | undefined) {
-  try {
-    return adapter?.configuredModel();
-  } catch {
-    return undefined;
-  }
-}

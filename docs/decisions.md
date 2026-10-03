@@ -15,6 +15,26 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-03 — The operator log is pino, to the console and a file
+
+**Context:** TASK-170 gave the server one `Logger` seam over the console. Review asked for an
+industry-standard logger and for errors kept somewhere they can be read after the fact, because
+the work this is for runs unattended and nobody reads a console nobody is watching.
+
+**Decision:** the seam stays ours — `Logger` with `info`, `warn`, `error` and `child` — and
+`PinoLogger` implements it with pino: `pino-pretty` for readable console lines and a synchronous
+file destination writing JSON lines to `<user .isotopy>/logs/server.log`. Each class takes the
+logger in its constructor and keeps `logger.child("<ClassName>")`; a child is always derived from
+the root, so a class handed another component's logger still names itself once. Errors go through
+pino's error serializer, so a stack reaches the file instead of `{}`.
+
+**Rejected:** winston — heavier, and its transports solve a multi-sink problem one file does not
+have. Keeping a hand-rolled console logger and adding a file writer to it — that is a logging
+library written badly. Typing services against pino's `Logger` directly — the seam is what lets a
+component test record what was reported, and what keeps the library replaceable.
+
+---
+
 ## 2026-09-26 — `pnpm test` proves the product; repo checks run under `pnpm check`
 
 **Context:** the suite mixed two kinds of failure. A component test goes red when the product

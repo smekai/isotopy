@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
+import { lookupOnPath } from "../utils/lookup-on-path.ts";
 import type { PermissionStrategy } from "../domain/rules/permission-plan.ts";
 import { claudeAuthStatus } from "../schemas/engine-auth.ts";
 import { claudeSettingsModel } from "../schemas/engine-cli-config.ts";
@@ -102,15 +102,11 @@ function resolveClaudeBinary(): ResolvedBinary {
     cachedBinary = { path: envPath, source: "env" };
     return cachedBinary;
   }
-  try {
-    const lookup = process.platform === "win32" ? "where" : "which";
-    const output = execFileSync(lookup, ["claude"], { encoding: "utf8" });
-    const first = firstLine(output);
-    if (first) {
-      cachedBinary = { path: first, source: "path" };
-      return cachedBinary;
-    }
-  } catch {}
+  const onPath = firstLine(lookupOnPath("claude") ?? "");
+  if (onPath) {
+    cachedBinary = { path: onPath, source: "path" };
+    return cachedBinary;
+  }
   const fromIde = findIdeExtensionBinary();
   if (fromIde) {
     cachedBinary = { path: fromIde, source: "ide-extension" };
