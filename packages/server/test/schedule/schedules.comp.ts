@@ -406,6 +406,20 @@ test("a window that cannot be claimed durably starts no paid work", async () => 
   ctx.engine.verify();
 });
 
+test("a window that cannot be claimed is reported to whoever runs the server, not only on the schedule", async () => {
+  // Arrange
+  const created = await createSchedule({ cron: EVERY_MINUTE });
+  failTheNextWrite("disk is full");
+
+  // Act
+  await ctx.schedules.tick(AN_HOUR_ON);
+
+  // Assert
+  expect(ctx.logger.at("error")).toEqual([
+    expect.objectContaining({ message: expect.stringContaining(created.id) }),
+  ]);
+});
+
 test("a failed claim leaves the window unconsumed, so the next tick may still take it", async () => {
   // Arrange
   await createSchedule({ cron: EVERY_MINUTE });

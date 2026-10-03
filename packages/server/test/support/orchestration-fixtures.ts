@@ -4,6 +4,7 @@ import { ORCHESTRATIONS_TABLE } from "../../src/db/json-records-table.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import type { ProjectRegistry } from "../../src/services/project-registry.ts";
+import { RecordingLogger } from "./recording-logger.ts";
 
 const AT = "2026-08-05T00:00:00.000Z";
 
@@ -25,7 +26,7 @@ export async function seedOrchestration(
   registry: ProjectRegistry,
   seed: Orchestration,
 ): Promise<void> {
-  const databases = new ProjectDatabases();
+  const databases = new ProjectDatabases(new RecordingLogger());
   const repository = new JsonRecordRepository(
     databases.for(registry.resolve(seed.projectId)),
     ORCHESTRATIONS_TABLE,

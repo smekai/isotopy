@@ -1,5 +1,96 @@
 # Done
 
+## TASK-170: A team running unattended has no way to say something went wrong
+**Priority:** P2 | **Tags:** server, infra, milestone-i
+**Updated:** 2026-10-03 19:06
+
+Of **Milestone I — Induction** (`TASK-156`). **Lands before the unattended stretch is measured**,
+and before `TASK-161`'s poller is enabled — not because the poller needs it to run, but because the
+first month nobody is watching is the worst possible time to discover the system cannot report.
+
+### The state today, counted rather than felt
+
+- **17 `console.*` calls, all in `packages/server/src`.** `packages/core` and `packages/ui` have
+  none, so core purity and the UI's single-network-module rule both hold.
+- **15 of the 17 are `console.warn`. Two are `console.log`. There is not one `console.error`.**
+  A database that cannot be closed, a malformed persisted row, and a run whose cleanup failed are
+  all reported at the same severity as "server listening on port 9477" — which is to say, there is
+  no severity signal at all.
+- **133 `catch` blocks across `packages/*/src`; 11 swallow completely.** Most of those 11 are
+  correct — `config.ts` treating a missing `.env` as "no overrides" is the fallback *being* the
+  answer. Some are not.
+- **The convention has no enforcement.** `docs/architecture.md` records "no `console.*` in the new
+  modules" as an upheld convention and there is **no `no-console` ESLint rule**, so it is prose that
+  drifts every time someone needs to report something and finds no sanctioned way to.
+
+**And the ticket everyone deferred to does not exist.** `.tasks/DONE.md:3312` reads *"structured
+logging stays TASK-022"*. There is no `TASK-022` in Backlog, Next, In Progress, Done or Rejected. It
+was never filed. That is the actual reason the silent catches accumulated: every author did the
+right thing by deferring, to a number that was never real.
+
+### Two channels, and the task must not confuse them
+
+This is the distinction that decides the scope, and getting it wrong produces a logger that solves
+nothing.
+
+| | Operator channel | User-visible record |
+| --- | --- | --- |
+| Who reads it | whoever runs the server | whoever opens the app |
+| Where it lives | stdout, and later a file | the run record, the schedule record, the rail |
+| Answers | "why did the process behave like that" | "what did my team do, and what did it fail to do" |
+
+**A logger alone would not have caught the defect that prompted this task.** Nobody reads stdout on
+an unattended box. `TASK-159`'s scheduled-run failure needed a home in the *record*, and that fix
+belongs with schedules, not here. This task owns the operator channel only, and says so, so the next
+author does not reach for a log line where a persisted field is what the user needs.
+
+### What this decides
+
+- **One `Logger` interface behind a seam** (A2), in its own file, with a console implementation
+  beside it. Services receive it; nothing imports a singleton, which is what lets a component test
+  assert on what was reported instead of scraping stdout.
+- **Levels that mean something.** At minimum `error` must exist and must be used where the code
+  currently warns about a genuine failure. Deciding the level set is part of the work; keeping
+  everything at `warn` is not an outcome.
+- **What a `catch` is allowed to do.** Written down, then enforced: swallow silently *only* where
+  the fallback is itself the answer, and that case should read as a fallback rather than as a
+  rescue. Everything else reports — to the operator channel, the user-visible record, or both, and
+  the rule says which.
+- **An ESLint rule**, so the convention stops being prose. Whether that is `no-console` with an
+  allowlist for the bootstrap's two `console.log`s, or a narrower restriction, is part of the work.
+
+### Explicitly out of scope
+
+Log files, rotation, log levels driven by configuration, and any external sink. Those need a
+deployment story the product does not have yet — the deploy target is one of the things `TASK-156`
+left unwritten on purpose. A task that grows a transport layer here has stopped being this task.
+
+### Evidence
+
+Failing-first per behaviour: a service handed a fake logger reports the failure it swallowed today,
+with the context needed to act on it; a fallback that is genuinely the answer stays silent and has a
+test saying so; and the lint rule rejects a bare `console.*` in a module that should be using the
+seam. Then `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm e2e`.
+
+The 17 existing call sites move onto the seam in the same change — per the standing rule that a new
+approach means the old code goes with it, not beside it.
+
+Cross-platform: stdout and stderr behave the same on both, but **line endings and console encoding
+do not**. A Windows terminal and a POSIX one disagree on both, and the repo has already been bitten
+by a CRLF assertion in the skill tests, so any test asserting on rendered output normalises rather
+than hardcodes.
+
+### Plan
+
+**Done 2026-10-03.** One `Logger` seam (`server/src/utils/logger.ts`, `info`/`warn`/`error`) with `ConsoleLogger` as the only source file allowed to touch `console`. The composition root hands it to every service that reports; the persistence layer gets it once through `ProjectDatabases` → `Database`, and repositories report through the `Database` they are built on. All 20 call sites moved (the count had grown from 17); genuine failures are now `error`, malformed rows and invalid config files stay `warn`, bootstrap lines are `info`. An error no route catches reaches `app.onError`, which logs it and answers `{ error }` instead of Hono's bare console line.
+
+Swallows fixed: an unreadable (not missing) `settings.json` or `projects.json` now fails loudly instead of reading as defaults that the next write would save over; the durable status lookup on restart and the durable cancel report; a failed product watch is reported and recorded on the product state; `.gitignore` creation is narrowed to `EEXIST`; a throwing configured-model read is reported. The three copies of the `where`/`which` lookup became `lookupOnPath`. `buildInput` moved out of `RunService` to `workflow/pipeline-workflow-input.ts` to keep it under the 1000-line cap.
+
+The rule is written in `docs/architecture.md` ("What a catch may do") and enforced: `no-console` across `packages/*/src`, empty catches banned outside the UI, both proven by `test/checks/lint-rules.check.ts`. `RecordingLogger` is the third sanctioned substitution in `docs/testing.md`. Five new component tests, each mutation-checked.
+
+Not done: the UI's nine empty catches (storage, clipboard, notifications, malformed SSE frames) are browser fallbacks outside the operator channel and keep `allowEmptyCatch`; an invalid (as opposed to unreadable) settings file still reads as defaults, as before.
+
+---
 ## TASK-177: Windows CI runs the suite on fewer workers, and tests share one temp root deleted once
 **Priority:** P2 | **Tags:** testing, infra
 **Updated:** 2026-09-27 10:33

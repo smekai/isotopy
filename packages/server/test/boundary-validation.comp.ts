@@ -85,16 +85,17 @@ test("an invalid settings record is ignored as a whole and left untouched", asyn
     },
   });
   await writeFile(settingsPath, contents, "utf8");
-  const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
   // Act
-  const { app, shutdown } = await restartApp();
+  const { app, shutdown, logger } = await restartApp();
 
   // Assert — the record is dropped whole, never salvaged field by field.
   const { body } = await get<SettingsView>(app, "/settings");
   expect(body.preferences).toEqual(defaultProjectPreferences());
   expect(await readFile(settingsPath, "utf8")).toBe(contents);
-  expect(warn).toHaveBeenCalledWith(expect.stringContaining("projects.home"));
+  expect(logger.at("warn")).toContainEqual(
+    expect.objectContaining({ message: expect.stringContaining("projects.home") }),
+  );
   await shutdown();
 });
 
@@ -116,18 +117,56 @@ test("an invalid project registry is ignored as a whole and left untouched", asy
   });
   await mkdir(ctx.userHome, { recursive: true });
   await writeFile(registryPath, contents, "utf8");
-  const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
   // Act
-  const { app, shutdown } = await restartApp();
+  const { app, shutdown, logger } = await restartApp();
 
   // Assert — the malformed entry takes only itself down, and the file is intact.
   const { body } = await get<ProjectsView>(app, "/projects");
   expect(body.projects).toHaveLength(1);
   expect(body.activeProjectId).toBe("home");
   expect(await readFile(registryPath, "utf8")).toBe(contents);
-  expect(warn).toHaveBeenCalledWith(expect.stringContaining("projects.1.id"));
+  expect(logger.at("warn")).toContainEqual(
+    expect.objectContaining({ message: expect.stringContaining("projects.1.id") }),
+  );
   await shutdown();
+});
+
+test("a missing settings file is the defaults, so reading it reports nothing", async () => {
+  // Act
+  const { status } = await get<SettingsView>(ctx.app, "/settings");
+
+  // Assert
+  expect(status).toBe(200);
+  expect(ctx.logger.entries).toEqual([]);
+});
+
+test("a settings file that exists but cannot be read fails loudly instead of reading as defaults", async () => {
+  // Arrange — a directory where the file belongs makes every read fail. Reading
+  // it as defaults is what let the next write replace the user's stored keys.
+  const settingsPath = path.join(ctx.userHome, "settings.json");
+  await mkdir(settingsPath, { recursive: true });
+
+  // Act
+  const { status, body } = await get<{ error: string }>(ctx.app, "/settings");
+
+  // Assert
+  expect(status).toBe(500);
+  expect(body.error).toContain(settingsPath);
+  expect(ctx.logger.at("error")).toEqual([
+    expect.objectContaining({ message: expect.stringContaining("/settings") }),
+  ]);
+});
+
+test("a project registry that cannot be read stops the server rather than starting without its projects", async () => {
+  // Arrange
+  await mkdir(path.join(ctx.userHome, "projects.json"), { recursive: true });
+
+  // Act
+  const restarting = restartApp();
+
+  // Assert
+  await expect(restarting).rejects.toThrow(/projects\.json/);
 });
 
 async function rawJsonRequest(

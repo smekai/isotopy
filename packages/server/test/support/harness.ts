@@ -22,6 +22,7 @@ import { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { RunService } from "../../src/services/run/run-service.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
 import { FakeEngine } from "./fake-engine.ts";
+import { RecordingLogger } from "./recording-logger.ts";
 
 const WAIT_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 10;
@@ -36,6 +37,7 @@ export interface TestApp {
   engine: FakeEngine;
   rosters: ModelRosterService;
   product: ProductProcessService;
+  logger: RecordingLogger;
   /** Temp `ISOTOPY_HOME` for this test — the home project's data root. */
   home: string;
   /** Temp `ISOTOPY_USER_HOME` — the project registry and credentials land here. */
@@ -89,13 +91,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const engine = new FakeEngine(engineId);
   setEngineAdapter(engineId, engine);
 
-  const registry = new ProjectRegistry();
-  const settings = new SettingsStore();
-  const rosters = new ModelRosterService();
+  const logger = new RecordingLogger();
+  const registry = new ProjectRegistry(logger);
+  const settings = new SettingsStore(logger);
+  const rosters = new ModelRosterService(logger);
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
-  const databases = new ProjectDatabases();
-  const product = new ProductProcessService(automation, unspawnedProduct());
+  const databases = new ProjectDatabases(logger);
+  const product = new ProductProcessService(automation, { ...unspawnedProduct(), logger });
   const orchestrator = new RunService(
     registry,
     settings,
@@ -103,10 +106,18 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     automation,
     deployment,
     databases,
+    logger,
     product,
   );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
-  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases, settings);
+  const schedules = new ScheduleService(
+    registry,
+    orchestrator,
+    orchestrations,
+    databases,
+    settings,
+    logger,
+  );
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await schedules.init();
@@ -121,6 +132,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     automation,
     deployment,
     product,
+    logger,
   });
 
   return {
@@ -133,6 +145,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     engine,
     rosters,
     product,
+    logger,
     home,
     userHome,
     dispose: async () => {
@@ -154,6 +167,7 @@ export interface RestartedApp {
   orchestrator: RunService;
   orchestrations: OrchestrationService;
   schedules: ScheduleService;
+  logger: RecordingLogger;
   /**
    * Settles every service this rebooted app opened. Each one holds its own
    * SQLite connection to the project's `runs.db`, and on Windows a connection
@@ -165,13 +179,14 @@ export interface RestartedApp {
 }
 
 export async function restartApp(): Promise<RestartedApp> {
-  const registry = new ProjectRegistry();
-  const settings = new SettingsStore();
-  const rosters = new ModelRosterService();
+  const logger = new RecordingLogger();
+  const registry = new ProjectRegistry(logger);
+  const settings = new SettingsStore(logger);
+  const rosters = new ModelRosterService(logger);
   const automation = new AutomationConfigStore();
   const deployment = new DeploymentRunner();
-  const databases = new ProjectDatabases();
-  const product = new ProductProcessService(automation, unspawnedProduct());
+  const databases = new ProjectDatabases(logger);
+  const product = new ProductProcessService(automation, { ...unspawnedProduct(), logger });
   const orchestrator = new RunService(
     registry,
     settings,
@@ -179,10 +194,18 @@ export async function restartApp(): Promise<RestartedApp> {
     automation,
     deployment,
     databases,
+    logger,
     product,
   );
   const orchestrations = new OrchestrationService(registry, orchestrator, settings, databases);
-  const schedules = new ScheduleService(registry, orchestrator, orchestrations, databases, settings);
+  const schedules = new ScheduleService(
+    registry,
+    orchestrator,
+    orchestrations,
+    databases,
+    settings,
+    logger,
+  );
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
@@ -199,10 +222,12 @@ export async function restartApp(): Promise<RestartedApp> {
       automation,
       deployment,
       product,
+      logger,
     }),
     orchestrator,
     orchestrations,
     schedules,
+    logger,
     shutdown: async () => {
       schedules.stop();
       await product.shutdown();

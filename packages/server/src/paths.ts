@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { Project } from "@isotopy/core";
+import { errorCodeOf } from "./utils/error-code.ts";
 
 export const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -76,7 +77,13 @@ export async function ensureProjectDataDir(projectPath: ProjectPath): Promise<vo
   await mkdir(projectPath.dataDir, { recursive: true });
   await writeFile(path.join(projectPath.dataDir, ".gitignore"), SELF_IGNORING_GITIGNORE, {
     flag: "wx",
-  }).catch(() => undefined);
+  }).catch(keepExistingFile);
+}
+
+function keepExistingFile(error: unknown): void {
+  if (errorCodeOf(error) !== "EEXIST") {
+    throw error;
+  }
 }
 
 async function ensureRunWorkspace(projectPath: ProjectPath, runId: string): Promise<string> {

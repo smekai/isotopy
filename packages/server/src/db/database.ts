@@ -2,6 +2,7 @@ import path from "node:path";
 import type { DatabaseSync as SqliteConnection } from "node:sqlite";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { Logger } from "../utils/logger.ts";
 
 const BUSY_TIMEOUT_MS = 5000;
 
@@ -17,7 +18,10 @@ export class Database {
   private readonly registrations: Registration[] = [];
   private applied = 0;
 
-  constructor(private readonly path: ProjectPath) {}
+  constructor(
+    private readonly path: ProjectPath,
+    readonly logger: Logger,
+  ) {}
 
   register(schema: string, migrate?: Migration): void {
     this.registrations.push({ schema, migrate });
@@ -76,7 +80,7 @@ export class Database {
       db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       db.close();
     } catch (error) {
-      console.warn(`Failed to close run database at ${this.describe()}:`, error);
+      this.logger.error(`Failed to close run database at ${this.describe()}`, { error });
     }
   }
 }

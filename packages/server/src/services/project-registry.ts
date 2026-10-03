@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { HOME_PROJECT_ID } from "@isotopy/core";
@@ -12,31 +12,31 @@ import { projectIdFor, projectNameFor, sameProjectRoot } from "../domain/rules/p
 import { formatValidationIssues, parseJson } from "../domain/validation.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import type { Logger } from "../utils/logger.ts";
+import { readOptionalTextSync } from "../utils/read-optional-text.ts";
 
 export class ProjectRegistry {
   private file: RegistryFile = { version: 1, activeProjectId: HOME_PROJECT_ID, projects: [] };
   private loaded = false;
 
+  constructor(private readonly logger: Logger) {}
+
   private read(): RegistryFile {
     if (this.loaded) {
       return this.file;
     }
-    try {
-      const parsed = parseJson(
-        registryFileSchema,
-        readFileSync(projectsFilePath(), "utf8"),
+    const raw = readOptionalTextSync(projectsFilePath());
+    const parsed = raw === undefined ? undefined : parseJson(registryFileSchema, raw);
+    if (parsed?.ok === false) {
+      this.logger.warn(
+        `Ignoring invalid project registry ${projectsFilePath()}: ${formatValidationIssues(parsed.issues)}`,
       );
-      if (!parsed.ok) {
-        console.warn(
-          `Ignoring invalid project registry ${projectsFilePath()}: ${formatValidationIssues(parsed.issues)}`,
-        );
-      } else {
-        this.file = {
-          ...parsed.value,
-          projects: parsed.value.projects.filter((project) => project.id !== HOME_PROJECT_ID),
-        };
-      }
-    } catch {}
+    } else if (parsed?.ok) {
+      this.file = {
+        ...parsed.value,
+        projects: parsed.value.projects.filter((project) => project.id !== HOME_PROJECT_ID),
+      };
+    }
     this.loaded = true;
     return this.file;
   }

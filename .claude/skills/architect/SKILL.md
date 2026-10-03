@@ -211,6 +211,20 @@ of the source. When you strip or avoid a comment, that is where its content goes
   extensions (like `@isotopy/core`); `rewriteRelativeImportExtensions` rewrites
   them to `.js` on build.
 
+- **What a catch may do (A2):** a failure has two possible readers. Whoever runs
+  the server reads the **operator channel**: the `Logger` seam
+  (`server/src/utils/logger.ts`), handed to each service by the composition root,
+  with `ConsoleLogger` the only source file allowed to touch `console`. Whoever
+  opens the app reads the **user-visible record**: the run log, a schedule's
+  `lastOutcome`, an orchestration's `decisionError`. A `catch` reports to one or
+  both. It stays silent **only when the fallback is the answer** — a missing
+  file, a probe that found nothing, a command absent from `PATH` — and then it
+  reads as a fallback: narrowed to the expected error code
+  (`readOptionalText`, `errorCodeOf`) or a named function that returns the
+  fallback value (`lookupOnPath`). An error nothing catches reaches `app.onError`,
+  which logs it and answers `{ error }`. ESLint enforces `no-console` across
+  `packages/*/src` and bans empty catches outside the UI.
+
 **Verify a change** (from the repo root, shell-neutral):
 
 ```

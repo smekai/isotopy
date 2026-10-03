@@ -73,11 +73,11 @@ function countRows(connection: SqliteConnection, sql: string): number {
 function migrateLegacyTimestamps(
   connection: SqliteConnection,
   spec: JsonTableSpec,
-): void {
+): number {
   const { table, idColumn } = spec;
   const columns = columnNames(connection, table);
   if (columns.has("created_at")) {
-    return;
+    return 0;
   }
   if (!columns.has("updated_at")) {
     throw new Error(`Cannot migrate ${table}: updated_at is missing`);
@@ -97,13 +97,9 @@ WHERE json_valid(data)`);
       connection,
       `SELECT COUNT(*) AS rows FROM ${temporaryTable} WHERE NOT json_valid(data)`,
     );
-    if (abandoned > 0) {
-      console.warn(
-        `Dropped ${abandoned} malformed ${table} row(s) during timestamp migration; they could not be read before it either`,
-      );
-    }
     connection.exec(`DROP TABLE ${temporaryTable}`);
     connection.exec("COMMIT");
+    return abandoned;
   } catch (error) {
     connection.exec("ROLLBACK");
     throw error;
@@ -124,7 +120,12 @@ export class JsonRecordsTable {
       schemaFor(spec),
       spec.migrateLegacyTimestamps
         ? (connection) => {
-            migrateLegacyTimestamps(connection, spec);
+            const abandoned = migrateLegacyTimestamps(connection, spec);
+            if (abandoned > 0) {
+              db.logger.warn(
+                `Dropped ${abandoned} malformed ${spec.table} row(s) during timestamp migration; they could not be read before it either`,
+              );
+            }
           }
         : undefined,
     );

@@ -9,6 +9,7 @@ import { RunRepository } from "../../repository/run-repository.ts";
 import type { PersistedRun } from "../../repository/run-repository.ts";
 import type { ProjectDatabases } from "../../db/project-databases.ts";
 import { getOrCreate } from "../../utils/get-or-create.ts";
+import type { Logger } from "../../utils/logger.ts";
 
 export class RunStore {
   readonly runs = new Map<string, RunState>();
@@ -18,10 +19,12 @@ export class RunStore {
   private readonly repositories = new Map<string, RunRepository>();
   private readonly registry: ProjectRegistry;
   private readonly databases: ProjectDatabases;
+  private readonly logger: Logger;
 
-  constructor(registry: ProjectRegistry, databases: ProjectDatabases) {
+  constructor(registry: ProjectRegistry, databases: ProjectDatabases, logger: Logger) {
     this.registry = registry;
     this.databases = databases;
+    this.logger = logger;
   }
 
   async loadProject(projectPath: ProjectPath): Promise<void> {
@@ -136,7 +139,7 @@ export class RunStore {
     try {
       await this.repositoryForRun(runId).writeState(runId, persisted);
     } catch (error) {
-      console.warn(`Failed to persist run ${runId}:`, error);
+      this.logger.error(`Failed to persist run ${runId}`, { error });
     }
   }
 

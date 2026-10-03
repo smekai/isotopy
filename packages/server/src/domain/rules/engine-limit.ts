@@ -58,19 +58,21 @@ function readMinutesOfDay(parts: Intl.DateTimeFormatPart[]): number {
 }
 
 function minutesOfDayIn(now: Date, timeZone: string | undefined): number {
+  const minutes = readMinutesOfDay(zonedTimeParts(now, timeZone));
+  return Number.isNaN(minutes) ? now.getHours() * 60 + now.getMinutes() : minutes;
+}
+
+function zonedTimeParts(now: Date, timeZone: string | undefined): Intl.DateTimeFormatPart[] {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat("en-US", {
       timeZone,
       hourCycle: "h23",
       hour: "2-digit",
       minute: "2-digit",
     }).formatToParts(now);
-    const minutes = readMinutesOfDay(parts);
-    if (!Number.isNaN(minutes)) {
-      return minutes;
-    }
-  } catch {}
-  return now.getHours() * 60 + now.getMinutes();
+  } catch {
+    return [];
+  }
 }
 
 function targetMinutesOfDay(

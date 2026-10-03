@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test } from "vitest";
 import { Database } from "../src/db/database.ts";
 import {
   JsonRecordsTable,
@@ -9,6 +9,7 @@ import {
   RUNS_TABLE,
 } from "../src/db/json-records-table.ts";
 import type { ProjectPath } from "../src/paths.ts";
+import { RecordingLogger } from "./support/recording-logger.ts";
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const LEGACY_TIMESTAMP = "2026-07-01T10:20:30.456Z";
@@ -17,10 +18,12 @@ const RUN_TIMESTAMPS = "SELECT created_at, updated_at FROM runs WHERE run_id = '
 let dir: string;
 let projectPath: ProjectPath;
 let database: Database | undefined;
+let logger: RecordingLogger;
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "isotopy-json-records-"));
   projectPath = { id: "p", root: dir, dataDir: dir };
+  logger = new RecordingLogger();
 });
 
 afterEach(async () => {
@@ -166,7 +169,6 @@ INSERT INTO runs(run_id, data, updated_at)
 VALUES('run-corrupt', 'this is not json', '${LEGACY_TIMESTAMP}');
 `);
   legacy.close();
-  const warnings = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
   // Act
   createTables();
@@ -175,17 +177,16 @@ VALUES('run-corrupt', 'this is not json', '${LEGACY_TIMESTAMP}');
   const connection = await database?.connection();
   const rows = connection?.prepare("SELECT run_id FROM runs ORDER BY run_id").all();
   expect(rows).toEqual([{ run_id: "run-ok" }]);
-  expect(warnings).toHaveBeenCalledWith(
-    expect.stringContaining("Dropped 1 malformed runs row(s)"),
-  );
-  warnings.mockRestore();
+  expect(logger.at("warn")).toEqual([
+    expect.objectContaining({ message: expect.stringContaining("Dropped 1 malformed runs row(s)") }),
+  ]);
 });
 
 function createTables(): {
   runs: JsonRecordsTable;
   milestones: JsonRecordsTable;
 } {
-  database = new Database(projectPath);
+  database = new Database(projectPath, logger);
   return {
     runs: new JsonRecordsTable(database, RUNS_TABLE),
     milestones: new JsonRecordsTable(database, MILESTONES_TABLE),

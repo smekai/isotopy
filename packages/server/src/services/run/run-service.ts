@@ -61,8 +61,9 @@ import { engineLabel } from "../../domain/rules/engine-label.ts";
 import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/run-start.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
+import { pipelineWorkflowInput } from "../../workflow/pipeline-workflow-input.ts";
+import type { PipelineLaunch } from "../../workflow/pipeline-workflow-input.ts";
 import type {
-  PipelineWorkflowInput,
   RunCompletionStatus,
   RunProjection,
   WorkflowDeps,
@@ -71,6 +72,7 @@ import type { OrchestrationService } from "../orchestration-service.ts";
 import type { ProductProcessService } from "../product-process-service.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
+import type { Logger } from "../../utils/logger.ts";
 import { LIMIT_ERRORS, LIMIT_LOG } from "../../domain/rules/limit-copy.ts";
 import {
   formatLimitWait,
@@ -119,7 +121,7 @@ export class RunService implements RunProjection {
   readonly milestones: MilestoneService;
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
-  private readonly changes = new RunChangeCollector();
+  private readonly changes: RunChangeCollector;
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
@@ -133,9 +135,11 @@ export class RunService implements RunProjection {
     private readonly automation: AutomationConfigStore,
     private readonly deployment: DeploymentRunner,
     databases: ProjectDatabases,
+    private readonly logger: Logger,
     private readonly product?: ProductProcessService,
   ) {
-    this.store = new RunStore(registry, databases);
+    this.changes = new RunChangeCollector({ logger });
+    this.store = new RunStore(registry, databases, logger);
     this.milestones = new MilestoneService(registry, () => this, databases);
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
@@ -196,7 +200,11 @@ export class RunService implements RunProjection {
     let status: string | undefined;
     try {
       status = await this.runtimes.for(projectPath).runStatus(openWorkflowRunId);
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        `Could not read the durable state of run ${run.id}; it stays ${run.status}`,
+        { error },
+      );
       return;
     }
     if (status === undefined || !TERMINAL_OPENWORKFLOW_STATUSES.has(status)) {
@@ -204,7 +212,7 @@ export class RunService implements RunProjection {
     }
     if (status === "canceled") {
       this.markCancelled(run.id);
-      await releaseUnfinishedSourceTasks(this.registry, run);
+      await releaseUnfinishedSourceTasks(this.registry, run, this.logger);
     } else if (status === "failed") {
       this.markInterrupted(run.id);
     } else {
@@ -458,7 +466,12 @@ export class RunService implements RunProjection {
     this.engineAborts.get(runId)?.abort();
     const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
     if (openWorkflowRunId) {
-      void this.runtimes.forProject(run.projectId).cancel(openWorkflowRunId).catch(() => {});
+      void this.runtimes
+        .forProject(run.projectId)
+        .cancel(openWorkflowRunId)
+        .catch((error: unknown) =>
+          this.logger.error(`Failed to cancel the durable run behind run ${runId}`, { error }),
+        );
     }
     this.markCancelled(runId);
     void this.settleCompletedRun(run)
@@ -466,7 +479,7 @@ export class RunService implements RunProjection {
         cleanupCancelledRun(this.registry.resolve(run.projectId), run.id),
       )
       .catch((error: unknown) =>
-        console.warn(`Failed to clean cancelled run ${run.id}:`, error),
+        this.logger.error(`Failed to clean cancelled run ${run.id}`, { error }),
       );
     return structuredClone(run);
   }
@@ -903,7 +916,9 @@ export class RunService implements RunProjection {
   private emit(event: RunEvent): void {
     void this.store.repositoryForRun(event.runId)
       .appendEvent(event.runId, event)
-      .catch((error) => console.warn(`Failed to persist event for run ${event.runId}:`, error));
+      .catch((error: unknown) =>
+        this.logger.error(`Failed to persist event for run ${event.runId}`, { error }),
+      );
     if (event.type !== "stage.log") {
       void this.store.flushPersist(event.runId);
     }
@@ -921,7 +936,7 @@ export class RunService implements RunProjection {
   }
 
   private async settleCompletedRun(run: RunState): Promise<void> {
-    await releaseUnfinishedSourceTasks(this.registry, run);
+    await releaseUnfinishedSourceTasks(this.registry, run, this.logger);
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.captureRunChanges(run);
     await this.milestones.completeMilestoneRun(run);
@@ -937,7 +952,7 @@ export class RunService implements RunProjection {
   private async launch(
     projectPath: ProjectPath,
     run: RunState,
-    extras: InputExtras,
+    extras: PipelineLaunch,
   ): Promise<void> {
     const pipeline = this.pipelineForRun(run);
     if (!pipeline) {
@@ -952,36 +967,13 @@ export class RunService implements RunProjection {
     }
     const runtime = this.runtimes.for(projectPath);
     await runtime.start();
-    const input = this.buildInput(run, pipeline, extras);
-    const openWorkflowRunId = await runtime.startRun(input);
+    const permissionMode =
+      this.store.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE;
+    const openWorkflowRunId = await runtime.startRun(
+      pipelineWorkflowInput(run, pipeline, permissionMode, extras),
+    );
     this.bindOpenWorkflowRun(run.id, openWorkflowRunId);
   }
-
-  private buildInput(
-    run: RunState,
-    pipeline: PipelineDefinition,
-    extras: InputExtras,
-  ): PipelineWorkflowInput {
-    return {
-      runId: run.id,
-      projectId: run.projectId,
-      pipeline,
-      task: extras.task ?? run.task,
-      engine: run.engine,
-      model: run.model,
-      permissionMode: this.store.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE,
-      workspacePath: run.workspacePath,
-      startedMessage: extras.startedMessage,
-      seeded: extras.seeded,
-    };
-  }
-}
-
-interface InputExtras {
-  startedMessage: string;
-  task?: string;
-  seeded?: SeededStart;
-  readmit?: boolean;
 }
 
 interface MessageDraft {

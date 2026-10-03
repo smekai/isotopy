@@ -11,6 +11,8 @@ import type { ProductResponseHeaders } from "../domain/rules/product-preview.ts"
 import { startSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessHandle, SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
+import { ConsoleLogger } from "../utils/console-logger.ts";
+import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { pollUntilHealthy } from "../utils/health-poll.ts";
 import type { HealthProbe } from "../utils/health-poll.ts";
@@ -42,6 +44,7 @@ export interface ProductProcessDependencies {
   headers: HeaderProbe;
   now: () => Date;
   sleep: (milliseconds: number) => Promise<void>;
+  logger: Logger;
 }
 
 interface RunningProduct {
@@ -79,6 +82,7 @@ function defaultDependencies(): ProductProcessDependencies {
     headers: readHeaders,
     now: () => new Date(),
     sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    logger: new ConsoleLogger(),
   };
 }
 
@@ -258,8 +262,20 @@ export class ProductProcessService {
       stderrTail,
     };
     this.current = current;
-    this.pending = this.watch(current).catch(() => undefined);
+    this.pending = this.watch(current).catch((error: unknown) => this.watchFailed(current, error));
     return statusOf(current);
+  }
+
+  private watchFailed(current: RunningProduct, error: unknown): void {
+    this.deps.logger.error(`Watching the product of project ${current.project.id} failed`, {
+      error,
+    });
+    if (this.superseded(current)) {
+      return;
+    }
+    current.state = "failed";
+    current.lastError = `Isotopy stopped watching the product: ${messageOf(error)}`;
+    current.handle.kill();
   }
 
   private async watch(current: RunningProduct): Promise<void> {

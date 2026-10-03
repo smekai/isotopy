@@ -23,6 +23,7 @@ import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
+import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
@@ -56,7 +57,7 @@ export class ScheduleService {
     SCHEDULE_TICK_MS,
     () => this.tick(),
     (error: unknown) => {
-      console.warn("Schedule tick failed:", messageOf(error));
+      this.logger.error("Schedule tick failed", { error });
     },
   );
 
@@ -66,6 +67,7 @@ export class ScheduleService {
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
     private readonly settings: SettingsStore,
+    private readonly logger: Logger,
   ) {}
 
   async init(): Promise<void> {
@@ -207,12 +209,12 @@ export class ScheduleService {
     const claimed = await this.claimWindow(schedule, now);
     if (claimed !== undefined) {
       schedule.lastOutcome = claimed;
-      console.warn(`Schedule ${schedule.id} could not claim its window:`, claimed);
+      this.logger.error(`Schedule ${schedule.id} could not claim its window`, { outcome: claimed });
       return claimed;
     }
     schedule.lastOutcome = await this.attemptRun(schedule, now);
     await this.persist(schedule).catch((error: unknown) => {
-      console.warn(`Failed to record the outcome of schedule ${schedule.id}:`, messageOf(error));
+      this.logger.error(`Failed to record the outcome of schedule ${schedule.id}`, { error });
     });
     return schedule.lastOutcome;
   }

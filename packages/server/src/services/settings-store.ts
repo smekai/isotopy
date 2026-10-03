@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   ENGINES,
@@ -26,20 +26,22 @@ import {
 } from "../domain/validation.ts";
 import type { EngineConnection } from "../engines/types.ts";
 import { userSettingsPath } from "../paths.ts";
+import type { Logger } from "../utils/logger.ts";
+import { readOptionalTextSync } from "../utils/read-optional-text.ts";
 
 export type { EngineConnectionUpdate } from "../schemas/request-schemas.ts";
 
 export class SettingsStore {
+  constructor(private readonly logger: Logger) {}
+
   private read(): SettingsFile {
-    let raw: string;
-    try {
-      raw = readFileSync(userSettingsPath(), "utf8");
-    } catch {
+    const raw = readOptionalTextSync(userSettingsPath());
+    if (raw === undefined) {
       return emptySettings();
     }
     const parsed = parseJson(settingsFileSchema, raw);
     if (!parsed.ok) {
-      console.warn(
+      this.logger.warn(
         `Ignoring invalid settings file ${userSettingsPath()}: ${formatValidationIssues(parsed.issues)}`,
       );
       return emptySettings();
