@@ -2,7 +2,7 @@
 
 ## TASK-168: Onboarding asks for a project and offers no way to add one
 **Priority:** P2 | **Tags:** ui, setup, milestone-i
-**Updated:** 2026-10-03 19:15
+**Updated:** 2026-10-03 19:53
 
 Observed in `TASK-142`'s dogfood by registering a real project through the UI for the first time in
 a clean `ISOTOPY_USER_HOME`. Small, and all in the first sixty seconds a newcomer spends here.
@@ -29,9 +29,9 @@ the field joins that rather than replacing it.
 
 **Done 2026-10-03.** The Project panel now carries an **Add project…** button under both of its messages, and it opens the same folder picker as the switcher's menu row: `App` owns the one picker (`ProjectSwitcher.onAdd(root)` became `onRequestAdd()`), renders it outside the panel's DOM so the panel still holds no input, and on select adds the project, goes Home and clears focus the way switching project does.
 
-The picker's path line is an editable **Folder path** field that follows the folder you are in; Enter or Go lists whatever was typed or pasted through the existing `GET /fs/dirs`, which now also strips the quotes Windows' *Copy as path* adds and expands a leading `~` (`~`, `~/…` or `~\…`). Whether a path is a folder is still decided by the server reading it after `path.resolve`, never by the shape of the text. A path that cannot be listed no longer strands the user: the error shows and the previous folder stays listed and selectable.
+The picker's path line is an editable **Folder path** field that follows the folder you are in; Enter or Go lists whatever was typed or pasted through the existing `GET /fs/dirs`, which resolves the trimmed text. Whether a path is a folder is decided by the server reading it, never by the shape of the text — quote stripping and `~` expansion were tried and dropped in review as guesswork. A listing updates the field only while the field still holds the text that request was sent with, so a paste made during the first (slow, on Windows) listing survives it. A path that cannot be listed no longer strands the user: the error shows and the field goes back to the folder Select would add.
 
-Evidence: five server component tests for `/fs/dirs` (none existed), three `FolderPicker` and one `ProjectDrawer` component test (none existed), each guard mutation-checked; two free-tier e2e specs, one of which really registers a pasted folder and unregisters it afterwards. Checked live in the dev app with a quoted `C:\…` path and a missing one.
+Evidence: four `FolderPicker` and one `ProjectDrawer` component test (none existed), each guard mutation-checked; two free-tier e2e specs, one of which really registers a pasted folder through `/fs/dirs` and unregisters it afterwards. Checked live in the dev app with a missing folder.
 
 Found, not fixed: unregistering a project leaves its SQLite database open, so on Windows its folder cannot be deleted while the server runs; the e2e cleanup leaves the folder under the suite's temp root for that reason. Offered as a separate task.
 
