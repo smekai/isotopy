@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { errorCodeOf } from "./error-code.ts";
 
 export interface DirectoryListing {
   path: string;
@@ -34,17 +35,25 @@ function isFilesystemRoot(dir: string): boolean {
   return path.dirname(dir) === dir;
 }
 
+function typedPath(input: string | undefined): string {
+  const trimmed = (input ?? "").trim();
+  const unquoted = /^"(.*)"$/.test(trimmed) ? trimmed.slice(1, -1).trim() : trimmed;
+  const underHome = unquoted === "~" || unquoted.startsWith("~/") || unquoted.startsWith("~\\");
+  return underHome ? path.join(os.homedir(), unquoted.slice(1)) : unquoted;
+}
+
 export async function listDirectories(targetPath?: string): Promise<DirectoryListing> {
-  if (!targetPath || targetPath.trim() === "") {
+  const typed = typedPath(targetPath);
+  if (typed === "") {
     return listRoots();
   }
 
-  const resolved = path.resolve(targetPath.trim());
+  const resolved = path.resolve(typed);
   let entries;
   try {
     entries = await readdir(resolved, { withFileTypes: true });
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
+    const code = errorCodeOf(error);
     const reason =
       code === "ENOENT"
         ? `Directory does not exist: ${resolved}`

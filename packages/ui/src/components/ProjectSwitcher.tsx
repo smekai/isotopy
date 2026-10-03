@@ -4,7 +4,6 @@ import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { Project } from "@isotopy/core";
 import type { Dir } from "../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT, Z } from "../theme";
-import { FolderPicker } from "./FolderPicker";
 
 const MENU_MIN_WIDTH = 300;
 const MENU_MAX_WIDTH = 420;
@@ -14,7 +13,7 @@ export interface ProjectSwitcherProps {
   projects: Project[];
   activeId: string;
   onSelect: (projectId: string) => void;
-  onAdd: (root: string) => void;
+  onRequestAdd: () => void;
   onRemove: (projectId: string) => void;
 }
 
@@ -90,12 +89,11 @@ export function ProjectSwitcher({
   projects,
   activeId,
   onSelect,
-  onAdd,
+  onRequestAdd,
   onRemove,
 }: ProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const active = projects.find((project) => project.id === activeId);
 
@@ -182,7 +180,7 @@ export function ProjectSwitcher({
 
           <button
             onClick={() => {
-              setPickerOpen(true);
+              onRequestAdd();
               setOpen(false);
             }}
             onMouseEnter={() => setHovered("add")}
@@ -193,17 +191,6 @@ export function ProjectSwitcher({
             <span style={addLabel(d)}>Add project…</span>
           </button>
         </div>
-      )}
-
-      {pickerOpen && (
-        <FolderPicker
-          d={d}
-          onSelect={(picked) => {
-            onAdd(picked);
-            setPickerOpen(false);
-          }}
-          onClose={() => setPickerOpen(false)}
-        />
       )}
     </div>
   );

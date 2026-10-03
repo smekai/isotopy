@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, FolderOpen, Lock, X } from "lucide-react";
+import { Check, Copy, FolderOpen, FolderPlus, Lock, X } from "lucide-react";
 import { ENGINES, HOME_PROJECT_ID, findPipeline, flattenPipelineStages, modelChoiceLabel, permissionModeLabel } from "@isotopy/core";
 import type { Project, RunState } from "@isotopy/core";
 import type { SettingsController } from "../hooks/useSettings";
@@ -86,6 +86,15 @@ function copyButtonStyle(d: Dir, copied: boolean): React.CSSProperties {
   };
 }
 
+function addProjectButtonStyle(d: Dir): React.CSSProperties {
+  return {
+    display: "flex", alignItems: "center", gap: SPACE.sm, marginTop: SPACE.lg,
+    background: d.accentSoft, border: "none", borderRadius: RADIUS.lg,
+    padding: `${SPACE.md}px ${SPACE.xl}px`, cursor: "pointer",
+    color: d.accent, fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.semibold,
+  };
+}
+
 function runNumberStyle(d: Dir): React.CSSProperties {
   return { color: d.textMuted, fontFamily: MONO, fontSize: FONT.xs };
 }
@@ -123,6 +132,7 @@ export interface ProjectDrawerProps {
   settings: SettingsController;
   run: RunState | null;
   onOpenSetup: (section: SetupSection) => void;
+  onAddProject: () => void;
   onClose: () => void;
 }
 
@@ -133,6 +143,7 @@ export function ProjectDrawer({
   settings,
   run,
   onOpenSetup,
+  onAddProject,
   onClose,
 }: ProjectDrawerProps) {
   const [copied, setCopied] = useState(false);
@@ -197,6 +208,9 @@ export function ProjectDrawer({
                 : "A project's folder is fixed. Add another project to work somewhere else."}
             </span>
           </div>
+          <button onClick={onAddProject} style={addProjectButtonStyle(d)}>
+            <FolderPlus size={ICON.md} /> Add project…
+          </button>
           <Field d={d} label="Runs and artifacts (git-ignored)" value={project?.dataDir ?? ""} mono />
         </div>
 

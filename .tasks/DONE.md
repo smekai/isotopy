@@ -1,5 +1,41 @@
 # Done
 
+## TASK-168: Onboarding asks for a project and offers no way to add one
+**Priority:** P2 | **Tags:** ui, setup, milestone-i
+**Updated:** 2026-10-03 19:15
+
+Observed in `TASK-142`'s dogfood by registering a real project through the UI for the first time in
+a clean `ISOTOPY_USER_HOME`. Small, and all in the first sixty seconds a newcomer spends here.
+
+**The Project panel names the need and cannot satisfy it.** It says "Home has no project folder —
+every run works in its own scratch folder. Add a project to work on real code", and contains no
+control that adds one. The control lives in `ProjectSwitcher` in the top bar, which is labelled with
+the *current project's name* — "Home" — next to a separate "Project" button that opens the panel
+that just told you to add one. Two adjacent controls, and the one that reads like the answer is the
+wrong one.
+
+**The folder picker has no path field.** Reaching `C:\Development\smekai\dogfood-focus-timer-142`
+from `C:\` took four clicks. Anyone arriving with a path in hand — which is everyone registering a
+project they already have — wants to paste it. `TASK-141` recorded the adjacent finding that a
+newcomer meets a goal composer over a scratch workspace and is never told that registering a project
+comes first; this is the same wound one layer in.
+
+Cross-platform: a path field must accept both `C:\...` and `/Users/...` shapes and validate through
+the existing `/fs` boundary rather than by pattern-matching a separator, and the picker's roots
+differ per OS (drive letters versus `/`). The existing picker already lists roots per platform, so
+the field joins that rather than replacing it.
+
+### Plan
+
+**Done 2026-10-03.** The Project panel now carries an **Add project…** button under both of its messages, and it opens the same folder picker as the switcher's menu row: `App` owns the one picker (`ProjectSwitcher.onAdd(root)` became `onRequestAdd()`), renders it outside the panel's DOM so the panel still holds no input, and on select adds the project, goes Home and clears focus the way switching project does.
+
+The picker's path line is an editable **Folder path** field that follows the folder you are in; Enter or Go lists whatever was typed or pasted through the existing `GET /fs/dirs`, which now also strips the quotes Windows' *Copy as path* adds and expands a leading `~` (`~`, `~/…` or `~\…`). Whether a path is a folder is still decided by the server reading it after `path.resolve`, never by the shape of the text. A path that cannot be listed no longer strands the user: the error shows and the previous folder stays listed and selectable.
+
+Evidence: five server component tests for `/fs/dirs` (none existed), three `FolderPicker` and one `ProjectDrawer` component test (none existed), each guard mutation-checked; two free-tier e2e specs, one of which really registers a pasted folder and unregisters it afterwards. Checked live in the dev app with a quoted `C:\…` path and a missing one.
+
+Found, not fixed: unregistering a project leaves its SQLite database open, so on Windows its folder cannot be deleted while the server runs; the e2e cleanup leaves the folder under the suite's temp root for that reason. Offered as a separate task.
+
+---
 ## TASK-170: A team running unattended has no way to say something went wrong
 **Priority:** P2 | **Tags:** server, infra, milestone-i
 **Updated:** 2026-10-03 19:06

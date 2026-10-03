@@ -82,8 +82,32 @@ function upButton(atRoots: boolean, d: Dir): CSSProperties {
   };
 }
 
-function pathText(d: Dir): CSSProperties {
-  return { color: d.textMid, fontFamily: MONO, fontSize: FONT.sm, wordBreak: "break-all" };
+function pathInput(d: Dir): CSSProperties {
+  return {
+    flex: 1,
+    minWidth: 0,
+    background: d.surface,
+    border: `1px solid ${d.border}`,
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.xs}px ${SPACE.md}px`,
+    color: d.text,
+    fontFamily: MONO,
+    fontSize: FONT.sm,
+  };
+}
+
+function goButton(d: Dir): CSSProperties {
+  return {
+    background: d.surface2,
+    border: `1px solid ${d.border}`,
+    borderRadius: RADIUS.md,
+    padding: `${SPACE.xs}px ${SPACE.lg}px`,
+    cursor: "pointer",
+    color: d.textMid,
+    fontFamily: SANS,
+    fontSize: FONT.sm,
+    fontWeight: WEIGHT.semibold,
+  };
 }
 
 function placeholder(color: string): CSSProperties {
@@ -166,6 +190,7 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
     path: initialPath,
     entry: undefined,
   });
+  const [typed, setTyped] = useState(initialPath ?? "");
 
   useEffect(() => {
     let cancelled = false;
@@ -175,12 +200,12 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
         if (!cancelled) {
           setListing(result);
           setError(null);
+          setTyped(result.isRootList ? "" : result.path);
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to read directory");
-          setListing(null);
         }
       })
       .finally(() => {
@@ -205,6 +230,10 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
 
   const atRoots = listing?.isRootList ?? true;
   const currentPath = listing?.path ?? "";
+
+  function goTo(path: string) {
+    setTarget({ path, entry: undefined });
+  }
 
   function open(entry: string) {
     setTarget(
@@ -244,18 +273,30 @@ export function FolderPicker({ d, initialPath, onSelect, onClose }: FolderPicker
           >
             <ArrowUp size={ICON.sm} /> Up
           </button>
-          <div style={pathText(d)}>{atRoots ? "Start in…" : currentPath}</div>
+          <input
+            aria-label="Folder path"
+            value={typed}
+            placeholder="Start in… or paste a folder path"
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                goTo(typed);
+              }
+            }}
+            style={pathInput(d)}
+          />
+          <button onClick={() => goTo(typed)} style={goButton(d)}>Go</button>
         </div>
 
         <div style={{ flex: 1, minHeight: LIST_MIN_HEIGHT, overflowY: "auto" }}>
-          {error && <div style={placeholder(ERROR_RED)}>{error}</div>}
-          {!error && loading && <div style={placeholder(d.textMuted)}>Loading…</div>}
-          {!error && !loading && listing?.entries.length === 0 && (
+          {error && <div role="alert" style={placeholder(ERROR_RED)}>{error}</div>}
+          {loading && <div style={placeholder(d.textMuted)}>Loading…</div>}
+          {!loading && listing?.entries.length === 0 && (
             <div style={placeholder(d.textMuted)}>
               No sub-folders here — Select this folder to use it.
             </div>
           )}
-          {!error && !loading && listing?.entries.map((entry) => (
+          {!loading && listing?.entries.map((entry) => (
             <button key={entry} onClick={() => open(entry)} style={entryButton(d)}>
               {atRoots ? <HardDrive size={ICON.sm} style={{ color: d.textMuted }} /> : <Folder size={ICON.sm} style={{ color: d.accent }} />}
               {entry}

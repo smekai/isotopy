@@ -23,6 +23,7 @@ import { HomeComposer } from "./components/home/HomeComposer";
 import { LimitModal } from "./components/LimitModal";
 import { MilestoneDashboard } from "./components/MilestoneDashboard";
 import { PipelineRow } from "./components/PipelineRow";
+import { FolderPicker } from "./components/FolderPicker";
 import { ProjectDrawer } from "./components/ProjectDrawer";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunRail } from "./components/RunRail";
@@ -188,6 +189,7 @@ export function App() {
   const [pipeVs, setPipeVs] = useState<VoiceState>("idle");
   const [setupSection, setSetupSection] = useState<SetupSection | null>(null);
   const [showProject, setShowProject] = useState(false);
+  const [addingProject, setAddingProject] = useState(false);
   const [starting, setStarting] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +317,18 @@ export function App() {
     navigate(HOME_ROUTE);
     setFocusedId(null);
     void projects.select(id);
+  }
+
+  function handleRequestAddProject() {
+    setShowProject(false);
+    setAddingProject(true);
+  }
+
+  function handleAddProject(root: string) {
+    setAddingProject(false);
+    navigate(HOME_ROUTE);
+    setFocusedId(null);
+    void projects.add(root);
   }
 
   async function handleStart(task: string, pipelineId: string) {
@@ -482,7 +496,7 @@ export function App() {
           projects={projects.projects}
           activeId={projectId}
           onSelect={handleSelectProject}
-          onAdd={(root) => void projects.add(root)}
+          onRequestAdd={handleRequestAddProject}
           onRemove={(id) => void projects.remove(id)}
         />
 
@@ -617,7 +631,15 @@ export function App() {
             setShowProject(false);
             setSetupSection(section);
           }}
+          onAddProject={handleRequestAddProject}
           onClose={() => setShowProject(false)}
+        />
+      )}
+      {addingProject && (
+        <FolderPicker
+          d={d}
+          onSelect={handleAddProject}
+          onClose={() => setAddingProject(false)}
         />
       )}
       {run && activeLimit && (

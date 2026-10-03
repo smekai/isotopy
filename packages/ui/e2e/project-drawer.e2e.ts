@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
+import path from "node:path";
 import { resetPreferences } from "./support/preferences";
+import { forgetProjectFolder, makeProjectFolder } from "./support/projects";
 
 // The Project drawer is where a run's setup is visible now that the folder is
 // no longer a per-run field. Only the home project is guaranteed to exist on a
@@ -54,4 +56,40 @@ test("Escape closes the drawer", async ({ page }) => {
 
   // Assert
   await expect(page.getByTestId("project-drawer")).toBeHidden();
+});
+
+test("the drawer's Add project opens the folder picker it tells a newcomer to use", async ({ page }) => {
+  // Act
+  await page.getByTestId("project-drawer").getByRole("button", { name: /Add project/ }).click();
+
+  // Assert
+  await expect(page.getByTestId("folder-picker")).toBeVisible();
+  await expect(page.getByTestId("project-drawer")).toHaveCount(0);
+});
+
+test.describe("adding a real folder", () => {
+  let folder: string;
+
+  test.beforeEach(async () => {
+    folder = await makeProjectFolder();
+  });
+
+  test.afterEach(async ({ page }) => {
+    await forgetProjectFolder(page, folder);
+  });
+
+  test("a pasted folder path becomes the active project", async ({ page }) => {
+    // Arrange
+    await page.getByTestId("project-drawer").getByRole("button", { name: /Add project/ }).click();
+    const field = page.getByLabel("Folder path");
+    await field.fill(folder);
+    await field.press("Enter");
+    await expect(field).toHaveValue(path.resolve(folder));
+
+    // Act
+    await page.getByRole("button", { name: "Select this folder" }).click();
+
+    // Assert
+    await expect(page.getByTestId("project-switcher")).toHaveText(path.basename(folder));
+  });
 });
