@@ -119,6 +119,12 @@ Human approval gates after Requirements, Design, Release, and before Deploy (con
 | Visual run dashboard | Yes | Varies | Yes (MVP) |
 | Built-in task backlog | No | No | Yes (repo-native, feeds runs) |
 
+**Why not a multi-agent framework such as CrewAI?** A framework gives you the parts:
+agents, loops, memory, checkpoints. Isotopy is the product those parts would have to
+become: prepared roles, an Orchestrator that decides what runs next, harnesses doing the
+coding, memory as markdown in git, and a run that ends with the product tested, deployed and
+running. The full comparison is in [competitor-matrix.md](./competitor-matrix.md#crewai--head-to-head-october-2026).
+
 **Positioning statement:**
 
 > For developers who liked hosted app-builder speed but hit a wall on iteration, Isotopy is the open-source local alternative that builds the first version and keeps the project evolvable — with prepared agents, Playwright E2E, deploy-anywhere adapters, and restartable stages — without replacing Cursor or Claude Code.

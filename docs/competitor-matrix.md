@@ -1,6 +1,6 @@
 # Competitor Matrix: Isotopy
 
-**Last updated:** September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
+**Last updated:** October 2026 (full CrewAI head-to-head in §5; its memory, checkpoint resume and looping Flows make those table stakes). Before that, September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where Isotopy wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -102,7 +102,7 @@
 |-----------|------|-------------------|-------|----------|
 | **Aiki** | Code (TypeScript) | Durable workflows (you design stages) | Yes | Long-running agent pipelines, HITL gates |
 | **LangGraph** | Code (Python + TypeScript) | None (you design graph) | Yes | Custom state machines |
-| **CrewAI** | Code (Python) | Role-based crews + event-driven Flows | Yes | Rapid multi-agent prototypes → production automations |
+| **CrewAI** | Code (Python) | Role-based Crews + Flows with state, loops and persistence | Framework yes; triggers and UI only in hosted AMP | Multi-agent automation in any domain |
 | **AutoGen** | Code (Python) | Conversation-centric | Yes | Research / open-ended tasks |
 | **n8n** | Visual + self-host | Generic automation | Yes | Integrations + AI nodes |
 | **Manifold** | Visual + self-host (Go/Vue) | None (long-horizon agent workflows) | Yes | Teams of "specialist" agents; MCP tools auto-exposed as nodes; saved workflows become reusable tools |
@@ -113,11 +113,106 @@
 
 **Manifold note:** The most product-like entry here — self-hosted (Go + Vue, SQLite/Postgres, MIT), ships a visual flow editor, specialist chat, observability dashboard, and scheduled runs (Pulse) out of the box. But it is model-API-driven (OpenAI/Anthropic/Google/llama.cpp/vLLM), not harness-driven: no Claude Code/Cursor adapters, no git/repo artifacts, no SDLC stages, no E2E or deploy story. Self-described **experimental** (~500 stars). Watch it as a pattern source for "workflows as reusable tools" and MCP-tools-as-nodes, not as a direct competitor.
 
-**CrewAI update (Aug 2026):** Now the #2 multi-agent framework by mindshare after LangGraph (~54k stars, v1.15, MIT). Two layers: **Crews** (autonomous teams of role-playing agents — the same "team of professions" metaphor we use) and **Flows** (event-driven workflows with typed state, branching, and native Crew embedding), plus an enterprise platform (AMP). Why it still isn't us: it's a **build-your-own framework** — you write Python to define roles, tasks, and tools; there are no prepared SDLC professions, no repo-native artifacts, no coding-harness adapters (it orchestrates LLM calls, not Claude Code/Cursor sessions), no stage restart, no Playwright E2E, no deploy adapters. Known limits at scale per third-party reviews: coarse error handling, no built-in checkpointing, agent communication mediated through task outputs. **Threat vector:** the role-based-team metaphor is now mainstream vocabulary CrewAI owns; our messaging must lead with "ready dev team + full delivery pipeline," never with "crew of agents," or we read as a CrewAI wrapper.
+**CrewAI:** the full head-to-head is below, after this section's gap line.
 
 **Artel (NicolasPrimeau/artel) note (Aug 2026):** Not a direct competitor — a **pattern / build-on source**. Self-hosted MCP + REST coordination layer for AI agent fleets (~early OSS): shared memory with semantic search and confidence decay, typed memory (`memory` / `doc` / `directive` / `skill` / `compiled`), tasks with claim/complete, async agent messaging, session handoffs across context resets, CRDT mesh between instances (feeds + mDNS), and an autonomous **archivist** that compacts raw session captures into clean memory. Claude Code plugin makes memory *ambient* (push relevant knowledge in; capture sessions out) rather than pull-only tool calls. **What it is not:** no prepared SDLC professions, no Full Delivery pipeline, no Playwright E2E, no deploy adapters, no visual run-control product for feature lifecycle — it coordinates fleets, it does not ship the delivery process. **Ideas worth borrowing:** ambient memory injection at session start; confidence-decay / heat-protected knowledge; archivist compaction of run transcripts into durable repo memory; session handoff packages so any harness can resume; `compiled` memory anchored to source files. Complementary framing: Artel-like memory could sit *under* an Isotopy run; Isotopy remains the opinionated pipeline on top. Also blocks **ARTEL** as a clean product name in our space.
 
 **Gap:** Frameworks give flexibility; they do not ship app-builder stages, git isolation, Playwright E2E, or deploy adapters out of the box.
+
+### CrewAI — head-to-head (October 2026)
+
+**The question this answers:** *"If CrewAI already runs a team of agents in a loop, and its
+agents update their own memory, why does Isotopy exist?"* It was asked in public, and it
+deserves a straight answer.
+
+**Where CrewAI stands.** MIT, ~59k GitHub stars, v1.15.x as of late September 2026, Python.
+It has two layers. **Crews** are role-playing agents, each with a role, goal and backstory,
+run in sequence or under a manager agent. **Flows** are event-driven workflows with typed
+state, `@router` branching and loops; CrewAI recommends starting production work with a
+Flow. The paid **AMP** platform sits on top: hosted deployment, tracing, a visual Studio,
+and triggers.
+
+**What the August note got wrong.** It said CrewAI had no built-in checkpointing. In fact:
+
+- **Memory updates itself.** After every task the crew extracts discrete facts from the
+  output and stores them. Before every task the agent recalls the relevant ones into its
+  prompt. Memory persists across runs in LanceDB (`./.crewai/memory`), scores recall by
+  similarity, recency and importance, consolidates duplicates and contradictions, and can
+  `forget()` a scope.
+- **Checkpointing.** The full state of a crew, flow or agent is saved on `task_completed`
+  (or finer events) to JSON files or SQLite. Resuming skips completed tasks and rehydrates
+  memory; a fork restores under a new lineage.
+- **Flow persistence.** `@persist` saves Flow state to SQLite, to resume by id or fork from
+  a snapshot.
+- **Loops.** Flows support loops, conditionals and branching, and the official examples
+  include a self-evaluation loop.
+- **Human in the loop.** `@human_feedback` pauses a Flow and routes on the answer.
+- **MCP and A2A** are supported.
+
+So the honest answer is: **yes, CrewAI loops, and its agents update their own context.**
+Neither is a difference any more.
+
+| Dimension | CrewAI | Isotopy |
+|-----------|--------|---------|
+| What it is | A framework: you write Python to define agents, tasks, tools and the flow | A product: install it, describe a goal, approve the team |
+| Domain | Any: sales, research, support, content, code | Software delivery only, from a goal to a running product |
+| Who does the work | An agent is an LLM call plus tools. Its own code execution is deprecated in favour of E2B or Modal sandboxes | A coding harness — Claude Code, Cursor or Codex — with its file editing, terminal, tests and permission model |
+| Model access and cost | Calls model APIs with your keys; you pay per token | **Never calls a model API**; runs on the CLI subscription you already pay for |
+| Roles | You write them for each project | A prepared persona catalog (PM, Designer, Architect, Developer, Reviewer, QA, Release Manager, SRE) as overridable markdown |
+| The loop | You code it: `@router`, `@listen`, conditions | The **Orchestrator** reads each settled run (verdicts, findings, changed files) and picks the next action: another run, a milestone, a question for you, or a reasoned stop |
+| Memory | Facts a model extracted, in a vector database, recalled by similarity | Plain markdown in the project's git repo: task board, decisions, handoffs, per-role notes. A person can read, diff and correct it, and any harness can read it |
+| Resume | Checkpoints per task; `@persist` for Flow state | Durable OpenWorkflow runtime on SQLite: resumes without re-running finished stages, and one stage can be restarted |
+| What "done" means | The task output passed its guardrail | The product runs: Playwright E2E against the started product, a deploy with a health check, closeout findings written to the backlog |
+| Starting on its own | Triggers (Gmail, Slack, Teams, Salesforce, webhooks…) exist only in hosted AMP; the open-source framework has no scheduler | Local cron schedules, built in |
+| UI | Hosted AMP (Studio, tracing); the open-source framework is code and a CLI | A local web app: team approval, gates, run view, preview of the built product |
+| Where it runs | Your Python process, or CrewAI's cloud | Your machine |
+| Software examples | Demos that generate once: Game Builder Crew, Landing Page Generator | v1 and every change after it |
+
+CrewAI's own "skills" for Claude Code, Cursor, Codex and Windsurf point the other way: they
+teach a coding agent to *write CrewAI code*. They do not make CrewAI drive the coding agent.
+
+**Where CrewAI genuinely beats us — do not pretend otherwise.** Distribution (59k stars
+against our pre-launch zero). Any domain, where we do one job. Any model provider through an
+API key. Semantic memory recall that is more sophisticated than anything we have.
+Finer-grained checkpoints. Parallel and async execution, where we run one stage at a time.
+The MCP and A2A ecosystem, and an enterprise platform with governance. Anyone automating
+work that is not building software should use CrewAI, not us.
+
+**So why Isotopy, if CrewAI can do all this?** CrewAI gives you the parts. Isotopy is the
+product those parts would have to become.
+
+1. **Build versus buy.** To get Isotopy out of CrewAI you would write the dev team's roles,
+   the stage contracts and handoffs, the Orchestrator's decision loop, the E2E and deploy
+   stages, a backlog, schedules and a UI. That is Isotopy. CrewAI is to Isotopy what a web
+   framework is to a finished application.
+2. **Writing software is the harness's job, not an LLM call's.** Claude Code, Codex and
+   Cursor are tuned for editing a real repository, running its tests and staying inside a
+   permission model. CrewAI deprecated its own code execution. Isotopy uses those harnesses
+   as the workers instead of rebuilding one, and costs nothing beyond the subscription you
+   already pay for.
+3. **In software, the memory should be the repo.** CrewAI's memory is a vector store of
+   facts a model chose to extract: nobody reviews it in a pull request, and the next tool
+   cannot read it. Isotopy's memory is markdown in git, next to the code: a person can read
+   and correct it, and any harness picks it up.
+4. **"Done" is a running product, not an output.** A CrewAI task finishes when its output
+   passes a guardrail. An Isotopy run finishes when the product starts, passes E2E in a
+   browser, deploys and answers its health check, and what it found goes into the backlog
+   for the next change.
+5. **Local all the way.** Schedules, UI, gates and memory run on your machine. With CrewAI,
+   scheduling, triggers and the UI live in the hosted AMP platform.
+
+**Threat vector.** A CrewAI template, or an AMP Studio crew, that wraps Claude Code or Codex
+as a tool and adds a deploy step. The day a crew drives a coding agent, the gap narrows to
+prepared professions, repo-native memory, and E2E plus deploy.
+
+**Positioning response.** Never argue memory, loops or resume: they are table stakes now,
+and CrewAI has more of them. Compare at the level of the job: **"CrewAI is a framework for
+building agents. Isotopy is a ready-made team that builds your software and keeps it
+running."**
+
+**Ideas worth taking (not scoped).** Forking a run from a stage under a new lineage, so the
+original run stays intact. Consolidating contradictions on write, for the Orchestrator's own
+context in `TASK-156`.
 
 ---
 
@@ -275,7 +370,7 @@ now ships is no longer something to sell, however well we do it.
 | Local artifact store (git-native) | Required | spec-manager, Sikula | Table stakes |
 | Built-in task backlog (feeds runs) | Required | spec-intelligence (kanban), spec-manager (task lifecycle) | Intake only; we execute full pipeline |
 | Predefined lifecycle stages | Required | autonomous-sdlc, aiagentflow | **Still differentiating** — §8 has cards, not stages |
-| Restart one failed stage | Required | Sikula (partial), LangGraph (DIY) | **Still differentiating** — §8 restarts a *card*, not a stage inside a pipeline |
+| Restart one failed stage | Required | Sikula (partial), LangGraph (DIY), CrewAI (resume skips finished tasks; no single-task restart) | **Still differentiating** — §8 restarts a *card*, not a stage inside a pipeline |
 | Adapter: Cursor / Claude Code | Required | **Bernstein (40+), Emdash (34), Vibe Kanban (10+), Cline Kanban** | **Table stakes** — stop selling it |
 | Playwright E2E in pipeline | Required | Locode, Open Orchestra | **Still differentiating** — no §8 orchestrator runs browser E2E in the loop |
 | Deploy to any platform | Required | Tinykit, Singulary (limited) | **Strongest remaining moat** — *zero* of the eleven §8 orchestrators deploy the product |
@@ -283,7 +378,8 @@ now ships is no longer something to sell, however well we do it.
 | Human approval gates | Required | spec-manager, autonomous-sdlc | Common in spec tools; §8 reviews diffs, it does not gate between stages |
 | Prepared professions (persona catalog) | Required | None (Cline improvises roles at runtime) | **Newly load-bearing** — the claim §8 cannot make |
 | Cross-stage handoff + verdict | Required | Bernstein (signals), Cline (mailbox) | **Still differentiating** — nobody carries design into QA |
-| Never calls a model API | Required | None — §8 tools are mostly API clients | **Unique**: your CLI subscription, your auth |
+| Never calls a model API | Required | None — §8 tools and CrewAI are API clients | **Unique**: your CLI subscription, your auth |
+| Memory across runs, checkpoint resume, looping workflows | Required | CrewAI (auto-extracted memory, checkpoints, Flows), Cline (mission logs) | **Table stakes** — sell *where* memory lives (markdown in git), not *that* it exists |
 | Visual run dashboard | Required | **Cline Kanban, Conductor, Vibe Kanban, Nimbalyst, Emdash, AO** | **Table stakes** — "CLI-only is common" is no longer true |
 | Worktree isolation per run | Required | Every §8 orchestrator | **Table stakes** — now universal |
 | Release / PR automation | Required | Codegen, Factory | Often cloud-only |
@@ -432,6 +528,10 @@ The category multiplies the implement stage. We are the only entrant claiming th
 | Paperclip | https://github.com/paperclipai/paperclip |
 | Guild.ai | https://www.guild.ai |
 | CrewAI | https://github.com/crewaiinc/crewai |
+| CrewAI memory | https://docs.crewai.com/en/concepts/memory |
+| CrewAI checkpointing | https://docs.crewai.com/en/concepts/checkpointing |
+| CrewAI Flows | https://docs.crewai.com/en/concepts/flows |
+| CrewAI AMP triggers | https://docs-platform.crewai.com/platform/en/guides/automation-triggers |
 | sandcastle | https://github.com/mattpocock/sandcastle |
 | Cursor Projects | https://cursor.com/blog/projects |
 | beads (bd) | https://github.com/gastownhall/beads |
