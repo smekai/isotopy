@@ -1,5 +1,152 @@
 # Backlog
 
+## TASK-190: The spend of an engine attempt that was killed mid-stage disappears from the run's cost
+**Priority:** P3 | **Tags:** server, engine
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157`'s Claude Code run (2026-10-04). The Developer's first attempt ran about 90 s (writing files, `npm install`, a dev server) before the server died; the stage re-ran after the restart. The run reports $0.55 — exactly the resumed Developer plus QA — so the killed attempt's spend is not in it. Usage is captured when the engine reports a result, and a killed process never reports one.
+
+For a product whose pitch includes running unattended on someone's subscription, cost that silently drops out is worth recording honestly. At minimum, mark a stage's usage as partial when an attempt ended without a result; better, capture usage events as they stream. Evidence: a component test where an aborted attempt followed by a resumed one reports both, or reports the first as unknown.
+
+---
+## TASK-189: The run view goes stale after a server restart and hides what needs the owner
+**Priority:** P2 | **Tags:** ui, milestone-i
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157` (2026-10-04); all small, all in the run view, all in the way of a newcomer following a real run.
+
+- **No recovery after a server restart.** After the API server died and came back, the open view kept showing the initiative as RUNNING and never re-subscribed; only a reload fixed it. Unattended runs will restart servers.
+- **Automation configured elsewhere does not reach an open view.** The Preview tab appeared only after a reload.
+- **The team card is on a tab you are not looking at.** After approving a milestone, the view stays on *Plan* while the header pill says *Team awaiting approval*; the *Approve & start* card is on *Chat*.
+- **The run title is the whole rendered prompt.** An orchestration run's title in the rail and header is the full Orchestrator prompt (goal, persona catalog, step-task catalog), not the goal.
+- **"See what was built" after a planning-only turn** (*No files changed*).
+- **A direct link to another project's run** opened under the previously active project's rail.
+
+Evidence: e2e coverage for the restart recovery and the card location; the rest are copy and selection fixes with component tests.
+
+---
+## TASK-188: Isotopy reports Cursor as logged in when the CLI cannot authenticate
+**Priority:** P2 | **Tags:** adapters, engine
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157` (2026-10-04). Before the owner re-ran `agent login`, `cursor-agent status` printed `✓ Login successful!` / `Logged in (unable to fetch user details)` while `cursor-agent models` failed with *"Authentication required"*. Isotopy's status endpoint answered `loggedIn: true, message: "✓ Login successful!"`, because `cursor.ts` only tests the first line of `status` against a not-logged-in pattern.
+
+A run started in that state would fail at its first stage with an auth error the Setup screen said could not happen. Check login with something that actually needs a valid token (the `models` listing the roster already runs, or a stricter parse of `status`), and treat *"unable to fetch user details"* as not logged in. Evidence: an adapter spec over the two `status` outputs.
+
+---
+## TASK-187: Runs the Orchestrator starts for a milestone feature are not linked to that feature
+**Priority:** P2 | **Tags:** server, milestone-i
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157`'s Cursor run (2026-10-04). The Orchestrator delegated milestone planning (*Arcade MVP*, three features), the owner approved it, and the Orchestrator then proposed and started three delivery runs for feature `arcade-shell-scores`. Afterwards all three features were still `ready` with no run ids: the milestone dashboard showed no history and no blocking findings for work that had run three times. The Orchestrator's own rationale also said *"continue_milestone is disabled"*, so it used `propose_team`/`start_run` instead of the milestone path.
+
+Decide which path the Orchestrator should use to deliver an approved milestone's feature, and make a run started for a feature carry `milestoneId`/`featureId` either way, so the dashboard, autorun and closeout findings all see it. Evidence: a component test where an Orchestrator-started run for a feature shows up under that feature.
+
+---
+## TASK-186: The Orchestrator reads the per-step time budget as a deadline for the whole goal
+**Priority:** P2 | **Tags:** engine, milestone-i
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157`'s Claude Code run (2026-10-04). The Orchestrator (haiku) proposed a two-role team with no planner and explained: *"Skipping the planner keeps us under the 10-minute time constraint"*. The ten minutes is the per-step budget each stage prompt states (`TASK-166`), not a deadline for the initiative. Team composition was cut to fit a limit that does not exist.
+
+Make the environment text say what the budget applies to — one engine turn of one stage — in the prompt the Orchestrator reads, or keep the step budget out of the `orchestrate` prompt altogether. Evidence: the rendered `orchestrate` prompt either omits the step budget or states its scope.
+
+---
+## TASK-185: Agents leave dev servers running and verification debris in the repo, and nothing is committed
+**Priority:** P2 | **Tags:** engine, milestone-i
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157` (2026-10-04).
+
+- **Dev servers left running:** the Claude team left three Vite servers on the arcade running after its run settled (the resumed Developer's and two of QA's). One held port 5192, so Isotopy's own product start later found the port taken.
+- **Debris in the repo:** QA left `VERIFICATION_REPORT.md`, `playwright-report/` and `test-results/` at the root (not gitignored), and installed Playwright browsers into `.isotopy/cache`. Cursor's QA wrote tests and config that the Developer then listed as *"other uncommitted work (not from this assignment)"*.
+- **Nothing committed:** neither team made a commit; both targets end with only untracked changes over the baseline.
+
+Decide, and say in the step tasks, (a) that a stage stops every process it started before it hands off, (b) where verification output belongs — under `.isotopy/runs/<id>/` or in a gitignored path, never loose at the root — and (c) whether a passing feature run commits its work, and who commits (Developer, Release Manager, or Isotopy on closeout). (c) matters for the inductive step: an unattended stretch with no commits has no history to evolve.
+
+Related: `TASK-179` (an agent killed Isotopy's own server while cleaning up).
+
+---
+## TASK-184: Cursor's closeout stage answers with a decision block instead of a closeout record
+**Priority:** P2 | **Tags:** engine, milestone-i
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157`'s Cursor run (2026-10-04): the `closeout` stage (Orchestrator persona, `closeout-feature` step task, Cursor · auto) failed in all three delivery runs. Its output ended in an `isotopy-orchestrator-decision` fence — the review-run's format — rather than the `isotopy-closeout` record the step task asks for, so closeout produced no record and the stage failed. Claude Code's run never reached a closeout stage, so this is unproven on Claude.
+
+Likely cause: the same Orchestrator persona carries both the closeout step and the post-run review, and the persona text pulls a cheaper model toward the decision format. Check what the closeout prompt actually contains (persona + step task + handoffs) and make the required fence unambiguous in the step task; consider a failure message that names the fence that was expected and the one that was found. Evidence: the stage prompt for `closeout-feature` states its fence before any mention of decisions, and a re-run on Cursor · auto produces a closeout record.
+
+---
+## TASK-183: A review FAIL has no route back to the Developer inside the run
+**Priority:** P2 | **Tags:** core, engine, milestone-i
+**Updated:** 2026-10-04 19:40
+
+Found in `TASK-157`'s Cursor run (2026-10-04). A design question, not a crash.
+
+The Architect and QA failed the arcade shell on a one-line README fix (Node floor), with every functional criterion passing (6 unit tests, 10/10 Playwright). The pipeline has no route from a blocking review finding back to `implementation` inside the same run, so the whole feature failed and the only way forward was a new run from the Orchestrator — which then hit `TASK-180`. The product brief's risk table still promises *"Playwright E2E fix loops"*.
+
+Decide whether a quality stage's blocking finding should send the run back to `implementation` once (bounded, recorded in the run) before the run settles, or whether the Orchestrator's follow-up run is the intended loop — and then make the product brief say which. Either answer is defensible; leaving it implicit is not. Record it in `docs/decisions.md`.
+
+---
+## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
+**Priority:** P1 | **Tags:** server, engine, milestone-i
+**Updated:** 2026-10-04 19:39
+
+Found in `TASK-157`'s Cursor run (2026-10-04).
+
+After the third failed delivery run, the Orchestrator's review decision was rejected by `orchestratorDecisionSchema`: it proposed a team whose roles used `persona` instead of `id`/`skill`. The orchestration recorded `decisionError` (visible — good) and then stayed `running` forever: no retry, no question to the owner, and the *"three blocked runs in a row stop the loop"* rule never applied, because no decision was ever accepted to count. The same stuck state happened earlier when the review step could not spawn its engine.
+
+Unattended, this is a silent stop that looks like work in progress. **Decide and fix:** on a decision that fails validation (or a review that cannot run), the orchestration should end in a state that says so — retry the review once with the validation issues fed back, then `ask_user` or stop with the reason — and the operator log should carry it at `error`. Evidence: a component test with `FakeEngine` returning an invalid decision, asserting the initiative leaves `running`.
+
+Related: the role key `persona` is a natural mistake for a model reading a catalog titled *Persona catalog*; the prompt or schema error text could name the expected keys.
+
+---
+## TASK-181: On Windows, an automation command given as a bare .cmd name fails before it starts
+**Priority:** P1 | **Tags:** server, infra, milestone-i
+**Updated:** 2026-10-04 19:39
+
+Found in `TASK-157` (2026-10-04), on both targets, and root-caused.
+
+`Start the product` with `ui.start.windows.executable = "npm.cmd"` — exactly what the Setup presets write — exited at once with `MODULE_NOT_FOUND`. The same command typed by hand starts Vite in 236 ms. Replicating Isotopy's spawn (`cmd.exe /d /s /c ""npm.cmd" "run" "dev""`, `windowsVerbatimArguments`) shows the real error: `Cannot find module 'C:\Development\smekai\dogfood-arcade-cursor\node_modules\npm\bin\npm-cli.js'`. When a batch file is invoked by a **quoted bare name**, `cmd` resolves its `%~dp0` against the working directory, so `npm.cmd` looks for npm inside the project. With the executable given as its full path (`C:\Program Files\nodejs\npm.cmd`) the product started and reached `ready`.
+
+Engines are unaffected because their adapters spawn CLIs by resolved full path. Everything in `.isotopy/automation.json` — `ui.start`, `validation`, `preview`, `production` — goes through `startSubprocess` → `resolveSpawnTarget` in `engines/subprocess.ts` and is affected whenever the executable is a bare `.cmd`/`.bat` name.
+
+**Fix:** resolve a bare executable to its full path before building the `cmd /c` line (`lookupOnPath` already exists in `utils/`), and fail with a stated reason when it cannot be found. Evidence: a component test (Windows-only, skipped elsewhere) that a bare `npm.cmd` automation command runs in a temp project.
+
+Also seen, smaller: with another process already answering the health URL, the product was marked `ready` 28 ms after start and then `exited` — readiness probed the URL, not our process. Worth a stated rule in the same change.
+
+Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
+
+---
+## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-04 19:39
+
+Found in `TASK-157`'s Cursor run (2026-10-04, `docs/dogfood/TASK-157-cursor-2026-10-04.md`).
+
+Run #3 delivered the arcade shell but failed review and QA on one docs defect (README claims Node 18+; Vite 7.3.6 needs `^20.19.0 || >=22.12.0`). The Orchestrator did exactly the right thing: `start_run` with the same team, skipping scoping, with a narrow task — *"set README to ^20.19.0 || >=22.12.0 … add the same range to package.json engines … do not change game or score behavior"*. It did it twice (runs #4, #5).
+
+**Both times the Developer never saw that task.** Runs #3, #4 and #5 all carry the same Cursor session for the `implementation` stage (`2aa7153f-d094-44c2-bec1-92fc7e4307e2`). The follow-up stage resumed the original session with a continue-style prompt, and the Developer answered *"Taking stock of what's already on disk … Nothing left to implement"* and passed. Review and QA failed on the same unchanged README both times, and the loop could not converge. `RunState.task` held the new text all along; it just never reached the agent.
+
+**What to decide and fix:** a run started by `start_run` (or by a restart with a *different* task) must not resume a session carried over from an earlier run, or must, when it does resume, put the new task in the resume prompt. Find where the earlier run's `sessionId` is inherited (`inheritedRunOptions` / seeding) and make the rule explicit in one place. Evidence: a component test where a follow-up run's Developer prompt contains the follow-up task, with `FakeEngine` asserting the prompt; mutation-check that the old-session path fails it.
+
+Cross-platform: none specific.
+
+---
+## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-04 19:39
+
+Found in `TASK-157`'s Claude Code run (2026-10-04, `docs/dogfood/TASK-157-claude-code-2026-10-04.md`).
+
+The Developer (Claude Code · haiku, permission mode *Never block*) finished its stage by cleaning up the dev server it had started — with `Get-Process -Name "node" | Stop-Process -Force`. On Windows that stops every node process the user can reach, and Isotopy's own API server is one. The server died silently 90 s into the stage; nothing was logged, because it was killed rather than failing. Durable recovery worked once the server was restarted by hand, but **unattended, nobody restarts it** — the whole milestone stops the first time an agent tidies up this way.
+
+The resumed attempt cleaned up correctly (`Get-NetTCPConnection -LocalPort 5192 … Stop-Process -Id`), so this is not a capability gap; it is the agent not knowing that other node processes on the machine matter.
+
+**Shape of the fix, as data rather than a gate** (see `docs/decisions.md` on boundaries): the environment section every stage prompt carries should say that Isotopy itself runs as node on this machine, that an agent stops only processes it started — by PID or by the port it opened — and never by process name. Starting the product is better left to Isotopy's own product process (`Setup → Automation → Start the product`, which QA can already ask for) than to agents launching `npm run dev &`. Evidence: a component test that the stage prompt states the rule, and a re-run of the dogfood without a server death.
+
+Cross-platform: the same mistake on macOS is `pkill node` / `killall node`; the instruction must name the rule, not one OS's command.
+
+---
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P2 | **Tags:** core, server, milestone-i
 **Updated:** 2026-10-04 17:49

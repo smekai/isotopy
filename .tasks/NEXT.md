@@ -232,7 +232,7 @@ Cross-platform: documentation only; the bar applies to the claims it makes about
 
 ## TASK-157: The dogfood product — a minigame arcade whose leaderboard cannot stand still
 **Priority:** P1 | **Tags:** testing, engine, ui, milestone-i
-**Updated:** 2026-08-21 12:00
+**Updated:** 2026-10-04 19:42
 
 The base case of **Milestone I — Induction** (`TASK-156`): one real product, built by Isotopy with
 the finished mechanism, and then carried by it.
@@ -293,5 +293,16 @@ Cross-platform: the arcade must build and run on Windows and macOS, and its auto
 arrays with a per-platform executable override, never shell strings
 ([`docs/project-automation.md`](../docs/project-automation.md)). Run live on Windows; record macOS
 as reasoned-through and untested unless a Mac is actually used.
+
+### Plan
+
+**Base case run 2026-10-04 — two engines side by side, cheapest settings.** Records: `docs/dogfood/TASK-157-claude-code-2026-10-04.md` (holds the comparison) and `docs/dogfood/TASK-157-cursor-2026-10-04.md`.
+
+- **Claude Code · haiku (Pro plan) — PASS.** No questions; Developer + QA; two playable games (Number Guess, Click Master) with a correctly weighted total, verified in the browser with seeded and played scores; the Orchestrator stopped itself. $0.67 recorded. Its Developer killed Isotopy's own server mid-stage (`TASK-179`); durable recovery resumed the run after a manual restart.
+- **Cursor · auto (free allowance) — NEEDS ATTENTION.** Planned a three-feature milestone after one well-posed question; delivered a well-tested shell (6 unit + 10 e2e), failed review and QA on a README Node floor, and the two fix runs never delivered the fix because they resumed the original Developer session (`TASK-180`); the initiative then stuck on a rejected decision (`TASK-182`). 511k / 70k / 2.21M cached tokens.
+
+**Gap list (filed, Backlog):** `TASK-179`–`TASK-190`. The three that block an unattended stretch outright: `TASK-179` (an agent can kill the server), `TASK-180` (fix runs cannot converge), `TASK-182` (a bad decision stalls the initiative silently). `TASK-181` blocks the embedded Preview for every bare `.cmd` automation command on Windows.
+
+**Stays in Next for the inductive step** (schedules, the poller, the measured stretch), which waits for `TASK-178` and the P1 gaps above.
 
 ---
