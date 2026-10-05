@@ -130,6 +130,25 @@ export function buildTimeBudget(timeoutMs: number): string {
   ].join("\n");
 }
 
+export interface IsotopyProcess {
+  pid: number;
+  port: number;
+}
+
+export function buildProcessRule({ pid, port }: IsotopyProcess): string {
+  return [
+    `Isotopy, which runs this step, is a node process on this machine: PID ${pid}, port ${port}.`,
+    "Stopping it stops the whole run, and nothing restarts it.",
+    "",
+    "Stop only the processes you started yourself, by the PID you were given or the port you",
+    "opened. Never stop processes by name — not `Stop-Process -Name node`, `taskkill /IM node.exe`,",
+    "`pkill node` or `killall node` — because that takes Isotopy down with them.",
+    "",
+    "Stop every process you started before you hand off. A dev server, watcher or daemon left",
+    "running holds your CLI open and stalls the run.",
+  ].join("\n");
+}
+
 export function buildResumePrompt(task: string, stepTask: string | undefined): string {
   return markdownBlocks([
     "# Continue in this session",

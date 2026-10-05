@@ -117,6 +117,22 @@ test("a box is told its time budget in minutes, the unit it can plan with", asyn
   expect(call.prompt).toContain(`about ${config.engineTimeoutMs / MS_PER_MINUTE} minutes`);
 });
 
+test("a box is told which process is Isotopy, so tidying up its own cannot stop the run", async () => {
+  // Arrange — TASK-157: a Developer cleaned up with `Stop-Process -Name node`
+  // and took the server down; the prompt now names the process to spare.
+  const { app, engine } = ctx;
+
+  // Anticipate
+  engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
+
+  // Act
+  await startRun(app, PIPELINE);
+
+  // Assert
+  const call = await engine.waitForCall(1);
+  expect(call.prompt).toContain(`PID ${process.pid}, port ${config.port}`);
+});
+
 test("each box's output is stored per stage and written as its own handoff.md", async () => {
   // Arrange
   const { app, engine, home } = ctx;

@@ -1,5 +1,26 @@
 # Done
 
+## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 12:39
+
+Found in `TASK-157`'s Claude Code run (2026-10-04, `docs/dogfood/TASK-157-claude-code-2026-10-04.md`).
+
+The Developer (Claude Code · haiku, permission mode *Never block*) finished its stage by cleaning up the dev server it had started — with `Get-Process -Name "node" | Stop-Process -Force`. On Windows that stops every node process the user can reach, and Isotopy's own API server is one. The server died silently 90 s into the stage; nothing was logged, because it was killed rather than failing. Durable recovery worked once the server was restarted by hand, but **unattended, nobody restarts it** — the whole milestone stops the first time an agent tidies up this way.
+
+The resumed attempt cleaned up correctly (`Get-NetTCPConnection -LocalPort 5192 … Stop-Process -Id`), so this is not a capability gap; it is the agent not knowing that other node processes on the machine matter.
+
+**Shape of the fix, as data rather than a gate** (see `docs/decisions.md` on boundaries): the environment section every stage prompt carries should say that Isotopy itself runs as node on this machine, that an agent stops only processes it started — by PID or by the port it opened — and never by process name. Starting the product is better left to Isotopy's own product process (`Setup → Automation → Start the product`, which QA can already ask for) than to agents launching `npm run dev &`. Evidence: a component test that the stage prompt states the rule, and a re-run of the dogfood without a server death.
+
+Cross-platform: the same mistake on macOS is `pkill node` / `killall node`; the instruction must name the rule, not one OS's command.
+
+### Plan
+
+**Done 2026-10-05.** The fix is data, not a gate. `buildProcessRule` (`domain/markdown/stage.ts`) joins the time budget in `stageEnvironment`, so every pipeline stage's `## Environment` names Isotopy's PID (`process.pid`) and port (`config.port`). It states the rule: stop only what you started, by PID or by the port you opened; never by name, with the Windows and POSIX commands named as examples; and stop everything you started before handing off, which covers TASK-185's leftover dev servers. `implement-feature.md` kept only its pick-your-own-port advice, because its stop-what-you-start sentence moved into the rule.
+
+Evidence: a component test in `pm-dev-test-pipeline.comp.ts` asserts the stage prompt names the server's PID and port. Dropping the rule from `stageEnvironment` fails it. `docs/decisions.md` (2026-10-05) records the choice, and rejects a supervisor and process-group isolation. The dogfood re-run is the Travel run's first watched day.
+
+---
 ## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
 **Priority:** P1 | **Tags:** engine, server, milestone-i
 **Updated:** 2026-10-05 12:37

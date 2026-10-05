@@ -134,21 +134,6 @@ Also seen, smaller: with another process already answering the health URL, the p
 Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
 
 ---
-## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
-**Priority:** P1 | **Tags:** engine, server, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157`'s Claude Code run (2026-10-04, `docs/dogfood/TASK-157-claude-code-2026-10-04.md`).
-
-The Developer (Claude Code · haiku, permission mode *Never block*) finished its stage by cleaning up the dev server it had started — with `Get-Process -Name "node" | Stop-Process -Force`. On Windows that stops every node process the user can reach, and Isotopy's own API server is one. The server died silently 90 s into the stage; nothing was logged, because it was killed rather than failing. Durable recovery worked once the server was restarted by hand, but **unattended, nobody restarts it** — the whole milestone stops the first time an agent tidies up this way.
-
-The resumed attempt cleaned up correctly (`Get-NetTCPConnection -LocalPort 5192 … Stop-Process -Id`), so this is not a capability gap; it is the agent not knowing that other node processes on the machine matter.
-
-**Shape of the fix, as data rather than a gate** (see `docs/decisions.md` on boundaries): the environment section every stage prompt carries should say that Isotopy itself runs as node on this machine, that an agent stops only processes it started — by PID or by the port it opened — and never by process name. Starting the product is better left to Isotopy's own product process (`Setup → Automation → Start the product`, which QA can already ask for) than to agents launching `npm run dev &`. Evidence: a component test that the stage prompt states the rule, and a re-run of the dogfood without a server death.
-
-Cross-platform: the same mistake on macOS is `pkill node` / `killall node`; the instruction must name the rule, not one OS's command.
-
----
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P2 | **Tags:** core, server, milestone-i
 **Updated:** 2026-10-04 17:49

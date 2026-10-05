@@ -15,6 +15,24 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-05 — An agent is told which process is Isotopy, and nothing polices it
+
+**Context:** in `TASK-157`'s arcade a Developer tidied up its dev server with
+`Get-Process -Name node | Stop-Process -Force`, which stopped Isotopy's own server too. Nothing was
+logged, because nothing failed: the server was killed. Unattended, nobody restarts it.
+
+**Decision:** every stage's `## Environment` names Isotopy's PID and port, and states the rule.
+Stop only what you started, by PID or by the port you opened. Never stop by process name. Stop
+everything you started before handing off. The agent can do this; the second attempt in the same
+run did, by port. It only lacked the fact that another node process on the machine mattered.
+
+**Rejected: a supervisor that restarts Isotopy, or isolating agents in their own process group.**
+Each one is a platform-specific mechanism built to catch an agent breaking a rule it was never
+told. A boundary is data the agent reads. If agents keep breaking a stated rule, that is the
+evidence a guard would need, and there is none yet.
+
+---
+
 ## 2026-10-03 — The operator log is pino, to the console and a file
 
 **Context:** TASK-170 gave the server one `Logger` seam over the console. Review asked for an

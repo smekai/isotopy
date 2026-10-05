@@ -24,6 +24,7 @@ import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
 import {
   buildContinuationPrompt,
+  buildProcessRule,
   buildResumePrompt,
   buildStagePrompt,
   buildTimeBudget,
@@ -91,7 +92,13 @@ async function stageEnvironment(
   stageDef: StageDefinition,
 ): Promise<string> {
   const product = await productEnvironment(deps, run, stageDef);
-  return [buildTimeBudget(config.engineTimeoutMs), product].filter(Boolean).join("\n\n");
+  return [
+    buildTimeBudget(config.engineTimeoutMs),
+    buildProcessRule({ pid: process.pid, port: config.port }),
+    product,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function productEnvironment(
