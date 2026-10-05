@@ -1,5 +1,22 @@
 # Backlog
 
+## TASK-191: Switching engine on a usage limit drops the owner's model pin for that engine
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 12:35
+
+Found while planning the Isotopy.Travel run (2026-10-05), after `TASK-157`.
+
+The owner pins one model per engine in Setup (`engineModels`), because the pin is the only cost cap: `orchestrate` is hard-coded to `deep`, and a tier alone climbs the ladder. Travel runs on Claude Code pinned to Sonnet, with Cursor pinned to Grok as the fallback when Claude's limits run out.
+
+**The fallback never reaches Grok.** When a run parks on a usage limit and the owner picks *Switch engine*, `selectionAfterLimit` (`domain/rules/engine-limit.ts`) returns `{ engine, modelTier }` and `RunService.resolveLimit` deletes `run.model`. Every remaining stage then runs on the tier ladder of the new engine — `deep` resolves to Claude Opus on Cursor — and follow-up runs inherit that unpinned selection.
+
+**Fix:** when the engine changes, the run takes the project's pin for the target engine (`settings.getPreferences(projectId).engineModels[engine]`) as `run.model`. With no pin, behaviour is unchanged. Evidence: a component test in `test/run/limit-pause.comp.ts` — blocked on Claude, resolved with switch-engine to Cursor in a project pinned to a Cursor model, and the next engine call carries that model.
+
+Not in scope: switching engines automatically when a limit is hit. Unattended, a limited run parks until the reset and resumes on its own.
+
+Cross-platform: none specific.
+
+---
 ## TASK-190: The spend of an engine attempt that was killed mid-stage disappears from the run's cost
 **Priority:** P3 | **Tags:** server, engine
 **Updated:** 2026-10-04 19:40
@@ -115,21 +132,6 @@ Engines are unaffected because their adapters spawn CLIs by resolved full path. 
 Also seen, smaller: with another process already answering the health URL, the product was marked `ready` 28 ms after start and then `exited` — readiness probed the URL, not our process. Worth a stated rule in the same change.
 
 Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
-
----
-## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
-**Priority:** P1 | **Tags:** engine, server, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157`'s Cursor run (2026-10-04, `docs/dogfood/TASK-157-cursor-2026-10-04.md`).
-
-Run #3 delivered the arcade shell but failed review and QA on one docs defect (README claims Node 18+; Vite 7.3.6 needs `^20.19.0 || >=22.12.0`). The Orchestrator did exactly the right thing: `start_run` with the same team, skipping scoping, with a narrow task — *"set README to ^20.19.0 || >=22.12.0 … add the same range to package.json engines … do not change game or score behavior"*. It did it twice (runs #4, #5).
-
-**Both times the Developer never saw that task.** Runs #3, #4 and #5 all carry the same Cursor session for the `implementation` stage (`2aa7153f-d094-44c2-bec1-92fc7e4307e2`). The follow-up stage resumed the original session with a continue-style prompt, and the Developer answered *"Taking stock of what's already on disk … Nothing left to implement"* and passed. Review and QA failed on the same unchanged README both times, and the loop could not converge. `RunState.task` held the new text all along; it just never reached the agent.
-
-**What to decide and fix:** a run started by `start_run` (or by a restart with a *different* task) must not resume a session carried over from an earlier run, or must, when it does resume, put the new task in the resume prompt. Find where the earlier run's `sessionId` is inherited (`inheritedRunOptions` / seeding) and make the rule explicit in one place. Evidence: a component test where a follow-up run's Developer prompt contains the follow-up task, with `FakeEngine` asserting the prompt; mutation-check that the old-session path fails it.
-
-Cross-platform: none specific.
 
 ---
 ## TASK-179: An agent stopped every node process and took Isotopy's own server down with it

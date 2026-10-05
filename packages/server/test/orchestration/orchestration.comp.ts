@@ -49,6 +49,8 @@ const TEAM: OrchestratorTeamProposal = {
 
 const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
+const DEVELOPER_SESSION = "2aa7153f-d094-44c2-bec1-92fc7e4307e2";
+
 const TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
   rationale: "One Developer and one QA Engineer cover this",
@@ -1107,6 +1109,52 @@ test("a stage that ran out of time is resumed on the restart, not started from n
   await waitForRunStatus(ctx.app, composed.id, "failed");
   const second = await waitForOrchestrationRuns(conversation.orchestrationId ?? "", 3);
   await waitForRunStatus(ctx.app, second, "completed");
+  ctx.engine.verify();
+});
+
+test("a fix run that resumes the Developer's session hands it the fix it was started for", async () => {
+  // Anticipate — TASK-157's Cursor loop: the Developer passes without a verdict,
+  // so its session is resumable; review fails on the README, and the Orchestrator
+  // sends a narrow fix back to the Developer. The resumed turn must carry that
+  // fix, or the Developer finds nothing left to do and the loop never converges.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).parks("Built the shell.", DEVELOPER_SESSION);
+  ctx.engine
+    .anticipate({ as: "QA Engineer" })
+    .reports("The README claims Node 18; Vite needs 20.19.\n\nVERDICT: FAIL");
+  ctx.engine.anticipateRunReview({
+    as: "review sending the fix back to the Developer",
+    decision: {
+      action: "start_run",
+      rationale: "Only the documented Node floor is wrong",
+      task: "Set the README's Node floor to 20.19",
+      fromStage: "implementation",
+    },
+  });
+  ctx.engine
+    .anticipate({
+      as: "resumed Developer",
+      resumeSessionId: DEVELOPER_SESSION,
+      prompt: /Set the README's Node floor to 20\.19/,
+    })
+    .reports("Raised the floor.");
+  ctx.engine.anticipate({ as: "second QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the fix run" });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  const fix = await waitForOrchestrationRuns(conversation.orchestrationId ?? "", 3);
+  await waitForRunStatus(ctx.app, fix, "completed");
   ctx.engine.verify();
 });
 

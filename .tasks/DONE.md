@@ -1,5 +1,26 @@
 # Done
 
+## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 12:37
+
+Found in `TASK-157`'s Cursor run (2026-10-04, `docs/dogfood/TASK-157-cursor-2026-10-04.md`).
+
+Run #3 delivered the arcade shell but failed review and QA on one docs defect (README claims Node 18+; Vite 7.3.6 needs `^20.19.0 || >=22.12.0`). The Orchestrator did exactly the right thing: `start_run` with the same team, skipping scoping, with a narrow task — *"set README to ^20.19.0 || >=22.12.0 … add the same range to package.json engines … do not change game or score behavior"*. It did it twice (runs #4, #5).
+
+**Both times the Developer never saw that task.** Runs #3, #4 and #5 all carry the same Cursor session for the `implementation` stage (`2aa7153f-d094-44c2-bec1-92fc7e4307e2`). The follow-up stage resumed the original session with a continue-style prompt, and the Developer answered *"Taking stock of what's already on disk … Nothing left to implement"* and passed. Review and QA failed on the same unchanged README both times, and the loop could not converge. `RunState.task` held the new text all along; it just never reached the agent.
+
+**What to decide and fix:** a run started by `start_run` (or by a restart with a *different* task) must not resume a session carried over from an earlier run, or must, when it does resume, put the new task in the resume prompt. Find where the earlier run's `sessionId` is inherited (`inheritedRunOptions` / seeding) and make the rule explicit in one place. Evidence: a component test where a follow-up run's Developer prompt contains the follow-up task, with `FakeEngine` asserting the prompt; mutation-check that the old-session path fails it.
+
+Cross-platform: none specific.
+
+### Plan
+
+**Done 2026-10-05.** The rule lives in one place, the resume branch of `turnPrompt` (`workflow/stage-execution.ts`). `buildResumePrompt(task, stepTask)` now carries the run's own task (`launch.task ?? run.task`), and its wording no longer claims a time limit. That claim was false for a Developer that passed, since a Developer never reports a verdict. The session is still resumed: it is the Developer's knowledge of what it built, which a narrow fix needs. The question-loop branch (`turn.answer`) is unchanged.
+
+Evidence: a component test in `orchestration.comp.ts` that reproduces TASK-157's loop. The Developer passes with a session and no verdict, QA fails, and the review sends a fix back `fromStage: "implementation"`. The resumed Developer must carry both the session and the fix's text. Removing the task block from the prompt fails it. The old spec test that asserted "cut off" prose is gone, superseded by the component test. `docs/decisions.md`'s 2026-08-24 resume entry is amended rather than paired.
+
+---
 ## TASK-168: Onboarding asks for a project and offers no way to add one
 **Priority:** P2 | **Tags:** ui, setup, milestone-i
 **Updated:** 2026-10-03 19:53

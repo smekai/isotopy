@@ -340,6 +340,16 @@ agent had no idea it was on a clock, so it reached for a browser install with fo
 The stage prompt names the minutes and says what overrunning costs — no verdict, no partial
 credit. A constraint an agent cannot see is one it cannot budget against.
 
+**Amended 2026-10-05 (`TASK-180`): a resumed turn carries the run's task.** "No verdict" is not
+only "cut off": a Developer never reports one, so a Developer that passed is resumable too, and a
+fix run that starts at it resumes that session with a new, narrower task. In `TASK-157`'s arcade
+the resume prompt had no task, so the Developer found nothing left to do three runs in a row and
+the loop never converged. The resume prompt now carries the run's task, whatever brought the
+session back.
+
+**Rejected: never resuming a stage that passed.** That session is the Developer's knowledge of what
+it built, which is what a narrow fix needs most. The defect was the missing task, not the resume.
+
 ---
 
 ## 2026-08-23 — An adapter declares what it can do, as data

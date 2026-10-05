@@ -5,7 +5,6 @@
 import { expect, test } from "vitest";
 import type { StageState } from "@isotopy/core";
 import { resumableSession } from "../../src/domain/rules/run-seeding.ts";
-import { buildResumePrompt } from "../../src/domain/markdown/stage.ts";
 
 const SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
@@ -29,12 +28,5 @@ test("a stage with no session recorded has nothing to resume", () => {
 test("a session is never handed to an engine that cannot resume one", () => {
   // The catalog is what answers this, so a new engine cannot inherit the claim.
   expect(resumableSession(stage({ sessionId: SESSION }), undefined)).toBeUndefined();
-});
-
-test("a resumed turn is told it was cut off, rather than being handed an empty prompt", () => {
-  const prompt = buildResumePrompt(undefined);
-
-  expect(prompt).toContain("cut off");
-  expect(prompt).toContain("do not start the stage over");
 });
 
