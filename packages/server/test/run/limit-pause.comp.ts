@@ -4,6 +4,7 @@ import {
   createTestApp,
   getRun,
   post,
+  put,
   restartApp,
   startRun,
   stageOf,
@@ -12,6 +13,7 @@ import {
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 import { LIMIT_ERRORS } from "../../src/domain/rules/limit-copy.ts";
+import { setEngineAdapter } from "../../src/engines/registry.ts";
 
 const TASK = "add a greet function";
 const PM_REPORT = "Build a greet function. Done when it prints a greeting.";
@@ -21,6 +23,8 @@ const TESTER_REPORT = "Verified it.\n\nVERDICT: PASS";
 // The verbatim trigger from TASK-061.
 const SESSION_LIMIT = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 const SHORT_LIMIT = "You've hit your session limit · try again in 2 seconds";
+
+const CURSOR_PIN = "cursor-grok-4.5-high";
 
 describe("plan limit", () => {
   let ctx: TestApp;
@@ -88,6 +92,40 @@ describe("plan limit", () => {
     expect(finished.stageOutputs?.intake).toBe(PM_REPORT);
     expect(finished.limit).toBeUndefined();
     // Four calls, not five: the Project Manager was never re-run.
+    ctx.engine.verify();
+  });
+
+  test("switching engine on a limit runs the rest on the owner's pin for that engine", async () => {
+    // Arrange — TASK-191: Claude Code pinned to Sonnet runs out, and the owner
+    // pinned Cursor to Grok as the fallback. Without the pin the switched run
+    // climbs Cursor's tier ladder instead, which is not what anybody chose.
+    // The same fake answers for Cursor too: the harness fakes one engine, and an
+    // unfaked one is the real CLI on this machine.
+    setEngineAdapter("cursor", ctx.engine);
+    const project = await addTestProject(ctx.registry, "limit-switch-engine");
+    await put(ctx.app, "/settings/preferences", { engineModels: { cursor: CURSOR_PIN } }, project.headers);
+    ctx.engine.anticipate({ as: "Agent on Sonnet", model: "sonnet" }).hitsLimit(SESSION_LIMIT);
+    ctx.engine.anticipate({ as: "Agent on the Cursor pin", model: CURSOR_PIN }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview({ as: "review on the Cursor pin" });
+    const run = await startRun(
+      ctx.app,
+      { pipelineId: "solo", task: TASK, engine: "claude-code", model: "sonnet", modelTier: "deep" },
+      project.headers,
+    );
+    await waitForStageStatus(ctx.app, run.id, "solo", "blocked");
+
+    // Act
+    const resumed = await post(
+      ctx.app,
+      `/runs/${run.id}/limit/solo/resolve`,
+      { choice: "switch-engine", engine: "cursor" },
+      project.headers,
+    );
+
+    // Assert
+    expect(resumed.status).toBe(200);
+    const finished = await waitForRunStatus(ctx.app, run.id, "completed");
+    expect(finished).toMatchObject({ engine: "cursor", model: CURSOR_PIN });
     ctx.engine.verify();
   });
 

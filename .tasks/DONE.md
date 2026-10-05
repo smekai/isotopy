@@ -1,5 +1,30 @@
 # Done
 
+## TASK-191: Switching engine on a usage limit drops the owner's model pin for that engine
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 12:57
+
+Found while planning the Isotopy.Travel run (2026-10-05), after `TASK-157`.
+
+The owner pins one model per engine in Setup (`engineModels`), because the pin is the only cost cap: `orchestrate` is hard-coded to `deep`, and a tier alone climbs the ladder. Travel runs on Claude Code pinned to Sonnet, with Cursor pinned to Grok as the fallback when Claude's limits run out.
+
+**The fallback never reaches Grok.** When a run parks on a usage limit and the owner picks *Switch engine*, `selectionAfterLimit` (`domain/rules/engine-limit.ts`) returns `{ engine, modelTier }` and `RunService.resolveLimit` deletes `run.model`. Every remaining stage then runs on the tier ladder of the new engine — `deep` resolves to Claude Opus on Cursor — and follow-up runs inherit that unpinned selection.
+
+**Fix:** when the engine changes, the run takes the project's pin for the target engine (`settings.getPreferences(projectId).engineModels[engine]`) as `run.model`. With no pin, behaviour is unchanged. Evidence: a component test in `test/run/limit-pause.comp.ts` — blocked on Claude, resolved with switch-engine to Cursor in a project pinned to a Cursor model, and the next engine call carries that model.
+
+Not in scope: switching engines automatically when a limit is hit. Unattended, a limited run parks until the reset and resumes on its own.
+
+Cross-platform: none specific.
+
+### Plan
+
+**Done 2026-10-05.** `selectionAfterLimit` (`domain/rules/engine-limit.ts`) now takes the project's `engineModels`. On `switch-engine` the run's model becomes the target harness's pin, and with no pin it falls back to the tier ladder as before. `RunService.resolveLimit` passes `settings.getPreferences(run.projectId).engineModels`. Switching tier and retrying are unchanged. Follow-up runs inherit the run's engine and model, so an initiative stays on the pin after a switch.
+
+Evidence: a component test in `limit-pause.comp.ts`. A run starts on Claude Code · sonnet, hits a limit, and switches to Cursor in a project pinned to a Cursor model. The resumed stage and the review run on that pin, and the run ends `{ engine: "cursor", model: <pin> }`. Removing the pin from the rule fails it. The spec's three callers pass pins. `docs/decisions.md`'s 2026-08 tier-preset entry is amended with the limit consequence.
+
+The test registers its `FakeEngine` for Cursor as well. Its first draft did not, so the harness's unfaked Cursor adapter spawned the real `cursor-agent` once on the dev machine. Not done: switching engines automatically when a limit is hit.
+
+---
 ## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
 **Priority:** P1 | **Tags:** server, engine, milestone-i
 **Updated:** 2026-10-05 12:49

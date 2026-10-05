@@ -1212,6 +1212,13 @@ stage as well as to the run. Later roles with their own preset keep it; later ro
 without one follow the new default. For a pipeline where no stage carries a preset —
 every static one — this is identical to the old behaviour.
 
+**Amended 2026-10-05 (`TASK-191`): switching harness on a limit takes the owner's pin for the
+new one.** The run's model id is dropped on a switch, because the new harness would not understand
+it. Before this, nothing replaced it: a run switched from Claude Code to Cursor climbed Cursor's
+tier ladder, even though Setup had pinned a Cursor model as the fallback. The pin is the only cost
+cap, so `selectionAfterLimit` now takes the project's `engineModels` and uses the target harness's
+pin as the run's model. With no pin it falls back to the ladder as before.
+
 ---
 
 ## 2026-08-11 — The product runs once per project, is shown in an iframe, and is driven by the agents' own browsers

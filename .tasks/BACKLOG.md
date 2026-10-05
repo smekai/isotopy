@@ -1,22 +1,5 @@
 # Backlog
 
-## TASK-191: Switching engine on a usage limit drops the owner's model pin for that engine
-**Priority:** P1 | **Tags:** engine, server, milestone-i
-**Updated:** 2026-10-05 12:35
-
-Found while planning the Isotopy.Travel run (2026-10-05), after `TASK-157`.
-
-The owner pins one model per engine in Setup (`engineModels`), because the pin is the only cost cap: `orchestrate` is hard-coded to `deep`, and a tier alone climbs the ladder. Travel runs on Claude Code pinned to Sonnet, with Cursor pinned to Grok as the fallback when Claude's limits run out.
-
-**The fallback never reaches Grok.** When a run parks on a usage limit and the owner picks *Switch engine*, `selectionAfterLimit` (`domain/rules/engine-limit.ts`) returns `{ engine, modelTier }` and `RunService.resolveLimit` deletes `run.model`. Every remaining stage then runs on the tier ladder of the new engine — `deep` resolves to Claude Opus on Cursor — and follow-up runs inherit that unpinned selection.
-
-**Fix:** when the engine changes, the run takes the project's pin for the target engine (`settings.getPreferences(projectId).engineModels[engine]`) as `run.model`. With no pin, behaviour is unchanged. Evidence: a component test in `test/run/limit-pause.comp.ts` — blocked on Claude, resolved with switch-engine to Cursor in a project pinned to a Cursor model, and the next engine call carries that model.
-
-Not in scope: switching engines automatically when a limit is hit. Unattended, a limited run parks until the reset and resumes on its own.
-
-Cross-platform: none specific.
-
----
 ## TASK-190: The spend of an engine attempt that was killed mid-stage disappears from the run's cost
 **Priority:** P3 | **Tags:** server, engine
 **Updated:** 2026-10-04 19:40
