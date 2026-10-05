@@ -1,5 +1,11 @@
 import { DEFAULT_LIMIT_WAIT_MS, MAX_LIMIT_WAIT_MS } from "@isotopy/core";
-import type { EngineId, EngineLimit, LimitResolution, ModelTier } from "@isotopy/core";
+import type {
+  EngineId,
+  EngineLimit,
+  LimitResolution,
+  ModelTier,
+  ProjectPreferences,
+} from "@isotopy/core";
 
 export interface RunEngineSelection {
   engine?: EngineId;
@@ -147,12 +153,17 @@ export function formatLimitWait(waitMs: number): string {
 export function selectionAfterLimit(
   current: RunEngineSelection,
   resolution: LimitResolution,
+  pins: ProjectPreferences["engineModels"],
 ): RunEngineSelection {
   if (resolution.choice === "switch-tier") {
     return { engine: current.engine, modelTier: resolution.tier };
   }
   if (resolution.choice === "switch-engine") {
-    return { engine: resolution.engine, modelTier: current.modelTier };
+    return {
+      engine: resolution.engine,
+      model: pins[resolution.engine],
+      modelTier: current.modelTier,
+    };
   }
   return current;
 }

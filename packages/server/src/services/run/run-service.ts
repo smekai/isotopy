@@ -121,6 +121,7 @@ export class RunService implements RunProjection {
   readonly milestones: MilestoneService;
   private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
+  private shuttingDown = false;
   private readonly changes: RunChangeCollector;
   private readonly logger: Logger;
   private readonly runtimes: WorkflowRuntimeRegistry;
@@ -183,6 +184,7 @@ export class RunService implements RunProjection {
   }
 
   async shutdown(): Promise<void> {
+    this.shuttingDown = true;
     for (const controller of this.engineAborts.values()) {
       controller.abort();
     }
@@ -682,7 +684,8 @@ export class RunService implements RunProjection {
     const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
     if (!openWorkflowRunId) throw new Error(LIMIT_ERRORS.noDurableRun(runId));
     const current = { engine: run.engine, model: run.model, modelTier: run.modelTier };
-    const selection = selectionAfterLimit(current, resolution);
+    const pins = this.settings.getPreferences(run.projectId).engineModels;
+    const selection = selectionAfterLimit(current, resolution, pins);
     run.engine = selection.engine;
     if (selection.model === undefined) delete run.model;
     else run.model = selection.model;
@@ -890,6 +893,7 @@ export class RunService implements RunProjection {
 
   private beginEngineStage(runId: string): AbortController {
     const controller = new AbortController();
+    if (this.shuttingDown) controller.abort();
     this.engineAborts.set(runId, controller);
     return controller;
   }

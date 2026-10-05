@@ -1,5 +1,110 @@
 # Done
 
+## TASK-191: Switching engine on a usage limit drops the owner's model pin for that engine
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 12:57
+
+Found while planning the Isotopy.Travel run (2026-10-05), after `TASK-157`.
+
+The owner pins one model per engine in Setup (`engineModels`), because the pin is the only cost cap: `orchestrate` is hard-coded to `deep`, and a tier alone climbs the ladder. Travel runs on Claude Code pinned to Sonnet, with Cursor pinned to Grok as the fallback when Claude's limits run out.
+
+**The fallback never reaches Grok.** When a run parks on a usage limit and the owner picks *Switch engine*, `selectionAfterLimit` (`domain/rules/engine-limit.ts`) returns `{ engine, modelTier }` and `RunService.resolveLimit` deletes `run.model`. Every remaining stage then runs on the tier ladder of the new engine — `deep` resolves to Claude Opus on Cursor — and follow-up runs inherit that unpinned selection.
+
+**Fix:** when the engine changes, the run takes the project's pin for the target engine (`settings.getPreferences(projectId).engineModels[engine]`) as `run.model`. With no pin, behaviour is unchanged. Evidence: a component test in `test/run/limit-pause.comp.ts` — blocked on Claude, resolved with switch-engine to Cursor in a project pinned to a Cursor model, and the next engine call carries that model.
+
+Not in scope: switching engines automatically when a limit is hit. Unattended, a limited run parks until the reset and resumes on its own.
+
+Cross-platform: none specific.
+
+### Plan
+
+**Done 2026-10-05.** `selectionAfterLimit` (`domain/rules/engine-limit.ts`) now takes the project's `engineModels`. On `switch-engine` the run's model becomes the target harness's pin, and with no pin it falls back to the tier ladder as before. `RunService.resolveLimit` passes `settings.getPreferences(run.projectId).engineModels`. Switching tier and retrying are unchanged. Follow-up runs inherit the run's engine and model, so an initiative stays on the pin after a switch.
+
+Evidence: a component test in `limit-pause.comp.ts`. A run starts on Claude Code · sonnet, hits a limit, and switches to Cursor in a project pinned to a Cursor model. The resumed stage and the review run on that pin, and the run ends `{ engine: "cursor", model: <pin> }`. Removing the pin from the rule fails it. The spec's three callers pass pins. `docs/decisions.md`'s 2026-08 tier-preset entry is amended with the limit consequence.
+
+The test registers its `FakeEngine` for Cursor as well. Its first draft did not, so the harness's unfaked Cursor adapter spawned the real `cursor-agent` once on the dev machine. Not done: switching engines automatically when a limit is hit.
+
+---
+## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
+**Priority:** P1 | **Tags:** server, engine, milestone-i
+**Updated:** 2026-10-05 13:33
+
+Found in `TASK-157`'s Cursor run (2026-10-04).
+
+After the third failed delivery run, the Orchestrator's review decision was rejected by `orchestratorDecisionSchema`: it proposed a team whose roles used `persona` instead of `id`/`skill`. The orchestration recorded `decisionError` (visible — good) and then stayed `running` forever: no retry, no question to the owner, and the *"three blocked runs in a row stop the loop"* rule never applied, because no decision was ever accepted to count. The same stuck state happened earlier when the review step could not spawn its engine.
+
+Unattended, this is a silent stop that looks like work in progress. **Decide and fix:** on a decision that fails validation (or a review that cannot run), the orchestration should end in a state that says so — retry the review once with the validation issues fed back, then `ask_user` or stop with the reason — and the operator log should carry it at `error`. Evidence: a component test with `FakeEngine` returning an invalid decision, asserting the initiative leaves `running`.
+
+Related: the role key `persona` is a natural mistake for a model reading a catalog titled *Persona catalog*; the prompt or schema error text could name the expected keys.
+
+### Plan
+
+**Done 2026-10-05.** A refused decision now parks the initiative on its owner instead of leaving it in `running` or `conversing` with nothing in flight. `OrchestrationService.parkOnOwner` sets `awaiting_user` and logs at `error` at all three dead ends:
+- `recordReview` leaves a run with no accepted decision (schema failure, a failed review engine, any refusal including three blocked runs);
+- `consume` refuses a conversation turn's decision, including a turn opened by the owner's answer (review feedback on smekai/isotopy#82);
+- `act` cannot launch an accepted decision.
+
+`parkedQuestion` (core) turns the rejection into the question. The finished run's chat composer accepts an answer, and `POST /orchestrations/:id/messages` opens a fresh Orchestrator turn that carries the rejection and the owner's steer.
+
+**Changed from the plan:** the plan said to terminate the initiative. That breaks the 2026-08-12 decision's recovery, in which restarting the run re-reviews it, and the existing re-review test failed. Parking keeps that recovery and still says why and logs it. There is no automatic retry, for the reasons already in `docs/decisions.md`.
+
+Evidence: component tests cover
+- the malformed review, with the `error` log line;
+- three blocked runs;
+- the milestone continuation refusal;
+- both conversation-turn refusals;
+- TASK-157's `persona`-for-`skill` team answered by the owner;
+- an answered turn refused again, which parks again.
+
+Every park site was mutation-checked. Not done: the schema error naming the expected role keys.
+
+---
+## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 12:39
+
+Found in `TASK-157`'s Claude Code run (2026-10-04, `docs/dogfood/TASK-157-claude-code-2026-10-04.md`).
+
+The Developer (Claude Code · haiku, permission mode *Never block*) finished its stage by cleaning up the dev server it had started — with `Get-Process -Name "node" | Stop-Process -Force`. On Windows that stops every node process the user can reach, and Isotopy's own API server is one. The server died silently 90 s into the stage; nothing was logged, because it was killed rather than failing. Durable recovery worked once the server was restarted by hand, but **unattended, nobody restarts it** — the whole milestone stops the first time an agent tidies up this way.
+
+The resumed attempt cleaned up correctly (`Get-NetTCPConnection -LocalPort 5192 … Stop-Process -Id`), so this is not a capability gap; it is the agent not knowing that other node processes on the machine matter.
+
+**Shape of the fix, as data rather than a gate** (see `docs/decisions.md` on boundaries): the environment section every stage prompt carries should say that Isotopy itself runs as node on this machine, that an agent stops only processes it started — by PID or by the port it opened — and never by process name. Starting the product is better left to Isotopy's own product process (`Setup → Automation → Start the product`, which QA can already ask for) than to agents launching `npm run dev &`. Evidence: a component test that the stage prompt states the rule, and a re-run of the dogfood without a server death.
+
+Cross-platform: the same mistake on macOS is `pkill node` / `killall node`; the instruction must name the rule, not one OS's command.
+
+### Plan
+
+**Done 2026-10-05.** The fix is data, not a gate. `buildProcessRule` (`domain/markdown/stage.ts`) joins the time budget in `stageEnvironment`, so every pipeline stage's `## Environment` names Isotopy's PID (`process.pid`) and port (`config.port`). It states the rule: stop only what you started, by PID or by the port you opened; never by name, with the Windows and POSIX commands named as examples; and stop everything you started before handing off, which covers TASK-185's leftover dev servers. `implement-feature.md` kept only its pick-your-own-port advice, because its stop-what-you-start sentence moved into the rule.
+
+Evidence: a component test in `pm-dev-test-pipeline.comp.ts` asserts the stage prompt names the server's PID and port. Dropping the rule from `stageEnvironment` fails it. `docs/decisions.md` (2026-10-05) records the choice, and rejects a supervisor and process-group isolation. The dogfood re-run is the Travel run's first watched day.
+
+---
+## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
+**Priority:** P1 | **Tags:** engine, server, milestone-i
+**Updated:** 2026-10-05 13:33
+
+Found in `TASK-157`'s Cursor run (2026-10-04, `docs/dogfood/TASK-157-cursor-2026-10-04.md`).
+
+Run #3 delivered the arcade shell but failed review and QA on one docs defect (README claims Node 18+; Vite 7.3.6 needs `^20.19.0 || >=22.12.0`). The Orchestrator did exactly the right thing: `start_run` with the same team, skipping scoping, with a narrow task — *"set README to ^20.19.0 || >=22.12.0 … add the same range to package.json engines … do not change game or score behavior"*. It did it twice (runs #4, #5).
+
+**Both times the Developer never saw that task.** Runs #3, #4 and #5 all carry the same Cursor session for the `implementation` stage (`2aa7153f-d094-44c2-bec1-92fc7e4307e2`). The follow-up stage resumed the original session with a continue-style prompt, and the Developer answered *"Taking stock of what's already on disk … Nothing left to implement"* and passed. Review and QA failed on the same unchanged README both times, and the loop could not converge. `RunState.task` held the new text all along; it just never reached the agent.
+
+**What to decide and fix:** a run started by `start_run` (or by a restart with a *different* task) must not resume a session carried over from an earlier run, or must, when it does resume, put the new task in the resume prompt. Find where the earlier run's `sessionId` is inherited (`inheritedRunOptions` / seeding) and make the rule explicit in one place. Evidence: a component test where a follow-up run's Developer prompt contains the follow-up task, with `FakeEngine` asserting the prompt; mutation-check that the old-session path fails it.
+
+Cross-platform: none specific.
+
+### Plan
+
+**Done 2026-10-05.** The rule lives in one place, the resume branch of `turnPrompt` (`workflow/stage-execution.ts`). `buildResumePrompt(task, stepTask, environment)` now carries the run's own task (`launch.task ?? run.task`) and the current `## Environment`, and its wording no longer claims a time limit. That claim was false for a Developer that passed, since a Developer never reports a verdict. The environment matters on resume because a server restart replaces the process the session's first turn named (review feedback on smekai/isotopy#82). The session is still resumed: it is the Developer's knowledge of what it built, which a narrow fix needs. The question-loop branch (`turn.answer`) is unchanged.
+
+Evidence:
+- A component test in `orchestration.comp.ts` reproduces TASK-157's loop. The Developer passes with a session and no verdict, QA fails, and the review sends a fix back `fromStage: "implementation"`. The resumed Developer must carry both the session and the fix's text.
+- A component test in `pm-dev-test-pipeline.comp.ts` requires a resumed QA turn to name the current PID and port.
+
+Each of these fails when its part is removed from the resume prompt. The old spec test that asserted "cut off" prose is gone, superseded. `docs/decisions.md`'s 2026-08-24 resume entry is amended rather than paired.
+
+---
 ## TASK-168: Onboarding asks for a project and offers no way to add one
 **Priority:** P2 | **Tags:** ui, setup, milestone-i
 **Updated:** 2026-10-03 19:53

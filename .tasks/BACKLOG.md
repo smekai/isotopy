@@ -87,19 +87,6 @@ The Architect and QA failed the arcade shell on a one-line README fix (Node floo
 Decide whether a quality stage's blocking finding should send the run back to `implementation` once (bounded, recorded in the run) before the run settles, or whether the Orchestrator's follow-up run is the intended loop — and then make the product brief say which. Either answer is defensible; leaving it implicit is not. Record it in `docs/decisions.md`.
 
 ---
-## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
-**Priority:** P1 | **Tags:** server, engine, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157`'s Cursor run (2026-10-04).
-
-After the third failed delivery run, the Orchestrator's review decision was rejected by `orchestratorDecisionSchema`: it proposed a team whose roles used `persona` instead of `id`/`skill`. The orchestration recorded `decisionError` (visible — good) and then stayed `running` forever: no retry, no question to the owner, and the *"three blocked runs in a row stop the loop"* rule never applied, because no decision was ever accepted to count. The same stuck state happened earlier when the review step could not spawn its engine.
-
-Unattended, this is a silent stop that looks like work in progress. **Decide and fix:** on a decision that fails validation (or a review that cannot run), the orchestration should end in a state that says so — retry the review once with the validation issues fed back, then `ask_user` or stop with the reason — and the operator log should carry it at `error`. Evidence: a component test with `FakeEngine` returning an invalid decision, asserting the initiative leaves `running`.
-
-Related: the role key `persona` is a natural mistake for a model reading a catalog titled *Persona catalog*; the prompt or schema error text could name the expected keys.
-
----
 ## TASK-181: On Windows, an automation command given as a bare .cmd name fails before it starts
 **Priority:** P1 | **Tags:** server, infra, milestone-i
 **Updated:** 2026-10-04 19:39
@@ -115,36 +102,6 @@ Engines are unaffected because their adapters spawn CLIs by resolved full path. 
 Also seen, smaller: with another process already answering the health URL, the product was marked `ready` 28 ms after start and then `exited` — readiness probed the URL, not our process. Worth a stated rule in the same change.
 
 Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
-
----
-## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
-**Priority:** P1 | **Tags:** engine, server, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157`'s Cursor run (2026-10-04, `docs/dogfood/TASK-157-cursor-2026-10-04.md`).
-
-Run #3 delivered the arcade shell but failed review and QA on one docs defect (README claims Node 18+; Vite 7.3.6 needs `^20.19.0 || >=22.12.0`). The Orchestrator did exactly the right thing: `start_run` with the same team, skipping scoping, with a narrow task — *"set README to ^20.19.0 || >=22.12.0 … add the same range to package.json engines … do not change game or score behavior"*. It did it twice (runs #4, #5).
-
-**Both times the Developer never saw that task.** Runs #3, #4 and #5 all carry the same Cursor session for the `implementation` stage (`2aa7153f-d094-44c2-bec1-92fc7e4307e2`). The follow-up stage resumed the original session with a continue-style prompt, and the Developer answered *"Taking stock of what's already on disk … Nothing left to implement"* and passed. Review and QA failed on the same unchanged README both times, and the loop could not converge. `RunState.task` held the new text all along; it just never reached the agent.
-
-**What to decide and fix:** a run started by `start_run` (or by a restart with a *different* task) must not resume a session carried over from an earlier run, or must, when it does resume, put the new task in the resume prompt. Find where the earlier run's `sessionId` is inherited (`inheritedRunOptions` / seeding) and make the rule explicit in one place. Evidence: a component test where a follow-up run's Developer prompt contains the follow-up task, with `FakeEngine` asserting the prompt; mutation-check that the old-session path fails it.
-
-Cross-platform: none specific.
-
----
-## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
-**Priority:** P1 | **Tags:** engine, server, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157`'s Claude Code run (2026-10-04, `docs/dogfood/TASK-157-claude-code-2026-10-04.md`).
-
-The Developer (Claude Code · haiku, permission mode *Never block*) finished its stage by cleaning up the dev server it had started — with `Get-Process -Name "node" | Stop-Process -Force`. On Windows that stops every node process the user can reach, and Isotopy's own API server is one. The server died silently 90 s into the stage; nothing was logged, because it was killed rather than failing. Durable recovery worked once the server was restarted by hand, but **unattended, nobody restarts it** — the whole milestone stops the first time an agent tidies up this way.
-
-The resumed attempt cleaned up correctly (`Get-NetTCPConnection -LocalPort 5192 … Stop-Process -Id`), so this is not a capability gap; it is the agent not knowing that other node processes on the machine matter.
-
-**Shape of the fix, as data rather than a gate** (see `docs/decisions.md` on boundaries): the environment section every stage prompt carries should say that Isotopy itself runs as node on this machine, that an agent stops only processes it started — by PID or by the port it opened — and never by process name. Starting the product is better left to Isotopy's own product process (`Setup → Automation → Start the product`, which QA can already ask for) than to agents launching `npm run dev &`. Evidence: a component test that the stage prompt states the rule, and a re-run of the dogfood without a server death.
-
-Cross-platform: the same mistake on macOS is `pkill node` / `killall node`; the instruction must name the rule, not one OS's command.
 
 ---
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start

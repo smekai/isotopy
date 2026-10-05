@@ -29,6 +29,23 @@ describe("durable runtime", () => {
     await ctx.dispose();
   });
 
+  test("shutdown also stops an engine call that begins while it is stopping", async () => {
+    // Arrange — the Windows CI hang behind PR #82: shutdown aborts the calls in
+    // flight, then waits for the worker, and the workflow it is waiting on goes
+    // on to start another call. Here the aborted stage's run moves on to its
+    // review, which begins after the abort and would hang the shutdown forever.
+    ctx.engine.anticipate({ as: "Agent, in flight at shutdown" }).hangsUntilAborted();
+    ctx.engine.anticipate({ as: "review, begun during shutdown" }).hangsUntilAborted();
+    await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+    await ctx.engine.waitForCall(1);
+
+    // Act
+    await ctx.orchestrator.shutdown();
+
+    // Assert
+    expect(ctx.engine.calls).toHaveLength(2);
+  });
+
   test("a gate survives a hard restart and the completed stage is not re-run (M6/M7)", async () => {
     // Arrange — pm-dev-test gates after the Project Manager's recommendation.
     const project = await addTestProject(ctx.registry, "durable");

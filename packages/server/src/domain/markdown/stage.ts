@@ -130,17 +130,40 @@ export function buildTimeBudget(timeoutMs: number): string {
   ].join("\n");
 }
 
-export function buildResumePrompt(stepTask: string | undefined): string {
+export interface IsotopyProcess {
+  pid: number;
+  port: number;
+}
+
+export function buildProcessRule({ pid, port }: IsotopyProcess): string {
+  return [
+    `Isotopy, which runs this step, is a node process on this machine: PID ${pid}, port ${port}.`,
+    "Stopping it stops the whole run, and nothing restarts it.",
+    "",
+    "Stop only the processes you started yourself, by the PID you were given or the port you",
+    "opened. Never stop processes by name — not `Stop-Process -Name node`, `taskkill /IM node.exe`,",
+    "`pkill node` or `killall node` — because that takes Isotopy down with them.",
+    "",
+    "Stop every process you started before you hand off. A dev server, watcher or daemon left",
+    "running holds your CLI open and stalls the run.",
+  ].join("\n");
+}
+
+export function buildResumePrompt(
+  task: string,
+  stepTask: string | undefined,
+  environment: string | undefined,
+): string {
   return markdownBlocks([
-    "# Continue where you were cut off",
-    "",
-    "Your previous attempt at this stage was stopped by a time limit before it reported a " +
-      "verdict. This is the same session, so what you had already established is still above — " +
-      "do not repeat it, and do not start the stage over.",
-    "",
-    "Take stock of what you had finished, finish only what is left, and end with your verdict. " +
-      "If you were part-way through setting something up and it is not essential to reaching a " +
-      "verdict, drop it and reach the verdict instead.",
+    "# Continue in this session",
+    "This is the same session you worked on this stage in before, so what you established then " +
+      "is still above — do not repeat it, and do not start the stage over.",
+    "The task below is this run's. It may not be the one you last worked on: an earlier attempt " +
+      "may have been cut off, or reviewed and sent back with a narrower ask. Check the working " +
+      "directory against it, do only what it still needs, and end the way your stage asks. If you " +
+      "were part-way through setting something up that this task does not need, drop it.",
+    `## Task\n\n${markdownBody(task)}`,
+    environment ? `## Environment\n\n${markdownBody(environment)}` : undefined,
     stepTask ? STAGE_NOTES_INVITATION : undefined,
   ]);
 }

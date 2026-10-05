@@ -312,6 +312,7 @@ export class OrchestrationService implements StageOutputConsumer {
       const cause = formatValidationIssues(parsed.issues);
       return this.refuse(
         orchestration,
+        run.id,
         cause,
         `${profession} produced no usable decision — ${cause}`,
       );
@@ -320,6 +321,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (refusal !== undefined) {
       return this.refuse(
         orchestration,
+        run.id,
         refusal,
         `${profession} decided something that cannot be acted on — ${refusal}`,
       );
@@ -343,10 +345,12 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private async refuse(
     orchestration: Orchestration,
+    runId: string,
     cause: string,
     reason: string,
   ): Promise<StageOutputRejection> {
     orchestration.decisionError = cause;
+    this.parkOnOwner(orchestration, runId);
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return { reason };
@@ -502,8 +506,19 @@ export class OrchestrationService implements StageOutputConsumer {
     } else if (decision.value) {
       delete orchestration.decisionError;
     }
+    if (errors.length > 0 && !this.hasTurnFor(orchestration, request.runId)) {
+      this.parkOnOwner(orchestration, request.runId);
+    }
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
+  }
+
+  private parkOnOwner(orchestration: Orchestration, runId: string): void {
+    orchestration.status = "awaiting_user";
+    this.logger.error(
+      `Orchestration ${orchestration.id} is waiting on its owner: no decision it made could be acted on`,
+      { runId, cause: orchestration.decisionError },
+    );
   }
 
   async settle(runId: string): Promise<void> {
@@ -542,6 +557,7 @@ export class OrchestrationService implements StageOutputConsumer {
       options,
     ).catch((error: unknown) => {
       orchestration.decisionError = messageOf(error);
+      this.parkOnOwner(orchestration, run.id);
       return undefined;
     });
     if (started && !orchestration.runIds.includes(started.id)) {

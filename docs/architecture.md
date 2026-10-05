@@ -630,7 +630,11 @@ that does not validate, and the blocked-launch ceiling. A refused decision recor
 `decisionError` and **no turn**, which is what keeps the loop open: `hasTurnFor` would
 otherwise discard the corrected decision of a re-review, and `settle` would find the run
 already spoken for. So the recovery is the ordinary one — restart the run, and the rejection
-travels into the next prompt. `launch` keeps the same two throws for what the type system
+travels into the next prompt. Meanwhile the initiative waits on its owner (`awaiting_user`),
+and the rejection is logged at `error`. This applies at all three dead ends: a review leaves
+its run without a decision, a conversation turn's decision is refused in `consume`, or an
+accepted decision fails to launch. `parkedQuestion` phrases the rejection
+as the question, so an answer through `POST /orchestrations/:id/messages` is the other way on. `launch` keeps the same two throws for what the type system
 cannot rule out; by then they are unreachable.
 
 **Specialist questions are mediated inside the specialist workflow.** The

@@ -49,6 +49,8 @@ const TEAM: OrchestratorTeamProposal = {
 
 const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
+const DEVELOPER_SESSION = "2aa7153f-d094-44c2-bec1-92fc7e4307e2";
+
 const TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
   rationale: "One Developer and one QA Engineer cover this",
@@ -423,7 +425,8 @@ test("a turn with no decision block needs attention and records why, rather than
     `/orchestrations/${run.orchestrationId}`,
   );
   expect(stageMessage(finished)).toContain("no usable decision");
-  expect(orchestration).toMatchObject({ status: "conversing", turns: [] });
+  // Not `conversing`: nothing is thinking, and the next move is the owner's.
+  expect(orchestration).toMatchObject({ status: "awaiting_user", turns: [] });
   expect(orchestration.decisionError).toContain(
     "Missing fenced isotopy-orchestrator-decision JSON block",
   );
@@ -445,7 +448,7 @@ test("a decision carrying an unknown field is rejected whole, not stripped down 
     ctx.app,
     `/orchestrations/${run.orchestrationId}`,
   );
-  expect(orchestration).toMatchObject({ status: "conversing", turns: [] });
+  expect(orchestration).toMatchObject({ status: "awaiting_user", turns: [] });
   expect(orchestration.decisionError).toContain("confidence");
   ctx.engine.verify();
 });
@@ -927,7 +930,7 @@ test("a start_run review with no approved team records the error instead of laun
   ctx.engine.verify();
 });
 
-test("a malformed review leaves the run terminal and records why it was unusable", async () => {
+test("a malformed review leaves the run terminal and the initiative waiting on its owner, saying why", async () => {
   // Anticipate — the Orchestrator answers with prose and no blocks at all.
   ctx.engine.anticipate({ as: "Developer" }).reports("done");
   ctx.engine
@@ -951,6 +954,99 @@ test("a malformed review leaves the run terminal and records why it was unusable
   expect(orchestration.decisionError).toContain("isotopy-run-artifacts");
   expect(orchestration.decisionError).toContain("isotopy-orchestrator-decision");
   expect(orchestration.turns).toEqual([]);
+  // TASK-157 left an initiative here reading `running` with nothing in flight,
+  // and nothing in the operator log said otherwise.
+  expect(orchestration.status).toBe("awaiting_user");
+  expect(ctx.logger.at("error")).toContainEqual(
+    expect.objectContaining({
+      component: "OrchestrationService",
+      fields: expect.objectContaining({ runId: run.id }),
+    }),
+  );
+  ctx.engine.verify();
+});
+
+test("an owner's answer to an unusable review opens a fresh Orchestrator turn that carries why", async () => {
+  // Anticipate — TASK-157's shape: a team proposed with `persona` for `skill`,
+  // rejected by the schema. The answer is the only way on, and the turn it
+  // opens must see both the rejection and the owner's steer.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Broken.\n\nVERDICT: FAIL");
+  ctx.engine
+    .anticipate({ as: "review proposing an invalid team" })
+    .reports(
+      `${artifactsBlock(REVIEW_ARTIFACTS)}\n\n${fenced({
+        action: "propose_team",
+        rationale: "A fresh pair",
+        task: "Fix the search endpoint",
+        team: { ...TEAM, roles: [{ id: "implementation", label: "Developer", persona: "developer" }] },
+      })}`,
+    );
+  ctx.engine
+    .anticipate({
+      as: "Orchestrator turn carrying the rejection and the answer",
+      persona: /# Role: Orchestrator/,
+      prompt: /could not be acted on[\s\S]*persona[\s\S]*Stop here, it is good enough/,
+    })
+    .reports(fenced(STOP));
+  const conversation = await proposedTeam();
+  const orchestrationId = conversation.orchestrationId ?? "";
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+
+  // Act
+  const { status, body: resumed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/messages`,
+    { text: "Stop here, it is good enough" },
+  );
+
+  // Assert
+  expect(status).toBe(201);
+  await waitForRunStatus(ctx.app, resumed.id, "completed");
+  await waitForOrchestrationStatus(orchestrationId, "stopped");
+  ctx.engine.verify();
+});
+
+test("a turn opened by an answer that is refused again waits on the owner again", async () => {
+  // Anticipate — the answered turn makes the same mistake. It is judged by
+  // `consume`, not by a review, so it must park on its own or the initiative
+  // reads "Thinking" with nothing in flight and no answer box.
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine
+    .anticipate({ as: "Orchestrator review" })
+    .reports("Looks fine to me, nothing structured to add.");
+  ctx.engine
+    .anticipate({ as: "Orchestrator turn after the answer", persona: /# Role: Orchestrator/ })
+    .reports("Still nothing structured, sorry.");
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+  const orchestrationId = run.orchestrationId ?? "";
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+
+  // Act
+  const { body: answered } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/messages`,
+    { text: "Try again, with a decision block" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, answered.id, "needs_attention");
+  const orchestration = await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+  expect(orchestration.decisionError).toContain("isotopy-orchestrator-decision");
   ctx.engine.verify();
 });
 
@@ -1107,6 +1203,52 @@ test("a stage that ran out of time is resumed on the restart, not started from n
   await waitForRunStatus(ctx.app, composed.id, "failed");
   const second = await waitForOrchestrationRuns(conversation.orchestrationId ?? "", 3);
   await waitForRunStatus(ctx.app, second, "completed");
+  ctx.engine.verify();
+});
+
+test("a fix run that resumes the Developer's session hands it the fix it was started for", async () => {
+  // Anticipate — TASK-157's Cursor loop: the Developer passes without a verdict,
+  // so its session is resumable; review fails on the README, and the Orchestrator
+  // sends a narrow fix back to the Developer. The resumed turn must carry that
+  // fix, or the Developer finds nothing left to do and the loop never converges.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Developer" }).parks("Built the shell.", DEVELOPER_SESSION);
+  ctx.engine
+    .anticipate({ as: "QA Engineer" })
+    .reports("The README claims Node 18; Vite needs 20.19.\n\nVERDICT: FAIL");
+  ctx.engine.anticipateRunReview({
+    as: "review sending the fix back to the Developer",
+    decision: {
+      action: "start_run",
+      rationale: "Only the documented Node floor is wrong",
+      task: "Set the README's Node floor to 20.19",
+      fromStage: "implementation",
+    },
+  });
+  ctx.engine
+    .anticipate({
+      as: "resumed Developer",
+      resumeSessionId: DEVELOPER_SESSION,
+      prompt: /Set the README's Node floor to 20\.19/,
+    })
+    .reports("Raised the floor.");
+  ctx.engine.anticipate({ as: "second QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({ as: "review of the fix run" });
+  const conversation = await proposedTeam();
+
+  // Act
+  const { body: composed } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${conversation.orchestrationId}/approve`,
+    { engine: "claude-code" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, composed.id, "needs_attention");
+  const fix = await waitForOrchestrationRuns(conversation.orchestrationId ?? "", 3);
+  await waitForRunStatus(ctx.app, fix, "completed");
   ctx.engine.verify();
 });
 
@@ -1314,16 +1456,14 @@ test("a fourth run is refused once three in a row ended blocked with nothing ask
     { engine: "claude-code" },
   );
 
-  // Assert — four runs on the orchestration, not five, and a stated reason.
+  // Assert — four runs on the orchestration, not five, a stated reason, and an
+  // initiative that hands the next move to its owner rather than reading `running`.
   await waitForRunStatus(ctx.app, composed.id, "needs_attention");
   const orchestrationId = conversation.orchestrationId ?? "";
   const third = await waitForOrchestrationRuns(orchestrationId, 4);
   await waitForRunStatus(ctx.app, third, "needs_attention");
-  expect(await waitForDecisionError(orchestrationId)).toContain("runs in a row");
-  const { body: orchestration } = await get<Orchestration>(
-    ctx.app,
-    `/orchestrations/${orchestrationId}`,
-  );
+  const orchestration = await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+  expect(orchestration.decisionError).toContain("runs in a row");
   expect(orchestration.runIds).toHaveLength(4);
   ctx.engine.verify();
 }, 20_000);

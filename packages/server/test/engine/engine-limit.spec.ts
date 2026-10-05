@@ -128,6 +128,7 @@ describe("selectionAfterLimit", () => {
     const next = selectionAfterLimit(
       { engine: "claude-code", model: "opus", modelTier: "deep" },
       { choice: "switch-tier", tier: "fast" },
+      {},
     );
     expect(next).toEqual({ engine: "claude-code", modelTier: "fast" });
   });
@@ -136,12 +137,13 @@ describe("selectionAfterLimit", () => {
     const next = selectionAfterLimit(
       { engine: "claude-code", model: "opus", modelTier: "deep" },
       { choice: "switch-engine", engine: "codex" },
+      { "claude-code": "opus" },
     );
     expect(next).toEqual({ engine: "codex", modelTier: "deep" });
   });
 
   test("retrying now changes nothing", () => {
     const current = { engine: "claude-code" as const, model: "opus" };
-    expect(selectionAfterLimit(current, { choice: "retry-now" })).toEqual(current);
+    expect(selectionAfterLimit(current, { choice: "retry-now" }, {})).toEqual(current);
   });
 });

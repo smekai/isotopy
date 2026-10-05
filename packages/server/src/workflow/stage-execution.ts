@@ -24,6 +24,7 @@ import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
 import {
   buildContinuationPrompt,
+  buildProcessRule,
   buildResumePrompt,
   buildStagePrompt,
   buildTimeBudget,
@@ -73,10 +74,10 @@ function turnPrompt(
   stepTask: string | undefined,
   environment: string | undefined,
 ): string {
-  if (turn.resumeSessionId !== undefined) {
-    return turn.answer ?? buildResumePrompt(stepTask);
-  }
   const task = input.task ?? "";
+  if (turn.resumeSessionId !== undefined) {
+    return turn.answer ?? buildResumePrompt(task, stepTask, environment);
+  }
   const upstream = upstreamFor(run, stageDef.id);
   return turn.exchanges === undefined || turn.exchanges.length === 0
     ? buildStagePrompt(task, upstream, stepTask, environment)
@@ -91,7 +92,13 @@ async function stageEnvironment(
   stageDef: StageDefinition,
 ): Promise<string> {
   const product = await productEnvironment(deps, run, stageDef);
-  return [buildTimeBudget(config.engineTimeoutMs), product].filter(Boolean).join("\n\n");
+  return [
+    buildTimeBudget(config.engineTimeoutMs),
+    buildProcessRule({ pid: process.pid, port: config.port }),
+    product,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function productEnvironment(

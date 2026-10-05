@@ -15,6 +15,24 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-05 — An agent is told which process is Isotopy, and nothing polices it
+
+**Context:** in `TASK-157`'s arcade a Developer tidied up its dev server with
+`Get-Process -Name node | Stop-Process -Force`, which stopped Isotopy's own server too. Nothing was
+logged, because nothing failed: the server was killed. Unattended, nobody restarts it.
+
+**Decision:** every stage's `## Environment` names Isotopy's PID and port, and states the rule.
+Stop only what you started, by PID or by the port you opened. Never stop by process name. Stop
+everything you started before handing off. The agent can do this; the second attempt in the same
+run did, by port. It only lacked the fact that another node process on the machine mattered.
+
+**Rejected: a supervisor that restarts Isotopy, or isolating agents in their own process group.**
+Each one is a platform-specific mechanism built to catch an agent breaking a rule it was never
+told. A boundary is data the agent reads. If agents keep breaking a stated rule, that is the
+evidence a guard would need, and there is none yet.
+
+---
+
 ## 2026-10-03 — The operator log is pino, to the console and a file
 
 **Context:** TASK-170 gave the server one `Logger` seam over the console. Review asked for an
@@ -339,6 +357,18 @@ covers the ground.
 agent had no idea it was on a clock, so it reached for a browser install with four minutes left.
 The stage prompt names the minutes and says what overrunning costs — no verdict, no partial
 credit. A constraint an agent cannot see is one it cannot budget against.
+
+**Amended 2026-10-05 (`TASK-180`): a resumed turn carries the run's task.** "No verdict" is not
+only "cut off": a Developer never reports one, so a Developer that passed is resumable too, and a
+fix run that starts at it resumes that session with a new, narrower task. In `TASK-157`'s arcade
+the resume prompt had no task, so the Developer found nothing left to do three runs in a row and
+the loop never converged. The resume prompt now carries the run's task, whatever brought the
+session back. It also carries the current `## Environment`. After a server restart, the session's
+earlier turn names a server process that no longer exists, and a product URL that may not be live.
+Repeating the time budget is accurate, because every resumed call gets the full budget again.
+
+**Rejected: never resuming a stage that passed.** That session is the Developer's knowledge of what
+it built, which is what a narrow fix needs most. The defect was the missing task, not the resume.
 
 ---
 
@@ -1044,6 +1074,17 @@ sentence. And loosening the decision schema: `.strict()` and the closed enums ar
 an invented persona or a stage id that escapes the run directory. An invalid decision stays
 invalid — it just stops being terminal.
 
+**Amended 2026-10-05 (`TASK-182`): a refused review parks the initiative on its owner.** Keeping
+the loop open had one gap. Status stayed `running` with nothing in flight, and the operator log was
+silent, so `TASK-157`'s initiative looked like work in progress until someone read the status bar.
+Now the initiative moves to `awaiting_user`, and the service logs it at `error`, in three cases:
+a review leaves no decision for its run; a conversation turn's decision is refused (in `consume`,
+including a turn opened by the owner's answer); or an accepted decision fails to launch. `parkedQuestion` turns the
+rejection into the question, so the initiative's own answer channel opens a fresh Orchestrator turn
+carrying the rejection and the owner's steer. Restarting the run still re-reviews it, as above.
+**Rejected: stopping the initiative.** It would end the recovery this entry exists to keep, and
+cost the goal, the approved team and their artifacts over one malformed block.
+
 ---
 
 ## 2026-08-12 — The Orchestrator is a conversation, not a tab
@@ -1173,6 +1214,13 @@ preset over the run's. `resolveLimit` therefore writes the chosen tier to the bl
 stage as well as to the run. Later roles with their own preset keep it; later roles
 without one follow the new default. For a pipeline where no stage carries a preset —
 every static one — this is identical to the old behaviour.
+
+**Amended 2026-10-05 (`TASK-191`): switching harness on a limit takes the owner's pin for the
+new one.** The run's model id is dropped on a switch, because the new harness would not understand
+it. Before this, nothing replaced it: a run switched from Claude Code to Cursor climbed Cursor's
+tier ladder, even though Setup had pinned a Cursor model as the fallback. The pin is the only cost
+cap, so `selectionAfterLimit` now takes the project's `engineModels` and uses the target harness's
+pin as the run's model. With no pin it falls back to the ladder as before.
 
 ---
 
