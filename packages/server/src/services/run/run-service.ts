@@ -162,7 +162,7 @@ export class RunService implements RunProjection {
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.cancelled.has(runId),
     };
-    this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry, this.logger);
+    this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry);
   }
 
   async init(): Promise<void> {
