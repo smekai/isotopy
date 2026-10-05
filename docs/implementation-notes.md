@@ -582,6 +582,16 @@ after the adapter returns. Cancel stays immediate and Isotopy-owned (`abortRun` 
 `controller.abort()` → `killProcessTree`); OpenWorkflow's `cancelWorkflowRun`
 only marks durable state (G4).
 
+**Shutdown aborts engine calls that begin after it, too (`RunService.shutdown`).**
+`Worker.stop()` waits for the poll loop's current tick, which can still claim a
+run, and then for every active execution to finish. An execution it is waiting on
+keeps going: a stage that shutdown aborted moves on to the Orchestrator's review,
+and a run claimed mid-stop starts its first stage. Aborting the controllers once,
+before the stop, missed those calls, and a CLI could hold the shutdown open for its
+whole timeout. On Windows CI that was a 10 s hook timeout in
+`source-task-claim.comp.ts`. Once `shuttingDown` is set, `beginEngineStage` hands
+out a controller that is already aborted.
+
 **`run.result` holds only the last stage's output.** It is kept for the
 run-level result view and for runs recorded before `stageOutputs` existed
 (single-box runs). Per-box consumers must read `stageOutputs` instead, or a
