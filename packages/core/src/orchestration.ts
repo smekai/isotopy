@@ -196,11 +196,16 @@ export function latestOrchestratorDecision(
 }
 
 export function parkedQuestion(orchestration: Orchestration): string | undefined {
+  if (orchestration.status !== "awaiting_user") {
+    return undefined;
+  }
   const decision = orchestration.latestDecision;
-  return orchestration.status === "awaiting_user" &&
-    (decision?.action === "ask_user" || decision?.action === "escalate_to_user")
-    ? decision.question
-    : undefined;
+  if (decision?.action === "ask_user" || decision?.action === "escalate_to_user") {
+    return decision.question;
+  }
+  return orchestration.decisionError === undefined
+    ? undefined
+    : `The Orchestrator's last decision could not be acted on — ${orchestration.decisionError}. How should it go on?`;
 }
 
 export function orchestrationStatusFor(

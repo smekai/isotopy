@@ -104,19 +104,6 @@ The Architect and QA failed the arcade shell on a one-line README fix (Node floo
 Decide whether a quality stage's blocking finding should send the run back to `implementation` once (bounded, recorded in the run) before the run settles, or whether the Orchestrator's follow-up run is the intended loop — and then make the product brief say which. Either answer is defensible; leaving it implicit is not. Record it in `docs/decisions.md`.
 
 ---
-## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
-**Priority:** P1 | **Tags:** server, engine, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157`'s Cursor run (2026-10-04).
-
-After the third failed delivery run, the Orchestrator's review decision was rejected by `orchestratorDecisionSchema`: it proposed a team whose roles used `persona` instead of `id`/`skill`. The orchestration recorded `decisionError` (visible — good) and then stayed `running` forever: no retry, no question to the owner, and the *"three blocked runs in a row stop the loop"* rule never applied, because no decision was ever accepted to count. The same stuck state happened earlier when the review step could not spawn its engine.
-
-Unattended, this is a silent stop that looks like work in progress. **Decide and fix:** on a decision that fails validation (or a review that cannot run), the orchestration should end in a state that says so — retry the review once with the validation issues fed back, then `ask_user` or stop with the reason — and the operator log should carry it at `error`. Evidence: a component test with `FakeEngine` returning an invalid decision, asserting the initiative leaves `running`.
-
-Related: the role key `persona` is a natural mistake for a model reading a catalog titled *Persona catalog*; the prompt or schema error text could name the expected keys.
-
----
 ## TASK-181: On Windows, an automation command given as a bare .cmd name fails before it starts
 **Priority:** P1 | **Tags:** server, infra, milestone-i
 **Updated:** 2026-10-04 19:39

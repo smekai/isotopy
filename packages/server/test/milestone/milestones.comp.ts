@@ -175,6 +175,7 @@ test("a milestone that does not auto-run refuses the review's continuation", asy
   const orchestrationId = first.orchestrationId ?? "";
   const orchestration = await waitForDecisionError(orchestrationId);
   expect(orchestration.decisionError).toContain("does not continue on its own");
+  expect(orchestration.status).toBe("awaiting_user");
   const { body: after } = await get<Milestone>(ctx.app, `/milestones/${milestone.id}`);
   expect(after.features.map((feature) => feature.status)).toEqual([
     "completed",

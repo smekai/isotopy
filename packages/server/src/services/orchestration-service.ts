@@ -502,8 +502,19 @@ export class OrchestrationService implements StageOutputConsumer {
     } else if (decision.value) {
       delete orchestration.decisionError;
     }
+    if (errors.length > 0 && !this.hasTurnFor(orchestration, request.runId)) {
+      this.parkOnOwner(orchestration, request.runId);
+    }
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
+  }
+
+  private parkOnOwner(orchestration: Orchestration, runId: string): void {
+    orchestration.status = "awaiting_user";
+    this.logger.error(
+      `Orchestration ${orchestration.id} is waiting on its owner: no decision it made could be acted on`,
+      { runId, cause: orchestration.decisionError },
+    );
   }
 
   async settle(runId: string): Promise<void> {
@@ -542,6 +553,7 @@ export class OrchestrationService implements StageOutputConsumer {
       options,
     ).catch((error: unknown) => {
       orchestration.decisionError = messageOf(error);
+      this.parkOnOwner(orchestration, run.id);
       return undefined;
     });
     if (started && !orchestration.runIds.includes(started.id)) {

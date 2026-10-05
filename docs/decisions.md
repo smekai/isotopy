@@ -1072,6 +1072,16 @@ sentence. And loosening the decision schema: `.strict()` and the closed enums ar
 an invented persona or a stage id that escapes the run directory. An invalid decision stays
 invalid — it just stops being terminal.
 
+**Amended 2026-10-05 (`TASK-182`): a refused review parks the initiative on its owner.** Keeping
+the loop open had one gap. Status stayed `running` with nothing in flight, and the operator log was
+silent, so `TASK-157`'s initiative looked like work in progress until someone read the status bar.
+Now, when a review leaves no decision for its run, or an accepted decision fails to launch, the
+initiative moves to `awaiting_user` and the service logs it at `error`. `parkedQuestion` turns the
+rejection into the question, so the initiative's own answer channel opens a fresh Orchestrator turn
+carrying the rejection and the owner's steer. Restarting the run still re-reviews it, as above.
+**Rejected: stopping the initiative.** It would end the recovery this entry exists to keep, and
+cost the goal, the approved team and their artifacts over one malformed block.
+
 ---
 
 ## 2026-08-12 — The Orchestrator is a conversation, not a tab

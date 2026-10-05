@@ -1,5 +1,31 @@
 # Done
 
+## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
+**Priority:** P1 | **Tags:** server, engine, milestone-i
+**Updated:** 2026-10-05 12:49
+
+Found in `TASK-157`'s Cursor run (2026-10-04).
+
+After the third failed delivery run, the Orchestrator's review decision was rejected by `orchestratorDecisionSchema`: it proposed a team whose roles used `persona` instead of `id`/`skill`. The orchestration recorded `decisionError` (visible — good) and then stayed `running` forever: no retry, no question to the owner, and the *"three blocked runs in a row stop the loop"* rule never applied, because no decision was ever accepted to count. The same stuck state happened earlier when the review step could not spawn its engine.
+
+Unattended, this is a silent stop that looks like work in progress. **Decide and fix:** on a decision that fails validation (or a review that cannot run), the orchestration should end in a state that says so — retry the review once with the validation issues fed back, then `ask_user` or stop with the reason — and the operator log should carry it at `error`. Evidence: a component test with `FakeEngine` returning an invalid decision, asserting the initiative leaves `running`.
+
+Related: the role key `persona` is a natural mistake for a model reading a catalog titled *Persona catalog*; the prompt or schema error text could name the expected keys.
+
+### Plan
+
+**Done 2026-10-05.** A refused review now parks the initiative on its owner instead of leaving it stuck in `running`. When `recordReview` leaves a run with no accepted decision (schema failure, a failed review engine, any refusal including three blocked runs), or `act` cannot launch an accepted decision, `OrchestrationService.parkOnOwner` sets `awaiting_user` and logs at `error`. `parkedQuestion` (core) turns the rejection into the question. The UI shows "Needs your answer" with an answer box, and `POST /orchestrations/:id/messages` opens a fresh Orchestrator turn that carries the rejection and the owner's steer.
+
+**Changed from the plan:** the plan said to terminate the initiative. That breaks the 2026-08-12 decision's recovery, in which restarting the run re-reviews it, and the existing re-review test failed. Parking keeps that recovery and still leaves `running`, says why and logs it. There is no automatic retry, for the reasons already in `docs/decisions.md`.
+
+Evidence:
+- the malformed-review and three-blocked-runs tests now assert `awaiting_user`, and the malformed one also asserts the `error` log line;
+- the milestone continuation refusal asserts `awaiting_user`;
+- a new test reproduces TASK-157's `persona`-for-`skill` team, answers it, and asserts the next Orchestrator turn carries both the rejection and the answer.
+
+All four guards were mutation-checked. Not done: the schema error naming the expected role keys.
+
+---
 ## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
 **Priority:** P1 | **Tags:** engine, server, milestone-i
 **Updated:** 2026-10-05 12:39
