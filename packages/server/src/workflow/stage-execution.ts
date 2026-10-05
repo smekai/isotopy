@@ -76,7 +76,7 @@ function turnPrompt(
 ): string {
   const task = input.task ?? "";
   if (turn.resumeSessionId !== undefined) {
-    return turn.answer ?? buildResumePrompt(task, stepTask);
+    return turn.answer ?? buildResumePrompt(task, stepTask, environment);
   }
   const upstream = upstreamFor(run, stageDef.id);
   return turn.exchanges === undefined || turn.exchanges.length === 0

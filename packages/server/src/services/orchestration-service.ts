@@ -312,6 +312,7 @@ export class OrchestrationService implements StageOutputConsumer {
       const cause = formatValidationIssues(parsed.issues);
       return this.refuse(
         orchestration,
+        run.id,
         cause,
         `${profession} produced no usable decision — ${cause}`,
       );
@@ -320,6 +321,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (refusal !== undefined) {
       return this.refuse(
         orchestration,
+        run.id,
         refusal,
         `${profession} decided something that cannot be acted on — ${refusal}`,
       );
@@ -343,10 +345,12 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private async refuse(
     orchestration: Orchestration,
+    runId: string,
     cause: string,
     reason: string,
   ): Promise<StageOutputRejection> {
     orchestration.decisionError = cause;
+    this.parkOnOwner(orchestration, runId);
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return { reason };

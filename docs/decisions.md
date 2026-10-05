@@ -363,7 +363,9 @@ only "cut off": a Developer never reports one, so a Developer that passed is res
 fix run that starts at it resumes that session with a new, narrower task. In `TASK-157`'s arcade
 the resume prompt had no task, so the Developer found nothing left to do three runs in a row and
 the loop never converged. The resume prompt now carries the run's task, whatever brought the
-session back.
+session back. It also carries the current `## Environment`. After a server restart, the session's
+earlier turn names a server process that no longer exists, and a product URL that may not be live.
+Repeating the time budget is accurate, because every resumed call gets the full budget again.
 
 **Rejected: never resuming a stage that passed.** That session is the Developer's knowledge of what
 it built, which is what a narrow fix needs most. The defect was the missing task, not the resume.
@@ -1075,8 +1077,9 @@ invalid — it just stops being terminal.
 **Amended 2026-10-05 (`TASK-182`): a refused review parks the initiative on its owner.** Keeping
 the loop open had one gap. Status stayed `running` with nothing in flight, and the operator log was
 silent, so `TASK-157`'s initiative looked like work in progress until someone read the status bar.
-Now, when a review leaves no decision for its run, or an accepted decision fails to launch, the
-initiative moves to `awaiting_user` and the service logs it at `error`. `parkedQuestion` turns the
+Now the initiative moves to `awaiting_user`, and the service logs it at `error`, in three cases:
+a review leaves no decision for its run; a conversation turn's decision is refused (in `consume`,
+including a turn opened by the owner's answer); or an accepted decision fails to launch. `parkedQuestion` turns the
 rejection into the question, so the initiative's own answer channel opens a fresh Orchestrator turn
 carrying the rejection and the owner's steer. Restarting the run still re-reviews it, as above.
 **Rejected: stopping the initiative.** It would end the recovery this entry exists to keep, and

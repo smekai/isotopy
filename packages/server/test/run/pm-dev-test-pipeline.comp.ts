@@ -133,6 +133,37 @@ test("a box is told which process is Isotopy, so tidying up its own cannot stop 
   expect(call.prompt).toContain(`PID ${process.pid}, port ${config.port}`);
 });
 
+test("a resumed stage is told which process is Isotopy now, because a restart replaced the one its session saw", async () => {
+  // Arrange — the session's first turn named the server that was running then.
+  // Restarting the server is the recovery from TASK-179's kill, so the resumed
+  // turn must carry the current process or the agent spares the wrong one.
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+  engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  engine.anticipate({ as: "QA, cut off" }).timesOut(CUT_OFF_SESSION);
+  engine.anticipateRunReview({ as: "Review of the timed-out attempt" });
+  const run = await startRun(app, PIPELINE);
+  await approveIntake(app, run.id);
+  await waitForRunStatus(app, run.id, "failed");
+
+  // Anticipate
+  engine
+    .anticipate({
+      as: "QA, resumed",
+      resumeSessionId: CUT_OFF_SESSION,
+      prompt: new RegExp(`PID ${process.pid}, port ${config.port}`),
+    })
+    .reports("Finished what was left.\n\nVERDICT: PASS");
+  engine.anticipateRunReview({ as: "Review of the resumed attempt" });
+
+  // Act
+  await post(app, `/runs/${run.id}/restart`, { stageId: "test" });
+
+  // Assert
+  await waitForRunStatus(app, run.id, "completed");
+  engine.verify();
+});
+
 test("each box's output is stored per stage and written as its own handoff.md", async () => {
   // Arrange
   const { app, engine, home } = ctx;

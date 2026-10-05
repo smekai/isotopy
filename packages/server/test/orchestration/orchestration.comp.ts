@@ -425,7 +425,8 @@ test("a turn with no decision block needs attention and records why, rather than
     `/orchestrations/${run.orchestrationId}`,
   );
   expect(stageMessage(finished)).toContain("no usable decision");
-  expect(orchestration).toMatchObject({ status: "conversing", turns: [] });
+  // Not `conversing`: nothing is thinking, and the next move is the owner's.
+  expect(orchestration).toMatchObject({ status: "awaiting_user", turns: [] });
   expect(orchestration.decisionError).toContain(
     "Missing fenced isotopy-orchestrator-decision JSON block",
   );
@@ -447,7 +448,7 @@ test("a decision carrying an unknown field is rejected whole, not stripped down 
     ctx.app,
     `/orchestrations/${run.orchestrationId}`,
   );
-  expect(orchestration).toMatchObject({ status: "conversing", turns: [] });
+  expect(orchestration).toMatchObject({ status: "awaiting_user", turns: [] });
   expect(orchestration.decisionError).toContain("confidence");
   ctx.engine.verify();
 });
@@ -1012,6 +1013,40 @@ test("an owner's answer to an unusable review opens a fresh Orchestrator turn th
   expect(status).toBe(201);
   await waitForRunStatus(ctx.app, resumed.id, "completed");
   await waitForOrchestrationStatus(orchestrationId, "stopped");
+  ctx.engine.verify();
+});
+
+test("a turn opened by an answer that is refused again waits on the owner again", async () => {
+  // Anticipate — the answered turn makes the same mistake. It is judged by
+  // `consume`, not by a review, so it must park on its own or the initiative
+  // reads "Thinking" with nothing in flight and no answer box.
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine
+    .anticipate({ as: "Orchestrator review" })
+    .reports("Looks fine to me, nothing structured to add.");
+  ctx.engine
+    .anticipate({ as: "Orchestrator turn after the answer", persona: /# Role: Orchestrator/ })
+    .reports("Still nothing structured, sorry.");
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+  const orchestrationId = run.orchestrationId ?? "";
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+
+  // Act
+  const { body: answered } = await post<RunState>(
+    ctx.app,
+    `/orchestrations/${orchestrationId}/messages`,
+    { text: "Try again, with a decision block" },
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, answered.id, "needs_attention");
+  const orchestration = await waitForOrchestrationStatus(orchestrationId, "awaiting_user");
+  expect(orchestration.decisionError).toContain("isotopy-orchestrator-decision");
   ctx.engine.verify();
 });
 

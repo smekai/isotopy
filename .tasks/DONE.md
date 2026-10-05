@@ -27,7 +27,7 @@ The test registers its `FakeEngine` for Cursor as well. Its first draft did not,
 ---
 ## TASK-182: An Orchestrator decision that fails to parse leaves the initiative stuck in running
 **Priority:** P1 | **Tags:** server, engine, milestone-i
-**Updated:** 2026-10-05 12:49
+**Updated:** 2026-10-05 13:33
 
 Found in `TASK-157`'s Cursor run (2026-10-04).
 
@@ -39,16 +39,24 @@ Related: the role key `persona` is a natural mistake for a model reading a catal
 
 ### Plan
 
-**Done 2026-10-05.** A refused review now parks the initiative on its owner instead of leaving it stuck in `running`. When `recordReview` leaves a run with no accepted decision (schema failure, a failed review engine, any refusal including three blocked runs), or `act` cannot launch an accepted decision, `OrchestrationService.parkOnOwner` sets `awaiting_user` and logs at `error`. `parkedQuestion` (core) turns the rejection into the question. The UI shows "Needs your answer" with an answer box, and `POST /orchestrations/:id/messages` opens a fresh Orchestrator turn that carries the rejection and the owner's steer.
+**Done 2026-10-05.** A refused decision now parks the initiative on its owner instead of leaving it in `running` or `conversing` with nothing in flight. `OrchestrationService.parkOnOwner` sets `awaiting_user` and logs at `error` at all three dead ends:
+- `recordReview` leaves a run with no accepted decision (schema failure, a failed review engine, any refusal including three blocked runs);
+- `consume` refuses a conversation turn's decision, including a turn opened by the owner's answer (review feedback on smekai/isotopy#82);
+- `act` cannot launch an accepted decision.
 
-**Changed from the plan:** the plan said to terminate the initiative. That breaks the 2026-08-12 decision's recovery, in which restarting the run re-reviews it, and the existing re-review test failed. Parking keeps that recovery and still leaves `running`, says why and logs it. There is no automatic retry, for the reasons already in `docs/decisions.md`.
+`parkedQuestion` (core) turns the rejection into the question. The finished run's chat composer accepts an answer, and `POST /orchestrations/:id/messages` opens a fresh Orchestrator turn that carries the rejection and the owner's steer.
 
-Evidence:
-- the malformed-review and three-blocked-runs tests now assert `awaiting_user`, and the malformed one also asserts the `error` log line;
-- the milestone continuation refusal asserts `awaiting_user`;
-- a new test reproduces TASK-157's `persona`-for-`skill` team, answers it, and asserts the next Orchestrator turn carries both the rejection and the answer.
+**Changed from the plan:** the plan said to terminate the initiative. That breaks the 2026-08-12 decision's recovery, in which restarting the run re-reviews it, and the existing re-review test failed. Parking keeps that recovery and still says why and logs it. There is no automatic retry, for the reasons already in `docs/decisions.md`.
 
-All four guards were mutation-checked. Not done: the schema error naming the expected role keys.
+Evidence: component tests cover
+- the malformed review, with the `error` log line;
+- three blocked runs;
+- the milestone continuation refusal;
+- both conversation-turn refusals;
+- TASK-157's `persona`-for-`skill` team answered by the owner;
+- an answered turn refused again, which parks again.
+
+Every park site was mutation-checked. Not done: the schema error naming the expected role keys.
 
 ---
 ## TASK-179: An agent stopped every node process and took Isotopy's own server down with it
@@ -74,7 +82,7 @@ Evidence: a component test in `pm-dev-test-pipeline.comp.ts` asserts the stage p
 ---
 ## TASK-180: A fix run resumes the old session, so the agent never sees the fix it was started for
 **Priority:** P1 | **Tags:** engine, server, milestone-i
-**Updated:** 2026-10-05 12:37
+**Updated:** 2026-10-05 13:33
 
 Found in `TASK-157`'s Cursor run (2026-10-04, `docs/dogfood/TASK-157-cursor-2026-10-04.md`).
 
@@ -88,9 +96,13 @@ Cross-platform: none specific.
 
 ### Plan
 
-**Done 2026-10-05.** The rule lives in one place, the resume branch of `turnPrompt` (`workflow/stage-execution.ts`). `buildResumePrompt(task, stepTask)` now carries the run's own task (`launch.task ?? run.task`), and its wording no longer claims a time limit. That claim was false for a Developer that passed, since a Developer never reports a verdict. The session is still resumed: it is the Developer's knowledge of what it built, which a narrow fix needs. The question-loop branch (`turn.answer`) is unchanged.
+**Done 2026-10-05.** The rule lives in one place, the resume branch of `turnPrompt` (`workflow/stage-execution.ts`). `buildResumePrompt(task, stepTask, environment)` now carries the run's own task (`launch.task ?? run.task`) and the current `## Environment`, and its wording no longer claims a time limit. That claim was false for a Developer that passed, since a Developer never reports a verdict. The environment matters on resume because a server restart replaces the process the session's first turn named (review feedback on smekai/isotopy#82). The session is still resumed: it is the Developer's knowledge of what it built, which a narrow fix needs. The question-loop branch (`turn.answer`) is unchanged.
 
-Evidence: a component test in `orchestration.comp.ts` that reproduces TASK-157's loop. The Developer passes with a session and no verdict, QA fails, and the review sends a fix back `fromStage: "implementation"`. The resumed Developer must carry both the session and the fix's text. Removing the task block from the prompt fails it. The old spec test that asserted "cut off" prose is gone, superseded by the component test. `docs/decisions.md`'s 2026-08-24 resume entry is amended rather than paired.
+Evidence:
+- A component test in `orchestration.comp.ts` reproduces TASK-157's loop. The Developer passes with a session and no verdict, QA fails, and the review sends a fix back `fromStage: "implementation"`. The resumed Developer must carry both the session and the fix's text.
+- A component test in `pm-dev-test-pipeline.comp.ts` requires a resumed QA turn to name the current PID and port.
+
+Each of these fails when its part is removed from the resume prompt. The old spec test that asserted "cut off" prose is gone, superseded. `docs/decisions.md`'s 2026-08-24 resume entry is amended rather than paired.
 
 ---
 ## TASK-168: Onboarding asks for a project and offers no way to add one

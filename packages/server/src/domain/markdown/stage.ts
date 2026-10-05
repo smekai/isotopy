@@ -149,7 +149,11 @@ export function buildProcessRule({ pid, port }: IsotopyProcess): string {
   ].join("\n");
 }
 
-export function buildResumePrompt(task: string, stepTask: string | undefined): string {
+export function buildResumePrompt(
+  task: string,
+  stepTask: string | undefined,
+  environment: string | undefined,
+): string {
   return markdownBlocks([
     "# Continue in this session",
     "This is the same session you worked on this stage in before, so what you established then " +
@@ -159,6 +163,7 @@ export function buildResumePrompt(task: string, stepTask: string | undefined): s
       "directory against it, do only what it still needs, and end the way your stage asks. If you " +
       "were part-way through setting something up that this task does not need, drop it.",
     `## Task\n\n${markdownBody(task)}`,
+    environment ? `## Environment\n\n${markdownBody(environment)}` : undefined,
     stepTask ? STAGE_NOTES_INVITATION : undefined,
   ]);
 }
