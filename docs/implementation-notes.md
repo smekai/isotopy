@@ -582,6 +582,19 @@ after the adapter returns. Cancel stays immediate and Isotopy-owned (`abortRun` 
 `controller.abort()` → `killProcessTree`); OpenWorkflow's `cancelWorkflowRun`
 only marks durable state (G4).
 
+**Isotopy drives the durable worker's poll loop (`workflow/workflow-runtime.ts`).**
+OpenWorkflow's own loop (`Worker.start`) sleeps between polls on a backoff of
+100 ms doubling to 1 s, and nothing can wake it. Every run start, gate approval,
+answer and limit resolution waited out that sleep. That cost up to a second per
+step in production, and about 40% of the server tests' wall time. `WorkflowRuntime`
+never calls `start()`. Its own loop calls `worker.tick()` and sleeps on a
+`WakeableDelay` (10 ms doubling to 1 s). Each enqueue (`startRun`, every signal,
+`cancel`) wakes it, and so does every execution that settles, which is how the next
+queued run starts at once. A wake that lands mid-tick is kept for the next wait. A
+single loop is the only caller of `tick()`, so the per-project concurrency of one
+still holds. `stop()` wakes the loop, waits for it, and then lets `Worker.stop()`
+wait for any active execution.
+
 **Shutdown aborts engine calls that begin after it, too (`RunService.shutdown`).**
 `Worker.stop()` waits for the poll loop's current tick, which can still claim a
 run, and then for every active execution to finish. An execution it is waiting on
