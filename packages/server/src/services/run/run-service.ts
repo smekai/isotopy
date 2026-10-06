@@ -119,7 +119,6 @@ export interface StartRunOptions extends InheritedRunOptions {
 export class RunService implements RunProjection {
   readonly store: RunStore;
   readonly milestones: MilestoneService;
-  private readonly cancelled = new Set<string>();
   private readonly engineAborts = new Map<string, AbortController>();
   private shuttingDown = false;
   private readonly changes: RunChangeCollector;
@@ -160,7 +159,7 @@ export class RunService implements RunProjection {
       product: this.product,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
       endEngineStage: (runId) => this.endEngineStage(runId),
-      isCancelled: (runId) => this.cancelled.has(runId),
+      isCancelled: (runId) => this.store.runs.get(runId)?.status === "cancelled",
     };
     this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry);
   }
@@ -466,7 +465,6 @@ export class RunService implements RunProjection {
     if (isTerminalRunStatus(run.status)) {
       throw new Error(`Run ${runId} is already finished`);
     }
-    this.cancelled.add(runId);
     this.engineAborts.get(runId)?.abort();
     const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
     if (openWorkflowRunId) {
@@ -541,7 +539,6 @@ export class RunService implements RunProjection {
     }
     const seeded = seedFromRestart(run, stageId);
     await reclaimReleasedSourceTasks(this.registry.resolve(run.projectId), run);
-    this.cancelled.delete(runId);
     run.stageOutputs = resetStagesForRestart(run.stages.slice(startIndex), run.stageOutputs);
     run.status = "running";
     if (orchestrationId !== undefined && this.orchestration) {
