@@ -1,20 +1,10 @@
 import { task, workflow } from "@aikirun/workflow";
 import type { WorkflowVersion } from "@aikirun/workflow";
+import type { ScheduleFiring } from "./durable-schedules.ts";
 
 export const SCHEDULE_WORKFLOW_NAME = "isotopy-schedule";
 
 const SCHEDULE_WORKFLOW_VERSION = "1.0.0";
-
-export interface ScheduleFiring {
-  fire(scheduleId: string): Promise<unknown>;
-}
-
-export interface ScheduleActivation {
-  activationId: string;
-  scheduleId: string;
-  cron: string;
-  timezone: string;
-}
 
 export interface ScheduleWorkflowInput {
   scheduleId: string;

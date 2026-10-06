@@ -62,6 +62,7 @@ import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/ru
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
 import type { DurableRunState } from "../../workflow/workflow-runtime.ts";
+import type { DurableSchedules } from "../../workflow/durable-schedules.ts";
 import { pipelineWorkflowInput } from "../../workflow/pipeline-workflow-input.ts";
 import type { PipelineLaunch } from "../../workflow/pipeline-workflow-input.ts";
 import type {
@@ -123,7 +124,7 @@ export class RunService implements RunProjection {
   private shuttingDown = false;
   private readonly changes: RunChangeCollector;
   private readonly logger: Logger;
-  readonly runtimes: WorkflowRuntimeRegistry;
+  private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
   private readonly projectListeners = new ListenerRegistry<RunSummary>();
@@ -254,6 +255,10 @@ export class RunService implements RunProjection {
 
   allRuns(): RunState[] {
     return this.store.allRuns();
+  }
+
+  get durableSchedules(): DurableSchedules {
+    return this.runtimes;
   }
 
   registerOrchestration(orchestration: OrchestrationService): void {
@@ -555,9 +560,8 @@ export class RunService implements RunProjection {
       seeded,
       task,
       readmit: true,
-    }).catch((error: unknown) => {
-      this.logger.error(`Run ${runId} could not restart its durable run`, { error });
-    });
+    }).catch((error: unknown) =>
+      this.logger.error(`Run ${runId} could not restart its durable run`, { error }));
     return structuredClone(run);
   }
 

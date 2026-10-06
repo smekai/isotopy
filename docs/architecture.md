@@ -670,7 +670,7 @@ activation derived from it.
 | Layer | Where |
 | --- | --- |
 | Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
-| Clock | Aiki — each enabled schedule is a cron activation on its project's runtime (`WorkflowRuntime.reconcileSchedules`), firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
+| Clock | Aiki — each enabled schedule is a cron activation on its project's runtime, reconciled through the `DurableSchedules` seam (`workflow/durable-schedules.ts`, implemented by `WorkflowRuntimeRegistry`) and firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
 | Timing | `server/src/domain/rules/schedule-timing.ts` over `utils/recurrence.ts` — validation and `nextFireForSchedule` with `cron-parser`, the parser Aiki fires with, so the preview and the clock cannot disagree. The API sends the next fire, so the UI never parses an expression |
 | Built-ins | `server/src/domain/rules/built-in-schedules.ts` — an `as const` catalog seeded per project, every entry disabled. The board poller is its only entry today |
 | Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming a persona that does not exist are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |

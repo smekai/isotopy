@@ -18,8 +18,9 @@ import type { Logger } from "../utils/logger.ts";
 import { AikiLoggerAdapter } from "./aiki-logger-adapter.ts";
 import { createPipelineWorkflow } from "./pipeline-workflow.ts";
 import type { PipelineRunHandle, PipelineWorkflow } from "./pipeline-workflow.ts";
+import type { DurableSchedules, ScheduleActivation, ScheduleFiring } from "./durable-schedules.ts";
 import { SCHEDULE_WORKFLOW_NAME, createScheduleWorkflow } from "./schedule-workflow.ts";
-import type { ScheduleActivation, ScheduleFiring, ScheduleWorkflow } from "./schedule-workflow.ts";
+import type { ScheduleWorkflow } from "./schedule-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
 const WORKFLOW_DB_FILE = "aiki.db";
@@ -225,7 +226,7 @@ export class WorkflowRuntime {
   }
 }
 
-export class WorkflowRuntimeRegistry {
+export class WorkflowRuntimeRegistry implements DurableSchedules {
   private readonly runtimes = new Map<string, WorkflowRuntime>();
   private readonly workflows: DurableWorkflows;
   private readonly aikiLogger: AikiLoggerAdapter;
@@ -255,6 +256,10 @@ export class WorkflowRuntimeRegistry {
 
   registerScheduleFiring(firing: ScheduleFiring): void {
     this.firing = firing;
+  }
+
+  reconcileSchedules(projectPath: ProjectPath, wanted: ScheduleActivation[]): Promise<void> {
+    return this.for(projectPath).reconcileSchedules(wanted);
   }
 
   forProject(projectId: string): WorkflowRuntime {

@@ -20,7 +20,11 @@ import { getOrCreate } from "../utils/get-or-create.ts";
 import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
-import type { ScheduleActivation, ScheduleFiring } from "../workflow/schedule-workflow.ts";
+import type {
+  DurableSchedules,
+  ScheduleActivation,
+  ScheduleFiring,
+} from "../workflow/durable-schedules.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { SettingsStore } from "./settings-store.ts";
@@ -49,6 +53,7 @@ export class ScheduleService implements ScheduleFiring {
   private readonly repositories = new Map<string, JsonRecordRepository<Schedule>>();
   private readonly schedules = new Map<string, Schedule>();
   private readonly logger: Logger;
+  private readonly durable: DurableSchedules;
 
   constructor(
     private readonly registry: ProjectRegistry,
@@ -59,7 +64,8 @@ export class ScheduleService implements ScheduleFiring {
     logger: Logger,
   ) {
     this.logger = logger.child("ScheduleService");
-    runs.runtimes.registerScheduleFiring(this);
+    this.durable = runs.durableSchedules;
+    this.durable.registerScheduleFiring(this);
   }
 
   async init(): Promise<void> {
@@ -179,7 +185,7 @@ export class ScheduleService implements ScheduleFiring {
     const wanted = [...this.schedules.values()]
       .filter((schedule) => schedule.projectId === projectPath.id && schedule.enabled)
       .map(activationOf);
-    await this.runs.runtimes.for(projectPath).reconcileSchedules(wanted);
+    await this.durable.reconcileSchedules(projectPath, wanted);
   }
 
   private builtInAllowed(schedule: Schedule): boolean {
