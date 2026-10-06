@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   addTestProject,
+  approveGatesOnArrival,
   createTestApp,
   getRun,
   post,
@@ -26,6 +27,7 @@ describe("durable runtime", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await ctx.dispose();
   });
 
@@ -78,6 +80,24 @@ describe("durable runtime", () => {
     expect(finished.stageOutputs?.intake).toBe(PM_REPORT);
 
     await restarted.shutdown();
+  });
+
+  test("an approval that lands before the run starts waiting for it still opens the gate", async () => {
+    // Arrange
+    approveGatesOnArrival(ctx.orchestrator);
+
+    // Anticipate
+    ctx.engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
+    ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+    ctx.engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(ctx.app, { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" });
+
+    // Assert
+    await waitForRunStatus(ctx.app, run.id, "completed");
+    ctx.engine.verify();
   });
 
   test("a project runs one at a time while another project runs concurrently (G2/S5)", async () => {
@@ -133,10 +153,9 @@ describe("durable runtime", () => {
   });
 
   test("the durable runtime keeps its own database, so it never waits on a lock Isotopy holds", async () => {
-    // Arrange — OpenWorkflow's connection sets no busy_timeout and claims work
-    // with BEGIN IMMEDIATE, and `BackendSqliteOptions` exposes no way to change
-    // that. Sharing a file with Isotopy's own writer means SQLITE_BUSY on contention,
-    // so the two must never be the same file.
+    // Arrange — Aiki writes through its own libsql connection and migrates its own
+    // schema. Sharing a file with Isotopy's node:sqlite writer would make two
+    // drivers contend for one write lock, so the two must never be the same file.
     const project = await addTestProject(ctx.registry, "split-db");
     ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
     ctx.engine.anticipateRunReview();
@@ -150,7 +169,7 @@ describe("durable runtime", () => {
 
     // Assert
     await waitForRunStatus(ctx.app, run.id, "completed");
-    expect(tablesIn(project.root, "workflow.db")).toContain("workflow_runs");
-    expect(tablesIn(project.root, "runs.db")).not.toContain("workflow_runs");
+    expect(tablesIn(project.root, "aiki.db")).toContain("workflow_run");
+    expect(tablesIn(project.root, "runs.db")).not.toContain("workflow_run");
   });
 });

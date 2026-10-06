@@ -512,12 +512,15 @@ both are present. The result is clamped to 24h so a bad parse cannot park a run 
 a decade, and `limitWaitMs` falls back to `DEFAULT_LIMIT_WAIT_MS` (30 minutes) when
 nothing parsed or the stored instant is already past.
 
-**Step names carry the attempt (`stepName` in `pipeline-workflow.ts`).** A stage
-that limits and retries runs its turn step more than once, and OpenWorkflow
-memoizes a step by name — reusing the name would replay the *limited* result
-forever. Attempt 0 keeps the original `${stageId}:turn:${n}` spelling on purpose:
-a run parked across an upgrade must find its completed stages in history rather
-than re-run and re-pay for them.
+**A task is found again by what it was asked, in order (`pipeline-tasks.ts`).** Aiki
+replays a task by its address — the task name plus a hash of its input — and keeps
+a queue per address, so the Nth call with the same input gets the Nth recorded
+result. A stage that limits and retries sends its turn task the same input twice,
+and the retry still runs fresh: no attempt number has to be spelled into a name.
+The price is that replay follows the order of calls. A deploy that changes the
+workflow body *before* the point a parked run reached makes that run fail with
+"Replay divergence" (`NonDeterminismError`) when it resumes; the user restarts it
+from the stage. A change only after that point replays cleanly.
 
 `EngineRunResult.limit` rides on a result whose `success` is `false`, because the
 process really did fail — the presence of `limit` is what reclassifies it from a
@@ -563,15 +566,40 @@ engine adapter. The read model is in memory; SQLite (`repository/` over `db/`) i
 the store of record, written per transition.
 
 **The durable-workflow seam is the whole `RunService`, not one method.**
-The durable runtime is **OpenWorkflow** (`workflow/`, see
-`workflow-runtime-options.md`). `workflow/pipeline-workflow.ts` is the durable
-workflow body (the ported run loop) and `workflow/stage-execution.ts` is the
-durable *step* — the single decision point for how a stage runs (simulate vs.
-engine). Durability owns starting/queueing, the loop, gates (durable signals),
-durable timers, retries, recovery and cancellation state; `RunService` is
-the single writer of the `RunState`/events read model. The earlier claim that a
-durable runtime "replaces `executeStage()` alone" was wrong (§4 of the runtime
-doc). Keep stage-execution logic inside `workflow/stage-execution.ts`.
+The durable runtime is **Aiki** (`workflow/`), embedded per project:
+`WorkflowRuntime` opens an Aiki server on `.isotopy/aiki.db`, a client bound to its
+handler, and a worker, all in-process. `workflow/pipeline-workflow.ts` is the
+durable workflow body, `workflow/pipeline-tasks.ts` its tasks, and
+`workflow/stage-execution.ts` the work a stage task does — the single decision
+point for how a stage runs (simulate vs. engine). Durability owns
+starting/queueing, the loop, gates (durable events), durable timers, retries,
+recovery and cancellation state; `RunService` is the single writer of the
+`RunState`/events read model, and every write it receives from the workflow
+arrives through the `isotopy.project` task so a replay never repeats one. Keep
+stage-execution logic inside `workflow/stage-execution.ts`.
+
+**Events are mailboxes, so a user action must change the read model when it is
+accepted (`approveGate`, `postMessage`, `resolveLimit`).** An event sent before the
+workflow waits is held, not dropped — OpenWorkflow dropped it, and a fast gate
+click was lost. A held event is delivered to the *next* wait for that event, so
+each action flips the stage out of `awaiting`/`asking`/`blocked` synchronously,
+and a second click or message lands somewhere else instead of answering a
+question nobody has asked yet. The workflow also drops an event whose `stageId`
+is not the stage it waits on, and each send carries a reference id (the stage,
+the message id, the limit's `detectedAt`) that Aiki dedupes. One race is left: a
+limit resolved at the instant its reset timer fires is held, and a later limit
+park on the same stage takes it.
+
+**Pickup is pushed, and the embedded runtime is tuned for one owner
+(`workflow-runtime.ts`).** An in-process queue hands a ready run to the worker at
+once (start to first task ≈ 20 ms; event to resume ≈ 15 ms, measured on Windows),
+and an in-process timer queue fires durable timers on time. Aiki's defaults are
+for a fleet: a claim is reclaimed after 90 s and an unclaimed run is republished
+every 10 s. Here one process owns each file, so a run killed mid-task should come
+back within seconds — the claim refresh, the idle timeout and the publish lease
+are all lowered together, and the idle timeout must stay above the refresh or a
+live run is reclaimed from under its worker. Aiki's info-level logs are per-task
+chatter and are not forwarded to the operator log; warnings and errors are.
 
 **Register the abort handle before the first `await` (`workflow/stage-execution.ts` `runEngineStage`, via `deps.beginEngineStage`).**
 Resolving the persona touches the filesystem. An abort arriving in that window
@@ -579,18 +607,20 @@ used to find no `AbortController` to cancel, so the CLI was spawned anyway and
 ran to completion for a run the user had already stopped. The controller is set
 before any await, and cancellation is re-checked after the inputs resolve and
 after the adapter returns. Cancel stays immediate and Isotopy-owned (`abortRun` →
-`controller.abort()` → `killProcessTree`); OpenWorkflow's `cancelWorkflowRun`
-only marks durable state (G4).
+`controller.abort()` → `killProcessTree`); Aiki's cancel never interrupts the task
+in flight, it only refuses the run's next transition (G4). That cancel is sent
+without waiting, so the workflow can finish the killed task before it lands;
+`isCancelled` reads the run's own status, which `abortRun` sets synchronously, and
+keeps the workflow from walking into its next stage or the review in that window.
 
 **Shutdown aborts engine calls that begin after it, too (`RunService.shutdown`).**
-`Worker.stop()` waits for the poll loop's current tick, which can still claim a
-run, and then for every active execution to finish. An execution it is waiting on
-keeps going: a stage that shutdown aborted moves on to the Orchestrator's review,
-and a run claimed mid-stop starts its first stage. Aborting the controllers once,
-before the stop, missed those calls, and a CLI could hold the shutdown open for its
-whole timeout. On Windows CI that was a 10 s hook timeout in
-`source-task-claim.comp.ts`. Once `shuttingDown` is set, `beginEngineStage` hands
-out a controller that is already aborted.
+The worker's stop waits up to its grace period for active executions, and an
+execution keeps going while it waits: a stage that shutdown aborted moves on to
+the Orchestrator's review. Aborting the controllers once, before the stop, missed
+that call, and a CLI could hold the shutdown open. Once `shuttingDown` is set,
+`beginEngineStage` hands out a controller that is already aborted. A stopped
+`WorkflowRuntime` stays stopped: a run that settles during shutdown and chains
+another run gets a refusal, not a fresh server opened after the fact.
 
 **`run.result` holds only the last stage's output.** It is kept for the
 run-level result view and for runs recorded before `stageOutputs` existed
@@ -778,14 +808,16 @@ orchestration note: only the last stage's output lives there, so per-box views
 read `stageOutputs`.
 
 **Interrupted runs now resume on boot (`init` + the per-project worker).**
-OpenWorkflow's SQLite state is the source of truth, so on `init` each project's
-worker resumes any non-terminal durable run from its last completed step — a gate
-parked before a crash resumes and waits again (the old
-`reconcileInterrupted`-marks-everything-failed is gone). Only a run with no
-durable run behind it, or whose durable run already failed, is settled to failed
-(`reconcileOnLoad`/`markInterrupted`).
+Aiki's SQLite state is the source of truth, so on `init` each project's runtime
+resumes any non-terminal durable run from its last completed task — a gate parked
+before a crash resumes and waits again. Only a run with no durable run behind it,
+or whose durable run already failed, is settled to failed
+(`reconcileOnLoad`/`markInterrupted`). That includes every run left mid-flight
+under OpenWorkflow: its stored `openWorkflowRunId` is dropped on load, so it has
+no durable run on Aiki and settles as interrupted, while a finished one loads
+unchanged.
 
-**The read model is a projection; OpenWorkflow's SQLite is the SoT (`emit`/`schedulePersist`).**
+**The read model is a projection; Aiki's SQLite is the SoT (`emit`/`schedulePersist`).**
 Every event appends to the per-project `events` table immediately; `RunState`
 snapshot transitions flush at once, while high-frequency stage logs are coalesced
 behind a short debounce. The snapshot and events (formerly `state.json` /

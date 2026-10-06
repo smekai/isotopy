@@ -1,124 +1,212 @@
 import path from "node:path";
-import { OpenWorkflow } from "openworkflow";
-import type { Worker, Workflow } from "openworkflow";
-import { BackendSqlite } from "openworkflow/sqlite";
+import { client } from "@aikirun/client";
+import type { Client } from "@aikirun/client";
+import { inMemoryQueue, inMemoryTimerPriorityQueue } from "@aikirun/memory";
+import { database, migrateApply, server } from "@aikirun/server";
+import type { DatabaseConfig, ServerRuntimeConfigOverrides, ServerRuntimeHandle } from "@aikirun/server";
+import { worker } from "@aikirun/worker";
+import type { WorkerConfigOverrides, WorkerHandle } from "@aikirun/worker";
+import type { WorkflowRunStatus } from "@aikirun/workflow";
 import type { LimitChoice } from "@isotopy/core";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
-import {
-  answerSignal,
-  createPipelineWorkflow,
-  gateSignal,
-  limitSignal,
-} from "./pipeline-workflow.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
-import type { PipelineWorkflowResult } from "./pipeline-workflow.ts";
+import { messageOf } from "../utils/message-of.ts";
+import type { Logger } from "../utils/logger.ts";
+import { AikiLoggerAdapter } from "./aiki-logger-adapter.ts";
+import { createPipelineWorkflow } from "./pipeline-workflow.ts";
+import type { PipelineRunHandle, PipelineWorkflow } from "./pipeline-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
-const WORKFLOW_DB_FILE = "workflow.db";
+const WORKFLOW_DB_FILE = "aiki.db";
 
-type PipelineWorkflow = Workflow<
-  PipelineWorkflowInput,
-  PipelineWorkflowResult,
-  PipelineWorkflowInput
->;
+const SERVER_RUNTIME_CONFIG: ServerRuntimeConfigOverrides = {
+  daemons: {
+    publishPendingOutboxEntries: { intervalMs: 1_000, leaseDurationMs: 2_000 },
+    recoverOverdueOutboxEntries: { intervalMs: 1_000, claimIdleTimeoutMs: 6_000 },
+  },
+};
+
+const WORKER_CONFIG: WorkerConfigOverrides = {
+  maxConcurrentWorkflowRuns: 1,
+  gracefulShutdownTimeoutMs: 2_000,
+  workflowRun: { claimRefreshIntervalMs: 2_000 },
+};
+
+export type DurableRunState = "active" | "completed" | "failed" | "cancelled";
+
+function durableRunState(status: WorkflowRunStatus): DurableRunState {
+  switch (status) {
+    case "completed":
+    case "failed":
+    case "cancelled":
+      return status;
+    case "scheduled":
+    case "queued":
+    case "running":
+    case "paused":
+    case "sleeping":
+    case "awaiting_event":
+    case "awaiting_retry":
+    case "awaiting_task_retry":
+    case "awaiting_child_workflow":
+    case "stalled":
+      return "active";
+    default:
+      return status satisfies never;
+  }
+}
+
+interface EmbeddedAiki {
+  client: Client<null>;
+  close(): Promise<void>;
+}
+
+async function openEmbeddedAiki(
+  config: DatabaseConfig,
+  workflow: PipelineWorkflow,
+  logger: AikiLoggerAdapter,
+): Promise<EmbeddedAiki> {
+  await migrateApply({ db: config });
+  const db = database(config);
+  const queue = inMemoryQueue();
+  const aiki = server({
+    db,
+    logger,
+    timerPriorityQueue: inMemoryTimerPriorityQueue(),
+    runtime: { publisher: queue.publisher, config: SERVER_RUNTIME_CONFIG },
+  });
+  const runtime: ServerRuntimeHandle = aiki.runtime.start();
+  const aikiClient = client({ handler: aiki.handler, logger });
+  const workerHandle: WorkerHandle = worker({
+    workflows: [workflow],
+    subscriber: queue.subscriber,
+    config: WORKER_CONFIG,
+  }).start(aikiClient);
+  return {
+    client: aikiClient,
+    async close() {
+      await workerHandle.stop();
+      await runtime.stop();
+      await db.close();
+    },
+  };
+}
 
 export class WorkflowRuntime {
-  private backend?: BackendSqlite;
-  private client?: OpenWorkflow;
-  private worker?: Worker;
-  private started = false;
+  private embedded?: Promise<EmbeddedAiki>;
+  private stopped = false;
 
   constructor(
     private readonly projectPath: ProjectPath,
     private readonly workflow: PipelineWorkflow,
+    private readonly aikiLogger: AikiLoggerAdapter,
+    private readonly logger: Logger,
   ) {}
 
-  private async ensure(): Promise<{ client: OpenWorkflow; backend: BackendSqlite }> {
-    if (!this.client || !this.backend) {
-      await ensureProjectDataDir(this.projectPath);
-      this.backend = BackendSqlite.connect(
-        path.join(this.projectPath.dataDir, WORKFLOW_DB_FILE),
-      );
-      this.client = new OpenWorkflow({ backend: this.backend });
-      this.client.implementWorkflow(this.workflow.spec, this.workflow.fn);
+  private ensure(): Promise<EmbeddedAiki> {
+    if (this.stopped) {
+      return Promise.reject(new Error(`The durable runtime of ${this.projectPath.id} has stopped`));
     }
-    return { client: this.client, backend: this.backend };
+    this.embedded ??= this.open();
+    return this.embedded;
+  }
+
+  private async open(): Promise<EmbeddedAiki> {
+    await ensureProjectDataDir(this.projectPath);
+    const dbPath = path.join(this.projectPath.dataDir, WORKFLOW_DB_FILE);
+    try {
+      return await openEmbeddedAiki({ provider: "sqlite", path: dbPath }, this.workflow, this.aikiLogger);
+    } catch (error) {
+      throw new Error(
+        `The durable runtime could not open ${dbPath} on ${process.platform}-${process.arch}: ${messageOf(error)}`,
+        { cause: error },
+      );
+    }
   }
 
   async start(): Promise<void> {
-    if (this.started) {
-      return;
-    }
-    const { client } = await this.ensure();
-    this.worker = client.newWorker({ concurrency: 1 });
-    await this.worker.start();
-    this.started = true;
+    await this.ensure();
   }
 
   async startRun(input: PipelineWorkflowInput): Promise<string> {
-    const { client } = await this.ensure();
-    const handle = await client.runWorkflow(this.workflow.spec, input);
-    return handle.workflowRun.id;
+    const { client: aikiClient } = await this.ensure();
+    const handle = await this.workflow.start(aikiClient, input);
+    return handle.run.id;
   }
 
-  async approveGate(runId: string, stageId: string): Promise<void> {
-    const { client } = await this.ensure();
-    await client.sendSignal({ signal: gateSignal(runId, stageId) });
+  approveGate(durableRunId: string, stageId: string): void {
+    this.deliver(durableRunId, (handle) =>
+      handle.events.gate.with("reference.id", `gate:${stageId}`).send({ stageId }),
+    );
   }
 
-  async answerQuestion(runId: string, stageId: string, text: string): Promise<void> {
-    const { client } = await this.ensure();
-    await client.sendSignal({ signal: answerSignal(runId, stageId), data: { text } });
+  answerQuestion(durableRunId: string, stageId: string, text: string, messageId: string): void {
+    this.deliver(durableRunId, (handle) =>
+      handle.events.answer.with("reference.id", messageId).send({ stageId, text }),
+    );
   }
 
-  async resolveLimit(runId: string, stageId: string, choice: LimitChoice): Promise<void> {
-    const { client } = await this.ensure();
-    await client.sendSignal({ signal: limitSignal(runId, stageId), data: { choice } });
+  resolveLimit(durableRunId: string, stageId: string, choice: LimitChoice, parkedAt: string): void {
+    this.deliver(durableRunId, (handle) =>
+      handle.events.limit.with("reference.id", `limit:${stageId}:${parkedAt}`).send({ stageId, choice }),
+    );
   }
 
-  async cancel(openWorkflowRunId: string): Promise<void> {
-    const { client } = await this.ensure();
-    await client.cancelWorkflowRun(openWorkflowRunId);
+  cancel(durableRunId: string): void {
+    this.deliver(durableRunId, (handle) => handle.cancel());
   }
 
-  async runStatus(openWorkflowRunId: string): Promise<string | undefined> {
-    const { backend } = await this.ensure();
-    const run = await backend.getWorkflowRun({ workflowRunId: openWorkflowRunId });
-    return run?.status;
+  async runState(durableRunId: string): Promise<DurableRunState> {
+    const handle = await this.handle(durableRunId);
+    return durableRunState(handle.run.state.status);
+  }
+
+  private deliver(durableRunId: string, send: (handle: PipelineRunHandle) => Promise<void>): void {
+    this.handle(durableRunId)
+      .then(send)
+      .catch((error: unknown) =>
+        this.logger.error(`Durable run ${durableRunId} did not take a delivery`, { error }),
+      );
+  }
+
+  private async handle(durableRunId: string): Promise<PipelineRunHandle> {
+    const { client: aikiClient } = await this.ensure();
+    return this.workflow.getHandleById(aikiClient, durableRunId);
   }
 
   async stop(): Promise<void> {
-    if (this.worker) {
-      await this.worker.stop();
-      this.worker = undefined;
+    this.stopped = true;
+    const embedded = this.embedded;
+    this.embedded = undefined;
+    if (embedded) {
+      await (await embedded).close();
     }
-    if (this.backend) {
-      await this.backend.stop();
-      this.backend = undefined;
-    }
-    this.client = undefined;
-    this.started = false;
   }
 }
 
 export class WorkflowRuntimeRegistry {
   private readonly runtimes = new Map<string, WorkflowRuntime>();
   private readonly workflow: PipelineWorkflow;
+  private readonly aikiLogger: AikiLoggerAdapter;
+  private readonly logger: Logger;
 
   constructor(
     deps: WorkflowDeps,
     private readonly registry: ProjectRegistry,
+    logger: Logger,
   ) {
     this.workflow = createPipelineWorkflow(deps);
+    this.logger = logger.child("WorkflowRuntime");
+    this.aikiLogger = new AikiLoggerAdapter(logger.child("Aiki"));
   }
 
   for(projectPath: ProjectPath): WorkflowRuntime {
     return getOrCreate(
       this.runtimes,
       projectPath.id,
-      () => new WorkflowRuntime(projectPath, this.workflow),
+      () => new WorkflowRuntime(projectPath, this.workflow, this.aikiLogger, this.logger),
     );
   }
 

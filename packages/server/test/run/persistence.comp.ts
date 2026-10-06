@@ -197,6 +197,34 @@ test("a run left mid-flight by a crash with no durable run is reconciled to fail
   await restarted.shutdown();
 });
 
+test("a run stored under the retired runtime still loads, and one left mid-flight under it is reconciled to failed", async () => {
+  // Arrange — records written while OpenWorkflow ran carry its run id.
+  const { home } = ctx;
+  await seedHomeRunRow(home, "retired-done", {
+    version: 1,
+    run: storedRun({ id: "retired-done", number: 1 }),
+    openWorkflowRunId: "ow-finished",
+  });
+  await seedHomeRunRow(home, "retired-live", {
+    version: 1,
+    run: storedRun({
+      id: "retired-live",
+      number: 2,
+      status: "running",
+      stages: [{ id: "solo", label: "Developer", status: "running", logs: [] }],
+    }),
+    openWorkflowRunId: "ow-in-flight",
+  });
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  expect((await get<RunState>(restarted.app, "/runs/retired-done")).body.status).toBe("completed");
+  expect((await get<RunState>(restarted.app, "/runs/retired-live")).body.status).toBe("failed");
+  await restarted.shutdown();
+});
+
 test("a log written before a restart is still readable after it", async () => {
   // Arrange
   const { app } = ctx;

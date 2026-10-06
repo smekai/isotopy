@@ -103,12 +103,12 @@ that grew a pure helper should have handed it to `domain/`.
 
 ### A4 — The workflow seam
 
-The durable runtime is OpenWorkflow, in `packages/server/src/workflow/`.
-`pipeline-workflow.ts` is the workflow body (the run loop); `stage-execution.ts` is
-the durable *step* — the single decision point for how one stage runs. The seam is
-the workflow, **not** one orchestrator method: the older
-"`RunOrchestrator.executeStage()` is the seam" framing is wrong and is corrected in
-`docs/workflow-runtime-options.md` §4. If your change spread `await` chains for
+The durable runtime is Aiki, embedded in `packages/server/src/workflow/`.
+`pipeline-workflow.ts` is the workflow body (the run loop), `pipeline-tasks.ts` its
+durable tasks, and `stage-execution.ts` the work a stage task does — the single
+decision point for how one stage runs. The seam is the workflow, **not** one service
+method. A read-model write from the workflow goes through the `isotopy.project` task,
+never a direct call, or a replay repeats it. If your change spread `await` chains for
 long-running work across a service instead of going through the workflow, pull it back.
 
 ### A5 — Classes where there is state or a lifecycle

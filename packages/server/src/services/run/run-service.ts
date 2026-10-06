@@ -61,6 +61,7 @@ import { engineLabel } from "../../domain/rules/engine-label.ts";
 import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/run-start.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
+import type { DurableRunState } from "../../workflow/workflow-runtime.ts";
 import { pipelineWorkflowInput } from "../../workflow/pipeline-workflow-input.ts";
 import type { PipelineLaunch } from "../../workflow/pipeline-workflow-input.ts";
 import type {
@@ -81,7 +82,6 @@ import {
 } from "../../domain/rules/engine-limit.ts";
 import { formatHandoff } from "../../domain/markdown/stage.ts";
 import {
-  TERMINAL_OPENWORKFLOW_STATUSES,
   applyCancellation,
   applyInterruption,
   completionMessage,
@@ -161,7 +161,7 @@ export class RunService implements RunProjection {
       endEngineStage: (runId) => this.endEngineStage(runId),
       isCancelled: (runId) => this.store.runs.get(runId)?.status === "cancelled",
     };
-    this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry);
+    this.runtimes = new WorkflowRuntimeRegistry(deps, this.registry, logger);
   }
 
   async init(): Promise<void> {
@@ -195,14 +195,14 @@ export class RunService implements RunProjection {
   }
 
   private async reconcileOnLoad(projectPath: ProjectPath, run: RunState): Promise<void> {
-    const openWorkflowRunId = this.store.openWorkflowRunIds.get(run.id);
-    if (!openWorkflowRunId) {
+    const durableRunId = this.store.durableRunIds.get(run.id);
+    if (!durableRunId) {
       this.markInterrupted(run.id);
       return;
     }
-    let status: string | undefined;
+    let state: DurableRunState;
     try {
-      status = await this.runtimes.for(projectPath).runStatus(openWorkflowRunId);
+      state = await this.runtimes.for(projectPath).runState(durableRunId);
     } catch (error) {
       this.logger.error(
         `Could not read the durable state of run ${run.id}; it stays ${run.status}`,
@@ -210,13 +210,13 @@ export class RunService implements RunProjection {
       );
       return;
     }
-    if (status === undefined || !TERMINAL_OPENWORKFLOW_STATUSES.has(status)) {
+    if (state === "active") {
       return;
     }
-    if (status === "canceled") {
+    if (state === "cancelled") {
       this.markCancelled(run.id);
       await releaseUnfinishedSourceTasks(this.registry, run, this.logger);
-    } else if (status === "failed") {
+    } else if (state === "failed") {
       this.markInterrupted(run.id);
     } else {
       await this.runCompleted(run.id, "completed");
@@ -448,12 +448,12 @@ export class RunService implements RunProjection {
     if (stage.status !== "awaiting") {
       throw new Error(`Stage ${stageId} is not awaiting approval`);
     }
-    const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
-    if (!openWorkflowRunId) {
+    const durableRunId = this.store.durableRunIds.get(runId);
+    if (!durableRunId) {
       throw new Error(`Run ${runId} has no durable run to approve`);
     }
     this.gateApproved(runId, stageId);
-    void this.runtimes.forProject(run.projectId).approveGate(runId, stageId);
+    this.runtimes.forProject(run.projectId).approveGate(durableRunId, stageId);
     return structuredClone(run);
   }
 
@@ -466,14 +466,9 @@ export class RunService implements RunProjection {
       throw new Error(`Run ${runId} is already finished`);
     }
     this.engineAborts.get(runId)?.abort();
-    const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
-    if (openWorkflowRunId) {
-      void this.runtimes
-        .forProject(run.projectId)
-        .cancel(openWorkflowRunId)
-        .catch((error: unknown) =>
-          this.logger.error(`Failed to cancel the durable run behind run ${runId}`, { error }),
-        );
+    const durableRunId = this.store.durableRunIds.get(runId);
+    if (durableRunId) {
+      this.runtimes.forProject(run.projectId).cancel(durableRunId);
     }
     this.markCancelled(runId);
     void this.settleCompletedRun(run)
@@ -498,6 +493,10 @@ export class RunService implements RunProjection {
     if (!asking) {
       return this.appendMessage(run, { role: "user", text });
     }
+    const durableRunId = this.store.durableRunIds.get(runId);
+    if (!durableRunId) {
+      throw new Error(`Run ${runId} has no durable run to answer`);
+    }
     const message = this.appendMessage(run, {
       role: "user",
       stageId: asking.id,
@@ -505,7 +504,9 @@ export class RunService implements RunProjection {
       text,
     });
     this.stageAnswered(runId, asking.id);
-    void this.runtimes.forProject(run.projectId).answerQuestion(runId, asking.id, text);
+    this.runtimes
+      .forProject(run.projectId)
+      .answerQuestion(durableRunId, asking.id, text, message.id);
     return message;
   }
 
@@ -554,6 +555,8 @@ export class RunService implements RunProjection {
       seeded,
       task,
       readmit: true,
+    }).catch((error: unknown) => {
+      this.logger.error(`Run ${runId} could not restart its durable run`, { error });
     });
     return structuredClone(run);
   }
@@ -569,11 +572,6 @@ export class RunService implements RunProjection {
       stageId: message.stageId, chatMessage: message,
     });
     return message;
-  }
-
-  bindOpenWorkflowRun(runId: string, openWorkflowRunId: string): void {
-    this.store.openWorkflowRunIds.set(runId, openWorkflowRunId);
-    void this.store.flushPersist(runId);
   }
 
   runStarted(runId: string, message: string): void {
@@ -677,9 +675,10 @@ export class RunService implements RunProjection {
     const run = this.store.runs.get(runId);
     if (!run) throw new Error(`Run not found: ${runId}`);
     const stage = this.requireStage(runId, stageId);
-    if (stage.status !== "blocked") throw new Error(LIMIT_ERRORS.notBlocked(stageId));
-    const openWorkflowRunId = this.store.openWorkflowRunIds.get(runId);
-    if (!openWorkflowRunId) throw new Error(LIMIT_ERRORS.noDurableRun(runId));
+    if (stage.status !== "blocked" || !run.limit) throw new Error(LIMIT_ERRORS.notBlocked(stageId));
+    const parkedAt = run.limit.detectedAt;
+    const durableRunId = this.store.durableRunIds.get(runId);
+    if (!durableRunId) throw new Error(LIMIT_ERRORS.noDurableRun(runId));
     const current = { engine: run.engine, model: run.model, modelTier: run.modelTier };
     const pins = this.settings.getPreferences(run.projectId).engineModels;
     const selection = selectionAfterLimit(current, resolution, pins);
@@ -691,7 +690,9 @@ export class RunService implements RunProjection {
     if (resolution.choice === "switch-tier") stage.modelTier = resolution.tier;
     this.limitResolved(runId, stageId, resolution.choice);
     void this.store.flushPersist(runId);
-    void this.runtimes.forProject(run.projectId).resolveLimit(runId, stageId, resolution.choice);
+    this.runtimes
+      .forProject(run.projectId)
+      .resolveLimit(durableRunId, stageId, resolution.choice, parkedAt);
     return structuredClone(run);
   }
 
@@ -972,10 +973,11 @@ export class RunService implements RunProjection {
     await runtime.start();
     const permissionMode =
       this.store.enginePermissionModes.get(run.id) ?? DEFAULT_PERMISSION_MODE;
-    const openWorkflowRunId = await runtime.startRun(
+    const durableRunId = await runtime.startRun(
       pipelineWorkflowInput(run, pipeline, permissionMode, extras),
     );
-    this.bindOpenWorkflowRun(run.id, openWorkflowRunId);
+    this.store.durableRunIds.set(run.id, durableRunId);
+    void this.store.flushPersist(run.id);
   }
 }
 

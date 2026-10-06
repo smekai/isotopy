@@ -1,5 +1,5 @@
-import { defineWorkflow } from "openworkflow";
-import type { Workflow } from "openworkflow";
+import { workflow } from "@aikirun/workflow";
+import type { EventWaiter, WorkflowRun, WorkflowRunHandle, WorkflowVersion } from "@aikirun/workflow";
 import {
   ORCHESTRATION_PIPELINE,
   STAGE_EXECUTION_POLICIES,
@@ -9,113 +9,136 @@ import {
 import type {
   EngineLimit,
   LimitChoice,
-  OrchestratorBrokerPhase,
   PipelineGroup,
   StageDefinition,
   StageExecutionPolicy,
 } from "@isotopy/core";
 import { limitWaitMs } from "../domain/rules/engine-limit.ts";
+import { suppressionReason } from "../domain/rules/run-lifecycle.ts";
 import type { StageExchange } from "../domain/markdown/stage.ts";
-import {
-  runOrchestratorReviewWork,
-  runQuestionMediationWork,
-  runStageWork,
-} from "./stage-execution.ts";
+import { PIPELINE_EVENTS } from "./pipeline-events.ts";
+import type { PipelineEvents } from "./pipeline-events.ts";
+import { createPipelineTasks } from "./pipeline-tasks.ts";
+import type { PipelineTasks } from "./pipeline-tasks.ts";
 import type {
   PipelineWorkflowInput,
   QuestionMediationResult,
   RunCompletionStatus,
   StageOutcome,
   StageTurn,
+  StageWorkContext,
   WorkflowDeps,
 } from "./types.ts";
 import type { QuestionMediationRequest } from "./types.ts";
 
 export const PIPELINE_WORKFLOW_NAME = "isotopy-pipeline";
 
-const STAGE_RETRY = { maximumAttempts: 1 } as const;
-
-const GATE_TIMEOUT = "3650d";
-
-const ANSWER_TIMEOUT = "3650d";
+const PIPELINE_WORKFLOW_VERSION = "1.0.0";
 
 export interface PipelineWorkflowResult {
   status: RunCompletionStatus | "cancelled";
 }
 
-export function gateSignal(runId: string, stageId: string): string {
-  return `gate:${runId}:${stageId}`;
-}
+export type PipelineRun = Readonly<WorkflowRun<null, PipelineEvents>>;
 
-export function answerSignal(runId: string, stageId: string): string {
-  return `answer:${runId}:${stageId}`;
-}
+export type PipelineWorkflow = WorkflowVersion<
+  PipelineWorkflowInput,
+  PipelineWorkflowResult,
+  null,
+  PipelineEvents
+>;
 
-export function limitSignal(runId: string, stageId: string): string {
-  return `limit:${runId}:${stageId}`;
-}
+export type PipelineRunHandle = WorkflowRunHandle<PipelineWorkflowResult, null, PipelineEvents>;
 
-export interface AnswerSignalPayload {
-  text: string;
-}
-
-export interface LimitSignalPayload {
-  choice: LimitChoice;
-}
-
-interface StepApiLike {
-  run<Output>(config: { name: string }, fn: () => Promise<Output> | Output): Promise<Output>;
-  waitForSignal<Output>(options: {
-    signal: string;
-    timeout?: string | number;
-  }): Promise<{ data: Output } | null>;
+interface PipelineContext {
+  run: PipelineRun;
+  tasks: PipelineTasks;
+  deps: WorkflowDeps;
+  input: PipelineWorkflowInput;
 }
 
 type StageTurnsResult =
   | { outcome: Exclude<StageOutcome, typeof STAGE_OUTCOMES.LIMITED> }
   | { outcome: typeof STAGE_OUTCOMES.LIMITED; limit: EngineLimit };
 
-interface QuestionResolution {
-  outcome:
-    | typeof STAGE_OUTCOMES.PASSED
-    | typeof STAGE_OUTCOMES.NEEDS_ATTENTION
-    | typeof STAGE_OUTCOMES.FAILED
-    | typeof STAGE_OUTCOMES.CANCELLED;
-  answer?: string;
-}
+type QuestionFailureOutcome =
+  | typeof STAGE_OUTCOMES.NEEDS_ATTENTION
+  | typeof STAGE_OUTCOMES.FAILED
+  | typeof STAGE_OUTCOMES.CANCELLED;
 
-interface QuestionContext {
-  step: StepApiLike;
-  deps: WorkflowDeps;
-  input: PipelineWorkflowInput;
+type QuestionResolution =
+  | { outcome: typeof STAGE_OUTCOMES.PASSED; answer: string }
+  | { outcome: QuestionFailureOutcome };
+
+interface QuestionContext extends PipelineContext {
   stageDef: StageDefinition;
-  attempt: number;
   turnIndex: number;
 }
 
-function stepName(stageId: string, attempt: number, suffix: string): string {
-  return attempt === 0 ? `${stageId}:${suffix}` : `${stageId}:attempt:${attempt}:${suffix}`;
+interface StageEvent {
+  stageId: string;
 }
 
-function turnStepName(ctx: QuestionContext, suffix: string): string {
-  return stepName(ctx.stageDef.id, ctx.attempt, `turn:${ctx.turnIndex}:${suffix}`);
+function workContext(input: PipelineWorkflowInput): StageWorkContext {
+  return { runId: input.runId, task: input.task, permissionMode: input.permissionMode };
+}
+
+async function awaitStageEvent<Data extends StageEvent>(
+  waiter: EventWaiter<Data>,
+  stageId: string,
+): Promise<Data> {
+  for (;;) {
+    const { data } = await waiter.wait();
+    if (data.stageId === stageId) {
+      return data;
+    }
+  }
+}
+
+async function awaitStageEventUntil<Data extends StageEvent>(
+  waiter: EventWaiter<Data>,
+  stageId: string,
+  timeoutMs: number,
+): Promise<Data | undefined> {
+  for (;;) {
+    const received = await waiter.wait({ timeout: { milliseconds: timeoutMs } });
+    if (received.timeout) {
+      return undefined;
+    }
+    if (received.data.stageId === stageId) {
+      return received.data;
+    }
+  }
+}
+
+async function awaitLimitChoice(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+  limit: EngineLimit,
+): Promise<LimitChoice | undefined> {
+  const resolved = await awaitStageEventUntil(
+    ctx.run.events.limit,
+    stageDef.id,
+    limitWaitMs(limit),
+  );
+  return resolved?.choice;
 }
 
 async function failQuestionMediation(
   ctx: QuestionContext,
-  outcome: QuestionResolution["outcome"],
+  outcome: QuestionFailureOutcome,
   message: string,
 ): Promise<QuestionResolution> {
-  await ctx.step.run({ name: turnStepName(ctx, "mediation:failed") }, () => {
-    ctx.deps.projection.stageFailed(ctx.input.runId, ctx.stageDef.id, message);
-    return null;
+  await ctx.tasks.project.start(ctx.run, {
+    kind: "stageFailed",
+    runId: ctx.input.runId,
+    stageId: ctx.stageDef.id,
+    message,
   });
   return { outcome };
 }
 
-function questionFailureOutcome(
-  outcome: StageOutcome,
-): QuestionResolution["outcome"] {
+function questionFailureOutcome(outcome: StageOutcome): QuestionFailureOutcome {
   if (outcome === STAGE_OUTCOMES.FAILED) {
     return STAGE_OUTCOMES.FAILED;
   }
@@ -125,28 +148,29 @@ function questionFailureOutcome(
   return STAGE_OUTCOMES.NEEDS_ATTENTION;
 }
 
-async function waitOutMediationLimit(
-  ctx: QuestionContext,
-  phase: OrchestratorBrokerPhase,
-  mediationAttempt: number,
+async function waitOutLimit(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+  attempt: number,
   limit: EngineLimit,
 ): Promise<boolean> {
-  const { step, deps, input, stageDef } = ctx;
-  const prefix = `mediation:${phase}:${mediationAttempt}:limit`;
-  await step.run({ name: turnStepName(ctx, prefix) }, () => {
-    deps.projection.stageBlocked(input.runId, stageDef.id, limit, mediationAttempt + 1);
-    return null;
+  const { run, tasks, deps, input } = ctx;
+  await tasks.project.start(run, {
+    kind: "stageBlocked",
+    runId: input.runId,
+    stageId: stageDef.id,
+    limit,
+    attempt,
   });
-  const signal = await step.waitForSignal<LimitSignalPayload>({
-    signal: limitSignal(input.runId, stageDef.id),
-    timeout: limitWaitMs(limit),
-  });
+  const choice = await awaitLimitChoice(ctx, stageDef, limit);
   if (deps.isCancelled(input.runId)) {
     return false;
   }
-  await step.run({ name: turnStepName(ctx, `${prefix}:resume`) }, () => {
-    deps.projection.limitResolved(input.runId, stageDef.id, signal?.data.choice);
-    return null;
+  await tasks.project.start(run, {
+    kind: "limitResolved",
+    runId: input.runId,
+    stageId: stageDef.id,
+    choice,
   });
   return true;
 }
@@ -156,54 +180,55 @@ async function mediateQuestion(
   request: QuestionMediationRequest,
   resumeSessionId?: string,
 ): Promise<QuestionMediationResult> {
-  const { step, deps, input, stageDef } = ctx;
+  const { run, tasks, input, stageDef } = ctx;
   for (let mediationAttempt = 0; ; mediationAttempt += 1) {
-    const result = await step.run(
-      { name: turnStepName(ctx, `mediation:${request.phase}:${mediationAttempt}`) },
-      () => runQuestionMediationWork(deps, input, stageDef, request, resumeSessionId),
-    );
+    const result = await tasks.mediation.start(run, {
+      context: workContext(input),
+      stageDef,
+      request,
+      resumeSessionId,
+    });
     if (result.outcome !== STAGE_OUTCOMES.LIMITED || result.limit === undefined) {
       return result;
     }
-    const resumed = await waitOutMediationLimit(
-      ctx,
-      request.phase,
-      mediationAttempt,
-      result.limit,
-    );
+    const resumed = await waitOutLimit(ctx, stageDef, mediationAttempt + 1, result.limit);
     if (!resumed) {
       return { outcome: STAGE_OUTCOMES.CANCELLED };
     }
   }
 }
 
-async function waitForUserAnswer(
-  ctx: QuestionContext,
-  question: string,
-): Promise<string | undefined> {
-  const { step, deps, input, stageDef } = ctx;
-  await step.run({ name: turnStepName(ctx, "question:user") }, () => {
-    deps.projection.stageAsking(input.runId, stageDef.id, question);
-    return null;
+async function waitForUserAnswer(ctx: QuestionContext, question: string): Promise<string> {
+  const { run, tasks, input, stageDef } = ctx;
+  await tasks.project.start(run, {
+    kind: "stageAsking",
+    runId: input.runId,
+    stageId: stageDef.id,
+    question,
   });
-  const signal = await step.waitForSignal<AnswerSignalPayload>({
-    signal: answerSignal(input.runId, stageDef.id),
-    timeout: ANSWER_TIMEOUT,
+  const answer = await awaitStageEvent(run.events.answer, stageDef.id);
+  return answer.text;
+}
+
+async function recordMediatedAnswer(ctx: QuestionContext, answer: string): Promise<void> {
+  await ctx.tasks.project.start(ctx.run, {
+    kind: "stageMediatedAnswer",
+    runId: ctx.input.runId,
+    stageId: ctx.stageDef.id,
+    answer,
   });
-  if (deps.isCancelled(input.runId) || signal === null) {
-    return undefined;
-  }
-  return signal.data.text;
 }
 
 async function resolveSpecialistQuestion(
   ctx: QuestionContext,
   question: string,
 ): Promise<QuestionResolution> {
-  const { step, deps, input, stageDef } = ctx;
-  await step.run({ name: turnStepName(ctx, "question:recorded") }, () => {
-    deps.projection.stageQuestion(input.runId, stageDef.id, question);
-    return null;
+  const { run, tasks, deps, input, stageDef } = ctx;
+  await tasks.project.start(run, {
+    kind: "stageQuestion",
+    runId: input.runId,
+    stageId: stageDef.id,
+    question,
   });
   const request: QuestionMediationRequest = {
     runId: input.runId,
@@ -225,10 +250,7 @@ async function resolveSpecialistQuestion(
   }
   if (mediated.decision.action === "answer_agent") {
     const answer = mediated.decision.answer;
-    await step.run({ name: turnStepName(ctx, "question:answered") }, () => {
-      deps.projection.stageMediatedAnswer(input.runId, stageDef.id, answer);
-      return null;
-    });
+    await recordMediatedAnswer(ctx, answer);
     return { outcome: STAGE_OUTCOMES.PASSED, answer };
   }
   if (mediated.decision.action !== "escalate_to_user") {
@@ -239,14 +261,8 @@ async function resolveSpecialistQuestion(
     );
   }
   const userAnswer = await waitForUserAnswer(ctx, mediated.decision.question);
-  if (userAnswer === undefined) {
-    return deps.isCancelled(input.runId)
-      ? { outcome: STAGE_OUTCOMES.CANCELLED }
-      : failQuestionMediation(
-          ctx,
-          STAGE_OUTCOMES.FAILED,
-          "Nobody answered the mediated question",
-        );
+  if (deps.isCancelled(input.runId)) {
+    return { outcome: STAGE_OUTCOMES.CANCELLED };
   }
   const routed = await mediateQuestion(
     ctx,
@@ -267,11 +283,18 @@ async function resolveSpecialistQuestion(
     );
   }
   const answer = routed.decision.message;
-  await step.run({ name: turnStepName(ctx, "question:routed") }, () => {
-    deps.projection.stageMediatedAnswer(input.runId, stageDef.id, answer);
-    return null;
-  });
+  await recordMediatedAnswer(ctx, answer);
   return { outcome: STAGE_OUTCOMES.PASSED, answer };
+}
+
+async function resolveQuestion(ctx: QuestionContext, question: string): Promise<QuestionResolution> {
+  if (ctx.input.pipeline.id !== ORCHESTRATION_PIPELINE.id) {
+    return resolveSpecialistQuestion(ctx, question);
+  }
+  const answer = await waitForUserAnswer(ctx, question);
+  return ctx.deps.isCancelled(ctx.input.runId)
+    ? { outcome: STAGE_OUTCOMES.CANCELLED }
+    : { outcome: STAGE_OUTCOMES.PASSED, answer };
 }
 
 function firstTurn(
@@ -287,21 +310,32 @@ function firstTurn(
   return resumable ? { index: 0, resumeSessionId: seeded?.resumeSessionId } : { index: 0 };
 }
 
+function nextTurn(turn: StageTurn, exchange: StageExchange, sessionId: string | undefined): StageTurn {
+  const next: StageTurn = {
+    index: turn.index + 1,
+    answer: exchange.answer,
+    exchanges: [...(turn.exchanges ?? []), exchange],
+  };
+  if (sessionId !== undefined) {
+    next.resumeSessionId = sessionId;
+  }
+  return next;
+}
+
 async function runStageTurns(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  ctx: PipelineContext,
   stageDef: StageDefinition,
   attempt: number,
 ): Promise<StageTurnsResult> {
-  const { runId } = input;
+  const { run, tasks, input } = ctx;
   let turn: StageTurn = firstTurn(input, stageDef, attempt);
 
   for (;;) {
-    const result = await step.run(
-      { name: stepName(stageDef.id, attempt, `turn:${turn.index}`) },
-      () => runStageWork(deps, input, stageDef, turn),
-    );
+    const result = await tasks.stageTurn.start(run, {
+      context: workContext(input),
+      stageDef,
+      turn,
+    });
     if (result.outcome === STAGE_OUTCOMES.LIMITED) {
       return result.limit
         ? { outcome: STAGE_OUTCOMES.LIMITED, limit: result.limit }
@@ -311,98 +345,30 @@ async function runStageTurns(
       return { outcome: result.outcome };
     }
 
-    const ctx: QuestionContext = {
-      step,
-      deps,
-      input,
-      stageDef,
-      attempt,
-      turnIndex: turn.index,
-    };
-    const resolution =
-      input.pipeline.id === ORCHESTRATION_PIPELINE.id
-        ? {
-            outcome: STAGE_OUTCOMES.PASSED,
-            answer: await waitForUserAnswer(ctx, result.question ?? ""),
-          }
-        : await resolveSpecialistQuestion(ctx, result.question ?? "");
+    const question = result.question ?? "";
+    const resolution = await resolveQuestion({ ...ctx, stageDef, turnIndex: turn.index }, question);
     if (resolution.outcome !== STAGE_OUTCOMES.PASSED) {
       return { outcome: resolution.outcome };
     }
-    if (resolution.answer === undefined) {
-      if (deps.isCancelled(runId)) {
-        return { outcome: STAGE_OUTCOMES.CANCELLED };
-      }
-      await step.run(
-        { name: stepName(stageDef.id, attempt, `answer:timeout:${turn.index}`) },
-        () => {
-          deps.projection.stageFailed(runId, stageDef.id, "Nobody answered the question");
-          return null;
-        },
-      );
-      return { outcome: STAGE_OUTCOMES.FAILED };
-    }
 
-    const exchange: StageExchange = {
-      question: result.question ?? "",
-      answer: resolution.answer,
-    };
+    const exchange: StageExchange = { question, answer: resolution.answer };
     if (result.output !== undefined) {
       exchange.output = result.output;
     }
-    const nextTurn: StageTurn = {
-      index: turn.index + 1,
-      answer: resolution.answer,
-      exchanges: [...(turn.exchanges ?? []), exchange],
-    };
-    if (result.sessionId !== undefined) {
-      nextTurn.resumeSessionId = result.sessionId;
-    }
-    turn = nextTurn;
+    turn = nextTurn(turn, exchange, result.sessionId);
   }
-}
-
-async function waitOutLimit(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
-  stageDef: StageDefinition,
-  attempt: number,
-  limit: EngineLimit,
-): Promise<boolean> {
-  const { runId } = input;
-  await step.run({ name: stepName(stageDef.id, attempt, "limit") }, () => {
-    deps.projection.stageBlocked(runId, stageDef.id, limit, attempt + 1);
-    return null;
-  });
-
-  const signal = await step.waitForSignal<LimitSignalPayload>({
-    signal: limitSignal(runId, stageDef.id),
-    timeout: limitWaitMs(limit),
-  });
-  if (deps.isCancelled(runId)) {
-    return false;
-  }
-
-  await step.run({ name: stepName(stageDef.id, attempt, "limit:resume") }, () => {
-    deps.projection.limitResolved(runId, stageDef.id, signal?.data.choice);
-    return null;
-  });
-  return true;
 }
 
 async function runStageToOutcome(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  ctx: PipelineContext,
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
   for (let attempt = 0; ; attempt += 1) {
-    const result = await runStageTurns(step, deps, input, stageDef, attempt);
+    const result = await runStageTurns(ctx, stageDef, attempt);
     if (result.outcome !== STAGE_OUTCOMES.LIMITED || result.limit === undefined) {
       return result.outcome;
     }
-    const resumed = await waitOutLimit(step, deps, input, stageDef, attempt, result.limit);
+    const resumed = await waitOutLimit(ctx, stageDef, attempt + 1, result.limit);
     if (!resumed) {
       return STAGE_OUTCOMES.CANCELLED;
     }
@@ -410,41 +376,22 @@ async function runStageToOutcome(
 }
 
 async function runOneStage(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  ctx: PipelineContext,
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
-  const { runId } = input;
-  const outcome = await runStageToOutcome(step, deps, input, stageDef);
-  if (outcome !== STAGE_OUTCOMES.PASSED) {
+  const { run, tasks, deps, input } = ctx;
+  const outcome = await runStageToOutcome(ctx, stageDef);
+  if (outcome !== STAGE_OUTCOMES.PASSED || !stageDef.gateAfter) {
     return outcome;
   }
 
-  if (!stageDef.gateAfter) {
-    return STAGE_OUTCOMES.PASSED;
-  }
-
-  await step.run({ name: `${stageDef.id}:gate:awaiting` }, () => {
-    deps.projection.stageAwaiting(runId, stageDef.id);
-    return null;
+  await tasks.project.start(run, {
+    kind: "stageAwaiting",
+    runId: input.runId,
+    stageId: stageDef.id,
   });
-
-  const signal = await step.waitForSignal({
-    signal: gateSignal(runId, stageDef.id),
-    timeout: GATE_TIMEOUT,
-  });
-  if (deps.isCancelled(runId)) {
-    return STAGE_OUTCOMES.CANCELLED;
-  }
-  if (signal === null) {
-    await step.run({ name: `${stageDef.id}:gate:timeout` }, () => {
-      deps.projection.stageFailed(runId, stageDef.id, "Gate approval timed out");
-      return null;
-    });
-    return STAGE_OUTCOMES.FAILED;
-  }
-  return STAGE_OUTCOMES.PASSED;
+  await awaitStageEvent(run.events.gate, stageDef.id);
+  return deps.isCancelled(input.runId) ? STAGE_OUTCOMES.CANCELLED : STAGE_OUTCOMES.PASSED;
 }
 
 interface WalkState {
@@ -481,33 +428,27 @@ function mergeOutcome(status: RunCompletionStatus, outcome: StageOutcome): RunCo
 }
 
 async function suppressStage(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  runId: string,
+  ctx: PipelineContext,
   stageDef: StageDefinition,
-  status: RunCompletionStatus,
+  cause: RunCompletionStatus,
 ): Promise<void> {
-  await step.run({ name: `${stageDef.id}:suppressed:${status}` }, () => {
-    const reason =
-      status === "failed"
-        ? "an earlier engine or runtime failure"
-        : "blocking quality findings";
-    deps.projection.log(runId, stageDef.id, {
-      level: "warn",
-      message: `${agentForStage(stageDef).profession} suppressed because of ${reason}`,
-      });
-    deps.projection.stageSkipped(runId, stageDef.id);
-    return null;
+  const { run, tasks, input } = ctx;
+  const profession = agentForStage(stageDef).profession;
+  await tasks.project.start(run, {
+    kind: "log",
+    runId: input.runId,
+    stageId: stageDef.id,
+    draft: { level: "warn", message: `${profession} suppressed because of ${suppressionReason(cause)}` },
   });
+  await tasks.project.start(run, { kind: "stageSkipped", runId: input.runId, stageId: stageDef.id });
 }
 
 async function runGroup(
-  step: StepApiLike,
-  deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  ctx: PipelineContext,
   group: PipelineGroup,
   walk: WalkState,
 ): Promise<boolean> {
+  const { run, tasks, input } = ctx;
   const seeded = input.seeded;
 
   for (const stageDef of group.stages) {
@@ -515,12 +456,11 @@ async function runGroup(
       if (stageDef.id === seeded?.startStageId) {
         walk.reached = true;
       } else {
-        await step.run({ name: `${stageDef.id}:seeded` }, () => {
-          deps.projection.applySeededStage(input.runId, stageDef, {
-            output: seeded?.outputs[stageDef.id],
-            from: seeded?.from,
-          });
-          return null;
+        await tasks.project.start(run, {
+          kind: "applySeededStage",
+          runId: input.runId,
+          stageDef,
+          seeded: { output: seeded?.outputs[stageDef.id], from: seeded?.from },
         });
         const seededOutcome = seeded?.outcomes[stageDef.id];
         if (seededOutcome !== undefined) {
@@ -530,10 +470,10 @@ async function runGroup(
       }
     }
     if (!canRunStage(stageDef, walk.status)) {
-      await suppressStage(step, deps, input.runId, stageDef, walk.status);
+      await suppressStage(ctx, stageDef, walk.status);
       continue;
     }
-    const outcome = await runOneStage(step, deps, input, stageDef);
+    const outcome = await runOneStage(ctx, stageDef);
     if (outcome === STAGE_OUTCOMES.CANCELLED) {
       return true;
     }
@@ -542,47 +482,50 @@ async function runGroup(
   return false;
 }
 
-export function createPipelineWorkflow(
+async function runPipeline(
+  run: PipelineRun,
+  tasks: PipelineTasks,
   deps: WorkflowDeps,
-): Workflow<PipelineWorkflowInput, PipelineWorkflowResult, PipelineWorkflowInput> {
-  return defineWorkflow<PipelineWorkflowInput, PipelineWorkflowResult>(
-    { name: PIPELINE_WORKFLOW_NAME, retryPolicy: STAGE_RETRY },
-    async ({ input, step }) => {
-      const { runId, pipeline } = input;
+  input: PipelineWorkflowInput,
+): Promise<PipelineWorkflowResult> {
+  const ctx: PipelineContext = { run, tasks, deps, input };
+  const { runId, pipeline } = input;
 
-      await step.run({ name: "run:started" }, () => {
-        deps.projection.runStarted(runId, input.startedMessage);
-        return null;
-      });
+  await tasks.project.start(run, { kind: "runStarted", runId, message: input.startedMessage });
 
-      const walk: WalkState = {
-        reached: input.seeded === undefined,
-        status: "completed",
-      };
+  const walk: WalkState = {
+    reached: input.seeded === undefined,
+    status: "completed",
+  };
 
-      for (const group of pipeline.groups) {
-        const cancelled = await runGroup(step, deps, input, group, walk);
-        if (cancelled) {
-          return { status: "cancelled" };
-        }
-      }
+  for (const group of pipeline.groups) {
+    const cancelled = await runGroup(ctx, group, walk);
+    if (cancelled) {
+      return { status: "cancelled" };
+    }
+  }
 
-      if (deps.isCancelled(runId)) {
-        return { status: "cancelled" };
-      }
+  if (deps.isCancelled(runId)) {
+    return { status: "cancelled" };
+  }
 
-      const status = walk.status;
-      if (pipeline.id !== ORCHESTRATION_PIPELINE.id) {
-        await step.run({ name: "orchestrator:review" }, () =>
-          runOrchestratorReviewWork(deps, input, status),
-        );
-      }
+  const status = walk.status;
+  if (pipeline.id !== ORCHESTRATION_PIPELINE.id) {
+    await tasks.review.start(run, { context: workContext(input), status });
+  }
 
-      await step.run({ name: "run:completed" }, async () => {
-        await deps.projection.runCompleted(runId, status);
-        return null;
-      });
-      return { status };
-    },
-  );
+  await tasks.project.start(run, { kind: "runCompleted", runId, status });
+  return { status };
+}
+
+export function createPipelineWorkflow(deps: WorkflowDeps): PipelineWorkflow {
+  const tasks = createPipelineTasks(deps);
+  return workflow({ name: PIPELINE_WORKFLOW_NAME }).v<
+    PipelineWorkflowInput,
+    PipelineWorkflowResult,
+    PipelineEvents
+  >(PIPELINE_WORKFLOW_VERSION, {
+    events: PIPELINE_EVENTS,
+    handler: (run, input) => runPipeline(run, tasks, deps, input),
+  });
 }

@@ -153,6 +153,30 @@ describe("plan limit", () => {
     await restarted.shutdown();
   });
 
+  test("a run parked on a limit resumes on its own after a hard restart once the reset passes", async () => {
+    // Arrange — the reset timer is durable state, not a timer in the process that died.
+    const project = await addTestProject(ctx.registry, "limit-restart-timeout");
+    ctx.engine.anticipate({ as: "Agent" }).hitsLimit(SHORT_LIMIT);
+    const run = await startRun(
+      ctx.app,
+      { pipelineId: "solo", task: TASK, engine: "claude-code" },
+      project.headers,
+    );
+    await waitForStageStatus(ctx.app, run.id, "solo", "blocked");
+    await ctx.orchestrator.shutdown();
+    ctx.engine.anticipate({ as: "Agent after the reset" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const restarted = await restartApp();
+
+    // Assert
+    const finished = await waitForRunStatus(restarted.app, run.id, "completed");
+    expect(finished.stageOutputs?.solo).toBe(DEV_REPORT);
+    ctx.engine.verify();
+    await restarted.shutdown();
+  });
+
   test("the run resumes on its own once the parsed reset time passes", async () => {
     // Arrange
     const project = await addTestProject(ctx.registry, "limit-timeout");

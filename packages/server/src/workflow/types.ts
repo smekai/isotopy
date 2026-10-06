@@ -43,6 +43,12 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
+export interface StageWorkContext {
+  runId: string;
+  task?: string;
+  permissionMode: EnginePermissionMode;
+}
+
 export type { StageOutcome } from "@isotopy/core";
 
 export interface StageResult {
