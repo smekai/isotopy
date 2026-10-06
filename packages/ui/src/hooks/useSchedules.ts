@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { CreateScheduleInput, ScheduleView, UpdateScheduleInput } from "@isotopy/core";
-import { SCHEDULE_TICK_MS } from "@isotopy/core";
+import { SCHEDULE_REFRESH_MS } from "@isotopy/core";
 import { createSchedule, deleteSchedule, fetchSchedules, updateSchedule } from "../api";
 import { messageOf, useProjectCollection } from "./useProjectCollection";
 
@@ -22,7 +22,7 @@ export function useSchedules(projectId: string, enabled: boolean): SchedulesCont
     enabled,
     load: fetchSchedules,
     failure: "Failed to load schedules",
-    refreshMs: SCHEDULE_TICK_MS,
+    refreshMs: SCHEDULE_REFRESH_MS,
   });
   const { items: schedules, setItems, setError } = collection;
 

@@ -45,16 +45,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/scheduler:
-    dependencies:
-      croner:
-        specifier: ^10.0.1
-        version: 10.0.1
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
-
   packages/server:
     dependencies:
       '@aikirun/client':
@@ -78,15 +68,15 @@ importers:
       '@isotopy/core':
         specifier: workspace:*
         version: link:../core
-      '@isotopy/scheduler':
-        specifier: workspace:*
-        version: link:../scheduler
       '@libsql/client':
         specifier: ^0.18.0
         version: 0.18.0
       '@smekai/taskplanner':
         specifier: 2.4.7
         version: 2.4.7
+      cron-parser:
+        specifier: ^5.10.1
+        version: 5.10.1
       hono:
         specifier: ^4.7.6
         version: 4.12.28
@@ -1255,10 +1245,6 @@ packages:
   cron-parser@5.10.1:
     resolution: {integrity: sha512-pKRrRagItwk9rGIStcUyMxFX34x56zoX3KDf9HJ4ttwkXIK1qxK63EvXvEDmlxI9AdPJ+Y7TEKRftRlW5eSS7A==}
     engines: {node: '>=18'}
-
-  croner@10.0.1:
-    resolution: {integrity: sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g==}
-    engines: {node: '>=18.0'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -3235,8 +3221,6 @@ snapshots:
   cron-parser@5.10.1:
     dependencies:
       luxon: 3.7.2
-
-  croner@10.0.1: {}
 
   cross-spawn@7.0.6:
     dependencies:

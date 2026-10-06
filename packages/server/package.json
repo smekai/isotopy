@@ -1,6 +1,6 @@
 {
   "name": "@isotopy/server",
-  "version": "0.12.69",
+  "version": "0.12.70",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,9 +17,9 @@
     "@aikirun/workflow": "0.43.2",
     "@hono/node-server": "^1.14.1",
     "@isotopy/core": "workspace:*",
-    "@isotopy/scheduler": "workspace:*",
     "@libsql/client": "^0.18.0",
     "@smekai/taskplanner": "2.4.7",
+    "cron-parser": "^5.10.1",
     "hono": "^4.7.6",
     "pino": "^10.4.0",
     "pino-pretty": "^13.1.3",

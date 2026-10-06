@@ -123,7 +123,7 @@ export class RunService implements RunProjection {
   private shuttingDown = false;
   private readonly changes: RunChangeCollector;
   private readonly logger: Logger;
-  private readonly runtimes: WorkflowRuntimeRegistry;
+  readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
   private readonly listeners = new ListenerRegistry<RunEvent>();
   private readonly projectListeners = new ListenerRegistry<RunSummary>();

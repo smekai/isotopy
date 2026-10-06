@@ -3,7 +3,7 @@ import { orchestratorTeamProposalSchema } from "./orchestration.ts";
 import type { OrchestratorTeamProposal } from "./orchestration.ts";
 import { requiredText, timestamp } from "./schema.ts";
 
-export const SCHEDULE_TICK_MS = 30_000;
+export const SCHEDULE_REFRESH_MS = 30_000;
 
 export const SCHEDULE_SKIP_REASONS = ["run_active", "orchestrator_busy"] as const;
 
@@ -32,7 +32,6 @@ export const scheduleSchema = z
     team: orchestratorTeamProposalSchema.optional(),
     builtIn: requiredText.optional(),
     enabled: z.boolean(),
-    lastWindowAt: timestamp.optional(),
     lastFiredAt: timestamp.optional(),
     lastOutcome: scheduleOutcomeSchema.optional(),
     createdAt: timestamp,
@@ -79,8 +78,3 @@ export function schedulePinsTeam(
 ): schedule is Schedule & { team: OrchestratorTeamProposal } {
   return schedule.team !== undefined;
 }
-
-export function scheduleAnchor(schedule: Schedule): string {
-  return schedule.lastWindowAt ?? schedule.createdAt;
-}
-

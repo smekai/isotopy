@@ -5,7 +5,7 @@
 // keeps a rejected expression on screen and one that silently discards it.
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { SCHEDULE_TICK_MS } from "@isotopy/core";
+import { SCHEDULE_REFRESH_MS } from "@isotopy/core";
 import {
   createSchedule,
   deleteSchedule,
@@ -58,7 +58,7 @@ test("asks again on the ticker's cadence, because a fire nothing else can announ
 
   // Act
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(SCHEDULE_TICK_MS);
+    await vi.advanceTimersByTimeAsync(SCHEDULE_REFRESH_MS);
   });
 
   // Assert

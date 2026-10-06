@@ -97,7 +97,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/{core,scheduler,server}/src/**/*.ts"],
+    files: ["packages/{core,server}/src/**/*.ts"],
     rules: {
       "no-empty": ["error", { allowEmptyCatch: false }],
     },

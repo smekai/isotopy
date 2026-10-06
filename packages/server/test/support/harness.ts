@@ -241,7 +241,6 @@ export async function restartApp(): Promise<RestartedApp> {
     schedules,
     logger,
     shutdown: async () => {
-      schedules.stop();
       await product.shutdown();
       await orchestrator.shutdown();
       await databases.settleAll();

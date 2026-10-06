@@ -1,13 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Schedule, ScheduleOutcome, ScheduleView, RunState } from "@isotopy/core";
-import {
-  SCHEDULE_TICK_MS,
-  isTerminalRunStatus,
-  scheduleIsBuiltIn,
-  scheduleSchema,
-  schedulePinsTeam,
-} from "@isotopy/core";
-import { Ticker, claimWindow } from "@isotopy/scheduler";
+import { isTerminalRunStatus, scheduleIsBuiltIn, schedulePinsTeam } from "@isotopy/core";
 import type {
   CreateScheduleInput,
   ScheduleSkipReason,
@@ -17,24 +10,21 @@ import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { BUILT_IN_SCHEDULES } from "../domain/rules/built-in-schedules.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
-import { nextFireForSchedule, scheduleIsDue } from "../domain/rules/schedule-timing.ts";
+import { nextFireForSchedule, scheduleActivationId } from "../domain/rules/schedule-timing.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
+import { persistedScheduleSchema } from "../schemas/schedule-persistence.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
+import type { ScheduleActivation, ScheduleFiring } from "../workflow/schedule-workflow.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { RunService } from "./run/run-service.ts";
-
-export interface ScheduleTick {
-  scheduleId: string;
-  outcome: ScheduleOutcome;
-}
 
 export class ScheduleInvalidError extends Error {
   constructor(readonly issues: ValidationIssue[]) {
@@ -46,21 +36,19 @@ function isRunActive(run: RunState): boolean {
   return !isTerminalRunStatus(run.status);
 }
 
-function resumedFromPause(current: Schedule, patch: UpdateScheduleInput): boolean {
-  return patch.enabled === true && !current.enabled;
+function activationOf(schedule: Schedule): ScheduleActivation {
+  return {
+    activationId: scheduleActivationId(schedule),
+    scheduleId: schedule.id,
+    cron: schedule.cron,
+    timezone: schedule.timezone,
+  };
 }
 
-export class ScheduleService {
+export class ScheduleService implements ScheduleFiring {
   private readonly repositories = new Map<string, JsonRecordRepository<Schedule>>();
   private readonly schedules = new Map<string, Schedule>();
   private readonly logger: Logger;
-  private readonly ticker = new Ticker(
-    SCHEDULE_TICK_MS,
-    () => this.tick(),
-    (error: unknown) => {
-      this.logger.error("Schedule tick failed", { error });
-    },
-  );
 
   constructor(
     private readonly registry: ProjectRegistry,
@@ -71,6 +59,7 @@ export class ScheduleService {
     logger: Logger,
   ) {
     this.logger = logger.child("ScheduleService");
+    runs.runtimes.registerScheduleFiring(this);
   }
 
   async init(): Promise<void> {
@@ -85,6 +74,7 @@ export class ScheduleService {
       this.schedules.set(schedule.id, schedule);
     }
     await this.seedBuiltIns(projectPath);
+    await this.reconcile(projectPath);
   }
 
   private async seedBuiltIns(projectPath: ProjectPath): Promise<void> {
@@ -114,14 +104,6 @@ export class ScheduleService {
     return [...this.schedules.values()].find(
       (schedule) => schedule.projectId === projectId && schedule.builtIn === key,
     );
-  }
-
-  start(): void {
-    this.ticker.start();
-  }
-
-  stop(): void {
-    this.ticker.stop();
   }
 
   listSchedules(projectId: string): ScheduleView[] {
@@ -161,35 +143,43 @@ export class ScheduleService {
     projectId?: string,
   ): Promise<ScheduleView> {
     const current = this.requireSchedule(scheduleId, projectId);
-    const now = nowIso();
-    const merged: Schedule = { ...current, ...patch, updatedAt: now };
-    if (resumedFromPause(current, patch)) {
-      merged.lastWindowAt = now;
-    }
+    const merged: Schedule = { ...current, ...patch, updatedAt: nowIso() };
     return this.store(this.registry.resolve(current.projectId), merged);
   }
 
   async deleteSchedule(scheduleId: string, projectId?: string): Promise<void> {
     const schedule = this.requireSchedule(scheduleId, projectId);
+    const projectPath = this.registry.resolve(schedule.projectId);
     this.schedules.delete(scheduleId);
-    await this.repositoryFor(this.registry.resolve(schedule.projectId)).remove(scheduleId);
+    await this.repositoryFor(projectPath).remove(scheduleId);
+    await this.reconcile(projectPath);
   }
 
-  async tick(now = nowIso()): Promise<ScheduleTick[]> {
-    const ticks: ScheduleTick[] = [];
-    for (const schedule of this.dueSchedules(now)) {
-      ticks.push({ scheduleId: schedule.id, outcome: await this.fire(schedule, now) });
+  async fire(scheduleId: string): Promise<ScheduleOutcome | undefined> {
+    const schedule = this.schedules.get(scheduleId);
+    if (!schedule || !this.fireable(schedule)) {
+      return undefined;
     }
-    return ticks;
+    schedule.lastOutcome = await this.attemptRun(schedule, nowIso());
+    await this.persist(schedule).catch((error: unknown) => {
+      this.logger.error(`Failed to record the outcome of schedule ${schedule.id}`, { error });
+    });
+    return schedule.lastOutcome;
   }
 
-  private dueSchedules(now: string): Schedule[] {
-    return [...this.schedules.values()].filter(
-      (schedule) =>
-        this.registry.find(schedule.projectId) !== undefined &&
-        this.builtInAllowed(schedule) &&
-        scheduleIsDue(schedule, now),
+  private fireable(schedule: Schedule): boolean {
+    return (
+      schedule.enabled &&
+      this.registry.find(schedule.projectId) !== undefined &&
+      this.builtInAllowed(schedule)
     );
+  }
+
+  private async reconcile(projectPath: ProjectPath): Promise<void> {
+    const wanted = [...this.schedules.values()]
+      .filter((schedule) => schedule.projectId === projectPath.id && schedule.enabled)
+      .map(activationOf);
+    await this.runs.runtimes.for(projectPath).reconcileSchedules(wanted);
   }
 
   private builtInAllowed(schedule: Schedule): boolean {
@@ -206,28 +196,6 @@ export class ScheduleService {
       }
     }
     this.repositories.delete(projectId);
-  }
-
-  private async fire(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
-    const claimed = await this.claimWindow(schedule, now);
-    if (claimed !== undefined) {
-      schedule.lastOutcome = claimed;
-      this.logger.error(`Schedule ${schedule.id} could not claim its window`, { outcome: claimed });
-      return claimed;
-    }
-    schedule.lastOutcome = await this.attemptRun(schedule, now);
-    await this.persist(schedule).catch((error: unknown) => {
-      this.logger.error(`Failed to record the outcome of schedule ${schedule.id}`, { error });
-    });
-    return schedule.lastOutcome;
-  }
-
-  private async claimWindow(
-    schedule: Schedule,
-    now: string,
-  ): Promise<ScheduleOutcome | undefined> {
-    const claim = await claimWindow(schedule, now, (record) => this.persist(record));
-    return claim.ok ? undefined : { kind: "failed", error: messageOf(claim.error) };
   }
 
   private async attemptRun(schedule: Schedule, now: string): Promise<ScheduleOutcome> {
@@ -281,6 +249,7 @@ export class ScheduleService {
     }
     this.schedules.set(schedule.id, schedule);
     await this.repositoryFor(projectPath).write(schedule);
+    await this.reconcile(projectPath);
     return this.viewOf(schedule);
   }
 
@@ -292,7 +261,7 @@ export class ScheduleService {
     const blocked = this.builtInAllowed(schedule) ? undefined : "built_ins_disabled";
     return {
       ...structuredClone(schedule),
-      nextFireAt: blocked === undefined ? nextFireForSchedule(schedule) : undefined,
+      nextFireAt: blocked === undefined ? nextFireForSchedule(schedule, nowIso()) : undefined,
       blockedBy: blocked,
     };
   }
@@ -321,7 +290,7 @@ export class ScheduleService {
         new JsonRecordRepository(
           this.databases.for(projectPath),
           SCHEDULES_TABLE,
-          scheduleSchema,
+          persistedScheduleSchema,
           "schedule",
           this.logger,
         ),

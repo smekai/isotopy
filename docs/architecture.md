@@ -664,18 +664,19 @@ worker, admission lane, or direct-user fallback when the invariant is broken.
 A **schedule** is a recurring task with a fixed team. The Orchestrator is an episode
 handler, not a long-lived supervisor: `terminate()` is one-way, and `ensureActive`
 then builds a fresh `Orchestration` for the next episode. What carries intent across
-that gap is not the aggregate but the schedule — a persisted record plus a ticker.
+that gap is not the aggregate but the schedule — a persisted record plus an Aiki cron
+activation derived from it.
 
 | Layer | Where |
 | --- | --- |
-| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `scheduleAnchor`, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
-| Mechanism | `@isotopy/scheduler` — given a cron, a timezone, the window last consumed and a now, what is due and how to claim it durably. Knows nothing about runs, teams or the Orchestrator; `croner` lives here |
-| Timing | `server/src/domain/rules/schedule-timing.ts` — composes the package's answer with the record. `nextFireForSchedule` is what the API sends, so the UI never parses an expression |
+| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
+| Clock | Aiki — each enabled schedule is a cron activation on its project's runtime (`WorkflowRuntime.reconcileSchedules`), firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
+| Timing | `server/src/domain/rules/schedule-timing.ts` over `utils/recurrence.ts` — validation and `nextFireForSchedule` with `cron-parser`, the parser Aiki fires with, so the preview and the clock cannot disagree. The API sends the next fire, so the UI never parses an expression |
 | Built-ins | `server/src/domain/rules/built-in-schedules.ts` — an `as const` catalog seeded per project, every entry disabled. The board poller is its only entry today |
 | Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming a persona that does not exist are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
 | Boundary schema | `server/src/schemas/schedule.ts` — shape only. Validity is checked on the **merged** record, because a patch carrying a cron and no timezone cannot be judged alone |
-| Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE` |
-| Lifecycle | `ScheduleService` — the single writer, and the owner of the one interval that ticks |
+| Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE`, parsed by `schemas/schedule-persistence.ts` |
+| Lifecycle | `ScheduleService` — the single writer of the record, and the one that reconciles its project's activations after every change |
 | API | `server/src/routes/schedules.ts` — CRUD plus enable/disable. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 | UI | a rail section plus `#/schedules/:id` → `ScheduleDashboard`, fed by `useSchedules` |
 
@@ -690,14 +691,25 @@ outlives every orchestration it starts. The proposal is validated when saved and
 composed at fire time against that episode's fresh id.
 
 **Firing is a check, not a catch.** `admitRun` already refuses a second concurrent run
-per project, so a due schedule that finds one active records a skip and waits for its
-next window rather than starting a run it expects to be refused.
+per project, so a fired schedule that finds one active records a skip and waits for its
+next window rather than starting a run it expects to be refused. `fire` also re-checks
+that the record is still enabled, still in a registered project and, for a built-in,
+allowed by the project's gate — the activation is the clock, the record is the rule.
 
-**Catch up, never backfill.** The window is consumed whatever it produced, so a
-machine asleep for three days owes one run rather than three. Crash safety comes from
-the record: the expression plus the last window consumed recompute due-ness after any
-restart, with no runtime involvement. Cron is parsed in-process — never `cron`, never
-`schtasks`, never a second process.
+**The record is the source of truth; the activation is derived.** Aiki never writes a
+schedule. Its activation's reference id is the schedule id plus `updatedAt`, and
+`reconcileSchedules` deactivates every activation of the project that no enabled record
+names, then activates the ones that are named (idempotently). The id carries
+`updatedAt` because of how Aiki catches up.
+
+**Catch up, never backfill.** With the skip-overlap policy, Aiki fires *one* run for
+every window an activation missed — while the machine slept, or the server was down —
+so three days asleep owe one run rather than three, and that crash safety now lives in
+Aiki's database. But Aiki also owes that one run to an activation that is paused and
+resumed, or deactivated and reactivated. A schedule switched off and on again owes
+nothing, so re-enabling it, or editing it, gives it a new `updatedAt` and therefore a
+fresh activation with no missed window behind it. Cron is parsed in-process — never
+`cron`, never `schtasks`, never a second process.
 
 ### 3. Workflow state
 

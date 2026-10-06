@@ -6,6 +6,7 @@ import { database, migrateApply, server } from "@aikirun/server";
 import type { DatabaseConfig, ServerRuntimeConfigOverrides, ServerRuntimeHandle } from "@aikirun/server";
 import { worker } from "@aikirun/worker";
 import type { WorkerConfigOverrides, WorkerHandle } from "@aikirun/worker";
+import { schedule as aikiSchedule } from "@aikirun/workflow";
 import type { WorkflowRunStatus } from "@aikirun/workflow";
 import type { LimitChoice } from "@isotopy/core";
 import { ensureProjectDataDir } from "../paths.ts";
@@ -17,6 +18,8 @@ import type { Logger } from "../utils/logger.ts";
 import { AikiLoggerAdapter } from "./aiki-logger-adapter.ts";
 import { createPipelineWorkflow } from "./pipeline-workflow.ts";
 import type { PipelineRunHandle, PipelineWorkflow } from "./pipeline-workflow.ts";
+import { SCHEDULE_WORKFLOW_NAME, createScheduleWorkflow } from "./schedule-workflow.ts";
+import type { ScheduleActivation, ScheduleFiring, ScheduleWorkflow } from "./schedule-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
 
 const WORKFLOW_DB_FILE = "aiki.db";
@@ -27,6 +30,8 @@ const SERVER_RUNTIME_CONFIG: ServerRuntimeConfigOverrides = {
     recoverOverdueOutboxEntries: { intervalMs: 1_000, claimIdleTimeoutMs: 6_000 },
   },
 };
+
+const SCHEDULE_LIST_LIMIT = 1_000;
 
 const WORKER_CONFIG: WorkerConfigOverrides = {
   maxConcurrentWorkflowRuns: 1,
@@ -58,6 +63,11 @@ function durableRunState(status: WorkflowRunStatus): DurableRunState {
   }
 }
 
+export interface DurableWorkflows {
+  pipeline: PipelineWorkflow;
+  schedule: ScheduleWorkflow;
+}
+
 interface EmbeddedAiki {
   client: Client<null>;
   close(): Promise<void>;
@@ -65,7 +75,7 @@ interface EmbeddedAiki {
 
 async function openEmbeddedAiki(
   config: DatabaseConfig,
-  workflow: PipelineWorkflow,
+  workflows: DurableWorkflows,
   logger: AikiLoggerAdapter,
 ): Promise<EmbeddedAiki> {
   await migrateApply({ db: config });
@@ -79,15 +89,15 @@ async function openEmbeddedAiki(
   });
   const runtime: ServerRuntimeHandle = aiki.runtime.start();
   const aikiClient = client({ handler: aiki.handler, logger });
-  const workerHandle: WorkerHandle = worker({
-    workflows: [workflow],
-    subscriber: queue.subscriber,
-    config: WORKER_CONFIG,
-  }).start(aikiClient);
+  const workers: WorkerHandle[] = [workflows.pipeline, workflows.schedule].map((workflow) =>
+    worker({ workflows: [workflow], subscriber: queue.subscriber, config: WORKER_CONFIG }).start(
+      aikiClient,
+    ),
+  );
   return {
     client: aikiClient,
     async close() {
-      await workerHandle.stop();
+      await Promise.all(workers.map((workerHandle) => workerHandle.stop()));
       await runtime.stop();
       await db.close();
     },
@@ -100,7 +110,7 @@ export class WorkflowRuntime {
 
   constructor(
     private readonly projectPath: ProjectPath,
-    private readonly workflow: PipelineWorkflow,
+    private readonly workflows: DurableWorkflows,
     private readonly aikiLogger: AikiLoggerAdapter,
     private readonly logger: Logger,
   ) {}
@@ -117,7 +127,7 @@ export class WorkflowRuntime {
     await ensureProjectDataDir(this.projectPath);
     const dbPath = path.join(this.projectPath.dataDir, WORKFLOW_DB_FILE);
     try {
-      return await openEmbeddedAiki({ provider: "sqlite", path: dbPath }, this.workflow, this.aikiLogger);
+      return await openEmbeddedAiki({ provider: "sqlite", path: dbPath }, this.workflows, this.aikiLogger);
     } catch (error) {
       throw new Error(
         `The durable runtime could not open ${dbPath} on ${process.platform}-${process.arch}: ${messageOf(error)}`,
@@ -132,7 +142,7 @@ export class WorkflowRuntime {
 
   async startRun(input: PipelineWorkflowInput): Promise<string> {
     const { client: aikiClient } = await this.ensure();
-    const handle = await this.workflow.start(aikiClient, input);
+    const handle = await this.workflows.pipeline.start(aikiClient, input);
     return handle.run.id;
   }
 
@@ -173,7 +183,36 @@ export class WorkflowRuntime {
 
   private async handle(durableRunId: string): Promise<PipelineRunHandle> {
     const { client: aikiClient } = await this.ensure();
-    return this.workflow.getHandleById(aikiClient, durableRunId);
+    return this.workflows.pipeline.getHandleById(aikiClient, durableRunId);
+  }
+
+  async reconcileSchedules(wanted: ScheduleActivation[]): Promise<void> {
+    if (wanted.length === 0 && !this.embedded) {
+      return;
+    }
+    const { client: aikiClient } = await this.ensure();
+    const wantedIds = new Set(wanted.map((activation) => activation.activationId));
+    const { schedules } = await aikiClient.api.schedule.listV1({
+      limit: SCHEDULE_LIST_LIMIT,
+      filters: {
+        status: ["active", "paused"],
+        workflows: [{ name: SCHEDULE_WORKFLOW_NAME, source: "user" }],
+      },
+    });
+    const unwanted = schedules.filter(({ schedule }) => !wantedIds.has(schedule.referenceId ?? ""));
+    for (const { schedule } of unwanted) {
+      await aikiClient.api.schedule.deactivateV1({ id: schedule.id });
+    }
+    for (const activation of wanted) {
+      await aikiSchedule({
+        type: "cron",
+        expression: activation.cron,
+        timezone: activation.timezone,
+        overlapPolicy: "skip",
+      })
+        .with("reference.id", activation.activationId)
+        .activate(aikiClient, this.workflows.schedule, { scheduleId: activation.scheduleId });
+    }
   }
 
   async stop(): Promise<void> {
@@ -188,16 +227,20 @@ export class WorkflowRuntime {
 
 export class WorkflowRuntimeRegistry {
   private readonly runtimes = new Map<string, WorkflowRuntime>();
-  private readonly workflow: PipelineWorkflow;
+  private readonly workflows: DurableWorkflows;
   private readonly aikiLogger: AikiLoggerAdapter;
   private readonly logger: Logger;
+  private firing?: ScheduleFiring;
 
   constructor(
     deps: WorkflowDeps,
     private readonly registry: ProjectRegistry,
     logger: Logger,
   ) {
-    this.workflow = createPipelineWorkflow(deps);
+    this.workflows = {
+      pipeline: createPipelineWorkflow(deps),
+      schedule: createScheduleWorkflow(() => this.firing),
+    };
     this.logger = logger.child("WorkflowRuntime");
     this.aikiLogger = new AikiLoggerAdapter(logger.child("Aiki"));
   }
@@ -206,8 +249,12 @@ export class WorkflowRuntimeRegistry {
     return getOrCreate(
       this.runtimes,
       projectPath.id,
-      () => new WorkflowRuntime(projectPath, this.workflow, this.aikiLogger, this.logger),
+      () => new WorkflowRuntime(projectPath, this.workflows, this.aikiLogger, this.logger),
     );
+  }
+
+  registerScheduleFiring(firing: ScheduleFiring): void {
+    this.firing = firing;
   }
 
   forProject(projectId: string): WorkflowRuntime {
