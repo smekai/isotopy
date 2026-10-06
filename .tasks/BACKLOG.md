@@ -1,5 +1,43 @@
 # Backlog
 
+## TASK-193: Upstream the Aiki gaps TASK-069 found
+**Priority:** P2 | **Tags:** infra, engine
+**Updated:** 2026-10-06 18:30
+
+TASK-069 moved Isotopy onto Aiki 0.43.2. The Phase 0 spike and the port found gaps that belong in Aiki, which the owner contributes to, not in workarounds here. Each one becomes an upstream issue or PR in `aikirun/aiki`; Isotopy bumps its pinned `@aikirun/*` version once it lands.
+
+1. **Windows CI.** Aiki's CI runs on ubuntu only, and its binary ships for darwin-arm64 and linux only. Isotopy embeds it on Windows and macOS, so a Windows (and macOS) job in Aiki's CI is the guard Isotopy relies on.
+2. **The SQLite file stays locked after `close()` on Windows** until garbage collection. Raw `@libsql/client` reproduces it with create, insert and select followed by `close()`. Likely a libsql-js statement keeping the connection alive. Report to libsql, and make Aiki's sqlite provider finalize what it holds.
+3. **`migrateApply` logs with `console.log`** ("applying migration …"). Every new project prints three lines to the server console. It should take a logger, like `server()` does.
+4. **An invalid cron expression returns a 500.** The server logs "Request error occurred {err:{}}" rather than a validation error naming the expression. Isotopy validates first with `cron-parser`, but other callers get nothing useful.
+5. **Embedded single-owner boot.** With one process per SQLite file, a claim held at the last crash and a run published but never claimed can be released at `runtime.start()`, instead of waiting out `claimIdleTimeoutMs` (90 s by default) and the publish lease. Isotopy tunes both down in `workflow-runtime.ts`; an `exclusive` option would let it stop.
+
+Cross-platform: items 1 and 2 are the platform work, Windows first.
+
+---
+## TASK-192: A limit resolved as its reset fires cannot release a later park
+**Priority:** P3 | **Tags:** server, engine
+**Updated:** 2026-10-06 18:30
+
+Found in TASK-069. Limit choices are Aiki events, and an event sent before a run waits is held in the mailbox until the next wait for that event. The race goes like this:
+1. A stage is parked on a plan limit.
+2. The user resolves the limit at the instant its reset timer fires.
+3. The workflow takes the timeout and resumes.
+4. The user's `limit` event stays in the mailbox.
+5. The next time the same stage parks on a limit, it takes that stale choice at once and retries, instead of waiting for the reset or a new click.
+
+`resolveLimit` already refuses a stage that is not `blocked`, so the window is the few milliseconds between the timer firing and `limitResolved` projecting. Each send dedupes on `limit:<stageId>:<detectedAt>`.
+
+**Fix:**
+- Give each park an id: `RunLimit.parkId`, set by `stageBlocked`.
+- Echo it in the `limit` event.
+- `awaitStageEventUntil` drops an event whose `parkId` is not the current park, the way it already drops one for another stage.
+
+**Evidence:** a comp test that sends a limit event for an earlier park and proves the current park still waits.
+
+Cross-platform: n/a, pure logic.
+
+---
 ## TASK-190: The spend of an engine attempt that was killed mid-stage disappears from the run's cost
 **Priority:** P3 | **Tags:** server, engine
 **Updated:** 2026-10-04 19:40
@@ -299,64 +337,62 @@ resolves the persona into the proposal.
 ---
 ## TASK-175: Isotopy raises its own events, and a long-running workflow awaits them
 **Priority:** P2 | **Tags:** server, core, engine
-**Updated:** 2026-09-24 17:07
+**Updated:** 2026-10-06 18:30
 
-The durable runtime can already park a workflow until a named signal arrives, and resume it after
-a restart. Isotopy uses that three times: `gateSignal`, `answerSignal` and `limitSignal` in
-`workflow/pipeline-workflow.ts`, sent by `WorkflowRuntime.approveGate` / `answerQuestion` /
-`resolveLimit`. **Every one of them is sent because a person clicked something.** The code never
-sends a signal on its own behalf. So long-running work that depends on something *Isotopy itself*
-does has only three options: finish and hope a later tick notices, poll inline, or be chained by
-hand through a settle callback.
+**Rescoped 2026-10-06, after TASK-069 moved the runtime to Aiki.** Half of this task now comes with
+the runtime.
+- `workflow/pipeline-events.ts` is a catalogue of typed workflow events (`gate`, `answer`, `limit`).
+- Each event has a strict zod schema, which Aiki validates at the sender.
+- An event sent before the run waits is held in a durable mailbox, not dropped.
+- A reference id makes a repeated send idempotent.
+
+What is still missing is the reason this task was raised. **Every event is still sent because a
+person clicked something.** Isotopy never raises one on its own behalf, so long-running work that
+depends on something Isotopy itself does can only:
+- finish and hope a later fire notices;
+- poll inline; or
+- be chained by hand through a settle callback.
 
 **Raised 2026-09-24** by the product owner while reviewing Cursor Projects
 (`docs/competitor-matrix.md` §6). This does not reverse the cron decision in `TASK-156`. **Cron
-remains the only thing that starts work from outside.** An internal event only *resumes* a
-workflow that is already waiting, and Isotopy's own code is the only thing that raises one.
+remains the only thing that starts work from outside.** An internal event only *resumes* a workflow
+that is already waiting, and Isotopy's own code is the only thing that raises one.
 
 ### What to build
 
-- **One event catalogue.** Event names come from a single exported `as const` tuple, and the union
-  type is derived from it. Each event has a strict payload schema, parsed at the workflow boundary
-  when the signal is delivered, as the runtime-validation rule requires. The three existing
-  signals move into the same catalogue as its first entries.
 - **A raising seam for services.** An interface in its own file, e.g. `WorkflowEvents.raise(event)`,
-  that services receive rather than import. `WorkflowRuntime` implements it with `sendSignal`.
-  Domain code decides *that* an event happened. Only the seam knows how it is delivered.
-- **An awaiting helper for workflow code.** A `waitForEvent` step wrapper that takes the event
-  name, its scope (run, stage, task) and a **mandatory timeout**, and returns the parsed payload or
-  a timeout. The timeout is not optional: a wait that never ends is how a run silently stops.
-- **Deterministic names.** A signal name is built from the event name and its scope, as
-  `gateSignal(runId, stageId)` is today. Raising the same event twice is idempotent, and raising it
-  before anyone waits is not lost. Check both against OpenWorkflow's delivery semantics in the plan
-  and record the answer in `docs/implementation-notes.md`.
+  that services receive rather than import. `WorkflowRuntime` implements it with the Aiki event
+  sender, scoped by run and reference id. Domain code decides *that* an event happened. Only the seam
+  knows how it is delivered.
+- **The new events join `PIPELINE_EVENTS`**, each with a strict schema and a scope field that the
+  wait filters on, the way `awaitStageEvent` filters on `stageId` today.
+- **A mandatory timeout.** Waiting for an internal event always has one, built on
+  `awaitStageEventUntil`, and the timeout ends the stage with a named reason. A wait that never ends
+  is how a run silently stops.
 
 ### Candidate first consumers. The plan picks one and proves the seam on it
 
 - **The product is ready.** A stage that needs the running product (QA, preview) awaits a
-  `product-ready` event raised by the preview service once its health check passes, instead of
-  checking health inline.
+  `product-ready` event, raised by the preview service once its health check passes.
 - **A task is Done.** Work that depends on another task awaits `task-done`, raised when a closeout
-  moves a task (`TASK-172` makes that move actually happen).
-- **A run settled.** A run started behind another one awaits `run-settled` for it, rather than the
-  schedule skipping with `run_active` and trying again on the next tick.
+  moves a task (`TASK-172`).
+- **A run settled.** A run started behind another awaits `run-settled` for it, rather than the
+  schedule skipping with `run_active`.
 
 ### The constraint to design around
 
-Waiting costs the runtime nothing: OpenWorkflow 0.9.2 parks a waiting run and frees the worker, and
-`sendSignal` wakes it immediately (see the 2026-08-24 entry in `docs/decisions.md`, corrected in
-this change). **The cost is in our own rule.** `ScheduleService.skipReasonFor` counts every
-non-terminal run as busy (`isRunActive`), so a run parked on an event blocks every schedule in the
-project. A run waiting on an event needs a status that says so, and the plan decides whether that
-status counts as busy.
+Waiting costs the runtime nothing: an Aiki run parked on an event frees its worker, and the event
+resumes it within milliseconds. **The cost is in our own rule.** `ScheduleService.skipReasonFor`
+counts every non-terminal run as busy, so a run parked on an event blocks every schedule in the
+project. A run waiting on an internal event needs a status that says so, and the plan decides
+whether that status counts as busy.
 
-**Evidence:** a spec for the catalogue (a payload that fails its schema is refused, not coerced),
-and a comp test of the chosen consumer: the workflow parks, the service raises the event, the stage
-resumes with the payload. The same test with the server restarted while parked, and a timeout
-path that ends the stage with a named reason.
+**Evidence:** a comp test of the chosen consumer. The workflow parks, the service raises the event,
+and the stage resumes with the payload. The same test runs with the server restarted while parked,
+and with a timeout that ends the stage with a named reason.
 
-Cross-platform: n/a — pure logic. Signals go through the SQLite backend that runs already use. No
-process, path or shell surface is touched.
+Cross-platform: n/a, pure logic. Events go through the per-project Aiki SQLite file that runs
+already use. No process, path or shell surface is touched.
 
 ---
 ## TASK-174: A schedule earns its way out of the human gate, and loses it on the first failure
