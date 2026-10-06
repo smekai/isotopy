@@ -248,10 +248,6 @@ async function resolveSpecialistQuestion(
           "Nobody answered the mediated question",
         );
   }
-  await step.run({ name: turnStepName(ctx, "question:routing") }, () => {
-    deps.projection.stageAnswered(input.runId, stageDef.id);
-    return null;
-  });
   const routed = await mediateQuestion(
     ctx,
     { ...request, phase: "user_answer", userAnswer },
@@ -430,10 +426,6 @@ async function runOneStage(
   }
 
   await step.run({ name: `${stageDef.id}:gate:awaiting` }, () => {
-    deps.projection.log(runId, stageDef.id, {
-      level: "warn",
-      message: `${agentForStage(stageDef).profession} is waiting for your approval`,
-      });
     deps.projection.stageAwaiting(runId, stageDef.id);
     return null;
   });
@@ -452,11 +444,6 @@ async function runOneStage(
     });
     return STAGE_OUTCOMES.FAILED;
   }
-
-  await step.run({ name: `${stageDef.id}:gate:approved` }, () => {
-    deps.projection.gateApproved(runId, stageDef.id);
-    return null;
-  });
   return STAGE_OUTCOMES.PASSED;
 }
 

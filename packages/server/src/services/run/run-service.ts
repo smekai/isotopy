@@ -506,6 +506,7 @@ export class RunService implements RunProjection {
       kind: "answer",
       text,
     });
+    this.stageAnswered(runId, asking.id);
     void this.runtimes.forProject(run.projectId).answerQuestion(runId, asking.id, text);
     return message;
   }
@@ -606,12 +607,11 @@ export class RunService implements RunProjection {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
     if (!run || !stage) return;
+    const message = `${agentForStage(stage).profession} is waiting for your approval`;
+    this.log(runId, stageId, { level: "warn", message });
     stage.status = "awaiting";
     run.status = "awaiting";
-    this.emit({
-      ts: nowIso(), type: "stage.awaiting", runId, stageId, status: "awaiting",
-      message: `${agentForStage(stage).profession} is waiting for your approval`,
-    });
+    this.emit({ ts: nowIso(), type: "stage.awaiting", runId, stageId, status: "awaiting", message });
   }
 
   stageAsking(runId: string, stageId: string, question: string): void {
@@ -708,7 +708,7 @@ export class RunService implements RunProjection {
     }
   }
 
-  gateApproved(runId: string, stageId: string): void {
+  private gateApproved(runId: string, stageId: string): void {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
     if (!run || !stage || stage.status !== "awaiting") return;

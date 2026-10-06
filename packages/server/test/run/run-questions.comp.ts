@@ -3,7 +3,7 @@
 // parks in `asking` (its own status, never the gate's `awaiting`), and the answer
 // resumes rather than re-running, which is what `resumeSessionId` proves.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { RunState } from "@isotopy/core";
+import type { RunMessage, RunState } from "@isotopy/core";
 import {
   createTestApp,
   get,
@@ -256,13 +256,54 @@ test("the run leaves asking as soon as the answer lands, not when the specialist
   await post(app, `/runs/${run.id}/messages`, { text: "SQLite" });
 
   // Assert — the composer must close while the Orchestrator routes, or a second
-  // message that arrives then is swallowed by a signal nothing is waiting on.
+  // message that arrives then is taken as the answer to a question nobody asked yet.
   const events = await stream.waitFor(
     (seen) => seen.some((event) => event.event === "run.completed"),
     "the run to finish",
   );
   expect(events.filter((event) => event.event === "stage.answered")).toHaveLength(2);
   await stream.close();
+  engine.verify();
+});
+
+test("a second message sent while the Orchestrator routes the first goes to the chat, not to the next question", async () => {
+  // Arrange
+  const { app, engine } = ctx;
+  engine.anticipate({ as: "opening turn" }).asks(QUESTION, SESSION);
+  engine
+    .anticipate({ as: "Orchestrator escalation", persona: /# Role: Orchestrator/ })
+    .parks(
+      fenced({
+        action: "escalate_to_user",
+        question: USER_QUESTION,
+        originStageId: "solo",
+      }),
+      "broker-session",
+    );
+  engine
+    .anticipate({ as: "Orchestrator routing", resumeSessionId: "broker-session" })
+    .reports(
+      fenced({
+        action: "route_to_agent",
+        stageId: "solo",
+        message: "Use SQLite.",
+        rationale: "The user selected it",
+      }),
+    );
+  engine.anticipate({ as: "resumed turn", resumeSessionId: SESSION }).reports(DONE);
+  engine.anticipateRunReview();
+  const run = await startRun(app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+  await waitForStageStatus(app, run.id, "solo", "asking");
+  await post(app, `/runs/${run.id}/messages`, { text: "SQLite" });
+
+  // Act
+  const second = await post<RunMessage>(app, `/runs/${run.id}/messages`, {
+    text: "and keep it in one file",
+  });
+
+  // Assert
+  expect(second.body.kind).toBeUndefined();
+  await waitForRunStatus(app, run.id, "completed");
   engine.verify();
 });
 
