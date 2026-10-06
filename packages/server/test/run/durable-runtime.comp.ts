@@ -100,6 +100,26 @@ describe("durable runtime", () => {
     ctx.engine.verify();
   });
 
+  test("a stage whose work throws fails once, without running its engine again, and the run settles as failed", async () => {
+    // Arrange — recording the stage's pass is the last thing its work does, so the
+    // engine call has already been paid for when it throws.
+    vi.spyOn(ctx.orchestrator, "stagePassed").mockImplementationOnce(() => {
+      throw new Error("the stage's output could not be recorded");
+    });
+
+    // Anticipate
+    ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+
+    // Assert
+    const finished = await waitForRunStatus(ctx.app, run.id, "failed");
+    expect(stageOf(finished, "solo").status).toBe("failed");
+    ctx.engine.verify();
+  });
+
   test("a project runs one at a time while another project runs concurrently (G2/S5)", async () => {
     // Arrange
     const a = await addTestProject(ctx.registry, "adm-a");

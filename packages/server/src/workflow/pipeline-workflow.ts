@@ -1,4 +1,4 @@
-import { workflow } from "@aikirun/workflow";
+import { TaskFailedError, workflow } from "@aikirun/workflow";
 import type { EventWaiter, WorkflowRun, WorkflowRunHandle, WorkflowVersion } from "@aikirun/workflow";
 import {
   ORCHESTRATION_PIPELINE,
@@ -375,12 +375,32 @@ async function runStageToOutcome(
   }
 }
 
+async function failStageOnTaskFailure(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+): Promise<StageOutcome> {
+  try {
+    return await runStageToOutcome(ctx, stageDef);
+  } catch (error) {
+    if (!(error instanceof TaskFailedError)) {
+      throw error;
+    }
+    await ctx.tasks.project.start(ctx.run, {
+      kind: "stageFailed",
+      runId: ctx.input.runId,
+      stageId: stageDef.id,
+      message: error.reason,
+    });
+    return STAGE_OUTCOMES.FAILED;
+  }
+}
+
 async function runOneStage(
   ctx: PipelineContext,
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
   const { run, tasks, deps, input } = ctx;
-  const outcome = await runStageToOutcome(ctx, stageDef);
+  const outcome = await failStageOnTaskFailure(ctx, stageDef);
   if (outcome !== STAGE_OUTCOMES.PASSED || !stageDef.gateAfter) {
     return outcome;
   }

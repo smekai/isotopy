@@ -578,6 +578,15 @@ recovery and cancellation state; `RunService` is the single writer of the
 arrives through the `isotopy.project` task so a replay never repeats one. Keep
 stage-execution logic inside `workflow/stage-execution.ts`.
 
+**A stage whose work throws fails that stage, once (`failStageOnTaskFailure`).**
+Stage work catches what it expects — an engine that crashes or limits comes back as
+an outcome. Anything else it throws fails the task, and a task's retry default is
+`never`, so the engine call it already paid for is not repeated. The workflow
+catches only Aiki's `TaskFailedError`, records the stage as failed with its reason,
+and carries on like any failed stage. Every other error is rethrown: Aiki suspends a
+waiting run and refuses a cancelled one by throwing, and swallowing those would
+break both.
+
 **Events are mailboxes, so a user action must change the read model when it is
 accepted (`approveGate`, `postMessage`, `resolveLimit`).** An event sent before the
 workflow waits is held, not dropped — OpenWorkflow dropped it, and a fast gate
