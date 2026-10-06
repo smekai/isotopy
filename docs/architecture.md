@@ -642,9 +642,9 @@ cannot rule out; by then they are unreachable.
 decision. The workflow executes the Orchestrator persona as
 a named durable step with the asking run's engine, model, permissions, workspace,
 limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
-same specialist CLI session. `escalate_to_user` uses the existing `asking` state and
-durable user-signal wait; the answer moves the stage back to `running` before the
-routing step, so the composer is never open on a question nothing is waiting for. That
+same specialist CLI session. `escalate_to_user` uses the existing `asking` state and a
+durable wait on the run's `answer` event; accepting the answer moves the stage back to
+`running` at once, so the composer is never open while the Orchestrator routes it. That
 second step requires `route_to_agent` for the same stage before the specialist resumes.
 Only the orchestration pipeline itself asks the user directly, which is what prevents
 recursion.

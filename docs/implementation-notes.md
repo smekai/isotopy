@@ -240,11 +240,6 @@ will not do.
 - **The Orchestrator's copy keeps the `pipeline:stage` qualifier.** Stripping it produced a prompt
   that said both "wanted after: intake" and "waived after: intake" whenever the two pipelines
   disagreed, which is worse than saying nothing.
-- **`approveGate` applies the approval *and* signals the workflow, on purpose.** It looks like a
-  double-apply: the durable `<stage>:gate:approved` step calls `projection.gateApproved` again when
-  the signal lands. The eager call is what makes the UI update on the click rather than a round
-  trip later, and the replay is a no-op behind the `stage.status !== "awaiting"` guard. Two separate
-  audits have now flagged it as a bug, so it is written down here rather than re-argued a third time.
 
 ## A team per run (`domain/rules/team-composition.ts`, `services/orchestration-service.ts`)
 
