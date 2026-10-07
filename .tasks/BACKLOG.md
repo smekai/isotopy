@@ -1,98 +1,18 @@
 # Backlog
 
-## TASK-193: Aiki upstream: node:sqlite driver, and a cheaper step and cold start (before merging #83)
-**Priority:** P1 | **Tags:** infra, engine
-**Updated:** 2026-10-07 09:28
+## TASK-193: Upstream the Aiki gaps TASK-069 found
+**Priority:** P2 | **Tags:** infra, engine
+**Updated:** 2026-10-06 18:30
 
-**Decided 2026-10-07:** the owner contributes two changes to `aikirun/aiki` first, then PR smekai/isotopy#83 merges and bumps the pinned `@aikirun/*` version. The rest of TASK-069's findings are product features left to Aiki's maintainer: inline `run.step`, an `embedded()` factory, rerun-from-task, deadlines, OTel, the 500 on an invalid cron, and migration logging.
+TASK-069 moved Isotopy onto Aiki 0.43.2. The Phase 0 spike and the port found gaps that belong in Aiki, which the owner contributes to, not in workarounds here. Each one becomes an upstream issue or PR in `aikirun/aiki`; Isotopy bumps its pinned `@aikirun/*` version once it lands.
 
-All numbers come from Aiki 0.43.2 on Windows 11 / Node 24, using the spike scripts from TASK-069. Tasks A and B are written to be filed as Aiki issues.
+1. **Windows CI.** Aiki's CI runs on ubuntu only, and its binary ships for darwin-arm64 and linux only. Isotopy embeds it on Windows and macOS, so a Windows (and macOS) job in Aiki's CI is the guard Isotopy relies on.
+2. **The SQLite file stays locked after `close()` on Windows** until garbage collection. Raw `@libsql/client` reproduces it with create, insert and select followed by `close()`. Likely a libsql-js statement keeping the connection alive. Report to libsql, and make Aiki's sqlite provider finalize what it holds.
+3. **`migrateApply` logs with `console.log`** ("applying migration …"). Every new project prints three lines to the server console. It should take a logger, like `server()` does.
+4. **An invalid cron expression returns a 500.** The server logs "Request error occurred {err:{}}" rather than a validation error naming the expression. Isotopy validates first with `cron-parser`, but other callers get nothing useful.
+5. **Embedded single-owner boot.** With one process per SQLite file, a claim held at the last crash and a run published but never claimed can be released at `runtime.start()`, instead of waiting out `claimIdleTimeoutMs` (90 s by default) and the publish lease. Isotopy tunes both down in `workflow-runtime.ts`; an `exclusive` option would let it stop.
 
-### A. SQLite provider on Node's built-in `node:sqlite`, without the libsql native addon
-
-#### Problem
-`database({ provider: "sqlite", path })` requires `@libsql/client`, which brings 19 packages, about 10 MB, and a platform-specific native binary. For an app that embeds Aiki on a local file, this is the riskiest part of the install.
-- **Native code.** Prebuilds exist for win32-x64, darwin and linux, but not win32-arm64, and a failed native install takes the whole server down.
-- **Windows file lock.** After `client.close()` the database file stays locked until garbage collection, so a closed database can't be deleted. Plain `@libsql/client` reproduces it: create, insert, select, `close()`, then `fs.rm` fails with EPERM until `global.gc()` runs.
-- **A duplicate driver.** Node ≥ 22.13 ships `node:sqlite` without a flag, and Bun ≥ 1.4 passes 100% of Node's test suite for it.
-
-#### Proposal
-1. **A driver adapter, not a new dialect.** The SQLite repositories already go through `drizzle-orm/libsql` over `createSqliteClient` (`sdk/server/src/infra/db/sqlite/client.ts`), which serialises every call through a per-file mutex. Implement the libsql `Client` surface that wrapper uses, on one `DatabaseSync` per file:
-   - `execute`, `batch(stmts, mode)`, `migrate`, `executeMultiple` and `close`;
-   - `transaction(mode)`, whose result supports `execute`, `batch`, `commit`, `rollback` and `close`. A transaction is `BEGIN IMMEDIATE`/`COMMIT` on that connection while the mutex is held.
-   - Results map to libsql's `ResultSet`: `columns`, `rows` readable by index and by name, `rowsAffected`, `lastInsertRowid`.
-
-   Schema, repositories and migrations stay as they are. (The alternative is drizzle's `sqlite-proxy`.)
-2. **Pragmas are set with SQL:** `journal_mode=WAL`, `busy_timeout=5000`, `foreign_keys=ON`. The `DatabaseSync` `timeout` option only exists from Node 22.18 / 24.0, so the pragma keeps the minimum Node version at 22.13.
-3. **Driver selection.**
-   - `node:sqlite` is the default for file paths and `:memory:` on Node ≥ 22.13 and Bun ≥ 1.4.
-   - libsql is used only for `libsql://` and `http(s)://` URLs, embedded replicas, an explicit `driver: "libsql"`, or older runtimes.
-4. **Packaging.**
-   - `@libsql/client` stays an optional peer dependency, imported only when the libsql driver is chosen.
-   - Document the `ExperimentalWarning` that Node prints for `node:sqlite` below 25.7.
-   - Move Aiki's own CI from Bun 1.3.4 (pinned in `.github/actions/setup-workspace`) to Bun ≥ 1.4, so the test suite runs the driver users get.
-5. **`close()` releases the file** on every OS: close the `DatabaseSync` and finalize its statements.
-
-#### Acceptance criteria
-- With `@libsql/client` not installed, the embedded quick start runs on Node ≥ 22.13 and on Bun ≥ 1.4.
-- The server test suite passes against `node:sqlite` (under both Node and Bun), libsql and Postgres.
-- CI runs the sqlite provider on `ubuntu-latest`, `windows-latest` and `macos-latest`.
-- After `db.close()`, deleting the database directory succeeds at once on Windows, without waiting for GC.
-- A database file written by either driver opens with the other: same file format, same `__drizzle_migrations__server` table.
-
-#### Out of scope
-Remote libsql/Turso (stays on libsql), MySQL, and any change to `database()` beyond an optional `driver` field.
-
-### B. Cheaper task transitions and a faster cold start
-
-#### Problem (measured, embedded SQLite)
-
-| | Aiki 0.43.2 | OpenWorkflow 0.9.2, same scenario |
-|---|---:|---:|
-| CPU per task, warm | 4.4–5.2 ms | 0.8 ms |
-| Time inside SQLite per task | 3.1–3.7 ms (1.8 ms with `synchronous=NORMAL`) | 2.0 ms (0.4 ms) |
-| Transactions per task | 2 | ~0.2 |
-| CPU from process start to the first task | 1.2–1.5 s | 0.1 s |
-
-**Active CPU per task:** libsql about 49%, Node core about 11%, drizzle query building about 10%, arktype validation about 5%. oRPC accounts for only about 2%, so the in-process RPC is not where the time goes.
-
-**The SQL behind one task:**
-- Transaction 1: `BEGIN IMMEDIATE`; `SELECT id, revision, status FROM workflow_run`; `INSERT task`; `INSERT state_transition`; `COMMIT`.
-- Transaction 2: `BEGIN IMMEDIATE`; `SELECT … FROM workflow_run`; `SELECT … FROM task`; `UPDATE task`; `INSERT state_transition`; `COMMIT`.
-
-Every statement is prepared again on every call, about 13 prepares per task, and each `COMMIT` syncs to disk (`synchronous=FULL`).
-
-**Cold start.** The handler is built lazily on the first request, which costs about 1.0–1.3 s of CPU:
-- about 50% is module loading: resolution and `stat` calls across the oRPC, drizzle and arktype import graphs, made worse on Windows by pnpm's symlinks;
-- about 28% is arktype compiling validators (`DynamicFunction`).
-
-A second server in an already-warm process costs about 4 ms. A fresh process pays the full second, and test runners that isolate files pay it once per file.
-
-#### Proposal
-1. **Statement cache.** Keep prepared statements per connection, keyed by SQL text (an LRU). It fits most easily on top of task A's `node:sqlite` adapter, because the libsql client prepares on every `execute`.
-2. **Fewer statements per transition.**
-   - Fold the revision check into the write, as `UPDATE … WHERE id = ? AND revision = ? RETURNING …`, instead of a `SELECT` before each transition.
-   - Use `UPDATE task … RETURNING` instead of a select followed by an update.
-   - Consider whether a task's `running` transition and its result must always be two commits, or can be one when the task finishes within the same claim. That depends on the durability contract, so it is the maintainer's call.
-3. **A durability option.** `synchronous: "normal"` under WAL survives a process crash and loses at most the last commit on power loss. It halves the time spent in SQLite. It could be the default for embedded SQLite, or an opt-in.
-4. **Cold start.**
-   - Build arktype validators lazily per procedure, or once at build time.
-   - Collapse the handler's dynamic-import graph into fewer modules, for example by bundling the oRPC router into the server chunk.
-   - Measure first-request CPU in CI so it doesn't regress.
-
-#### Acceptance criteria
-- A benchmark script in the repo (50 runs × 20 trivial tasks, embedded SQLite) reports CPU, SQL statements and commits per task.
-- CPU per task is below 2 ms.
-- SQL statements per task drop from 9 to at most 6, and nothing is re-prepared after warm-up.
-- CPU from process start to the first task is below 0.4 s.
-- Every existing test passes, and crash recovery is unchanged: a run killed mid-task re-executes that task and never re-runs a completed one.
-
-### Then, in Isotopy
-1. Bump `@aikirun/*` in #83 and drop `@libsql/client` from `packages/server/package.json`.
-2. Re-measure the server test suite in a single worker. The baseline is 59–62 s on Aiki 0.43.2 and 79 s on OpenWorkflow.
-3. Merge #83.
-
-**Cross-platform:** A is the platform work (Windows and macOS CI, the file lock, arm64). B is pure logic.
+Cross-platform: items 1 and 2 are the platform work, Windows first.
 
 ---
 ## TASK-192: A limit resolved as its reset fires cannot release a later park
