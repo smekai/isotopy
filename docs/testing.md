@@ -266,6 +266,19 @@ React state updates must go through
 `renderHook`/`render` — `react-hooks/rules-of-hooks` is an **error** across
 `packages/ui/**`, so calling a hook directly in a test body fails lint.
 
+**The `node` project shares its workers across files; `ui` does not.** Recycling
+a worker per file made every server test file pay the durable runtime's ~1 s cold
+start again, so `node` runs on forks with `poolOptions.forks.isolate: false`: a
+file inherits the module state of the files that ran before it in the same
+worker. Two rules follow. Code must not cache anything a test is allowed to
+change — the engine adapters read an `ISOTOPY_*_PATH` override on every resolve
+rather than caching it, or a stub installed by one file is ignored because an
+earlier file already resolved the real CLI. And a test that changes shared state
+(`process.env`, a registered adapter, a spy) restores it in its own `after*`
+hook. `ui` runs on isolated `threads` because its tests replace modules with
+`vi.mock`, which a shared worker would leak into the next file. Isolation is set
+per pool because Vitest 3 ignores `isolate` inside a project.
+
 **Specs are deliberately narrow.** They live in the same `test/` directory as
 the component tests, and earn their place only where the logic is intricate
 enough that a component test would not localise the failure —

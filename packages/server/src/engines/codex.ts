@@ -70,16 +70,15 @@ function pickBinaryLine(output: string): string | undefined {
 }
 
 function resolveCodexBinary(): ResolvedBinary {
-  if (cachedBinary) {
-    return cachedBinary;
-  }
   const fromEnv = process.env.ISOTOPY_CODEX_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
     const envPath = fromEnv.trim();
     if (!existsSync(envPath)) {
       throw new Error(`ISOTOPY_CODEX_PATH points to a missing file: ${envPath}`);
     }
-    cachedBinary = { path: envPath, source: "env" };
+    return { path: envPath, source: "env" };
+  }
+  if (cachedBinary) {
     return cachedBinary;
   }
   const onPath = pickBinaryLine(lookupOnPath("codex") ?? "");

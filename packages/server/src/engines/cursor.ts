@@ -88,16 +88,15 @@ function findInstallDirBinary(): string | undefined {
 }
 
 function resolveCursorBinary(): ResolvedBinary {
-  if (cachedBinary) {
-    return cachedBinary;
-  }
   const fromEnv = process.env.ISOTOPY_CURSOR_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
     const envPath = fromEnv.trim();
     if (!existsSync(envPath)) {
       throw new Error(`ISOTOPY_CURSOR_PATH points to a missing file: ${envPath}`);
     }
-    cachedBinary = { path: envPath, source: "env" };
+    return { path: envPath, source: "env" };
+  }
+  if (cachedBinary) {
     return cachedBinary;
   }
   for (const name of PATH_CANDIDATES) {
