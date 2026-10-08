@@ -20,11 +20,7 @@ import { getOrCreate } from "../utils/get-or-create.ts";
 import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
-import type {
-  DurableSchedules,
-  ScheduleActivation,
-  ScheduleFiring,
-} from "../workflow/durable-schedules.ts";
+import type { DurableSchedules, ScheduleFiring } from "../workflow/durable-schedules.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { SettingsStore } from "./settings-store.ts";
@@ -38,14 +34,6 @@ export class ScheduleInvalidError extends Error {
 
 function isRunActive(run: RunState): boolean {
   return !isTerminalRunStatus(run.status);
-}
-
-function activationOf(schedule: Schedule): ScheduleActivation {
-  return {
-    scheduleId: schedule.id,
-    cron: schedule.cron,
-    timezone: schedule.timezone,
-  };
 }
 
 export class ScheduleService implements ScheduleFiring {
@@ -181,9 +169,9 @@ export class ScheduleService implements ScheduleFiring {
   }
 
   private async reconcile(projectPath: ProjectPath): Promise<void> {
-    const wanted = [...this.schedules.values()]
-      .filter((schedule) => schedule.projectId === projectPath.id && schedule.enabled)
-      .map(activationOf);
+    const wanted = [...this.schedules.values()].filter(
+      (schedule) => schedule.projectId === projectPath.id && schedule.enabled,
+    );
     await this.durable.reconcileSchedules(projectPath, wanted);
   }
 

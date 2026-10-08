@@ -56,6 +56,9 @@ importers:
       '@aikirun/server':
         specifier: 0.44.0
         version: 0.44.0
+      '@aikirun/types':
+        specifier: 0.44.0
+        version: 0.44.0
       '@aikirun/worker':
         specifier: 0.44.0
         version: 0.44.0

@@ -82,6 +82,24 @@ describe("durable runtime", () => {
     await restarted.shutdown();
   });
 
+  test("a run that finished while its read model missed the end settles on the next boot", async () => {
+    // Arrange — the run's closing write is lost, as if the process died just
+    // after Aiki recorded the end and before the read model saved it.
+    const closing = vi.spyOn(ctx.orchestrator, "runCompleted").mockResolvedValueOnce(undefined);
+    ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
+    const run = await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+    await vi.waitFor(() => expect(closing).toHaveBeenCalled(), { timeout: 5_000 });
+    await ctx.orchestrator.shutdown();
+
+    // Act
+    const restarted = await restartApp();
+
+    // Assert
+    expect((await getRun(restarted.app, run.id)).status).toBe("completed");
+    await restarted.shutdown();
+  });
+
   test("an approval that lands before the run starts waiting for it still opens the gate", async () => {
     // Arrange
     approveGatesOnArrival(ctx.orchestrator);

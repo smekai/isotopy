@@ -1,6 +1,6 @@
 {
   "name": "@isotopy/server",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "@aikirun/client": "0.44.0",
     "@aikirun/memory": "0.44.0",
     "@aikirun/server": "0.44.0",
+    "@aikirun/types": "0.44.0",
     "@aikirun/worker": "0.44.0",
     "@aikirun/workflow": "0.44.0",
     "@hono/node-server": "^1.14.1",
