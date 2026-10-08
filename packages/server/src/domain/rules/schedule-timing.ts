@@ -11,5 +11,5 @@ export function scheduleCronIssues(cron: string, timezone: string): ValidationIs
 }
 
 export function scheduleActivationId(schedule: Schedule): string {
-  return `${schedule.id}@${schedule.updatedAt}`;
+  return `${schedule.id}@${schedule.timezone}@${schedule.cron}`;
 }

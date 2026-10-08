@@ -701,11 +701,13 @@ that the record is still enabled, still in a registered project and, for a built
 allowed by the project's gate — the activation is the clock, the record is the rule.
 
 **The record is the source of truth; the activation is derived.** Aiki never writes a
-schedule. Its activation's reference id is the schedule id plus `updatedAt`, and
-`reconcileSchedules` deactivates every activation of the project that no enabled record
-names, then activates the ones that are named (idempotently). The id carries
-`updatedAt` because Aiki refuses a changed definition under one reference id
-(`SCHEDULE_CONFLICT`, even after a deactivate), so an edited schedule needs a new one.
+schedule. Its activation's reference id is the schedule id plus its timezone and cron,
+and `reconcileSchedules` deactivates every activation of the project that no enabled
+record names, then activates the ones that are named (idempotently). The id is built
+from the definition because Aiki ties each reference id to one definition and each
+definition to one reference id, even once deactivated (`SCHEDULE_CONFLICT`): switching
+a schedule back on finds the activation it switched off, an edit gets a new one, and
+an edit back to an earlier expression finds the one it had.
 
 **Catch up, never backfill.** With the skip-overlap policy, Aiki fires *one* run for
 every window an activation missed — while the machine slept, or the server was down —

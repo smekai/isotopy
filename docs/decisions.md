@@ -55,11 +55,13 @@ cancel refuses a run's next transition but never interrupts the task in flight.
 record, so the activation is the clock and the record the rule. **Catch up, never backfill:** a
 machine asleep for three days owes one run, which is what skip-overlap gives, and a schedule
 switched off and back on owes nothing, because Aiki starts a reactivated activation from its next
-occurrence. The activation's reference id carries the record's `updatedAt`: Aiki refuses a changed
-definition under one reference id, even after a deactivate, so an edited schedule gets a fresh one.
-Validation and the next-fire preview use `cron-parser`, the parser Aiki fires with, so preview and
-clock cannot disagree; the server sends the next fire and the UI never parses an expression. (The August choice of `croner` over
-`cron-parser` was about `luxon`, which Aiki now brings anyway.)
+occurrence. The activation's reference id is the schedule id plus its timezone and cron: Aiki ties
+each reference id to one definition and each definition to one reference id, even once deactivated,
+so the id has to follow the definition. An id carrying `updatedAt` made switching a schedule back on
+a conflict, and it never fired again. Validation and the next-fire preview use `cron-parser`, the
+parser Aiki fires with, so preview and clock cannot disagree; the server sends the next fire and the
+UI never parses an expression. (The August choice of `croner` over `cron-parser` was about `luxon`,
+which Aiki now brings anyway.)
 
 **What it costs, measured:**
 

@@ -188,6 +188,46 @@ test("switching a schedule off stops its cron, rather than leaving it to fire in
   expect(fire).not.toHaveBeenCalled();
 });
 
+test("a schedule switched off and on again fires on its own again", async () => {
+  // Arrange — Aiki keeps one activation per definition, so switching back on has
+  // to find the activation it switched off, not open a second one beside it.
+  const fire = vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+  const created = await createSchedule({ cron: EVERY_SECOND });
+  await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, { enabled: false });
+  await sleep(500);
+  fire.mockClear();
+
+  // Act
+  const switchedOn = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    enabled: true,
+  });
+
+  // Assert
+  expect(switchedOn.status).toBe(200);
+  await vi.waitFor(() => expect(fire).toHaveBeenCalledWith(created.id), { timeout: 5_000 });
+});
+
+test("a schedule edited to another expression and back fires on its own again", async () => {
+  // Arrange
+  const fire = vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+  const created = await createSchedule({ cron: EVERY_SECOND });
+  const editedAway = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    cron: LEAP_DAY,
+  });
+  await sleep(500);
+  fire.mockClear();
+
+  // Act
+  const editedBack = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    cron: EVERY_SECOND,
+  });
+
+  // Assert
+  expect(editedAway.status).toBe(200);
+  expect(editedBack.status).toBe(200);
+  await vi.waitFor(() => expect(fire).toHaveBeenCalledWith(created.id), { timeout: 5_000 });
+});
+
 test("the Orchestrator that owns a scheduled run knows which schedule started it", async () => {
   // Arrange
   const created = await createSchedule();
