@@ -14,7 +14,7 @@ import type { Logger } from "../../utils/logger.ts";
 export class RunStore {
   readonly runs = new Map<string, RunState>();
   readonly enginePermissionModes = new Map<string, EnginePermissionMode>();
-  readonly openWorkflowRunIds = new Map<string, string>();
+  readonly durableRunIds = new Map<string, string>();
   readonly nextRunNumbers = new Map<string, number>();
   private readonly repositories = new Map<string, RunRepository>();
   private readonly registry: ProjectRegistry;
@@ -38,8 +38,8 @@ export class RunStore {
       if (persisted.permissionMode) {
         this.enginePermissionModes.set(run.id, persisted.permissionMode);
       }
-      if (persisted.openWorkflowRunId) {
-        this.openWorkflowRunIds.set(run.id, persisted.openWorkflowRunId);
+      if (persisted.durableRunId) {
+        this.durableRunIds.set(run.id, persisted.durableRunId);
       }
       maxNumber = Math.max(maxNumber, run.number + 1);
     }
@@ -124,9 +124,9 @@ export class RunStore {
     if (permissionMode) {
       persisted.permissionMode = permissionMode;
     }
-    const openWorkflowRunId = this.openWorkflowRunIds.get(runId);
-    if (openWorkflowRunId) {
-      persisted.openWorkflowRunId = openWorkflowRunId;
+    const durableRunId = this.durableRunIds.get(runId);
+    if (durableRunId) {
+      persisted.durableRunId = durableRunId;
     }
     return persisted;
   }

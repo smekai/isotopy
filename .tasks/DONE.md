@@ -1,5 +1,48 @@
 # Done
 
+## TASK-069: Aiki replaces OpenWorkflow as the durable runtime, and schedules fire from Aiki cron
+**Priority:** P1 | **Tags:** server, engine, infra
+**Updated:** 2026-10-06 18:30
+
+Aiki 0.43.2 replaced OpenWorkflow 0.9.2 as the durable runtime, and Aiki cron replaced Isotopy's schedule ticker. The work was built on `feature/aiki-runtime` so the switch could be decided on the working PR from measured evidence. The reasoning is the 2026-10-06 entry in `docs/decisions.md`, which absorbs the OpenWorkflow, separate-file, ticker and scheduler-package entries; `docs/workflow-runtime-options.md` is retired.
+
+### Done summary
+
+- **Phase 0 spike, outside the repo, on Windows 11 / Node 24 / pnpm 10.** Every gate passed:
+  - the libsql prebuild installs;
+  - several projects embed in one process;
+  - the event mailbox holds early events and dedupes by reference id;
+  - a hard kill at a gate and mid-stage recovers, without re-running the finished stage;
+  - skip-overlap owes one run for windows missed while down;
+  - an event resumes a run in about 15 ms, and a new run reaches its first task in about 20 ms.
+- **Runtime.**
+  - Each project embeds an Aiki server, client and two workers (pipeline, schedule) on `.isotopy/aiki.db`.
+  - Every read-model write is one `isotopy.project` task taking a `ProjectionCall`; stage turn, mediation and review are tasks of their own.
+  - Gate, answer and limit are typed events carrying the stage.
+  - Persisted runs rename `openWorkflowRunId` to `durableRunId`. The old key is dropped on read, and a run left mid-flight under OpenWorkflow settles as interrupted.
+- **Proven red on the OpenWorkflow parent, green here:**
+  - an approval that lands before the wait opens the gate;
+  - a stage whose work throws fails once instead of being retried ten times.
+- **Fixed on the way:**
+  - a second message sent while the Orchestrator routes went to the next question (commit 1, also red before);
+  - a stopped runtime reopened itself for a late launch;
+  - event deliveries and restart launches left unhandled rejections.
+- **Schedules.**
+  - The record stays authoritative. Its Aiki activation is reconciled after every change, and the reference id carries `updatedAt`, because Aiki owes one run to a resumed activation and a re-enabled schedule must owe nothing.
+  - Deleted: `Ticker`, `claimWindow`, `lastWindowAt`, the tick loop, `@isotopy/scheduler` and `croner`. `cron-parser`, which Aiki already ships, validates and previews.
+- **Costs, measured:**
+  - server production dependencies go from 36 packages / 36.5 MB to 89 / 69.5 MB, including the libsql native addon (no win32-arm64 prebuild);
+  - source grows by about 200 net lines;
+  - the server suite's summed test time goes from about 95 s to 173 s, while wall time goes from 17 s to 18 s locally.
+- **Gates:** lint, typecheck, test (936), check, build and `gen:skills` are all green. The built server boots via `pnpm start` again, which the scheduler package's raw-TS export had broken.
+
+**Cross-platform:**
+- The surfaces are the libsql native addon (prebuilds for win32-x64, darwin-arm64, darwin-x64 and linux) and the DB path (`path.join`).
+- win32-arm64 fails to open the runtime with a message naming the platform.
+- No new subprocess, shell or env-var surface.
+- Tested on Windows. macOS is covered by CI only.
+
+---
 ## TASK-191: Switching engine on a usage limit drops the owner's model pin for that engine
 **Priority:** P1 | **Tags:** engine, server, milestone-i
 **Updated:** 2026-10-05 12:57

@@ -168,14 +168,17 @@ of the source. When you strip or avoid a comment, that is where its content goes
   (see Placement and naming above). A file that exports a class is named for that
   class (`run-service.ts` → `RunService`).
 
-- **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
-  `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
-  `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop) and
-  `workflow/stage-execution.ts` is the durable *step* — the one place that decides
-  how a stage runs. Durability owns start/queueing, the loop, gates, durable
-  timers, retries, recovery and cancellation state — *not* one method. The old
-  claim that a durable executor "replaces `executeStage()` alone" was wrong and
-  is corrected here.
+- **The workflow seam (A4):** the durable runtime is **Aiki**, embedded in
+  `workflow/` (see [Workflow runtime](../docs/architecture.md#workflow-runtime-aiki)).
+  `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop),
+  `workflow/pipeline-tasks.ts` holds its durable work *tasks*, and
+  `workflow/stage-execution.ts` is the work a stage task does — the one place that
+  decides how a stage runs. Durability owns start/queueing, the loop, gates,
+  durable timers, retries, recovery and cancellation state — *not* one method.
+  A task is replayed by its name and input, so a task's input carries data, never
+  a sentence the code builds, and a change that adds, removes or re-inputs a task
+  before a point where a run can park ships as a new workflow version (`.v()`),
+  with the old one still registered.
 
 - **The stateful class (A5):** `RunService` owns the run read model
   (`RunState` + events + SSE) and hosts the per-project durable runtime; that is

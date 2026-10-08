@@ -15,6 +15,90 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-06 — Aiki is the durable workflow runtime, and it keeps the schedule clock
+
+**Context:** OpenWorkflow had been the runtime since `TASK-068` (2026-07-24). Aiki was the
+recorded second choice for one reason only: it was Postgres-only. Aiki 0.43.2 (2026-10-02) ships
+SQLite and a fully embedded mode — its server is a library — and the owner contributes to it.
+`TASK-069` built the switch for real on `feature/aiki-runtime` so it could be decided on evidence
+rather than a feature table.
+
+**Decision:** each project embeds one Aiki server, client and worker in-process, on
+`.isotopy/aiki.db` through Node's built-in `node:sqlite` (Aiki ≥ 0.44). There is no daemon, no
+port, no Redis and no native addon; the file lives in the project's `.isotopy/` and travels with
+the folder. It is not `runs.db`: Aiki owns that file's schema and migrations, and two connections
+writing one file would contend for one write lock. **The seam is the workflow, not one method** — the pipeline is an
+Aiki workflow, its stage turns and every read-model write are durable tasks, and durability owns
+start and queueing, gates, durable timers, retries, recovery and cancellation.
+
+**What Aiki takes over** — the first two proven by tests that are red on the OpenWorkflow parent:
+
+- **An event sent before the run waits is held.** OpenWorkflow dropped a signal nobody was waiting
+  on, so an approval that landed between the stage going to `awaiting` and the wait starting hung
+  the run. Gate, answer and limit are typed events, validated by their schema at the sender.
+- **A stage whose work throws fails once.** A task's retry default is `never`; OpenWorkflow
+  retried a throwing step ten times with backoff, re-running whatever it had already paid for.
+- **Work is pushed, not polled.** An in-process queue starts a run in ~20 ms and resumes one ~15 ms
+  after its event; OpenWorkflow's worker slept up to a second, and our own wake loop for it was
+  reverted. The worker's stop is bounded; OpenWorkflow's waited forever.
+- **The schedule clock.** Cron with timezone and a skip-overlap policy replaced our ticker, its
+  window claim, `lastWindowAt` and the whole `@isotopy/scheduler` package.
+
+**Isotopy still owns the semantics on top.** The `RunState` snapshot and event log are a
+rebuildable read model with exactly one writer — the workflow drives it, the API only reads it.
+Restart-from-a-stage is a fresh run seeded with retained outputs, one active run per project is an
+admission guard below the API, and killing the engine's process tree on cancel is ours: Aiki's
+cancel refuses a run's next transition but never interrupts the task in flight.
+
+**A schedule is a record; its Aiki activation is derived.** Aiki never writes a schedule.
+`ScheduleService` reconciles a project's activations after every change, and `fire` re-checks the
+record, so the activation is the clock and the record the rule. **Catch up, never backfill:** a
+machine asleep for three days owes one run, which is what skip-overlap gives, and a schedule
+switched off and back on owes nothing, because Aiki starts a reactivated activation from its next
+occurrence. An activation carries no reference id: Aiki keeps one schedule per definition, even
+once deactivated, and refuses that definition under a second id. Our id carrying `updatedAt` made
+switching a schedule back on a conflict, and it never fired again; with the definition as the
+identity, nothing of ours has to change in step with it, a workflow version bump included.
+Validation and the next-fire preview use `cron-parser`, the parser Aiki fires with, so preview and
+clock cannot disagree; the server sends the next fire and the UI never parses an expression. (The
+August choice of `croner` over `cron-parser` was about `luxon`, which Aiki now brings anyway.)
+
+**What it costs, measured:**
+
+- Server production dependencies go from 36 packages (36.5 MB) to 72 (57.5 MB): Drizzle, oRPC
+  and arktype stay. Aiki 0.43 also needed `@libsql/client` and its native addon (89 packages,
+  69.5 MB, no win32-arm64 build); 0.44 opens SQLite through `node:sqlite` and the root
+  `engines.node` follows it to `>=22.16`.
+- Source grows by ~200 net lines. Embedding a server, client and two workers, a task per
+  read-model write, and reconciling activations outweigh what was deleted.
+- A task commits twice, when it starts and when it completes, as an OpenWorkflow step does (~2.3
+  commits each, measured). The difference is CPU: ~3–4 ms per task against OpenWorkflow's ~0.8 ms,
+  and opening the runtime costs ~1.1–1.4 s of CPU once per process.
+  Negligible next to an engine call measured in minutes. On Windows the server suite on one shared
+  worker takes 60 s against OpenWorkflow's 81 s, since work is pushed rather than polled, but 27 s
+  of CPU against 19 s.
+- Replay matches a task by its name and input, not its order. Adding, removing or re-inputting a
+  task before the point a parked run reached fails that run on resume, so such a change ships as a
+  new workflow version with the old one still registered; Aiki plans no tolerant mode.
+- Runs left mid-flight under OpenWorkflow settle as interrupted on upgrade; finished ones load
+  unchanged, and the retired `openWorkflowRunId` and `lastWindowAt` are dropped when read. Both
+  codecs can go once no install predates 0.12.68.
+- Maturity: Aiki is beta, ~42★, one dominant maintainer and about ten minors a quarter; its CI
+  runs the unit and SQLite tests on Linux, macOS and Windows since 0.44. All `@aikirun/*` packages
+  are pinned to one exact version. Gaps go upstream, not around: 0.44 answered the Windows file
+  lock (libsql is gone), migration logging (`migrateApply` takes a logger) and the 500 on an
+  invalid cron. Releasing stale claims at boot stays Isotopy's tuning: Aiki cannot know it is the
+  only process on a file.
+
+**Rejected: staying on OpenWorkflow 0.10.1.** Zero dependencies and a smaller tree, and 0.10 adds
+`rerunWorkflowRun({ fromStep })`. But it still drops an early signal, still retries a throwing step
+by default, still polls and still has no cron, so each of those stays Isotopy's code or Isotopy's
+bug. **Rejected in the July survey, unchanged:** DBOS (Postgres-only in TypeScript), Restate and
+Resonate (no Windows binaries), Reflow (no gates, signals or durable sleep) and TanStack
+Workflow (no SQLite store, still 0.0.x).
+
+---
+
 ## 2026-10-05 — An agent is told which process is Isotopy, and nothing polices it
 
 **Context:** in `TASK-157`'s arcade a Developer tidied up its dev server with
@@ -225,25 +309,11 @@ editable like any other schedule.
 
 ---
 
-## 2026-08-25 — The scheduling mechanism is a package, not a layer inside the server
+## 2026-08-25 — The server grows by package boundaries, not by services
 
-**Context:** `TASK-171`, whose first half landed with `TASK-161`. `packages/server/src` had grown to
-~15,000 lines behind one flat `services/` directory, and the scheduling code split along a seam
-already visible in the file.
-
-**Decision: `@isotopy/scheduler` owns the mechanism.** Given a cron expression, a timezone, the
-window last consumed and a now, it answers what is due and claims it durably. Nothing in it knows
-what a run, a team or an Orchestrator is, and `croner` moved with it — the server no longer depends
-on a cron parser.
-
-**The policy stayed, because it cannot leave.** Reading live run state to record a skip, and
-chaining `ensureActive`, `composeTeamPipeline` and `startComposedRun`, are Isotopy concerns.
-Persistence crosses as an **injected callback**: the package decides *when* and asks to claim, while
-the SQLite write stays in the server where the update path already touches that row.
-
-**`isScheduleDue` left `packages/core` too.** Due-ness needs cron arithmetic, and core is aliased
-into the browser build, so core was the wrong owner. The tick interval stayed in core, because the
-UI's poll cadence and the server's ticker must agree and neither should own the other.
+**Context:** `TASK-171`. `packages/server/src` had grown to ~15,000 lines behind one flat
+`services/` directory. Its first extraction, `@isotopy/scheduler`, was deleted again on 2026-10-06
+when Aiki took over the schedule clock; the rule below outlived it.
 
 **Rejected: splitting the backend into services.** No new process, no new port, no IPC. This is a
 boundary change; a topology change would buy deployment complexity the product has no use for yet.
@@ -254,49 +324,6 @@ rotting back one convenient import at a time.
 
 **`@isotopy/engines` is still open** — 2,409 lines across 17 call sites including `subprocess.ts`,
 the highest platform-risk file in the repo. It has nothing to do with schedules and gets its own PR.
-
----
-
-## 2026-08-24 — A schedule is a record plus a ticker, and cron is parsed by croner
-
-**Context:** `TASK-156` decided that what carries standing intent between Orchestrator episodes is
-a schedule. `TASK-159` had to say what a schedule *is*, and what parses its expression. The server
-had four runtime dependencies, so adding a fifth is a decision, not a detail.
-
-**Decision: a persisted record plus one interval, never a durable workflow.** A month-long
-parked workflow must be cancelled and rebuilt every time its expression is edited, and OpenWorkflow
-has no recurrence to offer (below).
-
-**Corrected 2026-09-24:** this entry also said a parked run "would occupy the only slot" of the
-`concurrency: 1` worker. It does not. In OpenWorkflow 0.9.2 a waiting step throws `SleepSignal`,
-the run is parked with `sleepWorkflowRun` and the worker slot is freed, and `sendSignal` pulls the
-parked run's `available_at` forward so it wakes at once. That was read in the library's source,
-not observed in a test. The decision stands on the other two reasons. `TASK-175` builds on the
-corrected reading. Crash safety comes from the record instead — the cron expression plus
-the last window it consumed recompute due-ness deterministically after any restart, with no
-runtime involvement at all. The tick reads the wall clock every time and never accumulates
-elapsed time itself, which is what makes suspend and resume work.
-
-**Decision: `croner` parses the expression.** MIT, zero runtime dependencies, ships its own types,
-and `nextRun()` takes an IANA zone. Timezone arithmetic across a DST boundary is the hazard, and
-it is not worth hand-rolling: an implementation that adds 24 hours to the last fire is wrong twice
-a year, in a direction nobody notices until an unattended team runs at the wrong hour.
-
-**Rejected: OpenWorkflow, which the repo already depends on.** Its only scheduling primitive is
-`WorkflowRunOptions.availableAt` — a one-shot delayed start taking a `Date` or a duration string.
-No cron expression, no recurrence, no timezone. It could not express a schedule even before the
-`concurrency: 1` problem. **Rejected: `cron-parser`**, which carries `luxon` transitively — two
-packages where croner is zero.
-
-**The parser stays server-side.** `packages/core` is aliased straight into the browser build, so
-the record and its predicates live in core while cron evaluation lives in
-`server/src/domain/rules/schedule-cron.ts`. The server computes each schedule's next fire time and
-sends it; the UI never parses an expression, so the two can never disagree.
-
-**A missed window fires once — catch up, never backfill.** A machine asleep for three days owes
-one run, not three, so the window is consumed whatever it produced. A schedule that finds a run
-already active records a skip and waits for its next window: it asks first rather than starting a
-run it expects `admitRun` to refuse, because a caught exception is not a design.
 
 ---
 
@@ -1616,34 +1643,6 @@ to drift out of `domain/`.
 
 ---
 
-## 2026-08-05 — OpenWorkflow gets its own SQLite file, separate from ADHD's read model
-
-**Context:** `WorkflowRuntime` opened `BackendSqlite` on `runs.db` — the same file
-`db/database.ts` uses for `runs`, `events`, `milestones`, `orchestrations` and
-`active_runs`. Two independent `DatabaseSync` connections, one file. During any real run
-the worker logged `SQLITE_BUSY: database is locked` on every tick.
-
-**Why it fails:** ADHD's connection sets `busy_timeout=5000`, but that pragma is
-**per-connection**. OpenWorkflow's connection sets only `journal_mode=WAL` and
-`foreign_keys=ON`, and `claimWorkflowRun` opens with `BEGIN IMMEDIATE` — which wants the
-write lock at once and, with no busy timeout, fails instantly the moment ADHD is mid-write.
-`BackendSqliteOptions` exposes `namespaceId` and `runMigrations` and nothing else, and the
-connection is private, so there is no supported way to set the pragma from our side.
-
-**Decision:** the durable runtime owns `workflow.db` in the same project data dir. `runs.db`
-stays ADHD's. One writer per file, so the two can never contend.
-
-**Rejected:** reaching into `BackendSqlite`'s private `db` to set `busy_timeout` — a cast that
-defeats the type system (**A7**) and breaks on any upstream change. Also rejected: migrating
-the four existing OpenWorkflow tables across. There are no deployed installs, so a workflow
-in flight at upgrade time is simply restarted from the UI; the old tables are left in
-`runs.db` rather than dropped, so the split stays reversible.
-
-**Consequence:** `WorkflowRuntime.ensure()` is now async — it calls `ensureProjectDataDir`
-before connecting, because `workflow.db` may be the first file a project ever writes.
-
----
-
 ## 2026-08-05 — Home leads with the Orchestrator, and the Orchestrator surface is a tab on its own run
 
 **Context:** Milestone E gives the product a top-level Orchestrator, but the UI had no
@@ -2025,9 +2024,9 @@ it threw away.
 instead of prose, `STAGE_OUTCOMES.LIMITED` carries it through `interpretEngineResult`,
 and the workflow parks the stage on a durable `limit:<runId>:<stageId>` signal whose
 timeout is the time to the reset. Timeout fired means the reset passed; a signal means
-the user chose. The run survives a hard process kill parked, because OpenWorkflow stores
-the wake time in SQLite rather than in a timer — the "durable sleep (TASK-061)" case
-[`workflow-runtime-options.md`](./workflow-runtime-options.md) picked that runtime for.
+the user chose. The run survives a hard process kill parked, because the durable runtime
+stores the wake time in its SQLite file rather than in a timer — the "durable sleep
+(TASK-061)" case the runtime was chosen for.
 Three consequences worth defending:
 
 - **`blocked` is its own status**, in both `StageStatus` and `RunStatus`, never
@@ -2268,34 +2267,6 @@ capabilities stay off and are recorded as a known gap.
 
 ---
 
-## 2026-07-24 — OpenWorkflow is the durable workflow runtime
-
-**Context:** runs were an in-memory map with heap-promise gates; recovery marked
-interrupted runs failed, and retries and durable timers did not exist. The runtime survey
-([`workflow-runtime-options.md`](./workflow-runtime-options.md)) chose **OpenWorkflow** —
-Apache-2.0, `node:sqlite`, no server process.
-
-**Decision:** the durable runtime is OpenWorkflow, embedded **in-process**; there is no
-daemon and no CLI. **The seam is the workflow, not one method** — `pipeline-workflow.ts`
-is the run loop and `stage-execution.ts` the durable step, and durability owns the whole
-lifecycle: start and queueing, gates, durable timers, retries, recovery, cancellation.
-The older claim that a durable runtime replaces `executeStage()` alone is wrong and
-under-budgets any migration.
-
-**Single-writer rule.** OpenWorkflow's tables are the source of truth for execution
-state; the `RunState` snapshot and event log are a rebuildable read model with exactly
-one writer — the workflow drives it, the API only reads it.
-
-**ADHD owns the semantics on top:** restart-from-a-stage is a fresh run seeded with
-retained prior outputs, one-active-run-per-project is an admission guard below the API,
-and subprocess-tree kill on cancel stays ours. **Behaviour change:** a second concurrent
-run in one project now returns 400.
-
-**Rejected:** Aiki — Postgres-only, so it would need us to write its SQLite backend *and*
-fork-from-step — remains the recorded second choice.
-
----
-
 ## 2026-07-23 — SQLite is the sole run store, behind a layered repository
 
 **Context:** a flat-file JSON store shipped first, with SQLite behind a selector. Run
@@ -2324,7 +2295,7 @@ measurement had already ruled out, at the cost of two code paths nobody selected
 The cost of `node:sqlite` is an experimental-API warning and a Node version floor.
 The storage choice also constrained the engine choice: most durable-execution
 engines are Postgres-only, so "which embedded DB" and "which workflow runtime"
-were the same question — see [workflow-runtime-options.md](./workflow-runtime-options.md).
+were the same question — see the 2026-10-06 runtime entry.
 
 ---
 

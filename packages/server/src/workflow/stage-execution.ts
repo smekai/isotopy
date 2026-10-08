@@ -42,7 +42,7 @@ import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
-  PipelineWorkflowInput,
+  StageWorkContext,
   QuestionMediationContext,
   QuestionMediationRequest,
   QuestionMediationResult,
@@ -67,7 +67,7 @@ function recordsOutputWhileAsking(stageDef: StageDefinition): boolean {
 }
 
 function turnPrompt(
-  input: PipelineWorkflowInput,
+  input: StageWorkContext,
   run: RunState,
   stageDef: StageDefinition,
   turn: StageTurn,
@@ -253,7 +253,7 @@ function failedDeployment(
 
 async function runAdapter(
   deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  input: StageWorkContext,
   run: RunState,
   engine: EngineId,
   stageId: string,
@@ -351,7 +351,7 @@ function asBrokerDecision(
 
 export async function runQuestionMediationWork(
   deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  input: StageWorkContext,
   stageDef: StageDefinition,
   request: QuestionMediationRequest,
   resumeSessionId?: string,
@@ -456,7 +456,7 @@ function reviewRecord(artifacts: RunArtifacts): RunCloseoutRecord {
 
 export async function runOrchestratorReviewWork(
   deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  input: StageWorkContext,
   status: RunState["status"],
 ): Promise<null> {
   const run = deps.projection.getRun(input.runId);
@@ -541,7 +541,7 @@ function readReview(outcome: EngineRunResult, artifactsExpected: boolean): RunRe
 
 export async function runStageWork(
   deps: WorkflowDeps,
-  input: PipelineWorkflowInput,
+  input: StageWorkContext,
   stageDef: StageDefinition,
   turn: StageTurn,
 ): Promise<StageResult> {

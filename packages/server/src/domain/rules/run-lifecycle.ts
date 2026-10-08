@@ -57,13 +57,6 @@ export function sourceTasksToRelease(run: RunState): string[] {
   return (run.sourceTaskIds ?? []).filter((id) => !classified.has(id));
 }
 
-export const TERMINAL_OPENWORKFLOW_STATUSES = new Set([
-  "succeeded",
-  "completed",
-  "failed",
-  "canceled",
-]);
-
 export function outcomeForRestart(stage: StageState): StageOutcome {
   if (stage.status === "failed") {
     return stage.verdict === "FAIL"
@@ -84,4 +77,8 @@ export function completionMessage(status: RunCompletionStatus): string {
     return "Run needs attention";
   }
   return "Run failed";
+}
+
+export function suppressionReason(cause: RunCompletionStatus): string {
+  return cause === "failed" ? "an earlier engine or runtime failure" : "blocking quality findings";
 }

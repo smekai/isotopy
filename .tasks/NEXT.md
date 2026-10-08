@@ -1,5 +1,45 @@
 # Next
 
+## TASK-194: After Aiki: shrink the docs and tests, reuse Aiki's types, and keep one logger
+**Priority:** P2 | **Tags:** core, server, testing
+**Updated:** 2026-10-08 16:36
+
+`TASK-069` (PR #83, 0.13.0) moved the durable runtime from OpenWorkflow to Aiki. The repo still carries text and tests written across two runtimes and a migration, and a logger split in two. Clean that up in one pass.
+
+### 1. Markdown: remove or shrink what is duplicated or no longer true
+
+- The same runtime facts are written in several places: embedding, claim and outbox timings, replay by name and input, schedule identity, cancel, and the cost numbers. These live in `docs/decisions.md`, `docs/architecture.md`, `docs/implementation-notes.md`, `README.md`, `AGENTS.md`/`CLAUDE.md` and the skills (edit the `gen:` blocks, then `pnpm gen:skills`).
+- Keep each fact once, where it belongs: what is, in `architecture.md`; how it works and its gotchas, in `implementation-notes.md`; why, as a dated entry in `decisions.md`. Link from the others.
+- Delete text that is no longer true. History stays only in dated decision entries.
+- Report the net lines removed.
+
+### 2. Tests: revisit
+
+- Remove tests that exercise Aiki rather than Isotopy, and merge near-duplicates.
+- Keep the tests that pin Isotopy's own rules, and mutation-check every guard that stays.
+- Look for harness scaffolding that existed for the runtime and Aiki now makes unnecessary.
+
+### 3. Reuse what Aiki already defines
+
+Where `workflow/` defines models, classes or enums that mirror Aiki's, use Aiki's exported types at the seam instead of a parallel copy. Candidates:
+- `DurableRunState` against `WorkflowRunStatus`;
+- the schedule spec;
+- the event payload shapes.
+
+Isotopy's domain types stay ours; this is only the seam.
+
+### 4. One logger, not two
+
+Today `AikiLoggerAdapter` wraps our `Logger` to fit Aiki's interface, which adds `trace`/`debug` and a `child(bindings)` that takes an object where ours takes a component name. The owner wants a single logger that implements both interfaces, so the adapter goes. Decide:
+- how `child(component)` and `child(bindings)` coexist;
+- what `trace` and `debug` do: pino levels below the operator log's `info`.
+
+**Done when:**
+- the docs and tests are smaller, and nothing in them is untrue;
+- `AikiLoggerAdapter` is gone, with one logger serving Isotopy and Aiki;
+- all gates are green.
+
+---
 ## TASK-178: The Orchestrator keeps a small context of its own, curated rather than accumulated
 **Priority:** P1 | **Tags:** core, server, engine, milestone-i
 **Updated:** 2026-10-04 17:49
@@ -29,7 +69,7 @@ Cross-platform: the file is written with `path.join`, UTF-8 and LF on both OSes;
 ---
 ## TASK-156: Milestone I — Induction: a product the team carries on its own
 **Priority:** P1 | **Tags:** core, server, ui, engine, testing, milestone-i
-**Updated:** 2026-10-04 17:49
+**Updated:** 2026-10-08 16:17
 
 Induction proves a base case, then proves each step follows from the last. The base case is a
 product built once with a human watching. The inductive step is the team building the next
@@ -143,10 +183,10 @@ yet: the deploy target, the measured unattended stretch, and the MVP gap list th
 milestone and opens the launch. Relaxing gates as a schedule earns trust is filed separately as
 `TASK-174`, deliberately outside this milestone.
 
-**A schedule is a record plus a ticker, not a durable workflow.** OpenWorkflow has no recurrence —
-its only scheduling primitive is a one-shot `availableAt` — and a month-long parked workflow must be
-cancelled and rebuilt every time its expression is edited. Crash safety comes from the record
-instead: the cron expression plus `lastFiredAt` recompute due-ness after any restart.
+**A schedule is a record; Aiki's cron is its clock.** The record stays the source of truth, and its
+Aiki activation is derived from it after every change (`TASK-069`). Skip-overlap owes one run for
+the windows missed while the machine slept or the server was down, and that crash safety lives in
+Aiki's database.
 
 **Product variants — Isotopy.gaming, Isotopy.travel — may ship their own schedules**, and remain
 the milestone *after* MVP, decided with the product owner on 2026-08-21. A fork of a core that
@@ -186,7 +226,7 @@ and APFS for a same-directory rename.
 
 The deploy target, the length of the measured stretch and the MVP gap list stay unwritten until step 3 produces evidence, as decided.
 
-**Changed with the owner, 2026-10-04.** *Isotopy.Travel* was recorded below as the milestone after MVP. The owner wants it as the big dogfood on a real, existing product (ShareTravel) once the arcade base case has run, rather than after MVP, so it is filed as its own task and does not wait for step 4. Separately, a switch of the durable runtime from OpenWorkflow to Aiki is planned as its own task, outside this milestone.
+**Changed with the owner, 2026-10-04.** *Isotopy.Travel* was recorded below as the milestone after MVP. The owner wants it as the big dogfood on a real, existing product (ShareTravel) once the arcade base case has run, rather than after MVP, so it is filed as its own task and does not wait for step 4. Separately, the durable runtime moved to Aiki in its own task, `TASK-069` (PR #83), outside this milestone.
 
 ---
 

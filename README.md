@@ -39,12 +39,14 @@ flowchart LR
    you are not there.
 
 Everything it knows lives in your repo as plain markdown: the task backlog, decisions and
-handoffs. A run survives a server restart and resumes where it stopped. The details are in
-[architecture.md](docs/architecture.md).
+handoffs. Runs and schedules are durable workflows on [Aiki](https://github.com/aikirun/aiki),
+embedded in the server on a SQLite file per project, with no daemon and nothing else to
+install. A run survives a server restart and resumes where it stopped, and a schedule fires
+from Aiki's cron. The details are in [architecture.md](docs/architecture.md).
 
 ## Quick start
 
-You need **Node.js 22.5+** and **pnpm** (`npm install -g pnpm`), plus at least one of
+You need **Node.js 22.16+** and **pnpm** (`npm install -g pnpm`), plus at least one of
 Claude Code, Cursor or Codex installed and logged in.
 
 ```bash

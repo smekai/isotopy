@@ -9,10 +9,7 @@ import path from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { vi } from "vitest";
 import { createTestApp, del, get, post, put, restartApp } from "../support/harness.ts";
-import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import type { TestApp } from "../support/harness.ts";
-
-const AN_HOUR_ON = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
 let ctx: TestApp;
 
@@ -44,10 +41,10 @@ test("a fresh project polls nothing, because the gate is off by default", async 
   // Anticipate — none: a fresh install must behave exactly as it did before.
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(poller.id);
 
   // Assert
-  expect(ticks).toEqual([]);
+  expect(outcome).toBeUndefined();
   ctx.engine.verify();
 });
 
@@ -60,11 +57,11 @@ test("a project upgraded from settings written before the gate existed stays off
   // Anticipate — none: an upgrade must not opt anyone in.
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(poller.id);
 
   // Assert
   expect(preferencesOf(await get<SettingsView>(ctx.app, "/settings"))).toBe(false);
-  expect(ticks).toEqual([]);
+  expect(outcome).toBeUndefined();
   ctx.engine.verify();
 });
 
@@ -78,10 +75,10 @@ test("with the gate on and the record enabled, the poller opens one Orchestrator
   ctx.engine.anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ }).parks("Reading.");
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(poller.id);
 
   // Assert
-  expect(ticks).toHaveLength(1);
+  expect(outcome?.kind).toBe("fired");
   await ctx.engine.waitForCall();
   ctx.engine.verify();
 });
@@ -177,23 +174,6 @@ test("a schedule blocked by the project gate says so and offers no fire time", a
   expect(blocked?.nextFireAt).toBeUndefined();
 });
 
-test("a window that could not be claimed is recorded, so the dashboard does not show stale state", async () => {
-  // Arrange — the claiming write fails; the ticker discards what tick() returns,
-  // so the record is the only place an operator can see this.
-  const created = await createUserSchedule();
-  failTheNextWrite("disk is full");
-
-  // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
-
-  // Assert
-  expect(ticks[0]?.outcome).toEqual({ kind: "failed", error: "disk is full" });
-  expect(ctx.schedules.getSchedule(created.id)?.lastOutcome).toEqual({
-    kind: "failed",
-    error: "disk is full",
-  });
-});
-
 function preferencesOf(response: { body: SettingsView }): boolean {
   return response.body.preferences.builtInSchedules;
 }
@@ -205,21 +185,8 @@ async function builtInPoller(): Promise<ScheduleView> {
   return poller;
 }
 
-async function createUserSchedule(): Promise<ScheduleView> {
-  const { body } = await post<ScheduleView>(ctx.app, "/schedules", {
-    name: "User schedule",
-    cron: "* * * * *",
-    timezone: "UTC",
-    task: "Do the thing",
-  });
-  return body;
-}
-
-function failTheNextWrite(message: string): void {
-  vi.spyOn(JsonRecordRepository.prototype, "write").mockRejectedValueOnce(new Error(message));
-}
-
-async function enable(scheduleId: string, cron = "* * * * *"): Promise<void> {
+// Fired by hand in these tests, so its own cron waits for midnight on a leap day.
+async function enable(scheduleId: string, cron = "0 0 29 2 *"): Promise<void> {
   const patched = await ctx.schedules.updateSchedule(scheduleId, { enabled: true, cron });
   expect(patched.enabled, "the built-in record is on").toBe(true);
 }

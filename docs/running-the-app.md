@@ -177,9 +177,9 @@ bills the plan (keys otherwise need interactive approval into
 `~/.claude.json` `customApiKeyResponses`).
 
 A subscription **session limit** parks the run; it does not fail it. The
-stage stops on a durable `limit:<runId>:<stageId>` signal carrying the reset
-time parsed from the CLI's own message, resumes by itself once that time
-passes, and survives a server restart still parked. Release it early — with a
+stage waits on the run's durable `limit` event, with the reset time parsed
+from the CLI's own message as the wait's timeout; it resumes by itself once
+that time passes, and survives a server restart still parked. Release it early — with a
 different model or tier, once the plan is topped up — via
 `POST /runs/:id/limit/:stageId/resolve`. A parked run is not a stuck run, so
 wait or resolve it rather than aborting and re-running from the top.

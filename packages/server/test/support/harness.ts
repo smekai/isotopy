@@ -1,6 +1,6 @@
 // AAAAA forbids branching or inline logic in a test body, so every loop, poll
 // and retry in a component test lives here instead.
-import { assert, expect, inject } from "vitest";
+import { assert, expect, inject, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
@@ -241,7 +241,6 @@ export async function restartApp(): Promise<RestartedApp> {
     schedules,
     logger,
     shutdown: async () => {
-      schedules.stop();
       await product.shutdown();
       await orchestrator.shutdown();
       await databases.settleAll();
@@ -524,4 +523,17 @@ export function tablesIn(projectRoot: string, file: string): string[] {
   } finally {
     connection.close();
   }
+}
+
+/**
+ * Approves every gate the instant the run projects it as awaiting — before the
+ * workflow has begun waiting for the approval. That window is where a runtime
+ * that drops an event sent ahead of its waiter loses the click.
+ */
+export function approveGatesOnArrival(orchestrator: RunService): void {
+  const project = orchestrator.stageAwaiting.bind(orchestrator);
+  vi.spyOn(orchestrator, "stageAwaiting").mockImplementation((runId, stageId) => {
+    project(runId, stageId);
+    orchestrator.approveGate(runId, stageId);
+  });
 }

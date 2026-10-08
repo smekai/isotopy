@@ -161,7 +161,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
   }
 
-  reconcileRuns(): void {
+  async reconcileRuns(): Promise<void> {
     for (const orchestration of this.orchestrations.values()) {
       if (orchestration.status !== "stopped") {
         continue;
@@ -169,7 +169,7 @@ export class OrchestrationService implements StageOutputConsumer {
       for (const runId of orchestration.runIds) {
         const run = this.runs.getRun(runId);
         if (run && !isTerminalRunStatus(run.status)) {
-          this.runs.abortRun(run.id);
+          await this.runs.abortRun(run.id);
         }
       }
     }
@@ -879,7 +879,7 @@ export class OrchestrationService implements StageOutputConsumer {
         run.id !== completingRunId &&
         !isTerminalRunStatus(run.status)
       ) {
-        this.runs.abortRun(run.id);
+        await this.runs.abortRun(run.id);
       }
     }
     const stoppedAt = nowIso();

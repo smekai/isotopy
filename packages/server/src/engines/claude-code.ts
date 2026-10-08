@@ -90,16 +90,15 @@ function findIdeExtensionBinary(): string | undefined {
 }
 
 function resolveClaudeBinary(): ResolvedBinary {
-  if (cachedBinary) {
-    return cachedBinary;
-  }
   const fromEnv = process.env.ISOTOPY_CLAUDE_PATH;
   if (fromEnv && fromEnv.trim() !== "") {
     const envPath = fromEnv.trim();
     if (!existsSync(envPath)) {
       throw new Error(`ISOTOPY_CLAUDE_PATH points to a missing file: ${envPath}`);
     }
-    cachedBinary = { path: envPath, source: "env" };
+    return { path: envPath, source: "env" };
+  }
+  if (cachedBinary) {
     return cachedBinary;
   }
   const onPath = firstLine(lookupOnPath("claude") ?? "");

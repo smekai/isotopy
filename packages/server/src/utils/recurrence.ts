@@ -1,4 +1,4 @@
-import { Cron } from "croner";
+import { CronExpressionParser } from "cron-parser";
 
 export interface Recurrence {
   cron: string;
@@ -12,17 +12,15 @@ export interface RecurrenceIssue {
 
 export function nextRunAfter(recurrence: Recurrence, after: string): string | undefined {
   try {
-    return new Cron(recurrence.cron, { timezone: recurrence.timezone })
-      .nextRun(new Date(after))
-      ?.toISOString();
+    return CronExpressionParser.parse(recurrence.cron, {
+      currentDate: new Date(after),
+      tz: recurrence.timezone,
+    })
+      .next()
+      .toISOString() ?? undefined;
   } catch {
     return undefined;
   }
-}
-
-export function isDueAt(recurrence: Recurrence, since: string, now: string): boolean {
-  const next = nextRunAfter(recurrence, since);
-  return next !== undefined && next <= now;
 }
 
 function timezoneIssues(timezone: string): RecurrenceIssue[] {
@@ -41,14 +39,13 @@ function timezoneIssues(timezone: string): RecurrenceIssue[] {
 
 function cronIssues(recurrence: Recurrence): RecurrenceIssue[] {
   try {
-    return new Cron(recurrence.cron, { timezone: recurrence.timezone }).nextRun() === null
-      ? [{ path: ["cron"], message: `${recurrence.cron} never fires again` }]
-      : [];
+    CronExpressionParser.parse(recurrence.cron, { tz: recurrence.timezone }).next();
+    return [];
   } catch {
     return [
       {
         path: ["cron"],
-        message: `${recurrence.cron} is not a cron expression — five fields, like 0 9 * * *`,
+        message: `${recurrence.cron} is not a cron expression, or never fires again — five fields, like 0 9 * * *`,
       },
     ];
   }

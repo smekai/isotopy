@@ -196,14 +196,17 @@ of the source. When you strip or avoid a comment, that is where its content goes
   (see Placement and naming above). A file that exports a class is named for that
   class (`run-service.ts` → `RunService`).
 
-- **The workflow seam (A4):** the durable runtime is **OpenWorkflow**, in
-  `workflow/` (see [`workflow-runtime-options.md`](../docs/workflow-runtime-options.md)).
-  `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop) and
-  `workflow/stage-execution.ts` is the durable *step* — the one place that decides
-  how a stage runs. Durability owns start/queueing, the loop, gates, durable
-  timers, retries, recovery and cancellation state — *not* one method. The old
-  claim that a durable executor "replaces `executeStage()` alone" was wrong and
-  is corrected here.
+- **The workflow seam (A4):** the durable runtime is **Aiki**, embedded in
+  `workflow/` (see [Workflow runtime](../docs/architecture.md#workflow-runtime-aiki)).
+  `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop),
+  `workflow/pipeline-tasks.ts` holds its durable work *tasks*, and
+  `workflow/stage-execution.ts` is the work a stage task does — the one place that
+  decides how a stage runs. Durability owns start/queueing, the loop, gates,
+  durable timers, retries, recovery and cancellation state — *not* one method.
+  A task is replayed by its name and input, so a task's input carries data, never
+  a sentence the code builds, and a change that adds, removes or re-inputs a task
+  before a point where a run can park ships as a new workflow version (`.v()`),
+  with the old one still registered.
 
 - **The stateful class (A5):** `RunService` owns the run read model
   (`RunState` + events + SSE) and hosts the per-project durable runtime; that is
@@ -416,7 +419,7 @@ Assessment of the two-box flow against the conventions above, with the refactors
 
 Conventions upheld: `@isotopy/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; every report goes through the `Logger` seam; no hardcoded paths or secrets.
 
-**Deliberate seam:** the durable runtime is OpenWorkflow (`workflow/`). `RunService` *is* the durable workflow (body in `workflow/pipeline-workflow.ts`); `workflow/stage-execution.ts` is the durable *step* — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunService` is the single writer of the read model. (The earlier "replaces `executeStage()` alone" claim is corrected in `workflow-runtime-options.md` §4.)
+**Deliberate seam:** the durable runtime is Aiki (`workflow/`). `RunService` *is* the durable workflow's host (body in `workflow/pipeline-workflow.ts`, tasks in `workflow/pipeline-tasks.ts`); `workflow/stage-execution.ts` is the work a stage task does — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunService` is the single writer of the read model.
 
 **Known gap (not code):** persona adherence is model-dependent. On `haiku` the Tester verified with inline `node -e` checks rather than writing a test file, and ignored an instruction placed *after* the closing "Do not restate this prompt" line. Put must-follow output rules before that line.
 
@@ -643,9 +646,9 @@ cannot rule out; by then they are unreachable.
 decision. The workflow executes the Orchestrator persona as
 a named durable step with the asking run's engine, model, permissions, workspace,
 limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
-same specialist CLI session. `escalate_to_user` uses the existing `asking` state and
-durable user-signal wait; the answer moves the stage back to `running` before the
-routing step, so the composer is never open on a question nothing is waiting for. That
+same specialist CLI session. `escalate_to_user` uses the existing `asking` state and a
+durable wait on the run's `answer` event; accepting the answer moves the stage back to
+`running` at once, so the composer is never open while the Orchestrator routes it. That
 second step requires `route_to_agent` for the same stage before the specialist resumes.
 Only the orchestration pipeline itself asks the user directly, which is what prevents
 recursion.
@@ -665,18 +668,19 @@ worker, admission lane, or direct-user fallback when the invariant is broken.
 A **schedule** is a recurring task with a fixed team. The Orchestrator is an episode
 handler, not a long-lived supervisor: `terminate()` is one-way, and `ensureActive`
 then builds a fresh `Orchestration` for the next episode. What carries intent across
-that gap is not the aggregate but the schedule — a persisted record plus a ticker.
+that gap is not the aggregate but the schedule — a persisted record plus an Aiki cron
+activation derived from it.
 
 | Layer | Where |
 | --- | --- |
-| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `scheduleAnchor`, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
-| Mechanism | `@isotopy/scheduler` — given a cron, a timezone, the window last consumed and a now, what is due and how to claim it durably. Knows nothing about runs, teams or the Orchestrator; `croner` lives here |
-| Timing | `server/src/domain/rules/schedule-timing.ts` — composes the package's answer with the record. `nextFireForSchedule` is what the API sends, so the UI never parses an expression |
+| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
+| Clock | Aiki — each enabled schedule is a cron activation on its project's runtime, reconciled through the `DurableSchedules` seam (`workflow/durable-schedules.ts`, implemented by `WorkflowRuntimeRegistry`) and firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
+| Timing | `server/src/domain/rules/schedule-timing.ts` over `utils/recurrence.ts` — validation and `nextFireForSchedule` with `cron-parser`, the parser Aiki fires with, so the preview and the clock cannot disagree. The API sends the next fire, so the UI never parses an expression |
 | Built-ins | `server/src/domain/rules/built-in-schedules.ts` — an `as const` catalog seeded per project, every entry disabled. The board poller is its only entry today |
 | Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming a persona that does not exist are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
 | Boundary schema | `server/src/schemas/schedule.ts` — shape only. Validity is checked on the **merged** record, because a patch carrying a cron and no timezone cannot be judged alone |
-| Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE` |
-| Lifecycle | `ScheduleService` — the single writer, and the owner of the one interval that ticks |
+| Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE`, parsed by `schemas/schedule-persistence.ts` |
+| Lifecycle | `ScheduleService` — the single writer of the record, and the one that reconciles its project's activations after every change |
 | API | `server/src/routes/schedules.ts` — CRUD plus enable/disable. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 | UI | a rail section plus `#/schedules/:id` → `ScheduleDashboard`, fed by `useSchedules` |
 
@@ -691,14 +695,27 @@ outlives every orchestration it starts. The proposal is validated when saved and
 composed at fire time against that episode's fresh id.
 
 **Firing is a check, not a catch.** `admitRun` already refuses a second concurrent run
-per project, so a due schedule that finds one active records a skip and waits for its
-next window rather than starting a run it expects to be refused.
+per project, so a fired schedule that finds one active records a skip and waits for its
+next window rather than starting a run it expects to be refused. `fire` also re-checks
+that the record is still enabled, still in a registered project and, for a built-in,
+allowed by the project's gate — the activation is the clock, the record is the rule.
 
-**Catch up, never backfill.** The window is consumed whatever it produced, so a
-machine asleep for three days owes one run rather than three. Crash safety comes from
-the record: the expression plus the last window consumed recompute due-ness after any
-restart, with no runtime involvement. Cron is parsed in-process — never `cron`, never
-`schtasks`, never a second process.
+**The record is the source of truth; the activation is derived.** Aiki never writes a
+schedule. `reconcileSchedules` activates one Aiki schedule per enabled record, keeps the
+ids Aiki returns, then deactivates every other active one in the project. An activation
+carries no reference id of ours: Aiki identifies a schedule by its definition (workflow
+and version, input, timetable, overlap policy), and a deactivated schedule keeps it.
+Activating the same definition again brings that schedule back, so switching one back
+on, or editing it back to an earlier expression, resumes the schedule it had, and an
+edit makes a new one. An id of our own would have to change exactly when the definition
+does, and Aiki refuses one definition under a second id (`SCHEDULE_CONFLICT`).
+
+**Catch up, never backfill.** With the skip-overlap policy, Aiki fires *one* run for
+every window an activation missed — while the machine slept, or the server was down —
+so three days asleep owe one run rather than three, and that crash safety now lives in
+Aiki's database. A schedule switched off and on again owes nothing: Aiki starts a
+reactivated activation from its next occurrence. Cron is parsed in-process — never
+`cron`, never `schtasks`, never a second process.
 
 ### 3. Workflow state
 
@@ -761,58 +778,51 @@ Enables dashboard live tail and post-run forensics.
 
 ---
 
-## Workflow runtime (OpenWorkflow)
+## Workflow runtime (Aiki)
 
-**Decision (TASK-066/068):** the durable workflow runtime is
-[OpenWorkflow](https://github.com/openworkflowdev/openworkflow) — Apache-2.0,
-TypeScript, durable execution on an embedded SQLite file via Node's built-in
-`node:sqlite`, no server. It runs in-process inside the single manually-started
-runner (its worker embeds; there is no daemon). Chosen over Aiki (Postgres-only
-today) and DBOS (Postgres-only) because it is the only candidate that pairs an
-embedded file DB with Windows support while shipping durable gates, durable
-sleep, retries and crash recovery. See
-[`workflow-runtime-options.md`](workflow-runtime-options.md) for the full
-comparison; Aiki remains the recorded second choice.
+**Decision (TASK-069, 2026-10-06):** the durable workflow runtime is
+[Aiki](https://github.com/aikirun/aiki) — Apache-2.0, TypeScript, durable
+execution with its server shipped as a library. Each project embeds one Aiki
+server, client and worker in-process, on a SQLite file through Node's built-in `node:sqlite`;
+there is no daemon and no network hop. It replaced OpenWorkflow, which Isotopy
+ran from TASK-068 until Aiki shipped SQLite. The comparison and the reasons are
+the 2026-10-06 entry in [`decisions.md`](decisions.md).
 
-**Why OpenWorkflow:**
+| Need | Aiki capability |
+|------|-----------------|
+| Long-running agent runs | Durable tasks, replayed by content address (task name + input hash) |
+| Human approval gates | Typed workflow events (`gate`, `answer`, `limit`); an event sent before the run waits is held |
+| Stage retries | Per-task retry strategy; the default is `never`, so a failing stage fails once |
+| Crash recovery | A claimed run whose claim goes stale is re-delivered and replays from its last task |
+| Durable timers | Event waits with a timeout survive restart; the limit park uses one |
+| Schedules | Cron schedules with timezone and a skip-overlap policy |
+| Local-first | In-process server and worker; the SQLite file lives inside `.isotopy/` and travels with the project |
 
-| Need | OpenWorkflow capability |
-|------|-------------------------|
-| Long-running agent runs | Durable steps with memoised checkpoint/resume |
-| Human approval gates | `step.waitForSignal` + `client.sendSignal` |
-| Stage retries | `RetryPolicy` (`maximumAttempts` + backoff) per workflow/step |
-| Crash recovery | Worker resumes from the last completed step (SQLite lease/heartbeat) |
-| Durable timers | `step.sleep` survives restart (TASK-061 shape) |
-| Local-first | In-process worker; the SQLite file lives inside `.isotopy/` and travels with the project |
-
-**Layering** (the durable runtime owns the *whole* lifecycle, not one method —
-see `workflow-runtime-options.md` §4):
+**Layering** (the durable runtime owns the *whole* lifecycle, not one method):
 
 ```
 ┌─────────────────────────────────────────┐
-│  Isotopy-owned                             │
+│  Isotopy-owned                          │
 │  definitions, agents, artifacts,        │
 │  engine adapters, subprocess kill (G4)  │
 ├─────────────────────────────────────────┤
 │  workflow/ (durable runtime)            │
-│  RunService hosts OpenWorkflow;         │
-│  pipeline-workflow = the run loop,      │
-│  stage-execution = the durable step     │
+│  WorkflowRuntime embeds Aiki per        │
+│  project; pipeline-workflow = the loop, │
+│  pipeline-tasks = its work tasks        │
 ├─────────────────────────────────────────┤
-│  .isotopy/workflow.db — OpenWorkflow SoT   │
-│  .isotopy/runs.db — runs/events projection │
+│  .isotopy/aiki.db — Aiki's SoT          │
+│  .isotopy/runs.db — the read model      │
 └─────────────────────────────────────────┘
 ```
 
-Each pipeline **stage** is a durable step; a `gateAfter` stage parks on
-`waitForSignal` and `approveGate` sends the matching signal. Semantic restart
-(S2) and one-active-run-per-project (S5) are Isotopy-owned on top (a seeded fresh
-run, and a project-keyed admission guard). Subprocess-tree kill on cancel (G4)
-stays Isotopy-owned; `cancelWorkflowRun` only marks durable state.
-
-**Fallback (not taken):** if the runtime had failed to embed in-process, the
-same six capabilities were to be built on the same `node:sqlite` substrate behind
-the repository seam — so the storage work is preserved either way.
+Each pipeline **stage turn** is a durable task, and every write to the read model
+is one too — a small task defined where it is called (`isotopy.stage-awaiting`,
+`isotopy.run-completed`, …) — so a replay never repeats one. A `gateAfter` stage parks on its `gate` event and `approveGate` sends it.
+Semantic restart (S2) and one-active-run-per-project (S5) are Isotopy-owned on
+top (a seeded fresh run, and a project-keyed admission guard). Subprocess-tree
+kill on cancel (G4) stays Isotopy-owned; Aiki's cancel stops the run at its next
+transition but never interrupts the task in flight.
 
 
 ---
@@ -945,12 +955,12 @@ user-level root; both exist so tests get isolated roots.
 │  - POST /engines/:id/install|login               │
 │  - GET /fs/dirs, GET /health                     │
 ├──────────────────────────────────────────────────┤
-│  RunService (durable OpenWorkflow runtime)       │
+│  RunService (durable Aiki runtime)               │
 │  + per-project SQLite read model                 │
 └──────────────────────────────────────────────────┘
 ```
 
-Every request carries an `X-Isotopy-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ISOTOPY_PORT`, `ISOTOPY_UI_PORT`). There is no external database — OpenWorkflow owns `.isotopy/workflow.db`, and Isotopy's run/event/milestone/orchestration tables live in `.isotopy/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
+Every request carries an `X-Isotopy-Project` header identifying the active project; the server falls back to its own active project when it is absent. Both processes read the same repo-root `.env`, so ports are configured once (`ISOTOPY_PORT`, `ISOTOPY_UI_PORT`). There is no external database — Aiki owns `.isotopy/aiki.db`, and Isotopy's run/event/milestone/orchestration tables live in `.isotopy/runs.db`. The frontend side of this picture is [`architecture-ui.md`](./architecture-ui.md).
 
 **Packaging note:** MVP uses local server + Web UI. A future Tauri desktop app can wrap the same Hono API and Vite SPA without changing orchestrator design.
 
@@ -971,7 +981,7 @@ Every request carries an `X-Isotopy-Project` header identifying the active proje
 | LLM abstraction | None — engines are coding CLIs | Isotopy spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
 | Worktree isolation | Not taken — agents run in `ctx.cwd` | Never built; a run works the project directory directly |
 | Commit specs automatically | Opt-in on gate approve | Keeps git clean |
-| Workflow runtime | OpenWorkflow (`node:sqlite`, in-process) | Durable execution, gates, retries, crash recovery; embedded file DB, no server |
+| Workflow runtime | Aiki (`node:sqlite`, in-process) | Durable execution, events, retries, crash recovery, cron; embedded file DB, no server |
 | E2E runner | Playwright | Industry standard; test agents; trace on failure |
 | Deploy model | Adapter-based subprocess/CLI | Platform-agnostic; preview default |
 | Fallback (not taken) | Custom engine on the same `node:sqlite` substrate | Same capabilities behind the repository seam if the runtime hadn't embedded |

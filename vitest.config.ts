@@ -28,6 +28,7 @@ const NODE_TEST_TIMEOUT_MS = 15_000;
 // so its *.spec.ts files are never matched here.
 export default defineConfig({
   test: {
+    poolOptions: { forks: { isolate: false } },
     projects: [
       {
         resolve: RESOLVE,
@@ -45,6 +46,7 @@ export default defineConfig({
         test: {
           name: "ui",
           environment: "jsdom",
+          pool: "threads",
           include: ["packages/ui/test/**/*.comp.tsx"],
           exclude: EXCLUDE,
         },

@@ -1,13 +1,14 @@
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, assert, beforeEach, expect, test, vi } from "vitest";
 import type {
   Orchestration,
   OrchestratorTeamProposal,
   RunState,
+  ScheduleOutcome,
   ScheduleView,
 } from "@isotopy/core";
-import type { ScheduleTick } from "../../src/services/schedule-service.ts";
 import {
   addTestProject,
   createTestApp,
@@ -20,17 +21,21 @@ import {
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
+import { HOME_PROJECT_ID } from "@isotopy/core";
+import { JsonRecordsTable, SCHEDULES_TABLE } from "../../src/db/json-records-table.ts";
+import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
+import { RecordingLogger } from "../support/recording-logger.ts";
 
-const EVERY_MINUTE = "* * * * *";
+// A schedule that a test fires by hand must not also fire on its own while the
+// test runs, so it waits for midnight on a leap day.
+const LEAP_DAY = "0 0 29 2 *";
+
+// The one schedule that is meant to fire on its own does so within a second.
+const EVERY_SECOND = "* * * * * *";
 
 // Which pipeline a scheduled run lands on is how the two paths are told apart.
 const ORCHESTRATION_PIPELINE = "orchestration";
-
-// Fixed at module load so a tick and the assertion about it name the same
-// instant; every schedule under test is created later, and so is due at both.
-const AN_HOUR_ON = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-const THREE_DAYS_ON = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
 const BOARD_READER: OrchestratorTeamProposal = {
   name: "Board reader",
@@ -108,139 +113,190 @@ test("an edit that would leave a schedule unable to fire is refused, and the sto
 
 test("the server sends the next fire time, so the browser never parses a cron expression", async () => {
   // Act
-  const created = await createSchedule({ cron: "0 9 * * *", timezone: "Europe/Berlin" });
+  const created = await createSchedule({
+    cron: "0 9 * * *",
+    timezone: "Europe/Berlin",
+    enabled: false,
+  });
 
   // Assert
-  assert(created.nextFireAt, "an enabled daily schedule always has a next fire");
+  assert(created.nextFireAt, "a daily schedule always has a next fire");
   expect(new Date(created.nextFireAt).getTime()).toBeGreaterThan(Date.now());
 });
 
-test("a due schedule starts exactly one run, and that run carries the team pinned to the schedule", async () => {
+test("a fired schedule starts exactly one run, and that run carries the team pinned to the schedule", async () => {
   // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE });
+  const created = await createSchedule();
 
   // Anticipate — the pinned team is one Project Manager, not the project default.
   ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
   ctx.engine.anticipateRunReview();
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert
-  expect(ticks).toEqual([
-    { scheduleId: created.id, outcome: { kind: "fired", runId: expect.any(String) } },
-  ]);
-  const run = await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
+  expect(outcome).toEqual({ kind: "fired", runId: expect.any(String) });
+  const run = await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   expect(run.pipeline?.groups[0]?.stages.map((stage) => stage.skill)).toEqual([
     "project-manager",
   ]);
   const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
-  expect(stored.body.lastFiredAt).toBe(AN_HOUR_ON);
+  expect(stored.body.lastFiredAt).toBeDefined();
   ctx.engine.verify();
+});
+
+test("an enabled schedule is fired by its own cron, with nobody calling it", async () => {
+  // Arrange
+  const fire = vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+
+  // Act
+  const created = await createSchedule({ cron: EVERY_SECOND });
+
+  // Assert
+  await vi.waitFor(() => expect(fire).toHaveBeenCalledWith(created.id), { timeout: 5_000 });
+});
+
+test("a schedule keeps firing on its own after a server restart", async () => {
+  // Arrange
+  vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+  const created = await createSchedule({ cron: EVERY_SECOND });
+  await ctx.orchestrator.shutdown();
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const fire = vi.spyOn(restarted.schedules, "fire").mockResolvedValue(undefined);
+  await vi.waitFor(() => expect(fire).toHaveBeenCalledWith(created.id), { timeout: 5_000 });
+  await restarted.shutdown();
+});
+
+test("switching a schedule off stops its cron, rather than leaving it to fire into nothing", async () => {
+  // Arrange
+  const fire = vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+  const created = await createSchedule({ cron: EVERY_SECOND });
+  await vi.waitFor(() => expect(fire).toHaveBeenCalled(), { timeout: 5_000 });
+
+  // Act
+  await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, { enabled: false });
+
+  // Assert — a fire already on its way when the switch landed may still arrive.
+  await sleep(500);
+  fire.mockClear();
+  await sleep(1_500);
+  expect(fire).not.toHaveBeenCalled();
+});
+
+test("a schedule switched off and on again fires on its own again", async () => {
+  // Arrange — Aiki keeps one activation per definition, so switching back on has
+  // to find the activation it switched off, not open a second one beside it.
+  const fire = vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+  const created = await createSchedule({ cron: EVERY_SECOND });
+  await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, { enabled: false });
+  await sleep(500);
+  fire.mockClear();
+
+  // Act
+  const switchedOn = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    enabled: true,
+  });
+
+  // Assert
+  expect(switchedOn.status).toBe(200);
+  await vi.waitFor(() => expect(fire).toHaveBeenCalledWith(created.id), { timeout: 5_000 });
+});
+
+test("a schedule edited to another expression and back fires on its own again", async () => {
+  // Arrange
+  const fire = vi.spyOn(ctx.schedules, "fire").mockResolvedValue(undefined);
+  const created = await createSchedule({ cron: EVERY_SECOND });
+  const editedAway = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    cron: LEAP_DAY,
+  });
+  await sleep(500);
+  fire.mockClear();
+
+  // Act
+  const editedBack = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    cron: EVERY_SECOND,
+  });
+
+  // Assert
+  expect(editedAway.status).toBe(200);
+  expect(editedBack.status).toBe(200);
+  await vi.waitFor(() => expect(fire).toHaveBeenCalledWith(created.id), { timeout: 5_000 });
 });
 
 test("the Orchestrator that owns a scheduled run knows which schedule started it", async () => {
   // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE });
+  const created = await createSchedule();
 
   // Anticipate
   ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
   ctx.engine.anticipateRunReview();
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert — this is what lets the rail show one group per schedule rather than
   // one per episode, however many times it has fired.
-  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
+  await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   const orchestrations = await get<Orchestration[]>(ctx.app, "/orchestrations");
   expect(orchestrations.body[0]?.scheduleId).toBe(created.id);
 });
 
-test("windows missed while the machine slept owe one run between them, not one each", async () => {
-  // Arrange — a per-minute schedule, ticked as if the machine woke three days on.
-  const created = await createSchedule({ cron: EVERY_MINUTE });
-
-  // Anticipate — one fire, therefore one engine call.
-  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
-  ctx.engine.anticipateRunReview();
-
-  // Act
-  const ticks = await ctx.schedules.tick(THREE_DAYS_ON);
-
-  // Assert
-  expect(ticks).toHaveLength(1);
-  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
-  const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
-  expect(stored.body.lastWindowAt).toBe(THREE_DAYS_ON);
-  ctx.engine.verify();
-});
-
-test("a window already consumed does not fire again, however long the machine was asleep", async () => {
-  // Arrange — the three-day catch-up has already happened.
-  await createSchedule({ cron: EVERY_MINUTE });
-  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
-  ctx.engine.anticipateRunReview();
-  const first = await ctx.schedules.tick(THREE_DAYS_ON);
-  await waitForRunStatus(ctx.app, firedRunId(first), "completed");
-
-  // Act
-  const second = await ctx.schedules.tick(THREE_DAYS_ON);
-
-  // Assert — catching up consumed the window; it does not owe the ones it slept through.
-  expect(second).toEqual([]);
-  ctx.engine.verify();
-});
-
-test("a due schedule that finds a run already active records a skip instead of starting a second", async () => {
+test("a fired schedule that finds a run already active records a skip instead of starting a second", async () => {
   // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE });
+  const created = await createSchedule();
 
   // Anticipate — the manual run holds the project open; the schedule adds nothing.
   ctx.engine.anticipate({ as: "Developer" }).hangsUntilAborted();
 
   // Act
-  const ticks = await tickWhileARunIsActive();
+  const outcome = await fireWhileARunIsActive(created.id);
 
   // Assert
-  expect(ticks).toEqual([
-    { scheduleId: created.id, outcome: { kind: "skipped", reason: "run_active" } },
-  ]);
+  expect(outcome).toEqual({ kind: "skipped", reason: "run_active" });
   const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
   expect(stored.body.lastOutcome).toEqual({ kind: "skipped", reason: "run_active" });
   expect(stored.body.lastFiredAt).toBeUndefined();
 });
 
-test("a disabled schedule does not fire, and accumulates no debt while it is off", async () => {
+test("a disabled schedule does not fire, even when asked to", async () => {
   // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE, enabled: false });
+  const created = await createSchedule({ enabled: false });
 
   // Anticipate — none: a disabled schedule must not reach an engine.
 
   // Act
-  const ticks = await ctx.schedules.tick(THREE_DAYS_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert
-  expect(ticks).toEqual([]);
-  const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
-  expect(stored.body.lastWindowAt).toBeUndefined();
+  expect(outcome).toBeUndefined();
   ctx.engine.verify();
 });
 
-test("a schedule and the window it last consumed survive a server restart", async () => {
-  // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE });
-  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
-  ctx.engine.anticipateRunReview();
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
-  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
-  await ctx.orchestrator.shutdown();
+test("a schedule stored while Isotopy kept its own window still loads after the upgrade", async () => {
+  // Arrange — records written by the ticker carry the window it last consumed.
+  await seedHomeScheduleRow("ticked01", {
+    id: "ticked01",
+    projectId: HOME_PROJECT_ID,
+    name: "Nightly sweep",
+    cron: LEAP_DAY,
+    timezone: "UTC",
+    task: "Sweep the board",
+    enabled: false,
+    lastWindowAt: "2026-10-01T09:00:00.000Z",
+    createdAt: "2026-09-01T09:00:00.000Z",
+    updatedAt: "2026-09-01T09:00:00.000Z",
+  });
 
   // Act
   const restarted = await restartApp();
 
-  // Assert — crash safety lives in the record, not in a parked workflow.
-  expect(restarted.schedules.getSchedule(created.id)?.lastWindowAt).toBe(AN_HOUR_ON);
+  // Assert
+  expect((await get<ScheduleView>(restarted.app, "/schedules/ticked01")).status).toBe(200);
   await restarted.shutdown();
 });
 
@@ -300,24 +356,9 @@ test("another project cannot delete a schedule it does not own", async () => {
   expect(await userSchedules()).toHaveLength(1);
 });
 
-test("turning a paused schedule back on owes nothing for the windows it slept through", async () => {
-  // Arrange — paused, so it consumed no window while it was off.
-  const created = await createSchedule({ cron: EVERY_MINUTE, enabled: false });
-
-  // Act
-  const resumed = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
-    enabled: true,
-  });
-
-  // Assert — the anchor moves to the moment it was enabled, so the pause is not
-  // a backlog of paid runs waiting for the first tick.
-  expect(resumed.body.lastWindowAt).toBeDefined();
-  expect(resumed.body.lastWindowAt! >= created.createdAt).toBe(true);
-});
-
 test("a run that fails to start is recorded as failed rather than left reading as a fire", async () => {
   // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE });
+  const created = await createSchedule();
 
   // Anticipate — the run never starts, so no engine is reached.
   vi.spyOn(ctx.orchestrator, "startComposedRun").mockRejectedValueOnce(
@@ -325,61 +366,35 @@ test("a run that fails to start is recorded as failed rather than left reading a
   );
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert — "Last ran" here would be a lie told to nobody who was watching.
-  expect(ticks).toEqual([
-    {
-      scheduleId: created.id,
-      outcome: { kind: "failed", error: "claude-code is not installed" },
-    },
-  ]);
+  expect(outcome).toEqual({ kind: "failed", error: "claude-code is not installed" });
   const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
   expect(stored.body.lastFiredAt).toBeUndefined();
-  ctx.engine.verify();
-});
-
-test("one schedule failing to start does not stop the schedules after it from firing", async () => {
-  // Arrange — two due on the same tick; the first one's start throws.
-  await createSchedule({ name: "Broken", cron: EVERY_MINUTE });
-  const healthy = await createSchedule({ name: "Healthy", cron: EVERY_MINUTE });
-  vi.spyOn(ctx.orchestrator, "startComposedRun").mockRejectedValueOnce(
-    new Error("claude-code is not installed"),
-  );
-
-  // Anticipate — the second schedule still reaches an engine.
-  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
-  ctx.engine.anticipateRunReview();
-
-  // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
-
-  // Assert
-  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
-  expect(outcomeKindFor(ticks, healthy.id)).toBe("fired");
   ctx.engine.verify();
 });
 
 test("a schedule whose project was removed does not run somewhere else instead", async () => {
   // Arrange — a schedule in its own project, which is then unregistered.
   const other = await addTestProject(ctx.registry, "removed");
-  await createSchedule({ cron: EVERY_MINUTE }, other.headers);
+  const orphan = await createSchedule({}, other.headers);
   ctx.registry.unregister(other.id);
 
   // Anticipate — none: an orphaned schedule must not spend money in Home.
 
   // Act
-  const ticks = await ctx.schedules.tick(THREE_DAYS_ON);
+  const outcome = await ctx.schedules.fire(orphan.id);
 
   // Assert
-  expect(ticks).toEqual([]);
+  expect(outcome).toBeUndefined();
   ctx.engine.verify();
 });
 
 test("removing a project takes its schedules with it, so a restart cannot adopt them", async () => {
   // Arrange
   const other = await addTestProject(ctx.registry, "removed");
-  const orphan = await createSchedule({ cron: EVERY_MINUTE }, other.headers);
+  const orphan = await createSchedule({}, other.headers);
 
   // Act
   await del<unknown>(ctx.app, `/projects/${other.id}`);
@@ -388,31 +403,20 @@ test("removing a project takes its schedules with it, so a restart cannot adopt 
   expect(ctx.schedules.getSchedule(orphan.id)).toBeUndefined();
 });
 
-test("a window that cannot be claimed durably starts no paid work", async () => {
-  // Arrange — the claiming write fails, so the window was never recorded.
-  const created = await createSchedule({ cron: EVERY_MINUTE });
-  failTheNextWrite("disk is full");
-
-  // Anticipate — none: an unrecorded window must not become a run that repeats
-  // after a restart.
-
-  // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
-
-  // Assert
-  expect(ticks).toEqual([
-    { scheduleId: created.id, outcome: { kind: "failed", error: "disk is full" } },
-  ]);
-  ctx.engine.verify();
-});
-
-test("a window that cannot be claimed is reported to whoever runs the server, not only on the schedule", async () => {
-  // Arrange
-  const created = await createSchedule({ cron: EVERY_MINUTE });
+test("an outcome that cannot be recorded is reported to whoever runs the server", async () => {
+  // Arrange — a run already under way makes this fire a skip, so recording its
+  // outcome is the only write it makes.
+  const created = await createSchedule();
+  ctx.engine.anticipate({ as: "Developer" }).hangsUntilAborted();
+  await post(ctx.app, "/runs", {
+    pipelineId: "solo",
+    task: "Manual work already under way",
+    engine: "claude-code",
+  });
   failTheNextWrite("disk is full");
 
   // Act
-  await ctx.schedules.tick(AN_HOUR_ON);
+  await ctx.schedules.fire(created.id);
 
   // Assert
   expect(ctx.logger.at("error")).toEqual([
@@ -420,37 +424,19 @@ test("a window that cannot be claimed is reported to whoever runs the server, no
   ]);
 });
 
-test("a failed claim leaves the window unconsumed, so the next tick may still take it", async () => {
-  // Arrange
-  await createSchedule({ cron: EVERY_MINUTE });
-  failTheNextWrite("disk is full");
-  await ctx.schedules.tick(AN_HOUR_ON);
-
-  // Anticipate — the retry is a real fire.
-  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
-  ctx.engine.anticipateRunReview();
-
-  // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
-
-  // Assert
-  await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
-  ctx.engine.verify();
-});
-
 test("a schedule with no team hands its prompt to the Orchestrator rather than a fixed team", async () => {
   // Arrange — a scheduled task that says what it wants, not who does it.
-  await createSchedule({ cron: EVERY_MINUTE, team: undefined });
+  const created = await createSchedule({ team: undefined });
 
   // Anticipate — the Orchestrator opens the conversation; no composed team runs.
   ctx.engine.anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ }).parks("Thinking.");
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert
   await ctx.engine.waitForCall();
-  const run = await getRun(ctx.app, firedRunId(ticks));
+  const run = await getRun(ctx.app, firedRunId(outcome));
   expect(run.pipelineId).toBe(ORCHESTRATION_PIPELINE);
   ctx.engine.verify();
 });
@@ -459,13 +445,13 @@ test("the Orchestrator's opening turn carries the board, so the prompt need not 
   // Arrange — a project that actually has a board to carry.
   const boarded = await addTestProject(ctx.registry, "boarded");
   await seedBoard(boarded.root, "## TASK-421: Rename the widget\n**Priority:** P1\n\n---\n");
-  await createSchedule({ cron: EVERY_MINUTE, team: undefined }, boarded.headers);
+  const created = await createSchedule({ team: undefined }, boarded.headers);
 
   // Anticipate — the board reaches the prompt the Orchestrator is handed.
   ctx.engine.anticipate({ as: "Orchestrator", prompt: /TASK-421/ }).parks("Thinking.");
 
   // Act
-  await ctx.schedules.tick(AN_HOUR_ON);
+  await ctx.schedules.fire(created.id);
 
   // Assert
   await ctx.engine.waitForCall();
@@ -474,17 +460,17 @@ test("the Orchestrator's opening turn carries the board, so the prompt need not 
 
 test("a schedule that pins a team still runs that team, not a conversation", async () => {
   // Arrange — the regression: pinning a team must not have become a prompt.
-  await createSchedule({ cron: EVERY_MINUTE });
+  const created = await createSchedule();
 
   // Anticipate
   ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
   ctx.engine.anticipateRunReview();
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert
-  const run = await waitForRunStatus(ctx.app, firedRunId(ticks), "completed");
+  const run = await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   expect(run.pipeline?.groups[0]?.stages.map((stage) => stage.skill)).toEqual([
     "project-manager",
   ]);
@@ -494,7 +480,7 @@ test("a schedule that pins a team still runs that team, not a conversation", asy
 test("a prompt-only schedule waits rather than superseding a conversation someone is mid-way through", async () => {
   // Arrange — orchestrations.start() terminates an active Orchestrator, and a
   // parked conversation is not a run, so admitRun cannot see it.
-  const created = await createSchedule({ cron: EVERY_MINUTE, team: undefined });
+  const created = await createSchedule({ team: undefined });
   ctx.engine.anticipate({ as: "Orchestrator" }).reports("Still weighing it up.");
   const { body: conversation } = await post<RunState>(ctx.app, "/orchestrations", {
     goal: "Ship the settings screen",
@@ -504,12 +490,10 @@ test("a prompt-only schedule waits rather than superseding a conversation someon
   await waitForRunStatus(ctx.app, conversation.id, "needs_attention");
 
   // Act
-  const ticks = await ctx.schedules.tick(AN_HOUR_ON);
+  const outcome = await ctx.schedules.fire(created.id);
 
   // Assert
-  expect(ticks).toEqual([
-    { scheduleId: created.id, outcome: { kind: "skipped", reason: "orchestrator_busy" } },
-  ]);
+  expect(outcome).toEqual({ kind: "skipped", reason: "orchestrator_busy" });
   ctx.engine.verify();
 });
 
@@ -538,14 +522,10 @@ async function userSchedules(): Promise<ScheduleView[]> {
   return body.filter((schedule) => schedule.builtIn === undefined);
 }
 
-function outcomeKindFor(ticks: ScheduleTick[], scheduleId: string): string | undefined {
-  return ticks.find((tick) => tick.scheduleId === scheduleId)?.outcome.kind;
-}
-
 function scheduleBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     name: "Board poller",
-    cron: "0 9 * * *",
+    cron: LEAP_DAY,
     timezone: "UTC",
     task: "Take the next task off the board",
     team: BOARD_READER,
@@ -567,21 +547,30 @@ async function createSchedule(
   return response.body;
 }
 
+async function seedHomeScheduleRow(id: string, record: unknown): Promise<void> {
+  const databases = new ProjectDatabases(new RecordingLogger());
+  const projectPath = { id: HOME_PROJECT_ID, root: ctx.home, dataDir: ctx.home };
+  await new JsonRecordsTable(databases.for(projectPath), SCHEDULES_TABLE).upsert(
+    id,
+    JSON.stringify(record),
+  );
+  await databases.settleAll();
+}
+
 function failTheNextWrite(message: string): void {
   vi.spyOn(JsonRecordRepository.prototype, "write").mockRejectedValueOnce(new Error(message));
 }
 
-async function tickWhileARunIsActive(): Promise<ScheduleTick[]> {
+async function fireWhileARunIsActive(scheduleId: string): Promise<ScheduleOutcome | undefined> {
   await post(ctx.app, "/runs", {
     pipelineId: "solo",
     task: "Manual work already under way",
     engine: "claude-code",
   });
-  return ctx.schedules.tick(AN_HOUR_ON);
+  return ctx.schedules.fire(scheduleId);
 }
 
-function firedRunId(ticks: ScheduleTick[]): string {
-  const fired = ticks.find((tick) => tick.outcome.kind === "fired");
-  assert(fired?.outcome.kind === "fired", "the tick started no run");
-  return fired.outcome.runId;
+function firedRunId(outcome: ScheduleOutcome | undefined): string {
+  assert(outcome?.kind === "fired", "the fire started no run");
+  return outcome.runId;
 }

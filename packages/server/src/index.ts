@@ -46,7 +46,6 @@ runs.registerOrchestration(orchestrations);
 await orchestrations.init();
 await runs.init();
 await schedules.init();
-schedules.start();
 
 serve(
   {
@@ -80,7 +79,6 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   }
   stopping = true;
   logger.info(`Isotopy server stopping on ${signal}`);
-  schedules.stop();
   await product.shutdown();
   await runs.shutdown();
   await databases.settleAll();

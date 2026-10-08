@@ -81,9 +81,11 @@ const persistedRunSchema = z
     version: z.literal(1),
     run: runStateSchema,
     permissionMode: z.enum(PERMISSION_MODE_IDS).optional(),
+    durableRunId: text.optional(),
     openWorkflowRunId: text.optional(),
   })
-  .strict();
+  .strict()
+  .transform(({ openWorkflowRunId: _retired, ...persisted }) => persisted);
 
 export type PersistedRun = z.infer<typeof persistedRunSchema>;
 

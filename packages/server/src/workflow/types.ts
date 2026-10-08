@@ -43,6 +43,12 @@ export interface PipelineWorkflowInput {
   startedMessage: string;
 }
 
+export interface StageWorkContext {
+  runId: string;
+  task?: string;
+  permissionMode: EnginePermissionMode;
+}
+
 export type { StageOutcome } from "@isotopy/core";
 
 export interface StageResult {
@@ -84,7 +90,6 @@ export interface RunProjection {
   stageAnswered(runId: string, stageId: string): void;
   stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void;
   limitResolved(runId: string, stageId: string, choice?: LimitChoice): void;
-  gateApproved(runId: string, stageId: string): void;
   stagePassed(runId: string, stageId: string): void;
   stageSkipped(runId: string, stageId: string): void;
   stageFailed(runId: string, stageId: string, message: string): void;

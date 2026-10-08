@@ -161,7 +161,7 @@ running. The full comparison is in [competitor-matrix.md](./competitor-matrix.md
 |------|------------|
 | Harness APIs unstable | Adapter interface plus CLI fallback |
 | Scope creep vs hosted builders on v1 speed | Prepared agents + templates; don't host runtime |
-| Orchestration complexity | OpenWorkflow for durable execution (embedded SQLite, no server); fixed default pipeline |
+| Orchestration complexity | Aiki for durable execution (embedded in-process on SQLite, no separate server); fixed default pipeline |
 | Quality of agent output | Gates, blind review agent, Playwright E2E fix loops |
 | Context burden on user | Smart defaults, intake agent, progressive disclosure |
 | Task management scope creep | Tasks feed runs only; no sprint planning, team sync, or external PM in MVP |
@@ -178,6 +178,6 @@ running. The full comparison is in [competitor-matrix.md](./competitor-matrix.md
 
 ## Next Steps
 
-1. Implement architecture with the OpenWorkflow workflow runtime (see [architecture.md](architecture.md))
+1. Implement architecture with the Aiki workflow runtime (see [architecture.md](architecture.md))
 2. Validate with 3-5 developers running one real feature end-to-end including deploy
 3. Publish docs and open-source repo under Isotopy
