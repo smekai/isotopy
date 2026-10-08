@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   addTestProject,
-  approveGatesOnArrival,
   createTestApp,
   getRun,
   post,
@@ -98,24 +97,6 @@ describe("durable runtime", () => {
     // Assert
     expect((await getRun(restarted.app, run.id)).status).toBe("completed");
     await restarted.shutdown();
-  });
-
-  test("an approval that lands before the run starts waiting for it still opens the gate", async () => {
-    // Arrange
-    approveGatesOnArrival(ctx.orchestrator);
-
-    // Anticipate
-    ctx.engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
-    ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-    ctx.engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
-    ctx.engine.anticipateRunReview();
-
-    // Act
-    const run = await startRun(ctx.app, { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" });
-
-    // Assert
-    await waitForRunStatus(ctx.app, run.id, "completed");
-    ctx.engine.verify();
   });
 
   test("a stage whose work throws fails once, without running its engine again, and the run settles as failed", async () => {

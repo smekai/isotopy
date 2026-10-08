@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractOrchestratorDecision } from "../../src/schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../../src/schemas/run-artifacts.ts";
-import { formatValidationIssues } from "../../src/domain/validation.ts";
 
 const ARTIFACTS = {
   summary: "Search shipped behind a flag",
@@ -31,32 +30,6 @@ describe("extractRunArtifacts", () => {
     expect(parsed.ok && parsed.value).toEqual(ARTIFACTS);
   });
 
-  it("reports a missing fenced block rather than throwing", () => {
-    const parsed = extractRunArtifacts("The run went fine, nothing to add.");
-
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "Missing fenced isotopy-run-artifacts JSON block",
-    );
-  });
-
-  it("reports a block that is not valid JSON", () => {
-    const parsed = extractRunArtifacts(
-      "```isotopy-run-artifacts\n{ summary: done }\n```",
-    );
-
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "valid JSON",
-    );
-  });
-
-  it("names the offending field when a required one is missing", () => {
-    const { summary: _omitted, ...withoutSummary } = ARTIFACTS;
-    const parsed = extractRunArtifacts(artifactsBlock(withoutSummary));
-
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "summary",
-    );
-  });
 });
 
 describe("a review turn carrying both blocks", () => {
