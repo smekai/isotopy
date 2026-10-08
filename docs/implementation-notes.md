@@ -285,7 +285,7 @@ and both carry an `orchestrationId` on their context, which is what makes the tw
 call sites symmetric.
 
 - **`recordDecisionUsage` is deliberately not part of `recordReview`.** That method
-  throws `OrchestratorRequiredError` once the orchestration has stopped, and
+  throws once the orchestration has stopped, and
   `runOrchestratorReviewWork` answers by logging a warning. Booking the cost there
   would lose it in exactly the case where a turn was spent and its decision was not
   kept.
@@ -374,6 +374,8 @@ by `\n\n---\n\n`) — same content reaches the model, keeping personas
 engine-agnostic. It is a no-op when a stage has no persona. **Exception:** a
 Claude `.cmd` shim runs through cmd.exe (multi-line flag can't survive), so on
 that path Claude also falls back to prompt-folding via stdin.
+
+**Persona adherence is model-dependent.** On `haiku` the Tester verified with inline `node -e` checks rather than writing a test file, and ignored an instruction placed *after* the closing "Do not restate this prompt" line. Put must-follow output rules before that line.
 
 ## Engines — CLI-specific quirks
 
@@ -563,19 +565,9 @@ subscribers, and executes each stage either as a simulation or through a real
 engine adapter. The read model is in memory; SQLite (`repository/` over `db/`) is
 the store of record, written per transition.
 
-**The durable-workflow seam is the whole `RunService`, not one method.**
-The durable runtime is **Aiki** (`workflow/`), embedded per project:
-`WorkflowRuntime` opens an Aiki server on `.isotopy/aiki.db`, a client bound to its
-handler, and a worker, all in-process. `workflow/pipeline-workflow.ts` is the
-durable workflow body, `workflow/pipeline-tasks.ts` its three work tasks, and
-`workflow/stage-execution.ts` the work a stage task does — the single decision
-point for how a stage runs (simulate vs. engine). Durability owns
-starting/queueing, the loop, gates (durable events), durable timers, retries,
-recovery and cancellation state; `RunService` is the single writer of the
-`RunState`/events read model, and every write it receives from the workflow body
-is a small task of its own, defined where it is called (`isotopy.stage-awaiting`,
-`isotopy.run-completed`, …), so a replay never repeats one. Keep stage-execution
-logic inside `workflow/stage-execution.ts`.
+The durable workflow behind it — which file holds the loop, the tasks and a stage's
+work, and what Aiki owns — is described once, in
+[architecture.md](architecture.md#workflow-runtime-aiki).
 
 **A stage whose work throws fails that stage, once (`failStageOnTaskFailure`).**
 Stage work catches what it expects — an engine that crashes or limits comes back as
@@ -606,9 +598,14 @@ for a fleet: a claim is reclaimed after 90 s and an unclaimed run is republished
 every 10 s. Here one process owns each file, so a run killed mid-task should come
 back within seconds — the claim refresh, the idle timeout and the publish lease
 are all lowered together, and the idle timeout must stay above the refresh or a
-live run is reclaimed from under its worker. Aiki logs a run's steps at `debug`
-(dropped) and lifecycle events — worker start and stop, a schedule activated, a run
-cancelled or woken — at `info`, which reach the operator log with warnings and errors.
+live run is reclaimed from under its worker.
+
+**Aiki logs through the operator logger itself (`PinoLogger`).** The `Logger` seam
+has Aiki's shape too — `trace`/`debug` and a `child` that takes either a component
+name or the bindings Aiki adds — so `logger.child("Aiki")` is handed to the server,
+client and migrations as is, with no adapter. A run's steps come at `debug` and
+pino's `info` level drops them; lifecycle events — worker start and stop, a schedule
+activated, a run cancelled or woken — come at `info` under `component: "Aiki"`.
 
 **An abort records the durable cancel before it kills the CLI (`RunService.abortRun`).**
 `abortRun` awaits Aiki's cancel first, then aborts the engine's controller
@@ -646,7 +643,7 @@ only means it ran; a `VERDICT: FAIL` in the output fails the stage anyway, or a
 failed verification would be reported as a green run. Stages whose persona
 declares no verdict stay governed by the exit code.
 
-**`parseStageVerdict` scans backwards (`domain/stage-context.ts`).** It looks for
+**`parseStageVerdict` scans backwards (`domain/rules/stage-context.ts`).** It looks for
 the *last* line that is *only* a verdict, tolerating markdown wrapping (bare,
 backticked, bold) and CRLF line endings. Both matter: the persona text itself
 contains the literal strings `VERDICT: PASS`/`FAIL`, and a report may discuss one
@@ -739,7 +736,7 @@ the workspace is the source of truth, the reports only add what a box *said*.
   cwd-relative path would land in the wrong place. Since TASK-059 it is used
   *only* to find the tool's own `.env` — no user data hangs off it.
 - **Data paths are a value, not a constant.** Every storage call takes a
-  `ProjectPaths` (`id`, `root`, `dataDir`): a project's data lives in
+  `ProjectPath` (`id`, `root`, `dataDir`): a project's data lives in
   `<root>/.isotopy/`, so history sits beside the code it belongs to instead of
   inside the Isotopy checkout. See [`decisions.md`](./decisions.md) (2026-07-23).
 - **`homeProjectPaths()` and `userIsotopyDir()` are functions, not constants.** A
@@ -831,10 +828,10 @@ under OpenWorkflow: its stored `openWorkflowRunId` is dropped on load, so it has
 no durable run on Aiki and settles as interrupted, while a finished one loads
 unchanged.
 
-**The read model is a projection; Aiki's SQLite is the SoT (`emit`/`schedulePersist`).**
-Every event appends to the per-project `events` table immediately; `RunState`
-snapshot transitions flush at once, while high-frequency stage logs are coalesced
-behind a short debounce. The snapshot and events (formerly `state.json` /
+**The read model is a projection; Aiki's SQLite is the SoT (`emit`/`flushPersist`).**
+Every event appends to the per-project `events` table immediately, and every event
+but a stage log also flushes the `RunState` snapshot; a stage's logs live only in
+the `events` table. The snapshot and events (formerly `state.json` /
 `events.jsonl`, now SQLite tables) are a rebuildable read model with exactly one
 writer — the durable workflow — never a second, independently advancing store.
 
@@ -940,8 +937,8 @@ install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23
 - **A corrupt or unopenable DB degrades to an empty load with a warning**, so a bad
   DB can't stop the server from booting. A failed open clears the memoised handle so
   a later call can retry. JSON parsing of a stored snapshot is confined to
-  `parsePersistedRun` — the one trust boundary where `unknown` is narrowed by the
-  `isPersistedRun` guard.
+  `parsePersistedRun` — the one trust boundary where `unknown` is narrowed, by
+  `persistedRunSchema`.
 
 ## Filesystem access (`utils/workspace-files.ts`, `utils/directory-browser.ts`)
 
@@ -1031,7 +1028,7 @@ run.
 `.isotopy/skills/<id>.md` on first read; that copy then silently shadowed later
 improvements to the constant and had to be regenerated by hand during the
 TASK-053 follow-up. Personas are **layered** instead, composed by the pure
-`domain/skills/compose.ts`:
+`composeSkill` (`domain/markdown/skill.ts`):
 
 1. bundled default in `domain/skills/personas/<id>.md`;
 2. replaced by a user-level `~/.isotopy/skills/<id>.md`, if present;
@@ -1090,7 +1087,7 @@ and a half-written notes file would be parsed as truncated on the next read.
 that has never produced a note contributes nothing to the Orchestrator's digest rather
 than a list of empty roles.
 
-The `NOTES_ID` guard (`/^[a-z0-9-]+$/`) is applied on both the write and the scan. A
+The `SKILL_ID` guard (`/^[a-z0-9-]+$/`, `domain/rules/persona-notes.ts`) is applied on both the write and the scan. A
 skill id reaches this code from a pipeline definition, which the Orchestrator can
 compose — so it is untrusted enough to keep out of a path join.
 

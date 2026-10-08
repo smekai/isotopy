@@ -339,11 +339,11 @@ test("restarting from QA keeps the upstream output and re-runs only QA", async (
 test("aborting before the box starts means the engine is never spawned at all", async () => {
   // Arrange — no anticipations: this run must not reach the engine.
   //
-  // Covers the abort landing before the stage is entered, where the "skipped"
-  // guard at the top of the stage step catches it. The narrower window — abort
-  // arriving *during* persona resolution, after that guard — is handled by the
-  // cancelled check before the adapter call, but is a genuine race and so is
-  // not deterministically reproducible here.
+  // Covers the abort landing before the stage's task starts: the abort waits
+  // for Aiki to record the cancel, so the task never runs. The narrower window
+  // — an abort while the task is still building its prompt — is the cancelled
+  // check right before the adapter call, a genuine race and so not
+  // deterministically reproducible here.
   const { app, engine } = ctx;
   const run = await startRun(app, PIPELINE);
 

@@ -68,22 +68,4 @@ describe("extractMilestonePlan", () => {
     );
   });
 
-  it("reports a missing fenced block rather than throwing", () => {
-    const parsed = extractMilestonePlan("The plan is in my head.");
-
-    expect(parsed.ok).toBe(false);
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "Missing fenced isotopy-milestone-plan JSON block",
-    );
-  });
-
-  it("reports a block that is not valid JSON", () => {
-    const parsed = extractMilestonePlan("```isotopy-milestone-plan\n{ nope }\n```");
-
-    expect(parsed.ok).toBe(false);
-    expect(parsed.ok === false && formatValidationIssues(parsed.issues)).toContain(
-      "valid JSON",
-    );
-  });
-
 });

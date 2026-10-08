@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   addTestProject,
-  approveGatesOnArrival,
   createTestApp,
   getRun,
   post,
@@ -82,22 +81,22 @@ describe("durable runtime", () => {
     await restarted.shutdown();
   });
 
-  test("an approval that lands before the run starts waiting for it still opens the gate", async () => {
-    // Arrange
-    approveGatesOnArrival(ctx.orchestrator);
-
-    // Anticipate
-    ctx.engine.anticipate({ as: "Project Manager" }).reports(PM_REPORT);
-    ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
-    ctx.engine.anticipate({ as: "Tester" }).reports(TESTER_REPORT);
+  test("a run that finished while its read model missed the end settles on the next boot", async () => {
+    // Arrange — the run's closing write is lost, as if the process died just
+    // after Aiki recorded the end and before the read model saved it.
+    const closing = vi.spyOn(ctx.orchestrator, "runCompleted").mockResolvedValueOnce(undefined);
+    ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
     ctx.engine.anticipateRunReview();
+    const run = await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+    await vi.waitFor(() => expect(closing).toHaveBeenCalled(), { timeout: 5_000 });
+    await ctx.orchestrator.shutdown();
 
     // Act
-    const run = await startRun(ctx.app, { pipelineId: "pm-dev-test", task: TASK, engine: "claude-code" });
+    const restarted = await restartApp();
 
     // Assert
-    await waitForRunStatus(ctx.app, run.id, "completed");
-    ctx.engine.verify();
+    expect((await getRun(restarted.app, run.id)).status).toBe("completed");
+    await restarted.shutdown();
   });
 
   test("a stage whose work throws fails once, without running its engine again, and the run settles as failed", async () => {
@@ -191,5 +190,23 @@ describe("durable runtime", () => {
     await waitForRunStatus(ctx.app, run.id, "completed");
     expect(tablesIn(project.root, "aiki.db")).toContain("workflow_run");
     expect(tablesIn(project.root, "runs.db")).not.toContain("workflow_run");
+  });
+
+  test("the runtime reports into the operator log as its own component, with the fields it binds", async () => {
+    // Anticipate
+    ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+
+    // Assert
+    await waitForRunStatus(ctx.app, run.id, "completed");
+    expect(ctx.logger.at("info")).toContainEqual(
+      expect.objectContaining({
+        component: "Aiki",
+        fields: expect.objectContaining({ "aiki.component": "worker" }),
+      }),
+    );
   });
 });

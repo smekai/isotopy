@@ -6,19 +6,19 @@ import { database, migrateApply, server } from "@aikirun/server";
 import type { DatabaseConfig, ServerRuntimeConfigOverrides, ServerRuntimeHandle } from "@aikirun/server";
 import { worker } from "@aikirun/worker";
 import type { WorkerConfigOverrides, WorkerHandle } from "@aikirun/worker";
+import { isTerminalWorkflowRunStatus } from "@aikirun/types/workflow/run";
+import type { TerminalWorkflowRunStatus } from "@aikirun/types/workflow/run";
 import { schedule as aikiSchedule } from "@aikirun/workflow";
-import type { WorkflowRunStatus } from "@aikirun/workflow";
-import type { LimitChoice } from "@isotopy/core";
+import type { LimitChoice, Schedule } from "@isotopy/core";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import type { Logger } from "../utils/logger.ts";
-import { AikiLoggerAdapter } from "./aiki-logger-adapter.ts";
 import { createPipelineWorkflow } from "./pipeline-workflow.ts";
 import type { PipelineRunHandle, PipelineWorkflow } from "./pipeline-workflow.ts";
-import type { DurableSchedules, ScheduleActivation, ScheduleFiring } from "./durable-schedules.ts";
+import type { DurableSchedules, ScheduleFiring } from "./durable-schedules.ts";
 import { SCHEDULE_WORKFLOW_NAME, createScheduleWorkflow } from "./schedule-workflow.ts";
 import type { ScheduleWorkflow } from "./schedule-workflow.ts";
 import type { PipelineWorkflowInput, WorkflowDeps } from "./types.ts";
@@ -40,30 +40,6 @@ const WORKER_CONFIG: WorkerConfigOverrides = {
   workflowRun: { claimRefreshIntervalMs: 2_000 },
 };
 
-export type DurableRunState = "active" | "completed" | "failed" | "cancelled";
-
-function durableRunState(status: WorkflowRunStatus): DurableRunState {
-  switch (status) {
-    case "completed":
-    case "failed":
-    case "cancelled":
-      return status;
-    case "scheduled":
-    case "queued":
-    case "running":
-    case "paused":
-    case "sleeping":
-    case "awaiting_event":
-    case "awaiting_retry":
-    case "awaiting_task_retry":
-    case "awaiting_child_workflow":
-    case "stalled":
-      return "active";
-    default:
-      return status satisfies never;
-  }
-}
-
 export interface DurableWorkflows {
   pipeline: PipelineWorkflow;
   schedule: ScheduleWorkflow;
@@ -77,7 +53,7 @@ interface EmbeddedAiki {
 async function openEmbeddedAiki(
   config: DatabaseConfig,
   workflows: DurableWorkflows,
-  logger: AikiLoggerAdapter,
+  logger: Logger,
 ): Promise<EmbeddedAiki> {
   await migrateApply({ db: config, logger });
   const db = database(config);
@@ -112,7 +88,7 @@ export class WorkflowRuntime {
   constructor(
     private readonly projectPath: ProjectPath,
     private readonly workflows: DurableWorkflows,
-    private readonly aikiLogger: AikiLoggerAdapter,
+    private readonly aikiLogger: Logger,
     private readonly logger: Logger,
   ) {}
 
@@ -174,9 +150,9 @@ export class WorkflowRuntime {
     }
   }
 
-  async runState(durableRunId: string): Promise<DurableRunState> {
-    const handle = await this.handle(durableRunId);
-    return durableRunState(handle.run.state.status);
+  async terminalStatus(durableRunId: string): Promise<TerminalWorkflowRunStatus | undefined> {
+    const { status } = (await this.handle(durableRunId)).run.state;
+    return isTerminalWorkflowRunStatus(status) ? status : undefined;
   }
 
   private deliver(durableRunId: string, send: (handle: PipelineRunHandle) => Promise<void>): void {
@@ -192,19 +168,19 @@ export class WorkflowRuntime {
     return this.workflows.pipeline.getHandleById(aikiClient, durableRunId);
   }
 
-  async reconcileSchedules(wanted: ScheduleActivation[]): Promise<void> {
+  async reconcileSchedules(wanted: Schedule[]): Promise<void> {
     if (wanted.length === 0 && !this.embedded) {
       return;
     }
     const { client: aikiClient } = await this.ensure();
     const kept = new Set<string>();
-    for (const activation of wanted) {
+    for (const record of wanted) {
       const handle = await aikiSchedule({
         type: "cron",
-        expression: activation.cron,
-        timezone: activation.timezone,
+        expression: record.cron,
+        timezone: record.timezone,
         overlapPolicy: "skip",
-      }).activate(aikiClient, this.workflows.schedule, { scheduleId: activation.scheduleId });
+      }).activate(aikiClient, this.workflows.schedule, { scheduleId: record.id });
       kept.add(handle.id);
     }
     const { schedules } = await aikiClient.api.schedule.listV1({
@@ -234,7 +210,7 @@ export class WorkflowRuntime {
 export class WorkflowRuntimeRegistry implements DurableSchedules {
   private readonly runtimes = new Map<string, WorkflowRuntime>();
   private readonly workflows: DurableWorkflows;
-  private readonly aikiLogger: AikiLoggerAdapter;
+  private readonly aikiLogger: Logger;
   private readonly logger: Logger;
   private firing?: ScheduleFiring;
 
@@ -248,7 +224,7 @@ export class WorkflowRuntimeRegistry implements DurableSchedules {
       schedule: createScheduleWorkflow(() => this.firing),
     };
     this.logger = logger.child("WorkflowRuntime");
-    this.aikiLogger = new AikiLoggerAdapter(logger.child("Aiki"));
+    this.aikiLogger = logger.child("Aiki");
   }
 
   for(projectPath: ProjectPath): WorkflowRuntime {
@@ -263,7 +239,7 @@ export class WorkflowRuntimeRegistry implements DurableSchedules {
     this.firing = firing;
   }
 
-  reconcileSchedules(projectPath: ProjectPath, wanted: ScheduleActivation[]): Promise<void> {
+  reconcileSchedules(projectPath: ProjectPath, wanted: Schedule[]): Promise<void> {
     return this.for(projectPath).reconcileSchedules(wanted);
   }
 

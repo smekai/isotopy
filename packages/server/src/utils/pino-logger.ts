@@ -1,9 +1,10 @@
+import type { Logger as AikiLogger } from "@aikirun/server";
 import { pino } from "pino";
 import type { Logger as Pino } from "pino";
 import pretty from "pino-pretty";
 import type { LogFields, Logger } from "./logger.ts";
 
-export class PinoLogger implements Logger {
+export class PinoLogger implements Logger, AikiLogger {
   private constructor(
     private readonly root: Pino,
     private readonly pino: Pino,
@@ -18,6 +19,14 @@ export class PinoLogger implements Logger {
     return new PinoLogger(root, root);
   }
 
+  trace(message: string, fields?: LogFields): void {
+    this.pino.trace(fields ?? {}, message);
+  }
+
+  debug(message: string, fields?: LogFields): void {
+    this.pino.debug(fields ?? {}, message);
+  }
+
   info(message: string, fields?: LogFields): void {
     this.pino.info(fields ?? {}, message);
   }
@@ -30,7 +39,9 @@ export class PinoLogger implements Logger {
     this.pino.error(fields ?? {}, message);
   }
 
-  child(component: string): Logger {
-    return new PinoLogger(this.root, this.root.child({ component }));
+  child(scope: string | LogFields): PinoLogger {
+    return typeof scope === "string"
+      ? new PinoLogger(this.root, this.root.child({ component: scope }))
+      : new PinoLogger(this.root, this.pino.child(scope));
   }
 }

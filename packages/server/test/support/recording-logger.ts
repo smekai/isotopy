@@ -1,3 +1,4 @@
+import type { Logger as AikiLogger } from "@aikirun/server";
 import type { LogFields, Logger, LoggerLevel } from "../../src/utils/logger.ts";
 
 export interface LoggedEntry {
@@ -8,14 +9,20 @@ export interface LoggedEntry {
 }
 
 /**
- * A Logger that keeps what was reported, so a test asserts on it instead of
- * scraping stdout. Every child shares one list and stamps its component.
+ * A Logger that keeps what reaches the operator log, so a test asserts on it
+ * instead of scraping stdout. Every child shares one list and stamps its
+ * component; trace and debug are dropped, as the operator log drops them.
  */
-export class RecordingLogger implements Logger {
+export class RecordingLogger implements Logger, AikiLogger {
   constructor(
     readonly entries: LoggedEntry[] = [],
     private readonly component?: string,
+    private readonly bindings?: LogFields,
   ) {}
+
+  trace(): void {}
+
+  debug(): void {}
 
   info(message: string, fields?: LogFields): void {
     this.record("info", message, fields);
@@ -29,8 +36,10 @@ export class RecordingLogger implements Logger {
     this.record("error", message, fields);
   }
 
-  child(component: string): Logger {
-    return new RecordingLogger(this.entries, component);
+  child(scope: string | LogFields): RecordingLogger {
+    return typeof scope === "string"
+      ? new RecordingLogger(this.entries, scope)
+      : new RecordingLogger(this.entries, this.component, { ...this.bindings, ...scope });
   }
 
   at(level: LoggerLevel): LoggedEntry[] {
@@ -38,6 +47,7 @@ export class RecordingLogger implements Logger {
   }
 
   private record(level: LoggerLevel, message: string, fields?: LogFields): void {
-    this.entries.push({ level, message, component: this.component, fields });
+    const bound = this.bindings === undefined ? fields : { ...this.bindings, ...fields };
+    this.entries.push({ level, message, component: this.component, fields: bound });
   }
 }

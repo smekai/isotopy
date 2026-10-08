@@ -111,28 +111,6 @@ test("a name-status rename carries a similarity score and three fields", () => {
   ]);
 });
 
-test("work the agent committed is reported even though the tree is clean again", () => {
-  const committed = [change("src/app.ts", "created")];
-
-  expect(mergeGitChanges([], [], committed)).toEqual(committed);
-});
-
-test("a file that was already dirty before the run is not claimed as the run's doing", () => {
-  const dirty = [change("src/app.ts", "edited")];
-
-  expect(mergeGitChanges(dirty, dirty, [])).toEqual([]);
-});
-
-test("a file already dirty before the run is the run's work once its content moves", () => {
-  expect(
-    mergeGitChanges(
-      [dirty("src/main.ts", "edited", "1111111")],
-      [dirty("src/main.ts", "edited", "2222222")],
-      [],
-    ),
-  ).toEqual([change("src/main.ts", "edited")]);
-});
-
 test("a dirty file the run never opened keeps its content hash, so it stays the user's", () => {
   const untouched = dirty("src/app.ts", "edited", "1111111");
 

@@ -356,9 +356,9 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 | File | Contents |
 | --- | --- |
 | `agents.ts` | Agent professions per stage |
-| `closeout.ts` | The Product Manager closeout record — findings, follow-up task drafts, cleanup result |
+| `closeout.ts` | The run's closeout record, written by the Orchestrator — findings, follow-up task drafts, cleanup result |
 | `engines.ts` | Engine/harness definitions, connection modes, model options |
-| `milestones.ts` | Milestone and feature models, the plan proposal, and pure predicates (`nextMilestoneFeature`, `milestoneProgress`, `canStartNextFeature`, `canFinalizeMilestone`, `milestoneFindings`) |
+| `milestones.ts` | Milestone and feature models, the plan proposal, and pure predicates (`nextMilestoneFeature`, `milestoneProgress`, `canStartNextFeature`, `canFinalizeMilestone`) |
 | `orchestration.ts` | The Orchestrator's decision union, the orchestration aggregate, and `orchestrationStatusFor` |
 | `pipelines.ts` | Pipeline/stage definitions and pure helpers |
 | `projects.ts` | Project model and the home-project constant |
@@ -380,11 +380,11 @@ functions only.
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the PM closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
-| `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts` and `orchestrator-required-error.ts`. No I/O — the thin-service/fat-domain split (A3) |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the Orchestrator's closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
+| `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `reveal-folder`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
-| `src/paths.ts` | Filesystem layout — resolves a `ProjectPaths` (per-project data dir, user-level roots) instead of exporting a global constant |
+| `src/paths.ts` | Filesystem layout — resolves a `ProjectPath` (per-project data dir, user-level roots) instead of exporting a global constant |
 | `test/` | Component tests, unit specs, and their support harness ([`testing.md`](./testing.md)) — never colocated with `src/`, which would emit them into `dist/` |
 
 Dependency direction: `index.ts → app.ts → routes → services → engines/core`. Routes never contain business rules; services never touch `Request`/`Response`. Routes are factories (`createRunRoutes(runs)`, `createMilestoneRoutes(milestones)`) that receive their service rather than importing a singleton — which is what lets a component test mount them over a throwaway run service.
@@ -406,23 +406,6 @@ The frontend tier is documented in full — module map, the network seam, run da
 - Named constants over magic numbers: timeouts, poll intervals, and status lists are declared at the top of the module that owns them (or in `@isotopy/core` when shared, e.g. `TERMINAL_RUN_STATUSES`).
 - Secrets (API keys) never go in code or `.env.example`; runtime secrets live in the user-level `~/.isotopy/settings.json` (mode `0600`) or real env vars — **never** in a project's `.isotopy/`, which sits in the user's git working tree.
 
-## Subsystem review: Developer→Tester flow (TASK-049)
-
-Assessment of the two-box flow against the conventions above, with the refactors applied.
-
-| Finding | Resolution |
-| --- | --- |
-| `executeEngineStage` inlined persona resolution + prompt building, mixing lifecycle with input assembly | Extracted `resolveStageInputs()`; the method is now stage lifecycle only |
-| `stage-context.ts` mixed Markdown rendering with verdict and question rules | Moved prompt and handoff rendering to `domain/markdown/stage.ts`; `stage-context.ts` now owns only stage-result interpretation |
-| `agentForStage()` and engine-label formatting computed twice; bare `"unknown"` literal | Extracted `engineLabel()`; added the `UNKNOWN_ENGINE_LABEL` constant |
-| `run.result` holds only the *last* stage's output — the reason the UI needed a fallback | Documented at the assignment; per-box consumers must read `stageOutputs` |
-
-Conventions upheld: `@isotopy/core` stays pure (`pipelineUsesEngine` is a pure helper; persona *text* lives in the server, not core); persona defaults sit in `domain/skills/`, their pure composition lives in `domain/markdown/`, and I/O stays in `services/skills.ts`; the run repository (`src/repository/`) over its `db/` data-access layer is the only place that knows the run storage layout; every report goes through the `Logger` seam; no hardcoded paths or secrets.
-
-**Deliberate seam:** the durable runtime is Aiki (`workflow/`). `RunService` *is* the durable workflow's host (body in `workflow/pipeline-workflow.ts`, tasks in `workflow/pipeline-tasks.ts`); `workflow/stage-execution.ts` is the work a stage task does — the single decision point for how a stage runs. Durability owns the whole lifecycle — start/queueing, the loop, gates, durable timers, retries, recovery, cancellation — not one method; `RunService` is the single writer of the read model.
-
-**Known gap (not code):** persona adherence is model-dependent. On `haiku` the Tester verified with inline `node -e` checks rather than writing a test file, and ignored an instruction placed *after* the closing "Do not restate this prompt" line. Put must-follow output rules before that line.
-
 ## Practices to keep (and adopt next)
 
 Already in place:
@@ -437,8 +420,8 @@ Recommended next steps, in rough priority order:
 
 1. ~~**CI gate**~~ — done. `.github/workflows/ci.yml` runs the gate on every PR, and `main` merges only on green; see [`decisions.md`](./decisions.md) (2026-08-04).
 2. **Formatter** — add Prettier (or Biome) with a pre-commit hook (`husky` + `lint-staged`) so style never reaches review.
-3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow. Engine *adapter* output parsing is still uncovered — the fake adapter substitutes for it, so `claude-code.ts`'s stream parsing has no test of its own. That is the next real gap.
-4. ~~**Structured logger**~~ — done in TASK-170 as the operator channel: one `Logger` seam with `info`, `warn`, `error` and `child`, backed by pino with a console and a file sink, and lint that keeps `console` out of source. Rotation and a configurable `LOG_LEVEL` wait for a deployment story.
+3. ~~**Unit tests**~~ — done in TASK-062, and landed differently than sketched here: component tests over the HTTP boundary turned out to be the higher-value default, with unit specs kept narrow; each engine's stream protocol has its own spec (`engine-protocols.spec.ts`).
+4. ~~**Structured logger**~~ — done in TASK-170 as the operator channel: one `Logger` seam with `trace`, `debug`, `info`, `warn`, `error` and `child` — the shape Aiki logs through too — backed by pino with a console and a file sink, and lint that keeps `console` out of source. Rotation and a configurable `LOG_LEVEL` wait for a deployment story.
 5. ~~**Request validation**~~ — done. `packages/server/src/schemas/` owns every untrusted boundary and the parsed types flow into services; see [`decisions.md`](./decisions.md) (2026-07-29).
 6. ~~**Stricter compiler flags**~~ — `noUncheckedIndexedAccess` is on in `tsconfig.base.json`, and TypeScript is on 6.0.3. `exactOptionalPropertyTypes` was tried and later removed because Isotopy intentionally treats an absent property and `undefined` as the same state. See [`decisions.md`](./decisions.md).
 7. **Dependency boundaries** — as the codebase grows, enforce the layer rules above with `eslint-plugin-import` (`no-restricted-imports`: e.g. routes may not import engines directly).
@@ -644,7 +627,7 @@ cannot rule out; by then they are unreachable.
 `OrchestrationHooks` seam (implemented by `OrchestrationService`) lets
 `PipelineWorkflow` request active aggregate context and record a narrowed broker
 decision. The workflow executes the Orchestrator persona as
-a named durable step with the asking run's engine, model, permissions, workspace,
+a durable task with the asking run's engine, model, permissions, workspace,
 limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
 same specialist CLI session. `escalate_to_user` uses the existing `asking` state and a
 durable wait on the run's `answer` event; accepting the answer moves the stage back to
@@ -784,9 +767,8 @@ Enables dashboard live tail and post-run forensics.
 [Aiki](https://github.com/aikirun/aiki) — Apache-2.0, TypeScript, durable
 execution with its server shipped as a library. Each project embeds one Aiki
 server, client and worker in-process, on a SQLite file through Node's built-in `node:sqlite`;
-there is no daemon and no network hop. It replaced OpenWorkflow, which Isotopy
-ran from TASK-068 until Aiki shipped SQLite. The comparison and the reasons are
-the 2026-10-06 entry in [`decisions.md`](decisions.md).
+there is no daemon and no network hop. Why Aiki, and what it costs, is the
+2026-10-06 entry in [`decisions.md`](decisions.md).
 
 | Need | Aiki capability |
 |------|-----------------|

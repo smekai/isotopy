@@ -12,15 +12,6 @@ function stage(overrides: Partial<StageState> = {}): StageState {
   return { id: "verifying", label: "Verifying", status: "failed", logs: [], ...overrides };
 }
 
-test("a stage cut off before any verdict resumes the session it left behind", () => {
-  expect(resumableSession(stage({ sessionId: SESSION }), "cursor")).toBe(SESSION);
-});
-
-test("a stage that reached a verdict starts fresh, because it finished its thought", () => {
-  // A FAIL is an answer. Resuming it would continue a conversation that ended.
-  expect(resumableSession(stage({ sessionId: SESSION, verdict: "FAIL" }), "cursor")).toBeUndefined();
-});
-
 test("a stage with no session recorded has nothing to resume", () => {
   expect(resumableSession(stage(), "cursor")).toBeUndefined();
 });

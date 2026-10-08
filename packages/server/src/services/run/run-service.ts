@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { TerminalWorkflowRunStatus } from "@aikirun/types/workflow/run";
 import type {
   DeploymentResult,
   EngineId,
@@ -61,7 +62,6 @@ import { engineLabel } from "../../domain/rules/engine-label.ts";
 import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/run-start.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
-import type { DurableRunState } from "../../workflow/workflow-runtime.ts";
 import type { DurableSchedules } from "../../workflow/durable-schedules.ts";
 import { pipelineWorkflowInput } from "../../workflow/pipeline-workflow-input.ts";
 import type { PipelineLaunch } from "../../workflow/pipeline-workflow-input.ts";
@@ -201,9 +201,9 @@ export class RunService implements RunProjection {
       this.markInterrupted(run.id);
       return;
     }
-    let state: DurableRunState;
+    let status: TerminalWorkflowRunStatus | undefined;
     try {
-      state = await this.runtimes.for(projectPath).runState(durableRunId);
+      status = await this.runtimes.for(projectPath).terminalStatus(durableRunId);
     } catch (error) {
       this.logger.error(
         `Could not read the durable state of run ${run.id}; it stays ${run.status}`,
@@ -211,16 +211,18 @@ export class RunService implements RunProjection {
       );
       return;
     }
-    if (state === "active") {
+    if (status === undefined) {
       return;
     }
-    if (state === "cancelled") {
+    if (status === "cancelled") {
       this.markCancelled(run.id);
       await releaseUnfinishedSourceTasks(this.registry, run, this.logger);
-    } else if (state === "failed") {
+    } else if (status === "failed") {
       this.markInterrupted(run.id);
-    } else {
+    } else if (status === "completed") {
       await this.runCompleted(run.id, "completed");
+    } else {
+      return status satisfies never;
     }
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.milestones.completeMilestoneRun(run);
