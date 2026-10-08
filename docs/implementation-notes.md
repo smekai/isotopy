@@ -606,9 +606,14 @@ for a fleet: a claim is reclaimed after 90 s and an unclaimed run is republished
 every 10 s. Here one process owns each file, so a run killed mid-task should come
 back within seconds — the claim refresh, the idle timeout and the publish lease
 are all lowered together, and the idle timeout must stay above the refresh or a
-live run is reclaimed from under its worker. Aiki logs a run's steps at `debug`
-(dropped) and lifecycle events — worker start and stop, a schedule activated, a run
-cancelled or woken — at `info`, which reach the operator log with warnings and errors.
+live run is reclaimed from under its worker.
+
+**Aiki logs through the operator logger itself (`PinoLogger`).** The `Logger` seam
+has Aiki's shape too — `trace`/`debug` and a `child` that takes either a component
+name or the bindings Aiki adds — so `logger.child("Aiki")` is handed to the server,
+client and migrations as is, with no adapter. A run's steps come at `debug` and
+pino's `info` level drops them; lifecycle events — worker start and stop, a schedule
+activated, a run cancelled or woken — come at `info` under `component: "Aiki"`.
 
 **An abort records the durable cancel before it kills the CLI (`RunService.abortRun`).**
 `abortRun` awaits Aiki's cancel first, then aborts the engine's controller

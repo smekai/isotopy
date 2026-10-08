@@ -15,7 +15,6 @@ import type { ProjectRegistry } from "../services/project-registry.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import type { Logger } from "../utils/logger.ts";
-import { AikiLoggerAdapter } from "./aiki-logger-adapter.ts";
 import { createPipelineWorkflow } from "./pipeline-workflow.ts";
 import type { PipelineRunHandle, PipelineWorkflow } from "./pipeline-workflow.ts";
 import type { DurableSchedules, ScheduleActivation, ScheduleFiring } from "./durable-schedules.ts";
@@ -77,7 +76,7 @@ interface EmbeddedAiki {
 async function openEmbeddedAiki(
   config: DatabaseConfig,
   workflows: DurableWorkflows,
-  logger: AikiLoggerAdapter,
+  logger: Logger,
 ): Promise<EmbeddedAiki> {
   await migrateApply({ db: config, logger });
   const db = database(config);
@@ -112,7 +111,7 @@ export class WorkflowRuntime {
   constructor(
     private readonly projectPath: ProjectPath,
     private readonly workflows: DurableWorkflows,
-    private readonly aikiLogger: AikiLoggerAdapter,
+    private readonly aikiLogger: Logger,
     private readonly logger: Logger,
   ) {}
 
@@ -234,7 +233,7 @@ export class WorkflowRuntime {
 export class WorkflowRuntimeRegistry implements DurableSchedules {
   private readonly runtimes = new Map<string, WorkflowRuntime>();
   private readonly workflows: DurableWorkflows;
-  private readonly aikiLogger: AikiLoggerAdapter;
+  private readonly aikiLogger: Logger;
   private readonly logger: Logger;
   private firing?: ScheduleFiring;
 
@@ -248,7 +247,7 @@ export class WorkflowRuntimeRegistry implements DurableSchedules {
       schedule: createScheduleWorkflow(() => this.firing),
     };
     this.logger = logger.child("WorkflowRuntime");
-    this.aikiLogger = new AikiLoggerAdapter(logger.child("Aiki"));
+    this.aikiLogger = logger.child("Aiki");
   }
 
   for(projectPath: ProjectPath): WorkflowRuntime {

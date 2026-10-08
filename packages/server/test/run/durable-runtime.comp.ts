@@ -192,4 +192,22 @@ describe("durable runtime", () => {
     expect(tablesIn(project.root, "aiki.db")).toContain("workflow_run");
     expect(tablesIn(project.root, "runs.db")).not.toContain("workflow_run");
   });
+
+  test("the runtime reports into the operator log as its own component, with the fields it binds", async () => {
+    // Anticipate
+    ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+
+    // Assert
+    await waitForRunStatus(ctx.app, run.id, "completed");
+    expect(ctx.logger.at("info")).toContainEqual(
+      expect.objectContaining({
+        component: "Aiki",
+        fields: expect.objectContaining({ "aiki.component": "worker" }),
+      }),
+    );
+  });
 });
