@@ -11,7 +11,9 @@ export class AikiLoggerAdapter implements AikiLogger {
 
   debug(): void {}
 
-  info(): void {}
+  info(message: string, metadata?: Record<string, unknown>): void {
+    this.logger.info(message, { ...this.bindings, ...metadata });
+  }
 
   warn(message: string, metadata?: Record<string, unknown>): void {
     this.logger.warn(message, { ...this.bindings, ...metadata });

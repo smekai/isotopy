@@ -777,7 +777,7 @@ Enables dashboard live tail and post-run forensics.
 **Decision (TASK-069, 2026-10-06):** the durable workflow runtime is
 [Aiki](https://github.com/aikirun/aiki) — Apache-2.0, TypeScript, durable
 execution with its server shipped as a library. Each project embeds one Aiki
-server, client and worker in-process, on a SQLite file through `@libsql/client`;
+server, client and worker in-process, on a SQLite file through Node's built-in `node:sqlite`;
 there is no daemon and no network hop. It replaced OpenWorkflow, which Isotopy
 ran from TASK-068 until Aiki shipped SQLite. The comparison and the reasons are
 the 2026-10-06 entry in [`decisions.md`](decisions.md).
@@ -975,7 +975,7 @@ Every request carries an `X-Isotopy-Project` header identifying the active proje
 | LLM abstraction | None — engines are coding CLIs | Isotopy spawns `claude`/`cursor`/`codex`; each brings its own model and auth |
 | Worktree isolation | Not taken — agents run in `ctx.cwd` | Never built; a run works the project directory directly |
 | Commit specs automatically | Opt-in on gate approve | Keeps git clean |
-| Workflow runtime | Aiki (`@libsql/client`, in-process) | Durable execution, events, retries, crash recovery, cron; embedded file DB, no server |
+| Workflow runtime | Aiki (`node:sqlite`, in-process) | Durable execution, events, retries, crash recovery, cron; embedded file DB, no server |
 | E2E runner | Playwright | Industry standard; test agents; trace on failure |
 | Deploy model | Adapter-based subprocess/CLI | Platform-agnostic; preview default |
 | Fallback (not taken) | Custom engine on the same `node:sqlite` substrate | Same capabilities behind the repository seam if the runtime hadn't embedded |

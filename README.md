@@ -44,7 +44,7 @@ handoffs. A run survives a server restart and resumes where it stopped. The deta
 
 ## Quick start
 
-You need **Node.js 22.5+** and **pnpm** (`npm install -g pnpm`), plus at least one of
+You need **Node.js 22.16+** and **pnpm** (`npm install -g pnpm`), plus at least one of
 Claude Code, Cursor or Codex installed and logged in.
 
 ```bash

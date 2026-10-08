@@ -24,10 +24,10 @@ SQLite and a fully embedded mode — its server is a library — and the owner c
 rather than a feature table.
 
 **Decision:** each project embeds one Aiki server, client and worker in-process, on
-`.isotopy/aiki.db` through `@libsql/client`. There is no daemon, no port and no Redis; the file
-lives in the project's `.isotopy/` and travels with the folder. It is not `runs.db`: Aiki writes
-through its own libsql connection and Isotopy through `node:sqlite`, and two drivers on one file
-would contend for one write lock. **The seam is the workflow, not one method** — the pipeline is an
+`.isotopy/aiki.db` through Node's built-in `node:sqlite` (Aiki ≥ 0.44). There is no daemon, no
+port, no Redis and no native addon; the file lives in the project's `.isotopy/` and travels with
+the folder. It is not `runs.db`: Aiki owns that file's schema and migrations, and two connections
+writing one file would contend for one write lock. **The seam is the workflow, not one method** — the pipeline is an
 Aiki workflow, its stage turns and every read-model write are durable tasks, and durability owns
 start and queueing, gates, durable timers, retries, recovery and cancellation.
 
@@ -63,9 +63,10 @@ the next fire and the UI never parses an expression. (The August choice of `cron
 
 **What it costs, measured:**
 
-- Server production dependencies go from 36 packages (36.5 MB) to 89 (69.5 MB), including
-  `@libsql/client`'s native addon. Prebuilds cover win32-x64, darwin and linux; win32-arm64 has
-  none, and the runtime fails to open with a message naming the platform.
+- Server production dependencies go from 36 packages (36.5 MB) to 72 (57.5 MB): Drizzle, oRPC
+  and arktype stay. Aiki 0.43 also needed `@libsql/client` and its native addon (89 packages,
+  69.5 MB, no win32-arm64 build); 0.44 opens SQLite through `node:sqlite` and the root
+  `engines.node` follows it to `>=22.16`.
 - Source grows by ~200 net lines. Embedding a server, client and two workers, a task catalogue in
   place of inline step closures, and reconciling activations outweigh what was deleted.
 - Every read-model write is a durable task, a few SQLite transactions each. Negligible next to an
@@ -76,11 +77,12 @@ the next fire and the UI never parses an expression. (The August choice of `cron
 - Runs left mid-flight under OpenWorkflow settle as interrupted on upgrade; finished ones load
   unchanged, and the retired `openWorkflowRunId` and `lastWindowAt` are dropped when read. Both
   codecs can go once no install predates 0.12.68.
-- Maturity: Aiki is beta, ~42★, one dominant maintainer, about ten minors a quarter, and CI on
-  ubuntu only. All `@aikirun/*` packages are pinned to one exact version. Gaps go upstream, not
-  around: the libsql file stays locked after `close()` until GC on Windows; migrations log to the
-  console; an invalid cron returns a 500; an embedded single owner should release stale claims at
-  boot instead of waiting them out (tuned down here instead).
+- Maturity: Aiki is beta, ~42★, one dominant maintainer and about ten minors a quarter; its CI
+  runs the unit and SQLite tests on Linux, macOS and Windows since 0.44. All `@aikirun/*` packages
+  are pinned to one exact version. Gaps go upstream, not around: 0.44 answered the Windows file
+  lock (libsql is gone), migration logging (`migrateApply` takes a logger) and the 500 on an
+  invalid cron. Releasing stale claims at boot stays Isotopy's tuning: Aiki cannot know it is the
+  only process on a file.
 
 **Rejected: staying on OpenWorkflow 0.10.1.** Zero dependencies and a smaller tree, and 0.10 adds
 `rerunWorkflowRun({ fromStep })`. But it still drops an early signal, still retries a throwing step

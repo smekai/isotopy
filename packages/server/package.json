@@ -1,6 +1,6 @@
 {
   "name": "@isotopy/server",
-  "version": "0.12.76",
+  "version": "0.12.77",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,14 +10,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "@aikirun/client": "0.43.2",
-    "@aikirun/memory": "0.43.2",
-    "@aikirun/server": "0.43.2",
-    "@aikirun/worker": "0.43.2",
-    "@aikirun/workflow": "0.43.2",
+    "@aikirun/client": "0.44.0",
+    "@aikirun/memory": "0.44.0",
+    "@aikirun/server": "0.44.0",
+    "@aikirun/worker": "0.44.0",
+    "@aikirun/workflow": "0.44.0",
     "@hono/node-server": "^1.14.1",
     "@isotopy/core": "workspace:*",
-    "@libsql/client": "^0.18.0",
     "@smekai/taskplanner": "2.4.7",
     "cron-parser": "^5.10.1",
     "hono": "^4.7.6",

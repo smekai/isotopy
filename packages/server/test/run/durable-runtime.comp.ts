@@ -173,9 +173,9 @@ describe("durable runtime", () => {
   });
 
   test("the durable runtime keeps its own database, so it never waits on a lock Isotopy holds", async () => {
-    // Arrange — Aiki writes through its own libsql connection and migrates its own
-    // schema. Sharing a file with Isotopy's node:sqlite writer would make two
-    // drivers contend for one write lock, so the two must never be the same file.
+    // Arrange — Aiki writes through its own connection and migrates its own schema.
+    // Sharing a file with Isotopy's writer would make two connections contend for
+    // one write lock, so the two must never be the same file.
     const project = await addTestProject(ctx.registry, "split-db");
     ctx.engine.anticipate({ as: "Agent" }).reports(DEV_REPORT);
     ctx.engine.anticipateRunReview();

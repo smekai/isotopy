@@ -602,8 +602,9 @@ for a fleet: a claim is reclaimed after 90 s and an unclaimed run is republished
 every 10 s. Here one process owns each file, so a run killed mid-task should come
 back within seconds — the claim refresh, the idle timeout and the publish lease
 are all lowered together, and the idle timeout must stay above the refresh or a
-live run is reclaimed from under its worker. Aiki's info-level logs are per-task
-chatter and are not forwarded to the operator log; warnings and errors are.
+live run is reclaimed from under its worker. Aiki logs a run's steps at `debug`
+(dropped) and lifecycle events — worker start and stop, a schedule activated, a run
+cancelled or woken — at `info`, which reach the operator log with warnings and errors.
 
 **Register the abort handle before the first `await` (`workflow/stage-execution.ts` `runEngineStage`, via `deps.beginEngineStage`).**
 Resolving the persona touches the filesystem. An abort arriving in that window
@@ -908,7 +909,8 @@ install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23
   the event trail live in the DB.
 - **`node:sqlite` is imported lazily** in `db/database.ts`, not at module load. Its
   narrow surface (`DatabaseSync`, `prepare`, `run/all`, `exec`) is contained to that
-  one file. Requires Node ≥ 22.5, which is why root `engines.node` is `>=22.5`.
+  one file. Isotopy's own use needs Node ≥ 22.5; root `engines.node` is `>=22.16`
+  because Aiki, which also opens its database through `node:sqlite`, requires it.
 - **The `ExperimentalWarning` is suppressed at launch, not in code.** node:sqlite
   fires it on the first require, on every startup. A `process.on('warning')` listener
   does *not* suppress the default printer (verified), so the shipped `start` script

@@ -79,7 +79,7 @@ async function openEmbeddedAiki(
   workflows: DurableWorkflows,
   logger: AikiLoggerAdapter,
 ): Promise<EmbeddedAiki> {
-  await migrateApply({ db: config });
+  await migrateApply({ db: config, logger });
   const db = database(config);
   const queue = inMemoryQueue();
   const aiki = server({
@@ -131,7 +131,7 @@ export class WorkflowRuntime {
       return await openEmbeddedAiki({ provider: "sqlite", path: dbPath }, this.workflows, this.aikiLogger);
     } catch (error) {
       throw new Error(
-        `The durable runtime could not open ${dbPath} on ${process.platform}-${process.arch}: ${messageOf(error)}`,
+        `The durable runtime could not open ${dbPath}: ${messageOf(error)}`,
         { cause: error },
       );
     }
