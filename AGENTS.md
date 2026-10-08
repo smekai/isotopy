@@ -136,6 +136,11 @@ Rules for new tasks:
 
 <!-- TASKPLANNER:END -->
 
+## Project standards
+
+The rules below are binding. The A1–A9 architecture rules live in
+[`docs/architecture.md`](docs/architecture.md).
+
 ## Versioning
 
 All workspace packages (root + `packages/*`) share one version, bumped together.

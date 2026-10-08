@@ -9,9 +9,9 @@ exists, is reasoned through, and degrades gracefully. Mark it
 
 ## When creating or planning a task
 
-Follow the TaskPlanner flow in your harness's instructions file — `CLAUDE.md`
-for Claude Code, `AGENTS.md` for Codex; they are twins (read `.tasks/config.json`
-for `nextId`, write to `BACKLOG.md`, bump `nextId`). In the task
+Follow the TaskPlanner flow in [`AGENTS.md`](../AGENTS.md), which Claude Code
+reads through the one-line `CLAUDE.md`: create the task with `taskplanner_create`,
+which allocates its id. In the task
 description, add a **Cross-platform:** line whenever the work touches
 any surface from the checklist below — state what it touches and how
 each OS is covered. If it touches none, write `Cross-platform: n/a —
