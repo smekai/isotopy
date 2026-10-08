@@ -72,8 +72,9 @@ the next fire and the UI never parses an expression. (The August choice of `cron
 - Every read-model write is a durable task, a few SQLite transactions each. Negligible next to an
   engine call measured in minutes, but the server suite's summed test time rose from ~95 s to
   ~173 s on Windows (wall time 17 s → 18 s), plus a ~1 s module load once per process.
-- Replay follows the order of calls. A deploy that changes the workflow body *before* the point a
-  parked run reached fails that run with "Replay divergence"; the user restarts it from the stage.
+- Replay matches a task by its name and input, not its order. Adding, removing or re-inputting a
+  task before the point a parked run reached fails that run on resume, so such a change ships as a
+  new workflow version with the old one still registered; Aiki plans no tolerant mode.
 - Runs left mid-flight under OpenWorkflow settle as interrupted on upgrade; finished ones load
   unchanged, and the retired `openWorkflowRunId` and `lastWindowAt` are dropped when read. Both
   codecs can go once no install predates 0.12.68.

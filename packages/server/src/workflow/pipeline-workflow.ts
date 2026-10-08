@@ -1,4 +1,4 @@
-import { TaskFailedError, workflow } from "@aikirun/workflow";
+import { TaskFailedError, task, workflow } from "@aikirun/workflow";
 import type { EventWaiter, WorkflowRun, WorkflowRunHandle, WorkflowVersion } from "@aikirun/workflow";
 import {
   ORCHESTRATION_PIPELINE,
@@ -15,6 +15,7 @@ import type {
 } from "@isotopy/core";
 import { limitWaitMs } from "../domain/rules/engine-limit.ts";
 import { suppressionReason } from "../domain/rules/run-lifecycle.ts";
+import type { SeededStage } from "../domain/rules/run-seeding.ts";
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import { PIPELINE_EVENTS } from "./pipeline-events.ts";
 import type { PipelineEvents } from "./pipeline-events.ts";
@@ -79,6 +80,49 @@ interface StageEvent {
   stageId: string;
 }
 
+interface StageRef {
+  runId: string;
+  stageId: string;
+}
+
+const MEDIATION_FAILURE_MESSAGES = {
+  mediation_failed: "Orchestrator could not mediate the question",
+  invalid_first_action: "Orchestrator returned an invalid first mediation action",
+  routing_failed: "Orchestrator could not route the user's answer",
+} as const;
+
+type MediationFailureCause = keyof typeof MEDIATION_FAILURE_MESSAGES;
+
+interface MediationFailure extends StageRef {
+  cause: MediationFailureCause;
+  detail?: string;
+}
+
+interface StageQuestion extends StageRef {
+  question: string;
+}
+
+interface StageBlock extends StageRef {
+  limit: EngineLimit;
+  attempt: number;
+}
+
+interface CarriedStage {
+  runId: string;
+  stageDef: StageDefinition;
+  seeded: SeededStage;
+}
+
+interface SuppressedStage {
+  runId: string;
+  stageDef: StageDefinition;
+  cause: RunCompletionStatus;
+}
+
+function stageRef(ctx: PipelineContext, stageDef: StageDefinition): StageRef {
+  return { runId: ctx.input.runId, stageId: stageDef.id };
+}
+
 function workContext(input: PipelineWorkflowInput): StageWorkContext {
   return { runId: input.runId, task: input.task, permissionMode: input.permissionMode };
 }
@@ -127,14 +171,18 @@ async function awaitLimitChoice(
 async function failQuestionMediation(
   ctx: QuestionContext,
   outcome: QuestionFailureOutcome,
-  message: string,
+  cause: MediationFailureCause,
+  detail?: string,
 ): Promise<QuestionResolution> {
-  await ctx.tasks.project.start(ctx.run, {
-    kind: "stageFailed",
-    runId: ctx.input.runId,
-    stageId: ctx.stageDef.id,
-    message,
-  });
+  await task({
+    name: "isotopy.question-mediation-failed",
+    handler: async (failure: MediationFailure) =>
+      ctx.deps.projection.stageFailed(
+        failure.runId,
+        failure.stageId,
+        failure.detail ?? MEDIATION_FAILURE_MESSAGES[failure.cause],
+      ),
+  }).start(ctx.run, { ...stageRef(ctx, ctx.stageDef), cause, detail });
   return { outcome };
 }
 
@@ -154,21 +202,18 @@ async function waitOutLimit(
   attempt: number,
   limit: EngineLimit,
 ): Promise<void> {
-  const { run, tasks, input } = ctx;
-  await tasks.project.start(run, {
-    kind: "stageBlocked",
-    runId: input.runId,
-    stageId: stageDef.id,
-    limit,
-    attempt,
-  });
+  const { run, deps } = ctx;
+  await task({
+    name: "isotopy.stage-blocked",
+    handler: async (blocked: StageBlock) =>
+      deps.projection.stageBlocked(blocked.runId, blocked.stageId, blocked.limit, blocked.attempt),
+  }).start(run, { ...stageRef(ctx, stageDef), limit, attempt });
   const choice = await awaitLimitChoice(ctx, stageDef, limit);
-  await tasks.project.start(run, {
-    kind: "limitResolved",
-    runId: input.runId,
-    stageId: stageDef.id,
-    choice,
-  });
+  await task({
+    name: "isotopy.limit-resolved",
+    handler: async (resolved: StageRef & { choice?: LimitChoice }) =>
+      deps.projection.limitResolved(resolved.runId, resolved.stageId, resolved.choice),
+  }).start(run, { ...stageRef(ctx, stageDef), choice });
 }
 
 async function mediateQuestion(
@@ -192,37 +237,34 @@ async function mediateQuestion(
 }
 
 async function waitForUserAnswer(ctx: QuestionContext, question: string): Promise<string> {
-  const { run, tasks, input, stageDef } = ctx;
-  await tasks.project.start(run, {
-    kind: "stageAsking",
-    runId: input.runId,
-    stageId: stageDef.id,
-    question,
-  });
+  const { run, deps, stageDef } = ctx;
+  await task({
+    name: "isotopy.stage-asking",
+    handler: async (asking: StageQuestion) =>
+      deps.projection.stageAsking(asking.runId, asking.stageId, asking.question),
+  }).start(run, { ...stageRef(ctx, stageDef), question });
   const answer = await awaitStageEvent(run.events.answer, stageDef.id);
   return answer.text;
 }
 
 async function recordMediatedAnswer(ctx: QuestionContext, answer: string): Promise<void> {
-  await ctx.tasks.project.start(ctx.run, {
-    kind: "stageMediatedAnswer",
-    runId: ctx.input.runId,
-    stageId: ctx.stageDef.id,
-    answer,
-  });
+  await task({
+    name: "isotopy.stage-mediated-answer",
+    handler: async (mediated: StageRef & { answer: string }) =>
+      ctx.deps.projection.stageMediatedAnswer(mediated.runId, mediated.stageId, mediated.answer),
+  }).start(ctx.run, { ...stageRef(ctx, ctx.stageDef), answer });
 }
 
 async function resolveSpecialistQuestion(
   ctx: QuestionContext,
   question: string,
 ): Promise<QuestionResolution> {
-  const { run, tasks, input, stageDef } = ctx;
-  await tasks.project.start(run, {
-    kind: "stageQuestion",
-    runId: input.runId,
-    stageId: stageDef.id,
-    question,
-  });
+  const { run, deps, input, stageDef } = ctx;
+  await task({
+    name: "isotopy.stage-question",
+    handler: async (asked: StageQuestion) =>
+      deps.projection.stageQuestion(asked.runId, asked.stageId, asked.question),
+  }).start(run, { ...stageRef(ctx, stageDef), question });
   const request: QuestionMediationRequest = {
     runId: input.runId,
     stageId: stageDef.id,
@@ -238,7 +280,8 @@ async function resolveSpecialistQuestion(
     return failQuestionMediation(
       ctx,
       questionFailureOutcome(mediated.outcome),
-      mediated.failureMessage ?? "Orchestrator could not mediate the question",
+      "mediation_failed",
+      mediated.failureMessage,
     );
   }
   if (mediated.decision.action === "answer_agent") {
@@ -247,11 +290,7 @@ async function resolveSpecialistQuestion(
     return { outcome: STAGE_OUTCOMES.PASSED, answer };
   }
   if (mediated.decision.action !== "escalate_to_user") {
-    return failQuestionMediation(
-      ctx,
-      STAGE_OUTCOMES.NEEDS_ATTENTION,
-      "Orchestrator returned an invalid first mediation action",
-    );
+    return failQuestionMediation(ctx, STAGE_OUTCOMES.NEEDS_ATTENTION, "invalid_first_action");
   }
   const userAnswer = await waitForUserAnswer(ctx, mediated.decision.question);
   const routed = await mediateQuestion(
@@ -269,7 +308,8 @@ async function resolveSpecialistQuestion(
     return failQuestionMediation(
       ctx,
       questionFailureOutcome(routed.outcome),
-      routed.failureMessage ?? "Orchestrator could not route the user's answer",
+      "routing_failed",
+      routed.failureMessage,
     );
   }
   const answer = routed.decision.message;
@@ -370,12 +410,11 @@ async function failStageOnTaskFailure(
     if (!(error instanceof TaskFailedError)) {
       throw error;
     }
-    await ctx.tasks.project.start(ctx.run, {
-      kind: "stageFailed",
-      runId: ctx.input.runId,
-      stageId: stageDef.id,
-      message: error.reason,
-    });
+    await task({
+      name: "isotopy.stage-failed",
+      handler: async (failed: StageRef & { reason: string }) =>
+        ctx.deps.projection.stageFailed(failed.runId, failed.stageId, failed.reason),
+    }).start(ctx.run, { ...stageRef(ctx, stageDef), reason: error.reason });
     return STAGE_OUTCOMES.FAILED;
   }
 }
@@ -384,17 +423,17 @@ async function runOneStage(
   ctx: PipelineContext,
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
-  const { run, tasks, input } = ctx;
+  const { run, deps } = ctx;
   const outcome = await failStageOnTaskFailure(ctx, stageDef);
   if (outcome !== STAGE_OUTCOMES.PASSED || !stageDef.gateAfter) {
     return outcome;
   }
 
-  await tasks.project.start(run, {
-    kind: "stageAwaiting",
-    runId: input.runId,
-    stageId: stageDef.id,
-  });
+  await task({
+    name: "isotopy.stage-awaiting",
+    handler: async (awaiting: StageRef) =>
+      deps.projection.stageAwaiting(awaiting.runId, awaiting.stageId),
+  }).start(run, stageRef(ctx, stageDef));
   await awaitStageEvent(run.events.gate, stageDef.id);
   return STAGE_OUTCOMES.PASSED;
 }
@@ -437,15 +476,16 @@ async function suppressStage(
   stageDef: StageDefinition,
   cause: RunCompletionStatus,
 ): Promise<void> {
-  const { run, tasks, input } = ctx;
-  const profession = agentForStage(stageDef).profession;
-  await tasks.project.start(run, {
-    kind: "log",
-    runId: input.runId,
-    stageId: stageDef.id,
-    draft: { level: "warn", message: `${profession} suppressed because of ${suppressionReason(cause)}` },
-  });
-  await tasks.project.start(run, { kind: "stageSkipped", runId: input.runId, stageId: stageDef.id });
+  const { projection } = ctx.deps;
+  await task({
+    name: "isotopy.stage-suppressed",
+    async handler(suppressed: SuppressedStage) {
+      const profession = agentForStage(suppressed.stageDef).profession;
+      const message = `${profession} suppressed because of ${suppressionReason(suppressed.cause)}`;
+      projection.log(suppressed.runId, suppressed.stageDef.id, { level: "warn", message });
+      projection.stageSkipped(suppressed.runId, suppressed.stageDef.id);
+    },
+  }).start(ctx.run, { runId: ctx.input.runId, stageDef, cause });
 }
 
 async function runGroup(
@@ -453,7 +493,7 @@ async function runGroup(
   group: PipelineGroup,
   walk: WalkState,
 ): Promise<boolean> {
-  const { run, tasks, input } = ctx;
+  const { run, deps, input } = ctx;
   const seeded = input.seeded;
 
   for (const stageDef of group.stages) {
@@ -461,8 +501,11 @@ async function runGroup(
       if (stageDef.id === seeded?.startStageId) {
         walk.reached = true;
       } else {
-        await tasks.project.start(run, {
-          kind: "applySeededStage",
+        await task({
+          name: "isotopy.stage-seeded",
+          handler: async (carried: CarriedStage) =>
+            deps.projection.applySeededStage(carried.runId, carried.stageDef, carried.seeded),
+        }).start(run, {
           runId: input.runId,
           stageDef,
           seeded: { output: seeded?.outputs[stageDef.id], from: seeded?.from },
@@ -496,7 +539,11 @@ async function runPipeline(
   const ctx: PipelineContext = { run, tasks, deps, input };
   const { runId, pipeline } = input;
 
-  await tasks.project.start(run, { kind: "runStarted", runId, message: input.startedMessage });
+  await task({
+    name: "isotopy.run-started",
+    handler: async (started: { runId: string; message: string }) =>
+      deps.projection.runStarted(started.runId, started.message),
+  }).start(run, { runId, message: input.startedMessage });
 
   const walk: WalkState = {
     reached: input.seeded === undefined,
@@ -515,7 +562,11 @@ async function runPipeline(
     await tasks.review.start(run, { context: workContext(input), status });
   }
 
-  await tasks.project.start(run, { kind: "runCompleted", runId, status });
+  await task({
+    name: "isotopy.run-completed",
+    handler: (completed: { runId: string; status: RunCompletionStatus }) =>
+      deps.projection.runCompleted(completed.runId, completed.status),
+  }).start(run, { runId, status });
   return { status };
 }
 

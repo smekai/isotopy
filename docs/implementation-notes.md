@@ -507,15 +507,18 @@ both are present. The result is clamped to 24h so a bad parse cannot park a run 
 a decade, and `limitWaitMs` falls back to `DEFAULT_LIMIT_WAIT_MS` (30 minutes) when
 nothing parsed or the stored instant is already past.
 
-**A task is found again by what it was asked, in order (`pipeline-tasks.ts`).** Aiki
-replays a task by its address — the task name plus a hash of its input — and keeps
-a queue per address, so the Nth call with the same input gets the Nth recorded
-result. A stage that limits and retries sends its turn task the same input twice,
-and the retry still runs fresh: no attempt number has to be spelled into a name.
-The price is that replay follows the order of calls. A deploy that changes the
-workflow body *before* the point a parked run reached makes that run fail with
-"Replay divergence" (`NonDeterminismError`) when it resumes; the user restarts it
-from the stage. A change only after that point replays cleanly.
+**A task is found again by its name and input, not by its place (`pipeline-workflow.ts`).**
+Aiki replays a task by its address — the task name plus a hash of its input — and
+keeps a queue per address, so the Nth call with the same input gets the Nth
+recorded result. A stage that limits and retries sends its turn task the same input
+twice, and the retry still runs fresh: no attempt number has to be spelled into a
+name. Moving a call is safe. Adding a task, removing one or changing what one is
+given *before* the point a parked run reached is not: that run fails with
+`NonDeterminismError` when it resumes. Such a change ships as a new workflow
+version (`.v("1.1.0")`), with the old version still registered on the worker so a
+parked run finishes on the body it started with. The same rule keeps sentences
+out of a task's input — rewording one would change the input — so a failed
+question mediation passes its cause and the handler builds the message.
 
 `EngineRunResult.limit` rides on a result whose `success` is `false`, because the
 process really did fail — the presence of `limit` is what reclassifies it from a
@@ -564,14 +567,15 @@ the store of record, written per transition.
 The durable runtime is **Aiki** (`workflow/`), embedded per project:
 `WorkflowRuntime` opens an Aiki server on `.isotopy/aiki.db`, a client bound to its
 handler, and a worker, all in-process. `workflow/pipeline-workflow.ts` is the
-durable workflow body, `workflow/pipeline-tasks.ts` its tasks, and
+durable workflow body, `workflow/pipeline-tasks.ts` its three work tasks, and
 `workflow/stage-execution.ts` the work a stage task does — the single decision
 point for how a stage runs (simulate vs. engine). Durability owns
 starting/queueing, the loop, gates (durable events), durable timers, retries,
 recovery and cancellation state; `RunService` is the single writer of the
-`RunState`/events read model, and every write it receives from the workflow
-arrives through the `isotopy.project` task so a replay never repeats one. Keep
-stage-execution logic inside `workflow/stage-execution.ts`.
+`RunState`/events read model, and every write it receives from the workflow body
+is a small task of its own, defined where it is called (`isotopy.stage-awaiting`,
+`isotopy.run-completed`, …), so a replay never repeats one. Keep stage-execution
+logic inside `workflow/stage-execution.ts`.
 
 **A stage whose work throws fails that stage, once (`failStageOnTaskFailure`).**
 Stage work catches what it expects — an engine that crashes or limits comes back as

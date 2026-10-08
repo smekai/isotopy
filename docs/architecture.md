@@ -199,10 +199,14 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **The workflow seam (A4):** the durable runtime is **Aiki**, embedded in
   `workflow/` (see [Workflow runtime](../docs/architecture.md#workflow-runtime-aiki)).
   `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop),
-  `workflow/pipeline-tasks.ts` holds its durable *tasks*, and
+  `workflow/pipeline-tasks.ts` holds its durable work *tasks*, and
   `workflow/stage-execution.ts` is the work a stage task does — the one place that
   decides how a stage runs. Durability owns start/queueing, the loop, gates,
   durable timers, retries, recovery and cancellation state — *not* one method.
+  A task is replayed by its name and input, so a task's input carries data, never
+  a sentence the code builds, and a change that adds, removes or re-inputs a task
+  before a point where a run can park ships as a new workflow version (`.v()`),
+  with the old one still registered.
 
 - **The stateful class (A5):** `RunService` owns the run read model
   (`RunState` + events + SSE) and hosts the per-project durable runtime; that is
@@ -803,7 +807,7 @@ the 2026-10-06 entry in [`decisions.md`](decisions.md).
 │  workflow/ (durable runtime)            │
 │  WorkflowRuntime embeds Aiki per        │
 │  project; pipeline-workflow = the loop, │
-│  pipeline-tasks = its durable tasks     │
+│  pipeline-tasks = its work tasks        │
 ├─────────────────────────────────────────┤
 │  .isotopy/aiki.db — Aiki's SoT          │
 │  .isotopy/runs.db — the read model      │
@@ -811,8 +815,8 @@ the 2026-10-06 entry in [`decisions.md`](decisions.md).
 ```
 
 Each pipeline **stage turn** is a durable task, and every write to the read model
-is one too (`isotopy.project`, a `ProjectionCall`), so a replay never repeats
-one. A `gateAfter` stage parks on its `gate` event and `approveGate` sends it.
+is one too — a small task defined where it is called (`isotopy.stage-awaiting`,
+`isotopy.run-completed`, …) — so a replay never repeats one. A `gateAfter` stage parks on its `gate` event and `approveGate` sends it.
 Semantic restart (S2) and one-active-run-per-project (S5) are Isotopy-owned on
 top (a seeded fresh run, and a project-keyed admission guard). Subprocess-tree
 kill on cancel (G4) stays Isotopy-owned; Aiki's cancel stops the run at its next

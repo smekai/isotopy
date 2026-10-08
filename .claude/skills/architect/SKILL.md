@@ -171,10 +171,14 @@ of the source. When you strip or avoid a comment, that is where its content goes
 - **The workflow seam (A4):** the durable runtime is **Aiki**, embedded in
   `workflow/` (see [Workflow runtime](../docs/architecture.md#workflow-runtime-aiki)).
   `workflow/pipeline-workflow.ts` is the durable workflow body (the run loop),
-  `workflow/pipeline-tasks.ts` holds its durable *tasks*, and
+  `workflow/pipeline-tasks.ts` holds its durable work *tasks*, and
   `workflow/stage-execution.ts` is the work a stage task does — the one place that
   decides how a stage runs. Durability owns start/queueing, the loop, gates,
   durable timers, retries, recovery and cancellation state — *not* one method.
+  A task is replayed by its name and input, so a task's input carries data, never
+  a sentence the code builds, and a change that adds, removes or re-inputs a task
+  before a point where a run can park ships as a new workflow version (`.v()`),
+  with the old one still registered.
 
 - **The stateful class (A5):** `RunService` owns the run read model
   (`RunState` + events + SSE) and hosts the per-project durable runtime; that is

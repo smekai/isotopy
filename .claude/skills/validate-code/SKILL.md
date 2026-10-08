@@ -105,11 +105,15 @@ that grew a pure helper should have handed it to `domain/`.
 
 The durable runtime is Aiki, embedded in `packages/server/src/workflow/`.
 `pipeline-workflow.ts` is the workflow body (the run loop), `pipeline-tasks.ts` its
-durable tasks, and `stage-execution.ts` the work a stage task does — the single
+durable work tasks, and `stage-execution.ts` the work a stage task does — the single
 decision point for how one stage runs. The seam is the workflow, **not** one service
-method. A read-model write from the workflow goes through the `isotopy.project` task,
-never a direct call, or a replay repeats it. If your change spread `await` chains for
-long-running work across a service instead of going through the workflow, pull it back.
+method. A read-model write from the workflow body is a small inline task of its own,
+never a direct call, or a replay repeats it. The body reads nothing it was not handed
+by a task or an event. A task is replayed by its name and input: its input carries
+data, never a sentence the code builds, and a change that adds, removes or re-inputs
+a task before a point where a run can park takes a new workflow version (`.v()`) with
+the old one still registered. If your change spread `await` chains for long-running
+work across a service instead of going through the workflow, pull it back.
 
 ### A5 — Classes where there is state or a lifecycle
 
