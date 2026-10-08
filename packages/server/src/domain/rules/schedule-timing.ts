@@ -9,7 +9,3 @@ export function nextFireForSchedule(schedule: Schedule, now: string): string | u
 export function scheduleCronIssues(cron: string, timezone: string): ValidationIssue[] {
   return recurrenceIssues({ cron, timezone });
 }
-
-export function scheduleActivationId(schedule: Schedule): string {
-  return `${schedule.id}@${schedule.timezone}@${schedule.cron}`;
-}

@@ -10,7 +10,7 @@ import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { BUILT_IN_SCHEDULES } from "../domain/rules/built-in-schedules.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
-import { nextFireForSchedule, scheduleActivationId } from "../domain/rules/schedule-timing.ts";
+import { nextFireForSchedule } from "../domain/rules/schedule-timing.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -42,7 +42,6 @@ function isRunActive(run: RunState): boolean {
 
 function activationOf(schedule: Schedule): ScheduleActivation {
   return {
-    activationId: scheduleActivationId(schedule),
     scheduleId: schedule.id,
     cron: schedule.cron,
     timezone: schedule.timezone,

@@ -197,7 +197,16 @@ export class WorkflowRuntime {
       return;
     }
     const { client: aikiClient } = await this.ensure();
-    const wantedIds = new Set(wanted.map((activation) => activation.activationId));
+    const kept = new Set<string>();
+    for (const activation of wanted) {
+      const handle = await aikiSchedule({
+        type: "cron",
+        expression: activation.cron,
+        timezone: activation.timezone,
+        overlapPolicy: "skip",
+      }).activate(aikiClient, this.workflows.schedule, { scheduleId: activation.scheduleId });
+      kept.add(handle.id);
+    }
     const { schedules } = await aikiClient.api.schedule.listV1({
       limit: SCHEDULE_LIST_LIMIT,
       filters: {
@@ -205,19 +214,10 @@ export class WorkflowRuntime {
         workflows: [{ name: SCHEDULE_WORKFLOW_NAME, source: "user" }],
       },
     });
-    const unwanted = schedules.filter(({ schedule }) => !wantedIds.has(schedule.referenceId ?? ""));
-    for (const { schedule } of unwanted) {
-      await aikiClient.api.schedule.deactivateV1({ id: schedule.id });
-    }
-    for (const activation of wanted) {
-      await aikiSchedule({
-        type: "cron",
-        expression: activation.cron,
-        timezone: activation.timezone,
-        overlapPolicy: "skip",
-      })
-        .with("reference.id", activation.activationId)
-        .activate(aikiClient, this.workflows.schedule, { scheduleId: activation.scheduleId });
+    for (const { schedule } of schedules) {
+      if (!kept.has(schedule.id)) {
+        await aikiClient.api.schedule.deactivateV1({ id: schedule.id });
+      }
     }
   }
 

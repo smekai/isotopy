@@ -5,7 +5,6 @@ export interface ScheduleFiring {
 }
 
 export interface ScheduleActivation {
-  activationId: string;
   scheduleId: string;
   cron: string;
   timezone: string;

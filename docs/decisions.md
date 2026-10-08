@@ -55,13 +55,13 @@ cancel refuses a run's next transition but never interrupts the task in flight.
 record, so the activation is the clock and the record the rule. **Catch up, never backfill:** a
 machine asleep for three days owes one run, which is what skip-overlap gives, and a schedule
 switched off and back on owes nothing, because Aiki starts a reactivated activation from its next
-occurrence. The activation's reference id is the schedule id plus its timezone and cron: Aiki ties
-each reference id to one definition and each definition to one reference id, even once deactivated,
-so the id has to follow the definition. An id carrying `updatedAt` made switching a schedule back on
-a conflict, and it never fired again. Validation and the next-fire preview use `cron-parser`, the
-parser Aiki fires with, so preview and clock cannot disagree; the server sends the next fire and the
-UI never parses an expression. (The August choice of `croner` over `cron-parser` was about `luxon`,
-which Aiki now brings anyway.)
+occurrence. An activation carries no reference id: Aiki keeps one schedule per definition, even
+once deactivated, and refuses that definition under a second id. Our id carrying `updatedAt` made
+switching a schedule back on a conflict, and it never fired again; with the definition as the
+identity, nothing of ours has to change in step with it, a workflow version bump included.
+Validation and the next-fire preview use `cron-parser`, the parser Aiki fires with, so preview and
+clock cannot disagree; the server sends the next fire and the UI never parses an expression. (The
+August choice of `croner` over `cron-parser` was about `luxon`, which Aiki now brings anyway.)
 
 **What it costs, measured:**
 
@@ -71,8 +71,9 @@ which Aiki now brings anyway.)
   `engines.node` follows it to `>=22.16`.
 - Source grows by ~200 net lines. Embedding a server, client and two workers, a task per
   read-model write, and reconciling activations outweigh what was deleted.
-- A task is two SQLite transactions, one when it starts and one when it completes: ~3–4 ms of CPU
-  against OpenWorkflow's ~0.8 ms, and opening the runtime costs ~1.1–1.4 s of CPU once per process.
+- A task commits twice, when it starts and when it completes, as an OpenWorkflow step does (~2.3
+  commits each, measured). The difference is CPU: ~3–4 ms per task against OpenWorkflow's ~0.8 ms,
+  and opening the runtime costs ~1.1–1.4 s of CPU once per process.
   Negligible next to an engine call measured in minutes. On Windows the server suite on one shared
   worker takes 60 s against OpenWorkflow's 81 s, since work is pushed rather than polled, but 27 s
   of CPU against 19 s.
