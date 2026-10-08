@@ -119,7 +119,8 @@ evidence a guard would need, and there is none yet.
 industry-standard logger and for errors kept somewhere they can be read after the fact, because
 the work this is for runs unattended and nobody reads a console nobody is watching.
 
-**Decision:** the seam stays ours — `Logger` with `info`, `warn`, `error` and `child` — and
+**Decision:** the seam stays ours — `Logger` with `info`, `warn`, `error` and `child`, plus the
+`trace` and `debug` Aiki logs at — and
 `PinoLogger` implements it with pino: `pino-pretty` for readable console lines and a synchronous
 file destination writing JSON lines to `<user .isotopy>/logs/server.log`. Each class takes the
 logger in its constructor and keeps `logger.child("<ClassName>")`; a child is always derived from
@@ -158,8 +159,8 @@ task being worked still reads as Next. The next episode has empty `runIds` and p
 Leaving a crashed run's tasks in In Progress forever is worse: no later episode will consider
 them.
 
-**Decision:** claim is a durable board write that happens *before* the work it authorises —
-the same shape as `claimWindow` for schedules. `startRunWith` awaits
+**Decision:** claim is a durable board write that happens *before* the work it authorises.
+`startRunWith` awaits
 `transitionTasks(..., "In Progress")` after the run is persisted and before `launch`. The
 intake `approveGate` transition is removed; gated and ungated runs share one claim point.
 
@@ -529,12 +530,8 @@ been measured.
 it forward on a schedule, unattended, for a measured stretch. The gap list that falls out is what
 MVP and public launch are scoped from. Four things fall out of it and hold beyond this milestone:
 
-- **A schedule is a persisted record plus a ticker, not a durable workflow.** Crash safety comes
-  from the record: a cron expression plus `lastFiredAt` recompute due-ness deterministically after
-  any restart. `step.waitForSignal({ timeoutMs })` — the durable park `TASK-061` built for plan
-  limits — is right for *one* wait of known length and wrong for a recurring one: `WorkflowRuntime`
-  registers exactly one workflow and runs `concurrency: 1`, and a month-long parked workflow must
-  be cancelled and rebuilt every time its expression is edited.
+- **A schedule is a persisted record, and its clock is Aiki's cron** (2026-10-06). It began as a
+  record plus a ticker of our own, because the runtime of the day had no recurrence.
 - **Cron is parsed in-process, never delegated to the OS.** `cron` and `schtasks` diverge by
   platform. Timezone resolution follows `domain/rules/engine-limit.ts` — ICU through
   `Intl.DateTimeFormat`, durations in server logs, clock times only in the browser.
@@ -638,7 +635,8 @@ all three (two of them cost maintenance and bought nothing).
 **Context:** two stores were wrong at once. A handoff dies with its run, so every role began each
 run knowing nothing about a project it had already worked on three times. Meanwhile a settled run
 kept *two* accounts of itself — a closeout written by the Product Manager and a `RunArtifacts`
-report written by the Orchestrator's review — the second a strict subset of the first.
+report written by the Orchestrator's review — the second a strict subset of the first. (Keeping both
+as two paths was the 2026-08-07 decision this replaces.)
 
 **Each persona gets a private memory of the project**, stored beside its skill as
 `<skills>/<id>.notes.md` and layered into that persona's prompt and no other. Merged, deduped,
@@ -1112,12 +1110,12 @@ cost the goal, the approved team and their artifacts over one malformed block.
 
 ## 2026-08-12 — The Orchestrator is a conversation, not a tab
 
-**Context:** an orchestration run opened on an `Orchestrator` tab and put `Chat`
-beside it. The team proposal, the latest decision and the child runs lived on one;
-the conversation those decisions were about lived on the other. The product's own
-copy admitted the seam — `LatestDecision` told the user to *"Answer in the Chat tab
-to continue."* A panel that has to point at another tab to be usable is one panel
-too many.
+**Context:** an orchestration run opened on an `Orchestrator` tab — the 2026-08-05
+placement this replaces — and put `Chat` beside it. The team proposal, the latest
+decision and the child runs lived on one; the conversation those decisions were
+about lived on the other. The product's own copy admitted the seam —
+`LatestDecision` told the user to *"Answer in the Chat tab to continue."* A panel
+that has to point at another tab to be usable is one panel too many.
 
 **Decision:** an orchestration run has a single dialog. `runThread` merges the
 orchestration's turns into the chat transcript on one timestamp ordering, the team
@@ -1271,7 +1269,7 @@ in the first place. It would also reverse the decision below that the server sta
 a pure API. Instead the server preflights the ready URL once and reports the exact
 header that refused, so the failure is legible rather than a blank rectangle.
 
-**Rejected — ADHD hosting a Playwright Chromium and streaming it to the UI.** This
+**Rejected — Isotopy hosting a Playwright Chromium and streaming it to the UI.** This
 is the one design where a single mechanism genuinely serves both consumers, and it
 costs a server runtime dependency plus a browser download at install. Milestone F's
 rule is to stop adding, and the agents already have browsers.
@@ -1353,7 +1351,7 @@ the blast radius beyond what was requested.
 `approvalMode` key in `~/.cursor/cli-config.json` rather than by a flag. Writing it
 would break the standing rule that CLI config files are read, never written, and
 would **persist past the run** — a crash mid-run leaves the user's global Cursor CLI
-reconfigured by ADHD. Relocating `CURSOR_CONFIG_DIR` instead risks relocating stored
+reconfigured by Isotopy. Relocating `CURSOR_CONFIG_DIR` instead risks relocating stored
 auth, which cannot be verified without the CLI installed. Cursor reports
 `unsupported` as a constant and says so.
 
@@ -1380,7 +1378,7 @@ model roster's `live → config → static`.
 costs nothing to read, but only Claude's protocol adapter is known to emit them. "Every
 engine" would have been a claim about Codex and Cursor that nobody had checked.
 
-**Rejected: asking the agent to declare the files.** The `adhd-run-artifacts` fence is
+**Rejected: asking the agent to declare the files.** The `isotopy-run-artifacts` fence is
 optional, is only produced for orchestration runs, and is prose. A run's own account of
 itself is the thing being replaced, not the thing to build on.
 
@@ -1403,7 +1401,7 @@ through `runSubprocess` with an argument array. The endpoint takes **no path** �
 resolves the folder from the run it is scoped to, so no client-supplied path, absolute or
 relative, ever reaches an OS shell.
 
-## 2026-08-10 — Deploying a preview is ADHD's job, not an agent's
+## 2026-08-10 — Deploying a preview is Isotopy's job, not an agent's
 
 **Context:** Full Delivery carried an SRE box whose step task told an agent to find the
 project's deployment configuration, run it, verify it, and report. There was no such
@@ -1416,9 +1414,9 @@ this entry is where that seam was finally filled. Showing a user the product a r
 built needs the same kind of fact — a start command, a readiness check, a port strategy —
 which is why `TASK-138` will read the `ui` block rather than inventing its own.
 
-**Decision:** project-owned commands live in `.adhd/automation.json` — validation, UI
+**Decision:** project-owned commands live in `.isotopy/automation.json` — validation, UI
 start, preview and production deployment — as executable-plus-argument arrays with
-per-platform overrides, never shell strings. ADHD executes the preview deployment itself:
+per-platform overrides, never shell strings. Isotopy executes the preview deployment itself:
 any stage whose step task is `deploy-preview` runs deterministically from that
 configuration, and no engine turn is spent. Keying on the **step task** rather than on
 `pipelineId === "full-delivery"` is deliberate — an Orchestrator-composed team that gives
@@ -1449,7 +1447,8 @@ Neither a first-time user nor an Orchestrator composing a team can track that; b
 say how much thinking a step needs.
 
 **Decision:** what the system stores and reasons about is a **preset** on one effort
-ladder — `auto · fast · balanced · deep · max` — resolved to a concrete `(model, effort)`
+ladder — `auto · economy · fast · balanced · deep · max` (`economy` since 2026-08-23) —
+resolved to a concrete `(model, effort)`
 pair per engine at stage-execution time. The ladder borrows the CLIs' own
 `low·medium·high·xhigh·max` vocabulary, which does not churn the way model names do, and
 effort is a genuinely separate axis on two of three engines (`--effort` on Claude,
@@ -1499,33 +1498,10 @@ board text exists to defend against.
 
 ---
 
-## 2026-08-07 — The Product Manager closeout and the Orchestrator review are two paths, not one
-
-**Context:** with the Orchestrator now deciding what happens after each run, the
-Product Manager closeout stage looked like leftover scaffolding.
-
-**Decision:** keep both. `FULL_DELIVERY_PIPELINE` ends in the `closeout` stage and
-produces a `RunCloseoutRecord`; an Orchestrator-composed pipeline has no closeout stage
-and produces a `RunArtifactRecord` from its review step instead. Consumers merge them at
-`run.closeout?.report ?? run.artifacts?.report`, and the Orchestrator treats a supplied
-closeout as authoritative rather than recomputing it. The file that held both was
-dissolved into its callers, because three of its five exports served the Orchestrator
-path and its name claimed otherwise: `applyProductManagerCloseout` and the closeout
-files it writes now live in `services/consumers/closeout-consumer.ts`, the run-directory
-artifact and cancellation writers in `services/run/run-service.ts`, and the milestone
-summary and prior-closeout context in `services/milestone-closeout.ts`.
-
-**Rejected:** deleting the `closeout` stage and letting the Orchestrator review be the
-only closeout. That also removes source-task transitions, run temp cleanup, and the
-written `closeout.md` from every full-delivery run — a product change wearing a
-refactor's clothes.
-
----
-
 ## 2026-08-07 — A consumer that cannot use a stage's output is what fails the stage
 
 **Context:** a `milestone-planning` run on Codex returned prose instead of a fenced
-`adhd-milestone-plan` block. `MilestonePlanConsumer` recorded `approvalError` correctly,
+`isotopy-milestone-plan` block. `MilestonePlanConsumer` recorded `approvalError` correctly,
 and the stage still passed — the run completed and the Orchestrator's review reported
 work as delivered. `StageOutputConsumer.consume` returned `Promise<void>`, and consumers
 ran *after* `interpretEngineResult` had already fixed the outcome, so a consumer could not
@@ -1582,6 +1558,16 @@ answer is sent bare, as before; without one the stage is re-prompted with
 far. The `conversational` flag and `isConversational` are deleted rather than left as a
 field nothing branches on.
 
+This refines 2026-07-27, when asking first shipped: an agent that asks resumes its CLI session,
+through `resumeSessionId` on one `run()` rather than a second `resume()`, because re-running the
+stage would pay for the investigation twice per question. Resuming stays the first choice
+wherever the engine supports it. Two rules from that entry still hold:
+
+- **Asking is its own run state,** not the gate state — reusing `awaiting` would make "Approve"
+  mean two different things. A parked run keeps its project slot, exactly as a gate does.
+- **Capabilities are verified against the installed CLI, never asserted from documentation** —
+  a capability claimed from docs alone fails silently at runtime.
+
 **Rejected:** refusing to start an orchestration on a non-conversational engine. It would
 have made the dead end loud instead of silent, but it also concedes a third of the engine
 roster for a limitation that costs one prompt-builder to work around — and it would have
@@ -1625,7 +1611,7 @@ whole run per log line versus 485 µs to append one event row. That cost is why 
 model + persistence), `MilestoneService` (milestone CRUD and proposal store), and
 `RunService` (run lifecycle + `RunProjection`). Persist snapshots without
 `stage.logs`; rehydrate logs from `stage.log` events on load; flush immediately.
-`utils/` is defined by the ADHD-concept test — if the file would make sense in
+`utils/` is defined by the Isotopy-concept test — if the file would make sense in
 another product it is a util; if it names a run/milestone/stage/persona/task board
 it is `schemas/` (boundary parse), `domain/` (other pure), or `services/` (I/O).
 Boundary parsers live at top-level `src/schemas/` (not `domain/codecs/`) — they
@@ -1639,32 +1625,16 @@ to drift out of `domain/`.
 
 ---
 
-## 2026-08-05 — Home leads with the Orchestrator, and the Orchestrator surface is a tab on its own run
+## 2026-08-05 — Home leads with the Orchestrator
 
 **Context:** Milestone E gives the product a top-level Orchestrator, but the UI had no
 reference to it at all — the home screen offered only a fixed pipeline and a milestone
 planning shortcut, and the `/orchestrations` endpoints were unreachable from the browser.
-Two placements were open: a dedicated `#/orchestrations/:id` route beside `#/runs/:id` and
-`#/milestones/:id`, or a surface on the orchestration run that already exists.
 
 **Decision:** the home composer opens in Orchestrator mode; the fixed pipeline composer is
-one click behind `choose-pipeline` and otherwise unchanged. The Orchestrator's own surface —
-status, the team awaiting approval, and the timeline of runs in the initiative — is an
-**extra tab on the orchestration run**, not a route of its own.
-
-**Why:** an orchestration *is* a run — the `orchestrate` stage is `interactive: true` with 24
-turns, so the conversation is already the run's chat and `POST /runs/:id/messages` already
-answers an `ask_user`. A separate route would have had to rebuild the transcript, the
-composer, the status bar and the SSE subscription to show the same thing the run view shows,
-and would have left the user with two places to look for one conversation. The rejected
-alternative is worth revisiting only if the Orchestrator gains state that outlives every run
-it owns.
-
-**Consequence:** `useOrchestration` refetches on `orchestrationRefreshKey(runs)` — the same
-derivation `useMilestones` uses, widened to stage statuses, because a decision is recorded
-when the `orchestrate` **stage** settles, which for a multi-stage team run is not a run status
-change. No third SSE channel; see the milestone rule in
-[`architecture-ui.md`](./architecture-ui.md) §5.
+one click behind `choose-pipeline` and otherwise unchanged. Where the Orchestrator itself
+shows was first an extra tab on its run, and is now the run's single conversation — see
+2026-08-12.
 
 ---
 
@@ -1676,16 +1646,11 @@ and no record a later run could read. Meanwhile the Orchestrator's `start_run` a
 `delegate_milestone_planning` decisions were recorded and never acted on, and milestone chaining
 picked the first `ready` feature without consulting anything the finished run had learned.
 
-**Decision:** the Orchestrator reviews **every** run it owns, as a named durable step inside that
-run's own `PipelineWorkflow`, immediately before the run is marked complete. The review turn
-returns two independent fenced blocks — `adhd-run-artifacts` and `adhd-orchestrator-decision` —
+**Decision:** the Orchestrator reviews **every** run it owns, as a durable task of that run's own
+workflow, immediately before the run is marked complete. The review turn returns two
+independent fenced blocks — `isotopy-run-artifacts` and `isotopy-orchestrator-decision` —
 each read on its own, so a malformed report never costs a sound decision. A review that fails
 outright is never fatal: the run's work is already done, and only the review is lost.
-
-Artifacts were a `RunArtifacts` type and the closeout its task-board-coupled superset through a
-shared `RUN_ARTIFACTS_SHAPE`. **Superseded 2026-08-20** — the two records collapsed into one
-`RunCloseoutRecord`, since a subset stored beside its superset only invited the two to disagree.
-See the 2026-08-20 entry.
 
 **Launching happens after the admission claim is released, never inside the review.** The
 per-project claim is held for the whole of a run, and the durable runtime gives each project one
@@ -1707,9 +1672,7 @@ in the system to read that field, which until now was parsed, persisted, rendere
 
 **Rejected:** making the Orchestrator the sole closeout author by dropping the `full-delivery`
 closeout stage — it is a behaviour change to a shipped pipeline for no gain, since a closeout
-that already exists is cheaper to condense than to reproduce. Also rejected: reusing
-`RunCloseoutRecord` for composed runs, which would have forced every team run to emit empty
-`completedTaskIds`, `unresolvedTaskIds`, and `cleanup` arrays it has no source tasks for.
+that already exists is cheaper to condense than to reproduce.
 
 ---
 
@@ -1907,7 +1870,7 @@ that logic belongs in the application, not the test.
 [`testing.md`](./testing.md), emitted into both the `write-tests` Claude Code skill and
 the shipped QA Engineer persona — the same generator, and the same drift check in CI,
 that Architect already uses. The split is strict: `testing-shared` ships into arbitrary
-repositories, so `FakeEngine`, `harness.ts` and `ADHD_HOME` stay in `testing-skill`.
+repositories, so `FakeEngine`, `harness.ts` and `ISOTOPY_HOME` stay in `testing-skill`.
 
 **"No logic in a test body" is an ESLint rule**, not a review note: `if`/`for`/`while`/
 `try` inside a `test()` or `it()` callback is an error under `packages/*/test/**` and
@@ -1974,7 +1937,7 @@ other. The emitter and the UI therefore guarded against states the schema alread
 proved impossible, and closeout and the milestone proposal had each accumulated
 three definitions of one shape.
 
-**Decision:** zod is a dependency of `@adhd/core`. A shape is defined once, as a
+**Decision:** zod is a dependency of `@isotopy/core`. A shape is defined once, as a
 schema, and its TypeScript type is `z.infer` of that schema. This extends the
 rule already in force for runtime value lists — exported `as const`, defining
 their unions — from lists to shapes.
@@ -1988,7 +1951,7 @@ type, so a union missing an arm still satisfies it — which is precisely how
 the *output* type and a transform makes the derived type dishonest about what the
 schema accepts. Normalisation that belongs to an agent boundary — deduping string
 arrays, rewriting severity prose — stays in the server, which is the same line
-drawn under "Strict for what ADHD writes, salvaging for what an agent writes".
+drawn under "Strict for what Isotopy writes, salvaging for what an agent writes".
 
 **Where this stops.** A schema earns its place where untrusted data crosses a
 boundary at runtime — SQLite reads, HTTP request bodies, engine JSONL, agent
@@ -2010,7 +1973,7 @@ decision from this one and has not been taken.
 ## 2026-08-03 — A plan limit is a wait, not a failure
 
 **Context:** every harness eventually says "you've hit your session limit · resets
-4:30pm". ADHD treated that as a dead run: three adapters pattern-matched it into a
+4:30pm". Isotopy treated that as a dead run: three adapters pattern-matched it into a
 friendlier string that still flowed to `stageFailed`, the reset time was logged and
 discarded, and recovery meant a human being present to press Restart — which re-ran the
 whole stage. The one thing the machine knew (*when* it could continue) was the one thing
@@ -2048,14 +2011,14 @@ with a timeout is both.
 
 ---
 
-## 2026-08-03 — Strict for what ADHD writes, salvaging for what an agent writes
+## 2026-08-03 — Strict for what Isotopy writes, salvaging for what an agent writes
 
 **Context:** rule **A7** says a codec rejects a malformed record whole rather than
 repairing fields. Applied to LLM output that rule destroyed real work: the closeout
 agent writes `"non-blocking"` where the enum demands `non_blocking`, and *any* schema
 slip discarded an entire run's findings, task drafts and classification.
 
-**Decision:** the boundary, not the shape, decides the strictness. An ADHD-owned record
+**Decision:** the boundary, not the shape, decides the strictness. An Isotopy-owned record
 — persisted JSON, settings, the project registry — validates completely or is rejected
 with path-aware issues. An **agent-authored or vendor protocol** is salvaged: known
 spellings are normalized, a failing field or array element is dropped alone, unknown
@@ -2069,10 +2032,10 @@ schema.
 and still answers a second failure with nothing.
 
 **Amended 2026-08-03:** two codecs never meant two definitions. The shape now lives once
-in `@adhd/core` as `CLOSEOUT_SHAPE`, transform-free, and the agent boundary overrides
+in `@isotopy/core` as `CLOSEOUT_SHAPE`, transform-free, and the agent boundary overrides
 only the fields whose input contract differs — trimming, deduping, severity prose. This
 closed a real defect the duplication had hidden: the persisted-run codec was importing
-the *agent-lenient* closeout schema, so ADHD's own records were being validated against
+the *agent-lenient* closeout schema, so Isotopy's own records were being validated against
 rules written for an LLM, silently accepting and rewriting `"Non-Blocking"` on the way
 out of SQLite.
 
@@ -2093,7 +2056,7 @@ milestone can be read back to distinguish what a run completed from what a human
 through. Blocking findings do not block acceptance; the alternative strands a milestone
 on a false positive with no way out.
 
-**Rejected:** widening `StageStatus` in `@adhd/core` so the colour could differ. The
+**Rejected:** widening `StageStatus` in `@isotopy/core` so the colour could differ. The
 persisted status is what the durable workflow branches on, and every runtime consumer
 would have to handle a case that exists only for presentation.
 
@@ -2138,7 +2101,7 @@ vendor protocol change independently.
 ## 2026-07-29 — Absent and `undefined` are the same domain state
 
 **Context:** `exactOptionalPropertyTypes` forced callers to distinguish a missing property
-from a property explicitly set to `undefined`. ADHD gives those no different meaning, so
+from a property explicitly set to `undefined`. Isotopy gives those no different meaning, so
 the flag produced `T | undefined` fields and conditional assembly protecting no invariant.
 
 **Decision:** the flag is **off**. A value that may be absent is `field?: T`; callers may
@@ -2149,10 +2112,10 @@ omit it or pass `undefined`. `null` is reserved for an explicit cleared state.
 
 ## 2026-07-29 — Pure logic lives in a domain layer, grouped by what it parses
 
-**Context:** rule A3 wants pure logic out of services. `@adhd/core` looked like the home,
+**Context:** rule A3 wants pure logic out of services. `@isotopy/core` looked like the home,
 and Markdown building was happening inline inside services that were also doing I/O.
 
-**Decision:** `@adhd/core` stays the *shared* contract imported by the browser UI —
+**Decision:** `@isotopy/core` stays the *shared* contract imported by the browser UI —
 prompt builders and persona text have no business in the client bundle — so server-only
 pure logic lives in `packages/server/src/domain/`, with Markdown parsing and rendering
 grouped by format under `domain/markdown/`. Services own I/O and orchestration;
@@ -2172,13 +2135,8 @@ tasks during an unfinished conversation would turn guesses into durable project 
 validated proposal is persisted as a draft, revisable by chat or direct edit, and creates
 or links tasks **only after explicit approval**. One feature is one Full Delivery run and
 may group several tasks. Existing TaskPlanner work is reused; missing work is created
-idempotently through an ADHD-owned adapter, with `.adhd/tasks` as the fallback. Product
-Manager also owns closeout: only explicitly completed source tasks move to Done,
-unresolved work is preserved, and cleanup is confined to the run-owned temporary root.
+idempotently through TaskPlanner's own board API (2026-09-22).
 
-**Deferred:** changing TaskPlanner itself. The Markdown integration stays behind an
-adapter so an official transactional API can replace it later without changing milestone
-behaviour.
 
 ---
 
@@ -2241,28 +2199,6 @@ logs.
 
 ---
 
-## 2026-07-27 — An agent that asks resumes its session
-
-**Context:** every adapter was one-shot, so an agent could not ask a clarifying question.
-Two mechanisms were possible: re-run the stage with the question and answer folded into a
-fresh prompt, or resume the CLI session.
-
-**Decision:** resume the session. `EngineRunContext` carries `resumeSessionId` and the
-result carries `sessionId` — one `run()` method, not a second `resume()`; the *flag*
-declares the capability and the *context* drives the behaviour. Re-running was rejected
-because the investigation is the expensive part: paying for it twice per question, and
-losing the model's working context each time, makes the feature not worth having.
-
-**Asking is its own run state,** not the gate state — reusing `awaiting` would make
-"Approve" mean two different things. A parked run keeps its project slot, exactly as a
-gate does; releasing it would let a second run write to the same workspace.
-
-**Capabilities are verified against the installed CLI, never asserted from
-documentation** — a flag claimed from docs alone fails silently at runtime. Unverified
-capabilities stay off and are recorded as a known gap.
-
----
-
 ## 2026-07-23 — SQLite is the sole run store, behind a layered repository
 
 **Context:** a flat-file JSON store shipped first, with SQLite behind a selector. Run
@@ -2297,23 +2233,23 @@ were the same question — see the 2026-10-06 runtime entry.
 
 ## 2026-07-23 — A project owns its folder, its data, and its settings
 
-**Context:** every path the server wrote was anchored to the ADHD source checkout, so a
+**Context:** every path the server wrote was anchored to the Isotopy source checkout, so a
 user's project history lived inside the tool and every project shared one history and one
 settings file. Separately, a run could be pointed at any directory the browser named.
 
-**Decision:** a project is a directory that owns its own `.adhd/`, like `.git`, so history
-travels with the code it belongs to. Storage takes a `ProjectPaths` value; a user-level
+**Decision:** a project is a directory that owns its own `.isotopy/`, like `.git`, so history
+travels with the code it belongs to. Storage takes a `ProjectPath` value; a user-level
 registry lists known projects and names the active one. The working directory is
 **derived from the project and never sent by the client** — the answer to "I want to work
 elsewhere" is to add another project. The fallback for "no project selected" is a home
-project under `~/.adhd/home`, *not* the repo, which keeps the zero-setup path without
+project under `~/.isotopy/home`, *not* the repo, which keeps the zero-setup path without
 recreating the bug.
 
 **Non-secret preferences are project state, not browser state** — engine, model,
 permission mode and pipeline live in the per-project section of user-level settings, so a
 second browser or cleared site data no longer silently reverts a project. **Secrets are
-user-level and write-only:** API keys live in `~/.adhd/settings.json` (mode `0600`) as
-`defaults` plus per-project overrides, and never leave the server. Each created `.adhd/`
+user-level and write-only:** API keys live in `~/.isotopy/settings.json` (mode `0600`) as
+`defaults` plus per-project overrides, and never leave the server. Each created `.isotopy/`
 ships a self-ignoring `.gitignore` so run artifacts never appear in a user's
 `git status`.
 
