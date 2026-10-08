@@ -606,17 +606,22 @@ live run is reclaimed from under its worker. Aiki logs a run's steps at `debug`
 (dropped) and lifecycle events — worker start and stop, a schedule activated, a run
 cancelled or woken — at `info`, which reach the operator log with warnings and errors.
 
-**Register the abort handle before the first `await` (`workflow/stage-execution.ts` `runEngineStage`, via `deps.beginEngineStage`).**
-Resolving the persona touches the filesystem. An abort arriving in that window
-used to find no `AbortController` to cancel, so the CLI was spawned anyway and
-ran to completion for a run the user had already stopped. The controller is set
-before any await, and cancellation is re-checked after the inputs resolve and
-after the adapter returns. Cancel stays immediate and Isotopy-owned (`abortRun` →
-`controller.abort()` → `killProcessTree`); Aiki's cancel never interrupts the task
-in flight, it only refuses the run's next transition (G4). That cancel is sent
-without waiting, so the workflow can finish the killed task before it lands;
-`isCancelled` reads the run's own status, which `abortRun` sets synchronously, and
-keeps the workflow from walking into its next stage or the review in that window.
+**An abort records the durable cancel before it kills the CLI (`RunService.abortRun`).**
+`abortRun` awaits Aiki's cancel first, then aborts the engine's controller
+(`killProcessTree`) and marks the run cancelled. Aiki's cancel never interrupts the
+task in flight; it refuses that task's result and every later transition (G4), so
+once it is recorded the killed task cannot carry the workflow into its next stage
+or the review. The workflow body therefore never reads the run's status: a read
+there is not recorded, and a replay could take the other branch. If the run
+finished while the cancel was being recorded, `abortRun` returns it as finished.
+
+The checks that remain run inside tasks (`workflow/stage-execution.ts`), where the
+cancel cannot reach. One sits right before `runAdapter`: the controller exists only
+from there, and an abort that lands while the prompt is built would otherwise find
+nothing to kill, so the CLI would run to completion for a stopped run. One follows
+each engine call, so the result of a killed call never becomes a verdict, a
+deployment or a review in the Orchestrator's history — `live()` guards the run's
+read model, but not the orchestration's.
 
 **Shutdown aborts engine calls that begin after it, too (`RunService.shutdown`).**
 The worker's stop waits up to its grace period for active executions, and an

@@ -127,7 +127,7 @@ test("starting the next feature links one Full Delivery run", async () => {
     status: "in_progress",
     runIds: [run.id],
   });
-  ctx.orchestrator.abortRun(run.id);
+  await ctx.orchestrator.abortRun(run.id);
   ctx.engine.verify();
 });
 
@@ -210,7 +210,7 @@ test("a feature already in progress cannot be started a second time", async () =
   // Assert
   expect(duplicate.status).toBe(400);
   expect(duplicate.body.error).toContain("in progress");
-  ctx.orchestrator.abortRun(run.id);
+  await ctx.orchestrator.abortRun(run.id);
   ctx.engine.verify();
 });
 

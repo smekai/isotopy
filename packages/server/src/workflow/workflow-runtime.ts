@@ -165,8 +165,13 @@ export class WorkflowRuntime {
     );
   }
 
-  cancel(durableRunId: string): void {
-    this.deliver(durableRunId, (handle) => handle.cancel());
+  async cancel(durableRunId: string): Promise<void> {
+    try {
+      const handle = await this.handle(durableRunId);
+      await handle.cancel();
+    } catch (error) {
+      this.logger.error(`Durable run ${durableRunId} did not take the cancel`, { error });
+    }
   }
 
   async runState(durableRunId: string): Promise<DurableRunState> {

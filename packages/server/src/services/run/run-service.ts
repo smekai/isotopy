@@ -176,7 +176,7 @@ export class RunService implements RunProjection {
         }
       }
     }
-    this.orchestration?.reconcileRuns();
+    await this.orchestration?.reconcileRuns();
     for (const project of this.registry.all()) {
       const projectPath = this.registry.resolve(project.id);
       await this.runtimes.for(projectPath).start();
@@ -462,7 +462,7 @@ export class RunService implements RunProjection {
     return structuredClone(run);
   }
 
-  abortRun(runId: string): RunState {
+  async abortRun(runId: string): Promise<RunState> {
     const run = this.store.runs.get(runId);
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
@@ -470,19 +470,16 @@ export class RunService implements RunProjection {
     if (isTerminalRunStatus(run.status)) {
       throw new Error(`Run ${runId} is already finished`);
     }
-    this.engineAborts.get(runId)?.abort();
     const durableRunId = this.store.durableRunIds.get(runId);
     if (durableRunId) {
-      this.runtimes.forProject(run.projectId).cancel(durableRunId);
+      await this.runtimes.forProject(run.projectId).cancel(durableRunId);
     }
+    if (isTerminalRunStatus(run.status)) return structuredClone(run);
+    this.engineAborts.get(runId)?.abort();
     this.markCancelled(runId);
     void this.settleCompletedRun(run)
-      .then(() =>
-        cleanupCancelledRun(this.registry.resolve(run.projectId), run.id),
-      )
-      .catch((error: unknown) =>
-        this.logger.error(`Failed to clean cancelled run ${run.id}`, { error }),
-      );
+      .then(() => cleanupCancelledRun(this.registry.resolve(run.projectId), run.id))
+      .catch((error: unknown) => this.logger.error(`Failed to clean cancelled run ${run.id}`, { error }));
     return structuredClone(run);
   }
 

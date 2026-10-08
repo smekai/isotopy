@@ -153,8 +153,8 @@ async function waitOutLimit(
   stageDef: StageDefinition,
   attempt: number,
   limit: EngineLimit,
-): Promise<boolean> {
-  const { run, tasks, deps, input } = ctx;
+): Promise<void> {
+  const { run, tasks, input } = ctx;
   await tasks.project.start(run, {
     kind: "stageBlocked",
     runId: input.runId,
@@ -163,16 +163,12 @@ async function waitOutLimit(
     attempt,
   });
   const choice = await awaitLimitChoice(ctx, stageDef, limit);
-  if (deps.isCancelled(input.runId)) {
-    return false;
-  }
   await tasks.project.start(run, {
     kind: "limitResolved",
     runId: input.runId,
     stageId: stageDef.id,
     choice,
   });
-  return true;
 }
 
 async function mediateQuestion(
@@ -191,10 +187,7 @@ async function mediateQuestion(
     if (result.outcome !== STAGE_OUTCOMES.LIMITED || result.limit === undefined) {
       return result;
     }
-    const resumed = await waitOutLimit(ctx, stageDef, mediationAttempt + 1, result.limit);
-    if (!resumed) {
-      return { outcome: STAGE_OUTCOMES.CANCELLED };
-    }
+    await waitOutLimit(ctx, stageDef, mediationAttempt + 1, result.limit);
   }
 }
 
@@ -223,7 +216,7 @@ async function resolveSpecialistQuestion(
   ctx: QuestionContext,
   question: string,
 ): Promise<QuestionResolution> {
-  const { run, tasks, deps, input, stageDef } = ctx;
+  const { run, tasks, input, stageDef } = ctx;
   await tasks.project.start(run, {
     kind: "stageQuestion",
     runId: input.runId,
@@ -261,9 +254,6 @@ async function resolveSpecialistQuestion(
     );
   }
   const userAnswer = await waitForUserAnswer(ctx, mediated.decision.question);
-  if (deps.isCancelled(input.runId)) {
-    return { outcome: STAGE_OUTCOMES.CANCELLED };
-  }
   const routed = await mediateQuestion(
     ctx,
     { ...request, phase: "user_answer", userAnswer },
@@ -292,9 +282,7 @@ async function resolveQuestion(ctx: QuestionContext, question: string): Promise<
     return resolveSpecialistQuestion(ctx, question);
   }
   const answer = await waitForUserAnswer(ctx, question);
-  return ctx.deps.isCancelled(ctx.input.runId)
-    ? { outcome: STAGE_OUTCOMES.CANCELLED }
-    : { outcome: STAGE_OUTCOMES.PASSED, answer };
+  return { outcome: STAGE_OUTCOMES.PASSED, answer };
 }
 
 function firstTurn(
@@ -368,10 +356,7 @@ async function runStageToOutcome(
     if (result.outcome !== STAGE_OUTCOMES.LIMITED || result.limit === undefined) {
       return result.outcome;
     }
-    const resumed = await waitOutLimit(ctx, stageDef, attempt + 1, result.limit);
-    if (!resumed) {
-      return STAGE_OUTCOMES.CANCELLED;
-    }
+    await waitOutLimit(ctx, stageDef, attempt + 1, result.limit);
   }
 }
 
@@ -399,7 +384,7 @@ async function runOneStage(
   ctx: PipelineContext,
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
-  const { run, tasks, deps, input } = ctx;
+  const { run, tasks, input } = ctx;
   const outcome = await failStageOnTaskFailure(ctx, stageDef);
   if (outcome !== STAGE_OUTCOMES.PASSED || !stageDef.gateAfter) {
     return outcome;
@@ -411,7 +396,7 @@ async function runOneStage(
     stageId: stageDef.id,
   });
   await awaitStageEvent(run.events.gate, stageDef.id);
-  return deps.isCancelled(input.runId) ? STAGE_OUTCOMES.CANCELLED : STAGE_OUTCOMES.PASSED;
+  return STAGE_OUTCOMES.PASSED;
 }
 
 interface WalkState {
@@ -523,10 +508,6 @@ async function runPipeline(
     if (cancelled) {
       return { status: "cancelled" };
     }
-  }
-
-  if (deps.isCancelled(runId)) {
-    return { status: "cancelled" };
   }
 
   const status = walk.status;

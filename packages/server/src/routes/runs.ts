@@ -135,13 +135,13 @@ export function createRunRoutes(
       }
     })
 
-    .post("/:id/abort", (c) => {
+    .post("/:id/abort", async (c) => {
       const runId = c.req.param("id");
       if (!runs.getRun(runId)) {
         return runNotFound(c);
       }
       try {
-        return c.json(runs.abortRun(runId));
+        return c.json(await runs.abortRun(runId));
       } catch (error) {
         return c.json({ error: messageOf(error) }, 409);
       }
