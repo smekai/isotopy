@@ -291,15 +291,11 @@ exemption is written at the top of the file rather than left to be inferred.
 ### Which checks earned their place
 
 Two rounds of review deleted ~35 worthless tests. What survived is the shape to
-copy. `parsePreferencesUpdate` (four validated fields, partial output, legacy
-rewrite) is covered; `normalizeProjectPreferences` beside it is not, because it
-is four ternaries whose only real logic is shared with the parser.
-`sameProjectRoot` is covered because it folds case **only on Windows**;
-`projectNameFor` is not, because it is `path.basename`. The three deletions that
-made the point: `expect(DEMO_PIPELINES.map(p => p.id)).toEqual([…])` asserted a
-constant back; `expect(persona.endsWith("prompt.")).toBe(true)` asserted on prose
-and broke on a correct new persona; the five `normalizeProjectPreferences` cases
-covered one-line expressions.
+copy. `sameProjectRoot` is covered because it folds case **only on Windows**;
+`projectNameFor` is not, because it is `path.basename`. Two deletions made the
+point: `expect(DEMO_PIPELINES.map(p => p.id)).toEqual([…])` asserted a constant
+back, and `expect(persona.endsWith("prompt.")).toBe(true)` asserted on prose and
+broke on a correct new persona.
 
 ### What gets substituted
 
