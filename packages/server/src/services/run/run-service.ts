@@ -219,8 +219,10 @@ export class RunService implements RunProjection {
       await releaseUnfinishedSourceTasks(this.registry, run, this.logger);
     } else if (status === "failed") {
       this.markInterrupted(run.id);
-    } else {
+    } else if (status === "completed") {
       await this.runCompleted(run.id, "completed");
+    } else {
+      return status satisfies never;
     }
     await this.store.repositoryForRun(run.id).releaseRun(run.id);
     await this.milestones.completeMilestoneRun(run);
