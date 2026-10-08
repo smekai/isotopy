@@ -704,15 +704,14 @@ allowed by the project's gate — the activation is the clock, the record is the
 schedule. Its activation's reference id is the schedule id plus `updatedAt`, and
 `reconcileSchedules` deactivates every activation of the project that no enabled record
 names, then activates the ones that are named (idempotently). The id carries
-`updatedAt` because of how Aiki catches up.
+`updatedAt` because Aiki refuses a changed definition under one reference id
+(`SCHEDULE_CONFLICT`, even after a deactivate), so an edited schedule needs a new one.
 
 **Catch up, never backfill.** With the skip-overlap policy, Aiki fires *one* run for
 every window an activation missed — while the machine slept, or the server was down —
 so three days asleep owe one run rather than three, and that crash safety now lives in
-Aiki's database. But Aiki also owes that one run to an activation that is paused and
-resumed, or deactivated and reactivated. A schedule switched off and on again owes
-nothing, so re-enabling it, or editing it, gives it a new `updatedAt` and therefore a
-fresh activation with no missed window behind it. Cron is parsed in-process — never
+Aiki's database. A schedule switched off and on again owes nothing: Aiki starts a
+reactivated activation from its next occurrence. Cron is parsed in-process — never
 `cron`, never `schtasks`, never a second process.
 
 ### 3. Workflow state

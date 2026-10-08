@@ -53,12 +53,12 @@ cancel refuses a run's next transition but never interrupts the task in flight.
 **A schedule is a record; its Aiki activation is derived.** Aiki never writes a schedule.
 `ScheduleService` reconciles a project's activations after every change, and `fire` re-checks the
 record, so the activation is the clock and the record the rule. **Catch up, never backfill:** a
-machine asleep for three days owes one run, which is what skip-overlap gives. Aiki also owes that
-one run to an activation that is paused and resumed, but a schedule switched off and back on owes
-nothing — so the activation's reference id carries the record's `updatedAt`, and re-enabling or
-editing a schedule gives it a fresh activation. Validation and the next-fire preview use
-`cron-parser`, the parser Aiki fires with, so preview and clock cannot disagree; the server sends
-the next fire and the UI never parses an expression. (The August choice of `croner` over
+machine asleep for three days owes one run, which is what skip-overlap gives, and a schedule
+switched off and back on owes nothing, because Aiki starts a reactivated activation from its next
+occurrence. The activation's reference id carries the record's `updatedAt`: Aiki refuses a changed
+definition under one reference id, even after a deactivate, so an edited schedule gets a fresh one.
+Validation and the next-fire preview use `cron-parser`, the parser Aiki fires with, so preview and
+clock cannot disagree; the server sends the next fire and the UI never parses an expression. (The August choice of `croner` over
 `cron-parser` was about `luxon`, which Aiki now brings anyway.)
 
 **What it costs, measured:**
@@ -67,11 +67,13 @@ the next fire and the UI never parses an expression. (The August choice of `cron
   and arktype stay. Aiki 0.43 also needed `@libsql/client` and its native addon (89 packages,
   69.5 MB, no win32-arm64 build); 0.44 opens SQLite through `node:sqlite` and the root
   `engines.node` follows it to `>=22.16`.
-- Source grows by ~200 net lines. Embedding a server, client and two workers, a task catalogue in
-  place of inline step closures, and reconciling activations outweigh what was deleted.
-- Every read-model write is a durable task, a few SQLite transactions each. Negligible next to an
-  engine call measured in minutes, but the server suite's summed test time rose from ~95 s to
-  ~173 s on Windows (wall time 17 s → 18 s), plus a ~1 s module load once per process.
+- Source grows by ~200 net lines. Embedding a server, client and two workers, a task per
+  read-model write, and reconciling activations outweigh what was deleted.
+- A task is two SQLite transactions, one when it starts and one when it completes: ~3–4 ms of CPU
+  against OpenWorkflow's ~0.8 ms, and opening the runtime costs ~1.1–1.4 s of CPU once per process.
+  Negligible next to an engine call measured in minutes. On Windows the server suite on one shared
+  worker takes 60 s against OpenWorkflow's 81 s, since work is pushed rather than polled, but 27 s
+  of CPU against 19 s.
 - Replay matches a task by its name and input, not its order. Adding, removing or re-inputting a
   task before the point a parked run reached fails that run on resume, so such a change ships as a
   new workflow version with the old one still registered; Aiki plans no tolerant mode.
