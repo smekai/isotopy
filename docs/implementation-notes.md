@@ -588,8 +588,8 @@ break both.
 
 **Events are mailboxes, so a user action must change the read model when it is
 accepted (`approveGate`, `postMessage`, `resolveLimit`).** An event sent before the
-workflow waits is held, not dropped — OpenWorkflow dropped it, and a fast gate
-click was lost. A held event is delivered to the *next* wait for that event, so
+workflow waits is held, not dropped, so a fast gate click is never lost. A held
+event is delivered to the *next* wait for that event, so
 each action flips the stage out of `awaiting`/`asking`/`blocked` synchronously,
 and a second click or message lands somewhere else instead of answering a
 question nobody has asked yet. The workflow also drops an event whose `stageId`
