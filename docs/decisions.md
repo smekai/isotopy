@@ -50,15 +50,11 @@ Restart-from-a-stage is a fresh run seeded with retained outputs, one active run
 admission guard below the API, and killing the engine's process tree on cancel is ours: Aiki's
 cancel refuses a run's next transition but never interrupts the task in flight.
 
-**A schedule is a record; its Aiki activation is derived.** Aiki never writes a schedule.
-`ScheduleService` reconciles a project's activations after every change, and `fire` re-checks the
-record, so the activation is the clock and the record the rule. **Catch up, never backfill:** a
-machine asleep for three days owes one run, which is what skip-overlap gives, and a schedule
-switched off and back on owes nothing, because Aiki starts a reactivated activation from its next
-occurrence. An activation carries no reference id: Aiki keeps one schedule per definition, even
-once deactivated, and refuses that definition under a second id. Our id carrying `updatedAt` made
-switching a schedule back on a conflict, and it never fired again; with the definition as the
-identity, nothing of ours has to change in step with it, a workflow version bump included.
+**A schedule is a record; its Aiki activation is derived.** Aiki never writes a schedule: the
+record is the rule and the activation only its clock. It catches up one run and never backfills, and
+it is identified by its definition rather than an id of ours — an id carrying `updatedAt` once left a
+schedule switched back on unable to fire. How each works is in
+[architecture.md](architecture.md#2d-schedules--the-standing-intention-between-episodes).
 Validation and the next-fire preview use `cron-parser`, the parser Aiki fires with, so preview and
 clock cannot disagree; the server sends the next fire and the UI never parses an expression. (The
 August choice of `croner` over `cron-parser` was about `luxon`, which Aiki now brings anyway.)

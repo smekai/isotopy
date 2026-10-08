@@ -565,19 +565,9 @@ subscribers, and executes each stage either as a simulation or through a real
 engine adapter. The read model is in memory; SQLite (`repository/` over `db/`) is
 the store of record, written per transition.
 
-**The durable-workflow seam is the whole `RunService`, not one method.**
-The durable runtime is **Aiki** (`workflow/`), embedded per project:
-`WorkflowRuntime` opens an Aiki server on `.isotopy/aiki.db`, a client bound to its
-handler, and a worker, all in-process. `workflow/pipeline-workflow.ts` is the
-durable workflow body, `workflow/pipeline-tasks.ts` its three work tasks, and
-`workflow/stage-execution.ts` the work a stage task does — the single decision
-point for how a stage runs (simulate vs. engine). Durability owns
-starting/queueing, the loop, gates (durable events), durable timers, retries,
-recovery and cancellation state; `RunService` is the single writer of the
-`RunState`/events read model, and every write it receives from the workflow body
-is a small task of its own, defined where it is called (`isotopy.stage-awaiting`,
-`isotopy.run-completed`, …), so a replay never repeats one. Keep stage-execution
-logic inside `workflow/stage-execution.ts`.
+The durable workflow behind it — which file holds the loop, the tasks and a stage's
+work, and what Aiki owns — is described once, in
+[architecture.md](architecture.md#workflow-runtime-aiki).
 
 **A stage whose work throws fails that stage, once (`failStageOnTaskFailure`).**
 Stage work catches what it expects — an engine that crashes or limits comes back as
