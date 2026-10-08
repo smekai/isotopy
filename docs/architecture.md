@@ -627,7 +627,7 @@ cannot rule out; by then they are unreachable.
 `OrchestrationHooks` seam (implemented by `OrchestrationService`) lets
 `PipelineWorkflow` request active aggregate context and record a narrowed broker
 decision. The workflow executes the Orchestrator persona as
-a named durable step with the asking run's engine, model, permissions, workspace,
+a durable task with the asking run's engine, model, permissions, workspace,
 limit handling, cancellation, logs, and usage accounting. `answer_agent` resumes the
 same specialist CLI session. `escalate_to_user` uses the existing `asking` state and a
 durable wait on the run's `answer` event; accepting the answer moves the stage back to

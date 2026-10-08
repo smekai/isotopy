@@ -606,8 +606,8 @@ restating the public surface of the single class behind it, which A2 does not as
 **Decision:** `RunProjection` **stays**; the other two are replaced by the class types.
 
 The difference is what the seam excludes. `RunService` also exposes `approveGate`,
-`resolveLimit` and `postMessage`, which *send signals into the running workflow*. Reaching one
-from inside a durable step would re-enter the workflow that is currently executing it, and the
+`resolveLimit` and `postMessage`, which *send events into the running workflow*. Reaching one
+from inside a durable task would re-enter the workflow that is currently executing it, and the
 projection is what makes those methods unreachable from `workflow/` — interface segregation
 doing real work, not a restatement. `bindOpenWorkflowRun` left the interface: `RunService` only
 ever called it on itself.
@@ -625,7 +625,7 @@ other. The cycle is **type-only**, erased at emit, and `pnpm build` confirms it;
 runtime cycle and no `import/no-cycle` rule. Should a bundler ever object, `Pick<
 OrchestrationService, …>` aliases would keep the collapse without the hand-maintained interface.
 
-**Rejected:** collapsing all three (loses the reentrancy guard on the run's signal API); keeping
+**Rejected:** collapsing all three (loses the reentrancy guard on the run's event API); keeping
 all three (two of them cost maintenance and bought nothing).
 
 ---
@@ -1689,11 +1689,11 @@ persists goal, approved team, owned runs, lifecycle decisions, mediation turns, 
 history, but no process stays resident between decisions. On legacy startup, the newest active
 aggregate survives and older duplicates are retired before their owned work can resume.
 
-Question mediation runs as named durable steps inside the asking specialist's existing
-`PipelineWorkflow`. Each step uses the specialist run's engine configuration, limits,
+Question mediation runs as durable tasks inside the asking specialist's existing
+`PipelineWorkflow`. Each task uses the specialist run's engine configuration, limits,
 cancellation, logging, and usage accounting while loading the Orchestrator persona and its
-aggregate context. An escalation uses the existing `asking` state and signal wait; the answer is
-then routed in a second durable mediation step before the same specialist session resumes.
+aggregate context. An escalation uses the existing `asking` state and event wait; the answer is
+then routed in a second durable mediation task before the same specialist session resumes.
 Broker decisions are a separate append-only part of the aggregate and never change its
 lifecycle status or latest lifecycle decision.
 
@@ -1981,9 +1981,8 @@ it threw away.
 
 **Decision:** a limit is its own outcome. Adapters return `limit` on `EngineRunResult`
 instead of prose, `STAGE_OUTCOMES.LIMITED` carries it through `interpretEngineResult`,
-and the workflow parks the stage on a durable `limit:<runId>:<stageId>` signal whose
-timeout is the time to the reset. Timeout fired means the reset passed; a signal means
-the user chose. The run survives a hard process kill parked, because the durable runtime
+and the workflow parks the stage on its `limit` event, waiting with a timeout of the
+time to the reset. A timeout means the reset passed; an event means the user chose. The run survives a hard process kill parked, because the durable runtime
 stores the wake time in its SQLite file rather than in a timer — the "durable sleep
 (TASK-061)" case the runtime was chosen for.
 Three consequences worth defending:
@@ -2005,9 +2004,9 @@ waiting never clears it. Switching connection mode is likewise not a resolve cho
 connection is read from `SettingsStore` on every turn, so the modal writes settings and
 then resumes with `retry-now`.
 
-**Rejected:** `step.sleep` for the wait. It wakes on time but cannot be interrupted, and
-half the point is that the user may switch to a cheaper model rather than wait. A signal
-with a timeout is both.
+**Rejected:** a durable sleep for the wait. It wakes on time but cannot be interrupted, and
+half the point is that the user may switch to a cheaper model rather than wait. An event
+wait with a timeout is both.
 
 ---
 
