@@ -1,5 +1,46 @@
 # Done
 
+## TASK-195: One text-file reader and writer for every store, and persona notes stop swallowing read errors
+**Priority:** P2 | **Tags:** server
+**Updated:** 2026-10-09 18:18
+
+Isotopy writes its own files in eight places, and each repeats the mechanics by hand.
+
+**The duplication:**
+- Five stores create the folder, write `<file>.tmp` and `rename` it: `persona-notes-store`, `orchestrator-context-store`, `automation-config-store`, `project-registry` and `settings-store`.
+- The run and milestone evidence writers (`run-evidence.ts`, `milestone-closeout.ts`, `run-repository.ts`'s `handoff.md`) write in place, so a crash mid-write leaves a half-written file.
+- A fixed `.tmp` name lets two writers of the same file collide.
+
+**The bug:** `persona-notes-store` reads with `readFile(...).catch(() => undefined)`. An unreadable notes file therefore reads as empty, and the next capture replaces it, losing that role's notes.
+
+**Do:**
+- One product-neutral helper in `utils/text-file.ts` (absorbing `read-optional-text.ts`):
+  - `writeTextFile` and `writeTextFileSync` create the folder, normalise to LF with one trailing newline, and write through a uniquely named temp file plus `rename`. The settings store keeps its `0o600` mode.
+  - `readOptionalText` and `readOptionalTextSync` treat a missing file as absent and throw on anything else.
+- Every writer above uses it.
+- `orchestrator-context-store.ts` goes: its read and write become one-liners in `services/skills.ts`, beside the path helpers.
+- Persona notes read through `readOptionalText`.
+
+**Done when:**
+- No `.tmp`/`rename` pair is left outside the helper.
+- A test shows an unreadable notes file is reported, not overwritten (POSIX, where a file can be made unreadable).
+- All gates are green.
+
+Cross-platform: `rename` over an existing file replaces it on Windows and POSIX alike. On Windows, an unreadable file cannot be made with a chmod, so that test runs on POSIX only.
+
+### Plan
+
+**Done, 0.13.14 (source −39 lines).**
+
+- **The helper:** `utils/text-file.ts` replaces `read-optional-text.ts`.
+  - `writeTextFile` and `writeTextFileSync` create the folder, normalise to LF with one trailing newline, and write through a uniquely named temp file plus `rename`.
+  - `readOptionalText` and `readOptionalTextSync` treat a missing file as absent and throw on anything else.
+- **Every writer now uses it:** the persona notes, the Orchestrator context, the automation config, the project registry, the settings (still `0o600`), all run evidence (closeout, changes, baseline, release, deployment) and the milestone summaries. No temp-file/`rename` pair is left outside the helper.
+- **`orchestrator-context-store.ts` is deleted.** Its read and write are two short functions in `services/skills.ts`, beside the path helpers.
+- **Fixed:** the persona notes, the milestone summaries and the change baseline no longer swallow read errors. An unreadable notes file is reported on the stage and kept, not overwritten.
+- **Proof:** a POSIX-only comp test (a `chmod 000` notes file survives a capture, with a warning naming the file); it runs on CI's macOS and Linux jobs. On Windows the helper was checked directly: missing → undefined, unreadable → throws, CRLF → LF.
+
+---
 ## TASK-178: The Orchestrator keeps a small context of its own, curated rather than accumulated
 **Priority:** P1 | **Tags:** core, server, engine, milestone-i
 **Updated:** 2026-10-09 17:59

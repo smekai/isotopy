@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import {
   SKILL_ID,
   mergePersonaNotes,
@@ -10,6 +10,7 @@ import { ensureProjectDataDir, skillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { extractPersonaNotes } from "../schemas/persona-notes.ts";
+import { readOptionalText, writeTextFile } from "../utils/text-file.ts";
 import { personaNotesPath } from "./skills.ts";
 
 const NOTES_SUFFIX = ".notes.md";
@@ -35,15 +36,9 @@ export async function capturePersonaNotes(
     return { report, issue: `No persona owns this stage, so its notes have nowhere to go` };
   }
   const file = personaNotesPath(projectPath, skillId);
-  const existing = parsePersonaNotes(
-    await readFile(file, "utf8").catch(() => undefined),
-  );
-  const merged = mergePersonaNotes(existing, notes.value.notes);
+  const merged = mergePersonaNotes(parsePersonaNotes(await readOptionalText(file)), notes.value.notes);
   await ensureProjectDataDir(projectPath);
-  await mkdir(skillsDir(projectPath), { recursive: true });
-  const temporary = `${file}.tmp`;
-  await writeFile(temporary, `${renderPersonaNotes(merged)}\n`, "utf8");
-  await rename(temporary, file);
+  await writeTextFile(file, renderPersonaNotes(merged));
   return { report };
 }
 
@@ -59,11 +54,7 @@ export async function personaNotesByRole(
   const sets = await Promise.all(
     roles.map(async (skillId) => ({
       skillId,
-      notes: parsePersonaNotes(
-        await readFile(personaNotesPath(projectPath, skillId), "utf8").catch(
-          () => undefined,
-        ),
-      ),
+      notes: parsePersonaNotes(await readOptionalText(personaNotesPath(projectPath, skillId))),
     })),
   );
   return sets.filter((set) => set.notes.length > 0);

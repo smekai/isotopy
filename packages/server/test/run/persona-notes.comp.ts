@@ -4,12 +4,13 @@
 // the invitation reaches the prompt, that what a role writes back lands under
 // that role's own file, and that the next run replays it to that role and to
 // nobody else.
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   approveIntake,
   createTestApp,
+  stageOf,
   startRun,
   waitForRunStatus,
 } from "../support/harness.ts";
@@ -97,6 +98,35 @@ test("a malformed notes block leaves the stage and the stored notes alone", asyn
   expect(await readNotes(home, "developer")).toBeUndefined();
 });
 
+test.skipIf(process.platform === "win32")(
+  "a notes file that cannot be read is reported and kept, not replaced by the new note",
+  async () => {
+    // Arrange — TASK-195: the read used to swallow every error, so an unreadable
+    // file read as empty and the capture replaced it with the new note alone,
+    // losing every earlier one. Windows cannot make a file unreadable with chmod.
+    const { app, engine, home } = ctx;
+    await writeNotes(home, "developer", EARLIER_FACT);
+    await chmod(notesPath(home, "developer"), 0o000);
+
+    // Anticipate
+    engine.anticipate({ as: "Product Manager" }).reports(PM_REPORT);
+    engine.anticipate({ as: "Developer" }).reports(DEV_REPORT_WITH_NOTES);
+    engine.anticipate({ as: "QA Engineer" }).reports(TESTER_REPORT);
+    engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(app, PIPELINE);
+    await approveIntake(app, run.id);
+
+    // Assert
+    const finished = await waitForRunStatus(app, run.id, "completed");
+    await chmod(notesPath(home, "developer"), 0o644);
+    expect(await readNotes(home, "developer")).toBe(`- ${EARLIER_FACT}\n`);
+    expect(stageOf(finished, "implementation").logs).toContainEqual(
+      expect.objectContaining({ level: "warn", message: expect.stringContaining("developer.notes.md") }),
+    );
+  },
+);
 
 // The notes block is addressed to the system, not to the next box. It is stripped
 // before the report is stored, or `upstreamFor` would replay a role's private
@@ -121,6 +151,7 @@ test("a role's notes never reach the next box in the same run", async () => {
 });
 
 const LEARNED_FACT = "The staging database is seeded from fixtures/seed.sql";
+const EARLIER_FACT = "The CI cache is keyed on the lockfile hash";
 
 const PM_REPORT = "Add a greet function. Done when it prints a greeting.";
 const DEV_REPORT = "Added greet.js and a smoke check.";

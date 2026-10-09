@@ -960,6 +960,19 @@ install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23
   `parsePersistedRun` — the one trust boundary where `unknown` is narrowed, by
   `persistedRunSchema`.
 
+## Files Isotopy writes (`utils/text-file.ts`)
+
+**One writer and one optional reader for every file Isotopy owns.** `writeTextFile`
+(and `writeTextFileSync` for the registry and settings, which are read at boot) creates
+the folder, normalises to LF with one trailing newline, and writes through a uniquely
+named temp file renamed over the target, so a crash never leaves a half-written file and
+two writers of one file never share a temp name. `rename` replaces an existing file on
+Windows and POSIX alike. `readOptionalText` reads a file that may be absent: a missing
+file is `undefined`, and any other error throws, because a file that exists and cannot
+be read is not the same as no file. Before `TASK-195` five stores carried their own copy
+of the temp-and-rename lines and the run evidence was written in place; the TaskPlanner
+board is not ours and keeps its own writer.
+
 ## Filesystem access (`utils/workspace-files.ts`, `utils/directory-browser.ts`)
 
 These back read-only UI views and every path from the client is untrusted.
@@ -1101,9 +1114,10 @@ The cap (`MAX_NOTES = 40`) then evicts from the front, so what survives is what 
 keep re-observing rather than what they observed first. Without the move, the cap would
 freeze the earliest 40 facts forever.
 
-Writes are tmp-then-rename because two stages of the same run can settle close together
-and a half-written notes file would be parsed as truncated on the next read.
-`personaNotesByRole` tolerates a missing directory and skips empty files, so a project
+Two stages of the same run can settle close together, so the notes are written through
+`writeTextFile` (see "Files Isotopy writes" below) and never half-written. A notes file
+that exists but cannot be read is reported on the stage and left alone, not read as
+empty and overwritten with the new note (`TASK-195`). `personaNotesByRole` tolerates a missing directory and skips empty files, so a project
 that has never produced a note contributes nothing to the Orchestrator's digest rather
 than a list of empty roles.
 
@@ -1112,7 +1126,7 @@ skill id reaches this code from a pipeline definition, which the Orchestrator ca
 compose — so it is untrusted enough to keep out of a path join.
 
 **The Orchestrator's own context is curated, not accumulated
-(`services/orchestrator-context-store.ts`).** Persona notes only ever merge; nobody
+(`readOrchestratorContext`/`writeOrchestratorContext` in `services/skills.ts`).** Persona notes only ever merge; nobody
 deletes a wrong one. The Orchestrator's context is the opposite: a review may return
 an `isotopy-orchestrator-context` block, and `recordReview` writes it **in place of**
 the old one, so dropping a stale line is as ordinary as adding one. The cap
@@ -1123,8 +1137,8 @@ joins `review.errors`, which would park the initiative on its owner. The review 
 shows the current context and its cap, because a whole-text rewrite needs both;
 `goalContext` puts it at the head of every episode's opening prompt and follow-ups. The
 file sits beside the persona notes as `orchestrator.context.md` — no skill loader and
-no `*.notes.md` scan reads that name — written UTF-8 and LF through tmp-then-rename,
-and read back with line endings normalised, so an owner's edit in any editor is simply
-the next version.
+no `*.notes.md` scan reads that name — written through `writeTextFile`, and read back
+with line endings normalised, so an owner's edit in any editor is simply the next
+version.
 
 ---

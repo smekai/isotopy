@@ -1,5 +1,3 @@
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import {
   ENGINES,
   defaultConnectionMode,
@@ -27,7 +25,7 @@ import {
 import type { EngineConnection } from "../engines/types.ts";
 import { userSettingsPath } from "../paths.ts";
 import type { Logger } from "../utils/logger.ts";
-import { readOptionalTextSync } from "../utils/read-optional-text.ts";
+import { readOptionalTextSync, writeTextFileSync } from "../utils/text-file.ts";
 
 export type { EngineConnectionUpdate } from "../schemas/request-schemas.ts";
 
@@ -54,11 +52,7 @@ export class SettingsStore {
   }
 
   private write(settings: SettingsFile): void {
-    const target = userSettingsPath();
-    mkdirSync(path.dirname(target), { recursive: true });
-    const tmp = `${target}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
-    renameSync(tmp, target);
+    writeTextFileSync(userSettingsPath(), JSON.stringify(settings, null, 2), { mode: 0o600 });
   }
 
   getEngineConnection(projectId: string, engineId: EngineId): EngineConnection {

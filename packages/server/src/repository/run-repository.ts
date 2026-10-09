@@ -1,4 +1,3 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import nodepath from "node:path";
 import type { RunEvent } from "@isotopy/core";
 import { ActiveRunsTable } from "../db/active-runs-table.ts";
@@ -15,6 +14,7 @@ import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { Logger } from "../utils/logger.ts";
 import { nowIso } from "../utils/time.ts";
+import { writeTextFile } from "../utils/text-file.ts";
 
 export type { PersistedRun } from "../schemas/run-persistence.ts";
 
@@ -108,9 +108,7 @@ async function persistHandoff(
   content: string,
 ): Promise<void> {
   try {
-    const dir = nodepath.join(runsDir(path), runId, stageId);
-    await mkdir(dir, { recursive: true });
-    await writeFile(nodepath.join(dir, "handoff.md"), content);
+    await writeTextFile(nodepath.join(runsDir(path), runId, stageId, "handoff.md"), content);
   } catch (error) {
     logger.error(`Failed to write handoff for run ${runId}/${stageId}`, { error });
   }
