@@ -1,20 +1,5 @@
 # Backlog
 
-## TASK-193: Upstream the Aiki gaps TASK-069 found
-**Priority:** P2 | **Tags:** infra, engine
-**Updated:** 2026-10-06 18:30
-
-TASK-069 moved Isotopy onto Aiki 0.43.2. The Phase 0 spike and the port found gaps that belong in Aiki, which the owner contributes to, not in workarounds here. Each one becomes an upstream issue or PR in `aikirun/aiki`; Isotopy bumps its pinned `@aikirun/*` version once it lands.
-
-1. **Windows CI.** Aiki's CI runs on ubuntu only, and its binary ships for darwin-arm64 and linux only. Isotopy embeds it on Windows and macOS, so a Windows (and macOS) job in Aiki's CI is the guard Isotopy relies on.
-2. **The SQLite file stays locked after `close()` on Windows** until garbage collection. Raw `@libsql/client` reproduces it with create, insert and select followed by `close()`. Likely a libsql-js statement keeping the connection alive. Report to libsql, and make Aiki's sqlite provider finalize what it holds.
-3. **`migrateApply` logs with `console.log`** ("applying migration …"). Every new project prints three lines to the server console. It should take a logger, like `server()` does.
-4. **An invalid cron expression returns a 500.** The server logs "Request error occurred {err:{}}" rather than a validation error naming the expression. Isotopy validates first with `cron-parser`, but other callers get nothing useful.
-5. **Embedded single-owner boot.** With one process per SQLite file, a claim held at the last crash and a run published but never claimed can be released at `runtime.start()`, instead of waiting out `claimIdleTimeoutMs` (90 s by default) and the publish lease. Isotopy tunes both down in `workflow-runtime.ts`; an `exclusive` option would let it stop.
-
-Cross-platform: items 1 and 2 are the platform work, Windows first.
-
----
 ## TASK-192: A limit resolved as its reset fires cannot release a later park
 **Priority:** P3 | **Tags:** server, engine
 **Updated:** 2026-10-06 18:30
