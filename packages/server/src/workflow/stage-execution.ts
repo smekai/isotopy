@@ -504,7 +504,10 @@ export async function runOrchestratorReviewWork(
     await deps.projection.captureRunCloseout(run.id, review.artifacts);
   }
   try {
-    await orchestration.recordReview(request, context, review);
+    const recorded = await orchestration.recordReview(request, context, review);
+    if (recorded.contextRefusal !== undefined) {
+      deps.projection.log(run.id, stageId, { level: "warn", message: recorded.contextRefusal });
+    }
   } catch (error) {
     deps.projection.log(run.id, stageId, {
       level: "warn",

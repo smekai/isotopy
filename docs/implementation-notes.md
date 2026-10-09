@@ -29,12 +29,10 @@ module entirely. Everything off Windows takes the argv array untouched.
 
 **A bare shim name is resolved on PATH first (`batchShimOnPath`).** Run by a quoted
 bare name, a batch file resolves its own `%~dp0` against the working directory, so
-`npm.cmd` started in a project looked for `node_modules
-pmin
-pm-cli.js` inside
+`npm.cmd` started in a project looked for `node_modules\npm\bin\npm-cli.js` inside
 that project and died with `MODULE_NOT_FOUND` (`TASK-181`). `startSubprocess`
-therefore turns a bare `.cmd`/`.bat` name into its full path with `where` before
-building the `cmd /c` line, and a name `where` cannot find fails at once, saying
+therefore turns a bare `.cmd`/`.bat` name into its full path with `lookupOnPath`
+before building the `cmd /c` line, and a name it cannot find fails at once, saying
 so, instead of coming back as cmd's "is not recognized". Engines pass full paths
 already, and nothing is cached, so a PATH change is seen on the next spawn.
 
@@ -186,9 +184,13 @@ the cache on `detect()`/`install()` so a freshly installed CLI is picked up
 without a server restart:
 
 1. `ISOTOPY_<ENGINE>_PATH` env override (validated to exist).
-2. `where`/`which` on PATH. **On Windows, prefer the `.cmd`/`.exe`/`.bat` shim
-   over an extensionless shell shim** — only the former can be spawned directly
-   (npm global installs drop both).
+2. `where`/`which` on PATH (`lookupOnPath`). **On Windows, prefer the
+   `.cmd`/`.exe`/`.bat` shim over an extensionless shell shim** — only the former
+   can be spawned directly (npm global installs drop both). Plain `where <name>`
+   searches the current directory before PATH, so a `npm.cmd` or `claude.cmd`
+   lying in the folder Isotopy was started from would win over the real one;
+   `lookupOnPath` asks for `where $PATH:<name>`, which searches PATH only (still
+   applying `PATHEXT`), as `which` does.
 3. Fallbacks: Cursor scans its installer dirs (`~/.local/bin`,
    `%LOCALAPPDATA%\cursor-agent`); Claude Code scans the native binary bundled in
    the VS Code / Cursor IDE extension (`anthropic.claude-code-*`).
@@ -1129,11 +1131,18 @@ compose — so it is untrusted enough to keep out of a path join.
 (`readOrchestratorContext`/`writeOrchestratorContext` in `services/skills.ts`).** Persona notes only ever merge; nobody
 deletes a wrong one. The Orchestrator's context is the opposite: a review may return
 an `isotopy-orchestrator-context` block, and `recordReview` writes it **in place of**
-the old one, so dropping a stale line is as ordinary as adding one. The cap
-(`ORCHESTRATOR_CONTEXT_LIMITS`, 60 lines and 4 KB, counted in UTF-8 bytes) is what
-forces the curating: a revision over it is refused, the old context is kept, and the
-refusal goes to the reviewed run's log for the user and to the operator log. It never
-joins `review.errors`, which would park the initiative on its owner. The review prompt
+the old one, so dropping a stale line is as ordinary as adding one. It writes it only
+when it records that review's decision as the turn: a review whose decision is
+malformed or refused parks the initiative and leaves the context alone, so the next
+episode never trusts what a turn that did not happen understood. A launch that fails
+after the decision was accepted does not undo the revision — the judgement stood, the
+start failed, and the next episode sees that failure as `rejectedDecision` beside the
+context. The cap (`ORCHESTRATOR_CONTEXT_LIMITS`, 60 lines and 4 KB, counted in UTF-8
+bytes) is what forces the curating: a revision over it is refused, the old context is
+kept, and `recordReview` warns the operator log and returns the refusal, which the
+review step logs beside its other lines on the run's last stage (the review has no
+stage of its own). It never joins `review.errors`, which would park the initiative on
+its owner. The review prompt
 shows the current context and its cap, because a whole-text rewrite needs both;
 `goalContext` puts it at the head of every episode's opening prompt and follow-ups. The
 file sits beside the persona notes as `orchestrator.context.md` — no skill loader and

@@ -109,8 +109,9 @@ hold.
 
 The block replaces your context whole, so drop a line that stopped being true and
 merge lines that say the same thing. It must fit the cap shown with your context;
-a longer one is refused and the old one kept. No block leaves it as it is. Write
-plain Markdown, with no code fences inside the block.
+a longer one is refused and the old one kept. No block leaves it as it is, and
+neither does a decision that cannot be acted on: a revision counts only with a
+decision that stands. Write plain Markdown, with no code fences inside the block.
 
 ## Rules
 

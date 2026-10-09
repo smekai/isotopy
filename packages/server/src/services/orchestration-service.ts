@@ -75,6 +75,7 @@ import type { InheritedRunOptions } from "./run/run-service.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
+  RecordedReview,
   RunReview,
   RunReviewContext,
   RunReviewRequest,
@@ -485,18 +486,19 @@ export class OrchestrationService implements StageOutputConsumer {
     request: RunReviewRequest,
     context: RunReviewContext,
     review: RunReview,
-  ): Promise<void> {
+  ): Promise<RecordedReview> {
     const orchestration = this.orchestrations.get(context.orchestrationId);
     if (!orchestration || orchestration.status === "stopped") {
       throw new Error(
         "The Orchestrator stopped before it could record the run review",
       );
     }
-    if (review.contextRevision !== undefined) {
-      await this.reviseOwnContext(request.runId, review.contextRevision);
-    }
+    const recorded: RecordedReview = {};
     const decision = this.actionableDecision(orchestration, request, review);
     if (decision.value && !this.hasTurnFor(orchestration, request.runId)) {
+      if (review.contextRevision !== undefined) {
+        recorded.contextRefusal = await this.reviseOwnContext(orchestration, request.runId, review.contextRevision);
+      }
       orchestration.turns.push({
         runId: request.runId,
         decision: decision.value,
@@ -518,24 +520,22 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
+    return recorded;
   }
 
-  private async reviseOwnContext(runId: string, revision: string): Promise<void> {
-    const run = this.runs.getRun(runId);
-    if (!run) {
-      return;
-    }
+  private async reviseOwnContext(
+    orchestration: Orchestration,
+    runId: string,
+    revision: string,
+  ): Promise<string | undefined> {
     const revised = reviseOrchestratorContext(revision);
     if (revised.ok) {
-      await writeOrchestratorContext(this.registry.resolve(run.projectId), revised.text);
-      return;
+      await writeOrchestratorContext(this.registry.resolve(orchestration.projectId), revised.text);
+      return undefined;
     }
-    const message = `The Orchestrator's context was not revised: ${revised.reason}, so the previous one is kept`;
-    const stageId = run.stages.at(-1)?.id;
-    if (stageId !== undefined) {
-      this.runs.log(run.id, stageId, { level: "warn", message });
-    }
-    this.logger.warn(message, { runId });
+    const refusal = `The Orchestrator's context was not revised: ${revised.reason}, so the previous one is kept`;
+    this.logger.warn(refusal, { runId });
+    return refusal;
   }
 
   private parkOnOwner(orchestration: Orchestration, runId: string): void {

@@ -143,6 +143,10 @@ export interface RunReview {
   errors: string[];
 }
 
+export interface RecordedReview {
+  contextRefusal?: string;
+}
+
 export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
