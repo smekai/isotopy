@@ -117,6 +117,7 @@ export class ProductProcessService {
   private readonly logger: Logger;
   private current?: RunningProduct;
   private pending?: Promise<void>;
+  private exitNoted: Promise<void> = Promise.resolve();
   private abandonedError?: string;
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -182,6 +183,7 @@ export class ProductProcessService {
   async settle(): Promise<void> {
     await this.queue;
     await this.pending;
+    await this.exitNoted;
   }
 
   shutdown(): Promise<void> {
@@ -279,7 +281,11 @@ export class ProductProcessService {
   }
 
   private async watch(current: RunningProduct): Promise<void> {
-    void current.handle.exited.then((result) => noteExit(current, result));
+    void current.handle.exited.then((result) => {
+      this.exitNoted = this.noteExit(current, result).catch((error: unknown) =>
+        this.watchFailed(current, error),
+      );
+    });
     const healthy = await this.reachable(current);
     if (this.superseded(current)) {
       return;
@@ -311,19 +317,34 @@ export class ProductProcessService {
     if (started || current.state !== "exited" || this.superseded(current)) {
       return started;
     }
-    const serving = await pollUntilHealthy(this.deps, {
-      url: current.ui.healthUrl,
+    if (!(await this.servedWithoutUs(current.ui.healthUrl))) {
+      return false;
+    }
+    adopt(current);
+    return true;
+  }
+
+  private async noteExit(current: RunningProduct, result: SubprocessResult): Promise<void> {
+    const wasReady = current.state === "ready";
+    current.stopping.abort();
+    if (!isProductLive(current.state)) {
+      return;
+    }
+    if (wasReady && !this.superseded(current) && (await this.servedWithoutUs(current.ui.healthUrl))) {
+      adopt(current);
+      return;
+    }
+    current.state = "exited";
+    current.lastError = result.errorMessage ?? `Stopped with exit code ${result.exitCode}`;
+  }
+
+  private servedWithoutUs(url: string): Promise<boolean> {
+    return pollUntilHealthy(this.deps, {
+      url,
       timeoutMs: ADOPT_PROBE_MS,
       intervalMs: ADOPT_PROBE_MS,
       signal: AbortSignal.timeout(ADOPT_PROBE_MS),
     });
-    if (!serving) {
-      return false;
-    }
-    current.adopted = true;
-    current.lastError = undefined;
-    current.stopping = new AbortController();
-    return true;
   }
 
   private superseded(current: RunningProduct): boolean {
@@ -344,11 +365,8 @@ export class ProductProcessService {
   }
 }
 
-function noteExit(current: RunningProduct, result: SubprocessResult): void {
-  current.stopping.abort();
-  if (!isProductLive(current.state)) {
-    return;
-  }
-  current.state = "exited";
-  current.lastError = result.errorMessage ?? `Stopped with exit code ${result.exitCode}`;
+function adopt(current: RunningProduct): void {
+  current.adopted = true;
+  current.lastError = undefined;
+  current.stopping = new AbortController();
 }

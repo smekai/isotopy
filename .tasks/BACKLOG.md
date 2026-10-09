@@ -110,23 +110,6 @@ The Architect and QA failed the arcade shell on a one-line README fix (Node floo
 Decide whether a quality stage's blocking finding should send the run back to `implementation` once (bounded, recorded in the run) before the run settles, or whether the Orchestrator's follow-up run is the intended loop — and then make the product brief say which. Either answer is defensible; leaving it implicit is not. Record it in `docs/decisions.md`.
 
 ---
-## TASK-181: On Windows, an automation command given as a bare .cmd name fails before it starts
-**Priority:** P1 | **Tags:** server, infra, milestone-i
-**Updated:** 2026-10-04 19:39
-
-Found in `TASK-157` (2026-10-04), on both targets, and root-caused.
-
-`Start the product` with `ui.start.windows.executable = "npm.cmd"` — exactly what the Setup presets write — exited at once with `MODULE_NOT_FOUND`. The same command typed by hand starts Vite in 236 ms. Replicating Isotopy's spawn (`cmd.exe /d /s /c ""npm.cmd" "run" "dev""`, `windowsVerbatimArguments`) shows the real error: `Cannot find module 'C:\Development\smekai\dogfood-arcade-cursor\node_modules\npm\bin\npm-cli.js'`. When a batch file is invoked by a **quoted bare name**, `cmd` resolves its `%~dp0` against the working directory, so `npm.cmd` looks for npm inside the project. With the executable given as its full path (`C:\Program Files\nodejs\npm.cmd`) the product started and reached `ready`.
-
-Engines are unaffected because their adapters spawn CLIs by resolved full path. Everything in `.isotopy/automation.json` — `ui.start`, `validation`, `preview`, `production` — goes through `startSubprocess` → `resolveSpawnTarget` in `engines/subprocess.ts` and is affected whenever the executable is a bare `.cmd`/`.bat` name.
-
-**Fix:** resolve a bare executable to its full path before building the `cmd /c` line (`lookupOnPath` already exists in `utils/`), and fail with a stated reason when it cannot be found. Evidence: a component test (Windows-only, skipped elsewhere) that a bare `npm.cmd` automation command runs in a temp project.
-
-Also seen, smaller: with another process already answering the health URL, the product was marked `ready` 28 ms after start and then `exited` — readiness probed the URL, not our process. Worth a stated rule in the same change.
-
-Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
-
----
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P2 | **Tags:** core, server, milestone-i
 **Updated:** 2026-10-04 17:49

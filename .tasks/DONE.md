@@ -1,5 +1,32 @@
 # Done
 
+## TASK-181: On Windows, an automation command given as a bare .cmd name fails before it starts
+**Priority:** P1 | **Tags:** server, infra, milestone-i
+**Updated:** 2026-10-09 17:53
+
+Found in `TASK-157` (2026-10-04), on both targets, and root-caused.
+
+`Start the product` with `ui.start.windows.executable = "npm.cmd"` — exactly what the Setup presets write — exited at once with `MODULE_NOT_FOUND`. The same command typed by hand starts Vite in 236 ms. Replicating Isotopy's spawn (`cmd.exe /d /s /c ""npm.cmd" "run" "dev""`, `windowsVerbatimArguments`) shows the real error: `Cannot find module 'C:\Development\smekai\dogfood-arcade-cursor\node_modules\npm\bin\npm-cli.js'`. When a batch file is invoked by a **quoted bare name**, `cmd` resolves its `%~dp0` against the working directory, so `npm.cmd` looks for npm inside the project. With the executable given as its full path (`C:\Program Files\nodejs\npm.cmd`) the product started and reached `ready`.
+
+Engines are unaffected because their adapters spawn CLIs by resolved full path. Everything in `.isotopy/automation.json` — `ui.start`, `validation`, `preview`, `production` — goes through `startSubprocess` → `resolveSpawnTarget` in `engines/subprocess.ts` and is affected whenever the executable is a bare `.cmd`/`.bat` name.
+
+**Fix:** resolve a bare executable to its full path before building the `cmd /c` line (`lookupOnPath` already exists in `utils/`), and fail with a stated reason when it cannot be found. Evidence: a component test (Windows-only, skipped elsewhere) that a bare `npm.cmd` automation command runs in a temp project.
+
+Also seen, smaller: with another process already answering the health URL, the product was marked `ready` 28 ms after start and then `exited` — readiness probed the URL, not our process. Worth a stated rule in the same change.
+
+Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
+
+### Plan
+
+**Done, 0.13.12.**
+
+- **Bare shims are resolved on PATH.** `startSubprocess` turns a bare `.cmd`/`.bat` name into its full path with `where` (`lookupOnPath` + `firstLine`) before building the `cmd /c` line. A name `where` cannot find fails at once with "`<name>` was not found on PATH". Full paths and POSIX are untouched, and nothing is cached.
+- **Proof:** two Windows-only comp tests (`engine/bare-windows-shim.comp.ts`). A bare `npm.cmd --version` runs from a temp project; it failed with `MODULE_NOT_FOUND` before the fix. A missing shim fails naming itself, with no exit code.
+- **The readiness rule:** whatever answers the health URL is the product, before ready and after it. `ProductProcessService` already adopted a server that kept answering when our process died before ready (TASK-142). An exit after ready now probes once and adopts too, where it used to report `exited`. A deliberate stop never adopts.
+- **Tests:** the new test "a product that loses its port after it was ready is adopted" fails when the after-ready probe is removed. The old "exits on its own" test now uses a stub that stops answering when its process dies.
+- **Docs:** both rules are in `implementation-notes.md`.
+
+---
 ## TASK-193: Upstream the Aiki gaps TASK-069 found
 **Priority:** P2 | **Tags:** infra, engine
 **Updated:** 2026-10-09 17:48

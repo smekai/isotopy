@@ -27,6 +27,17 @@ verbatim. `windowsVerbatimArguments: true` is what keeps `shell: true` (and the
 DEP0190 deprecation, which concatenates an args array unescaped) out of this
 module entirely. Everything off Windows takes the argv array untouched.
 
+**A bare shim name is resolved on PATH first (`batchShimOnPath`).** Run by a quoted
+bare name, a batch file resolves its own `%~dp0` against the working directory, so
+`npm.cmd` started in a project looked for `node_modules
+pmin
+pm-cli.js` inside
+that project and died with `MODULE_NOT_FOUND` (`TASK-181`). `startSubprocess`
+therefore turns a bare `.cmd`/`.bat` name into its full path with `where` before
+building the `cmd /c` line, and a name `where` cannot find fails at once, saying
+so, instead of coming back as cmd's "is not recognized". Engines pass full paths
+already, and nothing is cached, so a PATH change is seen on the next spawn.
+
 **Argument quoting (`quoteWindowsArg`).** Wraps one argument in double quotes
 using the C runtime's backslash rules so the child parses argv back exactly as
 given: backslashes before a quote are doubled then the quote escaped, and
@@ -94,6 +105,15 @@ named in `healthUrl`, so there is one, and starting one for another project stop
 the first. It is not run-scoped: an initiative's child runs would each kill the
 preview the user was watching. A completed run that changed files calls
 `refreshFor`, which restarts rather than stops, so the preview is the new build.
+
+**Whatever answers the health URL is the product.** When our process dies while
+something still answers `healthUrl` — a dev server an agent leaked, holding the
+port ours just lost — that server is **adopted**: the status stays `ready`, marked
+`adopted`, rather than reading as exited while the preview works. It holds before
+ready, when the exit aborts the readiness poll, and after it, when the URL answered
+before our own process died on the taken port (`TASK-181`). Only an exit with
+nothing serving reports `exited`; a deliberate stop never adopts, because the
+stopped product is no longer `current`.
 
 **One promise queue owns every lifecycle operation.** `start`, `stop`, `restart`,
 the project-switch stops and the post-run refresh all go through `serialize`, and
