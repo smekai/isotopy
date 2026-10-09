@@ -175,6 +175,32 @@ test("a refresh whose start command vanished reports why instead of rejecting in
   expect(status.lastError).toContain("Could not restart the product");
 });
 
+test("a product that loses its port after it was ready is adopted, not reported as exited", async () => {
+  // Arrange — TASK-157's dogfood: another server already held the port, so the
+  // URL answered 28 ms after start and the product read as ready; then our own
+  // process died on the taken port. Whatever answers the URL is the product,
+  // before ready as well as after it.
+  await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
+  const stub = stubProcess();
+  const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
+    ...stub.deps,
+    probe: () => Promise.resolve({ ok: true }),
+  });
+  const project = ctx.registry.resolve();
+  await product.start(project);
+  await product.settle();
+
+  // Act
+  stub.exit({ exitCode: 1, errorMessage: "Error: Port 59999 is already in use" });
+
+  // Assert
+  await product.settle();
+  const status = await product.status(project);
+  expect(status.state).toBe("ready");
+  expect(status.adopted).toBe(true);
+  expect(status.lastError).toBeUndefined();
+});
+
 test("a product that dies while its headers are being read is not then announced as ready", async () => {
   // Arrange
   await put<ProjectAutomationConfig>(ctx.app, "/automation", automationConfig());
@@ -200,7 +226,7 @@ test("a product that exits on its own is reported as exited rather than left loo
   const stub = stubProcess();
   const product = new ProductProcessService(new AutomationConfigStore(), new RecordingLogger(), {
     ...stub.deps,
-    probe: () => Promise.resolve({ ok: true }),
+    probe: stub.servingWhileRunning,
   });
   const project = ctx.registry.resolve();
   await product.start(project);
@@ -385,6 +411,7 @@ interface StubProcess {
   killed(): boolean;
   exit(overrides?: Partial<SubprocessResult>): void;
   emitStderr(line: string): void;
+  servingWhileRunning(url: string, init: { signal: AbortSignal }): Promise<{ ok: boolean }>;
 }
 
 /**
@@ -395,6 +422,7 @@ interface StubProcess {
 function stubProcess(): StubProcess {
   let starts = 0;
   let killed = false;
+  let running = false;
   let settle: ((result: SubprocessResult) => void) | undefined;
   let emit: SubprocessSpec["onLine"];
   return {
@@ -402,10 +430,12 @@ function stubProcess(): StubProcess {
       start: (spec: SubprocessSpec): SubprocessHandle => {
         starts += 1;
         emit = spec.onLine;
+        running = true;
         return {
           pid: 4242,
           kill: () => {
             killed = true;
+            running = false;
             settle?.(subprocessResult({ termSignal: "SIGTERM" }));
           },
           exited: new Promise<SubprocessResult>((resolve) => {
@@ -419,8 +449,12 @@ function stubProcess(): StubProcess {
     },
     starts: () => starts,
     killed: () => killed,
-    exit: (overrides: Partial<SubprocessResult> = {}) => settle?.(subprocessResult(overrides)),
+    exit: (overrides: Partial<SubprocessResult> = {}) => {
+      running = false;
+      settle?.(subprocessResult(overrides));
+    },
     emitStderr: (line: string) => emit?.("stderr", line),
+    servingWhileRunning: () => Promise.resolve({ ok: running }),
   };
 }
 

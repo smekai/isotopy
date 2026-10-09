@@ -4,6 +4,7 @@ import type {
   CloseoutReport,
 } from "@isotopy/core";
 import type { CatalogEntry } from "../skills/catalog.ts";
+import { ORCHESTRATOR_CONTEXT_LIMITS } from "../rules/orchestrator-context.ts";
 import type { PersonaNoteSet } from "../rules/persona-notes.ts";
 import { renderCloseoutBody } from "./closeout.ts";
 import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.ts";
@@ -16,6 +17,7 @@ export interface OrchestrationContext {
   closeoutContext: string;
   gatePreference?: string;
   personaConstraints?: string;
+  orchestratorContext?: string;
 }
 
 export interface OrchestrationFollowUpContext extends OrchestrationContext {
@@ -61,9 +63,11 @@ export function renderOrchestrationContext({
   closeoutContext,
   gatePreference,
   personaConstraints,
+  orchestratorContext,
 }: OrchestrationContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
+    orchestratorContext === undefined ? undefined : renderOwnContext(orchestratorContext),
     renderCatalog("Persona catalog", personas),
     renderCatalog("Step task catalog", stepTasks),
     gatePreference === undefined
@@ -74,6 +78,14 @@ export function renderOrchestrationContext({
       : `## What each role already knows about this project\n\n${markdownBody(personaConstraints)}`,
     markdownBody(tasksContext),
     markdownBody(closeoutContext),
+  ]);
+}
+
+function renderOwnContext(orchestratorContext: string): string {
+  return markdownBlocks([
+    "## What you understood in earlier episodes",
+    "Your own context, kept across episodes and rewritten by you when you review a settled run. Weigh it as yours, and trust the board and the run outputs below where they are newer.",
+    markdownBody(orchestratorContext),
   ]);
 }
 
@@ -209,6 +221,7 @@ export interface RunReviewMarkdownContext {
   artifacts: QuestionMediationArtifact[];
   milestone?: RunReviewMilestoneContext;
   rejectedDecision?: string;
+  orchestratorContext?: string;
 }
 
 function renderReviewMilestone(milestone: RunReviewMilestoneContext): string {
@@ -240,6 +253,7 @@ export function renderRunReviewContext({
   artifacts,
   milestone,
   rejectedDecision,
+  orchestratorContext,
 }: RunReviewMarkdownContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
@@ -252,9 +266,19 @@ export function renderRunReviewContext({
       : undefined,
     milestone ? renderReviewMilestone(milestone) : undefined,
     renderArtifactSections("Stage outputs", artifacts),
+    renderContextForRevision(orchestratorContext),
     rejectedDecision === undefined
       ? undefined
       : renderRejectedDecision(rejectedDecision),
+  ]);
+}
+
+function renderContextForRevision(orchestratorContext: string | undefined): string {
+  const { lines, bytes } = ORCHESTRATOR_CONTEXT_LIMITS;
+  return markdownBlocks([
+    "## Your context so far",
+    orchestratorContext === undefined ? "You have kept no context yet." : markdownBody(orchestratorContext),
+    `Cap: at most ${lines} lines and ${bytes} bytes.`,
   ]);
 }
 

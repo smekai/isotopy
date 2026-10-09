@@ -1,4 +1,3 @@
-import { rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { EMPTY_AUTOMATION_CONFIG } from "@isotopy/core";
 import type { ProjectAutomationConfig } from "@isotopy/core";
@@ -10,7 +9,7 @@ import { validate } from "../domain/validation.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
-import { readOptionalText } from "../utils/read-optional-text.ts";
+import { readOptionalText, writeTextFile } from "../utils/text-file.ts";
 
 const FILE_NAME = "automation.json";
 
@@ -46,10 +45,7 @@ export class AutomationConfigStore {
       throw new InvalidAutomationConfigError(parsed.issues);
     }
     await ensureProjectDataDir(project);
-    const target = automationConfigPath(project);
-    const temporary = `${target}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(parsed.value, null, 2)}\n`, "utf8");
-    await rename(temporary, target);
+    await writeTextFile(automationConfigPath(project), JSON.stringify(parsed.value, null, 2));
     return parsed.value;
   }
 }

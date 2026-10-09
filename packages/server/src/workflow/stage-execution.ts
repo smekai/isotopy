@@ -33,6 +33,7 @@ import type { UpstreamOutput } from "../domain/markdown/stage.ts";
 import { engineLabel } from "../domain/rules/engine-label.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
 import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
+import { extractOrchestratorContext } from "../schemas/orchestrator-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
@@ -503,7 +504,10 @@ export async function runOrchestratorReviewWork(
     await deps.projection.captureRunCloseout(run.id, review.artifacts);
   }
   try {
-    await orchestration.recordReview(request, context, review);
+    const recorded = await orchestration.recordReview(request, context, review);
+    if (recorded.contextRefusal !== undefined) {
+      deps.projection.log(run.id, stageId, { level: "warn", message: recorded.contextRefusal });
+    }
   } catch (error) {
     deps.projection.log(run.id, stageId, {
       level: "warn",
@@ -521,6 +525,7 @@ function readReview(outcome: EngineRunResult, artifactsExpected: boolean): RunRe
   const artifacts = extractRunArtifacts(output);
   const decision = extractOrchestratorDecision(output);
   const review: RunReview = {
+    contextRevision: extractOrchestratorContext(output),
     errors: [
       ...(artifacts.ok || !artifactsExpected
         ? []

@@ -27,6 +27,15 @@ verbatim. `windowsVerbatimArguments: true` is what keeps `shell: true` (and the
 DEP0190 deprecation, which concatenates an args array unescaped) out of this
 module entirely. Everything off Windows takes the argv array untouched.
 
+**A bare shim name is resolved on PATH first (`batchShimOnPath`).** Run by a quoted
+bare name, a batch file resolves its own `%~dp0` against the working directory, so
+`npm.cmd` started in a project looked for `node_modules\npm\bin\npm-cli.js` inside
+that project and died with `MODULE_NOT_FOUND` (`TASK-181`). `startSubprocess`
+therefore turns a bare `.cmd`/`.bat` name into its full path with `lookupOnPath`
+before building the `cmd /c` line, and a name it cannot find fails at once, saying
+so, instead of coming back as cmd's "is not recognized". Engines pass full paths
+already, and nothing is cached, so a PATH change is seen on the next spawn.
+
 **Argument quoting (`quoteWindowsArg`).** Wraps one argument in double quotes
 using the C runtime's backslash rules so the child parses argv back exactly as
 given: backslashes before a quote are doubled then the quote escaped, and
@@ -94,6 +103,15 @@ named in `healthUrl`, so there is one, and starting one for another project stop
 the first. It is not run-scoped: an initiative's child runs would each kill the
 preview the user was watching. A completed run that changed files calls
 `refreshFor`, which restarts rather than stops, so the preview is the new build.
+
+**Whatever answers the health URL is the product.** When our process dies while
+something still answers `healthUrl` — a dev server an agent leaked, holding the
+port ours just lost — that server is **adopted**: the status stays `ready`, marked
+`adopted`, rather than reading as exited while the preview works. It holds before
+ready, when the exit aborts the readiness poll, and after it, when the URL answered
+before our own process died on the taken port (`TASK-181`). Only an exit with
+nothing serving reports `exited`; a deliberate stop never adopts, because the
+stopped product is no longer `current`.
 
 **One promise queue owns every lifecycle operation.** `start`, `stop`, `restart`,
 the project-switch stops and the post-run refresh all go through `serialize`, and
@@ -166,9 +184,13 @@ the cache on `detect()`/`install()` so a freshly installed CLI is picked up
 without a server restart:
 
 1. `ISOTOPY_<ENGINE>_PATH` env override (validated to exist).
-2. `where`/`which` on PATH. **On Windows, prefer the `.cmd`/`.exe`/`.bat` shim
-   over an extensionless shell shim** — only the former can be spawned directly
-   (npm global installs drop both).
+2. `where`/`which` on PATH (`lookupOnPath`). **On Windows, prefer the
+   `.cmd`/`.exe`/`.bat` shim over an extensionless shell shim** — only the former
+   can be spawned directly (npm global installs drop both). Plain `where <name>`
+   searches the current directory before PATH, so a `npm.cmd` or `claude.cmd`
+   lying in the folder Isotopy was started from would win over the real one;
+   `lookupOnPath` asks for `where $PATH:<name>`, which searches PATH only (still
+   applying `PATHEXT`), as `which` does.
 3. Fallbacks: Cursor scans its installer dirs (`~/.local/bin`,
    `%LOCALAPPDATA%\cursor-agent`); Claude Code scans the native binary bundled in
    the VS Code / Cursor IDE extension (`anthropic.claude-code-*`).
@@ -940,6 +962,19 @@ install on the target platform; see [`decisions.md`](./decisions.md) (2026-07-23
   `parsePersistedRun` — the one trust boundary where `unknown` is narrowed, by
   `persistedRunSchema`.
 
+## Files Isotopy writes (`utils/text-file.ts`)
+
+**One writer and one optional reader for every file Isotopy owns.** `writeTextFile`
+(and `writeTextFileSync` for the registry and settings, which are read at boot) creates
+the folder, normalises to LF with one trailing newline, and writes through a uniquely
+named temp file renamed over the target, so a crash never leaves a half-written file and
+two writers of one file never share a temp name. `rename` replaces an existing file on
+Windows and POSIX alike. `readOptionalText` reads a file that may be absent: a missing
+file is `undefined`, and any other error throws, because a file that exists and cannot
+be read is not the same as no file. Before `TASK-195` five stores carried their own copy
+of the temp-and-rename lines and the run evidence was written in place; the TaskPlanner
+board is not ours and keeps its own writer.
+
 ## Filesystem access (`utils/workspace-files.ts`, `utils/directory-browser.ts`)
 
 These back read-only UI views and every path from the client is untrusted.
@@ -1081,14 +1116,38 @@ The cap (`MAX_NOTES = 40`) then evicts from the front, so what survives is what 
 keep re-observing rather than what they observed first. Without the move, the cap would
 freeze the earliest 40 facts forever.
 
-Writes are tmp-then-rename because two stages of the same run can settle close together
-and a half-written notes file would be parsed as truncated on the next read.
-`personaNotesByRole` tolerates a missing directory and skips empty files, so a project
+Two stages of the same run can settle close together, so the notes are written through
+`writeTextFile` (see "Files Isotopy writes" below) and never half-written. A notes file
+that exists but cannot be read is reported on the stage and left alone, not read as
+empty and overwritten with the new note (`TASK-195`). `personaNotesByRole` tolerates a missing directory and skips empty files, so a project
 that has never produced a note contributes nothing to the Orchestrator's digest rather
 than a list of empty roles.
 
 The `SKILL_ID` guard (`/^[a-z0-9-]+$/`, `domain/rules/persona-notes.ts`) is applied on both the write and the scan. A
 skill id reaches this code from a pipeline definition, which the Orchestrator can
 compose — so it is untrusted enough to keep out of a path join.
+
+**The Orchestrator's own context is curated, not accumulated
+(`readOrchestratorContext`/`writeOrchestratorContext` in `services/skills.ts`).** Persona notes only ever merge; nobody
+deletes a wrong one. The Orchestrator's context is the opposite: a review may return
+an `isotopy-orchestrator-context` block, and `recordReview` writes it **in place of**
+the old one, so dropping a stale line is as ordinary as adding one. It writes it only
+when it records that review's decision as the turn: a review whose decision is
+malformed or refused parks the initiative and leaves the context alone, so the next
+episode never trusts what a turn that did not happen understood. A launch that fails
+after the decision was accepted does not undo the revision — the judgement stood, the
+start failed, and the next episode sees that failure as `rejectedDecision` beside the
+context. The cap (`ORCHESTRATOR_CONTEXT_LIMITS`, 60 lines and 4 KB, counted in UTF-8
+bytes) is what forces the curating: a revision over it is refused, the old context is
+kept, and `recordReview` warns the operator log and returns the refusal, which the
+review step logs beside its other lines on the run's last stage (the review has no
+stage of its own). It never joins `review.errors`, which would park the initiative on
+its owner. The review prompt
+shows the current context and its cap, because a whole-text rewrite needs both;
+`goalContext` puts it at the head of every episode's opening prompt and follow-ups. The
+file sits beside the persona notes as `orchestrator.context.md` — no skill loader and
+no `*.notes.md` scan reads that name — written through `writeTextFile`, and read back
+with line endings normalised, so an owner's edit in any editor is simply the next
+version.
 
 ---

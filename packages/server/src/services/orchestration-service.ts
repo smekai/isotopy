@@ -18,6 +18,7 @@ import type {
   StageDefinition,
   StageUsage,
 } from "@isotopy/core";
+import { reviseOrchestratorContext } from "../domain/rules/orchestrator-context.ts";
 import {
   renderComposedRunTask,
   renderGatePreference,
@@ -64,6 +65,7 @@ import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
+import { readOrchestratorContext, writeOrchestratorContext } from "./skills.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
@@ -73,6 +75,7 @@ import type { InheritedRunOptions } from "./run/run-service.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
+  RecordedReview,
   RunReview,
   RunReviewContext,
   RunReviewRequest,
@@ -452,6 +455,7 @@ export class OrchestrationService implements StageOutputConsumer {
       request.runId,
       "review this run",
     );
+    const orchestratorContext = await readOrchestratorContext(this.registry.resolve(run.projectId));
     return {
       orchestrationId: orchestration.id,
       prompt: renderRunReviewContext({
@@ -463,6 +467,7 @@ export class OrchestrationService implements StageOutputConsumer {
         artifacts: stageOutputsOf(run),
         milestone: this.reviewMilestone(run),
         rejectedDecision: orchestration.decisionError,
+        orchestratorContext,
       }),
     };
   }
@@ -481,15 +486,19 @@ export class OrchestrationService implements StageOutputConsumer {
     request: RunReviewRequest,
     context: RunReviewContext,
     review: RunReview,
-  ): Promise<void> {
+  ): Promise<RecordedReview> {
     const orchestration = this.orchestrations.get(context.orchestrationId);
     if (!orchestration || orchestration.status === "stopped") {
       throw new Error(
         "The Orchestrator stopped before it could record the run review",
       );
     }
+    const recorded: RecordedReview = {};
     const decision = this.actionableDecision(orchestration, request, review);
     if (decision.value && !this.hasTurnFor(orchestration, request.runId)) {
+      if (review.contextRevision !== undefined) {
+        recorded.contextRefusal = await this.reviseOwnContext(orchestration, request.runId, review.contextRevision);
+      }
       orchestration.turns.push({
         runId: request.runId,
         decision: decision.value,
@@ -511,6 +520,22 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
+    return recorded;
+  }
+
+  private async reviseOwnContext(
+    orchestration: Orchestration,
+    runId: string,
+    revision: string,
+  ): Promise<string | undefined> {
+    const revised = reviseOrchestratorContext(revision);
+    if (revised.ok) {
+      await writeOrchestratorContext(this.registry.resolve(orchestration.projectId), revised.text);
+      return undefined;
+    }
+    const refusal = `The Orchestrator's context was not revised: ${revised.reason}, so the previous one is kept`;
+    this.logger.warn(refusal, { runId });
+    return refusal;
   }
 
   private parkOnOwner(orchestration: Orchestration, runId: string): void {
@@ -783,10 +808,11 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [tasksContext, closeoutContext, personaNotes] = await Promise.all([
+    const [tasksContext, closeoutContext, personaNotes, orchestratorContext] = await Promise.all([
       taskBoardFor(projectPath).tasksContext(),
       milestoneCloseoutContext(projectPath),
       personaNotesByRole(projectPath),
+      readOrchestratorContext(projectPath),
     ]);
     return {
       goal,
@@ -798,6 +824,7 @@ export class OrchestrationService implements StageOutputConsumer {
         this.settings.getPreferences(projectPath.id).gates,
       ),
       personaConstraints: renderPersonaConstraints(personaNotes),
+      orchestratorContext,
     };
   }
 

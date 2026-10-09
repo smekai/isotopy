@@ -139,7 +139,12 @@ export interface RunReviewContext {
 export interface RunReview {
   artifacts?: RunCloseoutRecord;
   decision?: OrchestratorDecision;
+  contextRevision?: string;
   errors: string[];
+}
+
+export interface RecordedReview {
+  contextRefusal?: string;
 }
 
 export interface WorkflowDeps {

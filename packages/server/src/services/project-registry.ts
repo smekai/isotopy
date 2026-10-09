@@ -1,4 +1,3 @@
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { HOME_PROJECT_ID } from "@isotopy/core";
@@ -13,7 +12,7 @@ import { formatValidationIssues, parseJson } from "../domain/validation.ts";
 import { ensureProjectDataDir, homeProjectPaths, projectPaths, projectsFilePath } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import type { Logger } from "../utils/logger.ts";
-import { readOptionalTextSync } from "../utils/read-optional-text.ts";
+import { readOptionalTextSync, writeTextFileSync } from "../utils/text-file.ts";
 
 export class ProjectRegistry {
   private file: RegistryFile = { version: 1, activeProjectId: HOME_PROJECT_ID, projects: [] };
@@ -46,11 +45,7 @@ export class ProjectRegistry {
   }
 
   private write(): void {
-    const target = projectsFilePath();
-    mkdirSync(path.dirname(target), { recursive: true });
-    const tmp = `${target}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(this.file, null, 2)}\n`);
-    renameSync(tmp, target);
+    writeTextFileSync(projectsFilePath(), JSON.stringify(this.file, null, 2));
   }
 
   all(): Project[] {

@@ -2,7 +2,9 @@ import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import os from "node:os";
 
+import { lookupOnPath } from "../utils/lookup-on-path.ts";
 import { messageOf } from "../utils/message-of.ts";
+import { firstLine } from "./log-text.ts";
 
 const STDERR_TAIL_LINES = 10;
 const SIGKILL_ESCALATE_MS = 5000;
@@ -149,6 +151,17 @@ function quoteWindowsArg(arg: string): string {
   return `"${escaped}"`;
 }
 
+function isBareName(command: string): boolean {
+  return !/[\\/]/.test(command);
+}
+
+function batchShimOnPath(spec: SubprocessSpec): string | undefined {
+  if (!commandNeedsWindowsShell(spec.command) || !isBareName(spec.command)) {
+    return spec.command;
+  }
+  return firstLine(lookupOnPath(spec.command) ?? "");
+}
+
 function resolveSpawnTarget(spec: SubprocessSpec): { command: string; args: string[] } {
   const args = spec.args ?? [];
   if (!needsWindowsShell(spec)) {
@@ -193,7 +206,11 @@ export function startSubprocess(spec: SubprocessSpec): SubprocessHandle {
     return settledHandle(startupFailure(MULTILINE_SHIM_MESSAGE, false, 0));
   }
 
-  const { command, args } = resolveSpawnTarget(spec);
+  const resolved = batchShimOnPath(spec);
+  if (resolved === undefined) {
+    return settledHandle(startupFailure(`${spec.command} was not found on PATH`, false, 0));
+  }
+  const { command, args } = resolveSpawnTarget({ ...spec, command: resolved });
 
   let child: ChildProcess;
   try {

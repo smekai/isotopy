@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import type {
   DeploymentResult,
@@ -20,6 +20,7 @@ import { parseRunChangeBaseline } from "../schemas/run-change-baseline.ts";
 import type { RunChangeBaseline } from "../schemas/run-change-baseline.ts";
 import { runsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import { readOptionalText, writeTextFile } from "../utils/text-file.ts";
 
 export async function persistRunCloseout(
   project: ProjectPath,
@@ -27,17 +28,10 @@ export async function persistRunCloseout(
   record: RunCloseoutRecord,
 ): Promise<void> {
   const directory = path.join(runsDir(project), runId, "closeout");
-  await mkdir(directory, { recursive: true });
   await Promise.all([
-    writeFile(
-      path.join(directory, "closeout.json"),
-      `${JSON.stringify(record, null, 2)}\n`,
-    ),
-    writeFile(path.join(directory, "closeout.md"), renderCloseout(record.report)),
-    writeFile(
-      path.join(directory, "cleanup-report.md"),
-      renderCleanupReport(record.cleanup),
-    ),
+    writeTextFile(path.join(directory, "closeout.json"), JSON.stringify(record, null, 2)),
+    writeTextFile(path.join(directory, "closeout.md"), renderCloseout(record.report)),
+    writeTextFile(path.join(directory, "cleanup-report.md"), renderCleanupReport(record.cleanup)),
   ]);
 }
 
@@ -50,22 +44,15 @@ export async function persistRunChangeBaseline(
   runId: string,
   baseline: RunChangeBaseline,
 ): Promise<void> {
-  const directory = changesDir(project, runId);
-  await mkdir(directory, { recursive: true });
-  await writeFile(
-    path.join(directory, "baseline.json"),
-    `${JSON.stringify(baseline)}\n`,
-  );
+  await writeTextFile(path.join(changesDir(project, runId), "baseline.json"), JSON.stringify(baseline));
 }
 
 export async function readRunChangeBaseline(
   project: ProjectPath,
   runId: string,
 ): Promise<RunChangeBaseline | undefined> {
-  let content: string;
-  try {
-    content = await readFile(path.join(changesDir(project, runId), "baseline.json"), "utf8");
-  } catch {
+  const content = await readOptionalText(path.join(changesDir(project, runId), "baseline.json"));
+  if (content === undefined) {
     return undefined;
   }
   const parsed = parseRunChangeBaseline(content);
@@ -78,13 +65,9 @@ export async function persistRunChanges(
   changes: RunChangeSet,
 ): Promise<void> {
   const directory = changesDir(project, runId);
-  await mkdir(directory, { recursive: true });
   await Promise.all([
-    writeFile(
-      path.join(directory, "changes.json"),
-      `${JSON.stringify(changes, null, 2)}\n`,
-    ),
-    writeFile(path.join(directory, "changes.md"), renderRunChanges(changes)),
+    writeTextFile(path.join(directory, "changes.json"), JSON.stringify(changes, null, 2)),
+    writeTextFile(path.join(directory, "changes.md"), renderRunChanges(changes)),
   ]);
 }
 
@@ -97,10 +80,8 @@ export async function cleanupCancelledRun(
     force: true,
     maxRetries: 3,
   });
-  const closeoutDir = path.join(runsDir(project), runId, "closeout");
-  await mkdir(closeoutDir, { recursive: true });
-  await writeFile(
-    path.join(closeoutDir, "cleanup-report.md"),
+  await writeTextFile(
+    path.join(runsDir(project), runId, "closeout", "cleanup-report.md"),
     renderCancelledCleanupReport(),
   );
 }
@@ -110,17 +91,10 @@ async function writeDeploymentEvidence(
   deployment: DeploymentResult,
   logLines: string[],
 ): Promise<void> {
-  await mkdir(directory, { recursive: true });
   await Promise.all([
-    writeFile(
-      path.join(directory, "deployment.json"),
-      `${JSON.stringify(deployment, null, 2)}\n`,
-    ),
-    writeFile(path.join(directory, "deployment.md"), renderDeploymentResult(deployment)),
-    writeFile(
-      path.join(directory, "deploy.log"),
-      logLines.length === 0 ? "" : `${logLines.join("\n")}\n`,
-    ),
+    writeTextFile(path.join(directory, "deployment.json"), JSON.stringify(deployment, null, 2)),
+    writeTextFile(path.join(directory, "deployment.md"), renderDeploymentResult(deployment)),
+    writeTextFile(path.join(directory, "deploy.log"), logLines.join("\n")),
   ]);
 }
 
@@ -130,13 +104,9 @@ export async function persistReleaseArtifacts(
   release: RunReleaseRecord,
 ): Promise<void> {
   const directory = path.join(runsDir(project), runId, "release");
-  await mkdir(directory, { recursive: true });
   await Promise.all([
-    writeFile(
-      path.join(directory, "release.json"),
-      `${JSON.stringify(release, null, 2)}\n`,
-    ),
-    writeFile(path.join(directory, "release.md"), renderReleaseManifest(release.manifest)),
+    writeTextFile(path.join(directory, "release.json"), JSON.stringify(release, null, 2)),
+    writeTextFile(path.join(directory, "release.md"), renderReleaseManifest(release.manifest)),
   ]);
 }
 

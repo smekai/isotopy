@@ -1,35 +1,8 @@
 # Next
 
-## TASK-178: The Orchestrator keeps a small context of its own, curated rather than accumulated
-**Priority:** P1 | **Tags:** core, server, engine, milestone-i
-**Updated:** 2026-10-04 17:49
-
-Step 6 of **Milestone I — Induction** (`TASK-156`), filed on its own 2026-10-04 so it can be worked. The *what* and *why* are settled in `TASK-156` ("The Orchestrator still dies — but it keeps a small context", decided with the owner 2026-09-24); this task is the *how*. **Lands before the unattended stretch is measured**, so the stretch measures episodes that remember.
-
-### The gap
-
-Every role keeps notes (`<skills>/<id>.notes.md`, `TASK-113`); the one agent that sees every run does not. `terminate()` is one-way and `ensureActive` builds a fresh Orchestration, so each episode opens knowing only the board, the closeout context and the persona digest — `goalContext` in `services/orchestration-service.ts` is exactly that list.
-
-### Design
-
-- **Fence.** The review step may return a whole revised context in an `isotopy-orchestrator-context` block — a markdown body, not JSON. Extract it with `takeFencedBlock` (`schemas/fenced-block.ts`) the way `schemas/persona-notes.ts` extracts `isotopy-persona-notes`. No block means no change.
-- **Pure rules** in `domain/rules/orchestrator-context.ts`: parse; a hard cap (start at 4 KB and 60 lines — the cap is what forces curating); a revision **replaces** the whole context, so deleting a stale line or merging three is as ordinary as adding one; an over-cap revision is **refused** and the previous context kept. Normalise line endings to LF.
-- **Store** in `services/orchestrator-context-store.ts` (`OrchestratorContextStore`): `orchestrator.context.md` beside the persona notes in `skillsDir(projectPath)`, written UTF-8/LF via temp file + `rename`, exactly as `persona-notes-store.ts` does (atomic on NTFS and APFS for a same-directory rename). A missing file is an empty context (`readOptionalText`); an unreadable one fails loudly, per "What a catch may do" in `docs/architecture.md`.
-- **Write** on the review path: `workflow/stage-execution.ts` `runOrchestratorReviewWork` → `readReview` → `OrchestrationService.recordReview`. A refusal is recorded on the review (the user-visible record) and reported through the service's own `logger.child("OrchestrationService")` (the operator channel).
-- **Read** in `goalContext`, rendered by `domain/markdown/orchestration.ts` into the opening prompt, follow-ups and the review prompt (`reviewContextFor`).
-- **Prompts.** `domain/skills/step-tasks/review-run.md` and `orchestrate.md` state the lane — the owner's standing preferences heard in conversation, what recent episodes tried and how they ended, what to avoid, open threads — and what it is **not**: the task list (the board), role craft (persona notes), run output (`.isotopy/runs/`). State the cap. Then `pnpm gen:skills`.
-- **Sizes.** `orchestration-service.ts` is near the 1000-line cap enforced by `structure.check.ts`; keep rendering and rules out of it.
-
-### Evidence
-
-A spec for the pure rules (a revision that deletes a line leaves it deleted; an over-cap revision leaves the file untouched; CRLF input is stored as LF). A component test with `FakeEngine` emitting the fence: episode 2's opening prompt carries what episode 1's review wrote, and a refused revision is visible on the review. Full gate set.
-
-Cross-platform: the file is written with `path.join`, UTF-8 and LF on both OSes; parsing splits on `/\r?\n/`.
-
----
 ## TASK-156: Milestone I — Induction: a product the team carries on its own
 **Priority:** P1 | **Tags:** core, server, ui, engine, testing, milestone-i
-**Updated:** 2026-10-08 16:17
+**Updated:** 2026-10-09 17:59
 
 Induction proves a base case, then proves each step follows from the last. The base case is a
 product built once with a human watching. The inductive step is the team building the next
@@ -163,7 +136,7 @@ and APFS for a same-directory rename.
 
 ### Plan
 
-**Status, 2026-10-04.**
+**Status, 2026-10-09.**
 
 | Scope item | State |
 | --- | --- |
@@ -172,16 +145,16 @@ and APFS for a same-directory rename.
 | 3 · `TASK-160` schedules in the rail | Done |
 | 4 · `TASK-161` built-in board poller (shipped disabled) | Done |
 | 5 · `TASK-162` the owner's boundary | Its boundary half shipped as `TASK-173`; the remainder (steps declaring agent, tools and MCP) moved to Backlog as a capability, not a blocker. PR #72 closed. |
-| 6 · The Orchestrator's own context | Filed as **`TASK-178`**, with the design |
+| 6 · The Orchestrator's own context | Done — `TASK-178` |
 | 7 · `TASK-163` what Isotopy is for, restated | Last, as written |
-| 8 · `TASK-157` the arcade | Next — base case first |
-| Added on the way | `TASK-172` done. `TASK-170` (the operator channel — pino to the console and `~/.isotopy/logs/server.log`) and `TASK-168` (adding an existing folder as a project) done in PR #79. |
+| 8 · `TASK-157` the arcade | Base case done 2026-10-04; the inductive step is next |
+| Added on the way | `TASK-172` done. `TASK-170` (the operator channel — pino to the console and `~/.isotopy/logs/server.log`) and `TASK-168` (adding an existing folder as a project) done in PR #79. From the arcade's gap list, `TASK-179`, `TASK-180`, `TASK-181` and `TASK-182` are done. |
 
 **Remaining order:**
 
-1. **`TASK-157`, base case only.** The arcade built once with a human watching, driven through the dev app with a browser alongside, recorded section for section against `TASK-141`'s record. Schedules, the poller and the unattended stretch are explicitly not part of this pass. Its gap list feeds every step below.
-2. **`TASK-178`** — the Orchestrator's own context, so the episodes that follow remember.
-3. **`TASK-157`, the inductive step.** The arcade's standing objectives as schedules, the poller enabled against a board with `**Assignee:**` marks, and the unattended stretch measured. `TASK-169` (a real sleep/wake with a schedule pending) is observed during it, because it needs a human at the machine anyway.
+1. ~~**`TASK-157`, base case only.**~~ Done 2026-10-04; its gap list is `TASK-179`–`TASK-190`.
+2. ~~**`TASK-178`** — the Orchestrator's own context.~~ Done.
+3. **`TASK-157`, the inductive step.** The arcade's standing objectives as schedules, the poller enabled against a board with `**Assignee:**` marks, and the unattended stretch measured. `TASK-169` (a real sleep/wake with a schedule pending) is observed during it, because it needs a human at the machine anyway. Before it, weigh the open gaps that would undermine an unattended run: `TASK-185` (debris and nothing committed) and `TASK-186` (the time budget read as a deadline).
 4. **`TASK-163`** — the docs made true, after the mechanism works.
 
 The deploy target, the length of the measured stretch and the MVP gap list stay unwritten until step 3 produces evidence, as decided.

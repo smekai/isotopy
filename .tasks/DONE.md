@@ -1,5 +1,138 @@
 # Done
 
+## TASK-195: One text-file reader and writer for every store, and persona notes stop swallowing read errors
+**Priority:** P2 | **Tags:** server
+**Updated:** 2026-10-09 18:18
+
+Isotopy writes its own files in eight places, and each repeats the mechanics by hand.
+
+**The duplication:**
+- Five stores create the folder, write `<file>.tmp` and `rename` it: `persona-notes-store`, `orchestrator-context-store`, `automation-config-store`, `project-registry` and `settings-store`.
+- The run and milestone evidence writers (`run-evidence.ts`, `milestone-closeout.ts`, `run-repository.ts`'s `handoff.md`) write in place, so a crash mid-write leaves a half-written file.
+- A fixed `.tmp` name lets two writers of the same file collide.
+
+**The bug:** `persona-notes-store` reads with `readFile(...).catch(() => undefined)`. An unreadable notes file therefore reads as empty, and the next capture replaces it, losing that role's notes.
+
+**Do:**
+- One product-neutral helper in `utils/text-file.ts` (absorbing `read-optional-text.ts`):
+  - `writeTextFile` and `writeTextFileSync` create the folder, normalise to LF with one trailing newline, and write through a uniquely named temp file plus `rename`. The settings store keeps its `0o600` mode.
+  - `readOptionalText` and `readOptionalTextSync` treat a missing file as absent and throw on anything else.
+- Every writer above uses it.
+- `orchestrator-context-store.ts` goes: its read and write become one-liners in `services/skills.ts`, beside the path helpers.
+- Persona notes read through `readOptionalText`.
+
+**Done when:**
+- No `.tmp`/`rename` pair is left outside the helper.
+- A test shows an unreadable notes file is reported, not overwritten (POSIX, where a file can be made unreadable).
+- All gates are green.
+
+Cross-platform: `rename` over an existing file replaces it on Windows and POSIX alike. On Windows, an unreadable file cannot be made with a chmod, so that test runs on POSIX only.
+
+### Plan
+
+**Done, 0.13.14 (source −39 lines).**
+
+- **The helper:** `utils/text-file.ts` replaces `read-optional-text.ts`.
+  - `writeTextFile` and `writeTextFileSync` create the folder, normalise to LF with one trailing newline, and write through a uniquely named temp file plus `rename`.
+  - `readOptionalText` and `readOptionalTextSync` treat a missing file as absent and throw on anything else.
+- **Every writer now uses it:** the persona notes, the Orchestrator context, the automation config, the project registry, the settings (still `0o600`), all run evidence (closeout, changes, baseline, release, deployment) and the milestone summaries. No temp-file/`rename` pair is left outside the helper.
+- **`orchestrator-context-store.ts` is deleted.** Its read and write are two short functions in `services/skills.ts`, beside the path helpers.
+- **Fixed:** the persona notes, the milestone summaries and the change baseline no longer swallow read errors. An unreadable notes file is reported on the stage and kept, not overwritten.
+- **Proof:** a POSIX-only comp test (a `chmod 000` notes file survives a capture, with a warning naming the file); it runs on CI's macOS and Linux jobs. On Windows the helper was checked directly: missing → undefined, unreadable → throws, CRLF → LF.
+
+---
+## TASK-178: The Orchestrator keeps a small context of its own, curated rather than accumulated
+**Priority:** P1 | **Tags:** core, server, engine, milestone-i
+**Updated:** 2026-10-09 17:59
+
+Step 6 of **Milestone I — Induction** (`TASK-156`), filed on its own 2026-10-04 so it can be worked. The *what* and *why* are settled in `TASK-156` ("The Orchestrator still dies — but it keeps a small context", decided with the owner 2026-09-24); this task is the *how*. **Lands before the unattended stretch is measured**, so the stretch measures episodes that remember.
+
+### The gap
+
+Every role keeps notes (`<skills>/<id>.notes.md`, `TASK-113`); the one agent that sees every run does not. `terminate()` is one-way and `ensureActive` builds a fresh Orchestration, so each episode opens knowing only the board, the closeout context and the persona digest — `goalContext` in `services/orchestration-service.ts` is exactly that list.
+
+### Design
+
+- **Fence.** The review step may return a whole revised context in an `isotopy-orchestrator-context` block — a markdown body, not JSON. Extract it with `takeFencedBlock` (`schemas/fenced-block.ts`) the way `schemas/persona-notes.ts` extracts `isotopy-persona-notes`. No block means no change.
+- **Pure rules** in `domain/rules/orchestrator-context.ts`: parse; a hard cap (start at 4 KB and 60 lines — the cap is what forces curating); a revision **replaces** the whole context, so deleting a stale line or merging three is as ordinary as adding one; an over-cap revision is **refused** and the previous context kept. Normalise line endings to LF.
+- **Store** in `services/orchestrator-context-store.ts` (`OrchestratorContextStore`): `orchestrator.context.md` beside the persona notes in `skillsDir(projectPath)`, written UTF-8/LF via temp file + `rename`, exactly as `persona-notes-store.ts` does (atomic on NTFS and APFS for a same-directory rename). A missing file is an empty context (`readOptionalText`); an unreadable one fails loudly, per "What a catch may do" in `docs/architecture.md`.
+- **Write** on the review path: `workflow/stage-execution.ts` `runOrchestratorReviewWork` → `readReview` → `OrchestrationService.recordReview`. A refusal is recorded on the review (the user-visible record) and reported through the service's own `logger.child("OrchestrationService")` (the operator channel).
+- **Read** in `goalContext`, rendered by `domain/markdown/orchestration.ts` into the opening prompt, follow-ups and the review prompt (`reviewContextFor`).
+- **Prompts.** `domain/skills/step-tasks/review-run.md` and `orchestrate.md` state the lane — the owner's standing preferences heard in conversation, what recent episodes tried and how they ended, what to avoid, open threads — and what it is **not**: the task list (the board), role craft (persona notes), run output (`.isotopy/runs/`). State the cap. Then `pnpm gen:skills`.
+- **Sizes.** `orchestration-service.ts` is near the 1000-line cap enforced by `structure.check.ts`; keep rendering and rules out of it.
+
+### Evidence
+
+A spec for the pure rules (a revision that deletes a line leaves it deleted; an over-cap revision leaves the file untouched; CRLF input is stored as LF). A component test with `FakeEngine` emitting the fence: episode 2's opening prompt carries what episode 1's review wrote, and a refused revision is visible on the review. Full gate set.
+
+Cross-platform: the file is written with `path.join`, UTF-8 and LF on both OSes; parsing splits on `/\r?\n/`.
+
+### Plan
+
+**Done, 0.13.13.**
+
+- **Rules** (`domain/rules/orchestrator-context.ts`): a revision replaces the whole context, with CRLF normalized to LF and surrounding blank lines trimmed. The cap is 60 lines and 4096 UTF-8 bytes; over it, the revision is refused with its size.
+- **Store** (`services/orchestrator-context-store.ts`): `<skills>/orchestrator.context.md`, written UTF-8 and LF through tmp-then-rename. A missing file means no context, and an unreadable one throws. The file is read with line endings normalized, so an owner's edit is the next version.
+- **Write:** `readReview` lifts the `isotopy-orchestrator-context` block onto `RunReview.contextRevision`, kept apart from `errors` so a refusal never parks the initiative. `recordReview` writes it or refuses it, putting the refusal on the run's log and the operator log.
+- **Read:** `goalContext` puts it at the head of every opening prompt and follow-up ("What you understood in earlier episodes"). The review prompt shows the current context with its cap, rendered from `ORCHESTRATOR_CONTEXT_LIMITS`.
+- **Prompts:** `review-run.md` has an optional third section covering the lane, what does not belong, whole-text rewriting and the cap. `orchestrate.md` says how to weigh the context.
+- **Evidence:** a 5-case spec (CRLF, both caps at and over the limit, bytes rather than characters) and 3 comp tests: the opening prompt carries the context; a review replaces it whole; an over-cap revision is refused on the run's log. Mutations each turn a test red: no read, append instead of replace, and no cap.
+
+---
+## TASK-181: On Windows, an automation command given as a bare .cmd name fails before it starts
+**Priority:** P1 | **Tags:** server, infra, milestone-i
+**Updated:** 2026-10-09 17:53
+
+Found in `TASK-157` (2026-10-04), on both targets, and root-caused.
+
+`Start the product` with `ui.start.windows.executable = "npm.cmd"` — exactly what the Setup presets write — exited at once with `MODULE_NOT_FOUND`. The same command typed by hand starts Vite in 236 ms. Replicating Isotopy's spawn (`cmd.exe /d /s /c ""npm.cmd" "run" "dev""`, `windowsVerbatimArguments`) shows the real error: `Cannot find module 'C:\Development\smekai\dogfood-arcade-cursor\node_modules\npm\bin\npm-cli.js'`. When a batch file is invoked by a **quoted bare name**, `cmd` resolves its `%~dp0` against the working directory, so `npm.cmd` looks for npm inside the project. With the executable given as its full path (`C:\Program Files\nodejs\npm.cmd`) the product started and reached `ready`.
+
+Engines are unaffected because their adapters spawn CLIs by resolved full path. Everything in `.isotopy/automation.json` — `ui.start`, `validation`, `preview`, `production` — goes through `startSubprocess` → `resolveSpawnTarget` in `engines/subprocess.ts` and is affected whenever the executable is a bare `.cmd`/`.bat` name.
+
+**Fix:** resolve a bare executable to its full path before building the `cmd /c` line (`lookupOnPath` already exists in `utils/`), and fail with a stated reason when it cannot be found. Evidence: a component test (Windows-only, skipped elsewhere) that a bare `npm.cmd` automation command runs in a temp project.
+
+Also seen, smaller: with another process already answering the health URL, the product was marked `ready` 28 ms after start and then `exited` — readiness probed the URL, not our process. Worth a stated rule in the same change.
+
+Cross-platform: POSIX spawns without a shell and is unaffected; the fix must leave that path alone.
+
+### Plan
+
+**Done, 0.13.12.**
+
+- **Bare shims are resolved on PATH.** `startSubprocess` turns a bare `.cmd`/`.bat` name into its full path with `where` (`lookupOnPath` + `firstLine`) before building the `cmd /c` line. A name `where` cannot find fails at once with "`<name>` was not found on PATH". Full paths and POSIX are untouched, and nothing is cached.
+- **Proof:** two Windows-only comp tests (`engine/bare-windows-shim.comp.ts`). A bare `npm.cmd --version` runs from a temp project; it failed with `MODULE_NOT_FOUND` before the fix. A missing shim fails naming itself, with no exit code.
+- **The readiness rule:** whatever answers the health URL is the product, before ready and after it. `ProductProcessService` already adopted a server that kept answering when our process died before ready (TASK-142). An exit after ready now probes once and adopts too, where it used to report `exited`. A deliberate stop never adopts.
+- **Tests:** the new test "a product that loses its port after it was ready is adopted" fails when the after-ready probe is removed. The old "exits on its own" test now uses a stub that stops answering when its process dies.
+- **Docs:** both rules are in `implementation-notes.md`.
+
+---
+## TASK-193: Upstream the Aiki gaps TASK-069 found
+**Priority:** P2 | **Tags:** infra, engine
+**Updated:** 2026-10-09 17:48
+
+TASK-069 moved Isotopy onto Aiki 0.43.2. The Phase 0 spike and the port found gaps that belong in Aiki, which the owner contributes to, not in workarounds here. Each one becomes an upstream issue or PR in `aikirun/aiki`; Isotopy bumps its pinned `@aikirun/*` version once it lands.
+
+1. **Windows CI.** Aiki's CI runs on ubuntu only, and its binary ships for darwin-arm64 and linux only. Isotopy embeds it on Windows and macOS, so a Windows (and macOS) job in Aiki's CI is the guard Isotopy relies on.
+2. **The SQLite file stays locked after `close()` on Windows** until garbage collection. Raw `@libsql/client` reproduces it with create, insert and select followed by `close()`. Likely a libsql-js statement keeping the connection alive. Report to libsql, and make Aiki's sqlite provider finalize what it holds.
+3. **`migrateApply` logs with `console.log`** ("applying migration …"). Every new project prints three lines to the server console. It should take a logger, like `server()` does.
+4. **An invalid cron expression returns a 500.** The server logs "Request error occurred {err:{}}" rather than a validation error naming the expression. Isotopy validates first with `cron-parser`, but other callers get nothing useful.
+5. **Embedded single-owner boot.** With one process per SQLite file, a claim held at the last crash and a run published but never claimed can be released at `runtime.start()`, instead of waiting out `claimIdleTimeoutMs` (90 s by default) and the publish lease. Isotopy tunes both down in `workflow-runtime.ts`; an `exclusive` option would let it stop.
+
+Cross-platform: items 1 and 2 are the platform work, Windows first.
+
+### Plan
+
+**Closed 2026-10-09 — answered upstream by Aiki 0.44.0.**
+
+1. **Windows CI:** shipped. Aiki's CI runs its unit and SQLite tests on Linux, macOS and Windows.
+2. **The file stays locked after `close()` on Windows:** gone. 0.44.0 replaced libsql with `node:sqlite`.
+3. **`migrateApply` logs with `console.log`:** fixed. It takes a logger, and Isotopy hands it the operator logger (TASK-194).
+4. **An invalid cron returns a 500:** fixed. It is a 400 that names the expression.
+5. **Single-owner boot release:** declined by the maintainer, because Aiki cannot know it is the only process on a file. Isotopy keeps its lowered claim and outbox timings in `workflow-runtime.ts`. A one-call `embedded()` preset may come later.
+
+Isotopy is on 0.44.0 since TASK-069 (#83).
+
+---
 ## TASK-194: After Aiki: shrink the docs and tests, reuse Aiki's types, and keep one logger
 **Priority:** P2 | **Tags:** core, server, testing
 **Updated:** 2026-10-08 19:28

@@ -1,10 +1,11 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import type { CloseoutReport, Milestone, RunState } from "@isotopy/core";
 import { renderMilestoneSummary } from "../domain/markdown/closeout.ts";
 import { renderPriorMilestoneCloseouts } from "../domain/markdown/planning.ts";
 import { parseMilestoneSummary } from "../schemas/milestone-summary.ts";
 import type { ProjectPath } from "../paths.ts";
+import { readOptionalText, writeTextFile } from "../utils/text-file.ts";
 
 export async function persistMilestoneSummary(
   projectPath: ProjectPath,
@@ -34,13 +35,9 @@ export async function persistMilestoneSummary(
     },
   };
   const dir = path.join(projectPath.dataDir, "milestones", milestone.id);
-  await mkdir(dir, { recursive: true });
   await Promise.all([
-    writeFile(
-      path.join(dir, "summary.json"),
-      `${JSON.stringify(summary, null, 2)}\n`,
-    ),
-    writeFile(
+    writeTextFile(path.join(dir, "summary.json"), JSON.stringify(summary, null, 2)),
+    writeTextFile(
       path.join(dir, "summary.md"),
       renderMilestoneSummary({
         name: milestone.name,
@@ -64,10 +61,7 @@ export async function milestoneCloseoutContext(
     entries
       .filter((entry) => entry.isDirectory())
       .map(async (entry) => {
-        const content = await readFile(
-          path.join(root, entry.name, "summary.json"),
-          "utf8",
-        ).catch(() => undefined);
+        const content = await readOptionalText(path.join(root, entry.name, "summary.json"));
         if (!content) return undefined;
         return parseMilestoneSummary(content);
       }),
