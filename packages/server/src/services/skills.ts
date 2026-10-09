@@ -30,6 +30,10 @@ export function personaNotesPath(projectPath: ProjectPath, skillId: string): str
   return path.join(skillsDir(projectPath), `${skillId}.notes.md`);
 }
 
+export function orchestratorContextPath(projectPath: ProjectPath): string {
+  return path.join(skillsDir(projectPath), "orchestrator.context.md");
+}
+
 export async function loadSkill(
   projectPath: ProjectPath,
   skillId: string,

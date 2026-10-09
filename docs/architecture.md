@@ -652,7 +652,9 @@ A **schedule** is a recurring task with a fixed team. The Orchestrator is an epi
 handler, not a long-lived supervisor: `terminate()` is one-way, and `ensureActive`
 then builds a fresh `Orchestration` for the next episode. What carries intent across
 that gap is not the aggregate but the schedule — a persisted record plus an Aiki cron
-activation derived from it.
+activation derived from it. What the Orchestrator has come to understand crosses it in
+its own small context, `<skills>/orchestrator.context.md`: rewritten whole at a review,
+capped, and read when the next episode opens (`TASK-178`).
 
 | Layer | Where |
 | --- | --- |

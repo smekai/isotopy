@@ -1111,4 +1111,20 @@ The `SKILL_ID` guard (`/^[a-z0-9-]+$/`, `domain/rules/persona-notes.ts`) is appl
 skill id reaches this code from a pipeline definition, which the Orchestrator can
 compose — so it is untrusted enough to keep out of a path join.
 
+**The Orchestrator's own context is curated, not accumulated
+(`services/orchestrator-context-store.ts`).** Persona notes only ever merge; nobody
+deletes a wrong one. The Orchestrator's context is the opposite: a review may return
+an `isotopy-orchestrator-context` block, and `recordReview` writes it **in place of**
+the old one, so dropping a stale line is as ordinary as adding one. The cap
+(`ORCHESTRATOR_CONTEXT_LIMITS`, 60 lines and 4 KB, counted in UTF-8 bytes) is what
+forces the curating: a revision over it is refused, the old context is kept, and the
+refusal goes to the reviewed run's log for the user and to the operator log. It never
+joins `review.errors`, which would park the initiative on its owner. The review prompt
+shows the current context and its cap, because a whole-text rewrite needs both;
+`goalContext` puts it at the head of every episode's opening prompt and follow-ups. The
+file sits beside the persona notes as `orchestrator.context.md` — no skill loader and
+no `*.notes.md` scan reads that name — written UTF-8 and LF through tmp-then-rename,
+and read back with line endings normalised, so an owner's edit in any editor is simply
+the next version.
+
 ---

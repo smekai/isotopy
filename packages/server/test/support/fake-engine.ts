@@ -93,6 +93,7 @@ export interface AnticipationOutcome {
 export interface RunReviewScript {
   artifacts?: Partial<RunArtifacts>;
   decision?: OrchestratorDecision;
+  context?: string;
   as?: string;
   prompt?: string | RegExp;
   usage?: StageUsage;
@@ -257,6 +258,9 @@ QUESTION: ${question}`,
         "Reviewed the run.",
         fencedBlock("isotopy-run-artifacts", artifacts),
         fencedBlock("isotopy-orchestrator-decision", decision),
+        ...(review.context === undefined
+          ? []
+          : [`\`\`\`isotopy-orchestrator-context\n${review.context}\n\`\`\``]),
       ].join("\n\n"),
       review.usage,
     );
