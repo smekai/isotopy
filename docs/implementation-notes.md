@@ -1120,6 +1120,20 @@ unprivileged user can create, and `readdir`'s `Dirent` reports it as a symbolic 
 one check covers both platforms. A second install into the same project while one is
 running is refused rather than queued, from an in-memory set on the installer.
 
+**A git source is a shallow clone into a temporary folder.** `git -c core.longpaths=true
+clone --depth 1 [--branch <ref>] -- <url>` runs through `runSubprocess` in a
+`mkdtemp(os.tmpdir(), "isotopy-pack-")` folder, with `GIT_TERMINAL_PROMPT=0` and
+`GCM_INTERACTIVE=never` so a private repository without stored credentials fails at once
+instead of waiting on a prompt nobody sees. `--branch` takes a branch or a tag, not a commit
+id; the commit actually installed is read back with `rev-parse HEAD` and recorded. The
+folder is removed in a `finally` with retries — a clone's pack files are read-only on
+Windows and an antivirus may hold them for a moment — and a removal that still fails is
+logged rather than failing an install that already succeeded. `--` keeps a URL from ever
+being read as an option, and `packSourceOf` refuses a source or ref that starts with `-`
+anyway. The tests stand a local bare repository in for an https address with git's own
+`url.<base>.insteadOf`, passed through `GIT_CONFIG_COUNT`/`KEY`/`VALUE`, which the clone
+inherits from the server's environment.
+
 The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
 in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)
 for how the `architect` and `tester` personas are generated from a single source.

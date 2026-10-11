@@ -878,7 +878,8 @@ reloads it whenever Setup opens; Setup → Agents lists it, and the home strip a
 the gate cards name a stage's agent from it.
 
 **A pack is installed by copying it in** (`TASK-200`): `POST /agents/packs` with a
-source folder or git repository. `PackInstaller` (`services/pack-installer.ts`)
+source folder, or a git repository with an optional ref and a folder inside it, which
+is shallow-cloned into a temporary folder that is always removed afterwards. `PackInstaller` (`services/pack-installer.ts`)
 walks the pack's `agents/` and `steps/`, refuses a link anywhere in it, validates
 every file with the same parsers the catalog uses, and asks the pure
 `planPackInstall` (`domain/rules/pack-plan.ts`) what to write, remove and keep

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import type { Dirent } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { InstallPackRequest, PackInstallResult } from "@isotopy/core";
 import { planPackInstall, sameSource } from "../domain/rules/pack-plan.ts";
@@ -14,6 +15,8 @@ import { packSourceOf } from "../domain/rules/pack-source.ts";
 import type { PackSource } from "../domain/rules/pack-source.ts";
 import { SKILL_ID } from "../domain/rules/persona-notes.ts";
 import type { ValidationIssue, ValidationResult } from "../domain/validation.ts";
+import { runSubprocess } from "../engines/subprocess.ts";
+import type { SubprocessResult } from "../engines/subprocess.ts";
 import { ensureProjectDataDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import {
@@ -24,6 +27,8 @@ import {
 } from "../schemas/agent-definition.ts";
 import { errorCodeOf } from "../utils/error-code.ts";
 import type { Logger } from "../utils/logger.ts";
+import { lookupOnPath } from "../utils/lookup-on-path.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import { readPackRecords, writePackRecords } from "./pack-records.ts";
 
@@ -56,6 +61,15 @@ interface ReadEntry extends PackEntry {
   text: string;
 }
 
+type GitPackSource = Extract<PackSource, { kind: "git" }>;
+
+const CLONE_PREFIX = "isotopy-pack-";
+
+const GIT_TIMEOUT_MS = 120_000;
+
+const GIT_MISSING =
+  "Git is not on PATH. Install it (winget install --id Git.Git -e on Windows, brew install git on macOS) and restart Isotopy.";
+
 const AGENT_FILE = "agent.md";
 
 const MARKDOWN = ".md";
@@ -72,6 +86,7 @@ export class PackInstaller {
   constructor(
     private readonly duties: DutySeeding,
     logger: Logger,
+    private readonly tempRoot: string = os.tmpdir(),
   ) {
     this.logger = logger.child("PackInstaller");
   }
@@ -99,11 +114,56 @@ export class PackInstaller {
     projectPath: ProjectPath,
     source: PackSource,
   ): Promise<PackInstallOutcome> {
-    const pack = await materializeFolder(source);
-    if (!pack.ok) {
-      return { kind: "invalid", issues: pack.issues };
+    if (source.kind === "folder") {
+      const folder = await existingFolder(source.folder, ["source"]);
+      return folder.ok
+        ? this.installRoot(projectPath, source, { root: folder.value })
+        : { kind: "invalid", issues: folder.issues };
     }
-    return this.installRoot(projectPath, source, pack.value);
+    const workspace = await mkdtemp(path.join(this.tempRoot, CLONE_PREFIX));
+    try {
+      const clone = await this.clone(source, workspace);
+      return clone.ok
+        ? await this.installRoot(projectPath, source, clone.value)
+        : { kind: "invalid", issues: clone.issues };
+    } finally {
+      await rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(
+        (error: unknown) => this.logger.warn(`Could not remove ${workspace}: ${messageOf(error)}`),
+      );
+    }
+  }
+
+  private async clone(
+    source: GitPackSource,
+    workspace: string,
+  ): Promise<ValidationResult<MaterializedPack>> {
+    if (lookupOnPath("git") === undefined) {
+      return refused(["source"], GIT_MISSING);
+    }
+    const target = path.join(workspace, "clone");
+    const branch = source.ref === undefined ? [] : ["--branch", source.ref];
+    const cloned = await git(workspace, [
+      "-c",
+      "core.longpaths=true",
+      "clone",
+      "--depth",
+      "1",
+      ...branch,
+      "--",
+      source.url,
+      target,
+    ]);
+    if (!cloned.success) {
+      return refused(["source"], `git clone ${source.url} failed: ${failureOf(cloned)}`);
+    }
+    const head = await git(target, ["rev-parse", "HEAD"]);
+    const root =
+      source.subpath === undefined ? target : path.join(target, ...source.subpath.split("/"));
+    const folder = await existingFolder(root, ["path"]);
+    if (!folder.ok) {
+      return folder;
+    }
+    return { ok: true, value: { root, commit: head.success ? head.stdout.trim() : undefined } };
   }
 
   private async installRoot(
@@ -172,15 +232,29 @@ export class PackInstaller {
   }
 }
 
-async function materializeFolder(source: PackSource): Promise<ValidationResult<MaterializedPack>> {
-  if (source.kind === "git") {
-    return refused(["source"], "Installing from git is not available yet");
-  }
-  const stats = await stat(source.folder).catch(absentAsUndefined);
+async function existingFolder(
+  folder: string,
+  issuePath: ValidationIssue["path"],
+): Promise<ValidationResult<string>> {
+  const stats = await stat(folder).catch(absentAsUndefined);
   if (stats === undefined || !stats.isDirectory()) {
-    return refused(["source"], `${source.folder} is not a folder`);
+    return refused(issuePath, `${folder} is not a folder`);
   }
-  return { ok: true, value: { root: source.folder } };
+  return { ok: true, value: folder };
+}
+
+function git(cwd: string, args: string[]): Promise<SubprocessResult> {
+  return runSubprocess({
+    command: "git",
+    args,
+    cwd,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" },
+    timeoutMs: GIT_TIMEOUT_MS,
+  });
+}
+
+function failureOf(result: SubprocessResult): string {
+  return [result.errorMessage, ...result.stderrTail].filter(Boolean).join(" ").trim();
 }
 
 async function packEntries(root: string): Promise<ValidationResult<PackEntry[]>> {
