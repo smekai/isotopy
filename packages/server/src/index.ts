@@ -71,6 +71,7 @@ serve(
       automation,
       deployment,
       product,
+      agents,
       logger,
     }).fetch,
     hostname: config.host,

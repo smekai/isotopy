@@ -863,6 +863,12 @@ generated from this document and `testing.md`.
 user-level override, else the bundled file; the project addendum and the role's
 notes follow it. Nothing is ever seeded to disk.
 
+**The browser reads the catalog from `GET /agents`** (`routes/agents.ts`, kept in
+`ui/vite.config.ts`'s proxy list): every agent and every composable step for the
+requested project, each with its origin. `useAgentCatalog` owns it in `App` and
+reloads it whenever Setup opens; Setup → Agents lists it, and the home strip and
+the gate cards name a stage's agent from it.
+
 ### Stage policy
 
 `executionPolicy` (`standard`, `quality`, `delivery`, `closeout`) decides what a

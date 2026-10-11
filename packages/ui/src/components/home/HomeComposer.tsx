@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import { Flag, FolderOpen, Play, Sparkles, SlidersHorizontal } from "lucide-react";
 import { ENGINES, HOME_PROJECT_ID, modelOverrideFor, pipelineUsesEngineById } from "@isotopy/core";
-import type { Project } from "@isotopy/core";
+import type { CatalogAgent, Project } from "@isotopy/core";
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
@@ -119,6 +119,7 @@ export interface HomeComposerProps {
   projectId: string;
   project?: Project;
   settings: SettingsController;
+  agents: CatalogAgent[];
   starting?: boolean;
   initialTask?: string;
   onOpenProject: () => void;
@@ -132,6 +133,7 @@ export function HomeComposer({
   projectId,
   project,
   settings,
+  agents,
   starting = false,
   initialTask = "",
   onOpenProject,
@@ -172,6 +174,7 @@ export function HomeComposer({
           d={d}
           pipelineId={pipelineId}
           engineId={settings.preferences.engine}
+          agents={agents}
           onSelectPipeline={(id) => settings.update({ pipelineId: id })}
         />
       )}

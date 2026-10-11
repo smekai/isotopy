@@ -2,16 +2,13 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { UNKNOWN_AGENT_GLYPH } from "@isotopy/core";
 import type { AgentOrigin } from "@isotopy/core";
 import { agentsDir, stepsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { withoutFrontMatter } from "../domain/markdown/front-matter.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
-import {
-  UNKNOWN_AGENT_GLYPH,
-  knownAgentIds,
-  mergeCatalog,
-} from "../domain/rules/agent-catalog.ts";
+import { knownAgentIds, mergeCatalog } from "../domain/rules/agent-catalog.ts";
 import type {
   AgentCatalogSnapshot,
   CatalogPersona,

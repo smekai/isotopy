@@ -143,6 +143,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     automation,
     deployment,
     product,
+    agents,
     logger,
   });
 
@@ -243,6 +244,7 @@ export async function restartApp(): Promise<RestartedApp> {
       automation,
       deployment,
       product,
+      agents,
       logger,
     }),
     orchestrator,

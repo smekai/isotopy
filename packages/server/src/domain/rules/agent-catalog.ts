@@ -1,6 +1,4 @@
-import type { AgentOrigin } from "@isotopy/core";
-
-export const UNKNOWN_AGENT_GLYPH = "◈";
+import type { AgentCatalogEntry, AgentOrigin } from "@isotopy/core";
 
 export interface CatalogPersona {
   id: string;
@@ -70,6 +68,27 @@ export function catalogLines(snapshot: AgentCatalogSnapshot): CatalogLines {
       .filter((step) => step.composable)
       .map((step) => ({ id: step.id, summary: step.description })),
   };
+}
+
+export function catalogEntries(snapshot: AgentCatalogSnapshot): AgentCatalogEntry[] {
+  return [
+    ...snapshot.personas.map((persona): AgentCatalogEntry => ({
+      kind: "agent",
+      id: persona.id,
+      title: persona.title,
+      glyph: persona.glyph,
+      description: persona.description,
+      origin: persona.origin,
+    })),
+    ...snapshot.steps
+      .filter((step) => step.composable)
+      .map((step): AgentCatalogEntry => ({
+        kind: "step",
+        id: step.id,
+        description: step.description,
+        origin: step.origin,
+      })),
+  ];
 }
 
 function mergeById<Entry extends { id: string }>(base: Entry[], overrides: Entry[]): Entry[] {
