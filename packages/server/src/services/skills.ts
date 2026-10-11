@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureProjectDataDir, skillsDir, userSkillsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
+import { withoutFrontMatter } from "../domain/markdown/front-matter.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
 import { normalizeOrchestratorContext } from "../domain/rules/orchestrator-context.ts";
 import { SKILL_ID } from "../domain/rules/persona-notes.ts";
@@ -63,8 +64,8 @@ export async function loadSkill(
       readCached(personaNotesPath(projectPath, skillId)),
     ]);
   return composeSkill({
-    base: userOverride ?? bundled,
-    projectOverride,
+    base: bodyOf(userOverride) ?? bundled,
+    projectOverride: bodyOf(projectOverride),
     projectAddendum,
     accumulatedNotes,
   });
@@ -82,10 +83,16 @@ async function loadBundledMarkdown(
     return undefined;
   }
   try {
-    return await readFile(fileURLToPath(new URL(`${id}.md`, directory)), "utf8");
+    return withoutFrontMatter(
+      await readFile(fileURLToPath(new URL(`${id}.md`, directory)), "utf8"),
+    );
   } catch {
     return undefined;
   }
+}
+
+function bodyOf(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : withoutFrontMatter(text);
 }
 
 interface CacheEntry {

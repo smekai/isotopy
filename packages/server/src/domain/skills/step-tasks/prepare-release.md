@@ -1,3 +1,7 @@
+---
+name: prepare-release
+description: "Produce the change manifest, changelog fragment, and release checklist."
+---
 # Assignment: Prepare the feature release
 
 Reconcile approved scope, implementation, architecture review, and QA evidence.

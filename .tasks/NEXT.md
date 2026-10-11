@@ -1,5 +1,72 @@
 # Next
 
+## TASK-196: Shared agents — a team can be more than a dev team, and a project brings its own
+**Priority:** P1 | **Tags:** core, server | **Epic:** Shared agents
+**Updated:** 2026-10-11 18:20
+
+The umbrella of the **Shared agents** epic. Filed 2026-10-10 with the owner, as the first step of the ShareTravel dogfood.
+
+**Isotopy's team is fixed to software delivery.** Three hard-coded lists decide who may be on it:
+
+- `PERSONA_CATALOG` and `STEP_TASK_CATALOG` in `packages/server/src/domain/skills/catalog.ts`. They are what the Orchestrator is told it can pick, and what `domain/rules/team-composition.ts` accepts.
+- `AGENTS` in `packages/core/src/agents.ts`, the name and glyph the UI shows.
+
+The loader is already open: `loadSkill` composes a persona that exists only as a project file. But the Orchestrator never hears of it, and `composeTeamPipeline` refuses it as `Unknown persona`. So a project cannot add a growth marketer, an SEO writer or a community manager, and even if it could, there would be no step for them to take: all thirteen step tasks are about building software.
+
+**Why now.** The ShareTravel dogfood (the owner's decision of 2026-10-04, recorded in `NEXT.md` under `TASK-156`) is about getting people to use a product that already works, not about building it. A team that can only plan, implement, review and verify cannot do that.
+
+### An agent is a folder
+
+What makes an agent useful already exists, in pieces, in four places. This epic gives the pieces one home and separates what travels from what stays. All paths are under `<project>/.isotopy/`.
+
+| Part | What it is | Where | Travels in a pack |
+| --- | --- | --- | --- |
+| Identity | Who it is and how it judges | `agents/<id>/agent.md` | yes |
+| Knowledge | Reference material it ships with: playbooks, checklists, a market brief | `agents/<id>/knowledge/*.md` | yes |
+| Duties | Recurring work it brings, as schedule templates | `agents/<id>/duties/*.md` | yes |
+| Steps | Assignments an agent can take | `steps/<id>.md` | yes |
+| Tools | MCP servers a step needs | step front matter (`TASK-162`) | yes |
+| Notes | What it learned in this project (`TASK-113`) | `skills/<id>.notes.md` | **never** |
+| Project addendum | This project's tweaks to it | `skills/<id>.project.md` | **never** |
+
+The split is the point. A pack copied from one project to another must never carry what an agent learned about the first one.
+
+### What this is not
+
+- **Not a vector store or RAG.** Knowledge is markdown in the repository, and the harness reads it when the step needs it.
+- **Not a trigger of its own.** A duty is a schedule; cron stays the only thing that starts work.
+- **Not a plugin runtime.** An agent is data. Nothing in a pack runs on the server; the one thing that reaches past markdown is a declared tool, and installing a pack shows those first (`TASK-200`).
+- **Not a marketplace, yet.** A marketplace is a list of packs. It waits until two projects want the same agents.
+
+### Evidence for the epic
+
+The ShareTravel fork brings a growth team as plain files: a `growth-marketer` agent with a knowledge folder, `plan-campaign`, `draft-content` and `review-metrics` steps, and a weekly metrics duty. The Orchestrator proposes that team for a growth goal, the owner approves it, it runs, and the duty fires once enabled — **with no change to Isotopy's source for ShareTravel's sake.**
+
+Cross-platform: each child carries its own line; the shared hazards are directory discovery (`readdir` + `path.join`, ids validated before they reach a path), CRLF front matter, and case-insensitive file systems on both Windows and macOS.
+
+### Plan
+
+**Planned 2026-10-10, with the owner. Scope widened 2026-10-11:** `TASK-197` to `TASK-200` ship in one PR (`feature/shared-agents-196`, `0.14.0` onward). `TASK-162` stays open after it.
+
+**Order inside the PR.** Front matter on every bundled file → `.isotopy/` lets git see what the owner authors → the catalog → `GET /agents` and Setup → runs record their agents → knowledge → duties → packs from a folder → packs from git → "Add agents from…" in Setup.
+
+**Decided at planning.** Each is recorded in `docs/decisions.md` by the commit that lands it.
+
+- **Front matter is YAML**, parsed with the `yaml` package and validated strictly with zod at the boundary. Keys follow Claude Code's own agent and skill files (`name`, `description`); Isotopy adds `title` and `glyph`. `name` is always an id, `title` always a display name. Rejected: the hand-rolled grammar on PR #72's branch, and JSON metadata.
+- **There is one way to replace a bundled persona:** `agents/<id>/agent.md`. `skills/<id>.md` goes. A folder with a bundled id and no `agent.md` adds knowledge and duties to the bundled agent.
+- **There is no user-level agents directory.** An agent reaches another project by being installed into it. The user-level override of a bundled persona stays.
+- **`.isotopy/` stops ignoring what the owner authors:** `agents/`, `steps/` and `packs.json` become visible to git; everything Isotopy produces stays ignored.
+- **A run records each stage's agent title and glyph**, so history does not change when an agent is renamed or removed. The core `AGENTS` table goes.
+- **Seeded duties start disabled**, as the board poller does today. **Learned notes never leave the project.**
+- **A pack source may name a folder inside a git repository**, so any project's `.isotopy/` is already a pack.
+
+**Answered by the owner, 2026-10-10.**
+
+1. `TASK-162` is rescoped: its catalog half is `TASK-197`'s; it keeps `agent`, `tools`, `context`, `setup` and the MCP plumbing.
+2. The `builtInSchedules` switch covers every seeded duty.
+3. Packs install from a folder or git, with no diff view; a re-install that would overwrite an edited file refuses and lists it.
+
+---
 ## TASK-156: Milestone I — Induction: a product the team carries on its own
 **Priority:** P1 | **Tags:** core, server, ui, engine, testing, milestone-i
 **Updated:** 2026-10-09 17:59

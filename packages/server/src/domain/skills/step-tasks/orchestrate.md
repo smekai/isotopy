@@ -1,3 +1,8 @@
+---
+name: orchestrate
+description: "Compose a team for the goal, ask the owner, or stop with a reason."
+composable: false
+---
 # Assignment: Orchestrate the goal
 
 Read the supplied goal, persona catalog, step task catalog, task board, and prior

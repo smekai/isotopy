@@ -30,6 +30,32 @@ function frontmatter(name, description) {
   return ["---", `name: ${name}`, `description: ${description}`, "---", ""];
 }
 
+function personaFrontmatter({ name, title, glyph, description }) {
+  return [
+    "---",
+    `name: ${name}`,
+    `title: ${title}`,
+    `glyph: ${JSON.stringify(glyph)}`,
+    `description: ${JSON.stringify(description)}`,
+    "---",
+  ];
+}
+
+const ARCHITECT_PERSONA = {
+  name: "architect",
+  title: "Architect",
+  glyph: "◇",
+  description:
+    "Writes and refactors code to a strict standard; generated from the repository's own architecture document.",
+};
+
+const TESTER_PERSONA = {
+  name: "tester",
+  title: "QA Engineer",
+  glyph: "⊕",
+  description: "Independently verifies the implementation with automated and interactive checks.",
+};
+
 function generatedBanner(source) {
   return [
     `> Generated from \`docs/${source}\`. Do not edit here — edit the`,
@@ -58,7 +84,14 @@ const SOURCES = [
       ],
       [
         personaPath("architect.md"),
-        [blocks["persona-head"], "", blocks.shared, "", blocks["persona-tail"]].join("\n") + "\n",
+        [
+          ...personaFrontmatter(ARCHITECT_PERSONA),
+          blocks["persona-head"],
+          "",
+          blocks.shared,
+          "",
+          blocks["persona-tail"],
+        ].join("\n") + "\n",
       ],
     ],
   },
@@ -82,6 +115,7 @@ const SOURCES = [
       [
         personaPath("tester.md"),
         [
+          ...personaFrontmatter(TESTER_PERSONA),
           blocks["tester-persona-head"],
           "",
           blocks["testing-shared"],

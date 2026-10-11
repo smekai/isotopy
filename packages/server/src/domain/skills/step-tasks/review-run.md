@@ -1,3 +1,8 @@
+---
+name: review-run
+description: "Review a settled run and decide what happens next."
+composable: false
+---
 # Assignment: Review a settled run and decide what happens next
 
 A run you own has finished. Read the orchestration goal, the approved team, the

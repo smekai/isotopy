@@ -15,6 +15,27 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-11 — An agent is a file whose front matter is its catalog entry
+
+**Context:** who may be on a team was decided by three lists in code — `PERSONA_CATALOG` and
+`STEP_TASK_CATALOG` on the server, `AGENTS` in core — so a project could not add a growth
+marketer, and a persona's summary, display name and prose lived in three places (`TASK-196`).
+
+**Decision:** every persona and step task opens with **YAML front matter**, parsed with the `yaml`
+package and checked against a strict schema in `schemas/agent-definition.ts`. A persona carries
+`name` (its id), `title`, `glyph` and `description`; a step carries `name`, `description` and, for
+the Orchestrator's own three assignments, `composable: false`. `name` is always an id and must
+equal the file's own; `title` is always what a person reads. The keys follow Claude Code's own
+agent and skill files, so one written for either reads in the other. Aliases are refused (a small
+file cannot expand into a large document), duplicate keys are refused, and the front matter never
+reaches a prompt.
+
+**Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
+coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
+use anywhere carries it, so every file would be ours alone.
+
+---
+
 ## 2026-10-06 — Aiki is the durable workflow runtime, and it keeps the schedule clock
 
 **Context:** OpenWorkflow had been the runtime since `TASK-068` (2026-07-24). Aiki was the

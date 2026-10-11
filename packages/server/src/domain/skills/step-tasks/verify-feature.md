@@ -1,3 +1,7 @@
+---
+name: verify-feature
+description: "Independently verify the implementation against the approved requirements."
+---
 # Assignment: Verify the implemented feature
 
 Independently verify the implementation on disk against the approved

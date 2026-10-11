@@ -1,3 +1,7 @@
+---
+name: design-experience
+description: "Design the user-facing interaction for an approved feature."
+---
 # Assignment: Design the product experience
 
 Decide whether the approved feature changes a user-facing interaction. If it

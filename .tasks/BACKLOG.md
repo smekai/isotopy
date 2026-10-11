@@ -112,7 +112,9 @@ Decide whether a quality stage's blocking finding should send the run back to `i
 ---
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P2 | **Tags:** core, server, milestone-i
-**Updated:** 2026-10-04 17:49
+**Updated:** 2026-10-11 18:20
+
+**Rescoped 2026-10-11, with the owner.** The catalog half of this task — step tasks as files with front matter, read from the project and replacing a bundled one by id, the catalog derived from those files, and `team-composition.ts` taking the known ids as a parameter — is delivered by `TASK-197` (**Shared agents**, `TASK-196`). What remains here is what a step *declares*: `agent`, `tools`, `context` and `setup` keys on that same front matter, and the MCP plumbing that lets a step carry a tool. The epic's agent packs (`TASK-200`) refuse a `tools:` key until this lands.
 
 The owner's boundary, as data on a task rather than a judgment in a prompt. Of **Milestone I —
 Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
@@ -143,27 +145,15 @@ without one.
 
 The owner's shape, and the one this task builds: **the main point of a step is its task** — an MD
 file describing a specific thing an agent must do — and that file names the agent, the tools, the
-setup and the context it needs. Isotopy has half of this already: `PERSONA_CATALOG` (10 personas,
-layered bundled → user → project) and `STEP_TASK_CATALOG` (10 bundled MD files). The pairing is
-chosen by the *role* rather than by the task, tools do not exist, and step-specific setup is a
-branch in code — `if (stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK)` in `stage-execution.ts`.
-That branch is the smell this removes: a step declares what it needs instead of the workflow
-special-casing it by id.
+setup and the context it needs. The pairing is chosen by the *role* rather than by the task, tools
+do not exist, and step-specific setup is a branch in code —
+`if (stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK)` in `stage-execution.ts`. That branch is the
+smell this removes: a step declares what it needs instead of the workflow special-casing it by id.
 
-**YAML front matter**, parsed once at the boundary with a strict schema — `agent: developer`,
-`tools: [taskplanner]`, `context: [product-environment]`, and the `summary:` that used to live in
-the catalog, fenced by the usual delimiters above the assignment prose. (Written inline here rather
-than as a block: a bare `---` line inside a task section is what TaskPlanner's own parser uses to
-end one, so an example carrying its delimiters would truncate this task on the next board read.)
+**Front matter already exists** (`TASK-197`): YAML, parsed once in `schemas/agent-definition.ts`
+against a strict schema, with `name` and `description`. This task adds `agent: developer`,
+`tools: [taskplanner]` and `context: [product-environment]` to the step schema.
 
-- The split is pure (`domain/markdown/`), the schema strict (`schemas/`), the reading a service —
-  domain never imports `node:fs`, and `structure.spec.ts` enforces it.
-- **Step tasks start layering like personas do**: bundled → user override → project addendum,
-  reusing `composeSkill` and the `userSkillsDir()` / `skillsDir()` paths. Persona *notes* stay
-  persona-only. This is what makes the library the user's to grow rather than ours to ship.
-- `STEP_TASK_CATALOG` stops being a hand-maintained array; each `summary` moves into its file.
-  `team-composition.ts` is pure domain and builds its id sets at module scope, so it takes the
-  known ids as parameters rather than importing a catalog that now reads the disk.
 - `role.skill` becomes optional and defaults to the task's `agent:`. The task is the main point; a
   role may still override.
 - `context` and `setup` are **closed vocabularies**, each derived from one `as const` tuple — not an
@@ -180,7 +170,8 @@ runs without it and says so in the run log** rather than failing or pretending.
 
 **Isotopy is not an MCP client — the engine CLI is.** Isotopy renders config and passes flags, so no
 MCP SDK enters this repo. The first and only tool is `taskplanner`, published as `@smekai/taskplanner`
-by TaskPlanner's `TASK-046` and pinned in this repo's `package.json`.
+by TaskPlanner's `TASK-046` and pinned in this repo's `package.json`. Installing an agent pack
+(`TASK-200`) must show the tools it declares before it writes anything.
 
 ### What TaskPlanner 2.3.0 changes about this task
 
@@ -250,16 +241,16 @@ a stated boundary is the agent's job, not the scheduler's.
 
 ### Evidence
 
-Failing-first, one behaviour per test: a step-task file with front matter parses to its declaration
-and a malformed one is rejected with a stated reason; a project override and addendum compose over
-the bundled step task, and a project step task the bundled catalog never knew is selectable by a
-role; a step declaring `tools: [taskplanner]` produces the right MCP config per adapter, and an
-engine without the capability runs anyway and logs why; `**Assignee:** owner` round-trips a write
-and re-read and TaskPlanner's own parser reads back the same assignee; a date-blocked task is
-skipped for a different stated reason than an owner-marked one; a closeout creates a marked
-follow-up; and the poller's prompt names the `@owner` rule. Then the full gate set, then the live
-app with a marked task on the board that the agent reads and leaves alone. **No schedule fires
-against a real CLI in the dev app** — firing is proven against `FakeEngine`, as `TASK-161` did.
+Failing-first, one behaviour per test: a step-task file declaring `agent`, `tools` and `context`
+parses to its declaration and an unknown tool or context is rejected with a stated reason; a step
+declaring `tools: [taskplanner]` produces the right MCP config per adapter, and an engine without
+the capability runs anyway and logs why; a role without a `skill` takes the step's `agent:`;
+`**Assignee:** owner` round-trips a write and re-read and TaskPlanner's own parser reads back the
+same assignee; a date-blocked task is skipped for a different stated reason than an owner-marked
+one; a closeout creates a marked follow-up; and the poller's prompt names the `@owner` rule. Then
+the full gate set, and the live app with a marked task on the board that the agent reads and leaves
+alone. **No schedule fires against a real CLI in the dev app** — firing is proven against
+`FakeEngine`, as `TASK-161` did.
 
 Cross-platform: `require.resolve('@smekai/taskplanner/mcp-server')` yields `dist/mcp-server.js`, and
 handing that JavaScript path to Node is exactly what **avoids** the Windows `.cmd` shim and the
@@ -274,6 +265,8 @@ recorded untested unless a Mac is used.
 
 ### Plan
 
+**Rescoped 2026-10-11.** The front-matter format question below is settled: YAML, parsed by the `yaml` package against strict zod schemas, as `TASK-197` delivered it. This task extends that schema; it does not choose a grammar.
+
 **Moved to Backlog 2026-10-04, with the owner.** What remains here — a step that declares its own agent, tools and context, and the MCP plumbing that lets a step carry a tool — is a capability, not a blocker for Milestone I: the boundary it was written for shipped as `TASK-173`. PR #72 is closed; its branch `feature/task-162-step-declares-itself` stays as reference, but it predates `TASK-170`, `TASK-172`, `TASK-173` and `TASK-176` and conflicts on the board, so pick this up by rebuilding from `main`, not by reviving that branch. The `@smekai/taskplanner` 2.3.1 gate below is long cleared (the repo pins 2.4.7).
 
 **Split on 2026-09-16.** This task had grown to +3345/−834 across four mechanisms, and the two halves
@@ -282,9 +275,7 @@ turned out to have different scope and different readiness:
 - **`TASK-173` took the board reader and the owner's mark** — the half the milestone blocks on. It
   needs nothing new, works on both platforms today, and is already delivered.
 - **This task keeps the mechanism** — a step task that declares its own agent, tools and context, and
-  the MCP plumbing that lets a step carry a tool. That is roughly +1900/−143: 12 new modules and 7
-  new test suites, almost pure addition, because it is new capability rather than a change to
-  existing code.
+  the MCP plumbing that lets a step carry a tool.
 
 The premise that joined them was that the agent must read `**Assignee:**` *through* an MCP tool,
 because `taskSummariesIn` stripped every `**`-prefixed line. Making the digest show the mark is the
@@ -292,15 +283,7 @@ direct fix, and `TASK-173` did it. The tool path remains worth having on its own
 declaring what it needs is a product capability the owner asked for on 2026-08-26 — but it is no
 longer the boundary's blocker.
 
-**Gated on `@smekai/taskplanner` 2.3.1.** The MCP server is the agent's reader here, and 2.3.0 has
-two defects that only reach that path: a CRLF board parses to zero tasks (indistinguishable from an
-empty board), and any read tool rewrites the caller's `config.json`. Both are fixed in
-smekai/taskplanner#10 and need publishing before this can land.
-
-Two open questions for the owner on this half: whether to replace the hand-rolled front-matter
-grammar with JSON metadata (~119 lines plus the coercions and the summary fallback — a format change
-to 13 shipped files), and confirmation that `agent` defaults stay, given the approval card now
-resolves the persona into the proposal.
+One open question for the owner on this half: confirmation that `agent` defaults stay, given the approval card now resolves the persona into the proposal.
 
 ---
 ## TASK-175: Isotopy raises its own events, and a long-running workflow awaits them

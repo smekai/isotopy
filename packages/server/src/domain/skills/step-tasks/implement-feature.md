@@ -1,3 +1,7 @@
+---
+name: implement-feature
+description: "Implement the approved scope in the project directory."
+---
 # Assignment: Implement the approved feature
 
 Implement the approved scope in the registered project directory.
