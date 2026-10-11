@@ -43,6 +43,13 @@ loads it, and only fields still empty are filled, so renaming or removing an age
 rewrites history. The core `AGENTS` table is gone; the home strip and the gate cards, which
 show pipelines rather than runs, read the catalog.
 
+**Decision: an agent's knowledge is listed, never inlined** (`TASK-198`). A playbook, a
+checklist or a market brief lives in `agents/<id>/knowledge/` with a one-line
+description; the prompt names each file and the agent reads what the step needs. The
+prompt stays the size of the identity, and every harness can read files on its own.
+Knowledge is what the owner vouches for and is read-only to the agent; what it learns
+still goes to its notes, and turning a note into knowledge is a human edit.
+
 **Decision: no user-level agents directory.** An agent reaches another project by being installed
 into it, so everything an engine reads sits inside the project, where every harness may read it,
 and git records which version of an agent the product ran with. The user-level override of a
@@ -50,7 +57,10 @@ bundled persona stays, because it changes a default rather than adding a team me
 
 **Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
 coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
-use anywhere carries it, so every file would be ours alone. **Rejected: looking each run's agents up in the live catalog** — history would change
+use anywhere carries it, so every file would be ours alone. **Rejected: pasting knowledge into the prompt** — every run would pay for every file
+whether the step needs it or not. **Rejected: retrieval or embeddings** — a search index
+to keep fresh for what a list of described files already answers.
+**Rejected: looking each run's agents up in the live catalog** — history would change
 whenever an agent is renamed, and the server's run log is written by synchronous code that
 cannot wait on a file read. **Rejected: recording without a backfill** — every run from
 before would show a bare id such as `developer`. **Rejected: keeping

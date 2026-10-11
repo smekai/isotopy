@@ -8,6 +8,7 @@ import { agentsDir, stepsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { withoutFrontMatter } from "../domain/markdown/front-matter.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
+import type { KnowledgeEntry } from "../domain/markdown/skill.ts";
 import { knownAgentIds, mergeCatalog } from "../domain/rules/agent-catalog.ts";
 import type {
   AgentCatalogSnapshot,
@@ -18,9 +19,10 @@ import type {
 import { SKILL_ID } from "../domain/rules/persona-notes.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
-import { parseAgentFile, parseStepFile } from "../schemas/agent-definition.ts";
+import { parseAgentFile, parseKnowledgeFile, parseStepFile } from "../schemas/agent-definition.ts";
 import { errorCodeOf } from "../utils/error-code.ts";
 import type { Logger } from "../utils/logger.ts";
+import { toPosixPath } from "../utils/posix-path.ts";
 import { personaNotesPath, projectSkillAddendumPath, userSkillFilePath } from "./skills.ts";
 
 const BUNDLED_PERSONAS = fileURLToPath(new URL("../domain/skills/personas/", import.meta.url));
@@ -29,6 +31,8 @@ const BUNDLED_STEPS = fileURLToPath(new URL("../domain/skills/step-tasks/", impo
 
 const AGENT_FILE = "agent.md";
 
+const KNOWLEDGE_DIR = "knowledge";
+
 const MARKDOWN = ".md";
 
 const ABSENT_FILE_CODES = new Set(["ENOENT", "ENOTDIR"]);
@@ -36,6 +40,16 @@ const ABSENT_FILE_CODES = new Set(["ENOENT", "ENOTDIR"]);
 interface DefinitionFile {
   id: string;
   file: string;
+}
+
+export interface ComposedPersona {
+  text: string;
+  warnings: string[];
+}
+
+interface LibraryBook {
+  entry: KnowledgeEntry;
+  warning?: string;
 }
 
 interface CachedText {
@@ -79,27 +93,48 @@ export class AgentCatalog {
     return knownAgentIds(await this.catalog(projectPath));
   }
 
-  async persona(projectPath: ProjectPath, id: string): Promise<string | undefined> {
+  async persona(projectPath: ProjectPath, id: string): Promise<ComposedPersona | undefined> {
     if (!SKILL_ID.test(id)) {
       return undefined;
     }
-    const [catalog, userOverride, projectAddendum, accumulatedNotes] = await Promise.all([
+    const [catalog, library, userOverride, projectAddendum, accumulatedNotes] = await Promise.all([
       this.catalog(projectPath),
+      this.libraryOf(projectPath, id),
       this.textOf(userSkillFilePath(id)),
       this.textOf(projectSkillAddendumPath(projectPath, id)),
       this.textOf(personaNotesPath(projectPath, id)),
     ]);
     const entry = catalog.personas.find((persona) => persona.id === id);
-    return composeSkill({
+    const text = composeSkill({
       base: entry?.origin === "project" ? entry.body : bodyOf(userOverride) ?? entry?.body,
+      knowledge: library.map((book) => book.entry),
       projectAddendum,
       accumulatedNotes,
     });
+    return text === undefined
+      ? undefined
+      : { text, warnings: library.flatMap((book) => book.warning ?? []) };
   }
 
   async stepTask(projectPath: ProjectPath, id: string): Promise<string | undefined> {
     const catalog = await this.catalog(projectPath);
     return catalog.steps.find((step) => step.id === id)?.body;
+  }
+
+  private async libraryOf(projectPath: ProjectPath, id: string): Promise<LibraryBook[]> {
+    const files = await markdownFilesIn(path.join(agentsDir(projectPath), id, KNOWLEDGE_DIR));
+    return Promise.all(
+      files.map(async ({ file }) => {
+        const shown = toPosixPath(file);
+        const parsed = parseKnowledgeFile((await this.textOf(file)) ?? "");
+        return parsed.ok
+          ? { entry: { path: shown, description: parsed.value.description } }
+          : {
+              entry: { path: shown },
+              warning: `Reference file ${shown} is listed without a description: ${formatValidationIssues(parsed.issues)}`,
+            };
+      }),
+    );
   }
 
   private async agentFolders(projectPath: ProjectPath): Promise<DefinitionFile[]> {
@@ -200,6 +235,7 @@ async function markdownFilesIn(directory: string): Promise<DefinitionFile[]> {
   const entries = await entriesOf(directory);
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(MARKDOWN))
+    .sort((left, right) => left.name.localeCompare(right.name))
     .map((entry) => ({
       id: entry.name.slice(0, -MARKDOWN.length),
       file: path.join(directory, entry.name),

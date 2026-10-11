@@ -12,8 +12,18 @@ import type { ProjectPath } from "../../src/paths.ts";
 import { AgentCatalog } from "../../src/services/agent-catalog.ts";
 import { writeProjectAgent, writeProjectStep, writeText } from "../support/agent-files.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
+import { toPosixPath } from "../../src/utils/posix-path.ts";
 
 const ADDENDUM = "Always use pnpm, never npm.";
+
+const REFERENCE_BODY = "1. Check the store listing in every launch language.";
+
+const REFERENCE_FILE = [
+  "---",
+  'description: "The checklist run before every launch."',
+  "---",
+  REFERENCE_BODY,
+].join("\n");
 
 let home: string;
 let userHome: string;
@@ -43,14 +53,65 @@ afterEach(async () => {
   );
 });
 
-test("with nothing of its own, a persona is the bundled default and nothing is written", async () => {
+test("with nothing of its own, a persona is exactly the bundled default and nothing is written", async () => {
+  // Arrange
+  const { personas } = await catalog.bundled();
+  const bundled = personas.find((persona) => persona.id === "developer")?.body.trim();
+
   // Act
-  const persona = await catalog.persona(project, "developer");
+  const persona = (await catalog.persona(project, "developer"))?.text;
+
+  // Assert
+  expect(persona).toBe(bundled);
+  expect(await readdir(home)).toEqual([]);
+  expect(await readdir(userHome)).toEqual([]);
+});
+
+test("a reference file is listed by its absolute path and description, never pasted into the prompt", async () => {
+  // Arrange
+  await writeProjectAgent(project.dataDir);
+  const file = path.join(agentsDir(project), "growth-marketer", "knowledge", "launch-checklist.md");
+  await writeText(file, REFERENCE_FILE);
+
+  // Act
+  const persona = (await catalog.persona(project, "growth-marketer"))?.text;
+
+  // Assert
+  expect(persona).toContain(`\`${toPosixPath(file)}\` — The checklist run before every launch.`);
+  expect(persona).not.toContain(REFERENCE_BODY);
+});
+
+test("the library sits between the agent's identity and the project's own instructions", async () => {
+  // Arrange
+  await writeProjectAgent(project.dataDir);
+  await writeText(
+    path.join(agentsDir(project), "growth-marketer", "knowledge", "launch-checklist.md"),
+    REFERENCE_FILE,
+  );
+  await writeText(path.join(skillsDir(project), "growth-marketer.project.md"), ADDENDUM);
+
+  // Act
+  const persona = (await catalog.persona(project, "growth-marketer"))?.text ?? "";
+
+  // Assert
+  expect(persona.indexOf("# Role: Growth Marketer")).toBe(0);
+  expect(persona.indexOf("## Your reference library")).toBeLessThan(persona.indexOf(ADDENDUM));
+});
+
+test("a folder holding only a library gives a bundled agent its references without replacing it", async () => {
+  // Arrange
+  await writeText(
+    path.join(agentsDir(project), "developer", "knowledge", "house-style.md"),
+    REFERENCE_FILE,
+  );
+
+  // Act
+  const persona = (await catalog.persona(project, "developer"))?.text;
 
   // Assert
   expect(persona).toMatch(/^# Role: Developer/);
-  expect(await readdir(home)).toEqual([]);
-  expect(await readdir(userHome)).toEqual([]);
+  expect(persona).toContain("house-style.md");
+  expect(warnings()).toEqual([]);
 });
 
 test("a project addendum follows the bundled default instead of replacing it", async () => {
@@ -58,7 +119,7 @@ test("a project addendum follows the bundled default instead of replacing it", a
   await writeText(path.join(skillsDir(project), "developer.project.md"), ADDENDUM);
 
   // Act
-  const persona = await catalog.persona(project, "developer");
+  const persona = (await catalog.persona(project, "developer"))?.text;
 
   // Assert
   expect(persona?.indexOf("# Role: Developer")).toBe(0);
@@ -70,7 +131,7 @@ test("a user-level skill overrides the bundled default", async () => {
   await writeText(path.join(userSkillsDir(), "developer.md"), "USER BASE");
 
   // Act
-  const persona = await catalog.persona(project, "developer");
+  const persona = (await catalog.persona(project, "developer"))?.text;
 
   // Assert
   expect(persona).toBe("USER BASE");
@@ -83,7 +144,7 @@ test("a project agent with a bundled id replaces the bundled text and keeps the 
   await writeText(path.join(skillsDir(project), "developer.notes.md"), "- Migrations live in db/migrate\n");
 
   // Act
-  const persona = await catalog.persona(project, "developer");
+  const persona = (await catalog.persona(project, "developer"))?.text;
 
   // Assert
   expect(persona).toMatch(/^# Role: House Developer/);
@@ -98,7 +159,7 @@ test("a project agent outranks the user-level override, because the project chos
   await writeProjectAgent(project.dataDir, { id: "developer", title: "House Developer" });
 
   // Act
-  const persona = await catalog.persona(project, "developer");
+  const persona = (await catalog.persona(project, "developer"))?.text;
 
   // Assert
   expect(persona).toMatch(/^# Role: House Developer/);
@@ -106,7 +167,7 @@ test("a project agent outranks the user-level override, because the project chos
 
 test("an agent nobody brings resolves to nothing", async () => {
   // Act
-  const persona = await catalog.persona(project, "no-such-agent");
+  const persona = (await catalog.persona(project, "no-such-agent"))?.text;
 
   // Assert
   expect(persona).toBeUndefined();
@@ -117,7 +178,7 @@ test("a persona id that would climb out of the skills folder resolves to nothing
   await writeText(path.join(userHome, "outside.md"), "OUTSIDE");
 
   // Act
-  const persona = await catalog.persona(project, "../outside");
+  const persona = (await catalog.persona(project, "../outside"))?.text;
 
   // Assert
   expect(persona).toBeUndefined();
@@ -129,7 +190,7 @@ test("notes sit after the project's own instructions, so a project override stil
   await writeText(path.join(skillsDir(project), "developer.notes.md"), "- Migrations live in db/migrate\n");
 
   // Act
-  const persona = await catalog.persona(project, "developer");
+  const persona = (await catalog.persona(project, "developer"))?.text;
 
   // Assert
   expect(persona?.indexOf("Always run pnpm lint")).toBeLessThan(

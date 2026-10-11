@@ -28,6 +28,10 @@ const stepFrontMatterSchema = z
   })
   .strict();
 
+const knowledgeFrontMatterSchema = z.object({ description: text }).strict();
+
+export type KnowledgeFrontMatter = z.infer<typeof knowledgeFrontMatterSchema>;
+
 type PersonaFrontMatter = z.infer<typeof personaFrontMatterSchema>;
 
 type StepFrontMatter = z.infer<typeof stepFrontMatterSchema>;
@@ -53,6 +57,14 @@ export function parseAgentFile(id: string, source: string): ValidationResult<Age
 
 export function parseStepFile(id: string, source: string): ValidationResult<StepDefinition> {
   return parseDefinition(id, source, stepFrontMatterSchema, toStep);
+}
+
+export function parseKnowledgeFile(source: string): ValidationResult<KnowledgeFrontMatter> {
+  const split = splitFrontMatter(source);
+  if (split.kind !== "present") {
+    return refused({ path: [], message: "File must open with front matter between --- lines" });
+  }
+  return parseYaml(knowledgeFrontMatterSchema, split.block);
 }
 
 function toAgent(meta: PersonaFrontMatter, body: string): AgentDefinition {

@@ -395,7 +395,7 @@ export async function runQuestionMediationWork(
     run.engine,
     stageDef.id,
     prompt,
-    persona,
+    persona?.text,
     resumeSessionId,
   );
   if (outcome.usage) {
@@ -492,7 +492,7 @@ export async function runOrchestratorReviewWork(
       [],
       await deps.agents.stepTask(deps.registry.resolve(run.projectId), "review-run"),
     ),
-    await deps.agents.persona(deps.registry.resolve(run.projectId), "orchestrator"),
+    (await deps.agents.persona(deps.registry.resolve(run.projectId), "orchestrator"))?.text,
     undefined,
   );
   if (outcome.usage) {
@@ -593,6 +593,9 @@ export async function runStageWork(
       message: `No skill "${stageDef.skill}" found — running without a persona`,
     });
   }
+  for (const warning of persona?.warnings ?? []) {
+    projection.log(runId, stageDef.id, { level: "warn", message: warning });
+  }
   if (stageDef.stepTask && !stepTask) {
     projection.log(runId, stageDef.id, {
       level: "warn",
@@ -613,7 +616,7 @@ export async function runStageWork(
     run.engine,
     stageDef.id,
     prompt,
-    persona,
+    persona?.text,
     turn.resumeSessionId,
   );
 

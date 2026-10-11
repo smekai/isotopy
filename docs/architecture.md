@@ -860,8 +860,16 @@ channel; the rest of the catalog survives it. The pure merge lives in
 generated from this document and `testing.md`.
 
 **A persona still layers:** its base is the project's `agent.md`, else the
-user-level override, else the bundled file; the project addendum and the role's
-notes follow it. Nothing is ever seeded to disk.
+user-level override, else the bundled file; then the agent's reference library, the
+project addendum and the role's notes follow it. Nothing is ever seeded to disk.
+
+**An agent carries a reference library** (`TASK-198`): `agents/<id>/knowledge/*.md`,
+each with a `description` in its front matter. The composed persona *lists* each file
+by absolute path and description under `## Your reference library` and tells the
+agent to read what the step needs; the text is never pasted in. A folder holding only
+`knowledge/` gives a bundled agent a library without replacing it. A file whose front
+matter does not parse is still listed, without a description, and the stage's log says
+why.
 
 **The browser reads the catalog from `GET /agents`** (`routes/agents.ts`, kept in
 `ui/vite.config.ts`'s proxy list): every agent and every composable step for the
@@ -896,6 +904,7 @@ only for loading the tool's own `.env`.
 |----------|-------|-------|
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/agents/<id>/agent.md` | An agent the project brings, or its replacement for a bundled one | One project |
+| `<project>/.isotopy/agents/<id>/knowledge/*.md` | The agent's reference library, listed in its prompt by path | One project |
 | `<project>/.isotopy/steps/<id>.md` | A step task the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.notes.md` | What the role learned in this project (`TASK-113`); never leaves it | One project |

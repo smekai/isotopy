@@ -1089,12 +1089,20 @@ TASK-053 follow-up. Personas are **layered** instead, composed by the pure
 
 1. the base: `<project>/.isotopy/agents/<id>/agent.md` if the project brings one,
    else a user-level `~/.isotopy/skills/<id>.md`, else the bundled default;
-2. plus `<project>/.isotopy/skills/<id>.project.md` **appended** — the default way
+2. plus the agent's reference library — every `agents/<id>/knowledge/*.md`, listed
+   by path and description, never inlined;
+3. plus `<project>/.isotopy/skills/<id>.project.md` **appended** — the default way
    to customise, carrying only the project's tweaks so improvements to the base
    keep reaching it;
-3. plus `<project>/.isotopy/skills/<id>.notes.md` **appended** — what this role
-   learned about this project on earlier runs. Layer 2 is written by a human;
-   layer 3 is written by the role itself.
+4. plus `<project>/.isotopy/skills/<id>.notes.md` **appended** — what this role
+   learned about this project on earlier runs. Layer 3 is written by a human;
+   layer 4 is written by the role itself.
+
+**Library paths are absolute, with forward slashes.** A home-project run executes in
+a scratch `runs/<id>/workspace/`, so a path relative to the project would not resolve
+from the engine's working directory. Claude Code, Codex and Cursor all accept forward
+slashes on Windows. Files are listed in name order so a prompt does not change between
+file systems that enumerate a directory differently.
 
 The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
 in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)
