@@ -355,7 +355,7 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 
 | File | Contents |
 | --- | --- |
-| `agents.ts` | Agent professions per stage |
+| `agents.ts` | The catalog entry types the browser receives (`CatalogAgent`, `CatalogStepTask`) and `catalogAgentLook`. There is no agent table here: titles and glyphs come from the agents' own files |
 | `closeout.ts` | The run's closeout record, written by the Orchestrator — findings, follow-up task drafts, cleanup result |
 | `engines.ts` | Engine/harness definitions, connection modes, model options |
 | `milestones.ts` | Milestone and feature models, the plan proposal, and pure predicates (`nextMilestoneFeature`, `milestoneProgress`, `canStartNextFeature`, `canFinalizeMilestone`) |

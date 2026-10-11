@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { agentForStage, formatUsage } from "@isotopy/core";
+import { formatUsage, stageAgent } from "@isotopy/core";
 import type { LogLevel, RunState, StageState } from "@isotopy/core";
 import { renderInlineMarkdown } from "../../inline-md";
 import { useFollowScroll } from "../../hooks/useFollowScroll";
@@ -80,7 +80,7 @@ function statusText(status: StagePresentation): CSSProperties {
 }
 
 function StageLog({ stage, d }: { stage: StageState; d: Dir }) {
-  const agent = agentForStage(stage);
+  const agent = stageAgent(stage);
   const presentation = stagePresentation(stage);
   const spend = stage.usage ? formatUsage(stage.usage) : undefined;
   const level = (entry: LogLevel) => logLevelColor(entry, d);
@@ -89,7 +89,7 @@ function StageLog({ stage, d }: { stage: StageState; d: Dir }) {
     <>
       <div style={stageHeader(d)}>
         <span style={stageGlyph(d, GLYPH_SIZE)}>{agent.glyph}</span>
-        <span data-testid="stage-profession">{agent.profession}</span>
+        <span data-testid="stage-profession">{agent.title}</span>
         {stage.skill && (
           <span
             data-testid="stage-persona"

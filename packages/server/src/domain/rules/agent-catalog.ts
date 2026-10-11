@@ -1,4 +1,4 @@
-import type { AgentCatalogEntry, AgentOrigin } from "@isotopy/core";
+import type { AgentCatalogEntry, AgentOrigin, StageAgents } from "@isotopy/core";
 
 export interface CatalogPersona {
   id: string;
@@ -68,6 +68,12 @@ export function catalogLines(snapshot: AgentCatalogSnapshot): CatalogLines {
       .filter((step) => step.composable)
       .map((step) => ({ id: step.id, summary: step.description })),
   };
+}
+
+export function stageAgentsOf(snapshot: AgentCatalogSnapshot): StageAgents {
+  return new Map(
+    snapshot.personas.map((persona) => [persona.id, { title: persona.title, glyph: persona.glyph }]),
+  );
 }
 
 export function catalogEntries(snapshot: AgentCatalogSnapshot): AgentCatalogEntry[] {

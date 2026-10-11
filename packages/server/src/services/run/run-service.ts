@@ -27,12 +27,14 @@ import {
   DEMO_PIPELINES,
   ENGINES,
   addUsage,
-  agentForStage,
   applyGatePreferences,
   createInitialRunState,
   isTerminalRunStatus,
   pipelineUsesEngine,
   rosterAccepts,
+  stageAgent,
+  stageTitleIn,
+  stampStageAgents,
   toRunSummary,
 } from "@isotopy/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
@@ -69,6 +71,7 @@ import type {
   WorkflowDeps,
 } from "../../workflow/types.ts";
 import type { OrchestrationService } from "../orchestration-service.ts";
+import { stageAgentsOf } from "../../domain/rules/agent-catalog.ts";
 import type { AgentCatalog } from "../agent-catalog.ts";
 import type { ProductProcessService } from "../product-process-service.ts";
 import { MilestoneService } from "../milestone-service.ts";
@@ -171,7 +174,9 @@ export class RunService implements RunProjection {
       const projectPath = this.registry.resolve(project.id);
       await this.milestones.loadProject(projectPath);
       await this.store.loadProject(projectPath);
+      const agents = stageAgentsOf(await this.agents.catalog(projectPath));
       for (const run of this.store.listRuns(projectPath.id)) {
+        run.stages = stampStageAgents(run.stages, agents);
         if (!isTerminalRunStatus(run.status)) {
           await this.reconcileOnLoad(projectPath, run);
         }
@@ -391,6 +396,7 @@ export class RunService implements RunProjection {
       featureId,
       orchestrationId,
       sourceTaskIds,
+      agents: stageAgentsOf(await this.agents.catalog(projectPath)),
     });
     if (usesEngine) {
       const engineId = engine ?? "claude-code";
@@ -531,7 +537,7 @@ export class RunService implements RunProjection {
     }
     delete run.completedAt;
     void this.store.flushPersist(runId);
-    const profession = agentForStage(run.stages[startIndex] ?? { id: stageId }).profession;
+    const profession = stageAgent(run.stages[startIndex] ?? { id: stageId }).title;
     const task = await this.orchestration?.restartTask(run);
     void this.launch(this.registry.resolve(run.projectId), run, {
       startedMessage: `Restarted from ${profession}`,
@@ -584,7 +590,7 @@ export class RunService implements RunProjection {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
     if (!run || !stage) return;
-    const message = `${agentForStage(stage).profession} is waiting for your approval`;
+    const message = `${stageAgent(stage).title} is waiting for your approval`;
     this.log(runId, stageId, { level: "warn", message });
     stage.status = "awaiting";
     run.status = "awaiting";
@@ -619,7 +625,7 @@ export class RunService implements RunProjection {
     run.status = "running";
     this.emit({
       ts: nowIso(), type: "stage.answered", runId, stageId, status: "running",
-      message: `${agentForStage(stage).profession} is continuing`,
+      message: `${stageAgent(stage).title} is continuing`,
     });
   }
 
@@ -634,7 +640,7 @@ export class RunService implements RunProjection {
       stageId, engine: run.engine, model: run.model, raw: limit.raw,
       resetAt: limit.resetAt, detectedAt: ts, attempt,
     };
-    const profession = agentForStage(stage).profession;
+    const profession = stageAgent(stage).title;
     const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
     this.log(runId, stageId, { level: "warn", message });
     this.emit({ ts, type: "stage.blocked", runId, stageId, status: "blocked", message, limit: run.limit });
@@ -647,7 +653,7 @@ export class RunService implements RunProjection {
     stage.status = "running";
     run.status = "running";
     delete run.limit;
-    const profession = agentForStage(stage).profession;
+    const profession = stageAgent(stage).title;
     const message = LIMIT_LOG.resuming(profession, choice);
     this.log(runId, stageId, { level: "run", message });
     this.emit({ ts: nowIso(), type: "stage.unblocked", runId, stageId, status: "running", message });
@@ -692,7 +698,7 @@ export class RunService implements RunProjection {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
     if (!run || !stage || stage.status !== "awaiting") return;
-    const profession = agentForStage(stage).profession;
+    const profession = stageAgent(stage).title;
     stage.status = "passed";
     stage.completedAt = nowIso();
     run.status = "running";
@@ -711,7 +717,7 @@ export class RunService implements RunProjection {
     stage.status = "passed";
     this.emit({
       ts: nowIso(), type: "stage.completed", runId, stageId, status: "passed",
-      message: `${agentForStage(stage).profession} completed`,
+      message: `${stageAgent(stage).title} completed`,
     });
   }
 
@@ -724,7 +730,7 @@ export class RunService implements RunProjection {
     stage.status = "skipped";
     this.emit({
       ts: completedAt, type: "stage.skipped", runId, stageId, status: "skipped",
-      message: `${agentForStage(stage).profession} skipped`,
+      message: `${stageAgent(stage).title} skipped`,
     });
   }
 
@@ -774,7 +780,7 @@ export class RunService implements RunProjection {
         formatHandoff(
           {
             stageLabel: stageDef.label,
-            profession: agentForStage(stageDef).profession,
+            profession: stageTitleIn(run, stageDef.id),
             engine: engineLabel(run),
             model: run.model,
             completedAt: nowIso(),
@@ -829,7 +835,7 @@ export class RunService implements RunProjection {
       run.result = seeded.output;
     }
     if (stage.status !== "pending") return;
-    const message = carriedOverMessage(agentForStage(stageDef).profession, seeded.from);
+    const message = carriedOverMessage(stageAgent(stage).title, seeded.from);
     this.log(runId, stageDef.id, { level: "warn", message });
     this.stageSkipped(runId, stageDef.id);
   }

@@ -75,6 +75,17 @@ describe("bundled skills", () => {
     expect(persona).toContain("isotopy-orchestrator-decision");
   });
 
+  // The agent's title is rendered above the label, so a label like "Software
+  // Architect" says the same thing twice and names no work. The Orchestrator
+  // composes labels from the same field, and it learns the shape from these.
+  test("no shipped stage label repeats an agent's title, because the label says what is being done", () => {
+    const titles = new Set(BUNDLED.personas.map((persona) => persona.title));
+
+    const titled = STAGES.filter((stage) => titles.has(stage.label));
+
+    expect(titled.map((stage) => stage.label)).toEqual([]);
+  });
+
   test("QA stays an ordinary workflow step that never owns the product process", async () => {
     const persona = bundledPersona("tester");
     const assignment = bundledStep("verify-feature");

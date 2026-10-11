@@ -4,7 +4,7 @@ import {
   ORCHESTRATION_PIPELINE,
   STAGE_EXECUTION_POLICIES,
   STAGE_OUTCOMES,
-  agentForStage,
+  stageAgent,
 } from "@isotopy/core";
 import type {
   EngineLimit,
@@ -480,7 +480,10 @@ async function suppressStage(
   await task({
     name: "isotopy.stage-suppressed",
     async handler(suppressed: SuppressedStage) {
-      const profession = agentForStage(suppressed.stageDef).profession;
+      const recorded = projection
+        .getRun(suppressed.runId)
+        ?.stages.find((stage) => stage.id === suppressed.stageDef.id);
+      const profession = stageAgent(recorded ?? suppressed.stageDef).title;
       const message = `${profession} suppressed because of ${suppressionReason(suppressed.cause)}`;
       projection.log(suppressed.runId, suppressed.stageDef.id, { level: "warn", message });
       projection.stageSkipped(suppressed.runId, suppressed.stageDef.id);

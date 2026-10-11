@@ -1,5 +1,5 @@
 import type { RunState } from "@isotopy/core";
-import { findPipeline, flattenPipelineStages } from "@isotopy/core";
+import { findPipeline, flattenPipelineStages, stageAgent } from "@isotopy/core";
 import type { CSSProperties } from "react";
 import { stagePresentation } from "../run-utils";
 import type { Dir } from "../theme";
@@ -56,7 +56,7 @@ export function PipelineRow({ run, d, focusedId, onNodeClick, onApprove }: Pipel
           const node = (
             <StageNode
               stageId={stage.id}
-              skill={stage.skill}
+              agent={stageAgent(stage)}
               label={stage.label}
               status={stagePresentation(stage)}
               d={d}

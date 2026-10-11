@@ -36,6 +36,13 @@ replaces the bundled one. The merged catalog is what the Orchestrator chooses fr
 composition and schedule validation accept, passed to those pure rules as known ids. A project
 step that reuses an Orchestrator-only id stays out of what a team may compose.
 
+**Decision: a run records who was on it.** Each stage stores its agent's `title` and `glyph`
+when the run is created, and the run log, the run views and the stage-output consumers read
+what was recorded. A run saved before this is filled in from the catalog when the server
+loads it, and only fields still empty are filled, so renaming or removing an agent never
+rewrites history. The core `AGENTS` table is gone; the home strip and the gate cards, which
+show pipelines rather than runs, read the catalog.
+
 **Decision: no user-level agents directory.** An agent reaches another project by being installed
 into it, so everything an engine reads sits inside the project, where every harness may read it,
 and git records which version of an agent the product ran with. The user-level override of a
@@ -43,7 +50,10 @@ bundled persona stays, because it changes a default rather than adding a team me
 
 **Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
 coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
-use anywhere carries it, so every file would be ours alone. **Rejected: keeping
+use anywhere carries it, so every file would be ours alone. **Rejected: looking each run's agents up in the live catalog** — history would change
+whenever an agent is renamed, and the server's run log is written by synchronous code that
+cannot wait on a file read. **Rejected: recording without a backfill** — every run from
+before would show a bare id such as `developer`. **Rejected: keeping
 `skills/<id>.md` beside `agents/<id>/agent.md`** — two ways to replace a persona, one of them
 mixed in with the notes that must never travel. No project on the owner's machine had one.
 
@@ -1218,13 +1228,14 @@ Orchestrator invented an id, which it does freely: it is given catalogs for `ski
 rendered as *Software Architect*, because `AGENTS["design"]` is one.
 
 **Decision:** the persona is keyed off `skill`, which `team-composition.ts` already
-validates against `PERSONA_IDS`, so an invented id can no longer rename the person. The
+validates against the catalog, so an invented id can no longer rename the person. The
 label names the work — `Scoping`, `Architecting`, `Implementing`, `Verifying` — and
 `orchestrate.md` says so with an action-phrased example, because the model copies the
-example. Both directions are guarded: `pipelines.spec.ts` fails if a shipped stage names
-a persona with no `AGENTS` entry or labels itself with a job title, and
-`orchestrate-assignment.spec.ts` fails if the assignment's example ever labels a role
-after its worker again.
+example. Both directions are guarded: `bundled-skills.check.ts` fails if a shipped stage names
+a persona that is not bundled or labels itself with an agent's title, and
+`orchestrate-assignment.check.ts` fails if the assignment's example ever labels a role
+after its worker again. Since 2026-10-11 the title comes from the agent's own file and is
+recorded on the run's stage, not looked up in a table.
 
 **Accepted cost:** `architecture` and `review` share a persona and so now share a glyph.
 The action label distinguishes them, and `specColor` still keys on stage id, so they keep

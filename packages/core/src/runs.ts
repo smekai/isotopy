@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { UNKNOWN_AGENT_GLYPH } from "./agents.ts";
+import type { AgentLook } from "./agents.ts";
 import { ENGINE_IDS, ENGINES, engineCapability } from "./engines.ts";
 import type { EngineId, ModelTier } from "./engines.ts";
 import type { DeploymentResult, RunReleaseRecord } from "./automation.ts";
@@ -176,6 +178,8 @@ export interface StageState {
   id: string;
   label: string;
   skill?: string;
+  title?: string;
+  glyph?: string;
   modelTier?: ModelTier;
   verdict?: StageVerdict;
   status: StageStatus;
@@ -334,6 +338,36 @@ export interface NewRunInput {
   featureId?: string;
   orchestrationId?: string;
   sourceTaskIds?: string[];
+  agents: StageAgents;
+}
+
+export type StageAgents = ReadonlyMap<string, AgentLook>;
+
+export interface StageAgentFields {
+  id: string;
+  skill?: string;
+  title?: string;
+  glyph?: string;
+}
+
+export function stageAgent(stage: StageAgentFields): AgentLook {
+  return {
+    title: stage.title ?? stage.skill ?? stage.id,
+    glyph: stage.glyph ?? UNKNOWN_AGENT_GLYPH,
+  };
+}
+
+export function stageTitleIn(run: RunState, stageId: string): string {
+  return stageAgent(run.stages.find((stage) => stage.id === stageId) ?? { id: stageId }).title;
+}
+
+export function stampStageAgents(stages: StageState[], agents: StageAgents): StageState[] {
+  return stages.map((stage) => {
+    const look = stage.skill === undefined ? undefined : agents.get(stage.skill);
+    return look === undefined
+      ? stage
+      : { ...stage, title: stage.title ?? look.title, glyph: stage.glyph ?? look.glyph };
+  });
 }
 
 function isCatalogPipeline(pipeline: PipelineDefinition): boolean {
@@ -350,6 +384,7 @@ export function createInitialRunState({
   featureId,
   orchestrationId,
   sourceTaskIds,
+  agents,
 }: NewRunInput): RunState {
   return {
     id: runId,
@@ -367,13 +402,16 @@ export function createInitialRunState({
     stageOutputs: {},
     messages: [],
     createdAt: new Date().toISOString(),
-    stages: flattenPipelineStages(pipeline).map((stage) => ({
-      id: stage.id,
-      label: stage.label,
-      skill: stage.skill,
-      modelTier: stage.modelTier,
-      status: "pending",
-      logs: [],
-    })),
+    stages: stampStageAgents(
+      flattenPipelineStages(pipeline).map((stage) => ({
+        id: stage.id,
+        label: stage.label,
+        skill: stage.skill,
+        modelTier: stage.modelTier,
+        status: "pending",
+        logs: [],
+      })),
+      agents,
+    ),
   };
 }

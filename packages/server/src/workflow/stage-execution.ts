@@ -3,7 +3,7 @@ import {
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
-  agentForStage,
+  stageTitleIn,
   resolveTier,
 } from "@isotopy/core";
 import type {
@@ -155,7 +155,7 @@ async function runPreviewDeployment(
   projection.stageStarted(run.id, stageDef.id);
   projection.log(run.id, stageDef.id, {
     level: "run",
-    message: `${agentForStage(stageDef).profession} deploying the preview from project automation`,
+    message: `${stageTitleIn(run, stageDef.id)} deploying the preview from project automation`,
   });
 
   let target: DeploymentAutomation | undefined;
@@ -566,7 +566,7 @@ export async function runStageWork(
   if (!run.engine) {
     return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
   }
-  const profession = agentForStage(stageDef).profession;
+  const profession = stageTitleIn(run, stageDef.id);
   const continuing = turn.index > 0;
 
   if (continuing) {

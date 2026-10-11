@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import {
   addUsage,
-  agentForStage,
   isTerminalRunStatus,
   orchestrationSchema,
   orchestrationStatusFor,
   parkedQuestion,
+  stageTitleIn,
 } from "@isotopy/core";
 import type {
   ModelTier,
@@ -312,7 +312,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!orchestration) {
       return undefined;
     }
-    const profession = agentForStage(stageDef).profession;
+    const profession = stageTitleIn(run, stageDef.id);
     const parsed = extractOrchestratorDecision(output);
     if (!parsed.ok) {
       const cause = formatValidationIssues(parsed.issues);

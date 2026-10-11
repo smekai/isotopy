@@ -1,5 +1,4 @@
 import {
-  AGENTS,
   MODEL_TIERS,
   STAGE_EXECUTION_POLICIES,
   orchestratorDecisionSchema,
@@ -8,11 +7,11 @@ import { expect, test } from "vitest";
 import { AgentCatalog } from "../../src/services/agent-catalog.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
 
-const PROFESSIONS = Object.values(AGENTS).map((agent) => agent.profession);
-
 const START_RUN_FIELDS = startRunFields();
 
 const BUNDLED = await new AgentCatalog(new RecordingLogger()).bundled();
+
+const PROFESSIONS = BUNDLED.personas.map((persona) => persona.title);
 
 test.each(Object.values(STAGE_EXECUTION_POLICIES))(
   "the assignment names the %s policy, because a value it omits gets invented and rejected",
