@@ -8,10 +8,10 @@ import type {
 } from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
-import { BUILT_IN_SCHEDULES } from "../domain/rules/built-in-schedules.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
 import { nextFireForSchedule } from "../domain/rules/schedule-timing.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
@@ -68,24 +68,36 @@ export class ScheduleService implements ScheduleFiring {
       schedule.projectId = projectPath.id;
       this.schedules.set(schedule.id, schedule);
     }
-    await this.seedBuiltIns(projectPath);
+    await this.seedDuties(projectPath);
     await this.reconcile(projectPath);
   }
 
-  private async seedBuiltIns(projectPath: ProjectPath): Promise<void> {
-    for (const definition of BUILT_IN_SCHEDULES) {
-      if (this.builtInFor(projectPath.id, definition.key)) {
+  async seedDuties(projectPath: ProjectPath): Promise<void> {
+    const [duties, known] = await Promise.all([
+      this.agents.duties(projectPath),
+      this.agents.knownIds(projectPath),
+    ]);
+    for (const duty of duties) {
+      if (this.builtInFor(projectPath.id, duty.key)) {
+        continue;
+      }
+      const issues = scheduleIssues(duty, known);
+      if (issues.length > 0) {
+        this.logger.warn(`Duty ${duty.key} was not seeded: ${formatValidationIssues(issues)}`, {
+          projectId: projectPath.id,
+        });
         continue;
       }
       const now = nowIso();
       const schedule: Schedule = {
         id: randomUUID().slice(0, 8),
         projectId: projectPath.id,
-        name: definition.name,
-        cron: definition.cron,
-        timezone: definition.timezone,
-        task: definition.task,
-        builtIn: definition.key,
+        name: duty.title,
+        cron: duty.cron,
+        timezone: duty.timezone,
+        task: duty.task,
+        team: duty.team,
+        builtIn: duty.key,
         enabled: false,
         createdAt: now,
         updatedAt: now,

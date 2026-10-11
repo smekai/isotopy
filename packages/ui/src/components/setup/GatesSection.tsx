@@ -62,8 +62,9 @@ export function GatesSection({ d, settings, agents }: GatesSectionProps) {
     <div>
       <div style={sectionTitle(d)}>Unattended work</div>
       <div style={sectionSubtitle(d)}>
-        Whether this project may run the schedules that ship with the product. Off by default; each
-        built-in still has its own switch, and both must be on before anything runs.
+        Whether this project may run the schedules it was given rather than wrote: the board poller
+        and every duty an agent brings. Off by default; each still has its own switch, and both must be
+        on before anything runs.
       </div>
       <button
         data-testid="built-in-schedules-toggle"
@@ -73,14 +74,14 @@ export function GatesSection({ d, settings, agents }: GatesSectionProps) {
       >
         <div style={{ flex: 1 }}>
           <div style={GATE_CARD_HEADER}>
-            <div style={optionLabel(d)}>Allow built-in schedules</div>
+            <div style={optionLabel(d)}>Allow the schedules agents bring</div>
             <div style={builtInSchedules ? accentBadge(d) : mutedBadge(d)}>
               {builtInSchedules ? "ALLOWED" : "OFF"}
             </div>
           </div>
           <div style={builtInSchedules ? mutedBody(d) : mutedCaption(d)}>
-            The board poller starts work on its own when nothing is running. Leave this off unless
-            you want the team acting without you.
+            The board poller and every agent's duties start work on their own when nothing is running.
+            Leave this off unless you want the team acting without you.
           </div>
         </div>
       </button>

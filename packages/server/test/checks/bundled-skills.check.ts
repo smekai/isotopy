@@ -3,13 +3,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
-import { parseAgentFile, parseStepFile } from "../../src/schemas/agent-definition.ts";
+import {
+  parseAgentFile,
+  parseDutyFile,
+  parseStepFile,
+} from "../../src/schemas/agent-definition.ts";
 import { AgentCatalog } from "../../src/services/agent-catalog.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
 
 const BUNDLED_ROOT = fileURLToPath(new URL("../../src/domain/skills/", import.meta.url));
 const BUNDLED_PERSONAS = await bundledIds("personas");
 const BUNDLED_STEPS = await bundledIds("step-tasks");
+const BUNDLED_DUTIES = await bundledIds("duties");
 const BUNDLED = await new AgentCatalog(new RecordingLogger()).bundled();
 
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
@@ -26,6 +31,12 @@ const PROTOCOL_ASSIGNMENTS = [
 describe("bundled skills", () => {
   test.each(BUNDLED_PERSONAS)("persona %s parses and names its own file", async (id) => {
     const parsed = parseAgentFile(id, await readBundled("personas", id));
+
+    expect(parsed).toMatchObject({ ok: true });
+  });
+
+  test.each(BUNDLED_DUTIES)("duty %s parses", async (id) => {
+    const parsed = parseDutyFile(await readBundled("duties", id));
 
     expect(parsed).toMatchObject({ ok: true });
   });

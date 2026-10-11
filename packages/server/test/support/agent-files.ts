@@ -57,6 +57,47 @@ export async function writeProjectStep(
   return file;
 }
 
+export interface DutyFileFields {
+  agent: string;
+  key: string;
+  title: string;
+  cron: string;
+  timezone: string;
+  team?: unknown;
+  task: string;
+}
+
+export function dutyFile(overrides: Partial<DutyFileFields> = {}): string {
+  const fields: Record<string, string> = {
+    title: overrides.title ?? "Weekly metrics",
+    cron: overrides.cron ?? "0 8 * * 1",
+    timezone: overrides.timezone ?? "UTC",
+  };
+  const team = overrides.team === undefined ? [] : [`team: ${JSON.stringify(overrides.team)}`];
+  return [
+    "---",
+    ...Object.entries(fields).map(([key, value]) => `${key}: ${JSON.stringify(value)}`),
+    ...team,
+    "---",
+    overrides.task ?? "Read last week's numbers and propose the next experiment.",
+  ].join("\n");
+}
+
+export async function writeProjectDuty(
+  dataDir: string,
+  overrides: Partial<DutyFileFields> = {},
+): Promise<string> {
+  const file = path.join(
+    dataDir,
+    "agents",
+    overrides.agent ?? "growth-marketer",
+    "duties",
+    `${overrides.key ?? "weekly-metrics"}.md`,
+  );
+  await writeText(file, dutyFile(overrides));
+  return file;
+}
+
 export async function writeText(file: string, content: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, content);

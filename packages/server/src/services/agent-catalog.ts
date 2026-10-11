@@ -12,6 +12,7 @@ import type { KnowledgeEntry } from "../domain/markdown/skill.ts";
 import { knownAgentIds, mergeCatalog } from "../domain/rules/agent-catalog.ts";
 import type {
   AgentCatalogSnapshot,
+  CatalogDuty,
   CatalogPersona,
   CatalogStep,
   KnownAgentIds,
@@ -19,7 +20,12 @@ import type {
 import { SKILL_ID } from "../domain/rules/persona-notes.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
-import { parseAgentFile, parseKnowledgeFile, parseStepFile } from "../schemas/agent-definition.ts";
+import {
+  parseAgentFile,
+  parseDutyFile,
+  parseKnowledgeFile,
+  parseStepFile,
+} from "../schemas/agent-definition.ts";
 import { errorCodeOf } from "../utils/error-code.ts";
 import type { Logger } from "../utils/logger.ts";
 import { toPosixPath } from "../utils/posix-path.ts";
@@ -29,9 +35,13 @@ const BUNDLED_PERSONAS = fileURLToPath(new URL("../domain/skills/personas/", imp
 
 const BUNDLED_STEPS = fileURLToPath(new URL("../domain/skills/step-tasks/", import.meta.url));
 
+const BUNDLED_DUTIES = fileURLToPath(new URL("../domain/skills/duties/", import.meta.url));
+
 const AGENT_FILE = "agent.md";
 
 const KNOWLEDGE_DIR = "knowledge";
+
+const DUTIES_DIR = "duties";
 
 const MARKDOWN = ".md";
 
@@ -87,6 +97,23 @@ export class AgentCatalog {
     ]);
     await this.reportFoldersWithoutAgent(folders, bundled);
     return mergeCatalog(bundled, { personas, steps });
+  }
+
+  async duties(projectPath: ProjectPath): Promise<CatalogDuty[]> {
+    const [bundledFiles, catalog] = await Promise.all([
+      markdownFilesIn(BUNDLED_DUTIES),
+      this.catalog(projectPath),
+    ]);
+    const [bundled, ...brought] = await Promise.all([
+      this.readDuties(bundledFiles, (key) => key),
+      ...catalog.personas.map(async ({ id }) =>
+        this.readDuties(
+          await markdownFilesIn(path.join(agentsDir(projectPath), id, DUTIES_DIR)),
+          (key) => `${id}/${key}`,
+        ),
+      ),
+    ]);
+    return [...bundled, ...brought.flat()];
   }
 
   async knownIds(projectPath: ProjectPath): Promise<KnownAgentIds> {
@@ -164,10 +191,21 @@ export class AgentCatalog {
     }));
   }
 
+  private readDuties(
+    files: DefinitionFile[],
+    keyOf: (fileId: string) => string,
+  ): Promise<CatalogDuty[]> {
+    return this.readDefinitions(
+      files,
+      (_id, source) => parseDutyFile(source),
+      (definition, id) => ({ key: keyOf(id), ...definition }),
+    );
+  }
+
   private async readDefinitions<Definition, Entry>(
     files: DefinitionFile[],
     parse: (id: string, source: string) => ValidationResult<Definition>,
-    toEntry: (definition: Definition) => Entry,
+    toEntry: (definition: Definition, id: string) => Entry,
   ): Promise<Awaited<Entry>[]> {
     const entries = await Promise.all(
       files.map(async ({ id, file }) => {
@@ -183,7 +221,7 @@ export class AgentCatalog {
           );
           return undefined;
         }
-        return toEntry(parsed.value);
+        return toEntry(parsed.value, id);
       }),
     );
     return entries.filter((entry): entry is Awaited<Entry> => entry !== undefined);

@@ -1,4 +1,9 @@
-import type { AgentCatalogEntry, AgentOrigin, StageAgents } from "@isotopy/core";
+import type {
+  AgentCatalogEntry,
+  AgentOrigin,
+  OrchestratorTeamProposal,
+  StageAgents,
+} from "@isotopy/core";
 
 export interface CatalogPersona {
   id: string;
@@ -20,6 +25,15 @@ export interface CatalogStep {
 export interface AgentCatalogSnapshot {
   personas: CatalogPersona[];
   steps: CatalogStep[];
+}
+
+export interface CatalogDuty {
+  key: string;
+  title: string;
+  cron: string;
+  timezone: string;
+  team?: OrchestratorTeamProposal;
+  task: string;
 }
 
 export interface KnownAgentIds {

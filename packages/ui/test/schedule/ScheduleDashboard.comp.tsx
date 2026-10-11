@@ -102,6 +102,17 @@ test("a built-in says so instead of offering a delete that would not stick", () 
   expect(screen.queryByTestId("delete-schedule")).toBeNull();
 });
 
+test("a duty an agent brought names that agent, so the owner knows where it came from", () => {
+  // Arrange
+  const duty = scheduleView({ id: "s2", builtIn: "growth-marketer/weekly-metrics" });
+
+  // Act
+  render(<ScheduleDashboard {...dashboardProps({ schedule: duty })} />);
+
+  // Assert
+  expect(screen.getByTestId("built-in-badge").textContent).toContain("growth-marketer");
+});
+
 test("a schedule the user made keeps its delete", () => {
   // Act
   render(<ScheduleDashboard {...dashboardProps()} />);

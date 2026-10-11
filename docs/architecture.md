@@ -661,7 +661,7 @@ capped, and read when the next episode opens (`TASK-178`).
 | Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
 | Clock | Aiki — each enabled schedule is a cron activation on its project's runtime, reconciled through the `DurableSchedules` seam (`workflow/durable-schedules.ts`, implemented by `WorkflowRuntimeRegistry`) and firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
 | Timing | `server/src/domain/rules/schedule-timing.ts` over `utils/recurrence.ts` — validation and `nextFireForSchedule` with `cron-parser`, the parser Aiki fires with, so the preview and the clock cannot disagree. The API sends the next fire, so the UI never parses an expression |
-| Built-ins | `server/src/domain/rules/built-in-schedules.ts` — an `as const` catalog seeded per project, every entry disabled. The board poller is its only entry today |
+| Duties | `AgentCatalog.duties` — the bundled `domain/skills/duties/board-poller.md` and every `agents/<id>/duties/*.md` the project's agents bring, keyed `board-poller` and `<agent>/<duty>`. `ScheduleService.seedDuties` writes each once, switched off, after `scheduleIssues`; one that fails is logged and left out. The project's `builtInSchedules` switch covers all of them |
 | Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming an agent the project's catalog does not hold are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
 | Boundary schema | `server/src/schemas/schedule.ts` — shape only. Validity is checked on the **merged** record, because a patch carrying a cron and no timezone cannot be judged alone |
 | Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE`, parsed by `schemas/schedule-persistence.ts` |
@@ -905,6 +905,7 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/agents/<id>/agent.md` | An agent the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/agents/<id>/knowledge/*.md` | The agent's reference library, listed in its prompt by path | One project |
+| `<project>/.isotopy/agents/<id>/duties/*.md` | Recurring work the agent brings, seeded once as a disabled schedule | One project |
 | `<project>/.isotopy/steps/<id>.md` | A step task the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.notes.md` | What the role learned in this project (`TASK-113`); never leaves it | One project |

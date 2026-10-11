@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { orchestratorTeamProposalSchema } from "@isotopy/core";
+import type { OrchestratorTeamProposal } from "@isotopy/core";
 import type { ZodType } from "zod";
 import { splitFrontMatter } from "../domain/markdown/front-matter.ts";
 import { SKILL_ID } from "../domain/rules/persona-notes.ts";
@@ -57,6 +59,39 @@ export function parseAgentFile(id: string, source: string): ValidationResult<Age
 
 export function parseStepFile(id: string, source: string): ValidationResult<StepDefinition> {
   return parseDefinition(id, source, stepFrontMatterSchema, toStep);
+}
+
+const dutyFrontMatterSchema = z
+  .object({
+    title: text,
+    cron: text,
+    timezone: text,
+    team: orchestratorTeamProposalSchema.optional(),
+  })
+  .strict();
+
+export interface DutyDefinition {
+  title: string;
+  cron: string;
+  timezone: string;
+  team?: OrchestratorTeamProposal;
+  task: string;
+}
+
+export function parseDutyFile(source: string): ValidationResult<DutyDefinition> {
+  const split = splitFrontMatter(source);
+  if (split.kind !== "present") {
+    return refused({ path: [], message: "File must open with front matter between --- lines" });
+  }
+  const meta = parseYaml(dutyFrontMatterSchema, split.block);
+  if (!meta.ok) {
+    return meta;
+  }
+  const task = split.body.trim();
+  if (task === "") {
+    return refused({ path: [], message: "The body is the task the duty gives the team, and it is empty" });
+  }
+  return { ok: true, value: { ...meta.value, task } };
 }
 
 export function parseKnowledgeFile(source: string): ValidationResult<KnowledgeFrontMatter> {

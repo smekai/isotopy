@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { CalendarClock, Pencil, Trash2 } from "lucide-react";
+import { scheduleBroughtBy } from "@isotopy/core";
 import type { Orchestration, RunSummary, ScheduleView } from "@isotopy/core";
 import { runsForSchedule } from "../../run-list";
 import {
@@ -138,6 +139,7 @@ export function ScheduleDashboard({
   onRerunRun,
 }: ScheduleDashboardProps) {
   const fires = runsForSchedule(runs, orchestrations, schedule.id);
+  const broughtBy = scheduleBroughtBy(schedule);
   return (
     <div data-testid="schedule-dashboard" style={pane(d)}>
       <div style={head()}>
@@ -159,7 +161,7 @@ export function ScheduleDashboard({
           </button>
         ) : (
           <span data-testid="built-in-badge" style={mutedLine(d)}>
-            Built in
+            {broughtBy === undefined ? "Built in" : `Brought by ${broughtBy}`}
           </span>
         )}
       </div>

@@ -1104,6 +1104,12 @@ from the engine's working directory. Claude Code, Codex and Cursor all accept fo
 slashes on Windows. Files are listed in name order so a prompt does not change between
 file systems that enumerate a directory differently.
 
+**Duties are seeded, not watched.** `ScheduleService.seedDuties` runs when a project loads —
+at startup and when it is registered. A duty file written by hand
+while the server runs is seeded on the next of those, never from a file watcher, because cron
+stays the only thing that starts work. Deleting a seeded duty brings it back on the next load,
+as the board poller always has; switching it off is how an owner says no.
+
 The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
 in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)
 for how the `architect` and `tester` personas are generated from a single source.

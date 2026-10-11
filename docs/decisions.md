@@ -43,6 +43,14 @@ loads it, and only fields still empty are filled, so renaming or removing an age
 rewrites history. The core `AGENTS` table is gone; the home strip and the gate cards, which
 show pipelines rather than runs, read the catalog.
 
+**Decision: an agent brings its recurring work as duties** (`TASK-199`). A duty is a schedule
+template — `title`, `cron`, `timezone`, an optional pinned `team`, and the task as its body. It is
+seeded once, switched off, under the key `<agent>/<duty>`, and from then on the schedule is the
+project's record: editing the file changes nothing already seeded. The existing
+`builtInSchedules` switch covers every seeded duty as well as the board poller, because each is
+something the project was given rather than wrote. A duty that cannot be stored — a bad cron, a
+team naming an agent nobody brings — is not seeded and the operator log says why.
+
 **Decision: an agent's knowledge is listed, never inlined** (`TASK-198`). A playbook, a
 checklist or a market brief lives in `agents/<id>/knowledge/` with a one-line
 description; the prompt names each file and the agent reads what the step needs. The
@@ -57,7 +65,9 @@ bundled persona stays, because it changes a default rather than adding a team me
 
 **Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
 coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
-use anywhere carries it, so every file would be ours alone. **Rejected: pasting knowledge into the prompt** — every run would pay for every file
+use anywhere carries it, so every file would be ours alone. **Rejected: a second switch for agent duties** — two answers to *may this project act without
+me*, for no case the record's own switch does not already cover.
+**Rejected: pasting knowledge into the prompt** — every run would pay for every file
 whether the step needs it or not. **Rejected: retrieval or embeddings** — a search index
 to keep fresh for what a list of described files already answers.
 **Rejected: looking each run's agents up in the live catalog** — history would change
@@ -350,8 +360,9 @@ have killed it silently. A prompt-only schedule now skips with `orchestrator_bus
 therefore turns only when the Orchestrator finishes its episode, which is the episode-handler design
 from `TASK-156` rather than a limitation.
 
-**Built-ins are a catalog, and off twice.** `BUILT_IN_SCHEDULES` is an `as const` catalog seeded per
-project; the board poller is its only entry today and a product variant adds a row. Firing needs
+**Built-ins are a catalog, and off twice.** Since 2026-10-11 the catalog is files: the bundled
+`domain/skills/duties/board-poller.md`, and every `agents/<id>/duties/*.md` a project's agents bring
+(`TASK-199`), each seeded once per project and switched off. Firing needs
 both `ProjectPreferences.builtInSchedules` and the record's own `enabled`. A fresh install is off
 because the default is off; an upgrade is off because `normalizeProjectPreferences` falls back to
 that default for a key older settings never wrote. Two switches is one more than strictly needed —
