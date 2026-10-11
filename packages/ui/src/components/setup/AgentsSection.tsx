@@ -16,6 +16,7 @@ import {
 const ORIGIN_LABELS: Record<AgentOrigin, string> = {
   bundled: "BUILT IN",
   project: "PROJECT",
+  pack: "PACK",
 };
 
 const GLYPH_SIZE = 28;

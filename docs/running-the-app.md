@@ -80,6 +80,8 @@ substitute the engine adapter.
 - Projects: `GET /projects` → the registry (`home` always present);
   `POST /projects` (`{"root":"C:/some/dir"}`) registers one and creates its
   `.isotopy/`, git-ignored except `agents/`, `steps/` and `packs.json`;
+  `GET /agents` lists the project's catalog and `POST /agents/packs`
+  (`{"source":"C:/some/pack"}`) installs a pack;
   `POST /projects/<id>/activate`; `DELETE /projects/<id>`
   unregisters without touching files.
 - Milestones: `GET /milestones`, `GET /milestones/:id`, `POST /milestones/plan`

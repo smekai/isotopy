@@ -1105,10 +1105,20 @@ slashes on Windows. Files are listed in name order so a prompt does not change b
 file systems that enumerate a directory differently.
 
 **Duties are seeded, not watched.** `ScheduleService.seedDuties` runs when a project loads —
-at startup and when it is registered. A duty file written by hand
+at startup and when it is registered — and after a pack is installed. A duty file written by hand
 while the server runs is seeded on the next of those, never from a file watcher, because cron
 stays the only thing that starts work. Deleting a seeded duty brings it back on the next load,
 as the board poller always has; switching it off is how an owner says no.
+
+**A pack install is copy, record, then seed** (`services/pack-installer.ts`). Files are
+copied with `copyFile`, never through `writeTextFile`, because that normalises line
+endings and a pack's CRLF file must arrive as it was. `packs.json` is written only after
+every copy and removal succeeded, so a failure part-way leaves files the record does not
+claim — the next install treats them as the owner's and refuses rather than overwriting.
+A link is refused wherever it appears: on Windows a directory junction is what an
+unprivileged user can create, and `readdir`'s `Dirent` reports it as a symbolic link, so
+one check covers both platforms. A second install into the same project while one is
+running is refused rather than queued, from an in-memory set on the installer.
 
 The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
 in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)

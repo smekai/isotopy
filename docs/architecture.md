@@ -877,6 +877,16 @@ requested project, each with its origin. `useAgentCatalog` owns it in `App` and
 reloads it whenever Setup opens; Setup → Agents lists it, and the home strip and
 the gate cards name a stage's agent from it.
 
+**A pack is installed by copying it in** (`TASK-200`): `POST /agents/packs` with a
+source folder or git repository. `PackInstaller` (`services/pack-installer.ts`)
+walks the pack's `agents/` and `steps/`, refuses a link anywhere in it, validates
+every file with the same parsers the catalog uses, and asks the pure
+`planPackInstall` (`domain/rules/pack-plan.ts`) what to write, remove and keep
+against `packs.json` and the files on disk. A conflict refuses the whole install
+with one issue per file; otherwise the files are copied byte for byte, the record
+is written last, and the project's duties are seeded. An entry a pack installed
+shows in the catalog with the origin `pack`.
+
 ### Stage policy
 
 `executionPolicy` (`standard`, `quality`, `delivery`, `closeout`) decides what a
@@ -906,6 +916,7 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/agents/<id>/agent.md` | An agent the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/agents/<id>/knowledge/*.md` | The agent's reference library, listed in its prompt by path | One project |
 | `<project>/.isotopy/agents/<id>/duties/*.md` | Recurring work the agent brings, seeded once as a disabled schedule | One project |
+| `<project>/.isotopy/packs.json` | Every pack installed: its source, ref, folder, commit, and each file it wrote with its sha256 | One project |
 | `<project>/.isotopy/steps/<id>.md` | A step task the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.notes.md` | What the role learned in this project (`TASK-113`); never leaves it | One project |

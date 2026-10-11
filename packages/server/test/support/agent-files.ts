@@ -98,6 +98,34 @@ export async function writeProjectDuty(
   return file;
 }
 
+export function knowledgeFile(description = "The keywords this product competes on."): string {
+  return frontMatter({ description }, "1. adventure planner\n2. group trip app");
+}
+
+export function seoPack(): Record<string, string> {
+  return {
+    "agents/seo-writer/agent.md": agentFile({ id: "seo-writer", title: "SEO Writer", glyph: "✎" }),
+    "agents/seo-writer/knowledge/keyword-brief.md": knowledgeFile(),
+    "agents/seo-writer/duties/monthly-audit.md": dutyFile({
+      title: "Monthly audit",
+      cron: "0 9 1 * *",
+    }),
+    "steps/draft-post.md": stepFile({
+      id: "draft-post",
+      description: "Draft one post for one keyword.",
+      body: "# Assignment: Draft a post",
+    }),
+  };
+}
+
+export async function writePack(root: string, files: Record<string, string>): Promise<void> {
+  await Promise.all(
+    Object.entries(files).map(([relative, content]) =>
+      writeText(path.join(root, ...relative.split("/")), content),
+    ),
+  );
+}
+
 export async function writeText(file: string, content: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, content);
