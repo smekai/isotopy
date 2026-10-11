@@ -65,7 +65,8 @@ Real server, real navigation, no run that reaches an engine.
   so the specs assert the entries that matter rather than a count.
 - **`setup/agents.e2e.ts`** — Setup → Agents reads the real catalog through the
   `/agents` proxy: the built-in team is listed as built in, and the Orchestrator's
-  own assignments are not offered as steps a team may take.
+  own assignments are not offered as steps a team may take. A pack source the server
+  refuses shows the server's reason under the form, which installs nothing.
 - **`project-switcher.e2e.ts`** — the header switcher lists the home project and
   offers to add one, exactly one project is active at a time, Add project opens
   the folder picker, and Escape closes both. Setup names the active project.

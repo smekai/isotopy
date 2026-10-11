@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { X } from "lucide-react";
+import type { InstallPackRequest, PackInstallResult } from "@isotopy/core";
 import type { AgentCatalogController } from "../../hooks/useAgentCatalog";
 import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, RADIUS, SANS, SPACE, WEIGHT, Z } from "../../theme";
@@ -110,6 +111,7 @@ export interface SetupModalProps {
   projectName: string;
   settings: SettingsController;
   agents: AgentCatalogController;
+  onInstallPack: (request: InstallPackRequest) => Promise<PackInstallResult>;
   section?: SetupSection;
   onClose: () => void;
 }
@@ -120,6 +122,7 @@ export function SetupModal({
   projectName,
   settings,
   agents,
+  onInstallPack,
   section = "harness",
   onClose,
 }: SetupModalProps) {
@@ -146,7 +149,7 @@ export function SetupModal({
 
         <div style={BODY}>
           {sec === "appearance" && <AppearanceSection d={d} />}
-          {sec === "agents" && <AgentsSection d={d} catalog={agents} />}
+          {sec === "agents" && <AgentsSection d={d} catalog={agents} onInstall={onInstallPack} />}
           {sec === "gates" && <GatesSection d={d} settings={settings} agents={agents.agents} />}
           {sec === "harness" && (
             <HarnessSection d={d} projectName={projectName} settings={settings} />

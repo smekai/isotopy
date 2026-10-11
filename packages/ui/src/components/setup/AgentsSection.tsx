@@ -1,6 +1,13 @@
 import type { CSSProperties } from "react";
-import type { AgentOrigin, CatalogAgent, CatalogStepTask } from "@isotopy/core";
+import type {
+  AgentOrigin,
+  CatalogAgent,
+  CatalogStepTask,
+  InstallPackRequest,
+  PackInstallResult,
+} from "@isotopy/core";
 import type { AgentCatalogController } from "../../hooks/useAgentCatalog";
+import { PackInstallForm } from "./PackInstallForm";
 import { FONT, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
 import {
@@ -72,9 +79,10 @@ function idLabel(d: Dir): CSSProperties {
 export interface AgentsSectionProps {
   d: Dir;
   catalog: AgentCatalogController;
+  onInstall: (request: InstallPackRequest) => Promise<PackInstallResult>;
 }
 
-export function AgentsSection({ d, catalog }: AgentsSectionProps) {
+export function AgentsSection({ d, catalog, onInstall }: AgentsSectionProps) {
   return (
     <div>
       <div style={sectionTitle(d)}>Agents</div>
@@ -82,6 +90,10 @@ export function AgentsSection({ d, catalog }: AgentsSectionProps) {
         Who the Orchestrator can put on a team. A project brings its own as files under
         .isotopy/agents/ and .isotopy/steps/, and one with a built-in id replaces it.
       </div>
+      <PackInstallForm d={d} onInstall={onInstall} />
+
+      <div style={SECTION_GAP} />
+
       {catalog.error && <div style={ERROR_LINE}>{catalog.error}</div>}
       <div style={OPTION_STACK}>
         {catalog.agents.map((agent) => (

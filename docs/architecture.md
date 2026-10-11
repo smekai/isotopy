@@ -874,8 +874,10 @@ why.
 **The browser reads the catalog from `GET /agents`** (`routes/agents.ts`, kept in
 `ui/vite.config.ts`'s proxy list): every agent and every composable step for the
 requested project, each with its origin. `useAgentCatalog` owns it in `App` and
-reloads it whenever Setup opens; Setup → Agents lists it, and the home strip and
-the gate cards name a stage's agent from it.
+reloads it whenever Setup opens; Setup → Agents lists it and offers "Add agents
+from…" (`PackInstallForm`), and the home strip and the gate cards name a stage's
+agent from it. After an install, `App` reloads the catalog and the schedules, so the
+duties a pack brought appear at once.
 
 **A pack is installed by copying it in** (`TASK-200`): `POST /agents/packs` with a
 source folder, or a git repository with an optional ref and a folder inside it, which

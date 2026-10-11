@@ -3,8 +3,10 @@ import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
 import type {
   CreateScheduleInput,
+  InstallPackRequest,
   LimitResolution,
   ModelTier,
+  PackInstallResult,
   RunSummary,
   ScheduleView,
 } from "@isotopy/core";
@@ -190,6 +192,11 @@ export function App() {
   const attachedProject = useRef<string | null>(null);
   const [pipeVs, setPipeVs] = useState<VoiceState>("idle");
   const [setupSection, setSetupSection] = useState<SetupSection | null>(null);
+  const installAgentPack = async (request: InstallPackRequest): Promise<PackInstallResult> => {
+    const result = await agentCatalog.install(request);
+    await schedules.reload();
+    return result;
+  };
   const setupOpen = setupSection !== null;
   const reloadAgentCatalog = agentCatalog.reload;
   useEffect(() => {
@@ -679,6 +686,7 @@ export function App() {
           projectName={projects.active?.name ?? "Home"}
           settings={settings}
           agents={agentCatalog}
+          onInstallPack={installAgentPack}
           section={setupSection}
           onClose={() => setSetupSection(null)}
         />

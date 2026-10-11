@@ -12,6 +12,7 @@ export interface SchedulesController {
   create(body: CreateScheduleInput): Promise<ScheduleView | undefined>;
   update(scheduleId: string, patch: UpdateScheduleInput): Promise<boolean>;
   remove(scheduleId: string): Promise<boolean>;
+  reload(): Promise<void>;
 }
 
 export function useSchedules(projectId: string, enabled: boolean): SchedulesController {
@@ -24,7 +25,7 @@ export function useSchedules(projectId: string, enabled: boolean): SchedulesCont
     failure: "Failed to load schedules",
     refreshMs: SCHEDULE_REFRESH_MS,
   });
-  const { items: schedules, setItems, setError } = collection;
+  const { items: schedules, setItems, setError, reload } = collection;
 
   const create = useCallback(
     async (body: CreateScheduleInput) => {
@@ -86,5 +87,6 @@ export function useSchedules(projectId: string, enabled: boolean): SchedulesCont
     create,
     update,
     remove,
+    reload,
   };
 }

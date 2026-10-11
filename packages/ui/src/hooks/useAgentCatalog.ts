@@ -1,6 +1,12 @@
-import { useMemo } from "react";
-import type { AgentCatalogEntry, CatalogAgent, CatalogStepTask } from "@isotopy/core";
-import { fetchAgentCatalog } from "../api";
+import { useCallback, useMemo } from "react";
+import type {
+  AgentCatalogEntry,
+  CatalogAgent,
+  CatalogStepTask,
+  InstallPackRequest,
+  PackInstallResult,
+} from "@isotopy/core";
+import { fetchAgentCatalog, installPack } from "../api";
 import { useProjectCollection } from "./useProjectCollection";
 
 export interface AgentCatalogController {
@@ -9,6 +15,7 @@ export interface AgentCatalogController {
   ready: boolean;
   error: string | null;
   reload(): Promise<void>;
+  install(request: InstallPackRequest): Promise<PackInstallResult>;
 }
 
 export function useAgentCatalog(projectId: string, enabled: boolean): AgentCatalogController {
@@ -20,7 +27,15 @@ export function useAgentCatalog(projectId: string, enabled: boolean): AgentCatal
   });
   const agents = useMemo(() => items.filter(isAgent), [items]);
   const steps = useMemo(() => items.filter(isStep), [items]);
-  return { agents, steps, ready, error, reload };
+  const install = useCallback(
+    async (request: InstallPackRequest) => {
+      const result = await installPack(request);
+      await reload();
+      return result;
+    },
+    [reload],
+  );
+  return { agents, steps, ready, error, reload, install };
 }
 
 function isAgent(entry: AgentCatalogEntry): entry is CatalogAgent {
