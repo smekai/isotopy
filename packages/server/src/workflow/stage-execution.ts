@@ -39,7 +39,6 @@ import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
-import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -381,8 +380,8 @@ export async function runQuestionMediationWork(
     };
   }
   const projectPath = deps.registry.resolve(run.projectId);
-  const persona = await loadSkill(projectPath, "orchestrator");
-  const stepTask = await loadBundledStepTask("mediate-question");
+  const persona = await deps.agents.persona(projectPath, "orchestrator");
+  const stepTask = await deps.agents.stepTask(projectPath, "mediate-question");
   deps.projection.log(run.id, stageDef.id, {
     level: "run",
     message: `Orchestrator mediating · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
@@ -488,8 +487,12 @@ export async function runOrchestratorReviewWork(
     run,
     run.engine,
     stageId,
-    buildStagePrompt(context.prompt, [], await loadBundledStepTask("review-run")),
-    await loadSkill(deps.registry.resolve(run.projectId), "orchestrator"),
+    buildStagePrompt(
+      context.prompt,
+      [],
+      await deps.agents.stepTask(deps.registry.resolve(run.projectId), "review-run"),
+    ),
+    await deps.agents.persona(deps.registry.resolve(run.projectId), "orchestrator"),
     undefined,
   );
   if (outcome.usage) {
@@ -578,8 +581,12 @@ export async function runStageWork(
   }
 
   const projectPath = registry.resolve(run.projectId);
-  const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
-  const stepTask = stageDef.stepTask ? await loadBundledStepTask(stageDef.stepTask) : undefined;
+  const persona = stageDef.skill
+    ? await deps.agents.persona(projectPath, stageDef.skill)
+    : undefined;
+  const stepTask = stageDef.stepTask
+    ? await deps.agents.stepTask(projectPath, stageDef.stepTask)
+    : undefined;
   if (stageDef.skill && !persona) {
     projection.log(runId, stageDef.id, {
       level: "warn",

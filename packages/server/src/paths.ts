@@ -65,6 +65,14 @@ export function skillsDir(projectPath: ProjectPath): string {
   return path.join(projectPath.dataDir, "skills");
 }
 
+export function agentsDir(projectPath: ProjectPath): string {
+  return path.join(projectPath.dataDir, "agents");
+}
+
+export function stepsDir(projectPath: ProjectPath): string {
+  return path.join(projectPath.dataDir, "steps");
+}
+
 export function runWorkspaceDir(projectPath: ProjectPath, runId: string): string {
   return path.join(runsDir(projectPath), runId, "workspace");
 }

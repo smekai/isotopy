@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { ProjectDatabases } from "./db/project-databases.ts";
+import { AgentCatalog } from "./services/agent-catalog.ts";
 import { AutomationConfigStore } from "./services/automation-config-store.ts";
 import { DeploymentRunner } from "./services/deployment-runner.ts";
 import { ModelRosterService } from "./services/model-roster-service.ts";
@@ -22,6 +23,7 @@ const automation = new AutomationConfigStore();
 const deployment = new DeploymentRunner();
 const databases = new ProjectDatabases(logger);
 const product = new ProductProcessService(automation, logger);
+const agents = new AgentCatalog(logger);
 const runs = new RunService(
   registry,
   settings,
@@ -29,16 +31,25 @@ const runs = new RunService(
   automation,
   deployment,
   databases,
+  agents,
   logger,
   product,
 );
-const orchestrations = new OrchestrationService(registry, runs, settings, databases, logger);
+const orchestrations = new OrchestrationService(
+  registry,
+  runs,
+  settings,
+  databases,
+  agents,
+  logger,
+);
 const schedules = new ScheduleService(
   registry,
   runs,
   orchestrations,
   databases,
   settings,
+  agents,
   logger,
 );
 runs.registerOrchestration(orchestrations);

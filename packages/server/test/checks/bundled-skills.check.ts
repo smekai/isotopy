@@ -4,14 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { DEMO_PIPELINES, flattenPipelineStages } from "@isotopy/core";
 import { parseAgentFile, parseStepFile } from "../../src/schemas/agent-definition.ts";
-import {
-  loadBundledPersona,
-  loadBundledStepTask,
-} from "../../src/services/skills.ts";
+import { AgentCatalog } from "../../src/services/agent-catalog.ts";
+import { RecordingLogger } from "../support/recording-logger.ts";
 
 const BUNDLED_ROOT = fileURLToPath(new URL("../../src/domain/skills/", import.meta.url));
 const BUNDLED_PERSONAS = await bundledIds("personas");
 const BUNDLED_STEPS = await bundledIds("step-tasks");
+const BUNDLED = await new AgentCatalog(new RecordingLogger()).bundled();
 
 const STAGES = DEMO_PIPELINES.flatMap(flattenPipelineStages);
 const PROTOCOL_ASSIGNMENTS = [
@@ -40,7 +39,7 @@ describe("bundled skills", () => {
   test("every persona a shipped pipeline references is bundled", async () => {
     const referenced = STAGES.map((stage) => stage.skill).filter((id) => id !== undefined);
 
-    const loaded = await Promise.all(referenced.map((id) => loadBundledPersona(id)));
+    const loaded = await Promise.all(referenced.map((id) => bundledPersona(id)));
 
     expect(referenced.length).toBeGreaterThan(0);
     expect(
@@ -52,7 +51,7 @@ describe("bundled skills", () => {
   test("every step task a shipped pipeline references is bundled", async () => {
     const referenced = STAGES.map((stage) => stage.stepTask).filter((id) => id !== undefined);
 
-    const loaded = await Promise.all(referenced.map((id) => loadBundledStepTask(id)));
+    const loaded = await Promise.all(referenced.map((id) => bundledStep(id)));
 
     expect(referenced.length).toBeGreaterThan(0);
     expect(
@@ -64,21 +63,21 @@ describe("bundled skills", () => {
   test.each(PROTOCOL_ASSIGNMENTS)(
     "%s emits the %s fence its consumer expects",
     async (stepTask, fence) => {
-      const assignment = await loadBundledStepTask(stepTask);
+      const assignment = bundledStep(stepTask);
 
       expect(assignment).toContain(fence);
     },
   );
 
   test("the Orchestrator persona requires the decision fence its consumer expects", async () => {
-    const persona = await loadBundledPersona("orchestrator");
+    const persona = bundledPersona("orchestrator");
 
     expect(persona).toContain("isotopy-orchestrator-decision");
   });
 
   test("QA stays an ordinary workflow step that never owns the product process", async () => {
-    const persona = await loadBundledPersona("tester");
-    const assignment = await loadBundledStepTask("verify-feature");
+    const persona = bundledPersona("tester");
+    const assignment = bundledStep("verify-feature");
 
     expect(persona).toContain("ordinary agent-backed workflow step");
     expect(persona).toContain("Playwright");
@@ -91,6 +90,14 @@ describe("bundled skills", () => {
 async function bundledIds(folder: string): Promise<string[]> {
   const entries = await readdir(path.join(BUNDLED_ROOT, folder));
   return entries.filter((entry) => entry.endsWith(".md")).map((entry) => entry.slice(0, -3));
+}
+
+function bundledPersona(id: string): string | undefined {
+  return BUNDLED.personas.find((persona) => persona.id === id)?.body;
+}
+
+function bundledStep(id: string): string | undefined {
+  return BUNDLED.steps.find((step) => step.id === id)?.body;
 }
 
 function readBundled(folder: string, id: string): Promise<string> {

@@ -9,8 +9,6 @@ import type {
   LimitResolution,
   MessageKind,
   MessageRole,
-  Milestone,
-  MilestoneFeature,
   ModelTier,
   PipelineDefinition,
   RunCloseoutRecord,
@@ -71,6 +69,7 @@ import type {
   WorkflowDeps,
 } from "../../workflow/types.ts";
 import type { OrchestrationService } from "../orchestration-service.ts";
+import type { AgentCatalog } from "../agent-catalog.ts";
 import type { ProductProcessService } from "../product-process-service.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
@@ -137,6 +136,7 @@ export class RunService implements RunProjection {
     private readonly automation: AutomationConfigStore,
     private readonly deployment: DeploymentRunner,
     databases: ProjectDatabases,
+    private readonly agents: AgentCatalog,
     logger: Logger,
     private readonly product?: ProductProcessService,
   ) {
@@ -152,6 +152,7 @@ export class RunService implements RunProjection {
     const deps: WorkflowDeps = {
       projection: this,
       registry: this.registry,
+      agents: this.agents,
       settings: this.settings,
       rosters: this.rosters,
       automation: this.automation,
@@ -312,28 +313,6 @@ export class RunService implements RunProjection {
     return this.startRunWith(projectPath, pipeline, options);
   }
 
-  private linkMilestone(
-    projectPath: ProjectPath,
-    milestoneId: string | undefined,
-    featureId: string | undefined,
-  ): { linkedMilestone?: Milestone; linkedFeature?: MilestoneFeature } {
-    if (milestoneId === undefined) {
-      return {};
-    }
-    const linkedMilestone = this.milestones.requireMilestone(projectPath.id, milestoneId);
-    if (featureId === undefined) {
-      return { linkedMilestone };
-    }
-    const linkedFeature = this.milestones.requireMilestoneFeature(
-      linkedMilestone,
-      featureId,
-    );
-    if (linkedFeature.status !== "ready") {
-      throw new Error(`Feature is ${linkedFeature.status}`);
-    }
-    return { linkedMilestone, linkedFeature };
-  }
-
   private async requireEngineReady(
     projectPath: ProjectPath,
     engineId: string,
@@ -392,8 +371,8 @@ export class RunService implements RunProjection {
       activeOrchestrationId,
     );
     const planningRun = isPlanningRun(pipeline.id, milestoneId, featureId);
-    const { linkedMilestone, linkedFeature } = this.linkMilestone(
-      projectPath,
+    const { linkedMilestone, linkedFeature } = this.milestones.linkRun(
+      projectPath.id,
       milestoneId,
       featureId,
     );

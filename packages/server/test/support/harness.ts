@@ -10,6 +10,7 @@ import type { EngineId, RunEvent, RunState, RunSummary } from "@isotopy/core";
 import { createApp } from "../../src/app.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
+import { AgentCatalog } from "../../src/services/agent-catalog.ts";
 import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
 import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { ModelRosterService } from "../../src/services/model-roster-service.ts";
@@ -99,6 +100,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const deployment = new DeploymentRunner();
   const databases = new ProjectDatabases(logger);
   const product = new ProductProcessService(automation, logger, unspawnedProduct());
+  const agents = new AgentCatalog(logger);
   const orchestrator = new RunService(
     registry,
     settings,
@@ -106,6 +108,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     automation,
     deployment,
     databases,
+    agents,
     logger,
     product,
   );
@@ -114,6 +117,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     orchestrator,
     settings,
     databases,
+    agents,
     logger,
   );
   const schedules = new ScheduleService(
@@ -122,6 +126,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     orchestrations,
     databases,
     settings,
+    agents,
     logger,
   );
   orchestrator.registerOrchestration(orchestrations);
@@ -193,6 +198,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const deployment = new DeploymentRunner();
   const databases = new ProjectDatabases(logger);
   const product = new ProductProcessService(automation, logger, unspawnedProduct());
+  const agents = new AgentCatalog(logger);
   const orchestrator = new RunService(
     registry,
     settings,
@@ -200,6 +206,7 @@ export async function restartApp(): Promise<RestartedApp> {
     automation,
     deployment,
     databases,
+    agents,
     logger,
     product,
   );
@@ -208,6 +215,7 @@ export async function restartApp(): Promise<RestartedApp> {
     orchestrator,
     settings,
     databases,
+    agents,
     logger,
   );
   const schedules = new ScheduleService(
@@ -216,6 +224,7 @@ export async function restartApp(): Promise<RestartedApp> {
     orchestrations,
     databases,
     settings,
+    agents,
     logger,
   );
   orchestrator.registerOrchestration(orchestrations);

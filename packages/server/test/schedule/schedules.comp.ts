@@ -26,6 +26,7 @@ import { JsonRecordsTable, SCHEDULES_TABLE } from "../../src/db/json-records-tab
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
+import { writeProjectAgent } from "../support/agent-files.ts";
 
 // A schedule that a test fires by hand must not also fire on its own while the
 // test runs, so it waits for midnight on a leap day.
@@ -94,6 +95,22 @@ test("a team naming a persona that does not exist is refused when the schedule i
   expect(response.status).toBe(400);
   expect(response.body.issues[0]?.message).toContain("wizard");
   ctx.engine.verify();
+});
+
+test("a team naming an agent the project brings is accepted when the schedule is saved", async () => {
+  // Arrange
+  await writeProjectAgent(ctx.home);
+  const marketer = { ...BOARD_READER.roles[0]!, skill: "growth-marketer" };
+
+  // Act
+  const response = await post(
+    ctx.app,
+    "/schedules",
+    scheduleBody({ team: { ...BOARD_READER, roles: [marketer] } }),
+  );
+
+  // Assert
+  expect(response.status).toBe(200);
 });
 
 test("an edit that would leave a schedule unable to fire is refused, and the stored one is untouched", async () => {

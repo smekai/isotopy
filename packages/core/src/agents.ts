@@ -1,3 +1,7 @@
+export const AGENT_ORIGINS = ["bundled", "project"] as const;
+
+export type AgentOrigin = (typeof AGENT_ORIGINS)[number];
+
 export interface AgentDefinition {
   skill: string;
   profession: string;

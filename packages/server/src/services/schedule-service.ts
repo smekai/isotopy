@@ -21,6 +21,7 @@ import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { DurableSchedules, ScheduleFiring } from "../workflow/durable-schedules.ts";
+import type { AgentCatalog } from "./agent-catalog.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { SettingsStore } from "./settings-store.ts";
@@ -48,6 +49,7 @@ export class ScheduleService implements ScheduleFiring {
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
     private readonly settings: SettingsStore,
+    private readonly agents: AgentCatalog,
     logger: Logger,
   ) {
     this.logger = logger.child("ScheduleService");
@@ -225,7 +227,11 @@ export class ScheduleService implements ScheduleFiring {
       schedule.task,
       schedule.id,
     );
-    const composed = composeTeamPipeline(schedule.team, orchestrationId);
+    const composed = composeTeamPipeline(
+      schedule.team,
+      await this.agents.knownIds(projectPath),
+      orchestrationId,
+    );
     if (!composed.ok) {
       throw new ScheduleInvalidError(composed.issues);
     }
@@ -236,7 +242,7 @@ export class ScheduleService implements ScheduleFiring {
   }
 
   private async store(projectPath: ProjectPath, schedule: Schedule): Promise<ScheduleView> {
-    const issues = scheduleIssues(schedule);
+    const issues = scheduleIssues(schedule, await this.agents.knownIds(projectPath));
     if (issues.length > 0) {
       throw new ScheduleInvalidError(issues);
     }

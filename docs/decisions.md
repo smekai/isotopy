@@ -30,9 +30,22 @@ agent and skill files, so one written for either reads in the other. Aliases are
 file cannot expand into a large document), duplicate keys are refused, and the front matter never
 reaches a prompt.
 
+**Decision: the catalog is the files.** A project brings an agent as
+`.isotopy/agents/<id>/agent.md` and a step as `.isotopy/steps/<id>.md`; with a bundled id it
+replaces the bundled one. The merged catalog is what the Orchestrator chooses from and what team
+composition and schedule validation accept, passed to those pure rules as known ids. A project
+step that reuses an Orchestrator-only id stays out of what a team may compose.
+
+**Decision: no user-level agents directory.** An agent reaches another project by being installed
+into it, so everything an engine reads sits inside the project, where every harness may read it,
+and git records which version of an agent the product ran with. The user-level override of a
+bundled persona stays, because it changes a default rather than adding a team member.
+
 **Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
 coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
-use anywhere carries it, so every file would be ours alone.
+use anywhere carries it, so every file would be ours alone. **Rejected: keeping
+`skills/<id>.md` beside `agents/<id>/agent.md`** — two ways to replace a persona, one of them
+mixed in with the notes that must never travel. No project on the owner's machine had one.
 
 ---
 
@@ -2291,7 +2304,8 @@ hand.
 
 **Decision:** resolution is bundled default → user-level override → project addendum, and
 **nothing is written to disk on read**. Composition is a pure function; the service only
-reads. A full project replacement stays available for power users, but appending an
-addendum is the default path.
+reads. Appending an addendum is the default path. A full project replacement is
+`<project>/.isotopy/agents/<id>/agent.md` since 2026-10-11 — the same file that adds a new
+agent, so there is one way to bring a persona rather than two; `skills/<id>.md` is gone.
 
 ---

@@ -13,10 +13,21 @@ import {
   sameComposition,
   withRoleTiers,
 } from "../../src/domain/rules/team-composition.ts";
+import type { KnownAgentIds } from "../../src/domain/rules/agent-catalog.ts";
 import { formatValidationIssues } from "../../src/domain/validation.ts";
 
+test("a persona and step only the project brings compose once its catalog names them", () => {
+  const composed = composeTeamPipeline(
+    team([role({ skill: "growth-marketer", stepTask: "plan-campaign" })]),
+    known({ personas: ["growth-marketer"], steps: ["plan-campaign"] }),
+    "abc123",
+  );
+
+  expect(stagesOf(composed).map((stage) => stage.skill)).toEqual(["growth-marketer"]);
+});
+
 test("an invented persona id is rejected, rather than degrading the stage to no persona", () => {
-  const composed = composeTeamPipeline(team([role({ skill: "wizard" })]), "abc123");
+  const composed = composeTeamPipeline(team([role({ skill: "wizard" })]), KNOWN, "abc123");
 
   expect(issuesOf(composed)).toContain("roles.0.skill: Unknown persona: wizard");
 });
@@ -24,7 +35,7 @@ test("an invented persona id is rejected, rather than degrading the stage to no 
 test("an invented step task id is rejected on the field that carries it", () => {
   const composed = composeTeamPipeline(
     team([role({ stepTask: "do-the-thing" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(issuesOf(composed)).toContain(
@@ -35,7 +46,7 @@ test("an invented step task id is rejected on the field that carries it", () => 
 test("the Orchestrator cannot compose itself to do a specialist's work", () => {
   const composed = composeTeamPipeline(
     team([role({ skill: "orchestrator", stepTask: "implement-feature" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(issuesOf(composed)).toBe(
@@ -47,7 +58,7 @@ test("the Orchestrator cannot compose itself to do a specialist's work", () => {
 test("the Orchestrator can compose itself to close the run out, because no specialist saw it all", () => {
   const composed = composeTeamPipeline(
     team([role({ skill: "orchestrator", stepTask: "closeout-feature" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(flattenPipelineStages(valueOf(composed))[0]?.skill).toBe("orchestrator");
@@ -56,7 +67,7 @@ test("the Orchestrator can compose itself to close the run out, because no speci
 test("a role id that would escape the run directory is rejected before it reaches a path", () => {
   const composed = composeTeamPipeline(
     team([role({ id: "../../escape" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(issuesOf(composed)).toContain(
@@ -67,14 +78,14 @@ test("a role id that would escape the run directory is rejected before it reache
 test("two roles sharing an id are rejected, because their outputs would collide", () => {
   const composed = composeTeamPipeline(
     team([role({ id: "build" }), role({ id: "build" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(issuesOf(composed)).toBe("roles.1.id: Duplicate role id: build");
 });
 
 test("a role that declares no execution policy is composed as a standard stage", () => {
-  const composed = composeTeamPipeline(team([role({})]), "abc123");
+  const composed = composeTeamPipeline(team([role({})]), KNOWN, "abc123");
 
   expect(stagesOf(composed)[0]).toMatchObject({ executionPolicy: "standard" });
 });
@@ -83,13 +94,13 @@ test("a role that declares no execution policy is composed as a standard stage",
 // configurable without touching that. These two pin the composed side so the
 // difference stays deliberate.
 test("a role that asks for a gate is composed as a gated stage", () => {
-  const composed = composeTeamPipeline(team([role({ id: "intake", gateAfter: true })]), "abc123");
+  const composed = composeTeamPipeline(team([role({ id: "intake", gateAfter: true })]), KNOWN, "abc123");
 
   expect(stagesOf(composed)[0]).toMatchObject({ gateAfter: true });
 });
 
 test("a role that asks for no gate is composed without one, whatever the project prefers", () => {
-  const composed = composeTeamPipeline(team([role({ id: "intake" })]), "abc123");
+  const composed = composeTeamPipeline(team([role({ id: "intake" })]), KNOWN, "abc123");
 
   const [stage] = stagesOf(composed);
   assert(stage, "expected the team to compose one stage");
@@ -99,7 +110,7 @@ test("a role that asks for no gate is composed without one, whatever the project
 test("a declared execution policy survives composition, so quality stages still run after a failure", () => {
   const composed = composeTeamPipeline(
     team([role({ id: "test", executionPolicy: "quality" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(stagesOf(composed)[0]).toMatchObject({ executionPolicy: "quality" });
@@ -108,7 +119,7 @@ test("a declared execution policy survives composition, so quality stages still 
 test("stages are composed in the order the team proposed them", () => {
   const composed = composeTeamPipeline(
     team([role({ id: "first" }), role({ id: "second" }), role({ id: "third" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(stagesOf(composed).map((stage) => stage.id)).toEqual([
@@ -119,7 +130,7 @@ test("stages are composed in the order the team proposed them", () => {
 });
 
 test("the composed pipeline is named for the orchestration that produced it", () => {
-  const composed = composeTeamPipeline(team([role({})]), "abc123");
+  const composed = composeTeamPipeline(team([role({})]), KNOWN, "abc123");
 
   expect(valueOf(composed).id).toBe("team-abc123-1");
 });
@@ -128,53 +139,53 @@ test("the composed pipeline is named for the orchestration that produced it", ()
 // to the team it actually ran with — which the shared `pipelineId`/`pipelineName`
 // could not express while every generation was called the same thing.
 test("a later team gets its own pipeline id, so two runs are not both team-abc123", () => {
-  const first = composeTeamPipeline(team([role({})]), "abc123", 1);
-  const second = composeTeamPipeline(team([role({})]), "abc123", 2);
+  const first = composeTeamPipeline(team([role({})]), KNOWN, "abc123", 1);
+  const second = composeTeamPipeline(team([role({})]), KNOWN, "abc123", 2);
 
   expect(valueOf(second).id).not.toBe(valueOf(first).id);
 });
 
 test("a later team says so in its name, because that is what every run list already shows", () => {
-  const composed = composeTeamPipeline(team([role({})]), "abc123", 2);
+  const composed = composeTeamPipeline(team([role({})]), KNOWN, "abc123", 2);
 
   expect(valueOf(composed).name).toBe("Delivery pair (team 2)");
 });
 
 test("the first team is named plainly, so an initiative with one team reads as it always did", () => {
-  const composed = composeTeamPipeline(team([role({})]), "abc123", 1);
+  const composed = composeTeamPipeline(team([role({})]), KNOWN, "abc123", 1);
 
   expect(valueOf(composed).name).toBe("Delivery pair");
 });
 
 test("a team whose roles are unchanged is the same composition, whatever generation it carries", () => {
-  const first = composeTeamPipeline(team([role({})]), "abc123", 1);
-  const second = composeTeamPipeline(team([role({})]), "abc123", 2);
+  const first = composeTeamPipeline(team([role({})]), KNOWN, "abc123", 1);
+  const second = composeTeamPipeline(team([role({})]), KNOWN, "abc123", 2);
 
   expect(sameComposition(valueOf(first), valueOf(second))).toBe(true);
 });
 
 test("a dropped role is a different composition, so the user is asked before it runs", () => {
-  const pair = composeTeamPipeline(team([role({}), role({ id: "test" })]), "abc123");
-  const solo = composeTeamPipeline(team([role({})]), "abc123");
+  const pair = composeTeamPipeline(team([role({}), role({ id: "test" })]), KNOWN, "abc123");
+  const solo = composeTeamPipeline(team([role({})]), KNOWN, "abc123");
 
   expect(sameComposition(valueOf(pair), valueOf(solo))).toBe(false);
 });
 
 test("a changed model tier is a different composition, because it changes what the run costs", () => {
-  const balanced = composeTeamPipeline(team([role({ modelTier: "balanced" })]), "abc123");
-  const deep = composeTeamPipeline(team([role({ modelTier: "deep" })]), "abc123");
+  const balanced = composeTeamPipeline(team([role({ modelTier: "balanced" })]), KNOWN, "abc123");
+  const deep = composeTeamPipeline(team([role({ modelTier: "deep" })]), KNOWN, "abc123");
 
   expect(sameComposition(valueOf(balanced), valueOf(deep))).toBe(false);
 });
 
 test("a role's model tier reaches the stage, which is the only place resolution reads it", () => {
-  const composed = composeTeamPipeline(team([role({ modelTier: "deep" })]), "abc123");
+  const composed = composeTeamPipeline(team([role({ modelTier: "deep" })]), KNOWN, "abc123");
 
   expect(stagesOf(composed)[0]).toMatchObject({ modelTier: "deep" });
 });
 
 test("a role that names no tier composes without one, so the stage falls back to the run's", () => {
-  const composed = composeTeamPipeline(team([role({})]), "abc123");
+  const composed = composeTeamPipeline(team([role({})]), KNOWN, "abc123");
 
   expect(stagesOf(composed)[0]?.modelTier).toBeUndefined();
 });
@@ -236,6 +247,20 @@ function team(roles: OrchestratorRole[]): OrchestratorTeamProposal {
   return { name: "Delivery pair", summary: "Build it and verify it", roles };
 }
 
+interface KnownIds {
+  personas: string[];
+  steps: string[];
+}
+
+function known(overrides: Partial<KnownIds> = {}): KnownAgentIds {
+  return {
+    personas: new Set(overrides.personas ?? ["developer", "orchestrator", "project-manager"]),
+    steps: new Set(overrides.steps ?? ["implement-feature", "closeout-feature"]),
+  };
+}
+
+const KNOWN = known();
+
 type Composed = ReturnType<typeof composeTeamPipeline>;
 
 function issuesOf(composed: Composed): string {
@@ -267,8 +292,8 @@ test("a composed pipeline id reads back the generation it carries", () => {
 });
 
 test("a renamed team with the same roles is still the same composition", () => {
-  const named = composeTeamPipeline({ ...team([role({})]), name: "Fix crew" }, "abc12345");
-  const original = composeTeamPipeline(team([role({})]), "abc12345");
+  const named = composeTeamPipeline({ ...team([role({})]), name: "Fix crew" }, KNOWN, "abc12345");
+  const original = composeTeamPipeline(team([role({})]), KNOWN, "abc12345");
 
   expect(sameComposition(valueOf(named), valueOf(original))).toBe(true);
 });
@@ -279,7 +304,7 @@ test("a renamed team with the same roles is still the same composition", () => {
 test("a specialist cannot be given the closeout, whichever specialist it is", () => {
   const composed = composeTeamPipeline(
     team([role({ skill: "project-manager", stepTask: "closeout-feature" })]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(issuesOf(composed)).toBe(
@@ -298,7 +323,7 @@ test("a composed closeout runs after a failure, whatever policy the team asked f
         executionPolicy: "standard",
       }),
     ]),
-    "abc123",
+    KNOWN, "abc123",
   );
 
   expect(stagesOf(composed)[0]).toMatchObject({ executionPolicy: "closeout" });
