@@ -877,7 +877,7 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
-| `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
+| `<project>/.isotopy/.gitignore` | Ignores everything Isotopy writes there, and lets git see `agents/`, `steps/` and `packs.json`, which the owner authors | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
 | `~/.isotopy/skills/<id>.md` | User-level persona override of the bundled default | User |
@@ -890,7 +890,7 @@ the home project, which has no code of its own — a scratch
 `runs/<run-id>/workspace/` used by that run alone. A client cannot name the
 directory an agent runs in; it selects a *project*, and the project's root is
 fixed when it is registered. Run artifacts always stay in the per-run folder
-under `.isotopy/`, which ignores itself from git.
+under `.isotopy/`, which git ignores except for the agents the owner authors.
 
 **Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by

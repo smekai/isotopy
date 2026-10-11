@@ -48,3 +48,20 @@ export async function addDirtyEmbeddedRepository(cwd: string, name: string): Pro
   await writeFile(path.join(embedded, "inner.txt"), "second\n");
   await commitEverything(embedded, "inner again");
 }
+
+export async function untrackedPaths(cwd: string): Promise<string[]> {
+  const result = await runSubprocess({
+    command: "git",
+    args: ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    cwd,
+    timeoutMs: GIT_TIMEOUT_MS,
+  });
+  if (!result.success) {
+    throw new Error(`git status failed: ${result.stderrTail.join("\n")}`);
+  }
+  return result.stdout
+    .split("\0")
+    .filter((entry) => entry.startsWith("?? "))
+    .map((entry) => entry.slice(3))
+    .sort();
+}

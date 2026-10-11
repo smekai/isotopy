@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { Project } from "@isotopy/core";
-import { errorCodeOf } from "./utils/error-code.ts";
+import { readOptionalText } from "./utils/text-file.ts";
 
 export const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -75,19 +75,28 @@ export function toolCacheDir(projectPath: ProjectPath, workspacePath: string): s
     : path.join(projectPath.dataDir, "cache");
 }
 
+const DATA_DIR_GITIGNORE = [
+  "*",
+  "!/agents/",
+  "!/agents/**",
+  "!/steps/",
+  "!/steps/**",
+  "!/packs.json",
+  "",
+].join("\n");
+
 const SELF_IGNORING_GITIGNORE = "*\n";
 
 export async function ensureProjectDataDir(projectPath: ProjectPath): Promise<void> {
   await mkdir(projectPath.dataDir, { recursive: true });
-  await writeFile(path.join(projectPath.dataDir, ".gitignore"), SELF_IGNORING_GITIGNORE, {
-    flag: "wx",
-  }).catch(keepExistingFile);
+  const file = path.join(projectPath.dataDir, ".gitignore");
+  if (isIsotopyGitignore(await readOptionalText(file))) {
+    await writeFile(file, DATA_DIR_GITIGNORE);
+  }
 }
 
-function keepExistingFile(error: unknown): void {
-  if (errorCodeOf(error) !== "EEXIST") {
-    throw error;
-  }
+function isIsotopyGitignore(existing: string | undefined): boolean {
+  return existing === undefined || existing.replace(/\r\n/g, "\n") === SELF_IGNORING_GITIGNORE;
 }
 
 async function ensureRunWorkspace(projectPath: ProjectPath, runId: string): Promise<string> {

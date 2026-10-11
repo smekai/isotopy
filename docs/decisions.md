@@ -2270,8 +2270,11 @@ permission mode and pipeline live in the per-project section of user-level setti
 second browser or cleared site data no longer silently reverts a project. **Secrets are
 user-level and write-only:** API keys live in `~/.isotopy/settings.json` (mode `0600`) as
 `defaults` plus per-project overrides, and never leave the server. Each created `.isotopy/`
-ships a self-ignoring `.gitignore` so run artifacts never appear in a user's
-`git status`.
+ships a `.gitignore` so run artifacts never appear in a user's `git status`. **It ignores what
+Isotopy produces, not what the owner authors** (2026-10-11, `TASK-196`): `agents/`, `steps/` and
+`packs.json` are the project's own and travel with its repository, so a product records which
+version of an agent it ran with. A file still holding the old ignore-everything `*` is upgraded in
+place; one the owner edited is never rewritten.
 
 **Rejected:** one global store filtered by a project column — it leaves history inside
 the tool, so uninstalling or re-cloning loses or duplicates it. And validating a

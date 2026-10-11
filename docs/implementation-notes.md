@@ -337,8 +337,9 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   adding a browser test can prune the machine's cache exactly as readily as a
   Tester. It is never set on the Isotopy server's own process, so this
   repository's `pnpm e2e` keeps using the host cache.
-- **Nothing extra hides the cache.** `ensureProjectDataDir` already writes
-  `.isotopy/.gitignore` containing `*`, and `SNAPSHOT_IGNORED_DIRECTORIES`
+- **Nothing extra hides the cache.** `ensureProjectDataDir` already writes an
+  `.isotopy/.gitignore` that ignores everything but the owner's `agents/`, `steps/`
+  and `packs.json`, and `SNAPSHOT_IGNORED_DIRECTORIES`
   already excludes `.isotopy`, so a multi-hundred-megabyte cache is invisible to
   git and is never reported as files the run created.
 - **`toolCacheDir` is required on `EngineRunContext`, not optional.** Every run
@@ -890,9 +891,12 @@ and [`decisions.md`](./decisions.md) for why the home project is not `REPO_ROOT`
   `withDataDir` so the UI can name the folder runs land in without duplicating
   the layout rule, and a stored file can never disagree with `paths.ts`.
 - **`ensureProjectDataDir` runs at run start as well as at registration.** A
-  project registered before the self-ignoring `.gitignore` existed — or one whose
+  project registered before the `.gitignore` existed — or one whose
   `.isotopy/` was deleted — would otherwise accumulate run artifacts that show up in
-  the user's `git status`.
+  the user's `git status`. It also opens every project's database at startup, so an
+  `.isotopy/.gitignore` that still reads `*` is upgraded the first time the server
+  starts after `0.14`, and only a file whose whole content is that old `*` is
+  rewritten: anything the owner edited is theirs.
 
 ## Credentials (`services/settings-store.ts`)
 
@@ -1004,8 +1008,9 @@ when it settles. Why each piece is the way it is:
   entry ceilings and reports `truncated` so the UI can admit a partial list.
 - **`.isotopy` is excluded from the snapshot walk.** Every run writes its own logs,
   handoffs and change set under the project's `.isotopy/`, so without the exclusion a
-  run would report its own bookkeeping as work it did. Git never sees it either —
-  `ensureProjectDataDir` writes `.isotopy/.gitignore` containing `*` — but
+  run would report its own bookkeeping as work it did. Git never sees most of it
+  either — `ensureProjectDataDir`'s `.isotopy/.gitignore` lets through only the
+  owner's agent files — but
   `reportableChanges` filters both sources anyway, because the git path also has to
   survive a project that never called that function.
 - **`git status` alone is not enough.** An agent that commits its work leaves a clean
