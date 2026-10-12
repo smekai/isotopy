@@ -11,7 +11,6 @@ import { createApp } from "../../src/app.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
 import { AgentCatalog } from "../../src/services/agent-catalog.ts";
-import { PackInstaller } from "../../src/services/pack-installer.ts";
 import { AutomationConfigStore } from "../../src/services/automation-config-store.ts";
 import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { ModelRosterService } from "../../src/services/model-roster-service.ts";
@@ -130,7 +129,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     agents,
     logger,
   );
-  const packs = new PackInstaller(schedules, logger);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await schedules.init();
@@ -146,7 +144,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     deployment,
     product,
     agents,
-    packs,
     logger,
   });
 
@@ -231,7 +228,6 @@ export async function restartApp(): Promise<RestartedApp> {
     agents,
     logger,
   );
-  const packs = new PackInstaller(schedules, logger);
   orchestrator.registerOrchestration(orchestrations);
   await orchestrations.init();
   await orchestrator.init();
@@ -249,7 +245,6 @@ export async function restartApp(): Promise<RestartedApp> {
       deployment,
       product,
       agents,
-      packs,
       logger,
     }),
     orchestrator,

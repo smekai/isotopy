@@ -36,7 +36,6 @@ const OWNER_FILES = [
   "agents/growth-marketer/agent.md",
   "agents/growth-marketer/knowledge/launch-checklist.md",
   "steps/plan-campaign.md",
-  "packs.json",
 ];
 
 const ISOTOPY_FILES = ["runs/r1/state.json", "skills/growth-marketer.notes.md", "aiki.db"];

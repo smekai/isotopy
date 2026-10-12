@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { CatalogAgent, CatalogStepTask, PackInstallResult } from "@isotopy/core";
+import type { CatalogAgent, CatalogStepTask } from "@isotopy/core";
 import type { AgentCatalogController } from "../../src/hooks/useAgentCatalog";
 
 export function catalogAgent(overrides: Partial<CatalogAgent> = {}): CatalogAgent {
@@ -31,19 +31,5 @@ export function agentCatalog(
     ready: overrides.ready ?? true,
     error: overrides.error ?? null,
     reload: overrides.reload ?? vi.fn(() => Promise.resolve()),
-    install: overrides.install ?? vi.fn(() => Promise.resolve(installResult())),
-  };
-}
-
-export function installResult(overrides: Partial<PackInstallResult> = {}): PackInstallResult {
-  return {
-    source: overrides.source ?? "C:/packs/seo",
-    ref: overrides.ref,
-    path: overrides.path,
-    commit: overrides.commit,
-    installedAt: overrides.installedAt ?? "2026-10-11T10:00:00.000Z",
-    written: overrides.written ?? ["agents/seo-writer/agent.md"],
-    removed: overrides.removed ?? [],
-    kept: overrides.kept ?? [],
   };
 }

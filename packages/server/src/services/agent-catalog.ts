@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { UNKNOWN_AGENT_GLYPH } from "@isotopy/core";
 import type { AgentOrigin } from "@isotopy/core";
-import { agentsDir, packsFile, stepsDir } from "../paths.ts";
+import { agentsDir, stepsDir } from "../paths.ts";
 import type { ProjectPath } from "../paths.ts";
 import { withoutFrontMatter } from "../domain/markdown/front-matter.ts";
 import { composeSkill } from "../domain/markdown/skill.ts";
@@ -29,7 +29,6 @@ import {
 import { errorCodeOf } from "../utils/error-code.ts";
 import type { Logger } from "../utils/logger.ts";
 import { toPosixPath } from "../utils/posix-path.ts";
-import { readPackRecords } from "./pack-records.ts";
 import { personaNotesPath, projectSkillAddendumPath, userSkillFilePath } from "./skills.ts";
 
 const BUNDLED_PERSONAS = fileURLToPath(new URL("../domain/skills/personas/", import.meta.url));
@@ -80,23 +79,21 @@ export class AgentCatalog {
 
   async bundled(): Promise<AgentCatalogSnapshot> {
     const [personas, steps] = await Promise.all([
-      this.readPersonas(await markdownFilesIn(BUNDLED_PERSONAS), () => "bundled"),
-      this.readSteps(await markdownFilesIn(BUNDLED_STEPS), () => "bundled"),
+      this.readPersonas(await markdownFilesIn(BUNDLED_PERSONAS), "bundled"),
+      this.readSteps(await markdownFilesIn(BUNDLED_STEPS), "bundled"),
     ]);
     return { personas, steps };
   }
 
   async catalog(projectPath: ProjectPath): Promise<AgentCatalogSnapshot> {
-    const [bundled, folders, stepFiles, packed] = await Promise.all([
+    const [bundled, folders, stepFiles] = await Promise.all([
       this.bundled(),
       this.agentFolders(projectPath),
       markdownFilesIn(stepsDir(projectPath)),
-      this.packedFiles(projectPath),
     ]);
-    const originOf = (file: string): AgentOrigin => (packed.has(file) ? "pack" : "project");
     const [personas, steps] = await Promise.all([
-      this.readPersonas(folders, (id) => originOf(`agents/${id}/${AGENT_FILE}`)),
-      this.readSteps(stepFiles, (id) => originOf(`steps/${id}${MARKDOWN}`)),
+      this.readPersonas(folders, "project"),
+      this.readSteps(stepFiles, "project"),
     ]);
     await this.reportFoldersWithoutAgent(folders, bundled);
     return mergeCatalog(bundled, { personas, steps });
@@ -176,39 +173,21 @@ export class AgentCatalog {
     }));
   }
 
-  private async packedFiles(projectPath: ProjectPath): Promise<Set<string>> {
-    const records = await readPackRecords(projectPath);
-    if (!records.ok) {
-      this.reportOnce(
-        packsFile(projectPath),
-        `Ignoring ${packsFile(projectPath)}: ${formatValidationIssues(records.issues)}`,
-      );
-      return new Set();
-    }
-    return new Set(records.value.flatMap((record) => record.files.map((file) => file.path)));
-  }
-
-  private readPersonas(
-    files: DefinitionFile[],
-    originOf: (id: string) => AgentOrigin,
-  ): Promise<CatalogPersona[]> {
+  private readPersonas(files: DefinitionFile[], origin: AgentOrigin): Promise<CatalogPersona[]> {
     return this.readDefinitions(files, parseAgentFile, (definition) => ({
       id: definition.id,
       title: definition.title,
       glyph: definition.glyph ?? UNKNOWN_AGENT_GLYPH,
       description: definition.description,
-      origin: originOf(definition.id),
+      origin,
       body: definition.body,
     }));
   }
 
-  private readSteps(
-    files: DefinitionFile[],
-    originOf: (id: string) => AgentOrigin,
-  ): Promise<CatalogStep[]> {
+  private readSteps(files: DefinitionFile[], origin: AgentOrigin): Promise<CatalogStep[]> {
     return this.readDefinitions(files, parseStepFile, (definition) => ({
       ...definition,
-      origin: originOf(definition.id),
+      origin,
     }));
   }
 

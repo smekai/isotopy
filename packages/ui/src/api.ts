@@ -1,7 +1,5 @@
 import type {
   AgentCatalogEntry,
-  InstallPackRequest,
-  PackInstallResult,
   DeploymentRecord,
   Milestone,
   MilestonePlan,
@@ -129,10 +127,6 @@ export function deleteSchedule(scheduleId: string): Promise<void> {
 
 export function fetchAgentCatalog(): Promise<AgentCatalogEntry[]> {
   return requestJson<AgentCatalogEntry[]>("/agents");
-}
-
-export function installPack(request: InstallPackRequest): Promise<PackInstallResult> {
-  return postJson<PackInstallResult>("/agents/packs", request);
 }
 
 export function fetchSettings(): Promise<SettingsView> {

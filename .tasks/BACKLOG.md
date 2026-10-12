@@ -1,5 +1,40 @@
 # Backlog
 
+## TASK-200: Agent packs — install a set of agents from a folder or a git repository
+**Priority:** P3 | **Tags:** core, server, ui | **Epic:** Shared agents
+**Updated:** 2026-10-12 07:19
+
+The "shared" in **Shared agents** (`TASK-196`), and the last part of it.
+
+After `TASK-197` to `TASK-199`, a project's agents are files in its `.isotopy/`. A **pack** is the same files kept somewhere else, a folder holding `agents/` and `steps/`. Installing one copies them in.
+
+**Start when** a second project wants agents that a first one already has, for example ShareTravel's growth team in the arcade. Designing the install format before then would be guessing.
+
+### Shape, to confirm when started
+
+- **Source:** a local folder, or a git URL at a ref. A git source is cloned into a temporary directory and copied into `<project>/.isotopy/`. `.isotopy/packs.json` records the source, ref, commit and the files the install wrote.
+- **Only `agents/` and `steps/` are copied.** Never `skills/`: notes and addenda belong to the project.
+- **Update re-copies and shows the diff before writing.** A pack file the project has edited is a conflict to show, not to overwrite. A project's tweaks belong in the addendum, which is why it exists.
+- **A declared tool is shown before anything is written.** A step can declare an MCP server (`TASK-162`) that launches on the next run. That is the one place a pack reaches past markdown, so the owner sees it first.
+- **Setup gains "Add agents from…".** A marketplace is a list of pack URLs on top of this, and is not part of this task.
+- Agent front matter follows Claude Code's own agent and skill files (`name`, `description`; `TASK-197`). Whether a folder of Claude Code subagents installs as a pack unchanged is a question for when this starts.
+
+### Evidence
+
+- installing from a folder writes the files and the record;
+- an install never touches `skills/`;
+- updating over a locally edited file reports the conflict and writes nothing;
+- a pack that declares a tool shows it before writing.
+
+Cross-platform: `git` is found with `where` on Windows and `which` on POSIX, per the binary-lookup rule, and run through `runSubprocess`. The temporary clone goes under `os.tmpdir()` with `path.join`; files are copied with `fs.cp`. A pack whose files have CRLF line endings installs byte-identical. Install hints shown to the user come in both PowerShell and bash.
+
+### Plan
+
+**Built and withdrawn, 2026-10-12, with the owner.** A full implementation — install from a folder or a git repository with a ref and a folder inside it, `.isotopy/packs.json` with a sha256 per file, refusing a re-install over an edited file, and "Add agents from…" in Setup — was built on `feature/shared-agents-196` (commits a18c1be, 19e472d, 346b3cd, about 1500 lines with tests) and reverted before the PR. The owner's reasoning: agents are plain files, so copying a folder into `.isotopy/agents/` and `.isotopy/steps/` already shares them, and the two things an installer adds — a safe update that knows which files the owner edited, and seeding duties without a restart — only pay off once several projects share agents often. The reverted commits stay in the branch history as the reference implementation when that day comes.
+
+**Start when** the owner finds themselves copying the same agents between projects more than once.
+
+---
 ## TASK-192: A limit resolved as its reset fires cannot release a later park
 **Priority:** P3 | **Tags:** server, engine
 **Updated:** 2026-10-06 18:30

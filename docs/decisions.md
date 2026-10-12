@@ -58,32 +58,14 @@ prompt stays the size of the identity, and every harness can read files on its o
 Knowledge is what the owner vouches for and is read-only to the agent; what it learns
 still goes to its notes, and turning a note into knowledge is a human edit.
 
-**Decision: a pack is copied in, not referenced** (`TASK-200`). Installing a pack copies its
-`agents/` and `steps/` into the project's `.isotopy/` byte for byte and records every file and
-its sha256 in `.isotopy/packs.json`. Nothing is resolved at run time, nothing is fetched while
-an agent works, and git shows the project exactly what it now runs with. A source is a local
-folder or a git repository (`https://`, `ssh://`, `git@host:path`) with an optional ref and a
-folder inside it, so a project's own `.isotopy/` is already a pack. `skills/` is never copied:
-notes and addenda are the project's. Every file is validated before anything is written, and
-an install refuses as a whole — listing each file — rather than overwrite a file the owner
-edited, a file no pack installed, or another pack's file. A re-install updates what it still
-owns and removes what it dropped, unless the owner changed it, in which case the file is
-left as theirs. A pack carries prompt text that will run with the project's credentials, so
-trusting a pack is trusting its source; a declared tool is refused until `TASK-162`, which
-must show it before an install writes anything.
-
-**Decision: no user-level agents directory.** An agent reaches another project by being installed
-into it, so everything an engine reads sits inside the project, where every harness may read it,
+**Decision: no user-level agents directory.** An agent reaches another project by copying its
+folder into that project's `.isotopy/agents/`, so everything an engine reads sits inside the project, where every harness may read it,
 and git records which version of an agent the product ran with. The user-level override of a
 bundled persona stays, because it changes a default rather than adding a team member.
 
 **Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
 coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
-use anywhere carries it, so every file would be ours alone. **Rejected: a pack registry or a lockfile that resolves at run time** — a second place an
-agent's text could come from, invisible to the project's own history. **Rejected: a diff
-view on update**, for now — the owner chose a refusal that names each file; the diff is a
-later step on the same record.
-**Rejected: a second switch for agent duties** — two answers to *may this project act without
+use anywhere carries it, so every file would be ours alone. **Rejected: a second switch for agent duties** — two answers to *may this project act without
 me*, for no case the record's own switch does not already cover.
 **Rejected: pasting knowledge into the prompt** — every run would pay for every file
 whether the step needs it or not. **Rejected: retrieval or embeddings** — a search index
@@ -2334,8 +2316,8 @@ second browser or cleared site data no longer silently reverts a project. **Secr
 user-level and write-only:** API keys live in `~/.isotopy/settings.json` (mode `0600`) as
 `defaults` plus per-project overrides, and never leave the server. Each created `.isotopy/`
 ships a `.gitignore` so run artifacts never appear in a user's `git status`. **It ignores what
-Isotopy produces, not what the owner authors** (2026-10-11, `TASK-196`): `agents/`, `steps/` and
-`packs.json` are the project's own and travel with its repository, so a product records which
+Isotopy produces, not what the owner authors** (2026-10-11, `TASK-196`): `agents/` and `steps/` are
+the project's own and travel with its repository, so a product records which
 version of an agent it ran with. A file still holding the old ignore-everything `*` is upgraded in
 place; one the owner edited is never rewritten.
 

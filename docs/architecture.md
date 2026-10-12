@@ -874,21 +874,8 @@ why.
 **The browser reads the catalog from `GET /agents`** (`routes/agents.ts`, kept in
 `ui/vite.config.ts`'s proxy list): every agent and every composable step for the
 requested project, each with its origin. `useAgentCatalog` owns it in `App` and
-reloads it whenever Setup opens; Setup → Agents lists it and offers "Add agents
-from…" (`PackInstallForm`), and the home strip and the gate cards name a stage's
-agent from it. After an install, `App` reloads the catalog and the schedules, so the
-duties a pack brought appear at once.
-
-**A pack is installed by copying it in** (`TASK-200`): `POST /agents/packs` with a
-source folder, or a git repository with an optional ref and a folder inside it, which
-is shallow-cloned into a temporary folder that is always removed afterwards. `PackInstaller` (`services/pack-installer.ts`)
-walks the pack's `agents/` and `steps/`, refuses a link anywhere in it, validates
-every file with the same parsers the catalog uses, and asks the pure
-`planPackInstall` (`domain/rules/pack-plan.ts`) what to write, remove and keep
-against `packs.json` and the files on disk. A conflict refuses the whole install
-with one issue per file; otherwise the files are copied byte for byte, the record
-is written last, and the project's duties are seeded. An entry a pack installed
-shows in the catalog with the origin `pack`.
+reloads it whenever Setup opens; Setup → Agents lists it, and the home strip and
+the gate cards name a stage's agent from it.
 
 ### Stage policy
 
@@ -919,11 +906,10 @@ only for loading the tool's own `.env`.
 | `<project>/.isotopy/agents/<id>/agent.md` | An agent the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/agents/<id>/knowledge/*.md` | The agent's reference library, listed in its prompt by path | One project |
 | `<project>/.isotopy/agents/<id>/duties/*.md` | Recurring work the agent brings, seeded once as a disabled schedule | One project |
-| `<project>/.isotopy/packs.json` | Every pack installed: its source, ref, folder, commit, and each file it wrote with its sha256 | One project |
 | `<project>/.isotopy/steps/<id>.md` | A step task the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
 | `<project>/.isotopy/skills/<id>.notes.md` | What the role learned in this project (`TASK-113`); never leaves it | One project |
-| `<project>/.isotopy/.gitignore` | Ignores everything Isotopy writes there, and lets git see `agents/`, `steps/` and `packs.json`, which the owner authors | One project |
+| `<project>/.isotopy/.gitignore` | Ignores everything Isotopy writes there, and lets git see `agents/` and `steps/`, which the owner authors | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
 | `~/.isotopy/skills/<id>.md` | User-level persona override of the bundled default | User |

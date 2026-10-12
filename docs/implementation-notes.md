@@ -338,8 +338,8 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   Tester. It is never set on the Isotopy server's own process, so this
   repository's `pnpm e2e` keeps using the host cache.
 - **Nothing extra hides the cache.** `ensureProjectDataDir` already writes an
-  `.isotopy/.gitignore` that ignores everything but the owner's `agents/`, `steps/`
-  and `packs.json`, and `SNAPSHOT_IGNORED_DIRECTORIES`
+  `.isotopy/.gitignore` that ignores everything but the owner's `agents/` and
+  `steps/`, and `SNAPSHOT_IGNORED_DIRECTORIES`
   already excludes `.isotopy`, so a multi-hundred-megabyte cache is invisible to
   git and is never reported as files the run created.
 - **`toolCacheDir` is required on `EngineRunContext`, not optional.** Every run
@@ -1105,34 +1105,10 @@ slashes on Windows. Files are listed in name order so a prompt does not change b
 file systems that enumerate a directory differently.
 
 **Duties are seeded, not watched.** `ScheduleService.seedDuties` runs when a project loads —
-at startup and when it is registered — and after a pack is installed. A duty file written by hand
+at startup and when it is registered. A duty file written by hand
 while the server runs is seeded on the next of those, never from a file watcher, because cron
 stays the only thing that starts work. Deleting a seeded duty brings it back on the next load,
 as the board poller always has; switching it off is how an owner says no.
-
-**A pack install is copy, record, then seed** (`services/pack-installer.ts`). Files are
-copied with `copyFile`, never through `writeTextFile`, because that normalises line
-endings and a pack's CRLF file must arrive as it was. `packs.json` is written only after
-every copy and removal succeeded, so a failure part-way leaves files the record does not
-claim — the next install treats them as the owner's and refuses rather than overwriting.
-A link is refused wherever it appears: on Windows a directory junction is what an
-unprivileged user can create, and `readdir`'s `Dirent` reports it as a symbolic link, so
-one check covers both platforms. A second install into the same project while one is
-running is refused rather than queued, from an in-memory set on the installer.
-
-**A git source is a shallow clone into a temporary folder.** `git -c core.longpaths=true
-clone --depth 1 [--branch <ref>] -- <url>` runs through `runSubprocess` in a
-`mkdtemp(os.tmpdir(), "isotopy-pack-")` folder, with `GIT_TERMINAL_PROMPT=0` and
-`GCM_INTERACTIVE=never` so a private repository without stored credentials fails at once
-instead of waiting on a prompt nobody sees. `--branch` takes a branch or a tag, not a commit
-id; the commit actually installed is read back with `rev-parse HEAD` and recorded. The
-folder is removed in a `finally` with retries — a clone's pack files are read-only on
-Windows and an antivirus may hold them for a moment — and a removal that still fails is
-logged rather than failing an install that already succeeded. `--` keeps a URL from ever
-being read as an option, and `packSourceOf` refuses a source or ref that starts with `-`
-anyway. The tests stand a local bare repository in for an https address with git's own
-`url.<base>.insteadOf`, passed through `GIT_CONFIG_COUNT`/`KEY`/`VALUE`, which the clone
-inherits from the server's environment.
 
 The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
 in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)

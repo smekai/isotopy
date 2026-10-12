@@ -1,11 +1,11 @@
 // Component test: Setup → Agents is where an owner sees who the Orchestrator can put
 // on a team, and whether each one ships with Isotopy or came with the project.
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test } from "vitest";
 import { AgentsSection } from "../../src/components/setup/AgentsSection";
 import type { AgentsSectionProps } from "../../src/components/setup/AgentsSection";
 import { DIRS } from "../../src/theme";
-import { agentCatalog, catalogAgent, catalogStep, installResult } from "../support/agent-fixtures";
+import { agentCatalog, catalogAgent, catalogStep } from "../support/agent-fixtures";
 
 afterEach(() => {
   cleanup();
@@ -52,6 +52,5 @@ function agentsProps(overrides: Partial<AgentsSectionProps> = {}): AgentsSection
   return {
     d: overrides.d ?? DIRS.indigo,
     catalog: overrides.catalog ?? agentCatalog(),
-    onInstall: overrides.onInstall ?? vi.fn(() => Promise.resolve(installResult())),
   };
 }

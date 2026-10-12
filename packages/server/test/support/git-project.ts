@@ -65,24 +65,3 @@ export async function untrackedPaths(cwd: string): Promise<string[]> {
     .map((entry) => entry.slice(3))
     .sort();
 }
-
-export async function tagHead(cwd: string, tag: string): Promise<void> {
-  await git(cwd, ["tag", tag]);
-}
-
-export async function cloneBare(source: string, target: string): Promise<void> {
-  await git(path.dirname(target), ["clone", "--bare", "--", source, target]);
-}
-
-export async function headCommit(cwd: string): Promise<string> {
-  const result = await runSubprocess({
-    command: "git",
-    args: ["rev-parse", "HEAD"],
-    cwd,
-    timeoutMs: GIT_TIMEOUT_MS,
-  });
-  if (!result.success) {
-    throw new Error(`git rev-parse failed: ${result.stderrTail.join("\n")}`);
-  }
-  return result.stdout.trim();
-}

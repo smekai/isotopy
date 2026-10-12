@@ -73,10 +73,6 @@ export function stepsDir(projectPath: ProjectPath): string {
   return path.join(projectPath.dataDir, "steps");
 }
 
-export function packsFile(projectPath: ProjectPath): string {
-  return path.join(projectPath.dataDir, "packs.json");
-}
-
 export function runWorkspaceDir(projectPath: ProjectPath, runId: string): string {
   return path.join(runsDir(projectPath), runId, "workspace");
 }
@@ -93,7 +89,6 @@ const DATA_DIR_GITIGNORE = [
   "!/agents/**",
   "!/steps/",
   "!/steps/**",
-  "!/packs.json",
   "",
 ].join("\n");
 

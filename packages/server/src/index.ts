@@ -3,7 +3,6 @@ import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { ProjectDatabases } from "./db/project-databases.ts";
 import { AgentCatalog } from "./services/agent-catalog.ts";
-import { PackInstaller } from "./services/pack-installer.ts";
 import { AutomationConfigStore } from "./services/automation-config-store.ts";
 import { DeploymentRunner } from "./services/deployment-runner.ts";
 import { ModelRosterService } from "./services/model-roster-service.ts";
@@ -53,7 +52,6 @@ const schedules = new ScheduleService(
   agents,
   logger,
 );
-const packs = new PackInstaller(schedules, logger);
 runs.registerOrchestration(orchestrations);
 
 await orchestrations.init();
@@ -74,7 +72,6 @@ serve(
       deployment,
       product,
       agents,
-      packs,
       logger,
     }).fetch,
     hostname: config.host,

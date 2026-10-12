@@ -79,9 +79,7 @@ substitute the engine adapter.
   localStorage. Scope any call to a project with `-H "X-Isotopy-Project: <id>"`.
 - Projects: `GET /projects` → the registry (`home` always present);
   `POST /projects` (`{"root":"C:/some/dir"}`) registers one and creates its
-  `.isotopy/`, git-ignored except `agents/`, `steps/` and `packs.json`;
-  `GET /agents` lists the project's catalog and `POST /agents/packs`
-  (`{"source":"C:/some/pack"}`) installs a pack;
+  `.isotopy/`, git-ignored except `agents/` and `steps/`;
   `POST /projects/<id>/activate`; `DELETE /projects/<id>`
   unregisters without touching files.
 - Milestones: `GET /milestones`, `GET /milestones/:id`, `POST /milestones/plan`
