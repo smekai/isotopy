@@ -450,6 +450,7 @@ test("an outcome that cannot be recorded is reported to whoever runs the server"
     task: "Manual work already under way",
     engine: "claude-code",
   });
+  await ctx.engine.waitForCall();
   failTheNextWrite("disk is full");
 
   // Act

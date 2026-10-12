@@ -28,6 +28,7 @@ import {
 } from "../schemas/agent-definition.ts";
 import { errorCodeOf } from "../utils/error-code.ts";
 import type { Logger } from "../utils/logger.ts";
+import { messageOf } from "../utils/message-of.ts";
 import { toPosixPath } from "../utils/posix-path.ts";
 import { personaNotesPath, projectSkillAddendumPath, userSkillFilePath } from "./skills.ts";
 
@@ -59,6 +60,11 @@ export interface ComposedPersona {
 
 interface LibraryBook {
   entry: KnowledgeEntry;
+  warning?: string;
+}
+
+interface PersonaLayer {
+  text?: string;
   warning?: string;
 }
 
@@ -127,20 +133,21 @@ export class AgentCatalog {
     const [catalog, library, userOverride, projectAddendum, accumulatedNotes] = await Promise.all([
       this.catalog(projectPath),
       this.libraryOf(projectPath, id),
-      this.textOf(userSkillFilePath(id)),
-      this.textOf(projectSkillAddendumPath(projectPath, id)),
-      this.textOf(personaNotesPath(projectPath, id)),
+      this.layerOf(userSkillFilePath(id)),
+      this.layerOf(projectSkillAddendumPath(projectPath, id)),
+      this.layerOf(personaNotesPath(projectPath, id)),
     ]);
     const entry = catalog.personas.find((persona) => persona.id === id);
     const text = composeSkill({
-      base: entry?.origin === "project" ? entry.body : bodyOf(userOverride) ?? entry?.body,
+      base: entry?.origin === "project" ? entry.body : bodyOf(userOverride.text) ?? entry?.body,
       knowledge: library.map((book) => book.entry),
-      projectAddendum,
-      accumulatedNotes,
+      projectAddendum: projectAddendum.text,
+      accumulatedNotes: accumulatedNotes.text,
     });
-    return text === undefined
-      ? undefined
-      : { text, warnings: library.flatMap((book) => book.warning ?? []) };
+    const warnings = [...library, userOverride, projectAddendum, accumulatedNotes].flatMap(
+      (layer) => layer.warning ?? [],
+    );
+    return text === undefined ? undefined : { text, warnings };
   }
 
   async stepTask(projectPath: ProjectPath, id: string): Promise<string | undefined> {
@@ -153,7 +160,11 @@ export class AgentCatalog {
     return Promise.all(
       files.map(async ({ file }) => {
         const shown = toPosixPath(file);
-        const parsed = parseKnowledgeFile((await this.textOf(file)) ?? "");
+        const layer = await this.layerOf(file);
+        if (layer.warning !== undefined) {
+          return { entry: { path: shown }, warning: layer.warning };
+        }
+        const parsed = parseKnowledgeFile(layer.text ?? "");
         return parsed.ok
           ? { entry: { path: shown, description: parsed.value.description } }
           : {
@@ -209,7 +220,10 @@ export class AgentCatalog {
   ): Promise<Awaited<Entry>[]> {
     const entries = await Promise.all(
       files.map(async ({ id, file }) => {
-        const cached = await this.cachedText(file);
+        const cached = await this.cachedText(file).catch((error: unknown) => {
+          this.reportOnce(file, `Skipped ${file}: ${messageOf(error)}`);
+          return undefined;
+        });
         if (cached === undefined) {
           return undefined;
         }
@@ -242,8 +256,12 @@ export class AgentCatalog {
     }
   }
 
-  private async textOf(file: string): Promise<string | undefined> {
-    return (await this.cachedText(file))?.text;
+  private async layerOf(file: string): Promise<PersonaLayer> {
+    try {
+      return { text: (await this.cachedText(file))?.text };
+    } catch (error) {
+      return { warning: `Could not read ${toPosixPath(file)}, so this run goes without it: ${messageOf(error)}` };
+    }
   }
 
   private async cachedText(file: string): Promise<CachedText | undefined> {

@@ -1074,6 +1074,13 @@ checkout and a file saved by an editor that writes a BOM parse the same. The fir
 horizontal rule in the body. An unclosed block is refused rather than read as body,
 because reading it would hand the engine the YAML.
 
+**A file that exists but cannot be read never fails a stage.** "Not there" is the only
+silent fallback. Any other read error on a persona layer — the user override, the project
+addendum, the notes, a reference file — is left out and named in the stage's run log, and an
+unreadable agent or step file is left out of the catalog and reported on the operator channel,
+exactly as a malformed one is. Before this, an unreadable notes file (`TASK-195`'s case) threw out
+of the persona and failed the stage before the engine started.
+
 **A folder name is never trusted on its own.** On NTFS and APFS `Growth-Marketer/`
 and `growth-marketer/` are the same folder. The schema requires `name` to be a
 lowercase id equal to its file's own, so a folder or file named any other way never

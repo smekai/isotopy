@@ -3,7 +3,7 @@
 // layers — a project tweaks one with an addendum, and what a role learned follows it —
 // so an improvement to a bundled default keeps reaching every project that did not
 // replace it.
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
@@ -230,6 +230,24 @@ test("a malformed agent file is left out and reported, and the rest of the catal
   expect(personas.map((persona) => persona.id)).not.toContain("growth-marketer");
   expect(warnings()).toEqual([expect.stringContaining("growth-marketer")]);
 });
+
+// Windows cannot make a file unreadable with chmod.
+test.skipIf(process.platform === "win32")(
+  "an agent file that cannot be read is left out and reported, and the catalog still loads",
+  async () => {
+    // Arrange
+    const file = await writeProjectAgent(project.dataDir);
+    await chmod(file, 0o000);
+
+    // Act
+    const { personas } = await catalog.catalog(project);
+
+    // Assert
+    await chmod(file, 0o644);
+    expect(personas.map((persona) => persona.id)).not.toContain("growth-marketer");
+    expect(warnings()).toEqual([expect.stringContaining("growth-marketer")]);
+  },
+);
 
 test("a folder that is not a lowercase id never reaches the catalog, so it cannot shadow one that is", async () => {
   // Arrange
