@@ -16,6 +16,7 @@ import {
   get,
   patch,
   post,
+  put,
   getRun,
   restartApp,
   waitForRunStatus,
@@ -160,6 +161,25 @@ test("a fired schedule starts exactly one run, and that run carries the team pin
   ]);
   const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
   expect(stored.body.lastFiredAt).toBeDefined();
+  ctx.engine.verify();
+});
+
+// The pin is the owner's only cost cap. A scheduled run is started by the server with
+// nobody at the browser, which is exactly when the browser cannot apply it.
+test("a scheduled run uses the model the project pinned for its engine", async () => {
+  // Arrange
+  await put(ctx.app, "/settings/preferences", { engineModels: { "claude-code": "haiku" } });
+  const created = await createSchedule();
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Project Manager", model: "haiku" }).reports("Next: TASK-999.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const outcome = await ctx.schedules.fire(created.id);
+
+  // Assert
+  await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   ctx.engine.verify();
 });
 

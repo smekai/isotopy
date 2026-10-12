@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Schedule, ScheduleOutcome, ScheduleView, RunState } from "@isotopy/core";
-import { isTerminalRunStatus, scheduleIsBuiltIn, schedulePinsTeam } from "@isotopy/core";
+import {
+  isTerminalRunStatus,
+  preferredRunOptions,
+  scheduleIsBuiltIn,
+  schedulePinsTeam,
+} from "@isotopy/core";
 import type {
   CreateScheduleInput,
   ScheduleSkipReason,
@@ -231,8 +236,9 @@ export class ScheduleService implements ScheduleFiring {
 
   private async startScheduledRun(schedule: Schedule): Promise<RunState> {
     const projectPath = this.registry.resolve(schedule.projectId);
+    const preferred = preferredRunOptions(this.settings.getPreferences(projectPath.id));
     if (!schedulePinsTeam(schedule)) {
-      return this.orchestrations.start(projectPath, schedule.task, {});
+      return this.orchestrations.start(projectPath, schedule.task, preferred);
     }
     const orchestrationId = await this.orchestrations.ensureActive(
       projectPath,
@@ -248,6 +254,7 @@ export class ScheduleService implements ScheduleFiring {
       throw new ScheduleInvalidError(composed.issues);
     }
     return this.runs.startComposedRun(projectPath, composed.value, {
+      ...preferred,
       task: schedule.task,
       orchestrationId,
     });

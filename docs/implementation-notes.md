@@ -1104,6 +1104,13 @@ from the engine's working directory. Claude Code, Codex and Cursor all accept fo
 slashes on Windows. Files are listed in name order so a prompt does not change between
 file systems that enumerate a directory differently.
 
+**A scheduled run takes the project's own engine and pinned model.** The browser applies
+`preferredRunOptions` to every run it starts, but a schedule is started by the server with nobody
+at the browser, so `ScheduleService` applies the same function itself. Before 2026-10-12 it did
+not: the first live duty ran on Claude Code's default model (Opus, $0.93) despite a haiku pin, and
+a project set to Cursor would still have been run on Claude. The pin is the owner's only cost cap
+for unattended work.
+
 **Duties are seeded, not watched.** `ScheduleService.seedDuties` runs when a project loads —
 at startup and when it is registered. A duty file written by hand
 while the server runs is seeded on the next of those, never from a file watcher, because cron
