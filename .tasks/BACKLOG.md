@@ -1,5 +1,50 @@
 # Backlog
 
+## TASK-202: The server is organised by concept, and a boundary schema is the domain type
+**Priority:** P2 | **Tags:** server, infra
+**Updated:** 2026-10-12 19:51
+
+Raised by the owner on 2026-10-12, reviewing `schemas/agent-definition.ts` in the Shared agents PR (#86). **Think first**: the shape below is a starting point to discuss, not a decision.
+
+### The problem
+
+**1. One concept is spread across layers.** Nine places know what an agent is: `schemas/agent-definition.ts`, `domain/rules/agent-catalog.ts`, `domain/rules/persona-notes.ts` (`SKILL_ID`), `domain/markdown/front-matter.ts`, `domain/markdown/skill.ts`, `domain/skills/*`, `services/agent-catalog.ts`, `routes/agents.ts` and `core/agents.ts`. Schedules, runs and milestones are split the same way. That is rule A3: folders are named for a layer, never a concept.
+
+**2. The line between `schemas/` and `domain/` is blurred, and moving files into concept folders would not fix it.**
+- `agent-definition.ts` holds the zod shapes and, next to them, domain rules: `name` must equal the folder id, a duty's body must not be empty, `composable` defaults to `true`.
+- It also hand-writes `AgentDefinition`, `StepDefinition` and `DutyDefinition`, which restate what zod already knows (`PersonaFrontMatter` → `toAgent` → `AgentDefinition`).
+- The same thing is described twice. Put both files in `src/agents/` and the two halves simply sit in one folder.
+
+### A shape to start from
+
+1. **One rule that removes the duplicate.** Reading one input (a file, a request body, a stored JSON blob, a fenced block in an agent's report) returns the domain type directly.
+   - The zod schema with its `.transform` is the type's definition: `type AgentDefinition = z.output<typeof agentFileSchema>`. No hand-written interface beside it.
+   - Checks on that one input live in its schema, including those that need context such as "`name` equals the folder id"; the context is a parameter.
+   - Only decisions that weigh several values become rules: merging the catalog, known ids, team composition, schedule validity.
+   - "Schema versus domain" is replaced by "reading one input versus rules over many".
+2. **A module per concept:** `agents/`, `schedules/`, `runs/`, `orchestration/`, `milestones/`, `projects/`, `settings/`.
+   - The product-neutral kernel stays apart: `utils/`, `db/`, `workflow/`, `engines/`, and `TASK-201`'s document reader.
+   - The bundled prompts move into their module (`agents/bundled/`).
+   - `packages/core` is unchanged; the UI shares it.
+3. **Purity is set by file name, not folder.** Only `*-service.ts`, `*-store.ts`, `*-repository.ts` and `*-routes.ts` may do I/O. eslint forbids `node:fs*`, `node:child_process` and `node:net` in every other module file. Today nothing enforces `domain/`'s purity at all, so this is a gain.
+4. **Pilot on agents**, then one PR per concept, each a pure move with no behaviour change. Tests follow into `test/<module>/`.
+
+### Open questions
+
+- `src/<module>/` or `src/modules/<module>/`?
+- Where does something two modules share live? `team-composition` serves both schedules and orchestration.
+- Do routes move into their module, or stay one HTTP layer?
+- Order against `TASK-201`: doing the document layer first would make the agents pilot's reader thin from the start.
+
+### Done when
+
+- `docs/decisions.md` has the entry: context, decision, and "keep A3" as the rejected alternative.
+- A3 and the placement section of `docs/architecture.md` are rewritten.
+- The eslint purity rule is on.
+- The pilot is merged and the other modules are filed as tasks.
+- The whole suite is green with no behaviour change, on Windows and macOS.
+
+---
 ## TASK-201: One reader for every markdown document Isotopy parses
 **Priority:** P3 | **Tags:** core, server
 **Updated:** 2026-10-12 07:54
