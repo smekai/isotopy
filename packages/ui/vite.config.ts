@@ -17,6 +17,7 @@ const API_PROXY_PATHS = [
   "/engines",
   "/automation",
   "/fs",
+  "/agents",
 ];
 
 export default defineConfig(({ mode }) => {

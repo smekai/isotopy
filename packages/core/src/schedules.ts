@@ -73,6 +73,11 @@ export function scheduleIsBuiltIn(schedule: Schedule): boolean {
   return schedule.builtIn !== undefined;
 }
 
+export function scheduleBroughtBy(schedule: Schedule): string | undefined {
+  const [agent, duty] = schedule.builtIn?.split("/") ?? [];
+  return duty === undefined ? undefined : agent;
+}
+
 export function schedulePinsTeam(
   schedule: Schedule,
 ): schedule is Schedule & { team: OrchestratorTeamProposal } {

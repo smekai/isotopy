@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Schedule, ScheduleOutcome, ScheduleView, RunState } from "@isotopy/core";
-import { isTerminalRunStatus, scheduleIsBuiltIn, schedulePinsTeam } from "@isotopy/core";
+import {
+  isTerminalRunStatus,
+  preferredRunOptions,
+  scheduleIsBuiltIn,
+  schedulePinsTeam,
+} from "@isotopy/core";
 import type {
   CreateScheduleInput,
   ScheduleSkipReason,
@@ -8,10 +13,10 @@ import type {
 } from "@isotopy/core";
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
-import { BUILT_IN_SCHEDULES } from "../domain/rules/built-in-schedules.ts";
 import { composeTeamPipeline } from "../domain/rules/team-composition.ts";
 import { nextFireForSchedule } from "../domain/rules/schedule-timing.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
+import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
@@ -21,6 +26,7 @@ import type { Logger } from "../utils/logger.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type { DurableSchedules, ScheduleFiring } from "../workflow/durable-schedules.ts";
+import type { AgentCatalog } from "./agent-catalog.ts";
 import type { OrchestrationService } from "./orchestration-service.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { SettingsStore } from "./settings-store.ts";
@@ -48,6 +54,7 @@ export class ScheduleService implements ScheduleFiring {
     private readonly orchestrations: OrchestrationService,
     private readonly databases: ProjectDatabases,
     private readonly settings: SettingsStore,
+    private readonly agents: AgentCatalog,
     logger: Logger,
   ) {
     this.logger = logger.child("ScheduleService");
@@ -66,24 +73,36 @@ export class ScheduleService implements ScheduleFiring {
       schedule.projectId = projectPath.id;
       this.schedules.set(schedule.id, schedule);
     }
-    await this.seedBuiltIns(projectPath);
+    await this.seedDuties(projectPath);
     await this.reconcile(projectPath);
   }
 
-  private async seedBuiltIns(projectPath: ProjectPath): Promise<void> {
-    for (const definition of BUILT_IN_SCHEDULES) {
-      if (this.builtInFor(projectPath.id, definition.key)) {
+  async seedDuties(projectPath: ProjectPath): Promise<void> {
+    const [duties, known] = await Promise.all([
+      this.agents.duties(projectPath),
+      this.agents.knownIds(projectPath),
+    ]);
+    for (const duty of duties) {
+      if (this.builtInFor(projectPath.id, duty.key)) {
+        continue;
+      }
+      const issues = scheduleIssues(duty, known);
+      if (issues.length > 0) {
+        this.logger.warn(`Duty ${duty.key} was not seeded: ${formatValidationIssues(issues)}`, {
+          projectId: projectPath.id,
+        });
         continue;
       }
       const now = nowIso();
       const schedule: Schedule = {
         id: randomUUID().slice(0, 8),
         projectId: projectPath.id,
-        name: definition.name,
-        cron: definition.cron,
-        timezone: definition.timezone,
-        task: definition.task,
-        builtIn: definition.key,
+        name: duty.title,
+        cron: duty.cron,
+        timezone: duty.timezone,
+        task: duty.task,
+        team: duty.team,
+        builtIn: duty.key,
         enabled: false,
         createdAt: now,
         updatedAt: now,
@@ -217,26 +236,32 @@ export class ScheduleService implements ScheduleFiring {
 
   private async startScheduledRun(schedule: Schedule): Promise<RunState> {
     const projectPath = this.registry.resolve(schedule.projectId);
+    const preferred = preferredRunOptions(this.settings.getPreferences(projectPath.id));
     if (!schedulePinsTeam(schedule)) {
-      return this.orchestrations.start(projectPath, schedule.task, {});
+      return this.orchestrations.start(projectPath, schedule.task, preferred);
     }
     const orchestrationId = await this.orchestrations.ensureActive(
       projectPath,
       schedule.task,
       schedule.id,
     );
-    const composed = composeTeamPipeline(schedule.team, orchestrationId);
+    const composed = composeTeamPipeline(
+      schedule.team,
+      await this.agents.knownIds(projectPath),
+      orchestrationId,
+    );
     if (!composed.ok) {
       throw new ScheduleInvalidError(composed.issues);
     }
     return this.runs.startComposedRun(projectPath, composed.value, {
+      ...preferred,
       task: schedule.task,
       orchestrationId,
     });
   }
 
   private async store(projectPath: ProjectPath, schedule: Schedule): Promise<ScheduleView> {
-    const issues = scheduleIssues(schedule);
+    const issues = scheduleIssues(schedule, await this.agents.knownIds(projectPath));
     if (issues.length > 0) {
       throw new ScheduleInvalidError(issues);
     }

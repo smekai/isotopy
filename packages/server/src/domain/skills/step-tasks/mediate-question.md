@@ -1,3 +1,8 @@
+---
+name: mediate-question
+description: "Answer a specialist's question from the supplied context, or escalate it to the owner."
+composable: false
+---
 # Assignment: Mediate a specialist question
 
 Read the orchestration goal, approved team, specialist question, and prior run

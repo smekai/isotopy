@@ -38,6 +38,7 @@ import { TeamController } from "./components/TeamController";
 import type { LiveInitiative } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
+import { useAgentCatalog } from "./hooks/useAgentCatalog";
 import { useMilestones } from "./hooks/useMilestones";
 import { useSchedules } from "./hooks/useSchedules";
 import { useOrchestration } from "./hooks/useOrchestration";
@@ -181,6 +182,7 @@ export function App() {
     orchestrationRefreshKey(runs.runs),
   );
   const schedules = useSchedules(projectId, projects.ready);
+  const agentCatalog = useAgentCatalog(projectId, projects.ready);
   const product = useProduct(projectId);
   const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
   const [resubKey, setResubKey] = useState(0);
@@ -188,6 +190,13 @@ export function App() {
   const attachedProject = useRef<string | null>(null);
   const [pipeVs, setPipeVs] = useState<VoiceState>("idle");
   const [setupSection, setSetupSection] = useState<SetupSection | null>(null);
+  const setupOpen = setupSection !== null;
+  const reloadAgentCatalog = agentCatalog.reload;
+  useEffect(() => {
+    if (setupOpen) {
+      void reloadAgentCatalog();
+    }
+  }, [setupOpen, reloadAgentCatalog]);
   const [showProject, setShowProject] = useState(false);
   const [addingProject, setAddingProject] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -543,6 +552,7 @@ export function App() {
               projectId={projectId}
               project={projects.active}
               settings={settings}
+              agents={agentCatalog.agents}
               onOpenProject={() => setShowProject(true)}
               initialTask={prefill?.task}
               onStartOrchestrator={(goal) => void handleStartOrchestrator(goal)}
@@ -668,6 +678,7 @@ export function App() {
           projectId={projectId}
           projectName={projects.active?.name ?? "Home"}
           settings={settings}
+          agents={agentCatalog}
           section={setupSection}
           onClose={() => setSetupSection(null)}
         />

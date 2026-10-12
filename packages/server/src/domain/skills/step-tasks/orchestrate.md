@@ -1,3 +1,8 @@
+---
+name: orchestrate
+description: "Compose a team for the goal, ask the owner, or stop with a reason."
+composable: false
+---
 # Assignment: Orchestrate the goal
 
 Read the supplied goal, persona catalog, step task catalog, task board, and prior
@@ -51,6 +56,13 @@ runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
   }
 }
 ```
+
+### Writing a role's `id`
+
+A role's `id` is lowercase letters, digits and hyphens only — `campaign-planning`,
+never `campaign_planning` or `CampaignPlanning`. It names the stage's folder and its
+gate, and a team carrying any other id cannot be approved. Make it short and unique
+within the team.
 
 ### Writing a role's `label`
 

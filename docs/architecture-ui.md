@@ -39,7 +39,7 @@ by accident and nobody defends them past their usefulness.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
 on ports, and proxies `/projects /runs /milestones /orchestrations /schedules /health
-/settings /engines /automation /fs` to the server. **That proxy list must stay in sync with the routes
+/settings /engines /automation /fs /agents` to the server. **That proxy list must stay in sync with the routes
 mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
 dev UI until it is added there.
 
@@ -66,7 +66,7 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`, `stagePresentation`). Unit-tested. |
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useSchedules`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useSchedules`, `useAgentCatalog`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
 | `components/` | 14 flat component files, plus four feature folders — `setup/`, `run/`, `home/` and `schedule/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
@@ -578,7 +578,7 @@ list card. The current roster:
 `orchestrator-decision-error` · `approve-team` · `stop-initiative` ·
 `role-tier-<roleId>` · `start-engine` · `start-tier` ·
 `product-preview` · `product-start` · `product-stop` · `product-restart` ·
-`product-open-external`
+`product-open-external` · `agent-<id>` · `step-<id>`
 
 `milestone-card` and `milestone-feature` also carry `data-milestone-id` /
 `data-feature-id`, which is what the e2e suite locates on: the e2e home is durable,

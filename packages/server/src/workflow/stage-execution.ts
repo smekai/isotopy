@@ -3,7 +3,7 @@ import {
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
-  agentForStage,
+  stageTitleIn,
   resolveTier,
 } from "@isotopy/core";
 import type {
@@ -39,7 +39,6 @@ import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
-import { loadBundledStepTask, loadSkill } from "../services/skills.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
@@ -156,7 +155,7 @@ async function runPreviewDeployment(
   projection.stageStarted(run.id, stageDef.id);
   projection.log(run.id, stageDef.id, {
     level: "run",
-    message: `${agentForStage(stageDef).profession} deploying the preview from project automation`,
+    message: `${stageTitleIn(run, stageDef.id)} deploying the preview from project automation`,
   });
 
   let target: DeploymentAutomation | undefined;
@@ -381,8 +380,8 @@ export async function runQuestionMediationWork(
     };
   }
   const projectPath = deps.registry.resolve(run.projectId);
-  const persona = await loadSkill(projectPath, "orchestrator");
-  const stepTask = await loadBundledStepTask("mediate-question");
+  const persona = await deps.agents.persona(projectPath, "orchestrator");
+  const stepTask = await deps.agents.stepTask(projectPath, "mediate-question");
   deps.projection.log(run.id, stageDef.id, {
     level: "run",
     message: `Orchestrator mediating · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
@@ -396,7 +395,7 @@ export async function runQuestionMediationWork(
     run.engine,
     stageDef.id,
     prompt,
-    persona,
+    persona?.text,
     resumeSessionId,
   );
   if (outcome.usage) {
@@ -488,8 +487,12 @@ export async function runOrchestratorReviewWork(
     run,
     run.engine,
     stageId,
-    buildStagePrompt(context.prompt, [], await loadBundledStepTask("review-run")),
-    await loadSkill(deps.registry.resolve(run.projectId), "orchestrator"),
+    buildStagePrompt(
+      context.prompt,
+      [],
+      await deps.agents.stepTask(deps.registry.resolve(run.projectId), "review-run"),
+    ),
+    (await deps.agents.persona(deps.registry.resolve(run.projectId), "orchestrator"))?.text,
     undefined,
   );
   if (outcome.usage) {
@@ -563,7 +566,7 @@ export async function runStageWork(
   if (!run.engine) {
     return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
   }
-  const profession = agentForStage(stageDef).profession;
+  const profession = stageTitleIn(run, stageDef.id);
   const continuing = turn.index > 0;
 
   if (continuing) {
@@ -578,13 +581,20 @@ export async function runStageWork(
   }
 
   const projectPath = registry.resolve(run.projectId);
-  const persona = stageDef.skill ? await loadSkill(projectPath, stageDef.skill) : undefined;
-  const stepTask = stageDef.stepTask ? await loadBundledStepTask(stageDef.stepTask) : undefined;
+  const persona = stageDef.skill
+    ? await deps.agents.persona(projectPath, stageDef.skill)
+    : undefined;
+  const stepTask = stageDef.stepTask
+    ? await deps.agents.stepTask(projectPath, stageDef.stepTask)
+    : undefined;
   if (stageDef.skill && !persona) {
     projection.log(runId, stageDef.id, {
       level: "warn",
       message: `No skill "${stageDef.skill}" found — running without a persona`,
     });
+  }
+  for (const warning of persona?.warnings ?? []) {
+    projection.log(runId, stageDef.id, { level: "warn", message: warning });
   }
   if (stageDef.stepTask && !stepTask) {
     projection.log(runId, stageDef.id, {
@@ -606,7 +616,7 @@ export async function runStageWork(
     run.engine,
     stageDef.id,
     prompt,
-    persona,
+    persona?.text,
     turn.resumeSessionId,
   );
 

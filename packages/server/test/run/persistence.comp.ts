@@ -19,6 +19,7 @@ import {
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
+import { writeProjectAgent } from "../support/agent-files.ts";
 
 let ctx: TestApp;
 
@@ -143,6 +144,55 @@ test("a run saved before log entries carried an activity still loads", async () 
   const { status, body } = await get<RunState>(restarted.app, `/runs/${runId}`);
   expect(status).toBe(200);
   expect(body.status).toBe("completed");
+  await restarted.shutdown();
+});
+
+test("a run saved before stages recorded their agent shows its agent's title after a restart", async () => {
+  // Arrange — runs stored before 0.14 carried a skill and no title.
+  await seedHomeRun(
+    ctx.home,
+    storedRun({
+      id: "untitled1",
+      stages: [{ id: "solo", label: "Working", skill: "solo", status: "passed", logs: [] }],
+    }),
+  );
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const { body } = await get<RunState>(restarted.app, "/runs/untitled1");
+  expect(body.stages[0]).toMatchObject({ title: "Agent", glyph: "✦" });
+  await restarted.shutdown();
+});
+
+test("a title a run recorded survives its agent being renamed, so history says who actually worked", async () => {
+  // Arrange
+  await writeProjectAgent(ctx.home, { id: "developer", title: "House Developer" });
+  await seedHomeRun(
+    ctx.home,
+    storedRun({
+      id: "titled1",
+      stages: [
+        {
+          id: "solo",
+          label: "Working",
+          skill: "developer",
+          title: "Developer",
+          glyph: "⬡",
+          status: "passed",
+          logs: [],
+        },
+      ],
+    }),
+  );
+
+  // Act
+  const restarted = await restartApp();
+
+  // Assert
+  const { body } = await get<RunState>(restarted.app, "/runs/titled1");
+  expect(body.stages[0]?.title).toBe("Developer");
   await restarted.shutdown();
 });
 

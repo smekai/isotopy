@@ -4,7 +4,7 @@ Monorepo: `pnpm dev` at the repo root starts both processes via
 concurrently — `@isotopy/server` (Hono, port **9477**) and `@isotopy/ui`
 (Vite + React, port **5173**). The UI proxies `/projects`,
 `/runs`, `/milestones`, `/orchestrations`, `/schedules`, `/health`,
-`/settings`, `/engines`, `/automation`, `/fs` to the server, so
+`/settings`, `/engines`, `/automation`, `/fs`, `/agents` to the server, so
 `http://localhost:5173/health` proves both are up. The proxy
 list in `packages/ui/vite.config.ts` mirrors the route mounts in
 `packages/server/src/app.ts` — add a mount, add a prefix.
@@ -79,7 +79,8 @@ substitute the engine adapter.
   localStorage. Scope any call to a project with `-H "X-Isotopy-Project: <id>"`.
 - Projects: `GET /projects` → the registry (`home` always present);
   `POST /projects` (`{"root":"C:/some/dir"}`) registers one and creates its
-  self-ignoring `.isotopy/`; `POST /projects/<id>/activate`; `DELETE /projects/<id>`
+  `.isotopy/`, git-ignored except `agents/` and `steps/`;
+  `POST /projects/<id>/activate`; `DELETE /projects/<id>`
   unregisters without touching files.
 - Milestones: `GET /milestones`, `GET /milestones/:id`, `POST /milestones/plan`
   (starts the planning conversation), `POST /milestones/:id/revise`,

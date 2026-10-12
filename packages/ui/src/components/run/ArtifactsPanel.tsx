@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { ClipboardCheck, FileDiff, FileText, FolderOpen } from "lucide-react";
-import { agentForStage } from "@isotopy/core";
+import { stageAgent } from "@isotopy/core";
 import type { RunState } from "@isotopy/core";
 import { fetchRunFiles } from "../../api";
 import type { WorkspaceFile } from "../../api";
@@ -57,7 +57,7 @@ function handoffsOf(run: RunState): Handoff[] {
       {
         stageId: stage.id,
         name: `${stage.id}/handoff.md`,
-        profession: agentForStage(stage).profession,
+        profession: stageAgent(stage).title,
         size: formatBytes(new Blob([body]).size),
         body,
       },

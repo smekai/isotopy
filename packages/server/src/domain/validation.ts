@@ -1,4 +1,6 @@
+import { parse as parseYamlText } from "yaml";
 import type { ZodError, ZodType } from "zod";
+import { messageOf } from "../utils/message-of.ts";
 
 export interface ValidationIssue {
   path: (string | number)[];
@@ -45,6 +47,22 @@ export function parseJson<T>(
     return {
       ok: false,
       issues: [{ path: [], message: "Value must be valid JSON" }],
+    };
+  }
+  return validate(schema, input);
+}
+
+export function parseYaml<T>(
+  schema: ZodType<T>,
+  text: string,
+): ValidationResult<T> {
+  let input: unknown;
+  try {
+    input = parseYamlText(text, { maxAliasCount: 0, uniqueKeys: true });
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [{ path: [], message: `Value must be valid YAML: ${messageOf(error)}` }],
     };
   }
   return validate(schema, input);

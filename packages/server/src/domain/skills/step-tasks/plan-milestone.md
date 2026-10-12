@@ -1,3 +1,7 @@
+---
+name: plan-milestone
+description: "Turn a goal into a milestone and an ordered delivery backlog."
+---
 # Assignment: Plan a milestone
 
 Turn the user's goal into one coherent milestone and an ordered delivery backlog.

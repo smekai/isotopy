@@ -16,7 +16,7 @@ for that extension, and `.spec.ts` means a Vitest unit spec — see `testing.md`
 
 | Tier | Cost | What it proves | Where |
 | --- | --- | --- | --- |
-| Free | none | Composer, Setup, project switching, and the milestone dashboard, against a real server | `ui-smoke.e2e.ts`, `project-drawer.e2e.ts`, `project-switcher.e2e.ts`, `milestone/milestone-dashboard.e2e.ts` |
+| Free | none | Composer, Setup, project switching, and the milestone dashboard, against a real server | `ui-smoke.e2e.ts`, `project-drawer.e2e.ts`, `project-switcher.e2e.ts`, `milestone/milestone-dashboard.e2e.ts`, `setup/agents.e2e.ts` |
 | Seeded | none | Per-stage rendering, the initiative thread, parked runs and the product preview, from a fabricated `RunState` served by route interception | `run/dev-test-flow.e2e.ts`, `run/run-limit.e2e.ts`, `run/run-question.e2e.ts`, `run/product-preview.e2e.ts`, `orchestration/orchestrator-flow.e2e.ts` |
 | Built | none | That the compiled bundle actually executes in a browser | `built-app.e2e.ts` (opt-in) |
 | Live | ≈ $0.01 | Canary that the real CLI still integrates | `run/live-dev-test.e2e.ts` (opt-in) |
@@ -63,6 +63,9 @@ Real server, real navigation, no run that reaches an engine.
   read-only context. Setup → AI Harness lists engines, status, models and
   permission modes — the roster resolves server-side and can come from the CLI,
   so the specs assert the entries that matter rather than a count.
+- **`setup/agents.e2e.ts`** — Setup → Agents reads the real catalog through the
+  `/agents` proxy: the built-in team is listed as built in, and the Orchestrator's
+  own assignments are not offered as steps a team may take.
 - **`project-switcher.e2e.ts`** — the header switcher lists the home project and
   offers to add one, exactly one project is active at a time, Add project opens
   the folder picker, and Escape closes both. Setup names the active project.

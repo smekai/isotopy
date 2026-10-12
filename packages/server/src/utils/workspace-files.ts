@@ -1,6 +1,7 @@
 import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import path from "node:path";
+import { toPosixPath } from "./posix-path.ts";
 
 const IGNORED_DIRECTORIES = new Set([
   "node_modules",
@@ -42,10 +43,6 @@ export interface WorkspaceFileContent {
   size: number;
   content: string;
   truncated: boolean;
-}
-
-function toPosix(relativePath: string): string {
-  return relativePath.split(path.sep).join("/");
 }
 
 export async function resolveInsideWorkspace(
@@ -118,7 +115,7 @@ async function walkWorkspace(
         }
       } else if (entry.isFile()) {
         try {
-          visit(toPosix(path.relative(root, absolute)), await stat(absolute));
+          visit(toPosixPath(path.relative(root, absolute)), await stat(absolute));
           visited += 1;
         } catch {
           continue;
@@ -162,10 +159,10 @@ export async function readWorkspaceFile(
     throw new Error("Not a file");
   }
   if (size > MAX_PREVIEW_BYTES) {
-    return { path: toPosix(relativePath), size, content: "", truncated: true };
+    return { path: toPosixPath(relativePath), size, content: "", truncated: true };
   }
   return {
-    path: toPosix(relativePath),
+    path: toPosixPath(relativePath),
     size,
     content: await readFile(absolute, "utf8"),
     truncated: false,

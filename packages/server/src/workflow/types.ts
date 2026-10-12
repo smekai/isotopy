@@ -20,6 +20,7 @@ import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { SeededStage, SeededStart } from "../domain/rules/run-seeding.ts";
+import type { AgentCatalog } from "../services/agent-catalog.ts";
 import type { AutomationConfigStore } from "../services/automation-config-store.ts";
 import type { DeploymentRunner } from "../services/deployment-runner.ts";
 import type { ModelRosterService } from "../services/model-roster-service.ts";
@@ -150,6 +151,7 @@ export interface RecordedReview {
 export interface WorkflowDeps {
   projection: RunProjection;
   registry: ProjectRegistry;
+  agents: AgentCatalog;
   settings: SettingsStore;
   rosters: ModelRosterService;
   automation: AutomationConfigStore;

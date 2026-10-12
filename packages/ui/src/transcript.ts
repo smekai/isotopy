@@ -1,4 +1,4 @@
-import { agentForStage } from "@isotopy/core";
+import { stageAgent } from "@isotopy/core";
 import type { LogLevel, RunState, StageActivity, StageStatus } from "@isotopy/core";
 
 export type TranscriptItem =
@@ -79,7 +79,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
 
   for (const stage of run.stages) {
     if (stage.startedAt) {
-      const agent = agentForStage(stage);
+      const agent = stageAgent(stage);
       ordered.push({
         seq: seq++,
         item: {
@@ -88,7 +88,7 @@ export function buildTranscript(run: RunState): TranscriptItem[] {
           ts: stage.startedAt,
           stageId: stage.id,
           label: stage.label,
-          profession: agent.profession,
+          profession: agent.title,
           glyph: agent.glyph,
           status: stage.status,
         },

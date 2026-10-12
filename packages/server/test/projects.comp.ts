@@ -1,9 +1,9 @@
 // Project isolation, proven at the API boundary. Two projects pointing at two
 // directories must not see each other's history, must write their runs into
 // their own `.isotopy/`, and must never have an API key written inside them.
-import { readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, inject, test } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { ProjectsView, RunState, SettingsView } from "@isotopy/core";
 import {
@@ -17,6 +17,7 @@ import {
   waitForRunStatus,
 } from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
+import { initGitRepository, untrackedPaths } from "./support/git-project.ts";
 
 /** One real (mocked) engine box — the shortest run that has a workspace. */
 const ENGINE_RUN = { pipelineId: "solo", task: "work here", engine: "claude-code" };
@@ -30,6 +31,28 @@ beforeEach(async () => {
 afterEach(async () => {
   await ctx.dispose();
 });
+
+const OWNER_FILES = [
+  "agents/growth-marketer/agent.md",
+  "agents/growth-marketer/knowledge/launch-checklist.md",
+  "steps/plan-campaign.md",
+];
+
+const ISOTOPY_FILES = ["runs/r1/state.json", "skills/growth-marketer.notes.md", "aiki.db"];
+
+async function writeDataFiles(root: string, files: string[]): Promise<void> {
+  await Promise.all(
+    files.map(async (file) => {
+      const target = path.join(root, ".isotopy", ...file.split("/"));
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, "x\n");
+    }),
+  );
+}
+
+function readGitignore(root: string): Promise<string> {
+  return readFile(path.join(root, ".isotopy", ".gitignore"), "utf8");
+}
 
 async function exists(target: string): Promise<boolean> {
   return stat(target)
@@ -46,13 +69,44 @@ test("the registry starts with just the home project, active", async () => {
   expect(body.projects.map((project) => project.id)).toEqual([HOME_PROJECT_ID]);
 });
 
-test("adding a project creates a self-ignoring .isotopy folder inside it", async () => {
+test("in a git project, the agents an owner writes show in git status and what Isotopy writes does not", async () => {
   // Arrange
   const added = await addTestProject(ctx.registry, "proj");
+  await initGitRepository(added.root);
+  await writeDataFiles(added.root, [...OWNER_FILES, ...ISOTOPY_FILES]);
+
+  // Act
+  const untracked = await untrackedPaths(added.root);
 
   // Assert
-  const gitignore = await readFile(path.join(added.root, ".isotopy", ".gitignore"), "utf8");
-  expect(gitignore.trim()).toBe("*");
+  expect(untracked).toEqual(OWNER_FILES.map((file) => `.isotopy/${file}`).sort());
+});
+
+test("registering a project whose .isotopy still ignores everything lets the owner's agents through", async () => {
+  // Arrange
+  const root = await mkdtemp(path.join(inject("testTempRoot"), "upgrade-"));
+  await initGitRepository(root);
+  await writeDataFiles(root, OWNER_FILES);
+  await writeFile(path.join(root, ".isotopy", ".gitignore"), "*\r\n");
+
+  // Act
+  await post(ctx.app, "/projects", { root });
+
+  // Assert
+  expect(await untrackedPaths(root)).toEqual(OWNER_FILES.map((file) => `.isotopy/${file}`).sort());
+});
+
+test("an .isotopy/.gitignore the owner wrote is never rewritten", async () => {
+  // Arrange
+  const root = await mkdtemp(path.join(inject("testTempRoot"), "custom-"));
+  await mkdir(path.join(root, ".isotopy"));
+  await writeFile(path.join(root, ".isotopy", ".gitignore"), "runs/\n");
+
+  // Act
+  await post(ctx.app, "/projects", { root });
+
+  // Assert
+  expect(await readFile(path.join(root, ".isotopy", ".gitignore"), "utf8")).toBe("runs/\n");
 });
 
 test("adding the same folder twice returns one project, not two", async () => {
@@ -92,6 +146,7 @@ test("a run is written into its own project's .isotopy, not the home project's",
 
 test("starting a run restores the .isotopy git-ignore if the folder was wiped", async () => {
   // Arrange
+  const fresh = await addTestProject(ctx.registry, "fresh");
   const project = await addTestProject(ctx.registry, "reignore");
   await rm(path.join(project.root, ".isotopy"), { recursive: true, force: true });
 
@@ -101,8 +156,7 @@ test("starting a run restores the .isotopy git-ignore if the folder was wiped", 
 
   // Assert
   await waitForRunStatus(ctx.app, run.id, "completed");
-  const gitignore = await readFile(path.join(project.root, ".isotopy", ".gitignore"), "utf8");
-  expect(gitignore.trim()).toBe("*");
+  expect(await readGitignore(project.root)).toBe(await readGitignore(fresh.root));
 });
 
 test("an engine run works in the project folder itself", async () => {

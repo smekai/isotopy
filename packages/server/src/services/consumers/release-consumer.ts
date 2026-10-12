@@ -1,4 +1,4 @@
-import { agentForStage } from "@isotopy/core";
+import { stageTitleIn } from "@isotopy/core";
 import type { RunState, StageDefinition } from "@isotopy/core";
 import { extractReleaseManifest } from "../../schemas/release-manifest.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
@@ -22,7 +22,7 @@ export class ReleaseConsumer implements StageOutputConsumer {
     const parsed = extractReleaseManifest(output);
     if (!parsed.ok) {
       return {
-        reason: `${agentForStage(stageDef).profession} produced no usable release handoff — ${formatValidationIssues(parsed.issues)}`,
+        reason: `${stageTitleIn(run, stageDef.id)} produced no usable release handoff — ${formatValidationIssues(parsed.issues)}`,
       };
     }
     run.release = { manifest: parsed.value, completedAt: nowIso() };

@@ -439,6 +439,25 @@ export class MilestoneService {
     return milestone;
   }
 
+  linkRun(
+    projectId: string,
+    milestoneId: string | undefined,
+    featureId: string | undefined,
+  ): { linkedMilestone?: Milestone; linkedFeature?: MilestoneFeature } {
+    if (milestoneId === undefined) {
+      return {};
+    }
+    const linkedMilestone = this.requireMilestone(projectId, milestoneId);
+    if (featureId === undefined) {
+      return { linkedMilestone };
+    }
+    const linkedFeature = this.requireMilestoneFeature(linkedMilestone, featureId);
+    if (linkedFeature.status !== "ready") {
+      throw new Error(`Feature is ${linkedFeature.status}`);
+    }
+    return { linkedMilestone, linkedFeature };
+  }
+
   requireMilestoneFeature(
     milestone: Milestone,
     featureId: string,

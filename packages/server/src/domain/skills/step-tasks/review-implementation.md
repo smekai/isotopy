@@ -1,3 +1,7 @@
+---
+name: review-implementation
+description: "Independently review the working-tree diff against the approved scope."
+---
 # Assignment: Review the implementation
 
 Independently inspect the actual working-tree diff and repository state against

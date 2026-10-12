@@ -1,4 +1,4 @@
-import { agentForStage, toMilestoneProposal } from "@isotopy/core";
+import { stageTitleIn, toMilestoneProposal } from "@isotopy/core";
 import type { RunState, StageDefinition } from "@isotopy/core";
 import { extractMilestonePlan } from "../../schemas/milestone-plan.ts";
 import { formatValidationIssues } from "../../domain/validation.ts";
@@ -48,7 +48,7 @@ export class MilestonePlanConsumer implements StageOutputConsumer {
       return undefined;
     }
     return {
-      reason: `${agentForStage(stageDef).profession} produced no usable milestone plan — ${unusable}`,
+      reason: `${stageTitleIn(run, stageDef.id)} produced no usable milestone plan — ${unusable}`,
     };
   }
 }

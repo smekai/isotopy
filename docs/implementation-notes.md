@@ -337,8 +337,9 @@ set to `<project>/.isotopy/cache/ms-playwright`.
   adding a browser test can prune the machine's cache exactly as readily as a
   Tester. It is never set on the Isotopy server's own process, so this
   repository's `pnpm e2e` keeps using the host cache.
-- **Nothing extra hides the cache.** `ensureProjectDataDir` already writes
-  `.isotopy/.gitignore` containing `*`, and `SNAPSHOT_IGNORED_DIRECTORIES`
+- **Nothing extra hides the cache.** `ensureProjectDataDir` already writes an
+  `.isotopy/.gitignore` that ignores everything but the owner's `agents/` and
+  `steps/`, and `SNAPSHOT_IGNORED_DIRECTORIES`
   already excludes `.isotopy`, so a multi-hundred-megabyte cache is invisible to
   git and is never reported as files the run created.
 - **`toolCacheDir` is required on `EngineRunContext`, not optional.** Every run
@@ -890,9 +891,12 @@ and [`decisions.md`](./decisions.md) for why the home project is not `REPO_ROOT`
   `withDataDir` so the UI can name the folder runs land in without duplicating
   the layout rule, and a stored file can never disagree with `paths.ts`.
 - **`ensureProjectDataDir` runs at run start as well as at registration.** A
-  project registered before the self-ignoring `.gitignore` existed — or one whose
+  project registered before the `.gitignore` existed — or one whose
   `.isotopy/` was deleted — would otherwise accumulate run artifacts that show up in
-  the user's `git status`.
+  the user's `git status`. It also opens every project's database at startup, so an
+  `.isotopy/.gitignore` that still reads `*` is upgraded the first time the server
+  starts after `0.14`, and only a file whose whole content is that old `*` is
+  rewritten: anything the owner edited is theirs.
 
 ## Credentials (`services/settings-store.ts`)
 
@@ -1004,8 +1008,9 @@ when it settles. Why each piece is the way it is:
   entry ceilings and reports `truncated` so the UI can admit a partial list.
 - **`.isotopy` is excluded from the snapshot walk.** Every run writes its own logs,
   handoffs and change set under the project's `.isotopy/`, so without the exclusion a
-  run would report its own bookkeeping as work it did. Git never sees it either —
-  `ensureProjectDataDir` writes `.isotopy/.gitignore` containing `*` — but
+  run would report its own bookkeeping as work it did. Git never sees most of it
+  either — `ensureProjectDataDir`'s `.isotopy/.gitignore` lets through only the
+  owner's agent files — but
   `reportableChanges` filters both sources anyway, because the git path also has to
   survive a project that never called that function.
 - **`git status` alone is not enough.** An agent that commits its work leaves a clean
@@ -1051,13 +1056,37 @@ Windows, `open` and `xdg-open` are trusted to report failure the ordinary way. T
 path is always a single argument in an array — never spliced into a shell string —
 and the route resolves it from the run rather than accepting one from the client.
 
-## Skills / personas (`services/skills.ts`, `domain/skills/`)
+## Agents (`services/agent-catalog.ts`, `domain/skills/`)
 
-Personas ("skills") are Markdown on disk so they can be edited and re-run
-without a rebuild. The bundled files in `domain/skills/personas/` are the
-shipped source of truth and the server build copies them into `dist`. Override
-files are re-read whenever their mtime changes, so an edit applies to the next
-run.
+Personas and step tasks are Markdown on disk so they can be edited and re-run
+without a rebuild. The bundled files in `domain/skills/personas/` and
+`domain/skills/step-tasks/` are the shipped source of truth and the server build
+copies them into `dist`. `AgentCatalog` caches every file it reads on the
+instance, keyed by path and invalidated by mtime and size, so an edit applies to
+the next run; directories are listed again on every call, because a folder's mtime
+does not change when a file inside a subfolder is edited. Nothing lives at module
+scope, which keeps the catalog safe under the test runner's shared workers.
+
+**Front matter splits on `/?
+/` after a byte-order mark is dropped,** so a CRLF
+checkout and a file saved by an editor that writes a BOM parse the same. The first
+`---` line after the opening fence closes the block; any later `---` is a
+horizontal rule in the body. An unclosed block is refused rather than read as body,
+because reading it would hand the engine the YAML.
+
+**A file that exists but cannot be read never fails a stage.** "Not there" is the only
+silent fallback. Any other read error on a persona layer — the user override, the project
+addendum, the notes, a reference file — is left out and named in the stage's run log, and an
+unreadable agent or step file is left out of the catalog and reported on the operator channel,
+exactly as a malformed one is. Before this, an unreadable notes file (`TASK-195`'s case) threw out
+of the persona and failed the stage before the engine started.
+
+**A folder name is never trusted on its own.** On NTFS and APFS `Growth-Marketer/`
+and `growth-marketer/` are the same folder. The schema requires `name` to be a
+lowercase id equal to its file's own, so a folder or file named any other way never
+parses and is reported instead of shadowing the lowercase one. `persona(id)` checks
+the id before it builds the user-level override path, because that id can come from
+a stage definition rather than a directory listing.
 
 **Nothing is seeded to disk.** `loadSkill` used to write the bundled default to
 `.isotopy/skills/<id>.md` on first read; that copy then silently shadowed later
@@ -1065,25 +1094,50 @@ improvements to the constant and had to be regenerated by hand during the
 TASK-053 follow-up. Personas are **layered** instead, composed by the pure
 `composeSkill` (`domain/markdown/skill.ts`):
 
-1. bundled default in `domain/skills/personas/<id>.md`;
-2. replaced by a user-level `~/.isotopy/skills/<id>.md`, if present;
-3. replaced by `<project>/.isotopy/skills/<id>.md`, if present — the power-user
-   escape hatch;
-4. plus `<project>/.isotopy/skills/<id>.project.md` **appended** — the default way
+1. the base: `<project>/.isotopy/agents/<id>/agent.md` if the project brings one,
+   else a user-level `~/.isotopy/skills/<id>.md`, else the bundled default;
+2. plus the agent's reference library — every `agents/<id>/knowledge/*.md`, listed
+   by path and description, never inlined;
+3. plus `<project>/.isotopy/skills/<id>.project.md` **appended** — the default way
    to customise, carrying only the project's tweaks so improvements to the base
-   keep reaching it.
-5. plus `<project>/.isotopy/skills/<id>.notes.md` **appended** — what this role
-   learned about this project on earlier runs. Layer 4 is written by a human;
-   layer 5 is written by the role itself.
+   keep reaching it;
+4. plus `<project>/.isotopy/skills/<id>.notes.md` **appended** — what this role
+   learned about this project on earlier runs. Layer 3 is written by a human;
+   layer 4 is written by the role itself.
 
-The cache is keyed by resolved path, not skill id, because the data roots differ
-per project and an id-keyed cache would leak one project's persona into another.
-See [`architecture.md`](./architecture.md) for how the `architect`
-persona is generated from a single source.
+**Library paths are absolute, with forward slashes.** A home-project run executes in
+a scratch `runs/<id>/workspace/`, so a path relative to the project would not resolve
+from the engine's working directory. Claude Code, Codex and Cursor all accept forward
+slashes on Windows. Files are listed in name order so a prompt does not change between
+file systems that enumerate a directory differently.
+
+**A scheduled run takes the project's own engine and pinned model.** The browser applies
+`preferredRunOptions` to every run it starts, but a schedule is started by the server with nobody
+at the browser, so `ScheduleService` applies the same function itself. Before 2026-10-12 it did
+not: the first live duty ran on Claude Code's default model (Opus, $0.93) despite a haiku pin, and
+a project set to Cursor would still have been run on Claude. The pin is the owner's only cost cap
+for unattended work.
+
+**Duties are seeded, not watched.** `ScheduleService.seedDuties` runs when a project loads —
+at startup and when it is registered. A duty file written by hand
+while the server runs is seeded on the next of those, never from a file watcher, because cron
+stays the only thing that starts work. Deleting a seeded duty brings it back on the next load,
+as the board poller always has; switching it off is how an owner says no.
+
+**A role id is spelled out in `orchestrate.md`, not only enforced.** `composeTeamPipeline`
+refuses a role id that is not lowercase letters, digits and hyphens, but the assignment never
+said so. In the first live run with a project agent (2026-10-11, Claude Code on haiku) the
+Orchestrator proposed `campaign_planning`, and the owner could not approve the team it had
+proposed. The rule now sits beside the JSON example, and the second run proposed
+`campaign-planning`.
+
+The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
+in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)
+for how the `architect` and `tester` personas are generated from a single source.
 
 ## A role's memory of the project (`services/persona-notes-store.ts`, `domain/rules/persona-notes.ts`)
 
-The fifth skill layer above. Four properties are load-bearing and none is obvious
+The last skill layer above. Four properties are load-bearing and none is obvious
 from the code alone.
 
 **The invitation rides with the step task, not with the prompt.** `buildStagePrompt`

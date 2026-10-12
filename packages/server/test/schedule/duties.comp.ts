@@ -1,14 +1,25 @@
-// Component test: the one schedule every project has from the start, and the
-// reason it is safe to ship it — a fresh install and an upgraded project both
-// behave exactly as they did before it existed. An unattended loop that turns
-// itself on is the failure this file exists to prevent.
-import { afterEach, assert, beforeEach, expect, inject, test } from "vitest";
+// Component test: the schedules a project is given rather than writes — the board
+// poller every project has, and the duties its agents bring — and the reason they
+// are safe to ship: each is seeded switched off, a fresh install and an upgraded
+// project behave exactly as before, and nothing fires until the owner opts in. An
+// unattended loop that turns itself on is the failure this file exists to prevent.
+import { afterEach, assert, beforeEach, describe, expect, inject, test } from "vitest";
+import { HOME_PROJECT_ID } from "@isotopy/core";
 import type { ScheduleView, SettingsView } from "@isotopy/core";
-import { BUILT_IN_SCHEDULES } from "../../src/domain/rules/built-in-schedules.ts";
 import path from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { vi } from "vitest";
-import { createTestApp, del, get, post, put, restartApp } from "../support/harness.ts";
+import type { ProjectPath } from "../../src/paths.ts";
+import { writeProjectAgent, writeProjectDuty, writeProjectStep } from "../support/agent-files.ts";
+import {
+  createTestApp,
+  del,
+  get,
+  post,
+  put,
+  restartApp,
+  waitForRunStatus,
+} from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 
 let ctx: TestApp;
@@ -27,9 +38,7 @@ test("every project has the built-in schedules from the start, and every one is 
   const { body: schedules } = await get<ScheduleView[]>(ctx.app, "/schedules");
 
   // Assert
-  expect(schedules.map((schedule) => schedule.builtIn)).toEqual(
-    BUILT_IN_SCHEDULES.map((definition) => definition.key),
-  );
+  expect(schedules.map((schedule) => schedule.builtIn)).toEqual(["board-poller"]);
   expect(schedules.every((schedule) => !schedule.enabled)).toBe(true);
 });
 
@@ -173,6 +182,126 @@ test("a schedule blocked by the project gate says so and offers no fire time", a
   expect(blocked?.blockedBy).toBe("built_ins_disabled");
   expect(blocked?.nextFireAt).toBeUndefined();
 });
+
+describe("duties an agent brings", () => {
+  beforeEach(async () => {
+    await writeProjectAgent(ctx.home);
+    await writeProjectStep(ctx.home);
+  });
+
+  test("a duty an agent brings is seeded switched off, with its cron, timezone and pinned team", async () => {
+    // Arrange
+    await writeProjectDuty(ctx.home, { team: METRICS_TEAM });
+    await ctx.orchestrator.shutdown();
+
+    // Act
+    const restarted = await restartApp();
+
+    // Assert
+    expect(dutyIn(restarted.schedules.listSchedules(HOME_PROJECT_ID))).toMatchObject({
+      name: "Weekly metrics",
+      cron: "0 8 * * 1",
+      timezone: "UTC",
+      team: METRICS_TEAM,
+      enabled: false,
+    });
+    await restarted.shutdown();
+  });
+
+  test("a duty is seeded once, and editing its file afterwards leaves the schedule as it was", async () => {
+    // Arrange
+    await writeProjectDuty(ctx.home);
+    await ctx.schedules.seedDuties(home());
+    await writeProjectDuty(ctx.home, { cron: "0 9 * * 1" });
+
+    // Act
+    await ctx.schedules.seedDuties(home());
+
+    // Assert
+    const seeded = ctx.schedules
+      .listSchedules(HOME_PROJECT_ID)
+      .filter((schedule) => schedule.builtIn === DUTY_KEY);
+    expect(seeded.map((schedule) => schedule.cron)).toEqual(["0 8 * * 1"]);
+  });
+
+  test("a duty whose cron cannot be parsed is not seeded, and the operator log says why", async () => {
+    // Arrange
+    await writeProjectDuty(ctx.home, { cron: "every monday" });
+
+    // Act
+    await ctx.schedules.seedDuties(home());
+
+    // Assert
+    expect(dutyIn(ctx.schedules.listSchedules(HOME_PROJECT_ID))).toBeUndefined();
+    expect(ctx.logger.at("warn").map((entry) => entry.message)).toContainEqual(
+      expect.stringContaining(DUTY_KEY),
+    );
+  });
+
+  test("a duty an agent brings waits on the same project switch as the board poller", async () => {
+    // Arrange
+    await writeProjectDuty(ctx.home);
+    await ctx.schedules.seedDuties(home());
+    await enable(seededDuty().id);
+
+    // Act
+    const { body: schedules } = await get<ScheduleView[]>(ctx.app, "/schedules");
+
+    // Assert
+    expect(dutyIn(schedules)?.blockedBy).toBe("built_ins_disabled");
+  });
+
+  test("an enabled duty, with the switch on, runs the team it pins", async () => {
+    // Arrange
+    await writeProjectDuty(ctx.home, { team: METRICS_TEAM });
+    await ctx.schedules.seedDuties(home());
+    await put<SettingsView>(ctx.app, "/settings/preferences", { builtInSchedules: true });
+    await enable(seededDuty().id);
+
+    // Anticipate
+    ctx.engine
+      .anticipate({ as: "Growth Marketer", persona: /^# Role: Growth Marketer/ })
+      .reports("Read the numbers.\n\nVERDICT: PASS");
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const outcome = await ctx.schedules.fire(seededDuty().id);
+
+    // Assert
+    assert(outcome?.kind === "fired", "the duty fired");
+    await waitForRunStatus(ctx.app, outcome.runId, "completed");
+    ctx.engine.verify();
+  });
+});
+
+const DUTY_KEY = "growth-marketer/weekly-metrics";
+
+const METRICS_TEAM = {
+  name: "Metrics reader",
+  summary: "Read the numbers and propose the next experiment",
+  roles: [
+    {
+      id: "metrics",
+      label: "Reading the numbers",
+      skill: "growth-marketer",
+      stepTask: "plan-campaign",
+    },
+  ],
+};
+
+function home(): ProjectPath {
+  return ctx.registry.resolve(HOME_PROJECT_ID);
+}
+
+function dutyIn(schedules: ScheduleView[]): ScheduleView | undefined {
+  return schedules.find((schedule) => schedule.builtIn === DUTY_KEY);
+}
+
+function seededDuty(): ScheduleView {
+  const duty = dutyIn(ctx.schedules.listSchedules(HOME_PROJECT_ID));
+  assert(duty, "the duty was seeded");
+  return duty;
+}
 
 function preferencesOf(response: { body: SettingsView }): boolean {
   return response.body.preferences.builtInSchedules;

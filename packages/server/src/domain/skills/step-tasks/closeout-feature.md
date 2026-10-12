@@ -1,3 +1,7 @@
+---
+name: closeout-feature
+description: "Consolidate decisions, knowledge, findings, and the next recommendation."
+---
 # Assignment: Close out the feature run
 
 This is a closeout, not a decision: end it with a `VERDICT:` line and the

@@ -1,3 +1,7 @@
+---
+name: plan-feature
+description: "Turn a request into one coherent, implementable feature."
+---
 # Assignment: Plan a feature
 
 Turn the user's request into one coherent feature a Developer can implement

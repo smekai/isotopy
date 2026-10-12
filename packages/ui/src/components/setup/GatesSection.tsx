@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
 import {
   DEMO_PIPELINES,
-  agentForStage,
+  catalogAgentLook,
   flattenPipelineStages,
   gateEnabled,
   gateKey,
 } from "@isotopy/core";
-import type { PipelineDefinition, StageDefinition } from "@isotopy/core";
+import type { CatalogAgent, PipelineDefinition, StageDefinition } from "@isotopy/core";
 import { RADIUS, SPACE } from "../../theme";
 import type { Dir } from "../../theme";
 import type { SettingsController } from "../../hooks/useSettings";
@@ -52,17 +52,19 @@ function mutedBadge(d: Dir): CSSProperties {
 export interface GatesSectionProps {
   d: Dir;
   settings: SettingsController;
+  agents: CatalogAgent[];
 }
 
-export function GatesSection({ d, settings }: GatesSectionProps) {
+export function GatesSection({ d, settings, agents }: GatesSectionProps) {
   const { gates, builtInSchedules } = settings.preferences;
 
   return (
     <div>
       <div style={sectionTitle(d)}>Unattended work</div>
       <div style={sectionSubtitle(d)}>
-        Whether this project may run the schedules that ship with the product. Off by default; each
-        built-in still has its own switch, and both must be on before anything runs.
+        Whether this project may run the schedules it was given rather than wrote: the board poller
+        and every duty an agent brings. Off by default; each still has its own switch, and both must be
+        on before anything runs.
       </div>
       <button
         data-testid="built-in-schedules-toggle"
@@ -72,14 +74,14 @@ export function GatesSection({ d, settings }: GatesSectionProps) {
       >
         <div style={{ flex: 1 }}>
           <div style={GATE_CARD_HEADER}>
-            <div style={optionLabel(d)}>Allow built-in schedules</div>
+            <div style={optionLabel(d)}>Allow the schedules agents bring</div>
             <div style={builtInSchedules ? accentBadge(d) : mutedBadge(d)}>
               {builtInSchedules ? "ALLOWED" : "OFF"}
             </div>
           </div>
           <div style={builtInSchedules ? mutedBody(d) : mutedCaption(d)}>
-            The board poller starts work on its own when nothing is running. Leave this off unless
-            you want the team acting without you.
+            The board poller and every agent's duties start work on their own when nothing is running.
+            Leave this off unless you want the team acting without you.
           </div>
         </div>
       </button>
@@ -102,6 +104,7 @@ export function GatesSection({ d, settings }: GatesSectionProps) {
                   d={d}
                   pipeline={pipeline}
                   stage={stage}
+                  agentTitle={catalogAgentLook(agents, stage.skill ?? stage.id).title}
                   enabled={gateEnabled(pipeline.id, stage, gates)}
                   onToggle={(next) =>
                     settings.update({ gates: { [gateKey(pipeline.id, stage.id)]: next } })
@@ -120,11 +123,12 @@ interface GateCardProps {
   d: Dir;
   pipeline: PipelineDefinition;
   stage: StageDefinition;
+  agentTitle: string;
   enabled: boolean;
   onToggle: (next: boolean) => void;
 }
 
-function GateCard({ d, pipeline, stage, enabled, onToggle }: GateCardProps) {
+function GateCard({ d, pipeline, stage, agentTitle, enabled, onToggle }: GateCardProps) {
   return (
     <button
       data-testid={`gate-toggle-${gateKey(pipeline.id, stage.id)}`}
@@ -140,7 +144,7 @@ function GateCard({ d, pipeline, stage, enabled, onToggle }: GateCardProps) {
           </div>
         </div>
         <div style={enabled ? mutedBody(d) : mutedCaption(d)}>
-          The {agentForStage(stage).profession}'s output needs your approval before the team
+          The {agentTitle}'s output needs your approval before the team
           continues.
         </div>
       </div>

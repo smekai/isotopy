@@ -1,5 +1,127 @@
 # Backlog
 
+## TASK-202: The server is organised by concept, and a boundary schema is the domain type
+**Priority:** P2 | **Tags:** server, infra
+**Updated:** 2026-10-12 19:51
+
+Raised by the owner on 2026-10-12, reviewing `schemas/agent-definition.ts` in the Shared agents PR (#86). **Think first**: the shape below is a starting point to discuss, not a decision.
+
+### The problem
+
+**1. One concept is spread across layers.** Nine places know what an agent is: `schemas/agent-definition.ts`, `domain/rules/agent-catalog.ts`, `domain/rules/persona-notes.ts` (`SKILL_ID`), `domain/markdown/front-matter.ts`, `domain/markdown/skill.ts`, `domain/skills/*`, `services/agent-catalog.ts`, `routes/agents.ts` and `core/agents.ts`. Schedules, runs and milestones are split the same way. That is rule A3: folders are named for a layer, never a concept.
+
+**2. The line between `schemas/` and `domain/` is blurred, and moving files into concept folders would not fix it.**
+- `agent-definition.ts` holds the zod shapes and, next to them, domain rules: `name` must equal the folder id, a duty's body must not be empty, `composable` defaults to `true`.
+- It also hand-writes `AgentDefinition`, `StepDefinition` and `DutyDefinition`, which restate what zod already knows (`PersonaFrontMatter` → `toAgent` → `AgentDefinition`).
+- The same thing is described twice. Put both files in `src/agents/` and the two halves simply sit in one folder.
+
+### A shape to start from
+
+1. **One rule that removes the duplicate.** Reading one input (a file, a request body, a stored JSON blob, a fenced block in an agent's report) returns the domain type directly.
+   - The zod schema with its `.transform` is the type's definition: `type AgentDefinition = z.output<typeof agentFileSchema>`. No hand-written interface beside it.
+   - Checks on that one input live in its schema, including those that need context such as "`name` equals the folder id"; the context is a parameter.
+   - Only decisions that weigh several values become rules: merging the catalog, known ids, team composition, schedule validity.
+   - "Schema versus domain" is replaced by "reading one input versus rules over many".
+2. **A module per concept:** `agents/`, `schedules/`, `runs/`, `orchestration/`, `milestones/`, `projects/`, `settings/`.
+   - The product-neutral kernel stays apart: `utils/`, `db/`, `workflow/`, `engines/`, and `TASK-201`'s document reader.
+   - The bundled prompts move into their module (`agents/bundled/`).
+   - `packages/core` is unchanged; the UI shares it.
+3. **Purity is set by file name, not folder.** Only `*-service.ts`, `*-store.ts`, `*-repository.ts` and `*-routes.ts` may do I/O. eslint forbids `node:fs*`, `node:child_process` and `node:net` in every other module file. Today nothing enforces `domain/`'s purity at all, so this is a gain.
+4. **Pilot on agents**, then one PR per concept, each a pure move with no behaviour change. Tests follow into `test/<module>/`.
+
+### Open questions
+
+- `src/<module>/` or `src/modules/<module>/`?
+- Where does something two modules share live? `team-composition` serves both schedules and orchestration.
+- Do routes move into their module, or stay one HTTP layer?
+- Order against `TASK-201`: doing the document layer first would make the agents pilot's reader thin from the start.
+
+### Done when
+
+- `docs/decisions.md` has the entry: context, decision, and "keep A3" as the rejected alternative.
+- A3 and the placement section of `docs/architecture.md` are rewritten.
+- The eslint purity rule is on.
+- The pilot is merged and the other modules are filed as tasks.
+- The whole suite is green with no behaviour change, on Windows and macOS.
+
+---
+## TASK-201: One reader for every markdown document Isotopy parses
+**Priority:** P3 | **Tags:** core, server
+**Updated:** 2026-10-12 07:54
+
+Raised by the owner on 2026-10-12, after the Shared agents PR (#86) added a fourth markdown file format. **Not now**: start when a fifth format arrives — most likely `TASK-162`'s `tools`, `context` and `setup` on a step — or when one of the readers below gets a bug the others already fixed.
+
+### What exists
+
+About 230 lines of hand-written parsing across six places, each solving the same small problems — CRLF against LF, a byte-order mark, markdown decoration around a marker, and what to do with a malformed input — in its own way:
+
+| Input | Reader | What it handles |
+| --- | --- | --- |
+| Agent, step, knowledge and duty files | `domain/markdown/front-matter.ts`, `schemas/agent-definition.ts` | YAML front matter + body, BOM, CRLF |
+| Persona notes | `domain/rules/persona-notes.ts` | a bullet list |
+| Orchestrator context | `domain/rules/orchestrator-context.ts`, `schemas/orchestrator-context.ts` | free text with limits |
+| Agent output protocols (decision, closeout, release, milestone plan, notes, run artifacts) | `schemas/fenced-block.ts` | a fenced JSON block |
+| Verdict and question lines | `domain/rules/stage-context.ts` | a marker line tolerant of `**`, backticks, CRLF |
+
+The task board is not on this list on purpose: TaskPlanner's own library reads it.
+
+### Shape
+
+A small document layer, not a markdown framework:
+
+1. **Read a document**: normalise BOM and line endings once at the boundary, then return `{ meta, body }` validated by a schema. This replaces `splitFrontMatter`.
+2. **Take a fenced block**: the JSON protocol in an agent's report, with one policy for malformed output.
+3. **Find a marker line**: `VERDICT:` and `QUESTION:`, tolerant of markdown decoration.
+4. **One error policy, written down**: a malformed file on disk is left out and reported on the operator channel; a malformed agent report is a refusal with the parser's reason.
+
+Persona notes and the Orchestrator's context could then become ordinary front-matter documents instead of formats of their own.
+
+### Rejected up front
+
+**remark / unified, or any full markdown AST.** What Isotopy reads is a handful of small protocols carried inside markdown, not markdown structure. A full tree would make each protocol harder to state and add a dependency tree for nothing the five readers need.
+
+### Out of scope
+
+The prompt renderers in `domain/markdown/*` build markdown; they do not parse it, and `format.ts` already serves them.
+
+Cross-platform: the point of the layer is that line endings and BOM are handled once, so a CRLF checkout on Windows and an LF one on macOS read identically everywhere. Tests: one spec over the layer's primitives, and the existing component tests for each format must stay green unchanged.
+
+---
+## TASK-200: Agent packs — install a set of agents from a folder or a git repository
+**Priority:** P3 | **Tags:** core, server, ui | **Epic:** Shared agents
+**Updated:** 2026-10-12 07:19
+
+The "shared" in **Shared agents** (`TASK-196`), and the last part of it.
+
+After `TASK-197` to `TASK-199`, a project's agents are files in its `.isotopy/`. A **pack** is the same files kept somewhere else, a folder holding `agents/` and `steps/`. Installing one copies them in.
+
+**Start when** a second project wants agents that a first one already has, for example ShareTravel's growth team in the arcade. Designing the install format before then would be guessing.
+
+### Shape, to confirm when started
+
+- **Source:** a local folder, or a git URL at a ref. A git source is cloned into a temporary directory and copied into `<project>/.isotopy/`. `.isotopy/packs.json` records the source, ref, commit and the files the install wrote.
+- **Only `agents/` and `steps/` are copied.** Never `skills/`: notes and addenda belong to the project.
+- **Update re-copies and shows the diff before writing.** A pack file the project has edited is a conflict to show, not to overwrite. A project's tweaks belong in the addendum, which is why it exists.
+- **A declared tool is shown before anything is written.** A step can declare an MCP server (`TASK-162`) that launches on the next run. That is the one place a pack reaches past markdown, so the owner sees it first.
+- **Setup gains "Add agents from…".** A marketplace is a list of pack URLs on top of this, and is not part of this task.
+- Agent front matter follows Claude Code's own agent and skill files (`name`, `description`; `TASK-197`). Whether a folder of Claude Code subagents installs as a pack unchanged is a question for when this starts.
+
+### Evidence
+
+- installing from a folder writes the files and the record;
+- an install never touches `skills/`;
+- updating over a locally edited file reports the conflict and writes nothing;
+- a pack that declares a tool shows it before writing.
+
+Cross-platform: `git` is found with `where` on Windows and `which` on POSIX, per the binary-lookup rule, and run through `runSubprocess`. The temporary clone goes under `os.tmpdir()` with `path.join`; files are copied with `fs.cp`. A pack whose files have CRLF line endings installs byte-identical. Install hints shown to the user come in both PowerShell and bash.
+
+### Plan
+
+**Built and withdrawn, 2026-10-12, with the owner.** A full implementation — install from a folder or a git repository with a ref and a folder inside it, `.isotopy/packs.json` with a sha256 per file, refusing a re-install over an edited file, and "Add agents from…" in Setup — was built on `feature/shared-agents-196` (commits a18c1be, 19e472d, 346b3cd, about 1500 lines with tests) and reverted before the PR. The owner's reasoning: agents are plain files, so copying a folder into `.isotopy/agents/` and `.isotopy/steps/` already shares them, and the two things an installer adds — a safe update that knows which files the owner edited, and seeding duties without a restart — only pay off once several projects share agents often. The reverted commits stay in the branch history as the reference implementation when that day comes.
+
+**Start when** the owner finds themselves copying the same agents between projects more than once.
+
+---
 ## TASK-192: A limit resolved as its reset fires cannot release a later park
 **Priority:** P3 | **Tags:** server, engine
 **Updated:** 2026-10-06 18:30
@@ -112,7 +234,9 @@ Decide whether a quality stage's blocking finding should send the run back to `i
 ---
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
 **Priority:** P2 | **Tags:** core, server, milestone-i
-**Updated:** 2026-10-04 17:49
+**Updated:** 2026-10-11 18:20
+
+**Rescoped 2026-10-11, with the owner.** The catalog half of this task — step tasks as files with front matter, read from the project and replacing a bundled one by id, the catalog derived from those files, and `team-composition.ts` taking the known ids as a parameter — is delivered by `TASK-197` (**Shared agents**, `TASK-196`). What remains here is what a step *declares*: `agent`, `tools`, `context` and `setup` keys on that same front matter, and the MCP plumbing that lets a step carry a tool. The epic's agent packs (`TASK-200`) refuse a `tools:` key until this lands.
 
 The owner's boundary, as data on a task rather than a judgment in a prompt. Of **Milestone I —
 Induction** (`TASK-156`). **Lands before `TASK-161` is ever enabled.**
@@ -143,27 +267,15 @@ without one.
 
 The owner's shape, and the one this task builds: **the main point of a step is its task** — an MD
 file describing a specific thing an agent must do — and that file names the agent, the tools, the
-setup and the context it needs. Isotopy has half of this already: `PERSONA_CATALOG` (10 personas,
-layered bundled → user → project) and `STEP_TASK_CATALOG` (10 bundled MD files). The pairing is
-chosen by the *role* rather than by the task, tools do not exist, and step-specific setup is a
-branch in code — `if (stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK)` in `stage-execution.ts`.
-That branch is the smell this removes: a step declares what it needs instead of the workflow
-special-casing it by id.
+setup and the context it needs. The pairing is chosen by the *role* rather than by the task, tools
+do not exist, and step-specific setup is a branch in code —
+`if (stageDef.stepTask !== VERIFY_FEATURE_STEP_TASK)` in `stage-execution.ts`. That branch is the
+smell this removes: a step declares what it needs instead of the workflow special-casing it by id.
 
-**YAML front matter**, parsed once at the boundary with a strict schema — `agent: developer`,
-`tools: [taskplanner]`, `context: [product-environment]`, and the `summary:` that used to live in
-the catalog, fenced by the usual delimiters above the assignment prose. (Written inline here rather
-than as a block: a bare `---` line inside a task section is what TaskPlanner's own parser uses to
-end one, so an example carrying its delimiters would truncate this task on the next board read.)
+**Front matter already exists** (`TASK-197`): YAML, parsed once in `schemas/agent-definition.ts`
+against a strict schema, with `name` and `description`. This task adds `agent: developer`,
+`tools: [taskplanner]` and `context: [product-environment]` to the step schema.
 
-- The split is pure (`domain/markdown/`), the schema strict (`schemas/`), the reading a service —
-  domain never imports `node:fs`, and `structure.spec.ts` enforces it.
-- **Step tasks start layering like personas do**: bundled → user override → project addendum,
-  reusing `composeSkill` and the `userSkillsDir()` / `skillsDir()` paths. Persona *notes* stay
-  persona-only. This is what makes the library the user's to grow rather than ours to ship.
-- `STEP_TASK_CATALOG` stops being a hand-maintained array; each `summary` moves into its file.
-  `team-composition.ts` is pure domain and builds its id sets at module scope, so it takes the
-  known ids as parameters rather than importing a catalog that now reads the disk.
 - `role.skill` becomes optional and defaults to the task's `agent:`. The task is the main point; a
   role may still override.
 - `context` and `setup` are **closed vocabularies**, each derived from one `as const` tuple — not an
@@ -180,7 +292,8 @@ runs without it and says so in the run log** rather than failing or pretending.
 
 **Isotopy is not an MCP client — the engine CLI is.** Isotopy renders config and passes flags, so no
 MCP SDK enters this repo. The first and only tool is `taskplanner`, published as `@smekai/taskplanner`
-by TaskPlanner's `TASK-046` and pinned in this repo's `package.json`.
+by TaskPlanner's `TASK-046` and pinned in this repo's `package.json`. Installing an agent pack
+(`TASK-200`) must show the tools it declares before it writes anything.
 
 ### What TaskPlanner 2.3.0 changes about this task
 
@@ -250,16 +363,16 @@ a stated boundary is the agent's job, not the scheduler's.
 
 ### Evidence
 
-Failing-first, one behaviour per test: a step-task file with front matter parses to its declaration
-and a malformed one is rejected with a stated reason; a project override and addendum compose over
-the bundled step task, and a project step task the bundled catalog never knew is selectable by a
-role; a step declaring `tools: [taskplanner]` produces the right MCP config per adapter, and an
-engine without the capability runs anyway and logs why; `**Assignee:** owner` round-trips a write
-and re-read and TaskPlanner's own parser reads back the same assignee; a date-blocked task is
-skipped for a different stated reason than an owner-marked one; a closeout creates a marked
-follow-up; and the poller's prompt names the `@owner` rule. Then the full gate set, then the live
-app with a marked task on the board that the agent reads and leaves alone. **No schedule fires
-against a real CLI in the dev app** — firing is proven against `FakeEngine`, as `TASK-161` did.
+Failing-first, one behaviour per test: a step-task file declaring `agent`, `tools` and `context`
+parses to its declaration and an unknown tool or context is rejected with a stated reason; a step
+declaring `tools: [taskplanner]` produces the right MCP config per adapter, and an engine without
+the capability runs anyway and logs why; a role without a `skill` takes the step's `agent:`;
+`**Assignee:** owner` round-trips a write and re-read and TaskPlanner's own parser reads back the
+same assignee; a date-blocked task is skipped for a different stated reason than an owner-marked
+one; a closeout creates a marked follow-up; and the poller's prompt names the `@owner` rule. Then
+the full gate set, and the live app with a marked task on the board that the agent reads and leaves
+alone. **No schedule fires against a real CLI in the dev app** — firing is proven against
+`FakeEngine`, as `TASK-161` did.
 
 Cross-platform: `require.resolve('@smekai/taskplanner/mcp-server')` yields `dist/mcp-server.js`, and
 handing that JavaScript path to Node is exactly what **avoids** the Windows `.cmd` shim and the
@@ -274,6 +387,8 @@ recorded untested unless a Mac is used.
 
 ### Plan
 
+**Rescoped 2026-10-11.** The front-matter format question below is settled: YAML, parsed by the `yaml` package against strict zod schemas, as `TASK-197` delivered it. This task extends that schema; it does not choose a grammar.
+
 **Moved to Backlog 2026-10-04, with the owner.** What remains here — a step that declares its own agent, tools and context, and the MCP plumbing that lets a step carry a tool — is a capability, not a blocker for Milestone I: the boundary it was written for shipped as `TASK-173`. PR #72 is closed; its branch `feature/task-162-step-declares-itself` stays as reference, but it predates `TASK-170`, `TASK-172`, `TASK-173` and `TASK-176` and conflicts on the board, so pick this up by rebuilding from `main`, not by reviving that branch. The `@smekai/taskplanner` 2.3.1 gate below is long cleared (the repo pins 2.4.7).
 
 **Split on 2026-09-16.** This task had grown to +3345/−834 across four mechanisms, and the two halves
@@ -282,9 +397,7 @@ turned out to have different scope and different readiness:
 - **`TASK-173` took the board reader and the owner's mark** — the half the milestone blocks on. It
   needs nothing new, works on both platforms today, and is already delivered.
 - **This task keeps the mechanism** — a step task that declares its own agent, tools and context, and
-  the MCP plumbing that lets a step carry a tool. That is roughly +1900/−143: 12 new modules and 7
-  new test suites, almost pure addition, because it is new capability rather than a change to
-  existing code.
+  the MCP plumbing that lets a step carry a tool.
 
 The premise that joined them was that the agent must read `**Assignee:**` *through* an MCP tool,
 because `taskSummariesIn` stripped every `**`-prefixed line. Making the digest show the mark is the
@@ -292,15 +405,7 @@ direct fix, and `TASK-173` did it. The tool path remains worth having on its own
 declaring what it needs is a product capability the owner asked for on 2026-08-26 — but it is no
 longer the boundary's blocker.
 
-**Gated on `@smekai/taskplanner` 2.3.1.** The MCP server is the agent's reader here, and 2.3.0 has
-two defects that only reach that path: a CRLF board parses to zero tasks (indistinguishable from an
-empty board), and any read tool rewrites the caller's `config.json`. Both are fixed in
-smekai/taskplanner#10 and need publishing before this can land.
-
-Two open questions for the owner on this half: whether to replace the hand-rolled front-matter
-grammar with JSON metadata (~119 lines plus the coercions and the summary fallback — a format change
-to 13 shipped files), and confirmation that `agent` defaults stay, given the approval card now
-resolves the persona into the proposal.
+One open question for the owner on this half: confirmation that `agent` defaults stay, given the approval card now resolves the persona into the proposal.
 
 ---
 ## TASK-175: Isotopy raises its own events, and a long-running workflow awaits them

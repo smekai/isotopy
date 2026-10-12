@@ -376,6 +376,7 @@ function makeCloseoutRun() {
     milestoneId: "milestone",
     featureId: "feature",
     sourceTaskIds: ["TASK-001", "TASK-002"],
+    agents: new Map(),
   });
 }
 
@@ -411,6 +412,7 @@ function makeComposedTeamRun() {
       groups: [{ stages: [COMPOSED_CLOSEOUT_STAGE] }],
     },
     sourceTaskIds: ["TASK-001", "TASK-002"],
+    agents: new Map(),
   });
 }
 

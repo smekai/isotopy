@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import {
   addUsage,
-  agentForStage,
   isTerminalRunStatus,
   orchestrationSchema,
   orchestrationStatusFor,
   parkedQuestion,
+  stageTitleIn,
 } from "@isotopy/core";
 import type {
   ModelTier,
@@ -49,7 +49,7 @@ import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../domain/skills/catalog.ts";
+import { catalogLines } from "../domain/rules/agent-catalog.ts";
 import {
   composeTeamPipeline,
   generationOf,
@@ -67,6 +67,7 @@ import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
 import { readOrchestratorContext, writeOrchestratorContext } from "./skills.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
+import type { AgentCatalog } from "./agent-catalog.ts";
 import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
@@ -103,6 +104,7 @@ export class OrchestrationService implements StageOutputConsumer {
     private readonly runs: RunService,
     private readonly settings: SettingsStore,
     private readonly databases: ProjectDatabases,
+    private readonly agents: AgentCatalog,
     logger: Logger,
   ) {
     this.logger = logger.child("OrchestrationService");
@@ -231,6 +233,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const composed = composeTeamPipeline(
       approved.value,
+      await this.agents.knownIds(projectPath),
       orchestration.id,
       nextGeneration(orchestration),
     );
@@ -309,7 +312,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!orchestration) {
       return undefined;
     }
-    const profession = agentForStage(stageDef).profession;
+    const profession = stageTitleIn(run, stageDef.id);
     const parsed = extractOrchestratorDecision(output);
     if (!parsed.ok) {
       const cause = formatValidationIssues(parsed.issues);
@@ -644,7 +647,12 @@ export class OrchestrationService implements StageOutputConsumer {
     const running = orchestration.composedPipeline;
     const approved = withRoleTiers(decision.team, undefined);
     const composed = approved.ok
-      ? composeTeamPipeline(approved.value, orchestration.id, currentGeneration(orchestration))
+      ? composeTeamPipeline(
+          approved.value,
+          await this.agents.knownIds(projectPath),
+          orchestration.id,
+          currentGeneration(orchestration),
+        )
       : undefined;
     if (!running || !composed?.ok || !sameComposition(composed.value, running)) {
       return undefined;
@@ -808,16 +816,17 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [tasksContext, closeoutContext, personaNotes, orchestratorContext] = await Promise.all([
-      taskBoardFor(projectPath).tasksContext(),
-      milestoneCloseoutContext(projectPath),
-      personaNotesByRole(projectPath),
-      readOrchestratorContext(projectPath),
-    ]);
+    const [tasksContext, closeoutContext, personaNotes, orchestratorContext, catalog] =
+      await Promise.all([
+        taskBoardFor(projectPath).tasksContext(),
+        milestoneCloseoutContext(projectPath),
+        personaNotesByRole(projectPath),
+        readOrchestratorContext(projectPath),
+        this.agents.catalog(projectPath),
+      ]);
     return {
       goal,
-      personas: PERSONA_CATALOG,
-      stepTasks: STEP_TASK_CATALOG,
+      ...catalogLines(catalog),
       tasksContext,
       closeoutContext,
       gatePreference: renderGatePreference(

@@ -3,7 +3,7 @@ import type {
   OrchestratorTeamProposal,
   CloseoutReport,
 } from "@isotopy/core";
-import type { CatalogEntry } from "../skills/catalog.ts";
+import type { CatalogEntry } from "../rules/agent-catalog.ts";
 import { ORCHESTRATOR_CONTEXT_LIMITS } from "../rules/orchestrator-context.ts";
 import type { PersonaNoteSet } from "../rules/persona-notes.ts";
 import { renderCloseoutBody } from "./closeout.ts";

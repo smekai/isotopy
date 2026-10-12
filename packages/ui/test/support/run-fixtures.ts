@@ -30,8 +30,17 @@ const SHIPPED_SKILLS = new Map(
   DEMO_PIPELINES.flatMap(flattenPipelineStages).map((def) => [def.id, def.skill]),
 );
 
+// A run records each stage's agent title when it starts; these are the titles the
+// bundled catalog gives the shipped stages these fixtures use.
+const RECORDED_TITLES = new Map([
+  ["project-manager", "Product Manager"],
+  ["developer", "Developer"],
+  ["tester", "QA Engineer"],
+]);
+
 export function stage(id: string, status: StageStatus = "pending"): StageState {
-  return { id, label: id, skill: SHIPPED_SKILLS.get(id) ?? id, status, logs: [] };
+  const skill = SHIPPED_SKILLS.get(id) ?? id;
+  return { id, label: id, skill, title: RECORDED_TITLES.get(skill), status, logs: [] };
 }
 
 /** A stage that has started, so the transcript gives it a divider. */

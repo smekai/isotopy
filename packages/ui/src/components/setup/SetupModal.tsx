@@ -1,19 +1,22 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { X } from "lucide-react";
+import type { AgentCatalogController } from "../../hooks/useAgentCatalog";
 import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, RADIUS, SANS, SPACE, WEIGHT, Z } from "../../theme";
 import type { Dir } from "../../theme";
+import { AgentsSection } from "./AgentsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { AutomationSection } from "./AutomationSection";
 import { GatesSection } from "./GatesSection";
 import { HarnessSection } from "./HarnessSection";
 import { FLEX_FILL, WHITE, mutedCaption } from "./setup-styles";
 
-export type SetupSection = "harness" | "gates" | "appearance" | "automation";
+export type SetupSection = "harness" | "agents" | "gates" | "appearance" | "automation";
 
 const SECTIONS: { id: SetupSection; label: string }[] = [
   { id: "harness", label: "AI Harness" },
+  { id: "agents", label: "Agents" },
   { id: "gates", label: "Gates" },
   { id: "appearance", label: "Appearance" },
   { id: "automation", label: "Automation" },
@@ -106,6 +109,7 @@ export interface SetupModalProps {
   projectId: string;
   projectName: string;
   settings: SettingsController;
+  agents: AgentCatalogController;
   section?: SetupSection;
   onClose: () => void;
 }
@@ -115,6 +119,7 @@ export function SetupModal({
   projectId,
   projectName,
   settings,
+  agents,
   section = "harness",
   onClose,
 }: SetupModalProps) {
@@ -141,7 +146,8 @@ export function SetupModal({
 
         <div style={BODY}>
           {sec === "appearance" && <AppearanceSection d={d} />}
-          {sec === "gates" && <GatesSection d={d} settings={settings} />}
+          {sec === "agents" && <AgentsSection d={d} catalog={agents} />}
+          {sec === "gates" && <GatesSection d={d} settings={settings} agents={agents.agents} />}
           {sec === "harness" && (
             <HarnessSection d={d} projectName={projectName} settings={settings} />
           )}

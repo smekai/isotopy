@@ -1,4 +1,5 @@
 import type {
+  AgentCatalogEntry,
   DeploymentRecord,
   Milestone,
   MilestonePlan,
@@ -122,6 +123,10 @@ export function updateSchedule(
 
 export function deleteSchedule(scheduleId: string): Promise<void> {
   return requestJson<void>(`/schedules/${scheduleId}`, { method: "DELETE" });
+}
+
+export function fetchAgentCatalog(): Promise<AgentCatalogEntry[]> {
+  return requestJson<AgentCatalogEntry[]>("/agents");
 }
 
 export function fetchSettings(): Promise<SettingsView> {

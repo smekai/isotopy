@@ -15,6 +15,70 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-11 — An agent is a file whose front matter is its catalog entry
+
+**Context:** who may be on a team was decided by three lists in code — `PERSONA_CATALOG` and
+`STEP_TASK_CATALOG` on the server, `AGENTS` in core — so a project could not add a growth
+marketer, and a persona's summary, display name and prose lived in three places (`TASK-196`).
+
+**Decision:** every persona and step task opens with **YAML front matter**, parsed with the `yaml`
+package and checked against a strict schema in `schemas/agent-definition.ts`. A persona carries
+`name` (its id), `title`, `glyph` and `description`; a step carries `name`, `description` and, for
+the Orchestrator's own three assignments, `composable: false`. `name` is always an id and must
+equal the file's own; `title` is always what a person reads. The keys follow Claude Code's own
+agent and skill files, so one written for either reads in the other. Aliases are refused (a small
+file cannot expand into a large document), duplicate keys are refused, and the front matter never
+reaches a prompt.
+
+**Decision: the catalog is the files.** A project brings an agent as
+`.isotopy/agents/<id>/agent.md` and a step as `.isotopy/steps/<id>.md`; with a bundled id it
+replaces the bundled one. The merged catalog is what the Orchestrator chooses from and what team
+composition and schedule validation accept, passed to those pure rules as known ids. A project
+step that reuses an Orchestrator-only id stays out of what a team may compose.
+
+**Decision: a run records who was on it.** Each stage stores its agent's `title` and `glyph`
+when the run is created, and the run log, the run views and the stage-output consumers read
+what was recorded. A run saved before this is filled in from the catalog when the server
+loads it, and only fields still empty are filled, so renaming or removing an agent never
+rewrites history. The core `AGENTS` table is gone; the home strip and the gate cards, which
+show pipelines rather than runs, read the catalog.
+
+**Decision: an agent brings its recurring work as duties** (`TASK-199`). A duty is a schedule
+template — `title`, `cron`, `timezone`, an optional pinned `team`, and the task as its body. It is
+seeded once, switched off, under the key `<agent>/<duty>`, and from then on the schedule is the
+project's record: editing the file changes nothing already seeded. The existing
+`builtInSchedules` switch covers every seeded duty as well as the board poller, because each is
+something the project was given rather than wrote. A duty that cannot be stored — a bad cron, a
+team naming an agent nobody brings — is not seeded and the operator log says why.
+
+**Decision: an agent's knowledge is listed, never inlined** (`TASK-198`). A playbook, a
+checklist or a market brief lives in `agents/<id>/knowledge/` with a one-line
+description; the prompt names each file and the agent reads what the step needs. The
+prompt stays the size of the identity, and every harness can read files on its own.
+Knowledge is what the owner vouches for and is read-only to the agent; what it learns
+still goes to its notes, and turning a note into knowledge is a human edit.
+
+**Decision: no user-level agents directory.** An agent reaches another project by copying its
+folder into that project's `.isotopy/agents/`, so everything an engine reads sits inside the project, where every harness may read it,
+and git records which version of an agent the product ran with. The user-level override of a
+bundled persona stays, because it changes a default rather than adding a team member.
+
+**Rejected: the hand-rolled `key: value` grammar from PR #72's branch** — about 119 lines plus
+coercions to maintain a dialect nobody else reads. **Rejected: JSON metadata** — no agent format in
+use anywhere carries it, so every file would be ours alone. **Rejected: a second switch for agent duties** — two answers to *may this project act without
+me*, for no case the record's own switch does not already cover.
+**Rejected: pasting knowledge into the prompt** — every run would pay for every file
+whether the step needs it or not. **Rejected: retrieval or embeddings** — a search index
+to keep fresh for what a list of described files already answers.
+**Rejected: looking each run's agents up in the live catalog** — history would change
+whenever an agent is renamed, and the server's run log is written by synchronous code that
+cannot wait on a file read. **Rejected: recording without a backfill** — every run from
+before would show a bare id such as `developer`. **Rejected: keeping
+`skills/<id>.md` beside `agents/<id>/agent.md`** — two ways to replace a persona, one of them
+mixed in with the notes that must never travel. No project on the owner's machine had one.
+
+---
+
 ## 2026-10-06 — Aiki is the durable workflow runtime, and it keeps the schedule clock
 
 **Context:** OpenWorkflow had been the runtime since `TASK-068` (2026-07-24). Aiki was the
@@ -296,8 +360,9 @@ have killed it silently. A prompt-only schedule now skips with `orchestrator_bus
 therefore turns only when the Orchestrator finishes its episode, which is the episode-handler design
 from `TASK-156` rather than a limitation.
 
-**Built-ins are a catalog, and off twice.** `BUILT_IN_SCHEDULES` is an `as const` catalog seeded per
-project; the board poller is its only entry today and a product variant adds a row. Firing needs
+**Built-ins are a catalog, and off twice.** Since 2026-10-11 the catalog is files: the bundled
+`domain/skills/duties/board-poller.md`, and every `agents/<id>/duties/*.md` a project's agents bring
+(`TASK-199`), each seeded once per project and switched off. Firing needs
 both `ProjectPreferences.builtInSchedules` and the record's own `enabled`. A fresh install is off
 because the default is off; an upgrade is off because `normalizeProjectPreferences` falls back to
 that default for a key older settings never wrote. Two switches is one more than strictly needed —
@@ -1184,13 +1249,14 @@ Orchestrator invented an id, which it does freely: it is given catalogs for `ski
 rendered as *Software Architect*, because `AGENTS["design"]` is one.
 
 **Decision:** the persona is keyed off `skill`, which `team-composition.ts` already
-validates against `PERSONA_IDS`, so an invented id can no longer rename the person. The
+validates against the catalog, so an invented id can no longer rename the person. The
 label names the work — `Scoping`, `Architecting`, `Implementing`, `Verifying` — and
 `orchestrate.md` says so with an action-phrased example, because the model copies the
-example. Both directions are guarded: `pipelines.spec.ts` fails if a shipped stage names
-a persona with no `AGENTS` entry or labels itself with a job title, and
-`orchestrate-assignment.spec.ts` fails if the assignment's example ever labels a role
-after its worker again.
+example. Both directions are guarded: `bundled-skills.check.ts` fails if a shipped stage names
+a persona that is not bundled or labels itself with an agent's title, and
+`orchestrate-assignment.check.ts` fails if the assignment's example ever labels a role
+after its worker again. Since 2026-10-11 the title comes from the agent's own file and is
+recorded on the run's stage, not looked up in a table.
 
 **Accepted cost:** `architecture` and `review` share a persona and so now share a glyph.
 The action label distinguishes them, and `specColor` still keys on stage id, so they keep
@@ -2249,8 +2315,11 @@ permission mode and pipeline live in the per-project section of user-level setti
 second browser or cleared site data no longer silently reverts a project. **Secrets are
 user-level and write-only:** API keys live in `~/.isotopy/settings.json` (mode `0600`) as
 `defaults` plus per-project overrides, and never leave the server. Each created `.isotopy/`
-ships a self-ignoring `.gitignore` so run artifacts never appear in a user's
-`git status`.
+ships a `.gitignore` so run artifacts never appear in a user's `git status`. **It ignores what
+Isotopy produces, not what the owner authors** (2026-10-11, `TASK-196`): `agents/` and `steps/` are
+the project's own and travel with its repository, so a product records which
+version of an agent it ran with. A file still holding the old ignore-everything `*` is upgraded in
+place; one the owner edited is never rewritten.
 
 **Rejected:** one global store filtered by a project column — it leaves history inside
 the tool, so uninstalling or re-cloning loses or duplicates it. And validating a
@@ -2267,7 +2336,8 @@ hand.
 
 **Decision:** resolution is bundled default → user-level override → project addendum, and
 **nothing is written to disk on read**. Composition is a pure function; the service only
-reads. A full project replacement stays available for power users, but appending an
-addendum is the default path.
+reads. Appending an addendum is the default path. A full project replacement is
+`<project>/.isotopy/agents/<id>/agent.md` since 2026-10-11 — the same file that adds a new
+agent, so there is one way to bring a persona rather than two; `skills/<id>.md` is gone.
 
 ---

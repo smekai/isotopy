@@ -33,6 +33,8 @@ const stageSchema = z
     id: text,
     label: text,
     skill: text.optional(),
+    title: text.optional(),
+    glyph: text.optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
     verdict: z.enum(STAGE_VERDICTS).optional(),
     status: z.enum(STAGE_STATUSES),

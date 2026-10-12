@@ -355,7 +355,7 @@ One file per domain, re-exported from `index.ts` (the only import path consumers
 
 | File | Contents |
 | --- | --- |
-| `agents.ts` | Agent professions per stage |
+| `agents.ts` | The catalog entry types the browser receives (`CatalogAgent`, `CatalogStepTask`) and `catalogAgentLook`. There is no agent table here: titles and glyphs come from the agents' own files |
 | `closeout.ts` | The run's closeout record, written by the Orchestrator — findings, follow-up task drafts, cleanup result |
 | `engines.ts` | Engine/harness definitions, connection modes, model options |
 | `milestones.ts` | Milestone and feature models, the plan proposal, and pure predicates (`nextMilestoneFeature`, `milestoneProgress`, `canStartNextFeature`, `canFinalizeMilestone`) |
@@ -380,7 +380,7 @@ functions only.
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the Orchestrator's closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, settings, skills; no HTTP awareness |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the Orchestrator's closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, `agent-catalog.ts` (who may be on a team: bundled agents and steps plus what the project brings), settings, skills; no HTTP awareness |
 | `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `reveal-folder`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
@@ -501,7 +501,7 @@ to the conversation that asked for it.
 | Boundary schema | `server/src/schemas/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunService` is for runs |
-| Composition | `server/src/schemas/team-composition.ts` — an approved proposal in, a `PipelineDefinition` or path-aware issues out; pure |
+| Composition | `server/src/domain/rules/team-composition.ts` — an approved proposal and the project's known agent ids in, a `PipelineDefinition` or path-aware issues out; pure |
 | API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
@@ -544,9 +544,9 @@ side-effect errors: a report that would not parse fails the stage, while a task-
 that failed afterwards is recorded on the record and does not.
 
 **An approved team becomes a pipeline, and the run keeps it.** `composeTeamPipeline`
-validates every `skill` and `stepTask` against the persona and step-task catalogs —
-which is also what stops the Orchestrator composing itself, since neither
-`orchestrator` nor `orchestrate` is listed — requires unique role ids matching
+validates every `skill` and `stepTask` against the project's catalog —
+which is also what stops the Orchestrator composing itself, since `orchestrate` is
+not a composable step — requires unique role ids matching
 `/^[a-z0-9-]+$/`, and gives every composed stage an explicit `executionPolicy` so
 the quality, delivery and closeout suppression rules apply to a composed run exactly
 as they do to `full-delivery`. The id guard is not tidiness: a stage id becomes a
@@ -661,8 +661,8 @@ capped, and read when the next episode opens (`TASK-178`).
 | Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
 | Clock | Aiki — each enabled schedule is a cron activation on its project's runtime, reconciled through the `DurableSchedules` seam (`workflow/durable-schedules.ts`, implemented by `WorkflowRuntimeRegistry`) and firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
 | Timing | `server/src/domain/rules/schedule-timing.ts` over `utils/recurrence.ts` — validation and `nextFireForSchedule` with `cron-parser`, the parser Aiki fires with, so the preview and the clock cannot disagree. The API sends the next fire, so the UI never parses an expression |
-| Built-ins | `server/src/domain/rules/built-in-schedules.ts` — an `as const` catalog seeded per project, every entry disabled. The board poller is its only entry today |
-| Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming a persona that does not exist are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
+| Duties | `AgentCatalog.duties` — the bundled `domain/skills/duties/board-poller.md` and every `agents/<id>/duties/*.md` the project's agents bring, keyed `board-poller` and `<agent>/<duty>`. `ScheduleService.seedDuties` writes each once, switched off, after `scheduleIssues`; one that fails is logged and left out. The project's `builtInSchedules` switch covers all of them |
+| Storability | `server/src/domain/rules/schedule-validity.ts` — an unparseable expression, an unknown IANA zone, or a team naming an agent the project's catalog does not hold are refused **when the schedule is saved**. A schedule that cannot fire must not be storable |
 | Boundary schema | `server/src/schemas/schedule.ts` — shape only. Validity is checked on the **merged** record, because a patch carrying a cron and no timezone cannot be judged alone |
 | Persistence | `JsonRecordRepository<Schedule>` over `SCHEDULES_TABLE`, parsed by `schemas/schedule-persistence.ts` |
 | Lifecycle | `ScheduleService` — the single writer of the record, and the one that reconciles its project's activations after every change |
@@ -840,14 +840,42 @@ the legacy-alias migration.
 
 ### Personas
 
-What an agent *is* comes from a persona: Markdown on disk, layered by
-`domain/skills/compose.ts` (bundled default → user-level override → project
-override → project append). Nothing is ever seeded to disk. The persona catalog
-lives in `server/src/domain/skills/personas/`; the `architect` persona alone is
-generated from this document.
+What an agent *is* comes from a persona: a Markdown file whose YAML front matter is
+its catalog entry (`name`, `title`, `glyph`, `description`) and whose body is the
+prose the engine sees. A stage's `stepTask` is the assignment given to that
+persona, a file of the same shape (`name`, `description`, and `composable: false`
+on the Orchestrator's own three) — identity and assignment are separate, so the
+same Developer can be pointed at different work.
 
-A stage's `stepTask` is the assignment given to that persona — identity and
-assignment are separate, so the same Developer can be pointed at different work.
+**The catalog is the files.** `AgentCatalog` (`services/agent-catalog.ts`) reads
+the bundled personas and step tasks under `server/src/domain/skills/`, then what
+the project brings: `<project>/.isotopy/agents/<id>/agent.md` and
+`<project>/.isotopy/steps/<id>.md`. A project entry with a bundled id replaces it.
+That merged catalog is what the Orchestrator is told it can choose from and what
+`composeTeamPipeline` and `scheduleIssues` accept — both take the known ids as a
+parameter, so the pure rules never read the disk. A file that does not parse, or
+whose `name` is not its own id, is left out and reported once on the operator
+channel; the rest of the catalog survives it. The pure merge lives in
+`domain/rules/agent-catalog.ts`; the `architect` and `tester` personas are
+generated from this document and `testing.md`.
+
+**A persona still layers:** its base is the project's `agent.md`, else the
+user-level override, else the bundled file; then the agent's reference library, the
+project addendum and the role's notes follow it. Nothing is ever seeded to disk.
+
+**An agent carries a reference library** (`TASK-198`): `agents/<id>/knowledge/*.md`,
+each with a `description` in its front matter. The composed persona *lists* each file
+by absolute path and description under `## Your reference library` and tells the
+agent to read what the step needs; the text is never pasted in. A folder holding only
+`knowledge/` gives a bundled agent a library without replacing it. A file whose front
+matter does not parse is still listed, without a description, and the stage's log says
+why.
+
+**The browser reads the catalog from `GET /agents`** (`routes/agents.ts`, kept in
+`ui/vite.config.ts`'s proxy list): every agent and every composable step for the
+requested project, each with its origin. `useAgentCatalog` owns it in `App` and
+reloads it whenever Setup opens; Setup → Agents lists it, and the home strip and
+the gate cards name a stage's agent from it.
 
 ### Stage policy
 
@@ -875,9 +903,13 @@ only for loading the tool's own `.env`.
 | Location | Holds | Scope |
 |----------|-------|-------|
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
+| `<project>/.isotopy/agents/<id>/agent.md` | An agent the project brings, or its replacement for a bundled one | One project |
+| `<project>/.isotopy/agents/<id>/knowledge/*.md` | The agent's reference library, listed in its prompt by path | One project |
+| `<project>/.isotopy/agents/<id>/duties/*.md` | Recurring work the agent brings, seeded once as a disabled schedule | One project |
+| `<project>/.isotopy/steps/<id>.md` | A step task the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/skills/<id>.project.md` | Persona **addendum** — project tweaks only | One project |
-| `<project>/.isotopy/skills/<id>.md` | Full persona replacement (power users) | One project |
-| `<project>/.isotopy/.gitignore` | `*` — the folder ignores itself by default | One project |
+| `<project>/.isotopy/skills/<id>.notes.md` | What the role learned in this project (`TASK-113`); never leaves it | One project |
+| `<project>/.isotopy/.gitignore` | Ignores everything Isotopy writes there, and lets git see `agents/` and `steps/`, which the owner authors | One project |
 | `~/.isotopy/projects.json` | Known projects (paths + metadata) and the active one | User |
 | `~/.isotopy/settings.json` | Engine connection modes and **API keys**, plus project preferences (engine, model, permission mode, pipeline, disabled stages), `defaults` + per-project overrides, mode `0600` | User |
 | `~/.isotopy/skills/<id>.md` | User-level persona override of the bundled default | User |
@@ -890,7 +922,7 @@ the home project, which has no code of its own — a scratch
 `runs/<run-id>/workspace/` used by that run alone. A client cannot name the
 directory an agent runs in; it selects a *project*, and the project's root is
 fixed when it is registered. Run artifacts always stay in the per-run folder
-under `.isotopy/`, which ignores itself from git.
+under `.isotopy/`, which git ignores except for the agents the owner authors.
 
 **Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by
@@ -898,8 +930,8 @@ project id, with user-level defaults a new project inherits until it overrides
 them.
 
 **Skills layer rather than replace:** bundled Markdown persona
-(`domain/skills/personas/<id>.md`) → user-level override → project addendum
-appended. The build copies bundled persona and step-task Markdown into `dist`;
+(`domain/skills/personas/<id>.md`) → user-level override → project agent →
+project addendum appended. The build copies bundled persona and step-task Markdown into `dist`;
 nothing is written to user or project data on read, so improvements to a
 bundled persona keep reaching every project.
 

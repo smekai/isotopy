@@ -2,11 +2,11 @@ import type { CSSProperties } from "react";
 import {
   DEMO_PIPELINES,
   ENGINES,
-  agentForStage,
+  catalogAgentLook,
   findPipeline,
   flattenPipelineStages,
 } from "@isotopy/core";
-import type { EngineId } from "@isotopy/core";
+import type { CatalogAgent, EngineId } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { FONT, RADIUS, SANS, SPACE, WEIGHT, specColor } from "../../theme";
 import { PipelineDropdown } from "../PipelineDropdown";
@@ -108,6 +108,7 @@ export interface PipelineHeaderProps {
   d: Dir;
   pipelineId: string;
   engineId: EngineId;
+  agents: CatalogAgent[];
   onSelectPipeline: (pipelineId: string) => void;
 }
 
@@ -115,6 +116,7 @@ export function PipelineHeader({
   d,
   pipelineId,
   engineId,
+  agents,
   onSelectPipeline,
 }: PipelineHeaderProps) {
   const selected = findPipeline(pipelineId);
@@ -125,7 +127,7 @@ export function PipelineHeader({
     <>
       <div style={GLYPH_STRIP}>
         {stages.map((stage, index) => {
-          const agent = agentForStage(stage);
+          const agent = catalogAgentLook(agents, stage.skill ?? stage.id);
           const spec = specColor(stage.id);
           return (
             <div
@@ -141,7 +143,7 @@ export function PipelineHeader({
                 }}
               >
                 <div style={agentGlyph(spec, d)}>{agent.glyph}</div>
-                <div style={agentCaption(d)}>{agent.profession}</div>
+                <div style={agentCaption(d)}>{agent.title}</div>
               </div>
               {index < stages.length - 1 && <div style={agentConnector(d)} />}
             </div>

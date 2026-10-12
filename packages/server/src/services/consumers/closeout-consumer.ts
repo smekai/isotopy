@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { agentForStage } from "@isotopy/core";
+import { stageTitleIn } from "@isotopy/core";
 import type {
   CleanupResult,
   CloseoutReport,
@@ -48,7 +48,7 @@ export class CloseoutConsumer implements StageOutputConsumer {
       return undefined;
     }
     return {
-      reason: `${agentForStage(stageDef).profession} produced no usable closeout — ${applied.reportErrors.join("; ")}`,
+      reason: `${stageTitleIn(run, stageDef.id)} produced no usable closeout — ${applied.reportErrors.join("; ")}`,
     };
   }
 }

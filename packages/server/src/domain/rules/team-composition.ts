@@ -6,17 +6,15 @@ import type {
   PipelineDefinition,
   StageDefinition,
 } from "@isotopy/core";
-import { PERSONA_CATALOG, STEP_TASK_CATALOG } from "../skills/catalog.ts";
 import type { ValidationIssue, ValidationResult } from "../validation.ts";
+import type { KnownAgentIds } from "./agent-catalog.ts";
 import { SKILL_ID } from "./persona-notes.ts";
 
-
-
-const PERSONA_IDS = new Set(PERSONA_CATALOG.map((entry) => entry.id));
-
-const STEP_TASK_IDS = new Set(STEP_TASK_CATALOG.map((entry) => entry.id));
-
-function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
+function roleIssues(
+  role: OrchestratorRole,
+  index: number,
+  known: KnownAgentIds,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!SKILL_ID.test(role.id)) {
     issues.push({
@@ -24,13 +22,13 @@ function roleIssues(role: OrchestratorRole, index: number): ValidationIssue[] {
       message: "Role id must contain only lowercase letters, digits, and hyphens",
     });
   }
-  if (!PERSONA_IDS.has(role.skill)) {
+  if (!known.personas.has(role.skill)) {
     issues.push({
       path: ["roles", index, "skill"],
       message: `Unknown persona: ${role.skill}`,
     });
   }
-  if (!STEP_TASK_IDS.has(role.stepTask)) {
+  if (!known.steps.has(role.stepTask)) {
     issues.push({
       path: ["roles", index, "stepTask"],
       message: `Unknown step task: ${role.stepTask}`,
@@ -151,11 +149,12 @@ function chosenTier(
 
 export function composeTeamPipeline(
   team: OrchestratorTeamProposal,
+  known: KnownAgentIds,
   orchestrationId: string,
   generation = 1,
 ): ValidationResult<PipelineDefinition> {
   const issues = [
-    ...team.roles.flatMap(roleIssues),
+    ...team.roles.flatMap((role, index) => roleIssues(role, index, known)),
     ...duplicateIdIssues(team.roles),
   ];
   if (issues.length > 0) {
@@ -172,8 +171,11 @@ export function composeTeamPipeline(
   };
 }
 
-export function teamProposalIssues(team: OrchestratorTeamProposal): ValidationIssue[] {
-  const composed = composeTeamPipeline(team, VALIDATION_ORCHESTRATION_ID);
+export function teamProposalIssues(
+  team: OrchestratorTeamProposal,
+  known: KnownAgentIds,
+): ValidationIssue[] {
+  const composed = composeTeamPipeline(team, known, VALIDATION_ORCHESTRATION_ID);
   return composed.ok
     ? []
     : composed.issues.map((issue) => ({

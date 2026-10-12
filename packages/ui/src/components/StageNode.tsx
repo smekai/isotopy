@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { agentForStage } from "@isotopy/core";
+import type { AgentLook } from "@isotopy/core";
 import type { StagePresentation } from "../run-utils";
 import type { Dir } from "../theme";
 import { EASE, FONT, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT, focusRing, sLabel, specColor, statusClr } from "../theme";
@@ -136,7 +136,7 @@ function statusLabel(st: StatusColor): CSSProperties {
 
 export interface StageNodeProps {
   stageId: string;
-  skill?: string;
+  agent: AgentLook;
   label: string;
   status: StagePresentation;
   d: Dir;
@@ -146,14 +146,13 @@ export interface StageNodeProps {
 
 export function StageNode({
   stageId,
-  skill,
+  agent,
   label,
   status,
   d,
   focused,
   onClick,
 }: StageNodeProps) {
-  const agent = agentForStage({ id: stageId, skill });
   const sc = specColor(stageId);
   const st = statusClr(status);
   const running = status === "running";
@@ -172,7 +171,7 @@ export function StageNode({
       <div style={BODY}>
         <div style={agentGlyph(sc)}>{agent.glyph}</div>
 
-        <div style={PROFESSION}>{agent.profession}</div>
+        <div style={PROFESSION}>{agent.title}</div>
 
         <div style={STAGE_LABEL}>{label}</div>
 

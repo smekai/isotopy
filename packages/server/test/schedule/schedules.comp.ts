@@ -16,6 +16,7 @@ import {
   get,
   patch,
   post,
+  put,
   getRun,
   restartApp,
   waitForRunStatus,
@@ -26,6 +27,7 @@ import { JsonRecordsTable, SCHEDULES_TABLE } from "../../src/db/json-records-tab
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
+import { writeProjectAgent } from "../support/agent-files.ts";
 
 // A schedule that a test fires by hand must not also fire on its own while the
 // test runs, so it waits for midnight on a leap day.
@@ -96,6 +98,22 @@ test("a team naming a persona that does not exist is refused when the schedule i
   ctx.engine.verify();
 });
 
+test("a team naming an agent the project brings is accepted when the schedule is saved", async () => {
+  // Arrange
+  await writeProjectAgent(ctx.home);
+  const marketer = { ...BOARD_READER.roles[0]!, skill: "growth-marketer" };
+
+  // Act
+  const response = await post(
+    ctx.app,
+    "/schedules",
+    scheduleBody({ team: { ...BOARD_READER, roles: [marketer] } }),
+  );
+
+  // Assert
+  expect(response.status).toBe(200);
+});
+
 test("an edit that would leave a schedule unable to fire is refused, and the stored one is untouched", async () => {
   // Arrange
   const created = await createSchedule();
@@ -143,6 +161,25 @@ test("a fired schedule starts exactly one run, and that run carries the team pin
   ]);
   const stored = await get<ScheduleView>(ctx.app, `/schedules/${created.id}`);
   expect(stored.body.lastFiredAt).toBeDefined();
+  ctx.engine.verify();
+});
+
+// The pin is the owner's only cost cap. A scheduled run is started by the server with
+// nobody at the browser, which is exactly when the browser cannot apply it.
+test("a scheduled run uses the model the project pinned for its engine", async () => {
+  // Arrange
+  await put(ctx.app, "/settings/preferences", { engineModels: { "claude-code": "haiku" } });
+  const created = await createSchedule();
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Project Manager", model: "haiku" }).reports("Next: TASK-999.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const outcome = await ctx.schedules.fire(created.id);
+
+  // Assert
+  await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   ctx.engine.verify();
 });
 
@@ -413,6 +450,7 @@ test("an outcome that cannot be recorded is reported to whoever runs the server"
     task: "Manual work already under way",
     engine: "claude-code",
   });
+  await ctx.engine.waitForCall();
   failTheNextWrite("disk is full");
 
   // Act
