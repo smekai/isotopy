@@ -1,5 +1,47 @@
 # Backlog
 
+## TASK-201: One reader for every markdown document Isotopy parses
+**Priority:** P3 | **Tags:** core, server
+**Updated:** 2026-10-12 07:54
+
+Raised by the owner on 2026-10-12, after the Shared agents PR (#86) added a fourth markdown file format. **Not now**: start when a fifth format arrives — most likely `TASK-162`'s `tools`, `context` and `setup` on a step — or when one of the readers below gets a bug the others already fixed.
+
+### What exists
+
+About 230 lines of hand-written parsing across six places, each solving the same small problems — CRLF against LF, a byte-order mark, markdown decoration around a marker, and what to do with a malformed input — in its own way:
+
+| Input | Reader | What it handles |
+| --- | --- | --- |
+| Agent, step, knowledge and duty files | `domain/markdown/front-matter.ts`, `schemas/agent-definition.ts` | YAML front matter + body, BOM, CRLF |
+| Persona notes | `domain/rules/persona-notes.ts` | a bullet list |
+| Orchestrator context | `domain/rules/orchestrator-context.ts`, `schemas/orchestrator-context.ts` | free text with limits |
+| Agent output protocols (decision, closeout, release, milestone plan, notes, run artifacts) | `schemas/fenced-block.ts` | a fenced JSON block |
+| Verdict and question lines | `domain/rules/stage-context.ts` | a marker line tolerant of `**`, backticks, CRLF |
+
+The task board is not on this list on purpose: TaskPlanner's own library reads it.
+
+### Shape
+
+A small document layer, not a markdown framework:
+
+1. **Read a document**: normalise BOM and line endings once at the boundary, then return `{ meta, body }` validated by a schema. This replaces `splitFrontMatter`.
+2. **Take a fenced block**: the JSON protocol in an agent's report, with one policy for malformed output.
+3. **Find a marker line**: `VERDICT:` and `QUESTION:`, tolerant of markdown decoration.
+4. **One error policy, written down**: a malformed file on disk is left out and reported on the operator channel; a malformed agent report is a refusal with the parser's reason.
+
+Persona notes and the Orchestrator's context could then become ordinary front-matter documents instead of formats of their own.
+
+### Rejected up front
+
+**remark / unified, or any full markdown AST.** What Isotopy reads is a handful of small protocols carried inside markdown, not markdown structure. A full tree would make each protocol harder to state and add a dependency tree for nothing the five readers need.
+
+### Out of scope
+
+The prompt renderers in `domain/markdown/*` build markdown; they do not parse it, and `format.ts` already serves them.
+
+Cross-platform: the point of the layer is that line endings and BOM are handled once, so a CRLF checkout on Windows and an LF one on macOS read identically everywhere. Tests: one spec over the layer's primitives, and the existing component tests for each format must stay green unchanged.
+
+---
 ## TASK-200: Agent packs — install a set of agents from a folder or a git repository
 **Priority:** P3 | **Tags:** core, server, ui | **Epic:** Shared agents
 **Updated:** 2026-10-12 07:19
