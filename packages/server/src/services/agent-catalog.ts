@@ -247,7 +247,7 @@ export class AgentCatalog {
   ): Promise<void> {
     const bundledIds = new Set(bundled.personas.map((persona) => persona.id));
     for (const folder of folders.filter(({ id }) => !bundledIds.has(id))) {
-      if ((await this.cachedText(folder.file)) === undefined) {
+      if (!(await isFileAt(folder.file))) {
         this.reportOnce(
           folder.file,
           `Skipped ${path.dirname(folder.file)}: it has no ${AGENT_FILE} and names no bundled agent`,
@@ -311,4 +311,8 @@ function absentAsUndefined(error: unknown): undefined {
 
 function bodyOf(text: string | undefined): string | undefined {
   return text === undefined ? undefined : withoutFrontMatter(text);
+}
+
+async function isFileAt(file: string): Promise<boolean> {
+  return (await stat(file).catch(absentAsUndefined))?.isFile() ?? false;
 }
