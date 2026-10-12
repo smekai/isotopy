@@ -26,6 +26,25 @@ test("an agent the project brings shows its title, glyph, id and that the projec
   expect(card.textContent).toContain("PROJECT");
 });
 
+test("the project's own agents come before the built-in ones, so they are not lost below the fold", () => {
+  // Arrange
+  const catalog = agentCatalog({
+    agents: [
+      catalogAgent({ id: "developer", title: "Developer", origin: "bundled" }),
+      catalogAgent({ id: "growth-marketer", origin: "project" }),
+    ],
+  });
+
+  // Act
+  render(<AgentsSection {...agentsProps({ catalog })} />);
+
+  // Assert
+  expect(screen.getAllByTestId(/^agent-/).map((card) => card.dataset.testid)).toEqual([
+    "agent-growth-marketer",
+    "agent-developer",
+  ]);
+});
+
 test("a step is listed with where it came from, so a replaced built-in is visible", () => {
   // Arrange
   const catalog = agentCatalog({ steps: [catalogStep({ id: "plan-feature", origin: "project" })] });

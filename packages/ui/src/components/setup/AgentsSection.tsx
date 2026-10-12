@@ -18,6 +18,8 @@ const ORIGIN_LABELS: Record<AgentOrigin, string> = {
   project: "PROJECT",
 };
 
+const ORIGIN_ORDER: Record<AgentOrigin, number> = { project: 0, bundled: 1 };
+
 const GLYPH_SIZE = 28;
 
 const SECTION_GAP: CSSProperties = { height: SPACE.xxl };
@@ -83,7 +85,7 @@ export function AgentsSection({ d, catalog }: AgentsSectionProps) {
       </div>
       {catalog.error && <div style={ERROR_LINE}>{catalog.error}</div>}
       <div style={OPTION_STACK}>
-        {catalog.agents.map((agent) => (
+        {ownFirst(catalog.agents).map((agent) => (
           <AgentCard key={agent.id} d={d} agent={agent} />
         ))}
       </div>
@@ -93,7 +95,7 @@ export function AgentsSection({ d, catalog }: AgentsSectionProps) {
       <div style={sectionTitle(d)}>Steps</div>
       <div style={sectionSubtitle(d)}>The assignments a team member can be given.</div>
       <div style={OPTION_STACK}>
-        {catalog.steps.map((step) => (
+        {ownFirst(catalog.steps).map((step) => (
           <StepCard key={step.id} d={d} step={step} />
         ))}
       </div>
@@ -141,4 +143,8 @@ function StepCard({ d, step }: StepCardProps) {
       </div>
     </div>
   );
+}
+
+function ownFirst<Entry extends { origin: AgentOrigin }>(entries: Entry[]): Entry[] {
+  return [...entries].sort((left, right) => ORIGIN_ORDER[left.origin] - ORIGIN_ORDER[right.origin]);
 }

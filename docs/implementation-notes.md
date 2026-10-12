@@ -1110,6 +1110,13 @@ while the server runs is seeded on the next of those, never from a file watcher,
 stays the only thing that starts work. Deleting a seeded duty brings it back on the next load,
 as the board poller always has; switching it off is how an owner says no.
 
+**A role id is spelled out in `orchestrate.md`, not only enforced.** `composeTeamPipeline`
+refuses a role id that is not lowercase letters, digits and hyphens, but the assignment never
+said so. In the first live run with a project agent (2026-10-11, Claude Code on haiku) the
+Orchestrator proposed `campaign_planning`, and the owner could not approve the team it had
+proposed. The rule now sits beside the JSON example, and the second run proposed
+`campaign-planning`.
+
 The project's `agents/` and `steps/` are the shareable part; addenda and notes stay
 in `skills/` and never travel with an agent. See [`architecture.md`](./architecture.md)
 for how the `architect` and `tester` personas are generated from a single source.
