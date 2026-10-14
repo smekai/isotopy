@@ -1,6 +1,6 @@
 # Competitor Matrix: Isotopy
 
-**Last updated:** 14 October 2026 (full Mastra head-to-head in §1: Mastra Factory is the first framework vendor to ship an issue-to-pull-request product with stages and human checkpoints, and it stops at the merge). Earlier in October: full CrewAI head-to-head in §5; its memory, checkpoint resume and looping Flows make those table stakes. Before that, September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
+**Last updated:** 14 October 2026 (full Mastra head-to-head in §1: Mastra Factory is the first framework vendor to ship an issue-to-pull-request product with stages and human checkpoints, and it stops at the merge; "never calls a model API" is no longer scored unique, because the §8 multiplexers run the same CLIs on the same sign-in). Earlier in October: full CrewAI head-to-head in §5; its memory, checkpoint resume and looping Flows make those table stakes. Before that, September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where Isotopy wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -116,12 +116,14 @@ active run per project. A shared team dashboard with WorkOS auth and audit.
    lacks, but past the diff it is the same: no E2E against a running product, no deploy, and no
    loop after v1. Mastra states the boundary itself: people keep merge and deployment approval.
    Everything after that is exactly where we are.
-2. **Its worker is an API client; ours is the CLI you already pay for.** Mastra can wrap Claude
-   Code through the Agent SDK, but Anthropic's Agent SDK documentation forbids a third-party
-   product from offering claude.ai login without Anthropic's prior approval, so that route is
-   per-token on an API key. *Our own exposure:* Isotopy never embeds the SDK; it spawns the CLI
-   the user installed and logged into themselves. That distinction carries our "no extra bill"
-   claim, so it needs a `decisions.md` entry before launch copy leans on it.
+2. **Factory's worker is an API client; ours is the CLI you already pay for.** Mastra Code runs on
+   your provider keys, per token, and observational memory adds a second model on top. The seam
+   is not SDK versus CLI: Anthropic calls `claude -p` the Agent SDK's command-line form, and what
+   it forbids is a third-party product offering claude.ai login or handling the credentials. So
+   `@mastra/claude`, run on your machine with your own Claude Code login, draws on your plan
+   exactly as Isotopy does. The difference is Factory's default worker, not a wall Anthropic
+   built. The terms, and what launch copy may claim, are in [`decisions.md`](decisions.md),
+   2026-10-14.
 3. **A rules engine moves cards; it does not pick the work.** Factory's transitions are declared,
    and the next piece of work is the next issue someone filed. Isotopy's Orchestrator decides the
    next run from what the last one *found*.
@@ -147,7 +149,8 @@ on storage that supports concurrent updates.
    builds. The day a default board ends at a deployed preview, Factory lands on our pitch with a
    company behind it.
 2. **Factory's Building phase delegates to `@mastra/claude` or `@mastra/acp`.** That removes "a
-   harness, not an LLM call" as a difference, and leaves only the subscription seam.
+   harness, not an LLM call" as a difference, and the subscription seam with it for anyone who
+   runs Factory with their own CLI login.
 3. **A team builds its own Isotopy on Mastra.** This is the CrewAI build-versus-buy question
    again, but in our language, with Factory as the starting template.
 
@@ -514,7 +517,7 @@ now ships is no longer something to sell, however well we do it.
 | Human approval gates | Required | spec-manager, autonomous-sdlc, Mastra Factory (triage answers, plan approval, merge) | **Table stakes** — Mastra Factory gates between its phases too |
 | Prepared professions (persona catalog) | Required | None (Cline improvises roles at runtime; Mastra Factory has one skill per phase) | **Newly load-bearing** — the claim §8 cannot make |
 | Cross-stage handoff + verdict | Required | Bernstein (signals), Cline (mailbox) | **Still differentiating** — nobody carries design into QA |
-| Never calls a model API | Required | None — §8 tools, CrewAI and Mastra are API clients | **Unique**: your CLI subscription, your auth. Mastra's Claude Code wrapper goes through the Agent SDK, which needs an API key |
+| Never calls a model API | Required | §8 multiplexers drive the same CLIs on the same sign-in, and so does Mastra's Claude Code wrapper on a local login. CrewAI, Cline and Mastra Factory's own worker are API clients | **Not unique** — a difference against frameworks, Cline and Mastra Factory, table stakes against §8. Sell "your own CLI, your own plan, no API key", within the plan's limits; what launch copy may claim is in `decisions.md` (2026-10-14) |
 | Memory across runs, checkpoint resume, looping workflows | Required | CrewAI (auto-extracted memory, checkpoints, Flows), Mastra (observational memory, workflow snapshots), Cline (mission logs) | **Table stakes** — sell *where* memory lives (markdown in git), not *that* it exists |
 | Visual run dashboard | Required | **Cline Kanban, Conductor, Vibe Kanban, Nimbalyst, Emdash, AO** | **Table stakes** — "CLI-only is common" is no longer true |
 | Worktree isolation per run | Required | Every §8 orchestrator | **Table stakes** — now universal |
@@ -699,3 +702,14 @@ The category multiplies the implement stage. We are the only entrant claiming th
 | Conductor | https://conductor.build |
 | Nimbalyst | https://nimbalyst.com |
 | Emdash / AO / Claude Squad / Baton (roundup — verify individually) | https://www.augmentcode.com/tools/open-source-agent-orchestrators |
+| Terms: Claude Code legal and compliance (subscription sign-in, third-party products) | https://code.claude.com/docs/en/legal-and-compliance |
+| Terms: Claude Agent SDK overview (login note) | https://code.claude.com/docs/en/agent-sdk/overview |
+| Terms: Claude Agent SDK, `claude -p` and third-party apps on a Claude plan | https://support.claude.com/en/articles/15036540 |
+| Terms: Monthly API credits for Max and Team plans | https://support.claude.com/en/articles/17154008 |
+| Terms: Anthropic consumer terms (automated access) | https://www.anthropic.com/legal/consumer-terms |
+| Terms: Codex sign-in methods | https://learn.chatgpt.com/docs/auth |
+| Terms: Codex non-interactive mode | https://learn.chatgpt.com/docs/non-interactive-mode |
+| Terms: Sign in with ChatGPT | https://learn.chatgpt.com/docs/sign-in-with-chatgpt |
+| Terms: OpenAI terms of use (outside the EEA, Switzerland and the UK) | https://openai.com/policies/row-terms-of-use/ |
+| Terms: Cursor CLI authentication | https://cursor.com/docs/cli/reference/authentication |
+| Terms: Cursor terms of service | https://cursor.com/terms-of-service |
