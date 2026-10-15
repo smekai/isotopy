@@ -1,4 +1,4 @@
-import { lstat, stat } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 import type { FileChange, RunChangeSet, RunState } from "@isotopy/core";
 import {
@@ -13,6 +13,7 @@ import type { SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts"
 import type { ProjectPath } from "../paths.ts";
 import { RUN_CHANGE_BASELINE_VERSION } from "../schemas/run-change-baseline.ts";
 import type { DirtyFile, RunChangeBaseline } from "../schemas/run-change-baseline.ts";
+import { isRepositoryRoot } from "../utils/git-repository-root.ts";
 import type { Logger } from "../utils/logger.ts";
 import { snapshotWorkspace } from "../utils/workspace-files.ts";
 import type { WorkspaceSnapshot } from "../utils/workspace-files.ts";
@@ -38,15 +39,6 @@ export interface RunChangeCollectorDependencies {
 
 function defaultDependencies(): RunChangeCollectorDependencies {
   return { run: runSubprocess, now: () => new Date() };
-}
-
-async function isRepositoryRoot(workspacePath: string): Promise<boolean> {
-  try {
-    await stat(path.join(workspacePath, ".git"));
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function stillDirtyAtBaseline(

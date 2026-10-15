@@ -149,6 +149,23 @@ export function buildProcessRule({ pid, port }: IsotopyProcess): string {
   ].join("\n");
 }
 
+export function buildArtifactsRule(artifactsDir: string): string {
+  return [
+    `Write what a check produces — reports, screenshots, traces, a test runner's output — under`,
+    `\`${artifactsDir}\`, which git ignores. Point each tool's output option there instead of`,
+    "letting it write into the project, and never leave such files at the project root. Tests you",
+    "add to the project are code, not output: they belong in the repository.",
+  ].join("\n");
+}
+
+export const COMMIT_RULE = [
+  "Commit what you changed before you hand off, in commits whose messages say what changed and",
+  "why. Leave out anything that was already uncommitted when you started: that is someone else's",
+  "work. If a hook rejects a commit, fix what it reports and commit again; never bypass it with",
+  "`--no-verify`. Do not push, do not switch or create branches, and do not rewrite commits you",
+  "did not make.",
+].join("\n");
+
 export function buildResumePrompt(
   task: string,
   stepTask: string | undefined,

@@ -77,6 +77,10 @@ export function runWorkspaceDir(projectPath: ProjectPath, runId: string): string
   return path.join(runsDir(projectPath), runId, "workspace");
 }
 
+export function runArtifactsDir(projectPath: ProjectPath, runId: string): string {
+  return path.join(runsDir(projectPath), runId, "artifacts");
+}
+
 export function toolCacheDir(projectPath: ProjectPath, workspacePath: string): string {
   return projectPath.id === HOME_PROJECT_ID
     ? path.join(workspacePath, ".isotopy", "cache")

@@ -26,7 +26,8 @@ owns the same problem.
 Drive the running product with your own browser capability if you have one.
 Where you have none, Playwright is the complete fallback and stays the authority
 for anything that must run in CI. Retain useful screenshots or traces either
-way, and stop only the browser processes you started yourself.
+way, in the run's artifacts folder named under `## Environment`, and stop only
+the browser processes you started yourself.
 
 Reach that fallback through the repository's own Playwright and the browsers it
 already has, and install a second version alongside it only as a last resort you

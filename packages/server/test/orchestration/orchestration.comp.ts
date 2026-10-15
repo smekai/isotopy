@@ -20,6 +20,7 @@ import {
   waitForRunStatus,
   waitForStageStatus,
 } from "../support/harness.ts";
+import { toPosixPath } from "../../src/utils/posix-path.ts";
 import type { TestApp } from "../support/harness.ts";
 import {
   orchestration,
@@ -127,6 +128,22 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await ctx.dispose();
+});
+
+test("the Orchestrator's own conversation is not given a team's working rules, because it changes no files", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .hangsUntilAborted();
+
+  // Act
+  const conversation = await startOrchestration();
+
+  // Assert
+  const call = await ctx.engine.waitForCall(1);
+  expect(call.prompt).not.toContain(
+    toPosixPath(path.join(ctx.home, "runs", conversation.id, "artifacts")),
+  );
 });
 
 test("an ask_user decision parks the Orchestrator on the user instead of finishing", async () => {
