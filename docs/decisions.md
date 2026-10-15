@@ -15,6 +15,28 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-15 — A finding goes back to the Developer as a new run, not a loop inside one
+
+**Context:** in `TASK-157` a reviewer and QA failed the arcade on a one-line README fix while
+every functional check passed. The pipeline has no route from a blocking finding back to
+`implementation`, and the product brief promised "fix loops" without saying where they live
+(`TASK-183`).
+
+**Decision:** the loop is the Orchestrator's. A quality FAIL settles the run as
+`needs_attention`; the review reads the findings and, when the implementing role can fix them,
+answers `start_run` with `fromStage` set to that role and a task that names the findings. The
+approved team starts there without asking the owner, seeded with the earlier roles' output, and
+the reviewing roles check the fix. `blockedLaunchRefusal` ends a streak of fix runs that clear
+nothing. Every fix is a run of its own in the history, restartable like any other.
+
+**Rejected: one bounded return to `implementation` inside the run.** It would fix every finding,
+including the ones the Orchestrator would judge not worth a run, and a stage would run twice
+inside one run, which the run view, the stage records and the change baseline all assume
+never happens. It also changes the shape of the Aiki workflow, so it would have to ship as a
+new workflow version with the old one still registered.
+
+---
+
 ## 2026-10-14 — Isotopy runs on the user's own sign-in, and never holds it
 
 **Context:** the pitch says Isotopy never calls a model API and runs on the CLI subscription

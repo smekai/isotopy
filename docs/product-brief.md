@@ -167,7 +167,7 @@ and no deploy. Its coding agent is Mastra's own, paid per token on your model ke
 | Harness APIs unstable | Adapter interface plus CLI fallback |
 | Scope creep vs hosted builders on v1 speed | Prepared agents + templates; don't host runtime |
 | Orchestration complexity | Aiki for durable execution (embedded in-process on SQLite, no separate server); fixed default pipeline |
-| Quality of agent output | Gates, blind review agent, Playwright E2E fix loops |
+| Quality of agent output | Gates, blind review agent, Playwright E2E; a blocking finding goes back to the Developer as a fix run the Orchestrator starts from implementation |
 | Context burden on user | Smart defaults, intake agent, progressive disclosure |
 | Task management scope creep | Tasks feed runs only; no sprint planning, team sync, or external PM in MVP |
 

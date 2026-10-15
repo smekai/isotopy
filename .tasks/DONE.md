@@ -1,5 +1,20 @@
 # Done
 
+## TASK-183: A review FAIL has no route back to the Developer inside the run
+**Priority:** P2 | **Tags:** core, engine, milestone-i
+**Updated:** 2026-10-15 08:15
+
+Found in `TASK-157`'s Cursor run (2026-10-04). A design question, not a crash.
+
+The Architect and QA failed the arcade shell on a one-line README fix (Node floor), with every functional criterion passing (6 unit tests, 10/10 Playwright). The pipeline has no route from a blocking review finding back to `implementation` inside the same run, so the whole feature failed and the only way forward was a new run from the Orchestrator — which then hit `TASK-180`. The product brief's risk table still promises *"Playwright E2E fix loops"*.
+
+Decide whether a quality stage's blocking finding should send the run back to `implementation` once (bounded, recorded in the run) before the run settles, or whether the Orchestrator's follow-up run is the intended loop — and then make the product brief say which. Either answer is defensible; leaving it implicit is not. Record it in `docs/decisions.md`.
+
+### Plan
+
+**Done 2026-10-15, 0.14.18. Decided with the owner: the Orchestrator's follow-up run is the loop.** A quality FAIL settles the run as `needs_attention`; the review answers `start_run` with `fromStage` set to the implementing role and a task naming the findings, which starts the approved team there without asking the owner. `review-run.md` now says so, the product brief's risk table says what actually happens, and `docs/decisions.md` (2026-10-15) records it with the rejected in-run loop. Already covered end to end by `a fix run that resumes the Developer's session hands it the fix it was started for` in `orchestration.comp.ts`; no code changed.
+
+---
 ## TASK-199: An agent brings its recurring duties
 **Priority:** P2 | **Tags:** core, server | **Epic:** Shared agents
 **Updated:** 2026-10-12 07:24

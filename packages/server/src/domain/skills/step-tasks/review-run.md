@@ -70,6 +70,14 @@ verified nothing because verification was blocked needs the verifying role, not
 the whole team; re-running the role that already delivered spends the user's
 money to produce what you already have.
 
+This is also how a blocking finding goes back to the role that can fix it. Nothing
+inside a run sends work back: when a reviewing or verifying role fails the work on
+something the implementing role can fix, start the team again from that role.
+`fromStage` is its role id, and `task` names the findings to fix, with their
+evidence, instead of restating the scope; the roles after it run again and check
+the fix. A finding that does not hold the goal back is not worth a run. It belongs
+in the follow-up tasks, and the goal can be met without it.
+
 Continue a milestone by running its next feature. Only available when the run
 belonged to a milestone whose context says continuing is permitted. Name a
 `featureId` from the supplied ready features to override the default order:

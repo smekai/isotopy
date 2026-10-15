@@ -197,21 +197,6 @@ Found in `TASK-157`'s Claude Code run (2026-10-04). The Orchestrator (haiku) pro
 Make the environment text say what the budget applies to — one engine turn of one stage — in the prompt the Orchestrator reads, or keep the step budget out of the `orchestrate` prompt altogether. Evidence: the rendered `orchestrate` prompt either omits the step budget or states its scope.
 
 ---
-## TASK-185: Agents leave dev servers running and verification debris in the repo, and nothing is committed
-**Priority:** P2 | **Tags:** engine, milestone-i
-**Updated:** 2026-10-04 19:40
-
-Found in `TASK-157` (2026-10-04).
-
-- **Dev servers left running:** the Claude team left three Vite servers on the arcade running after its run settled (the resumed Developer's and two of QA's). One held port 5192, so Isotopy's own product start later found the port taken.
-- **Debris in the repo:** QA left `VERIFICATION_REPORT.md`, `playwright-report/` and `test-results/` at the root (not gitignored), and installed Playwright browsers into `.isotopy/cache`. Cursor's QA wrote tests and config that the Developer then listed as *"other uncommitted work (not from this assignment)"*.
-- **Nothing committed:** neither team made a commit; both targets end with only untracked changes over the baseline.
-
-Decide, and say in the step tasks, (a) that a stage stops every process it started before it hands off, (b) where verification output belongs — under `.isotopy/runs/<id>/` or in a gitignored path, never loose at the root — and (c) whether a passing feature run commits its work, and who commits (Developer, Release Manager, or Isotopy on closeout). (c) matters for the inductive step: an unattended stretch with no commits has no history to evolve.
-
-Related: `TASK-179` (an agent killed Isotopy's own server while cleaning up).
-
----
 ## TASK-184: Cursor's closeout stage answers with a decision block instead of a closeout record
 **Priority:** P2 | **Tags:** engine, milestone-i
 **Updated:** 2026-10-04 19:40
@@ -219,17 +204,6 @@ Related: `TASK-179` (an agent killed Isotopy's own server while cleaning up).
 Found in `TASK-157`'s Cursor run (2026-10-04): the `closeout` stage (Orchestrator persona, `closeout-feature` step task, Cursor · auto) failed in all three delivery runs. Its output ended in an `isotopy-orchestrator-decision` fence — the review-run's format — rather than the `isotopy-closeout` record the step task asks for, so closeout produced no record and the stage failed. Claude Code's run never reached a closeout stage, so this is unproven on Claude.
 
 Likely cause: the same Orchestrator persona carries both the closeout step and the post-run review, and the persona text pulls a cheaper model toward the decision format. Check what the closeout prompt actually contains (persona + step task + handoffs) and make the required fence unambiguous in the step task; consider a failure message that names the fence that was expected and the one that was found. Evidence: the stage prompt for `closeout-feature` states its fence before any mention of decisions, and a re-run on Cursor · auto produces a closeout record.
-
----
-## TASK-183: A review FAIL has no route back to the Developer inside the run
-**Priority:** P2 | **Tags:** core, engine, milestone-i
-**Updated:** 2026-10-04 19:40
-
-Found in `TASK-157`'s Cursor run (2026-10-04). A design question, not a crash.
-
-The Architect and QA failed the arcade shell on a one-line README fix (Node floor), with every functional criterion passing (6 unit tests, 10/10 Playwright). The pipeline has no route from a blocking review finding back to `implementation` inside the same run, so the whole feature failed and the only way forward was a new run from the Orchestrator — which then hit `TASK-180`. The product brief's risk table still promises *"Playwright E2E fix loops"*.
-
-Decide whether a quality stage's blocking finding should send the run back to `implementation` once (bounded, recorded in the run) before the run settles, or whether the Orchestrator's follow-up run is the intended loop — and then make the product brief say which. Either answer is defensible; leaving it implicit is not. Record it in `docs/decisions.md`.
 
 ---
 ## TASK-162: A step names its agent, its tools and what it needs — and a marked task is not the team's to start
