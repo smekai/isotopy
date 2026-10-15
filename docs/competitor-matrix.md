@@ -1,6 +1,6 @@
 # Competitor Matrix: Isotopy
 
-**Last updated:** October 2026 (full CrewAI head-to-head in §5; its memory, checkpoint resume and looping Flows make those table stakes). Before that, September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
+**Last updated:** 14 October 2026 (full Mastra head-to-head in §1: Mastra Factory is the first framework vendor to ship an issue-to-pull-request product with stages and human checkpoints, and it stops at the merge; "never calls a model API" is no longer scored unique, because the §8 multiplexers run the same CLIs on the same sign-in). Earlier in October: full CrewAI head-to-head in §5; its memory, checkpoint resume and looping Flows make those table stakes. Before that, September 2026 (Cursor Projects added to §6 — the harness grows a coordinator; new §8 — parallel-agent orchestrators; full Cline head-to-head; added Bernstein, Conductor, Vibe Kanban, Emdash, Agent Orchestrator, Nimbalyst, Claude Squad, Baton; three former differentiators reclassified as table stakes)  
 **Purpose:** Map adjacent products, explain what each category misses, and show where Isotopy wins on **ongoing local ownership** — not just first-version generation.
 
 ---
@@ -31,10 +31,146 @@
 | **loki-mode** | Yes | Yes (PRD→deploy) | RARV cycles | Claude Code primary; others degraded | CLI | Early OSS |
 | **Overcut** | No (SaaS) | Yes (triage→release) | Workflow config | Git/ticket-native | Drag-and-drop | Commercial |
 | **OpenCastle / SDLC Orchestrator** | Partial | Yes (governance-heavy) | Gate-based | Cursor, Claude, Copilot, etc. | Web/control plane | Niche OSS |
+| **Mastra Factory** | Partial (server on your machine; auth, Postgres and sandboxes from the Mastra platform unless you self-host all three) | Partial (issue → triage → plan → build → review; stops at the merge) | Session per work item; board phases | No: its own harness (Mastra Code) on your model keys | Web board (Work + Review) | Alpha, Apache-2.0, backed by a 28.8k-star framework |
 
 **What they miss:** Developer-facing CLI/TUI, limited visual run control, weak prompt-to-app first-run UX, and no unified deploy + E2E story. **Why not popular:** too early, too fragmented, require assembling your own stack.
 
 **Gap:** Few combine *local-first* + *visual run control* + *plug any harness* + *restart single stage* + *Playwright E2E* + *deploy adapters* in one product.
+
+### Mastra — head-to-head (October 2026)
+
+**The question this answers:** *"Mastra is TypeScript, like us. It has durable workflows,
+schedules, memory and a local Studio, and now a Factory that takes an issue to a reviewed pull
+request with human checkpoints. Isn't that Isotopy?"* It is the closest thing to our pitch any
+framework vendor has shipped, so it gets a straight answer.
+
+**Where Mastra stands.** Apache-2.0, except code under `ee/` directories, which is
+source-available under the Mastra Enterprise License. ~28.8k GitHub stars; `@mastra/core`
+1.77.0 shipped on 14 October 2026, its third minor in eight days. It has four layers:
+
+- **Framework.** Agents with model routing across 40+ providers. Workflows: a typed graph with
+  `.then()`, `.branch()` and `.parallel()`, where `suspend()` pauses a step for human input and a
+  run resumes from a step out of a snapshot in storage (LibSQL by default). Memory: semantic
+  recall, plus **observational memory**, in which an observer model compresses the conversation
+  into text observations once it passes a token threshold, with no vector store involved. Evals,
+  tracing, metrics and MCP. **Studio** runs locally on port 4111.
+- **Schedules** (July 2026). Cron on a workflow or an agent, declared on the workflow or managed
+  through `mastra.schedules`. The runtime API is beta.
+- **Harness and Mastra Code** (February 2026). Mastra's own TUI coding agent: persistent
+  sessions, plan and build modes, tool approvals, subagents, and observational memory, so it
+  never has to compact its context. **SDK subagents** (June 2026) wrap other harnesses as Mastra
+  agents: `@mastra/claude` runs Claude Code through the Claude Agent SDK, alongside
+  `@mastra/openai`, `@mastra/cursor` and `@mastra/acp`.
+- **Factory** (alpha; `@mastra/factory` 0.23.0-alpha, scaffolded by `npm create factory`; not to
+  be confused with Factory, factory.ai, in §4). A web app with two boards. Issues from GitHub
+  and Linear land on **Work**; pull requests land on **Review**. Work moves through
+  **Triage → Planning → Building → Review → Done**. Each phase is a skill bound to a role, and a
+  rules engine (`defineBoard()`, phase hooks, declared transitions) moves the cards. People answer the triage questions, approve or edit the plan, and review and
+  merge. Each pull request gets its own review session with its own agent. *Auto-start runs* and
+  *auto-approve plans* switch the stops off. By default the server runs on your machine, while
+  auth, Postgres and cloud VM sandboxes come from the Mastra platform. `--no-platform` self-hosts
+  all three; `LocalSandbox` gives each session a directory on the server's machine. **The coding
+  worker is Mastra Code's own runtime** (`@mastra/code-sdk`), paid per token through your model
+  provider. Factory does not depend on the Claude, Codex or ACP wrappers.
+
+**What Factory does not do, as of 14 October 2026.** It runs the repository's own test, lint and
+build commands in the sandbox, and nothing mentions a browser, a preview or E2E. It does not
+deploy the product: `mastra deploy` ships the Factory, not your app, and Mastra's own article
+leaves merge and deployment approval with people. Its roles are the four phase skills. There is
+no step that decides what to build next: work arrives as an issue, and the rules move the card.
+Its memory is observational memory in a database. Mastra's CTO said in August that autonomous
+agents make poor teammates because they lack company and codebase history, and the planned fix,
+"knowledge" (prototyped as Alexandria), has not shipped. An open issue (`mastra-ai/mastra#25228`)
+reports a work session running the review skill on its own pull request and approving it.
+
+| Dimension | Mastra (framework + Factory) | Isotopy |
+|-----------|------------------------------|---------|
+| What it is | A TypeScript framework for agent apps, plus Factory, an alpha issue-to-PR web app built on it | A product: a local dev team that goes from a goal to a running product, and keeps going |
+| Who writes the code | Factory: Mastra Code's own harness. Framework: can also wrap Claude Code (Agent SDK), Codex, Cursor or any ACP agent | Claude Code, Cursor or Codex, spawned as the CLI you already use |
+| Model access and cost | Provider keys, paid per token. Observational memory runs a second model (Mastra Code defaults to `gemini-2.5-flash`) | **Never calls a model API**; runs on the CLI subscription you already pay for |
+| Where it runs | Factory server on your machine; auth, Postgres and sandboxes on the Mastra platform by default; full self-host means configuring all three | Your machine, with SQLite files in the project's `.isotopy/` |
+| Where work comes from | GitHub and Linear issues, and incoming pull requests; rules route trusted contributors straight to triage | The repo's task board, a goal you type, and local cron schedules |
+| Stages | Triage → Planning → Building → Review → Done; boards and phases definable in code | Requirements → design → implement → review → test → release → deploy |
+| Roles | One skill per phase: triage, plan, build, review | A prepared persona catalog (PM, Designer, Architect, Developer, Reviewer, QA, Release Manager, SRE) as overridable markdown |
+| Who decides what is next | A rules engine moves cards; a person picks the action for anything untrusted | The **Orchestrator** reads each settled run and picks another run, a milestone, a question for you, or a reasoned stop |
+| Human gates | Answer triage questions, approve or edit the plan, merge the PR | Stage gates, plus a question broker that answers or rewrites a specialist's question before it reaches you |
+| Verification | The repo's own test, lint and build commands, plus a separate review agent per PR | Playwright E2E against the product the run started |
+| What "done" means | The outcome and acceptance criteria are met, possibly across several PRs; merge and deploy stay with people | The product runs: E2E passes, the deploy answers its health check, and closeout findings go to the backlog |
+| Memory | Observational memory and vector recall, in a database | Plain markdown in the project's git repo: board, decisions, handoffs, per-role notes |
+| Durability | Workflow snapshots on suspend, resume from a step; agent checkpoints | Aiki on SQLite: resume without re-running finished stages, restart one stage |
+| Scheduling | Cron for workflows and agents (beta API); Factory itself reacts to GitHub and Linear events | Local cron schedules; cron is the only thing that starts work |
+| UI | Studio for developers; the Factory board; Mastra platform dashboards | A local web app: team approval, gates, run view, preview of the built product |
+| Maturity | Framework 1.x, several releases a week; Factory alpha | Pre-launch |
+
+**Where Mastra genuinely beats us — do not pretend otherwise.** Distribution and a company behind
+it. Our own language: a TypeScript developer who wants to build an Isotopy reaches for Mastra
+first. 40+ model providers. Evals, tracing and cost metrics we do not have. Observational memory
+with a published benchmark (94.87% on LongMemEval, by Mastra's own measurement). GitHub, Linear
+and Slack intake. A Review board that reviews *any* incoming pull request, a human's included,
+where we review only our own runs. Concurrent sessions in cloud VM sandboxes, where we run one
+active run per project. A shared team dashboard with WorkOS auth and audit.
+
+**Where the difference is structural:**
+
+1. **Factory ends at the merge.** It adds triage and planning in front of the diff, which §8
+   lacks, but past the diff it is the same: no E2E against a running product, no deploy, and no
+   loop after v1. Mastra states the boundary itself: people keep merge and deployment approval.
+   Everything after that is exactly where we are.
+2. **Factory's worker is an API client; ours is the CLI you already pay for.** Mastra Code runs on
+   your provider keys, per token, and observational memory adds a second model on top. The seam
+   is not SDK versus CLI: Anthropic calls `claude -p` the Agent SDK's command-line form, and what
+   it forbids is a third-party product offering claude.ai login or handling the credentials. So
+   `@mastra/claude`, run on your machine with your own Claude Code login, draws on your plan
+   exactly as Isotopy does. The difference is Factory's default worker, not a wall Anthropic
+   built. The terms, and what launch copy may claim, are in [`decisions.md`](decisions.md),
+   2026-10-14.
+3. **A rules engine moves cards; it does not pick the work.** Factory's transitions are declared,
+   and the next piece of work is the next issue someone filed. Isotopy's Orchestrator decides the
+   next run from what the last one *found*.
+4. **The memory is in the wrong place, and Mastra says so.** Observational memory is text,
+   caching-friendly and closer to ours in form than CrewAI's vector store, but it lives in a
+   database: nobody reviews it in a pull request, and another tool cannot read it. Mastra's answer
+   to its agents lacking codebase history is a "knowledge" layer it has not shipped. Ours is
+   decisions, handoffs and role notes in git, next to the code.
+5. **Four phase skills are not a team.** Triage, plan, build and review leave out the product,
+   design, QA, release and operations roles that our persona catalog prepares.
+
+**As a runtime.** Mastra workflows were not in the July runtime survey, and they do not reopen
+the Aiki decision ([`decisions.md`](decisions.md), 2026-10-06). They come inside `@mastra/core`,
+whose agents, model routing and memory Isotopy would never call. The default store,
+`@mastra/libsql`, depends on `@libsql/client`, the native addon we left when Aiki 0.44 moved to
+`node:sqlite` (it has no win32-arm64 build). Schedules are a beta API and need the evented engine
+on storage that supports concurrent updates.
+
+**Threat vector, ranked.**
+
+1. **Factory gains a preview, E2E or deploy phase.** The pieces are already in the same monorepo:
+   a `browser` package, `deployers` for Mastra apps, and the Mastra platform to host what it
+   builds. The day a default board ends at a deployed preview, Factory lands on our pitch with a
+   company behind it.
+2. **Factory's Building phase delegates to `@mastra/claude` or `@mastra/acp`.** That removes "a
+   harness, not an LLM call" as a difference, and the subscription seam with it for anyone who
+   runs Factory with their own CLI login.
+3. **A team builds its own Isotopy on Mastra.** This is the CrewAI build-versus-buy question
+   again, but in our language, with Factory as the starting template.
+
+**Watch for:** a phase after Review in Factory's default boards; `@mastra/factory` depending on
+`@mastra/claude` or `@mastra/acp`; Factory leaving alpha.
+
+**Positioning response.** Never compare frameworks, memory benchmarks or integration counts; we
+lose all three. Compare where each one stops: **"Mastra Factory takes an issue to a merged pull
+request on your model keys. Isotopy takes a goal to a running, deployed product on the CLI you
+already pay for, then decides what to build next."**
+
+**Ideas worth taking (not scoped).**
+
+- **One triage decision that says how far to go:** *Accept*, *Accept and plan*, *Accept and
+  build*. A single choice sets where the work stops next, without a gate preference per stage.
+- **Rewritten, not appended, text memory** that stays prompt-cache friendly: the shape
+  `TASK-156` already wants for the Orchestrator's own context.
+- **A role reaches only its own skills.** Factory's `#25228` is a work session approving its own
+  pull request. A check that a persona cannot invoke another stage's skill is worth having
+  before we hit the same bug.
 
 ---
 
@@ -103,6 +239,7 @@
 | **Aiki** | Code (TypeScript) | Durable workflows (you design stages) | Yes | Long-running agent pipelines, HITL gates |
 | **LangGraph** | Code (Python + TypeScript) | None (you design graph) | Yes | Custom state machines |
 | **CrewAI** | Code (Python) | Role-based Crews + Flows with state, loops and persistence | Framework yes; triggers and UI only in hosted AMP | Multi-agent automation in any domain |
+| **Mastra** | Code (TypeScript) | Workflows with suspend/resume, schedules, a harness for long-running agents | Yes; Mastra platform optional | Agent apps in TypeScript; its Factory is a §1 product |
 | **AutoGen** | Code (Python) | Conversation-centric | Yes | Research / open-ended tasks |
 | **n8n** | Visual + self-host | Generic automation | Yes | Integrations + AI nodes |
 | **Manifold** | Visual + self-host (Go/Vue) | None (long-horizon agent workflows) | Yes | Teams of "specialist" agents; MCP tools auto-exposed as nodes; saved workflows become reusable tools |
@@ -114,6 +251,8 @@
 **Manifold note:** The most product-like entry here — self-hosted (Go + Vue, SQLite/Postgres, MIT), ships a visual flow editor, specialist chat, observability dashboard, and scheduled runs (Pulse) out of the box. But it is model-API-driven (OpenAI/Anthropic/Google/llama.cpp/vLLM), not harness-driven: no Claude Code/Cursor adapters, no git/repo artifacts, no SDLC stages, no E2E or deploy story. Self-described **experimental** (~500 stars). Watch it as a pattern source for "workflows as reusable tools" and MCP-tools-as-nodes, not as a direct competitor.
 
 **CrewAI:** the full head-to-head is below, after this section's gap line.
+
+**Mastra:** the full head-to-head is in §1, because Mastra Factory is a product rather than a framework.
 
 **Artel (NicolasPrimeau/artel) note (Aug 2026):** Not a direct competitor — a **pattern / build-on source**. Self-hosted MCP + REST coordination layer for AI agent fleets (~early OSS): shared memory with semantic search and confidence decay, typed memory (`memory` / `doc` / `directive` / `skill` / `compiled`), tasks with claim/complete, async agent messaging, session handoffs across context resets, CRDT mesh between instances (feeds + mDNS), and an autonomous **archivist** that compacts raw session captures into clean memory. Claude Code plugin makes memory *ambient* (push relevant knowledge in; capture sessions out) rather than pull-only tool calls. **What it is not:** no prepared SDLC professions, no Full Delivery pipeline, no Playwright E2E, no deploy adapters, no visual run-control product for feature lifecycle — it coordinates fleets, it does not ship the delivery process. **Ideas worth borrowing:** ambient memory injection at session start; confidence-decay / heat-protected knowledge; archivist compaction of run transcripts into durable repo memory; session handoff packages so any harness can resume; `compiled` memory anchored to source files. Complementary framing: Artel-like memory could sit *under* an Isotopy run; Isotopy remains the opinionated pipeline on top. Also blocks **ARTEL** as a clean product name in our space.
 
@@ -369,17 +508,17 @@ now ships is no longer something to sell, however well we do it.
 |------------|-----------|------------------|--------|
 | Local artifact store (git-native) | Required | spec-manager, Sikula | Table stakes |
 | Built-in task backlog (feeds runs) | Required | spec-intelligence (kanban), spec-manager (task lifecycle) | Intake only; we execute full pipeline |
-| Predefined lifecycle stages | Required | autonomous-sdlc, aiagentflow | **Still differentiating** — §8 has cards, not stages |
+| Predefined lifecycle stages | Required | autonomous-sdlc, aiagentflow, Mastra Factory (triage → plan → build → review) | **Still differentiating, but narrower** — Mastra Factory now has stages up to the merge; ours continue through E2E, release and deploy |
 | Restart one failed stage | Required | Sikula (partial), LangGraph (DIY), CrewAI (resume skips finished tasks; no single-task restart) | **Still differentiating** — §8 restarts a *card*, not a stage inside a pipeline |
 | Adapter: Cursor / Claude Code | Required | **Bernstein (40+), Emdash (34), Vibe Kanban (10+), Cline Kanban** | **Table stakes** — stop selling it |
-| Playwright E2E in pipeline | Required | Locode, Open Orchestra | **Still differentiating** — no §8 orchestrator runs browser E2E in the loop |
-| Deploy to any platform | Required | Tinykit, Singulary (limited) | **Strongest remaining moat** — *zero* of the eleven §8 orchestrators deploy the product |
+| Playwright E2E in pipeline | Required | Locode, Open Orchestra | **Still differentiating** — no §8 orchestrator, and not Mastra Factory, runs browser E2E in the loop |
+| Deploy to any platform | Required | Tinykit, Singulary (limited) | **Strongest remaining moat** — *zero* of the eleven §8 orchestrators deploy the product, and Mastra Factory leaves deployment to people |
 | Ongoing evolution (v2+) | Required | None cleanly | **Core wedge, still unclaimed** |
-| Human approval gates | Required | spec-manager, autonomous-sdlc | Common in spec tools; §8 reviews diffs, it does not gate between stages |
-| Prepared professions (persona catalog) | Required | None (Cline improvises roles at runtime) | **Newly load-bearing** — the claim §8 cannot make |
+| Human approval gates | Required | spec-manager, autonomous-sdlc, Mastra Factory (triage answers, plan approval, merge) | **Table stakes** — Mastra Factory gates between its phases too |
+| Prepared professions (persona catalog) | Required | None (Cline improvises roles at runtime; Mastra Factory has one skill per phase) | **Newly load-bearing** — the claim §8 cannot make |
 | Cross-stage handoff + verdict | Required | Bernstein (signals), Cline (mailbox) | **Still differentiating** — nobody carries design into QA |
-| Never calls a model API | Required | None — §8 tools and CrewAI are API clients | **Unique**: your CLI subscription, your auth |
-| Memory across runs, checkpoint resume, looping workflows | Required | CrewAI (auto-extracted memory, checkpoints, Flows), Cline (mission logs) | **Table stakes** — sell *where* memory lives (markdown in git), not *that* it exists |
+| Never calls a model API | Required | §8 multiplexers drive the same CLIs on the same sign-in, and so does Mastra's Claude Code wrapper on a local login. CrewAI, Cline and Mastra Factory's own worker are API clients | **Not unique** — a difference against frameworks, Cline and Mastra Factory, table stakes against §8. Sell "your own CLI, your own plan, no API key", within the plan's limits; what launch copy may claim is in `decisions.md` (2026-10-14) |
+| Memory across runs, checkpoint resume, looping workflows | Required | CrewAI (auto-extracted memory, checkpoints, Flows), Mastra (observational memory, workflow snapshots), Cline (mission logs) | **Table stakes** — sell *where* memory lives (markdown in git), not *that* it exists |
 | Visual run dashboard | Required | **Cline Kanban, Conductor, Vibe Kanban, Nimbalyst, Emdash, AO** | **Table stakes** — "CLI-only is common" is no longer true |
 | Worktree isolation per run | Required | Every §8 orchestrator | **Table stakes** — now universal |
 | Release / PR automation | Required | Codegen, Factory | Often cloud-only |
@@ -395,11 +534,12 @@ High control / low-level                    High speed / low-level
         │   Local app builder + evolution            │
         │                                              │
         │   Sikula, aiagentflow,                     │
-        │   autonomous-sdlc, spec-manager            │
+        │   autonomous-sdlc, spec-manager,           │
+        │   Mastra Factory (stops at the merge)      │
         │                                              │
 ────────┼──────────────────────────────────────────────┼────────
         │                                              │
-        │   LangGraph, CrewAI, Aiki, n8n             │   Bolt, v0,
+        │   LangGraph, CrewAI, Mastra, Aiki, n8n     │   Bolt, v0,
         │   (build your own)                           │   Dyad, Locode, Singulary
         │                                              │
         │   Augment Cosmos, Factory, Codegen           │
@@ -438,6 +578,7 @@ Low abstraction                             High abstraction
    - **Cline** — headless CLI contract (machine-readable output, branchable exit codes) as the adapter shape; cron agents and messaging connectors as the unattended-operation pattern; five surfaces off one runtime as a distribution lesson
    - **Cline Kanban** — dependency links that auto-start the next card, and diff review scoped to a message range
    - **Bernstein** — a verification gate expressed as concrete signals (lint, types, tests *per diff*), and audit lineage a reviewer checks offline without re-running the work
+   - **Mastra Factory** — one triage decision that sets how far work goes (accept, plan, build); rewritten text memory that stays prompt-cache friendly; skills scoped to the role that owns them
 
 4. **MVP wedge:** "Capture tasks in repo-native backlog, run a feature through requirements → design → implement → review → test (Playwright E2E) → release → deploy" on your machine, with one-click restart of any stage.
 
@@ -532,6 +673,17 @@ The category multiplies the implement stage. We are the only entrant claiming th
 | CrewAI checkpointing | https://docs.crewai.com/en/concepts/checkpointing |
 | CrewAI Flows | https://docs.crewai.com/en/concepts/flows |
 | CrewAI AMP triggers | https://docs-platform.crewai.com/platform/en/guides/automation-triggers |
+| Mastra (repo) | https://github.com/mastra-ai/mastra |
+| Mastra Factory | https://mastra.ai/factory |
+| Mastra Factory docs (setup, sandboxes, API) | https://factory.mastra.ai |
+| Mastra: what is an AI software factory | https://mastra.ai/articles/what-is-ai-software-factory |
+| Mastra Factory demo recap (WorkOS, Aug 2026) | https://workos.com/blog/agent-night-mastra-software-factory-demo-recap |
+| Mastra Code announcement | https://mastra.ai/blog/announcing-mastra-code |
+| Mastra observational memory | https://mastra.ai/blog/observational-memory |
+| Mastra SDK subagents (Claude Code, Codex, Cursor) | https://mastra.ai/blog/introducing-sdk-subagents |
+| Mastra schedules | https://mastra.ai/docs/workflows/scheduled-workflows |
+| Mastra workflow snapshots | https://mastra.ai/docs/workflows/snapshots |
+| Claude Agent SDK authentication note | https://code.claude.com/docs/en/agent-sdk/overview |
 | sandcastle | https://github.com/mattpocock/sandcastle |
 | Cursor Projects | https://cursor.com/blog/projects |
 | beads (bd) | https://github.com/gastownhall/beads |
@@ -550,3 +702,14 @@ The category multiplies the implement stage. We are the only entrant claiming th
 | Conductor | https://conductor.build |
 | Nimbalyst | https://nimbalyst.com |
 | Emdash / AO / Claude Squad / Baton (roundup — verify individually) | https://www.augmentcode.com/tools/open-source-agent-orchestrators |
+| Terms: Claude Code legal and compliance (subscription sign-in, third-party products) | https://code.claude.com/docs/en/legal-and-compliance |
+| Terms: Claude Agent SDK overview (login note) | https://code.claude.com/docs/en/agent-sdk/overview |
+| Terms: Claude Agent SDK, `claude -p` and third-party apps on a Claude plan | https://support.claude.com/en/articles/15036540 |
+| Terms: Monthly API credits for Max and Team plans | https://support.claude.com/en/articles/17154008 |
+| Terms: Anthropic consumer terms (automated access) | https://www.anthropic.com/legal/consumer-terms |
+| Terms: Codex sign-in methods | https://learn.chatgpt.com/docs/auth |
+| Terms: Codex non-interactive mode | https://learn.chatgpt.com/docs/non-interactive-mode |
+| Terms: Sign in with ChatGPT | https://learn.chatgpt.com/docs/sign-in-with-chatgpt |
+| Terms: OpenAI terms of use (outside the EEA, Switzerland and the UK) | https://openai.com/policies/row-terms-of-use/ |
+| Terms: Cursor CLI authentication | https://cursor.com/docs/cli/reference/authentication |
+| Terms: Cursor terms of service | https://cursor.com/terms-of-service |

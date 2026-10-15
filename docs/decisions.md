@@ -15,6 +15,88 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-14 — Isotopy runs on the user's own sign-in, and never holds it
+
+**Context:** the pitch says Isotopy never calls a model API and runs on the CLI subscription
+the user already pays for. The Mastra comparison found that Anthropic's Agent SDK overview bars
+third-party developers, unless approved, from offering claude.ai login or rate limits for their
+products, and sends them to API keys. Isotopy does not embed that SDK. Each engine adapter spawns
+the `claude`, `codex` or Cursor `agent` binary the user installed: in subscription mode with the
+login that binary already holds, in API-key mode with a key the user stored in Setup. This entry
+records the vendors' terms as published on this date, before launch copy leans on the
+subscription.
+
+**What the terms say.** *Anthropic:* Claude Code's legal page keeps subscription OAuth for
+subscribers' ordinary use of Claude Code and Anthropic's own apps. It bars a third-party
+developer from offering claude.ai login in its own app, from routing requests through Free, Pro
+or Max credentials on its users' behalf, and from collecting, storing or intermediating claude.ai
+credentials or session tokens; sign-in must finish in Anthropic's own flow. The same page says
+none of this stops an end user signing in to the unmodified binary with their own subscription,
+even where a platform hosts Claude Code, provided nobody else pays for, resells or intermediates
+the usage. The Help Center (updated 7 October 2026) says `claude -p`, the Agent SDK and
+third-party apps still draw on subscription limits; that is the explicit permission the consumer
+terms' ban on automated access defers to. Pro and Max limits assume ordinary, individual use.
+*OpenAI:* `codex exec` reuses the CLI's saved ChatGPT sign-in. The Codex docs recommend an API
+key for automation and call plan sign-in in CI an advanced path, and OpenAI runs Sign in with
+ChatGPT, through which listed third-party and open-source apps spend a user's plan. The terms of
+use forbid sharing an account and programmatically extracting output; `codex exec` is OpenAI's
+own non-interactive interface, so we read it as outside that clause. *Cursor:* the CLI docs
+recommend an API key for scripts and CI and say nothing either way about the browser login in a
+script. The terms (3 September 2026) forbid scraping and renting or selling the service, and
+have no automation clause.
+
+**Decision: the claim is compatible with all three vendors' terms as published, and it rests on
+who signs in, not on avoiding the SDK.** Anthropic's headless page calls `claude -p` the Agent SDK's command-line
+form, and the SDK starts the same binary, so "we never embed the SDK" carries nothing. What
+carries the claim is that Isotopy is not the party the restrictions name: its publisher runs no
+service, has no users on whose behalf to route a request, offers no login and never sees a
+credential. The user installs the vendor's CLI, signs in through the vendor's flow and runs
+Isotopy on their own machine for their own work, under their own agreement with the vendor.
+
+**Decision: what Isotopy refuses to do, so that stays true.** It never shows a login of its own,
+never accepts a subscription token (`claude setup-token` output, `~/.codex/auth.json`) and never
+reads, copies or forwards a CLI's credential store. It may start the CLI's own login command, as
+Setup does with `agent login`, because sign-in then finishes in the vendor's flow. It never
+patches the CLI or removes one of its sign-in methods. It never pays for, resells or meters model
+usage. It is never hosted on one person's subscription for anyone else: a hosted or shared
+Isotopy runs on each user's own key or each user's own sign-in. API-key mode stays a key the
+user owns, stored on their machine and billed to them, which Anthropic's page allows.
+
+**Decision: what launch copy may say.** *May:* Isotopy never calls a model API itself; it runs
+the Claude Code, Codex or Cursor CLI you already use, signed in with your own account, and its
+work counts against your plan's limits like any other session; there is no Isotopy bill and no
+API key is needed. "Runs Claude Code" in plain text. On Max and Team, API-key mode can spend the
+monthly API credits those plans now include. *May not:* "free", "unlimited" or "no extra cost"
+without "within your plan's limits"; "sign in with Claude", ChatGPT or Cursor; a vendor's name
+or logo in Isotopy's own name, logo or feature names, or anything that suggests a partnership;
+"approved by" or "compliant with" a vendor; "the only tool that runs on your subscription",
+because every §8 multiplexer and Mastra's Claude Code wrapper run the same way.
+
+**What remains uncertain.** Anthropic's policy moved five times this year: subscription tokens
+refused outside its own apps (January), third-party harnesses moved to paid extra usage (April),
+a separate Agent SDK credit announced (May) and paused (June), subscription limits confirmed for
+`claude -p` and third-party apps (October). The SDK overview's "rate limits for their products"
+can still be read against any product that drives `claude -p` on a plan, enforcement may come
+without notice, and nothing defines "ordinary, individual use": unattended scheduled runs are
+where Isotopy is most exposed. The headless docs also say `--bare`, which never reads the
+subscription login, will become the default for `-p`; subscription mode then needs an opt-out
+the CLI may not offer. OpenAI and Cursor prefer API keys for automation without forbidding the
+alternative. **What would settle it** is a written answer from Anthropic's sales contact, which
+the legal page names for exactly this question, and the same question to OpenAI and Cursor: may
+a local open-source tool run the user's own signed-in CLI non-interactively, on a schedule, for
+that user's own projects? Until then, copy uses the qualified wording above.
+
+**Rejected: resting the claim on "we never embed the SDK"** — Anthropic draws no line between
+the SDK and `claude -p`, and Mastra's wrapper, run on its user's own login, stands where we do.
+**Rejected: API-key-only engines** — gives up the cost argument for a risk the vendors' current
+pages allow, when API-key mode is already there for anyone who wants it. **Rejected: a sign-in of
+our own** (claude.ai login, a Sign in with ChatGPT client) — the first is what Anthropic forbids,
+the second makes Isotopy a registered client that holds tokens, and spawning the user's CLI needs
+neither. **Rejected: "free" as the headline** — the plan's limits are the price, and a run past
+them stops or bills extra usage.
+
+---
+
 ## 2026-10-11 — An agent is a file whose front matter is its catalog entry
 
 **Context:** who may be on a team was decided by three lists in code — `PERSONA_CATALOG` and

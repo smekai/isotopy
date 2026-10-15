@@ -125,6 +125,11 @@ become: prepared roles, an Orchestrator that decides what runs next, harnesses d
 coding, memory as markdown in git, and a run that ends with the product tested, deployed and
 running. The full comparison is in [competitor-matrix.md](./competitor-matrix.md#crewai--head-to-head-october-2026).
 
+**Why not Mastra Factory?** It takes an issue to a reviewed pull request, with triage, a plan you
+approve and a review agent per PR, and it stops at the merge: no E2E against the running product
+and no deploy. Its coding agent is Mastra's own, paid per token on your model keys. See
+[competitor-matrix.md](./competitor-matrix.md#mastra--head-to-head-october-2026).
+
 **Positioning statement:**
 
 > For developers who liked hosted app-builder speed but hit a wall on iteration, Isotopy is the open-source local alternative that builds the first version and keeps the project evolvable — with prepared agents, Playwright E2E, deploy-anywhere adapters, and restartable stages — without replacing Cursor or Claude Code.
