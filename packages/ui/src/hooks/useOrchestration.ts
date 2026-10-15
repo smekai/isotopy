@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type { Orchestration, RunState } from "@isotopy/core";
 import {
   approveOrchestratorTeam,
   fetchOrchestrations,
   startOrchestration,
   stopOrchestration,
+  subscribeOrchestrations,
 } from "../api";
 import type { ApproveTeamOptions, OrchestrationRunOptions } from "../api";
+import { messageOf, useProjectCollection } from "./useProjectCollection";
 
 export interface OrchestrationController {
   orchestrations: Orchestration[];
@@ -22,74 +24,22 @@ export interface OrchestrationController {
   stop(orchestrationId: string): Promise<void>;
 }
 
-function messageOf(reason: unknown, fallback: string): string {
-  return reason instanceof Error ? reason.message : fallback;
-}
-
-export function useOrchestration(
-  projectId: string,
-  enabled: boolean,
-  refreshKey: string,
-): OrchestrationController {
-  const [orchestrations, setOrchestrations] = useState<Orchestration[]>([]);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function useOrchestration(projectId: string, enabled: boolean): OrchestrationController {
+  const { items: orchestrations, ready, error, setError } = useProjectCollection<Orchestration>({
+    projectId,
+    enabled,
+    load: fetchOrchestrations,
+    subscribe: subscribeOrchestrations,
+    failure: "Failed to load orchestrations",
+  });
   const [busy, setBusy] = useState(false);
-  const loadedProject = useRef<string | null>(null);
-
-  function forgetPreviousProject() {
-    setOrchestrations([]);
-    setReady(false);
-    setError(null);
-  }
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    if (loadedProject.current !== projectId) {
-      loadedProject.current = projectId;
-      forgetPreviousProject();
-    }
-    let cancelled = false;
-    void fetchOrchestrations()
-      .then((loaded) => {
-        if (!cancelled) {
-          setOrchestrations(loaded);
-          setError(null);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled) {
-          setError(messageOf(reason, "Failed to load orchestrations"));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setReady(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, enabled, refreshKey]);
-
-  const reload = useCallback(async () => {
-    try {
-      setOrchestrations(await fetchOrchestrations());
-    } catch (reason) {
-      setError(messageOf(reason, "Failed to refresh orchestrations"));
-    }
-  }, []);
 
   const act = useCallback(
     async <T>(operation: () => Promise<T>, fallback: string): Promise<T | undefined> => {
       setError(null);
       setBusy(true);
       try {
-        const value = await operation();
-        await reload();
-        return value;
+        return await operation();
       } catch (reason) {
         setError(messageOf(reason, fallback));
         return undefined;
@@ -97,7 +47,7 @@ export function useOrchestration(
         setBusy(false);
       }
     },
-    [reload],
+    [setError],
   );
 
   const start = useCallback(

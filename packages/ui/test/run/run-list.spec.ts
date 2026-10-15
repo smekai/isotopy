@@ -1,13 +1,7 @@
-// Unit spec: the rail is fed by a snapshot plus a live stream, so a summary can
-// arrive for a run the snapshot already holds (replace, keep position) or for one
-// it has never seen (prepend — the server sorts newest first).
 import { describe, expect, test } from "vitest";
 import type { RailItem } from "../../src/run-list";
 import {
-  mergeSummaries,
-  mergeSummary,
   milestoneRefreshKey,
-  orchestrationRefreshKey,
   SCHEDULE_GROUP_RUNS,
   railItems,
   runsForFeature,
@@ -21,41 +15,7 @@ import {
   scheduleView,
 } from "../support/orchestration-fixtures";
 import type { RunSummary } from "@isotopy/core";
-import { stage, summary } from "../support/run-fixtures";
-
-describe("mergeSummary", () => {
-  test("replaces a run in place, keeping its position", () => {
-    const merged = mergeSummary(
-      [summary({ id: "a", status: "running" }), summary({ id: "b", status: "completed" })],
-      summary({ id: "a", status: "completed" }),
-    );
-    expect(merged.map((run) => run.id)).toEqual(["a", "b"]);
-    expect(merged[0]?.status).toBe("completed");
-  });
-
-  test("prepends a run it has not seen", () => {
-    const merged = mergeSummary([summary({ id: "a", status: "completed" })], summary({ id: "new", status: "running" }));
-    expect(merged.map((run) => run.id)).toEqual(["new", "a"]);
-  });
-
-  test("does not mutate the list it was given", () => {
-    const runs = [summary({ id: "a", status: "running" })];
-    mergeSummary(runs, summary({ id: "a", status: "failed" }));
-    expect(runs[0]?.status).toBe("running");
-  });
-});
-
-describe("mergeSummaries", () => {
-  test("replays buffered summaries over a snapshot in order", () => {
-    const merged = mergeSummaries(
-      [summary({ id: "a", status: "running" })],
-      [summary({ id: "a", status: "awaiting" }), summary({ id: "a", status: "completed" })],
-    );
-    expect(merged).toHaveLength(1);
-    expect(merged[0]?.status).toBe("completed");
-  });
-
-});
+import { summary } from "../support/run-fixtures";
 
 describe("runsForFeature", () => {
   test("keeps only the runs linked to that feature", () => {
@@ -110,34 +70,6 @@ describe("runsForOrchestration", () => {
     expect(
       runsForOrchestration(runs, orchestration({ runIds: ["mine"] })).map((run) => run.id),
     ).toEqual(["mine"]);
-  });
-});
-
-describe("orchestrationRefreshKey", () => {
-  test("changes when a stage settles, which is when a decision is recorded", () => {
-    const before = orchestrationRefreshKey([
-      orchestratedRun("a", "2026-08-01T09:00:00.000Z", { stages: [stage("orchestrate", "running")] }),
-    ]);
-    const after = orchestrationRefreshKey([
-      orchestratedRun("a", "2026-08-01T09:00:00.000Z", { stages: [stage("orchestrate", "passed")] }),
-    ]);
-    expect(after).not.toBe(before);
-  });
-
-  test("ignores runs no orchestrator owns", () => {
-    const key = orchestrationRefreshKey([orchestratedRun("a", "2026-08-01T09:00:00.000Z")]);
-    expect(
-      orchestrationRefreshKey([
-        orchestratedRun("a", "2026-08-01T09:00:00.000Z"),
-        summary({ id: "loose", status: "completed" }),
-      ]),
-    ).toBe(key);
-  });
-
-  test("is stable under rail reordering, so a prepend alone does not refetch", () => {
-    const a = orchestratedRun("a", "2026-08-01T09:00:00.000Z");
-    const b = orchestratedRun("b", "2026-08-01T10:00:00.000Z");
-    expect(orchestrationRefreshKey([a, b])).toBe(orchestrationRefreshKey([b, a]));
   });
 });
 

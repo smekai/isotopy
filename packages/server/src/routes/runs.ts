@@ -1,8 +1,14 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import { DEFAULT_PIPELINE_ID, RUN_SUMMARY_EVENT, isTerminalRunStatus } from "@isotopy/core";
-import type { RunEvent } from "@isotopy/core";
+import {
+  DEFAULT_PIPELINE_ID,
+  ORCHESTRATION_UPDATED_EVENT,
+  RUN_SUMMARY_EVENT,
+  isTerminalRunStatus,
+} from "@isotopy/core";
+import type { Orchestration, RunEvent, RunSummary } from "@isotopy/core";
+import type { OrchestrationService } from "../services/orchestration-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import type { RunService } from "../services/run/run-service.ts";
 import {
@@ -27,6 +33,7 @@ function runNotFound(c: Context) {
 
 export function createRunRoutes(
   runs: RunService,
+  orchestrations: OrchestrationService,
   registry: ProjectRegistry,
 ): Hono {
   return new Hono()
@@ -36,20 +43,25 @@ export function createRunRoutes(
       const projectId = projectScope(registry, c).id;
 
       return streamSSE(c, async (stream) => {
+        const sendAs =
+          (event: string) =>
+          (value: RunSummary | Orchestration): void => {
+            void stream.writeSSE({ event, data: JSON.stringify(value) });
+          };
         await new Promise<void>((resolve) => {
-          const unsubscribe = runs.subscribeProject(projectId, (summary) => {
-            void stream.writeSSE({
-              event: RUN_SUMMARY_EVENT,
-              data: JSON.stringify(summary),
-            });
-          });
+          const unsubscribeRuns = runs.subscribeProject(projectId, sendAs(RUN_SUMMARY_EVENT));
+          const unsubscribeOrchestrations = orchestrations.subscribeProject(
+            projectId,
+            sendAs(ORCHESTRATION_UPDATED_EVENT),
+          );
           const keepAlive = setInterval(() => {
             void stream.writeSSE({ event: "ping", data: "" });
           }, SSE_KEEPALIVE_MS);
           keepAlive.unref();
           stream.onAbort(() => {
             clearInterval(keepAlive);
-            unsubscribe();
+            unsubscribeRuns();
+            unsubscribeOrchestrations();
             resolve();
           });
         });

@@ -2,16 +2,21 @@
 // so without this stream a run list only ever changes on reload. Two properties
 // carry the weight — the channel pushes every status transition, and it is
 // scoped to one project (a run in project B must never surface in project A).
+// The same channel carries each orchestration as it is stored, because an
+// initiative's state can change after the last event of any run it owns.
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   addTestProject,
   createTestApp,
   openSse,
+  orchestrationsOf,
+  startOrchestration,
   startRun,
   summariesOf,
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
+import { TEAM_PROPOSAL, fenced } from "../support/orchestration-fixtures.ts";
 
 const TASK = "add a greet function";
 const DEV_REPORT = "Implemented it. MARKER-DEVELOPER";
@@ -115,4 +120,31 @@ test("the project is selectable by query, because EventSource cannot set headers
 
   // Assert
   expect(summariesOf(events).at(-1)?.task).toBe("query scoped run");
+});
+
+test("the project stream carries an initiative's decision as it is recorded, so the app need not ask again", async () => {
+  // Arrange
+  const { app, engine } = ctx;
+  const stream = await openSse(app, "/runs/events");
+
+  // Anticipate
+  engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(TEAM_PROPOSAL));
+
+  // Act
+  const conversation = await startOrchestration(app);
+
+  // Assert
+  const events = await stream.waitFor(
+    (seen) => orchestrationsOf(seen).some((orchestration) => orchestration.status === "awaiting_approval"),
+    "the proposal on the project stream",
+  );
+  await stream.close();
+  expect(orchestrationsOf(events).at(-1)).toMatchObject({
+    id: conversation.orchestrationId,
+    status: "awaiting_approval",
+    latestDecision: { action: "propose_team" },
+  });
+  engine.verify();
 });

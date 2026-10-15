@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mergeById } from "../merge-by-id";
+import type { Identified } from "../merge-by-id";
 
 export function messageOf(reason: unknown, fallback: string): string {
   return reason instanceof Error ? reason.message : fallback;
 }
 
+export type ProjectSubscription<T> = (
+  projectId: string,
+  onUpdate: (item: T) => void,
+) => () => void;
+
 export interface ProjectCollectionOptions<T> {
   projectId: string;
   enabled: boolean;
   load: () => Promise<T[]>;
+  subscribe?: ProjectSubscription<T>;
   failure: string;
-  refreshKey?: string;
   refreshMs?: number;
 }
 
@@ -22,12 +29,12 @@ export interface ProjectCollection<T> {
   reload: () => Promise<void>;
 }
 
-export function useProjectCollection<T>({
+export function useProjectCollection<T extends Identified>({
   projectId,
   enabled,
   load,
+  subscribe,
   failure,
-  refreshKey,
   refreshMs,
 }: ProjectCollectionOptions<T>): ProjectCollection<T> {
   const [items, setItems] = useState<T[]>([]);
@@ -59,17 +66,27 @@ export function useProjectCollection<T>({
       setError(null);
     }
     let cancelled = false;
+    let beforeFirstLoad: T[] | undefined = [];
+    const unsubscribe = subscribe?.(projectId, (update) => {
+      if (beforeFirstLoad) {
+        beforeFirstLoad.push(update);
+        return;
+      }
+      setItems((current) => mergeById(current, update));
+    });
     const fetchOnce = () =>
       loader
         .current()
         .then((loaded) => {
           if (!cancelled) {
-            setItems(loaded);
+            setItems(beforeFirstLoad?.reduce(mergeById, loaded) ?? loaded);
+            beforeFirstLoad = undefined;
             setError(null);
           }
         })
         .catch((reason: unknown) => {
           if (!cancelled) {
+            beforeFirstLoad = undefined;
             setError(messageOf(reason, failure));
           }
         })
@@ -82,11 +99,12 @@ export function useProjectCollection<T>({
     const poll = refreshMs === undefined ? undefined : setInterval(() => void fetchOnce(), refreshMs);
     return () => {
       cancelled = true;
+      unsubscribe?.();
       if (poll !== undefined) {
         clearInterval(poll);
       }
     };
-  }, [projectId, enabled, refreshKey, refreshMs, failure]);
+  }, [projectId, enabled, subscribe, refreshMs, failure]);
 
   const replaceItems = useCallback((update: (current: T[]) => T[]) => {
     setItems(update);

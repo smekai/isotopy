@@ -1,20 +1,6 @@
 import { isTerminalRunStatus } from "@isotopy/core";
 import type { Orchestration, RunSummary, ScheduleView } from "@isotopy/core";
 
-export function mergeSummary(runs: RunSummary[], summary: RunSummary): RunSummary[] {
-  const index = runs.findIndex((run) => run.id === summary.id);
-  if (index === -1) {
-    return [summary, ...runs];
-  }
-  const next = [...runs];
-  next[index] = summary;
-  return next;
-}
-
-export function mergeSummaries(runs: RunSummary[], updates: RunSummary[]): RunSummary[] {
-  return updates.reduce(mergeSummary, runs);
-}
-
 export function firstActiveRunId(runs: RunSummary[]): string | null {
   return runs.find((run) => !isTerminalRunStatus(run.status))?.id ?? null;
 }
@@ -54,14 +40,6 @@ export function runsForSchedule(
   return runs
     .filter((run) => run.orchestrationId !== undefined && episodes.has(run.orchestrationId))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function orchestrationRefreshKey(runs: RunSummary[]): string {
-  return runs
-    .filter((run) => run.orchestrationId !== undefined)
-    .map((run) => `${run.id}:${run.status}:${run.stages.map((stage) => stage.status).join(",")}`)
-    .sort()
-    .join("|");
 }
 
 export const SCHEDULE_GROUP_RUNS = 5;

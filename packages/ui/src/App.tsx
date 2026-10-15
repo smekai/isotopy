@@ -68,7 +68,6 @@ import type { OrchestratorView, PendingRoleTiers } from "./orchestration";
 import {
   firstActiveRunId,
   milestoneRefreshKey,
-  orchestrationRefreshKey,
   runsForOrchestration,
 } from "./run-list";
 import type { Dir } from "./theme";
@@ -176,11 +175,7 @@ export function App() {
     projects.ready,
     milestoneRefreshKey(runs.runs),
   );
-  const orchestration = useOrchestration(
-    projectId,
-    projects.ready,
-    orchestrationRefreshKey(runs.runs),
-  );
+  const orchestration = useOrchestration(projectId, projects.ready);
   const schedules = useSchedules(projectId, projects.ready);
   const agentCatalog = useAgentCatalog(projectId, projects.ready);
   const product = useProduct(projectId);

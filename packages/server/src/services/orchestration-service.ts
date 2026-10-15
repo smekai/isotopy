@@ -88,6 +88,8 @@ import type {
   RunReviewRequest,
 } from "../workflow/types.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
+import { ListenerRegistry } from "../utils/listener-registry.ts";
+import type { Listener } from "../utils/listener-registry.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
 import type { Logger } from "../utils/logger.ts";
@@ -102,6 +104,7 @@ export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
   private readonly repositories = new Map<string, JsonRecordRepository<Orchestration>>();
   private readonly settledRuns = new Set<string>();
+  private readonly projectListeners = new ListenerRegistry<Orchestration>();
 
   private readonly logger: Logger;
   private readonly branches: InitiativeBranches;
@@ -139,6 +142,10 @@ export class OrchestrationService implements StageOutputConsumer {
   get(orchestrationId: string): Orchestration | undefined {
     const orchestration = this.orchestrations.get(orchestrationId);
     return orchestration ? structuredClone(orchestration) : undefined;
+  }
+
+  subscribeProject(projectId: string, listener: Listener<Orchestration>): () => void {
+    return this.projectListeners.add(projectId, listener);
   }
 
   hasActive(projectId: string): boolean {
@@ -937,10 +944,11 @@ export class OrchestrationService implements StageOutputConsumer {
     await this.persist(orchestration);
   }
 
-  private persist(orchestration: Orchestration): Promise<void> {
-    return this.repositoryFor(
+  private async persist(orchestration: Orchestration): Promise<void> {
+    await this.repositoryFor(
       this.registry.resolve(orchestration.projectId),
     ).write(orchestration);
+    this.projectListeners.emit(orchestration.projectId, structuredClone(orchestration));
   }
 
   private repositoryFor(projectPath: ProjectPath): JsonRecordRepository<Orchestration> {

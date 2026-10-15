@@ -56,7 +56,8 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`App.tsx`](../packages/ui/src/App.tsx) | The single composition root — top bar, run rail, run view vs. composer, every overlay. See §6 for what it may own. |
 | [`api.ts`](../packages/ui/src/api.ts) | **The only module that touches the network.** §4. |
 | [`route.ts`](../packages/ui/src/route.ts) | Pure hash routing — `parseRoute` / `routeHash` over a `Route` union of home, `#/runs/:id`, `#/milestones/:id` and `#/schedules/:id`. Unit-tested. |
-| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `mergeSummary` (replace-or-prepend by id), `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `runsForSchedule`, `orchestrationRefreshKey`, `railItems` (groups an initiative's runs under it, and every episode of one schedule under that schedule). Unit-tested. |
+| [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `runsForSchedule`, `railItems` (groups an initiative's runs under it, and every episode of one schedule under that schedule). Unit-tested. |
+| [`merge-by-id.ts`](../packages/ui/src/merge-by-id.ts) | `mergeById` — replace in place, or prepend what the list has never seen. The one rule a snapshot and its live updates are merged by. Unit-tested. |
 | [`schedule-view.ts`](../packages/ui/src/schedule-view.ts) | Pure schedule view rules — the next fire time rendered **in the reader's own zone**, the on/paused label, and what a skipped window reads as. The server computes the instant; this only formats it. Unit-tested. |
 | [`orchestration.ts`](../packages/ui/src/orchestration.ts) | Pure orchestrator view rules — `teamAwaitingApproval` (status **and** decision must agree before Approve is offered), `decisionPresentation`, status labels. Unit-tested. |
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
@@ -173,6 +174,11 @@ What that seam guarantees:
 - **Errors are `Error`s.** `requestJson` unwraps a `{ error }` body into a thrown
   `Error` with the server's message. Callers `catch` and surface a string; they never
   inspect status codes.
+- **One connection per project stream.** `subscribeRunSummaries` and
+  `subscribeOrchestrations` both listen to `/runs/events`, and share one `EventSource`
+  per project: `api.ts` pools it and closes it when the last listener leaves. A
+  browser allows six connections to one origin, and every open tab already holds this
+  one plus the open run's own.
 - **Types are shared, not mirrored.** `RunState`, `RunEvent`, `Project`,
   `SettingsView`, `StageStatus`, `EngineId` and the rest are imported from
   `@isotopy/core`. A handful of response shapes are declared in `api.ts` itself
@@ -272,10 +278,9 @@ survives switching between runs, and an initiative's child runs share one proces
 `useProduct` refetches every second while `starting` and every five seconds while `ready` —
 it must keep watching past readiness, because a product that dies afterwards would otherwise
 leave the tab showing a live iframe and a Stop button for a process that is gone. It stops at
-every settled state. The two channels above are both run-scoped, and the rule against
-widening `/runs/events` into a second copy of `RunState` applies just as much to widening it
-into something that is not a run at all. A poll bounded by liveness costs one request every
-five seconds while a preview is open; a third channel would cost a channel forever.
+every settled state. Unlike an initiative's state, it does not ride the project stream; the
+poll is bounded by liveness, so it costs one request every five seconds while a preview is
+open and nothing otherwise.
 
 Stopping the product on a **project switch** is the server's job, not this hook's — `POST
 /projects/:id/activate` does it — so a closed or crashed browser cannot leak a process.
@@ -288,7 +293,8 @@ left alone.
 
 **The same two-load race is now a merge problem rather than a tab-default problem.** `App`
 feeds the thread from two independent loads — the run over its own SSE subscription, the
-orchestration over `useOrchestration`'s fetch — and the run almost always wins. `runThread`
+orchestration over `useOrchestration`'s load and the project stream — and the run almost
+always wins. `runThread`
 therefore has to be stable under a late second source: orchestration items carry keys
 derived from their position in `turns` and from the run id (`orch:turn:<i>`,
 `orch:run:<id>`), which cannot collide with `stage:` / `log:` / `msg:`, so the turns
@@ -321,10 +327,13 @@ that may run for hours.
 
 **There are two independent SSE channels**, and they answer different questions.
 `/runs/:id/events` carries one run in full detail and closes when that run ends;
-`/runs/events` carries a compact `RunSummary` for *every* run in the project on each
-non-log event, and stays open for the life of the page. The rail reads the second,
-the run view reads the first. Never widen the summary channel into a second copy of
-`RunState` — the reason it exists is that logs must not ride it.
+`/runs/events` — the project stream — carries a compact `RunSummary` (`run.summary`) for
+*every* run in the project on each non-log event, and each initiative whole
+(`orchestration.updated`) every time the server stores it, and stays open for the life of
+the page. The rail and the initiatives read the second, the run view reads the first. Never
+widen the summary channel into a second copy of `RunState` — the reason it exists is that
+logs must not ride it. An initiative rides it whole because it changes a few times per run,
+not once per log line.
 
 **Milestones have no channel of their own, and do not need one.** Every server-side
 milestone mutation — a feature reaching `completed` or `needs_attention`, autorun
@@ -332,17 +341,17 @@ chaining the next run — is a side effect of a milestone run reaching a termina
 status, which the summary channel already carries. `useMilestones` therefore refetches
 on `milestoneRefreshKey(runs)`: a string built from the id and status of the runs that
 carry a `milestoneId`, sorted, so it changes exactly when a refetch would see
-something new and stays stable under a rail reorder. **Rule:** do not add a third SSE
-channel for milestones without first showing that this derivation misses an update.
+something new and stays stable under a rail reorder. **Rule:** do not put milestones on
+the project stream without first showing that this derivation misses an update.
 
-**Orchestrations derive their refetch the same way, one level finer.** `useOrchestration`
-keys on `orchestrationRefreshKey(runs)`, which folds each owned run's **stage** statuses in
-as well as its own. A milestone only moves when a run reaches a terminal status; an
-orchestration moves when the `orchestrate` *stage* settles and its decision is consumed —
-which, for a multi-stage team run, happens while the run itself is still `running`. Keying
-on run status alone would leave an approved team, an `ask_user` question or a routed
-decision invisible until the whole run finished. The rest of the shape is `useMilestones`':
-clear on a project switch, never on a same-project refresh, mutations clear `error` up front.
+**Initiatives showed that it can, so they ride the stream instead.** An initiative changes
+where no run event announces it: a decision acted on once its run has completed — a stop, a
+launch the server refused, a merge git turned down — lands after that run's last summary. A
+refetch keyed on run and stage statuses fired before those changes and never again, so a
+stopped initiative went on showing as running. `useOrchestration` therefore loads once and
+takes every later state from `orchestration.updated`, which `OrchestrationService.persist` —
+the one place an initiative is written — publishes once the write has landed. Its actions
+(start, approve, stop) no longer reload: what they change reaches the hook the same way.
 
 Refetching on a key rather than on the project alone has three consequences, all
 load-bearing and all found in review:
@@ -350,9 +359,8 @@ load-bearing and all found in review:
 - A **project switch** must clear `milestones`/`ready` first, or the rail shows the
   previous project's milestones while the new fetch is in flight — which is why
   `useMilestones` tracks `loadedProject`. A **refresh of the same project** must *not*
-  clear them, or the rail blanks on every run status change. This is the one place
-  `useMilestones` deviates from `useRunList`, which resets unconditionally because its
-  effect has no refresh key.
+  clear them, or the rail blanks on every run status change. `useProjectCollection`,
+  under the run list and the initiatives, tracks the loaded project the same way.
 - `reload()` **never throws.** It reports a refresh failure through `error`, so a
   `startNext` whose run *was* created successfully still returns that run for `App` to
   navigate to. A throwing reload would report a start failure for a run that is
@@ -369,8 +377,8 @@ The seven things that are load-bearing:
 2. **The SSE subscription opens *before* the snapshot fetch.** Events arriving in the
    gap are buffered and replayed onto the snapshot once it lands, so nothing is lost.
    The log dedupe in `applyEvent` (matching `ts` + `message`) absorbs the overlap.
-   `useRunList` does the same dance for the same reason, with `mergeSummaries` as its
-   replay.
+   `useProjectCollection` does the same dance for every collection given a `subscribe` —
+   the run list and the initiatives — replaying with `mergeById`.
 3. **`applyEvent` is a pure reducer** — `structuredClone`, mutate the clone, return
    it. It is the single place run state advances, and it lives in its own module
    ([`run-events.ts`](../packages/ui/src/run-events.ts)) rather than inside the hook
@@ -528,7 +536,7 @@ version and [`e2e-test-plan.md`](./e2e-test-plan.md) for the browser tiers.
 | Layer | Runner | Location | Catches |
 | --- | --- | --- | --- |
 | Unit spec | Vitest `node` (`pnpm test`) | `packages/ui/test/*.spec.ts` | Pure functions — `run-utils`, `run-events`, `route`, `run-list`, `transcript` |
-| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList`, `useMilestones`, `RunTabs` (including the Orchestrator tab), `MilestoneDashboard`, `MilestonePlanPanel`, `CloseoutPanel` |
+| Component | Vitest `jsdom` (`pnpm test`) | `packages/ui/test/*.comp.tsx` | Hooks and components, rendered, with `api.ts` mocked — `useRunEvents`, `useRunList`, `useOrchestration`, `useMilestones`, `RunTabs` (including the Orchestrator tab), `MilestoneDashboard`, `MilestonePlanPanel`, `CloseoutPanel` |
 | E2E | Playwright (`pnpm e2e`) | `packages/ui/e2e/` | Real server, real browser |
 
 The root [`vitest.config.ts`](../vitest.config.ts) declares two projects: **`node`**

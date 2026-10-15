@@ -193,6 +193,8 @@ export const orchestrationSchema = z
 
 export type Orchestration = z.infer<typeof orchestrationSchema>;
 
+export const ORCHESTRATION_UPDATED_EVENT = "orchestration.updated";
+
 export function latestOrchestratorDecision(
   orchestration: Orchestration,
 ): OrchestratorDecision | undefined {
