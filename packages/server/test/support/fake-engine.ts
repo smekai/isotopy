@@ -17,6 +17,7 @@ import type {
   StageUsage,
 } from "@isotopy/core";
 import { detectEngineLimit } from "../../src/domain/rules/engine-limit.ts";
+import { commitEverything } from "./git-project.ts";
 import type {
   EngineAdapter,
   LiveModelLayer,
@@ -87,6 +88,11 @@ export interface AnticipationOutcome {
    * run's change set is measured from.
    */
   writes(files: Record<string, string>, result: string): FakeEngine;
+  /**
+   * The box writes files and commits them where it works, as a stage told to
+   * commit its own work does.
+   */
+  commits(files: Record<string, string>, result: string): FakeEngine;
 }
 
 /** What the Orchestrator's post-run review returns; both halves default. */
@@ -222,6 +228,12 @@ QUESTION: ${question}`,
       writes: (files, result) =>
         push(async (ctx) => {
           await writeIntoWorkspace(ctx.cwd, files);
+          return { success: true, exitCode: 0, result };
+        }),
+      commits: (files, result) =>
+        push(async (ctx) => {
+          await writeIntoWorkspace(ctx.cwd, files);
+          await commitEverything(ctx.cwd, "The box's work");
           return { success: true, exitCode: 0, result };
         }),
       hangsUntilAborted: () =>

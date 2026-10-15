@@ -27,6 +27,7 @@ import { buildProductEnvironment } from "../domain/markdown/product-environment.
 import {
   COMMIT_RULE,
   buildArtifactsRule,
+  buildBranchRule,
   buildContinuationPrompt,
   buildProcessRule,
   buildResumePrompt,
@@ -115,6 +116,9 @@ async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[
   const artifacts = runArtifactsDir(deps.registry.resolve(run.projectId), run.id);
   await mkdir(artifacts, { recursive: true });
   const rules = [buildArtifactsRule(toPosixPath(artifacts))];
+  if (run.branch !== undefined) {
+    rules.push(buildBranchRule(run.branch));
+  }
   if (run.workspacePath !== undefined && (await isRepositoryRoot(run.workspacePath))) {
     rules.push(COMMIT_RULE);
   }

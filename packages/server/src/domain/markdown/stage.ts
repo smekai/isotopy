@@ -1,3 +1,4 @@
+import type { RunBranch } from "@isotopy/core";
 import {
   markdownBlocks,
   markdownBody,
@@ -165,6 +166,14 @@ export const COMMIT_RULE = [
   "`--no-verify`. Do not push, do not switch or create branches, and do not rewrite commits you",
   "did not make.",
 ].join("\n");
+
+export function buildBranchRule({ name, base }: RunBranch): string {
+  return [
+    `This initiative's work goes on the branch \`${name}\`, cut from \`${base}\`, and it is already`,
+    `checked out. Commit there. Merging it into \`${base}\` is the Orchestrator's decision once the`,
+    "work is done, not a step's.",
+  ].join("\n");
+}
 
 export function buildResumePrompt(
   task: string,

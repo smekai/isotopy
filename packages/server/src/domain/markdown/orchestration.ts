@@ -2,6 +2,7 @@ import type {
   OrchestratorBrokerPhase,
   OrchestratorTeamProposal,
   CloseoutReport,
+  RunBranch,
 } from "@isotopy/core";
 import type { CatalogEntry } from "../rules/agent-catalog.ts";
 import { ORCHESTRATOR_CONTEXT_LIMITS } from "../rules/orchestrator-context.ts";
@@ -222,6 +223,22 @@ export interface RunReviewMarkdownContext {
   milestone?: RunReviewMilestoneContext;
   rejectedDecision?: string;
   orchestratorContext?: string;
+  branch?: RunBranch;
+}
+
+function renderInitiativeBranch(branch: RunBranch | undefined): string {
+  if (branch === undefined) {
+    return "## Branch\n\nThis initiative works without a branch of its own, so there is nothing to merge.";
+  }
+  const name = structuralText(branch.name);
+  const base = structuralText(branch.base);
+  return [
+    "## Branch",
+    "",
+    `This initiative's work is committed on \`${name}\`, cut from \`${base}\`. Stopping with`,
+    `\`"merge": true\` merges it into \`${base}\`; stopping without it leaves the branch unmerged`,
+    "for the owner.",
+  ].join("\n");
 }
 
 function renderReviewMilestone(milestone: RunReviewMilestoneContext): string {
@@ -254,6 +271,7 @@ export function renderRunReviewContext({
   milestone,
   rejectedDecision,
   orchestratorContext,
+  branch,
 }: RunReviewMarkdownContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
@@ -261,6 +279,7 @@ export function renderRunReviewContext({
       ? `## Team currently composed: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}\n\nThis is the team that just ran. Keep it, or propose a different one if the work ahead needs another shape.`
       : "## Team currently composed\n\nNo team has been approved yet.",
     `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
+    renderInitiativeBranch(branch),
     closeout
       ? `## Run closeout\n\n${renderCloseoutBody(closeout, "###")}`
       : undefined,

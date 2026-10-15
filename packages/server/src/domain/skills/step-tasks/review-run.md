@@ -99,8 +99,16 @@ Ask the user, when the next step turns on a decision only they hold:
 Stop, because the goal is met or cannot proceed:
 
 ```json
-{ "action": "stop", "reason": "Why this ends here", "summary": "What was achieved" }
+{ "action": "stop", "reason": "Why this ends here", "summary": "What was achieved", "merge": true }
 ```
+
+`merge` decides whether the work ships. The **Branch** section above names the
+branch the team committed to and the branch it was cut from. Set `"merge": true`
+when the goal is met and the work is ready to land there: the roles that check
+the work passed, and no blocking finding is open. Leave it out when you stop
+because the goal cannot proceed; the branch stays unmerged for the owner. A
+role's report that the work is not ready is a reason to start another run
+instead, not to merge. Without a branch, `merge` cannot be set.
 
 ## Third, when it is worth it: revise your own context
 

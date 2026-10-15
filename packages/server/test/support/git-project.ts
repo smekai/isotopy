@@ -27,13 +27,56 @@ async function git(cwd: string, args: string[]): Promise<void> {
   }
 }
 
+async function gitOutput(cwd: string, args: string[]): Promise<string> {
+  const result = await runSubprocess({ command: "git", args, cwd, timeoutMs: GIT_TIMEOUT_MS });
+  if (!result.success) {
+    throw new Error(`git ${args.join(" ")} failed: ${result.stderrTail.join("\n")}`);
+  }
+  return result.stdout.trim();
+}
+
+// The local identity is for the commits Isotopy itself makes, such as a merge,
+// which run without the -c flags above.
 export async function initGitRepository(cwd: string): Promise<void> {
   await git(cwd, ["init", "--initial-branch=main"]);
+  await git(cwd, ["config", "user.email", "test@isotopy.invalid"]);
+  await git(cwd, ["config", "user.name", "Isotopy Test"]);
+  await git(cwd, ["config", "commit.gpgsign", "false"]);
+}
+
+export async function commitFile(
+  cwd: string,
+  file: string,
+  content: string,
+  message: string,
+): Promise<void> {
+  await writeFile(path.join(cwd, file), content);
+  await commitEverything(cwd, message);
 }
 
 export async function commitEverything(cwd: string, message: string): Promise<void> {
   await git(cwd, ["add", "--all"]);
   await git(cwd, ["commit", "--no-verify", "-m", message]);
+}
+
+export async function createBranch(cwd: string, name: string): Promise<void> {
+  await git(cwd, ["branch", name]);
+}
+
+export function currentBranch(cwd: string): Promise<string> {
+  return gitOutput(cwd, ["symbolic-ref", "--short", "HEAD"]);
+}
+
+export async function branchNames(cwd: string): Promise<string[]> {
+  const listed = await gitOutput(cwd, ["branch", "--format=%(refname:short)"]);
+  return listed
+    .split("\n")
+    .map((name) => name.trim())
+    .sort();
+}
+
+export function fileAt(cwd: string, ref: string, file: string): Promise<string> {
+  return gitOutput(cwd, ["show", `${ref}:${file}`]);
 }
 
 // An embedded repository is committed to its parent as a gitlink, which is what

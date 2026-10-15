@@ -184,6 +184,10 @@ Stop, because the goal is met, or because it cannot proceed:
 { "action": "stop", "reason": "Why this ends here", "summary": "What was achieved" }
 ```
 
+Once a team has run, its work is committed on a branch of this initiative. Add
+`"merge": true` only when the owner tells you here that the work is ready to
+land; otherwise the branch stays unmerged for them.
+
 Answer a specialist's parked question yourself, when the answer follows from the
 goal, the approved scope, or an earlier run's artifacts:
 

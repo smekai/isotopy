@@ -14,11 +14,14 @@ import type {
   OrchestratorBrokerDecision,
   OrchestratorDecision,
   PipelineDefinition,
+  RunBranch,
   RunState,
   StageDefinition,
   StageUsage,
+  StopDecision,
 } from "@isotopy/core";
 import { reviseOrchestratorContext } from "../domain/rules/orchestrator-context.ts";
+import { NOTHING_TO_MERGE } from "../domain/rules/initiative-branch.ts";
 import {
   renderComposedRunTask,
   renderGatePreference,
@@ -31,13 +34,12 @@ import {
 } from "../domain/markdown/orchestration.ts";
 import type {
   OrchestrationContext,
-  QuestionMediationArtifact,
   RunReviewMilestoneContext,
 } from "../domain/markdown/orchestration.ts";
 import {
-  artifactDigestOf,
-  digestsOf,
+  mediationArtifactsOf,
   milestoneReviewContext,
+  priorArtifactsOf,
   runLabel,
   stageOutputsOf,
 } from "../domain/rules/orchestration-context.ts";
@@ -63,6 +65,7 @@ import { ORCHESTRATIONS_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
+import { InitiativeBranches } from "./initiative-branches.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
 import { readOrchestratorContext, writeOrchestratorContext } from "./skills.ts";
@@ -98,6 +101,7 @@ export class OrchestrationService implements StageOutputConsumer {
   private readonly settledRuns = new Set<string>();
 
   private readonly logger: Logger;
+  private readonly branches: InitiativeBranches;
 
   constructor(
     private readonly registry: ProjectRegistry,
@@ -108,6 +112,7 @@ export class OrchestrationService implements StageOutputConsumer {
     logger: Logger,
   ) {
     this.logger = logger.child("OrchestrationService");
+    this.branches = new InitiativeBranches(logger);
   }
 
   async init(): Promise<void> {
@@ -150,6 +155,23 @@ export class OrchestrationService implements StageOutputConsumer {
     this.orchestrations.set(orchestration.id, orchestration);
     await this.persist(orchestration);
     return orchestration.id;
+  }
+
+  async enterBranch(
+    projectPath: ProjectPath,
+    orchestrationId: string,
+  ): Promise<RunBranch | undefined> {
+    const orchestration = this.orchestrations.get(orchestrationId);
+    if (!orchestration) {
+      return undefined;
+    }
+    const branch = await this.branches.enter(projectPath.root, orchestration.id, orchestration.branch);
+    if (branch !== undefined && orchestration.branch === undefined) {
+      orchestration.branch = branch;
+      orchestration.updatedAt = nowIso();
+      await this.persist(orchestration);
+    }
+    return branch;
   }
 
   async attachRun(projectId: string, runId: string): Promise<void> {
@@ -340,7 +362,7 @@ export class OrchestrationService implements StageOutputConsumer {
     orchestration.latestDecision = parsed.value;
     delete orchestration.decisionError;
     if (parsed.value.action === "stop") {
-      await this.terminate(orchestration, parsed.value.reason, run.id);
+      await this.end(orchestration, parsed.value, run.id);
       return undefined;
     }
     orchestration.status = orchestrationStatusFor(parsed.value);
@@ -410,7 +432,7 @@ export class OrchestrationService implements StageOutputConsumer {
         originStageId: request.stageId,
         question: request.question,
         userAnswer: request.userAnswer,
-        artifacts: this.mediationArtifacts(orchestration, run),
+        artifacts: mediationArtifactsOf(orchestration, run, this.runs.listRuns(run.projectId)),
       }),
     };
   }
@@ -471,6 +493,7 @@ export class OrchestrationService implements StageOutputConsumer {
         milestone: this.reviewMilestone(run),
         rejectedDecision: orchestration.decisionError,
         orchestratorContext,
+        branch: orchestration.branch,
       }),
     };
   }
@@ -572,7 +595,7 @@ export class OrchestrationService implements StageOutputConsumer {
     decision: OrchestratorDecision,
   ): Promise<void> {
     if (decision.action === "stop") {
-      await this.terminate(orchestration, decision.reason, run.id);
+      await this.end(orchestration, decision, run.id);
       return;
     }
     const projectPath = this.registry.resolve(orchestration.projectId);
@@ -698,6 +721,11 @@ export class OrchestrationService implements StageOutputConsumer {
     settledStatus: RunState["status"],
     decision: OrchestratorDecision,
   ): string | undefined {
+    if (decision.action === "stop") {
+      return decision.merge === true && orchestration.branch === undefined
+        ? NOTHING_TO_MERGE
+        : undefined;
+    }
     if (decision.action === "propose_team") {
       return decision.task === undefined && orchestration.composedPipeline !== undefined
         ? PROPOSAL_NEEDS_TASK
@@ -808,7 +836,7 @@ export class OrchestrationService implements StageOutputConsumer {
       team: orchestration.approvedTeam,
       question,
       answer,
-      artifacts: this.priorArtifacts(orchestration),
+      artifacts: priorArtifactsOf(orchestration, this.runs.listRuns(orchestration.projectId)),
     });
   }
 
@@ -843,15 +871,6 @@ export class OrchestrationService implements StageOutputConsumer {
       .find((run): run is RunState => run?.status === "asking");
   }
 
-  private priorArtifacts(orchestration: Orchestration): QuestionMediationArtifact[] {
-    const runIds = new Set(orchestration.runIds);
-    return digestsOf(
-      this.runs
-        .listRuns(orchestration.projectId)
-        .filter((run) => runIds.has(run.id) && run.pipelineId !== PIPELINE_ID),
-    );
-  }
-
   private newOrchestration(
     projectId: string,
     goal: string,
@@ -876,20 +895,6 @@ export class OrchestrationService implements StageOutputConsumer {
     return activeOrchestrations(this.orchestrations.values(), projectId)[0];
   }
 
-  private mediationArtifacts(
-    orchestration: Orchestration,
-    current: RunState,
-  ): QuestionMediationArtifact[] {
-    const runIds = new Set([...orchestration.runIds, current.id]);
-    return this.runs
-      .listRuns(orchestration.projectId)
-      .filter((run) => runIds.has(run.id) && run.pipelineId !== PIPELINE_ID)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .flatMap((run) =>
-        run.id === current.id ? stageOutputsOf(run) : artifactDigestOf(run),
-      );
-  }
-
   private async reconcileActiveOrchestrations(projectId: string): Promise<void> {
     const active = activeOrchestrations(this.orchestrations.values(), projectId);
     for (const duplicate of active.slice(1)) {
@@ -898,6 +903,16 @@ export class OrchestrationService implements StageOutputConsumer {
         "Retired when the project adopted one active Orchestrator",
       );
     }
+  }
+
+  private async end(orchestration: Orchestration, stop: StopDecision, runId: string): Promise<void> {
+    const root = this.registry.resolve(orchestration.projectId).root;
+    const ending = await this.branches.end(root, orchestration, stop);
+    if (ending.ended) {
+      await this.terminate(orchestration, ending.reason, runId);
+      return;
+    }
+    await this.refuse(orchestration, runId, ending.refusal, ending.refusal);
   }
 
   private async terminate(

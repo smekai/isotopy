@@ -190,6 +190,12 @@ export interface StageState {
   completedAt?: string;
 }
 
+export const runBranchSchema = z
+  .object({ name: requiredText, base: requiredText })
+  .strict();
+
+export type RunBranch = z.infer<typeof runBranchSchema>;
+
 export interface RunState {
   id: string;
   number: number;
@@ -214,6 +220,7 @@ export interface RunState {
   result?: string;
   stageOutputs?: Record<string, string>;
   workspacePath?: string;
+  branch?: RunBranch;
   stages: StageState[];
   messages: RunMessage[];
   createdAt: string;

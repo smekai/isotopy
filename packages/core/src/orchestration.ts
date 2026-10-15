@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MODEL_TIERS } from "./engines.ts";
 import { STAGE_EXECUTION_POLICIES, pipelineDefinitionSchema } from "./pipelines.ts";
-import { stageUsageSchema } from "./runs.ts";
+import { runBranchSchema, stageUsageSchema } from "./runs.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const ORCHESTRATOR_ACTIONS = [
@@ -118,6 +118,7 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       action: z.literal("stop"),
       reason: requiredText,
       summary: requiredText.optional(),
+      merge: z.boolean().optional(),
     })
     .strict(),
   answerAgentDecisionSchema,
@@ -126,6 +127,8 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
 ]);
 
 export type OrchestratorDecision = z.infer<typeof orchestratorDecisionSchema>;
+
+export type StopDecision = Extract<OrchestratorDecision, { action: "stop" }>;
 
 export const ORCHESTRATION_STATUSES = [
   "conversing",
@@ -178,6 +181,7 @@ export const orchestrationSchema = z
     decisionError: requiredText.optional(),
     approvedTeam: orchestratorTeamProposalSchema.optional(),
     composedPipeline: pipelineDefinitionSchema.optional(),
+    branch: runBranchSchema.optional(),
     runIds: requiredTexts,
     usage: stageUsageSchema.optional(),
     stoppedAt: timestamp.optional(),
