@@ -929,15 +929,17 @@ under `.isotopy/`, which git ignores except for the agents the owner authors.
 `OrchestrationService.enterBranch` before the change baseline of every engine run an
 initiative owns, except the Orchestrator's own conversation. The first one cuts
 `isotopy/<orchestration-id>` from the branch checked out and records it, name and base, on
-the orchestration and the run; later ones check it out again. A project that is not a
-repository root, a detached HEAD or a repository with no commit gets no branch, and its runs
-work where they are. Every team stage is told the branch and to commit its own work there
-(`buildBranchRule`, `COMMIT_RULE`). The branch ends with the initiative: `stop` with
+the orchestration and the run; later ones check it out again. It refuses to cut from a branch
+that is itself an initiative's, which only a failed switch back leaves checked out. A project
+that is not a repository root, a detached HEAD or a repository with no commit gets no branch,
+and its runs work where they are. Every team stage on a branch is told it and to commit its
+own work there (`buildCommitRule`); without a branch, no stage is told to commit. Every ending
+goes through `OrchestrationService.end`: it aborts what still runs, then `stop` with
 `merge: true` switches to the base and merges `--no-ff`, deleting the branch, and a merge git
-refuses parks the initiative on its owner with git's reason; `stop` without it switches back
-to the base and keeps the branch. A user's Stop, a superseded initiative and a restarted run
-leave git alone. Isotopy never pushes. The git work is `InitiativeBranches`, through
-`runSubprocess`.
+refuses parks the initiative on its owner with git's reason; any other ending (a `stop`
+without it, the owner's Stop, a superseded initiative) switches back to the base and keeps
+the branch. A restarted run works on whatever is checked out. Isotopy never pushes. The git
+work is `InitiativeBranches`, through `runSubprocess` and `utils/git.ts`.
 
 **Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by

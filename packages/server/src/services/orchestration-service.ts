@@ -44,6 +44,9 @@ import {
   stageOutputsOf,
 } from "../domain/rules/orchestration-context.ts";
 import {
+  RETIRED_AS_DUPLICATE,
+  STOPPED_BY_USER,
+  SUPERSEDED,
   activeOrchestrations,
   blockedLaunchRefusal,
 } from "../domain/rules/orchestration-loop.ts";
@@ -213,7 +216,7 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const active = this.activeFor(projectPath.id);
     if (active) {
-      await this.terminate(active, "Superseded by a new Orchestrator");
+      await this.end(active, SUPERSEDED);
     }
     const orchestration = this.newOrchestration(projectPath.id, goal, "conversing");
     this.orchestrations.set(orchestration.id, orchestration);
@@ -373,7 +376,7 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private async refuse(
     orchestration: Orchestration,
-    runId: string,
+    runId: string | undefined,
     cause: string,
     reason: string,
   ): Promise<StageOutputRejection> {
@@ -389,7 +392,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!orchestration || orchestration.projectId !== projectPath.id) {
       throw new Error("Orchestration not found");
     }
-    await this.terminate(orchestration, "Stopped by user");
+    await this.end(orchestration, STOPPED_BY_USER);
     return structuredClone(orchestration);
   }
 
@@ -564,7 +567,7 @@ export class OrchestrationService implements StageOutputConsumer {
     return refusal;
   }
 
-  private parkOnOwner(orchestration: Orchestration, runId: string): void {
+  private parkOnOwner(orchestration: Orchestration, runId: string | undefined): void {
     orchestration.status = "awaiting_user";
     this.logger.error(
       `Orchestration ${orchestration.id} is waiting on its owner: no decision it made could be acted on`,
@@ -898,26 +901,13 @@ export class OrchestrationService implements StageOutputConsumer {
   private async reconcileActiveOrchestrations(projectId: string): Promise<void> {
     const active = activeOrchestrations(this.orchestrations.values(), projectId);
     for (const duplicate of active.slice(1)) {
-      await this.terminate(
-        duplicate,
-        "Retired when the project adopted one active Orchestrator",
-      );
+      await this.end(duplicate, RETIRED_AS_DUPLICATE);
     }
   }
 
-  private async end(orchestration: Orchestration, stop: StopDecision, runId: string): Promise<void> {
-    const root = this.registry.resolve(orchestration.projectId).root;
-    const ending = await this.branches.end(root, orchestration, stop);
-    if (ending.ended) {
-      await this.terminate(orchestration, ending.reason, runId);
-      return;
-    }
-    await this.refuse(orchestration, runId, ending.refusal, ending.refusal);
-  }
-
-  private async terminate(
+  private async end(
     orchestration: Orchestration,
-    reason: string,
+    stop: StopDecision,
     completingRunId?: string,
   ): Promise<void> {
     if (orchestration.status === "stopped") {
@@ -933,10 +923,16 @@ export class OrchestrationService implements StageOutputConsumer {
         await this.runs.abortRun(run.id);
       }
     }
+    const root = this.registry.resolve(orchestration.projectId).root;
+    const ending = await this.branches.end(root, orchestration, stop);
+    if (!ending.ended) {
+      await this.refuse(orchestration, completingRunId, ending.refusal, ending.refusal);
+      return;
+    }
     const stoppedAt = nowIso();
     orchestration.status = "stopped";
     orchestration.stoppedAt = stoppedAt;
-    orchestration.stopReason = reason;
+    orchestration.stopReason = ending.reason;
     orchestration.updatedAt = stoppedAt;
     await this.persist(orchestration);
   }

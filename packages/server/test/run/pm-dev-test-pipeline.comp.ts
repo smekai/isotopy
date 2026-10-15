@@ -6,7 +6,7 @@
 // now only has to prove the real CLI still integrates.
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, assert, beforeEach, expect, test } from "vitest";
 import type { RunState } from "@isotopy/core";
 import {
   addTestProject,
@@ -21,9 +21,9 @@ import {
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 import { config } from "../../src/config.ts";
-import { COMMIT_RULE } from "../../src/domain/markdown/stage.ts";
+import { buildCommitRule } from "../../src/domain/markdown/stage.ts";
 import { toPosixPath } from "../../src/utils/posix-path.ts";
-import { initGitRepository } from "../support/git-project.ts";
+import { commitFile, initGitRepository } from "../support/git-project.ts";
 
 const MS_PER_MINUTE = 60_000;
 const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
@@ -155,36 +155,41 @@ test("a box is told the run's own artifacts folder, so a report never lands loos
   expect((await stat(artifacts)).isDirectory()).toBe(true);
 });
 
-test("a box in a git repository is told to commit its own work before it hands off", async () => {
+test("a box on an initiative's branch is told to commit its own work there before it hands off", async () => {
   // Arrange — TASK-157: neither team committed, so the arcade had no history to evolve.
   const { app, engine, registry } = ctx;
   const project = await addTestProject(registry, "committing");
+  await initGitRepository(project.root);
+  await commitFile(project.root, "README.md", "# app\n", "Start the app");
+
+  // Anticipate
+  engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
+
+  // Act
+  const run = await startRun(app, PIPELINE, project.headers);
+
+  // Assert
+  const call = await engine.waitForCall(1);
+  assert(run.branch, "the run in a committed repository works on a branch");
+  expect(call.prompt).toContain(buildCommitRule(run.branch));
+});
+
+test("a repository with no commit yet gets no branch, so its boxes are not told to commit", async () => {
+  // Arrange — there is nothing to branch from, so nothing a commit could be merged back into.
+  const { app, engine, registry } = ctx;
+  const project = await addTestProject(registry, "uncommitted");
   await initGitRepository(project.root);
 
   // Anticipate
   engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
 
   // Act
-  await startRun(app, PIPELINE, project.headers);
+  const run = await startRun(app, PIPELINE, project.headers);
 
   // Assert
   const call = await engine.waitForCall(1);
-  expect(call.prompt).toContain(COMMIT_RULE);
-});
-
-test("a box outside a git repository is not told to commit, since there is nothing to commit into", async () => {
-  // Arrange
-  const { app, engine } = ctx;
-
-  // Anticipate
-  engine.anticipate({ as: "Product Manager" }).hangsUntilAborted();
-
-  // Act
-  await startRun(app, PIPELINE);
-
-  // Assert
-  const call = await engine.waitForCall(1);
-  expect(call.prompt).not.toContain(COMMIT_RULE);
+  expect(run.branch).toBeUndefined();
+  expect(call.prompt).not.toMatch(/isotopy\/[0-9a-f]{8}/);
 });
 
 test("a resumed stage is told which process is Isotopy now, because a restart replaced the one its session saw", async () => {

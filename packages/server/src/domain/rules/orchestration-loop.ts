@@ -1,4 +1,16 @@
-import type { Orchestration, OrchestratorAction, RunState } from "@isotopy/core";
+import type { Orchestration, OrchestratorAction, RunState, StopDecision } from "@isotopy/core";
+
+export const STOPPED_BY_USER: StopDecision = { action: "stop", reason: "Stopped by user" };
+
+export const SUPERSEDED: StopDecision = {
+  action: "stop",
+  reason: "Superseded by a new Orchestrator",
+};
+
+export const RETIRED_AS_DUPLICATE: StopDecision = {
+  action: "stop",
+  reason: "Retired when the project adopted one active Orchestrator",
+};
 
 export function activeOrchestrations(
   all: Iterable<Orchestration>,

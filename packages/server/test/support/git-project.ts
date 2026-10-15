@@ -63,6 +63,10 @@ export async function createBranch(cwd: string, name: string): Promise<void> {
   await git(cwd, ["branch", name]);
 }
 
+export async function switchToNewBranch(cwd: string, name: string): Promise<void> {
+  await git(cwd, ["switch", "-c", name]);
+}
+
 export function currentBranch(cwd: string): Promise<string> {
   return gitOutput(cwd, ["symbolic-ref", "--short", "HEAD"]);
 }

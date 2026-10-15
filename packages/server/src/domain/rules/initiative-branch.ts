@@ -1,7 +1,20 @@
 import type { RunBranch } from "@isotopy/core";
 
+const INITIATIVE_BRANCH_PREFIX = "isotopy/";
+
 export function initiativeBranchName(orchestrationId: string): string {
-  return `isotopy/${orchestrationId}`;
+  return `${INITIATIVE_BRANCH_PREFIX}${orchestrationId}`;
+}
+
+export function isInitiativeBranch(branch: string): boolean {
+  return branch.startsWith(INITIATIVE_BRANCH_PREFIX);
+}
+
+export function leftOnInitiativeBranch(branch: string): string {
+  return (
+    `The project is checked out on ${branch}, which an earlier initiative left behind. ` +
+    "Check out the branch this work should start from, then start it again"
+  );
 }
 
 export function initiativeMergeMessage(branch: RunBranch, goal: string, summary?: string): string {

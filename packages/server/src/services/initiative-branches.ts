@@ -2,14 +2,14 @@ import type { RunBranch, StopDecision } from "@isotopy/core";
 import {
   initiativeBranchName,
   initiativeMergeMessage,
+  isInitiativeBranch,
+  leftOnInitiativeBranch,
   mergedStopReason,
 } from "../domain/rules/initiative-branch.ts";
 import { runSubprocess } from "../engines/subprocess.ts";
 import type { SubprocessResult } from "../engines/subprocess.ts";
-import { isRepositoryRoot } from "../utils/git-repository-root.ts";
+import { gitCommand, isRepositoryRoot } from "../utils/git.ts";
 import type { Logger } from "../utils/logger.ts";
-
-const GIT_TIMEOUT_MS = 15_000;
 
 type BranchEntry = { kind: "branched"; branch: RunBranch } | { kind: "unbranched"; reason: string };
 
@@ -77,6 +77,9 @@ export class InitiativeBranches {
     const base = await this.currentBranch(root);
     if (base === undefined) {
       return { kind: "unbranched", reason: "HEAD is detached, so there is no branch to merge back into" };
+    }
+    if (isInitiativeBranch(base)) {
+      throw new Error(leftOnInitiativeBranch(base));
     }
     const name = initiativeBranchName(orchestrationId);
     await this.require(root, ["switch", "-c", name], `Could not create the initiative's branch ${name}`);
@@ -151,7 +154,7 @@ export class InitiativeBranches {
   }
 
   private git(root: string, args: string[]): Promise<SubprocessResult> {
-    return runSubprocess({ command: "git", args, cwd: root, timeoutMs: GIT_TIMEOUT_MS });
+    return runSubprocess(gitCommand(root, args));
   }
 }
 

@@ -29,17 +29,22 @@ the work goes on.
 
 - **Isotopy owns the branch.** The first team run of an initiative cuts
   `isotopy/<orchestration>` from the checked-out branch; later runs check it out again.
-  `stop` with `merge: true` merges it into that base with `--no-ff` and deletes it; `stop`
-  without it switches back to the base and keeps the branch for the owner. A merge git refuses
-  parks the initiative on its owner with git's reason. Isotopy never pushes.
-- **The agent owns the commits.** Every team stage is told to commit what it changed before
-  handing off, to leave out what was already uncommitted, and to fix a failing hook rather
-  than bypass it. It writes what its checks produce under `.isotopy/runs/<run>/artifacts/`,
-  which git ignores.
+  `stop` with `merge: true` merges it into that base with `--no-ff` and deletes it. Every other
+  ending (`stop` without it, the owner's Stop, a superseded initiative) aborts what is still
+  running, then switches back to the base and keeps the branch for the owner. A merge git
+  refuses parks the initiative on its owner with git's reason. Isotopy never pushes.
+- **An initiative branch is never a base.** When a switch back could not happen (a dirty tree
+  is enough) the checkout stays on the old branch, and a new initiative cut from it would merge
+  into it. Isotopy refuses to start that run and says which branch to leave.
+- **The agent owns the commits.** Every team stage working on an initiative's branch is told
+  to commit what it changed there before handing off, to leave out what was already
+  uncommitted, and to fix a failing hook rather than bypass it. It writes what its checks
+  produce under `.isotopy/runs/<run>/artifacts/`, which git ignores.
 - **Where git has nothing to say, Isotopy stays out.** A folder that is not a repository root
   (including one nested inside another repository), a detached HEAD and a repository with no
-  commit get no branch, and the runs work where they are, as before. A user's Stop, a
-  superseded initiative and a restarted run do not touch git: the owner is there.
+  commit get no branch; their runs work where they are, as before, and no stage is told to
+  commit, since nothing would merge those commits anywhere. A restarted run works on whatever
+  is checked out.
 
 **Rejected: Isotopy commits a run's changes when it settles.** A hook that fails would have
 nobody to fix it, a file holding both the owner's uncommitted edits and the agent's could not

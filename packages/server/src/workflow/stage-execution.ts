@@ -25,9 +25,8 @@ import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
 import {
-  COMMIT_RULE,
   buildArtifactsRule,
-  buildBranchRule,
+  buildCommitRule,
   buildContinuationPrompt,
   buildProcessRule,
   buildResumePrompt,
@@ -44,7 +43,6 @@ import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import { runArtifactsDir, toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
-import { isRepositoryRoot } from "../utils/git-repository-root.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { toPosixPath } from "../utils/posix-path.ts";
 import { nowIso } from "../utils/time.ts";
@@ -115,14 +113,8 @@ async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[
   }
   const artifacts = runArtifactsDir(deps.registry.resolve(run.projectId), run.id);
   await mkdir(artifacts, { recursive: true });
-  const rules = [buildArtifactsRule(toPosixPath(artifacts))];
-  if (run.branch !== undefined) {
-    rules.push(buildBranchRule(run.branch));
-  }
-  if (run.workspacePath !== undefined && (await isRepositoryRoot(run.workspacePath))) {
-    rules.push(COMMIT_RULE);
-  }
-  return rules;
+  const artifactsRule = buildArtifactsRule(toPosixPath(artifacts));
+  return run.branch === undefined ? [artifactsRule] : [artifactsRule, buildCommitRule(run.branch)];
 }
 
 async function productEnvironment(

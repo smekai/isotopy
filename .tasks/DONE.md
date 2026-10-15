@@ -2,7 +2,7 @@
 
 ## TASK-185: Agents leave dev servers running and verification debris in the repo, and nothing is committed
 **Priority:** P2 | **Tags:** engine, milestone-i
-**Updated:** 2026-10-15 08:41
+**Updated:** 2026-10-15 09:25
 
 Found in `TASK-157` (2026-10-04).
 
@@ -16,15 +16,15 @@ Related: `TASK-179` (an agent killed Isotopy's own server while cleaning up).
 
 ### Plan
 
-**Done 2026-10-15, 0.14.21–0.14.22. Decided with the owner:** each initiative works on its own branch, each stage commits its own work there, and the Orchestrator decides at the end whether the branch is merged.
+**Done 2026-10-15, 0.14.21–0.14.23. Decided with the owner:** each initiative works on its own branch, each stage commits its own work there, and the Orchestrator decides at the end whether the branch is merged.
 
 - **(a) Processes** — already true since `TASK-179`; no change.
 - **(b) Output, 0.14.21** — every team stage's `## Environment` names `.isotopy/runs/<run>/artifacts/` (created by Isotopy, git-ignored) for reports, screenshots, traces and test-runner output; `verify-feature.md` points there.
-- **(c) Commits, 0.14.21** — in a git repository every team stage is told to commit its own changes, leave out what was already uncommitted, fix a failing hook rather than bypass it, and never push, switch branches or rewrite others' commits. The Orchestrator's conversation gets neither rule.
-- **Initiative branch, 0.14.22** — `InitiativeBranches` cuts `isotopy/<orchestration>` on the first team run (`RunService.startRunWith`, after admission, before the baseline; a failure releases the admission) and checks it out on later ones. `stop` gained `merge: true`: merge `--no-ff` into the base and delete the branch, or park on the owner with git's reason; without it, return to the base and keep the branch. No branch for a non-root folder, a detached HEAD or a repository with no commit. A user's Stop, a superseded initiative and a restarted run leave git alone; Isotopy never pushes. The run review shows the branch.
-- To stay under the 1000-line cap, the run-artifact filters moved from `OrchestrationService` to `domain/rules/orchestration-context.ts`, and `RunService` uses core's `ORCHESTRATION_PIPELINE.id` instead of its own copy.
+- **(c) Commits** — every team stage on an initiative's branch is told (`buildCommitRule`) to commit its own changes there, leave out what was already uncommitted, fix a failing hook rather than bypass it, and never push, switch branches or rewrite others' commits. Without a branch no stage is told to commit. The Orchestrator's conversation gets neither rule.
+- **Initiative branch, 0.14.22** — `InitiativeBranches` cuts `isotopy/<orchestration>` on the first team run (`RunService.startRunWith`, after admission, before the baseline; a failure releases the admission) and checks it out on later ones. `stop` gained `merge: true`: merge `--no-ff` into the base and delete the branch, or park on the owner with git's reason. No branch for a non-root folder, a detached HEAD or a repository with no commit. Isotopy never pushes. The run review shows the branch.
+- **After review, 0.14.23** — every ending goes through `OrchestrationService.end`: the owner's Stop and a superseded initiative now abort what runs and switch back to the base, as a `stop` without merge does, and a new initiative refuses to cut from a branch that is itself an initiative's. The commit rule needs a branch. `gitCommand` in `utils/git.ts` serves both git callers; the tests share one poller, the team fixtures and the orchestration drivers instead of copies.
 
-**Evidence:** 4 comp tests for the stage rules, 9 against real temporary repositories for the branch, each guard mutation-checked (12 mutations, all red). Recorded in `docs/decisions.md` and `docs/architecture.md`. Tested on Windows; macOS reasoned through: git runs through `runSubprocess` with argument arrays, paths through `path.join`, prompt paths with forward slashes.
+**Evidence:** component tests for the stage rules and, against real temporary repositories, the branch lifecycle; each guard mutation-checked. Recorded in `docs/decisions.md` and `docs/architecture.md`. Tested on Windows; macOS reasoned through: git runs through `runSubprocess` with argument arrays, paths through `path.join`, prompt paths with forward slashes.
 
 ---
 ## TASK-183: A review FAIL has no route back to the Developer inside the run
