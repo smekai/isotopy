@@ -11,6 +11,7 @@ import type {
   MessageRole,
   ModelTier,
   PipelineDefinition,
+  RunBranch,
   RunCloseoutRecord,
   RunEvent,
   RunMessage,
@@ -26,6 +27,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
   ENGINES,
+  ORCHESTRATION_PIPELINE,
   addUsage,
   applyGatePreferences,
   createInitialRunState,
@@ -247,7 +249,7 @@ export class RunService implements RunProjection {
     pipelineId: string,
     goal: string,
   ): Promise<string | undefined> {
-    if (pipelineId === ORCHESTRATION_PIPELINE_ID) {
+    if (pipelineId === ORCHESTRATION_PIPELINE.id) {
       return undefined;
     }
     return this.orchestration?.ensureActive(projectPath, goal);
@@ -409,6 +411,9 @@ export class RunService implements RunProjection {
         run.modelTier = modelTier;
       }
       run.workspacePath = await resolveWorkspace(projectPath, runId);
+      if (orchestrationId !== undefined && pipeline.id !== ORCHESTRATION_PIPELINE.id) {
+        run.branch = await this.enterInitiativeBranch(projectPath, runId, orchestrationId);
+      }
       this.store.enginePermissionModes.set(runId, permissionMode ?? DEFAULT_PERMISSION_MODE);
     }
     this.store.runs.set(runId, run);
@@ -429,6 +434,19 @@ export class RunService implements RunProjection {
       seeded,
     });
     return structuredClone(run);
+  }
+
+  private async enterInitiativeBranch(
+    projectPath: ProjectPath,
+    runId: string,
+    orchestrationId: string,
+  ): Promise<RunBranch | undefined> {
+    try {
+      return await this.orchestration?.enterBranch(projectPath, orchestrationId);
+    } catch (error) {
+      await this.store.repositoryFor(projectPath).releaseRun(runId);
+      throw error;
+    }
   }
 
   approveGate(runId: string, stageId: string): RunState {
@@ -978,6 +996,4 @@ interface MessageDraft {
 
 type RunListener = (event: RunEvent) => void;
 type RunSummaryListener = (summary: RunSummary) => void;
-
-const ORCHESTRATION_PIPELINE_ID = "orchestration";
 

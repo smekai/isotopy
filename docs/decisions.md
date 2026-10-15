@@ -15,6 +15,68 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-15 — An initiative works on its own branch, and the Orchestrator decides the merge
+
+**Context:** in `TASK-157` neither team committed anything, QA left reports and test output at
+the arcade's root, and both targets ended as untracked changes over the baseline. An
+unattended stretch with no commits has no history to evolve, and every run after the first
+started on a dirty tree (`TASK-185`). ShareTravel, the next dogfood, is a product in
+production, where work cannot land on the branch it deploys from.
+
+**Decision, with the owner:** each initiative works on a branch of its own, each stage commits
+its own work there, and the Orchestrator decides at the end whether the branch is merged or
+the work goes on.
+
+- **Isotopy owns the branch.** The first team run of an initiative cuts
+  `isotopy/<orchestration>` from the checked-out branch; later runs check it out again.
+  `stop` with `merge: true` merges it into that base with `--no-ff` and deletes it. Every other
+  ending (`stop` without it, the owner's Stop, a superseded initiative) aborts what is still
+  running, then switches back to the base and keeps the branch for the owner. A merge git
+  refuses parks the initiative on its owner with git's reason. Isotopy never pushes.
+- **An initiative branch is never a base.** When a switch back could not happen (a dirty tree
+  is enough) the checkout stays on the old branch, and a new initiative cut from it would merge
+  into it. Isotopy refuses to start that run and says which branch to leave.
+- **The agent owns the commits.** Every team stage working on an initiative's branch is told
+  to commit what it changed there before handing off, to leave out what was already
+  uncommitted, and to fix a failing hook rather than bypass it. It writes what its checks
+  produce under `.isotopy/runs/<run>/artifacts/`, which git ignores.
+- **Where git has nothing to say, Isotopy stays out.** A folder that is not a repository root
+  (including one nested inside another repository), a detached HEAD and a repository with no
+  commit get no branch; their runs work where they are, as before, and no stage is told to
+  commit, since nothing would merge those commits anywhere. A restarted run works on whatever
+  is checked out.
+
+**Rejected: Isotopy commits a run's changes when it settles.** A hook that fails would have
+nobody to fix it, a file holding both the owner's uncommitted edits and the agent's could not
+be split, and every message would be mechanical. **Rejected: a worktree per initiative.**
+Isotopy starts the product and keeps its data from the project root, so the preview would
+show the base, not the work. **Rejected: the Release Manager commits.** Most teams the
+Orchestrator composes have none.
+
+---
+
+## 2026-10-15 — A finding goes back to the Developer as a new run, not a loop inside one
+
+**Context:** in `TASK-157` a reviewer and QA failed the arcade on a one-line README fix while
+every functional check passed. The pipeline has no route from a blocking finding back to
+`implementation`, and the product brief promised "fix loops" without saying where they live
+(`TASK-183`).
+
+**Decision:** the loop is the Orchestrator's. A quality FAIL settles the run as
+`needs_attention`; the review reads the findings and, when the implementing role can fix them,
+answers `start_run` with `fromStage` set to that role and a task that names the findings. The
+approved team starts there without asking the owner, seeded with the earlier roles' output, and
+the reviewing roles check the fix. `blockedLaunchRefusal` ends a streak of fix runs that clear
+nothing. Every fix is a run of its own in the history, restartable like any other.
+
+**Rejected: one bounded return to `implementation` inside the run.** It would fix every finding,
+including the ones the Orchestrator would judge not worth a run, and a stage would run twice
+inside one run, which the run view, the stage records and the change baseline all assume
+never happens. It also changes the shape of the Aiki workflow, so it would have to ship as a
+new workflow version with the old one still registered.
+
+---
+
 ## 2026-10-14 — Isotopy runs on the user's own sign-in, and never holds it
 
 **Context:** the pitch says Isotopy never calls a model API and runs on the CLI subscription

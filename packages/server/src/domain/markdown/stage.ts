@@ -1,3 +1,4 @@
+import type { RunBranch } from "@isotopy/core";
 import {
   markdownBlocks,
   markdownBody,
@@ -146,6 +147,27 @@ export function buildProcessRule({ pid, port }: IsotopyProcess): string {
     "",
     "Stop every process you started before you hand off. A dev server, watcher or daemon left",
     "running holds your CLI open and stalls the run.",
+  ].join("\n");
+}
+
+export function buildArtifactsRule(artifactsDir: string): string {
+  return [
+    `Write what a check produces — reports, screenshots, traces, a test runner's output — under`,
+    `\`${artifactsDir}\`, which git ignores. Point each tool's output option there instead of`,
+    "letting it write into the project, and never leave such files at the project root. Tests you",
+    "add to the project are code, not output: they belong in the repository.",
+  ].join("\n");
+}
+
+export function buildCommitRule({ name, base }: RunBranch): string {
+  return [
+    `This initiative's work goes on the branch \`${name}\`, cut from \`${base}\`, and it is already`,
+    "checked out. Commit what you changed there before you hand off, in commits whose messages say",
+    "what changed and why. Leave out anything that was already uncommitted when you started: that",
+    "is someone else's work. If a hook rejects a commit, fix what it reports and commit again; never",
+    "bypass it with `--no-verify`. Do not push, do not switch or create branches, and do not rewrite",
+    `commits you did not make. Merging into \`${base}\` is the Orchestrator's decision once the work`,
+    "is done, not a step's.",
   ].join("\n");
 }
 

@@ -1,5 +1,7 @@
+import { mkdir } from "node:fs/promises";
 import {
   DEFAULT_PERMISSION_MODE,
+  ORCHESTRATION_PIPELINE,
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
@@ -23,6 +25,8 @@ import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
 import {
+  buildArtifactsRule,
+  buildCommitRule,
   buildContinuationPrompt,
   buildProcessRule,
   buildResumePrompt,
@@ -37,9 +41,10 @@ import { extractOrchestratorContext } from "../schemas/orchestrator-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
-import { toolCacheDir } from "../paths.ts";
+import { runArtifactsDir, toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
 import { messageOf } from "../utils/message-of.ts";
+import { toPosixPath } from "../utils/posix-path.ts";
 import { nowIso } from "../utils/time.ts";
 import type {
   StageWorkContext,
@@ -95,10 +100,21 @@ async function stageEnvironment(
   return [
     buildTimeBudget(config.engineTimeoutMs),
     buildProcessRule({ pid: process.pid, port: config.port }),
+    ...(await teamWorkRules(deps, run)),
     product,
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[]> {
+  if (run.pipelineId === ORCHESTRATION_PIPELINE.id) {
+    return [];
+  }
+  const artifacts = runArtifactsDir(deps.registry.resolve(run.projectId), run.id);
+  await mkdir(artifacts, { recursive: true });
+  const artifactsRule = buildArtifactsRule(toPosixPath(artifacts));
+  return run.branch === undefined ? [artifactsRule] : [artifactsRule, buildCommitRule(run.branch)];
 }
 
 async function productEnvironment(

@@ -611,8 +611,8 @@ which is what separates it from `POST /orchestrations`.
 
 **A decision that cannot be acted on is never accepted.** `refusalFor` runs at both places
 a decision is taken — `consume` for a conversation turn, `recordReview` for a lifecycle
-review — and covers the three reasons acting would fail: no approved team, a `fromStage`
-that does not validate, and the blocked-launch ceiling. A refused decision records
+review — and covers the reasons acting would fail: no approved team, a `fromStage`
+that does not validate, the blocked-launch ceiling, and a merge with no branch to merge. A refused decision records
 `decisionError` and **no turn**, which is what keeps the loop open: `hasTurnFor` would
 otherwise discard the corrected decision of a re-review, and `settle` would find the run
 already spoken for. So the recovery is the ordinary one — restart the run, and the rejection
@@ -903,6 +903,7 @@ only for loading the tool's own `.env`.
 | Location | Holds | Scope |
 |----------|-------|-------|
 | `<project>/.isotopy/runs/<run-id>/` | `state.json`, `events.jsonl`, per-stage `handoff.md`, `closeout/closeout.{json,md}` | One project |
+| `<project>/.isotopy/runs/<run-id>/artifacts/` | What a stage's checks produce — reports, screenshots, traces — named in every team stage's prompt | One project |
 | `<project>/.isotopy/agents/<id>/agent.md` | An agent the project brings, or its replacement for a bundled one | One project |
 | `<project>/.isotopy/agents/<id>/knowledge/*.md` | The agent's reference library, listed in its prompt by path | One project |
 | `<project>/.isotopy/agents/<id>/duties/*.md` | Recurring work the agent brings, seeded once as a disabled schedule | One project |
@@ -923,6 +924,22 @@ the home project, which has no code of its own — a scratch
 directory an agent runs in; it selects a *project*, and the project's root is
 fixed when it is registered. Run artifacts always stay in the per-run folder
 under `.isotopy/`, which git ignores except for the agents the owner authors.
+
+**An initiative works on a branch of its own.** `RunService.startRunWith` asks
+`OrchestrationService.enterBranch` before the change baseline of every engine run an
+initiative owns, except the Orchestrator's own conversation. The first one cuts
+`isotopy/<orchestration-id>` from the branch checked out and records it, name and base, on
+the orchestration and the run; later ones check it out again. It refuses to cut from a branch
+that is itself an initiative's, which only a failed switch back leaves checked out. A project
+that is not a repository root, a detached HEAD or a repository with no commit gets no branch,
+and its runs work where they are. Every team stage on a branch is told it and to commit its
+own work there (`buildCommitRule`); without a branch, no stage is told to commit. Every ending
+goes through `OrchestrationService.end`: it aborts what still runs, then `stop` with
+`merge: true` switches to the base and merges `--no-ff`, deleting the branch, and a merge git
+refuses parks the initiative on its owner with git's reason; any other ending (a `stop`
+without it, the owner's Stop, a superseded initiative) switches back to the base and keeps
+the branch. A restarted run works on whatever is checked out. Isotopy never pushes. The git
+work is `InitiativeBranches`, through `runSubprocess` and `utils/git.ts`.
 
 **Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by

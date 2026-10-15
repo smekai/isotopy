@@ -1,4 +1,4 @@
-import { lstat, stat } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 import type { FileChange, RunChangeSet, RunState } from "@isotopy/core";
 import {
@@ -13,6 +13,7 @@ import type { SubprocessResult, SubprocessSpec } from "../engines/subprocess.ts"
 import type { ProjectPath } from "../paths.ts";
 import { RUN_CHANGE_BASELINE_VERSION } from "../schemas/run-change-baseline.ts";
 import type { DirtyFile, RunChangeBaseline } from "../schemas/run-change-baseline.ts";
+import { gitCommand, isRepositoryRoot } from "../utils/git.ts";
 import type { Logger } from "../utils/logger.ts";
 import { snapshotWorkspace } from "../utils/workspace-files.ts";
 import type { WorkspaceSnapshot } from "../utils/workspace-files.ts";
@@ -22,7 +23,6 @@ import {
   readRunChangeBaseline,
 } from "./run-evidence.ts";
 
-const GIT_TIMEOUT_MS = 15_000;
 const EMPTY_TREE_OBJECT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const STATUS_ARGS = ["status", "--porcelain=v1", "-z", "-uall"];
 const HASH_OBJECT_ARGS = ["hash-object", "--stdin-paths"];
@@ -38,15 +38,6 @@ export interface RunChangeCollectorDependencies {
 
 function defaultDependencies(): RunChangeCollectorDependencies {
   return { run: runSubprocess, now: () => new Date() };
-}
-
-async function isRepositoryRoot(workspacePath: string): Promise<boolean> {
-  try {
-    await stat(path.join(workspacePath, ".git"));
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function stillDirtyAtBaseline(
@@ -256,28 +247,14 @@ export class RunChangeCollector {
     if (hashable.length === 0) {
       return new Map();
     }
-    const result = await this.deps.run({
-      command: "git",
-      args: HASH_OBJECT_ARGS,
-      cwd: workspacePath,
-      input: `${hashable.join("\n")}\n`,
-      timeoutMs: GIT_TIMEOUT_MS,
-    });
+    const result = await this.deps.run(
+      gitCommand(workspacePath, HASH_OBJECT_ARGS, `${hashable.join("\n")}\n`),
+    );
     return pairOids(hashable, result.stdout);
   }
 
-  private async git(
-    cwd: string,
-    args: string[],
-    input?: string,
-  ): Promise<string | undefined> {
-    const result = await this.deps.run({
-      command: "git",
-      args,
-      cwd,
-      input,
-      timeoutMs: GIT_TIMEOUT_MS,
-    });
+  private async git(cwd: string, args: string[]): Promise<string | undefined> {
+    const result = await this.deps.run(gitCommand(cwd, args));
     return result.success ? result.stdout : undefined;
   }
 }

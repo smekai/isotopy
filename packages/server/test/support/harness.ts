@@ -6,7 +6,7 @@ import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import type { Hono } from "hono";
 import { PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
-import type { EngineId, RunEvent, RunState, RunSummary } from "@isotopy/core";
+import type { EngineId, Orchestration, RunEvent, RunState, RunSummary } from "@isotopy/core";
 import { createApp } from "../../src/app.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { resetEngineAdapters, setEngineAdapter } from "../../src/engines/registry.ts";
@@ -352,26 +352,87 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Poll until `predicate` holds, then return the run. Fails with the run's last
- * known state on timeout, which is what makes a failure diagnosable.
+ * Neither a run's settlement nor an orchestration's next state announces
+ * itself when it lands, so a wait reads until the state holds. It returns on
+ * the first read that does; the timeout only bounds a test that is failing,
+ * and the last state read is what the failure shows.
  */
-export async function waitForRun(
+async function waitUntil<T>(
+  read: () => Promise<T>,
+  holds: (value: T) => boolean,
+  subject: string,
+): Promise<T> {
+  const deadline = Date.now() + WAIT_TIMEOUT_MS;
+  let last = await read();
+  while (!holds(last) && Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
+    last = await read();
+  }
+  assert(holds(last), `Timed out waiting for ${subject}. Last read: ${JSON.stringify(last, null, 2)}`);
+  return last;
+}
+
+export function waitForOrchestration(
+  app: Hono,
+  orchestrationId: string | undefined,
+  holds: (orchestration: Orchestration) => boolean,
+  headers: TestHeaders = {},
+): Promise<Orchestration> {
+  return waitUntil(
+    async () => (await get<Orchestration>(app, `/orchestrations/${orchestrationId}`, headers)).body,
+    holds,
+    `orchestration ${orchestrationId}`,
+  );
+}
+
+/** The id of the orchestration's `count`th run, once it has exactly that many. */
+export async function waitForOrchestrationRun(
+  app: Hono,
+  orchestrationId: string | undefined,
+  count: number,
+  headers: TestHeaders = {},
+): Promise<string> {
+  const { runIds } = await waitForOrchestration(
+    app,
+    orchestrationId,
+    (orchestration) => orchestration.runIds.length >= count,
+    headers,
+  );
+  expect(runIds, `Orchestration ${orchestrationId} had runs ${runIds.join(", ")}`).toHaveLength(count);
+  const runId = runIds[count - 1];
+  assert(runId, `Orchestration ${orchestrationId} has no run ${count}`);
+  return runId;
+}
+
+export function waitForRun(
   app: Hono,
   runId: string,
   predicate: (run: RunState) => boolean,
   description: string,
 ): Promise<RunState> {
-  const deadline = Date.now() + WAIT_TIMEOUT_MS;
-  let last = await getRun(app, runId);
-  while (!predicate(last) && Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
-    last = await getRun(app, runId);
-  }
-  assert(
-    predicate(last),
-    `Timed out waiting for ${description}. Run was: ${JSON.stringify(last, null, 2)}`,
+  return waitUntil(() => getRun(app, runId), predicate, description);
+}
+
+export async function startOrchestration(
+  app: Hono,
+  headers: TestHeaders = {},
+  engine: EngineId = "claude-code",
+): Promise<RunState> {
+  const { status, body: run } = await post<RunState>(
+    app,
+    "/orchestrations",
+    { goal: "Add search to the product", engine },
+    headers,
   );
-  return last;
+  expect(status, `POST /orchestrations returned ${JSON.stringify(run)}`).toBe(201);
+  return run;
+}
+
+/** The Orchestrator's conversation, settled — its team proposal awaits approval. */
+export async function proposedTeam(app: Hono, headers: TestHeaders = {}): Promise<RunState> {
+  const conversation = await startOrchestration(app, headers);
+  await waitForRunStatus(app, conversation.id, "completed");
+  return conversation;
 }
 
 export function waitForRunStatus(

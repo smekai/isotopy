@@ -70,6 +70,14 @@ verified nothing because verification was blocked needs the verifying role, not
 the whole team; re-running the role that already delivered spends the user's
 money to produce what you already have.
 
+This is also how a blocking finding goes back to the role that can fix it. Nothing
+inside a run sends work back: when a reviewing or verifying role fails the work on
+something the implementing role can fix, start the team again from that role.
+`fromStage` is its role id, and `task` names the findings to fix, with their
+evidence, instead of restating the scope; the roles after it run again and check
+the fix. A finding that does not hold the goal back is not worth a run. It belongs
+in the follow-up tasks, and the goal can be met without it.
+
 Continue a milestone by running its next feature. Only available when the run
 belonged to a milestone whose context says continuing is permitted. Name a
 `featureId` from the supplied ready features to override the default order:
@@ -91,8 +99,16 @@ Ask the user, when the next step turns on a decision only they hold:
 Stop, because the goal is met or cannot proceed:
 
 ```json
-{ "action": "stop", "reason": "Why this ends here", "summary": "What was achieved" }
+{ "action": "stop", "reason": "Why this ends here", "summary": "What was achieved", "merge": true }
 ```
+
+`merge` decides whether the work ships. The **Branch** section above names the
+branch the team committed to and the branch it was cut from. Set `"merge": true`
+when the goal is met and the work is ready to land there: the roles that check
+the work passed, and no blocking finding is open. Leave it out when you stop
+because the goal cannot proceed; the branch stays unmerged for the owner. A
+role's report that the work is not ready is a reason to start another run
+instead, not to merge. Without a branch, `merge` cannot be set.
 
 ## Third, when it is worth it: revise your own context
 
