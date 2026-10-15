@@ -26,6 +26,7 @@ import type {
 import {
   DEFAULT_PIPELINE_ID,
   HOME_PROJECT_ID,
+  ORCHESTRATION_UPDATED_EVENT,
   PROJECT_HEADER,
   PRODUCTION_DEPLOYMENT_CONFIRMATION,
   RUN_EVENT_TYPES,
@@ -398,24 +399,70 @@ export function restartRun(runId: string, stageId: string): Promise<RunState> {
   return postJson<RunState>(`/runs/${runId}/restart`, { stageId });
 }
 
+interface SharedEventSource {
+  source: EventSource;
+  listeners: number;
+}
+
+class EventSourcePool {
+  private readonly open = new Map<string, SharedEventSource>();
+
+  listen(url: string, eventType: string, onData: (data: string) => void): () => void {
+    const shared = this.open.get(url) ?? this.connect(url);
+    const listener = (message: Event) => {
+      if (message instanceof MessageEvent && typeof message.data === "string") {
+        onData(message.data);
+      }
+    };
+    shared.source.addEventListener(eventType, listener);
+    shared.listeners += 1;
+    return () => {
+      shared.source.removeEventListener(eventType, listener);
+      shared.listeners -= 1;
+      if (shared.listeners === 0) {
+        shared.source.close();
+        this.open.delete(url);
+      }
+    };
+  }
+
+  private connect(url: string): SharedEventSource {
+    const shared = { source: new EventSource(url), listeners: 0 };
+    this.open.set(url, shared);
+    return shared;
+  }
+}
+
+const projectStreams = new EventSourcePool();
+
+function subscribeProjectStream<T>(
+  projectId: string,
+  eventType: string,
+  onValue: (value: T) => void,
+): () => void {
+  return projectStreams.listen(
+    `${API_BASE}/runs/events?project=${encodeURIComponent(projectId)}`,
+    eventType,
+    (data) => {
+      try {
+        onValue(JSON.parse(data) as T);
+      } catch {}
+    },
+  );
+}
+
 export function subscribeRunSummaries(
   projectId: string,
   onSummary: (summary: RunSummary) => void,
 ): () => void {
-  const source = new EventSource(
-    `${API_BASE}/runs/events?project=${encodeURIComponent(projectId)}`,
-  );
+  return subscribeProjectStream(projectId, RUN_SUMMARY_EVENT, onSummary);
+}
 
-  source.addEventListener(RUN_SUMMARY_EVENT, (message) => {
-    if (!(message instanceof MessageEvent) || !message.data) {
-      return;
-    }
-    try {
-      onSummary(JSON.parse(message.data) as RunSummary);
-    } catch {}
-  });
-
-  return () => source.close();
+export function subscribeOrchestrations(
+  projectId: string,
+  onOrchestration: (orchestration: Orchestration) => void,
+): () => void {
+  return subscribeProjectStream(projectId, ORCHESTRATION_UPDATED_EVENT, onOrchestration);
 }
 
 export function subscribeRunEvents(

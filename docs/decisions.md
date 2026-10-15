@@ -929,10 +929,11 @@ line, and a chevron.
 
 **Decision: group on `run.orchestrationId`, not on `orchestration.runIds`.** The two disagree for a
 window, and the direction of the disagreement decides the rule. `useRunList` receives runs over SSE
-the moment they exist; `useOrchestration` refetches on `orchestrationRefreshKey` and lands later. A
-run therefore names its initiative before the initiative admits the run. Grouping on `runIds` would
+the moment they exist; the initiative admits a run only when it is stored again, which
+`useOrchestration` hears afterwards. A run therefore names its initiative before the initiative
+admits the run. Grouping on `runIds` would
 drop such a run out of its group — and, since it is no longer loose either, off the rail entirely
-until the refetch returned. Grouping on the run's own field cannot lose a run: one whose
+until the initiative's update arrived. Grouping on the run's own field cannot lose a run: one whose
 orchestration has not loaded yet stays a top-level card for a frame, then joins its group. Showing a
 run ungrouped is a smaller wrong than not showing it.
 

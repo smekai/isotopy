@@ -3,14 +3,16 @@
 // The same ordering hazard as useRunEvents, and equally invisible when it breaks
 // — the rail simply shows a stale status until the next reload.
 //
-// Anticipate is the module-level `vi.mock("../../src/api")` plus `fakeRunListStream()`,
+// Anticipate is the module-level `vi.mock("../../src/api")` plus `fakeProjectStream()`,
 // which owns the deferred promises and the act() wrapping so no test body does.
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";
+import type { RunState, RunSummary } from "@isotopy/core";
+import { fetchRuns, subscribeRunSummaries } from "../../src/api";
 import { useRunList } from "../../src/hooks/useRunList";
-import { fakeRunListStream } from "../support/fake-run-list-stream";
-import type { FakeRunListStream } from "../support/fake-run-list-stream";
+import { fakeProjectStream } from "../support/fake-project-stream";
+import type { FakeProjectStream } from "../support/fake-project-stream";
 import { run, stage, summary } from "../support/run-fixtures";
 
 vi.mock("../../src/api", () => ({
@@ -21,10 +23,10 @@ vi.mock("../../src/api", () => ({
 const OTHER_PROJECT = "proj-2";
 
 
-let stream: FakeRunListStream;
+let stream: FakeProjectStream<RunState, RunSummary>;
 
 beforeEach(() => {
-  stream = fakeRunListStream();
+  stream = fakeProjectStream(fetchRuns, subscribeRunSummaries);
 });
 
 afterEach(() => {
@@ -102,6 +104,18 @@ test("a failed snapshot surfaces the error and still settles", async () => {
   // Assert — leaving `ready` false would hang the rail on a spinner forever.
   await waitFor(() => expect(result.current.error).toBe("Project not found"));
   expect(result.current.ready).toBe(true);
+});
+
+test("a failed snapshot does not stop the stream from filling the list", async () => {
+  // Arrange
+  const { result } = renderHook(() => useRunList(HOME_PROJECT_ID, true));
+  await stream.failSnapshot("Project not found");
+
+  // Act
+  await stream.push(summary({ id: "r1", status: "running" }));
+
+  // Assert — holding it for a snapshot that already failed would leave the rail empty.
+  expect(result.current.runs.map((item) => item.id)).toEqual(["r1"]);
 });
 
 test("switching project resubscribes and drops the previous list", async () => {
