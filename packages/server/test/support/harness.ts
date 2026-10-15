@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import type { Hono } from "hono";
-import { PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
+import { ORCHESTRATION_UPDATED_EVENT, PROJECT_HEADER, RUN_SUMMARY_EVENT } from "@isotopy/core";
 import type { EngineId, Orchestration, RunEvent, RunState, RunSummary } from "@isotopy/core";
 import { createApp } from "../../src/app.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
@@ -352,37 +352,32 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Neither a run's settlement nor an orchestration's next state announces
- * itself when it lands, so a wait reads until the state holds. It returns on
- * the first read that does; the timeout only bounds a test that is failing,
- * and the last state read is what the failure shows.
+ * The first state of the orchestration for which `holds` is true: the one it is
+ * in now, or the first update the project stream carries after that. The stream
+ * is opened before the current state is read, so a change landing in between is
+ * on the stream rather than lost.
  */
-async function waitUntil<T>(
-  read: () => Promise<T>,
-  holds: (value: T) => boolean,
-  subject: string,
-): Promise<T> {
-  const deadline = Date.now() + WAIT_TIMEOUT_MS;
-  let last = await read();
-  while (!holds(last) && Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
-    last = await read();
-  }
-  assert(holds(last), `Timed out waiting for ${subject}. Last read: ${JSON.stringify(last, null, 2)}`);
-  return last;
-}
-
-export function waitForOrchestration(
+export async function waitForOrchestration(
   app: Hono,
   orchestrationId: string | undefined,
   holds: (orchestration: Orchestration) => boolean,
   headers: TestHeaders = {},
 ): Promise<Orchestration> {
-  return waitUntil(
-    async () => (await get<Orchestration>(app, `/orchestrations/${orchestrationId}`, headers)).body,
-    holds,
+  assert(orchestrationId, "Waiting for an orchestration needs its id");
+  const stream = await openSse(app, "/runs/events", headers);
+  const { body: current } = await get<Orchestration>(app, `/orchestrations/${orchestrationId}`, headers);
+  const firstHolding = (events: SseEvent[]) =>
+    [current, ...orchestrationsOf(events)]
+      .filter((orchestration) => orchestration.id === orchestrationId)
+      .find(holds);
+  const events = await stream.waitFor(
+    (seen) => firstHolding(seen) !== undefined,
     `orchestration ${orchestrationId}`,
   );
+  await stream.close();
+  const holding = firstHolding(events);
+  assert(holding, `Orchestration ${orchestrationId} never held`);
+  return holding;
 }
 
 /** The id of the orchestration's `count`th run, once it has exactly that many. */
@@ -404,13 +399,26 @@ export async function waitForOrchestrationRun(
   return runId;
 }
 
-export function waitForRun(
+/**
+ * The project stream carries a run only as a summary, so a wait on the full
+ * state reads until it holds. It returns on the first read that does; the
+ * timeout only bounds a test that is failing, and the last state read is what
+ * the failure shows.
+ */
+export async function waitForRun(
   app: Hono,
   runId: string,
   predicate: (run: RunState) => boolean,
   description: string,
 ): Promise<RunState> {
-  return waitUntil(() => getRun(app, runId), predicate, description);
+  const deadline = Date.now() + WAIT_TIMEOUT_MS;
+  let last = await getRun(app, runId);
+  while (!predicate(last) && Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
+    last = await getRun(app, runId);
+  }
+  assert(predicate(last), `Timed out waiting for ${description}. Last read: ${JSON.stringify(last, null, 2)}`);
+  return last;
 }
 
 export async function startOrchestration(
@@ -492,6 +500,7 @@ export async function openSse(
   assert(response.body, `No SSE body from ${route}`);
 
   const events: SseEvent[] = [];
+  const frameWatchers = new Set<() => void>();
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -509,15 +518,29 @@ export async function openSse(
         buffer = buffer.slice(split + 2);
         split = buffer.indexOf("\n\n");
       }
+      for (const watch of frameWatchers) {
+        watch();
+      }
     }
   })().catch(() => undefined);
 
   return {
     async waitFor(predicate, description) {
-      const deadline = Date.now() + WAIT_TIMEOUT_MS;
-      while (!predicate(events) && Date.now() < deadline) {
-        await sleep(POLL_INTERVAL_MS);
-      }
+      await new Promise<void>((resolve) => {
+        const stopWatching = () => {
+          clearTimeout(ceiling);
+          frameWatchers.delete(watch);
+          resolve();
+        };
+        const watch = () => {
+          if (predicate(events)) {
+            stopWatching();
+          }
+        };
+        const ceiling = setTimeout(stopWatching, WAIT_TIMEOUT_MS);
+        frameWatchers.add(watch);
+        watch();
+      });
       assert(
         predicate(events),
         `Timed out waiting for ${description}. Saw: ${JSON.stringify(events, null, 2)}`,
@@ -535,6 +558,12 @@ export function summariesOf(events: SseEvent[]): RunSummary[] {
   return events
     .filter((event) => event.event === RUN_SUMMARY_EVENT)
     .map((event) => JSON.parse(event.data) as RunSummary);
+}
+
+export function orchestrationsOf(events: SseEvent[]): Orchestration[] {
+  return events
+    .filter((event) => event.event === ORCHESTRATION_UPDATED_EVENT)
+    .map((event) => JSON.parse(event.data) as Orchestration);
 }
 
 /**

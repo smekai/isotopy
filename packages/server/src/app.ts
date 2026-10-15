@@ -77,7 +77,7 @@ export function createApp({
   app.route("/engines", createEngineRoutes(rosters));
   app.route("/settings", createSettingsRoutes(registry, settings));
   app.route("/automation", createAutomationRoutes(registry, automation, deployment, product));
-  app.route("/runs", createRunRoutes(runs, registry));
+  app.route("/runs", createRunRoutes(runs, orchestrations, registry));
   app.route("/schedules", createScheduleRoutes(schedules, registry));
   app.route("/agents", createAgentRoutes(agents, registry));
   app.route("/fs", fsRoutes);

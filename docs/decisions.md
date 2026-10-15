@@ -15,6 +15,35 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-15 — An initiative's changes ride the project stream
+
+**Context:** the server changes an initiative where no run event announces it. A decision acted
+on once its run has completed — a stop, a launch it refused, a merge git turned down — lands after
+that run's `run.completed`. The UI guessed when to refetch from the run summaries it was already
+hearing, so it asked too early for those changes and then never again: a stopped initiative went on
+showing as running. The component tests could not hear the change either, and read
+`GET /orchestrations/:id` every 10 ms for up to 10 s until it showed.
+
+**Decision:** `OrchestrationService` publishes a copy of an initiative every time it stores one —
+from `persist`, the one place an initiative is written, once the write has landed, so a listener
+never sees a state a restart would lose. The project stream (`GET /runs/events?project=`) carries it
+as `orchestration.updated` beside `run.summary`. The UI loads the initiatives once and merges every
+update after that, through the same subscribe-then-load path as the run list; both listeners share
+one connection per project. The component tests wait for the frame instead of reading again. The
+payload is the whole initiative: it changes a few times per run, where the reason the summary
+channel stays small is the log line, which still does not ride it.
+
+**Rejected: a sibling `/orchestrations/events` channel.** Each open tab would hold a third
+connection for as long as it is open, against a browser's six per origin, to carry something that
+changes a few times per run. **Rejected: a "changed" ping that the UI answers with a refetch.** It
+keeps a round trip and the race between the ping and the read for every change, to save bytes
+nobody is short of. **Rejected: a finer refresh key derived from runs.** No run event follows the
+changes that were missed, so no key built from runs can see them. **Rejected: `RunService` as the
+publisher.** It would make the run read model know what an initiative is; each service publishes
+what it owns, and the route joins them.
+
+---
+
 ## 2026-10-15 — An initiative works on its own branch, and the Orchestrator decides the merge
 
 **Context:** in `TASK-157` neither team committed anything, QA left reports and test output at
