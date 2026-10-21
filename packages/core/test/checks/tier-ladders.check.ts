@@ -4,10 +4,14 @@ import { expect, test } from "vitest";
 import { ENGINE_IDS, MODEL_TIERS, bundledRosterFor, resolveTier } from "../../src/engines.ts";
 import type { EngineId, ModelTier } from "../../src/engines.ts";
 
+const PRICED_TIERS = MODEL_TIERS.filter((tier) => tier !== "auto");
+
 test.each(ENGINE_IDS)(
-  "%s separates Economy from Fast, so the cheapest preset is a real choice and not a second name for Fast",
+  "%s resolves every priced preset to its own model and effort, so no preset is a second name for another",
   (engineId) => {
-    expect(rung(engineId, "economy")).not.toBe(rung(engineId, "fast"));
+    const rungs = PRICED_TIERS.map((tier) => rung(engineId, tier));
+
+    expect(repeatedIn(rungs)).toEqual([]);
   },
 );
 
@@ -25,4 +29,8 @@ test.each(ENGINE_IDS)(
 function rung(engineId: EngineId, tier: ModelTier): string {
   const { model, effort } = resolveTier(engineId, tier, bundledRosterFor(engineId));
   return `${model} ${effort ?? ""}`;
+}
+
+function repeatedIn(rungs: string[]): string[] {
+  return rungs.filter((value, index) => rungs.indexOf(value) !== index);
 }

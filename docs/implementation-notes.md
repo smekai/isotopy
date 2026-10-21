@@ -679,7 +679,7 @@ the workspace is the source of truth, the reports only add what a box *said*.
 ## Core — model rosters & pipelines (`core/engines.ts`, `core/pipelines.ts`)
 
 - **What a user picks is a preset, not an id.** `MODEL_TIERS`
-  (`auto·fast·balanced·deep·max`) is one axis borrowed from the CLIs' own effort
+  (`auto·economy·fast·balanced·deep·max`) is one axis borrowed from the CLIs' own effort
   vocabulary, which turns over far more slowly than model names do — Cursor's live
   roster alone is ~194 entries. `resolveTier` walks that engine's ordered
   `TIER_LADDERS` candidates and takes the first the resolved roster still offers,
@@ -688,13 +688,16 @@ the workspace is the source of truth, the reports only add what a box *said*.
   Setup always renders what a preset resolved to, so it is never a black box.
 - **Effort is a separate axis on two of three CLIs.** Claude takes
   `--effort low|medium|high|xhigh|max`, Codex takes
-  `-c model_reasoning_effort="…"`, and Cursor bakes it into the id
-  (`claude-opus-5-thinking-xhigh`), so it ignores `EngineRunContext.effort` and
-  its rungs are whole model ids. Cursor's ladder crosses vendors — Composer at the
-  cheap end, Sonnet 5 and Opus 5 above it — because one family across every rung
-  was a poor default, not because the family mattered. Codex's accepted values
-  above `high` are unconfirmed, which is why Max shares Deep's effort there, and
-  is the one place two presets still resolve alike.
+  `-c model_reasoning_effort="…"` (its model cache lists `low` to `max`, plus
+  `ultra`, which delegates sub-tasks rather than reasoning longer and is not
+  offered), and Cursor bakes it into the id (`claude-opus-5-5-xhigh`), so it
+  ignores `EngineRunContext.effort` and its rungs are whole model ids. Cursor's
+  ladder crosses vendors — Composer at the cheap end, Sonnet 5.5 and Opus 5.5
+  above it, each falling back to its generation-5 id for an account that lacks
+  5.5 — because one family across every rung was a poor default, not because the
+  family mattered. No two priced presets resolve alike on any engine: Codex's Max
+  is GPT-6 Astra at `xhigh`, while Deep stays on GPT-6.1 Sol, which is close on
+  coding at a fifth of the price.
 - **`MODEL_TIER_OPTIONS` order is a price ladder, not a display order.**
   `LimitModal` slices it to find the rungs *cheaper* than the one that hit a
   limit, and drops `auto` from that list because "whatever the CLI is set to" has
@@ -716,6 +719,15 @@ the workspace is the source of truth, the reports only add what a box *said*.
   caches per engine with no TTL; the Setup Re-check (`?refresh=1`), a successful
   install and a successful login are the only invalidations, so editing
   `~/.codex/config.toml` mid-session needs a Re-check.
+- **Refreshing the bundled rosters is a hand job against each CLI's own word**,
+  and `STATIC_ROSTER_CHECKED_ON` moves with it. Claude: the alias table in Claude
+  Code's model-config docs — the aliases float, so the hints name today's model
+  and the ladder rarely changes. Cursor: `agent models`. Codex: the entries with
+  `"visibility": "list"` in `~/.codex/models_cache.json`, which the CLI and the
+  desktop app refresh for the signed-in account. Every rung's first candidate must
+  be in its own bundled roster and no two priced presets may resolve alike —
+  `tier-ladders.check.ts` fails otherwise — and a retired id a user may have
+  stored goes to `LEGACY_MODEL_ALIASES`.
 - **The config files are read, never written.** `~/.claude/settings.json` names a
   plain-string `model`; `~/.codex/config.toml` names one in its root table only
   (the scan stops at the first `[`, so a profile's model is not the CLI's);
