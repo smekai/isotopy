@@ -4,6 +4,7 @@ import {
   MODEL_TIER_OPTIONS,
   isVerifiedModel,
   resolveTier,
+  resolvedModelLabel,
   rosterAccepts,
   rosterOrigins,
 } from "@isotopy/core";
@@ -69,6 +70,15 @@ function resolutionLine(d: Dir): CSSProperties {
   };
 }
 
+function tierResolution(d: Dir): CSSProperties {
+  return {
+    color: d.textMuted,
+    fontFamily: MONO,
+    fontSize: FONT.xs,
+    marginTop: SPACE.xxs,
+  };
+}
+
 const WARNING_BLOCK: CSSProperties = {
   border: `1px solid ${ERROR_BORDER}`,
   background: ERROR_TINT,
@@ -129,18 +139,19 @@ export function EngineModelPicker({
               <div style={FLEX_FILL}>
                 <div style={optionLabel(d)}>{option.label}</div>
                 <div style={mutedCaption(d)}>{option.hint}</div>
+                {!unavailable && (
+                  <div style={tierResolution(d)} data-testid={`tier-resolution-${option.id}`}>
+                    → {resolvedModelLabel(resolveTier(engine, option.id, roster))}
+                  </div>
+                )}
               </div>
             </button>
           );
         })}
       </div>
 
-      {!overridden && (
-        <div style={resolutionLine(d)}>
-          {unavailable
-            ? "Model list unavailable — is the server running?"
-            : `→ ${resolved.model || "the harness's own default"}${resolved.effort ? ` · effort ${resolved.effort}` : ""}`}
-        </div>
+      {!overridden && unavailable && (
+        <div style={resolutionLine(d)}>Model list unavailable — is the server running?</div>
       )}
       {!overridden && !unavailable && resolved.degraded && (
         <div style={DEGRADED_NOTE}>

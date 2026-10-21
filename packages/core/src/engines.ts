@@ -367,6 +367,11 @@ export function resolveTier(
   return { model: AUTO_MODEL_ID, degraded: true };
 }
 
+export function resolvedModelLabel(resolved: ResolvedModel): string {
+  const model = resolved.model || "the harness's own default";
+  return resolved.effort === undefined ? model : `${model} · effort ${resolved.effort}`;
+}
+
 export interface ModelLayers {
   live: ModelOptionDraft[];
   configured?: ModelOptionDraft;

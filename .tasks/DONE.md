@@ -1,5 +1,26 @@
 # Done
 
+## TASK-203: Bundled models catch up with GPT-6, Claude 5.5 and Cursor's new roster, and every preset picker names its model
+**Priority:** P2 | **Tags:** core, ui, engine
+**Updated:** 2026-10-21 20:43
+
+Closed 2026-10-21. The bundled rosters were two months stale (TASK-164, 2026-08-23) and every vendor had moved a generation; separately, only Setup said which model a preset stood for, and only for the selected one.
+
+**Rosters and ladders.** Codex's roster mirrors its own picker — `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, and the still-offered `gpt-5.6-*` so stored pins keep passing `rosterAccepts`. Its ladder is Luna low/medium → 6.1 Sol medium/high → **Astra at `xhigh` for Max**, so Max no longer repeats Deep. Cursor's upper rungs move to Sonnet 5.5 medium and Opus 5.5 high/xhigh, each falling back to its generation-5 id. Claude keeps its floating aliases; the hints now name today's models (Opus 5.5 is the CLI default, not Sonnet), and `sonnet[1m]` went with `requiresUsageCredits`, the field only it used.
+
+**The model behind a preset is named wherever one is chosen.** The Home picker's options, each Setup preset card and each role control on the team card read "Deep — opus · effort high", through one `resolvedModelLabel`. The containers (`HomeComposer`, `App` via `OrchestratorView.harness`) hand the roster to the two presentational pickers. A model pinned in Setup outranks every role preset, so the team card names it instead.
+
+**Tests.** `tier-ladders.check.ts` now holds the invariant TASK-164 had to narrow: no two priced presets resolve alike on any engine. New component tests cover each picker naming the model for the chosen harness, the run default naming the tier and model a role inherits, and the pinned-model note. Each was mutation-checked: five deliberate breaks in `src/`, five red tests.
+
+**Gotcha worth keeping — Codex serves its model list by client version.** The CLI on `PATH` here was 0.144.6: it was offered only `gpt-5.6-*`, refused `gpt-6-astra` ("requires a newer version of Codex") and refused `gpt-6-luna` as "not supported with a ChatGPT account". The same three calls (Luna/medium, 6.1 Sol/medium, Astra/xhigh) succeeded through 0.163.0. A Codex user on an old CLI therefore needs `codex update` before the new presets run. Recorded in `docs/implementation-notes.md`, together with how to refresh each bundled list.
+
+**Verified:** lint, typecheck, **1016 tests passed**, check (75), build, `gen:skills` with no diff, **e2e 78 passed / 4 skipped**. Every tier resolved against the three rosters through `GET /engines/:id/models?refresh=1` with none degraded. Setup and the Home picker were checked in the browser. The preview server's `agent models` probe came back empty inside the sandbox, so Cursor resolved from the bundled list; every Cursor ladder id appears in a direct `agent models` run (2026.10.01).
+
+Also in this branch: `pnpm-workspace.yaml` moves to `allowBuilds`, which pnpm 12 requires. TASK-204 opens in the backlog for the competitor-led interface rethink.
+
+Cross-platform: n/a — pure data and UI. Verified on Windows.
+
+---
 ## TASK-185: Agents leave dev servers running and verification debris in the repo, and nothing is committed
 **Priority:** P2 | **Tags:** engine, milestone-i
 **Updated:** 2026-10-15 09:25

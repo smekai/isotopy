@@ -13,6 +13,7 @@ import { DIRS } from "../../src/theme";
 import {
   orchestratedRun,
   orchestration,
+  runHarness,
   team,
 } from "../support/orchestration-fixtures";
 import { changes, log, run, started } from "../support/run-fixtures";
@@ -354,6 +355,7 @@ function orchestrationOverrides(): Partial<RunTabsProps> {
         orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
       ],
       busy: false,
+      harness: runHarness(),
       roleTiers: {},
       onRoleTierChange: vi.fn(),
       onApprove: vi.fn(),
@@ -377,6 +379,7 @@ function awaitingAnswerOverrides(): Partial<RunTabsProps> {
       }),
       runs: [orchestratedRun("earlier", "2026-08-01T09:00:00.000Z")],
       busy: false,
+      harness: runHarness(),
       roleTiers: {},
       onRoleTierChange: vi.fn(),
       onApprove: vi.fn(),

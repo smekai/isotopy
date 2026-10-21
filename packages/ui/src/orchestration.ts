@@ -1,4 +1,6 @@
 import type {
+  EngineId,
+  EngineModelRoster,
   ModelTier,
   Orchestration,
   OrchestrationStatus,
@@ -9,10 +11,18 @@ import type {
 } from "@isotopy/core";
 import { isTerminalRunStatus, parkedQuestion } from "@isotopy/core";
 
+export interface RunHarness {
+  engine: EngineId;
+  modelTier: ModelTier;
+  pinnedModel?: string;
+  roster: EngineModelRoster;
+}
+
 export interface OrchestratorView {
   orchestration: Orchestration;
   runs: RunSummary[];
   busy: boolean;
+  harness: RunHarness;
   roleTiers: Record<string, ModelTier | null>;
   onApprove: () => void;
   onRoleTierChange: (roleId: string, tier: ModelTier | null) => void;
