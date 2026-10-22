@@ -8,13 +8,24 @@ import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { FULL_DELIVERY_PIPELINE, createInitialRunState } from "@isotopy/core";
 import { parseTasks } from "@smekai/taskplanner";
-import type { StageDefinition } from "@isotopy/core";
+import type { FollowUpTaskDraft, RunBranch, RunState, StageDefinition } from "@isotopy/core";
+import { ensureProjectDataDir } from "../../src/paths.ts";
 import type { ProjectPath } from "../../src/paths.ts";
 import {
   CloseoutConsumer,
   applyCloseoutReport,
 } from "../../src/services/consumers/closeout-consumer.ts";
 import type { ProjectRegistry } from "../../src/services/project-registry.ts";
+import {
+  commitEverything,
+  currentBranch,
+  dirtyPaths,
+  fileAt,
+  initGitRepository,
+  stageFile,
+  installHook,
+  switchToNewBranch,
+} from "../support/git-project.ts";
 
 const roots: string[] = [];
 
@@ -347,6 +358,152 @@ test("a stage that is not a closeout is left alone, whatever pipeline it belongs
   expect(rejection).toBeUndefined();
   expect(run.closeout).toBeUndefined();
 });
+// ShareTravel's initiative bdd1c288 ended runs with 33 follow-ups written to the
+// board and never committed; the next brief then told agents to keep off `.tasks`
+// as "someone else's uncommitted edits".
+test("an initiative's board edits land in a commit on its branch, through the project's own hooks", async () => {
+  // Arrange — a project whose pre-commit hook bumps its version, as ShareTravel's does.
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await writeFile(path.join(project.root, "VERSION"), "1\n");
+  await ensureProjectDataDir(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+  await switchToNewBranch(project.root, INITIATIVE_BRANCH.name);
+  await installHook(project.root, "pre-commit", 'echo 2 > VERSION && git add VERSION');
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors).toEqual([]);
+  expect(await dirtyPaths(project.root)).toEqual([]);
+  expect(await currentBranch(project.root)).toBe(INITIATIVE_BRANCH.name);
+  expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).toContain("Index the archive");
+  expect(await fileAt(project.root, "HEAD", ".tasks/DONE.md")).toContain("## TASK-001:");
+  expect(await fileAt(project.root, "HEAD", "VERSION")).toBe("2");
+});
+
+test("a board commit the project's hook refuses is recorded on the closeout, not lost", async () => {
+  // Arrange
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+  await switchToNewBranch(project.root, INITIATIVE_BRANCH.name);
+  await installHook(project.root, "pre-commit", "echo 'lint failed' >&2; exit 1");
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors.join("\n")).toContain("lint failed");
+});
+
+test("a project switched off the initiative's branch keeps its board edits uncommitted rather than commit them elsewhere", async () => {
+  // Arrange — someone checked the base branch back out while the run was closing.
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await ensureProjectDataDir(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors.join("\n")).toContain(INITIATIVE_BRANCH.name);
+  expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).not.toContain("Index the archive");
+});
+
+// A plain `git commit` records the whole index, so a half-done change someone had
+// staged would ship inside Isotopy's board commit when the branch is merged.
+test("work already staged before the closeout keeps the board edits uncommitted rather than ride along", async () => {
+  // Arrange
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await ensureProjectDataDir(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+  await switchToNewBranch(project.root, INITIATIVE_BRANCH.name);
+  await stageFile(project.root, "src/app.ts", "export const halfDone = true;\n");
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors.join("\n")).toContain("staged");
+  expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).not.toContain("Index the archive");
+  expect(await dirtyPaths(project.root)).toContain("src/app.ts");
+});
+
+test("board edits someone left uncommitted before the closeout keep it from committing the board", async () => {
+  // Arrange
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await ensureProjectDataDir(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+  await switchToNewBranch(project.root, INITIATIVE_BRANCH.name);
+  await writeFile(path.join(project.root, ".tasks", "NOTES.md"), "The owner's draft\n");
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors.join("\n")).toContain("uncommitted edits");
+  expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).not.toContain("Index the archive");
+});
+
+test("an initiative's blocking finding is carried to its next run; only work outside it and the owner's calls are filed", async () => {
+  // Arrange
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  const report = {
+    ...PARTIAL_DELIVERY,
+    findings: [
+      { id: "gateway-tests-missing", title: "No gateway tests", severity: "blocking" },
+      { id: "postgres-down", title: "Cap tests never ran", severity: "blocking" },
+      { id: "invite-race", title: "Invite codes can be redeemed twice", severity: "non_blocking" },
+    ],
+    tasks: [
+      followUp({ findingId: "gateway-tests-missing", title: "Add the gateway tests" }),
+      followUp({ findingId: "postgres-down", title: "Start Postgres", assignee: "owner" }),
+      followUp({ findingId: "invite-race", title: "Redeem invite codes atomically" }),
+    ],
+  };
+
+  // Act
+  const { record } = await applyCloseoutReport(project, initiativeRun(), closeoutOutput(report, "FAIL"));
+
+  // Assert
+  expect(record.createdTasks.map((task) => task.title)).toEqual([
+    "Start Postgres",
+    "Redeem invite codes atomically",
+  ]);
+  expect(record.report.findings.map((finding) => finding.id)).toContain("gateway-tests-missing");
+});
+
 /** An empty project root, swept by the afterEach above. */
 async function makeProject(): Promise<ProjectPath> {
   const root = await mkdtemp(path.join(os.tmpdir(), "isotopy-closeout-"));
@@ -378,6 +535,43 @@ function makeCloseoutRun() {
     sourceTaskIds: ["TASK-001", "TASK-002"],
     agents: new Map(),
   });
+}
+
+const INITIATIVE_BRANCH: RunBranch = { name: "isotopy/abc12345", base: "main" };
+
+/** Delivers TASK-001 and leaves one problem the initiative's goal does not cover. */
+const OUTSIDE_SCOPE_DELIVERY = {
+  ...PARTIAL_DELIVERY,
+  findings: [{ id: "archive-slow", title: "The archive is slow", severity: "non_blocking" }],
+  tasks: [{ ...PARTIAL_DELIVERY.tasks[0], findingId: "archive-slow", title: "Index the archive" }],
+  completedTaskIds: ["TASK-001"],
+  unresolvedTaskIds: ["TASK-002"],
+};
+
+function initiativeRun(overrides: Partial<RunState> = {}): RunState {
+  return {
+    ...createInitialRunState({
+      runId: "run-003",
+      number: 3,
+      projectId: "project",
+      pipeline: FULL_DELIVERY_PIPELINE,
+      orchestrationId: "abc12345",
+      sourceTaskIds: ["TASK-001", "TASK-002"],
+      agents: new Map(),
+    }),
+    ...overrides,
+  };
+}
+
+function followUp(overrides: Partial<FollowUpTaskDraft>): FollowUpTaskDraft {
+  return {
+    findingId: overrides.findingId ?? "finding",
+    title: overrides.title ?? "Follow-up",
+    description: overrides.description ?? "Decision-complete work.",
+    priority: overrides.priority ?? "P2",
+    tags: overrides.tags ?? ["server"],
+    assignee: overrides.assignee,
+  };
 }
 
 function markedDelivery(): object {

@@ -9,9 +9,11 @@ import type {
   StageDefinition,
 } from "@isotopy/core";
 import {
+  boardFollowUps,
   parseCloseoutReport,
   validateSourceTaskOutcome,
 } from "../../domain/rules/closeout.ts";
+import { renderBoardCommitMessage } from "../../domain/markdown/closeout.ts";
 import { runsDir } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import { nowIso } from "../../utils/time.ts";
@@ -63,21 +65,33 @@ export async function applyCloseoutReport(
   const reportErrors = [...parsed.validationErrors, ...review.contradictions];
   const sideEffectErrors: string[] = [];
   const taskBoard = taskBoardFor(projectPath);
+  const commitRefusal = run.branch === undefined
+    ? undefined
+    : await taskBoard.commitRefusal(run.branch).catch(messageOf);
   const createdTasks = await taskBoard
-    .createFollowUpTasks(run, parsed.report.tasks)
+    .createFollowUpTasks(run, boardFollowUps(run, parsed.report))
     .catch((error: unknown) => {
       sideEffectErrors.push(
         `Task creation failed: ${messageOf(error)}`,
       );
       return [];
     });
-  await taskBoard
+  const completedTaskIds = await taskBoard
     .transitionTasks(parsed.report.completedTaskIds, "Done", run.id)
     .catch((error: unknown) => {
       sideEffectErrors.push(
         `Task transition failed: ${messageOf(error)}`,
       );
+      return [];
     });
+  if (run.branch !== undefined && (createdTasks.length > 0 || completedTaskIds.length > 0)) {
+    const commitError = commitRefusal ?? await taskBoard
+      .commit(renderBoardCommitMessage(run.id, createdTasks, completedTaskIds))
+      .then(() => undefined, messageOf);
+    if (commitError !== undefined) {
+      sideEffectErrors.push(`Task board edits left uncommitted: ${commitError}`);
+    }
+  }
   const cleanup = await cleanupRunTemp(
     projectPath,
     run.id,

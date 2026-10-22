@@ -1,5 +1,22 @@
 # Done
 
+## TASK-205: An unreadable review gets one repair turn, and a closeout commits only the follow-ups the initiative will not do
+**Priority:** P1 | **Tags:** server, engine
+**Updated:** 2026-10-22 16:50
+
+Found dogfooding on ShareTravel, initiative `bdd1c288` (TASK-107, the alpha sign-up cap). Closed 2026-10-22.
+
+**A missing decision block parked the initiative.** Run `693e1716`'s review said "starting another run from implementation" in prose but carried no `isotopy-orchestrator-decision` block, so the initiative waited on its owner. The review now gets one repair turn — its own session resumed, or its assignment and answer replayed on a CLI that cannot resume — asking only for the blocks named, with the validation issues quoted. It parks only when the repair cannot be read either. Both answers are kept whole under `.isotopy/runs/<run>/review-run/` (`output.md`, `repair.md`); before, the only copy was a `stage.log` event cut at 1000 characters.
+
+**Closeout follow-ups left the tree dirty, and every finding became a task.** Two runs wrote 33 uncommitted tasks (`TASK-108`…`140` on ShareTravel's board) to the initiative branch, and the next brief told roles to keep off `.tasks`. On an initiative's run a blocking finding is now carried to the next run's task instead of filed, unless its task is assigned to the owner. When the run works on the initiative's branch, Isotopy commits its board edits there through the project's own hooks. A refused hook, or a checkout that left the branch, is recorded on the closeout. Rule and rejected alternatives: two `docs/decisions.md` entries dated 2026-10-22.
+
+**Tests.** Component tests cover: a repair that succeeds in the resumed session, a repair replayed for a CLI that cannot resume, and parking after the repair fails too, with both outputs on disk. They also cover the board commit going through a version-bumping pre-commit hook with a clean tree after, a refusing hook, a checkout off the branch, and which findings reach the board. Each rule was mutation-checked: breaking it in `src/` turned a test red.
+
+**Verified:** lint, typecheck, check (75). `pnpm test` gives 1015 passed and 15 failed. The 15 fail on 15 s cold-start timeouts, one per file, and fail identically on clean `origin/main` on this machine; `vitest --project node` alone passes (799).
+
+Cross-platform: the commit goes through `git` with the project's hooks, which Git for Windows runs through its own `sh`. Verified on Windows.
+
+---
 ## TASK-203: Bundled models catch up with GPT-6, Claude 5.5 and Cursor's new roster, and every preset picker names its model
 **Priority:** P2 | **Tags:** core, ui, engine
 **Updated:** 2026-10-22 08:56

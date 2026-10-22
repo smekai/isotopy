@@ -15,6 +15,66 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-22 — A closeout files only what the initiative will not do, and commits what it files
+
+**Context:** dogfooding on ShareTravel, initiative `bdd1c288` ended two runs of one feature with
+33 follow-up tasks written to `.tasks/BACKLOG.md` (`TASK-108`…`140`, down to a P4 "move an
+import"). Most were the feature's own open work — gateway tests, a formatting hunk — which the
+next run was about to do anyway. The server wrote them after the closeout agent's own commit, so
+none was committed, and the next brief told every role to keep off `.tasks` as "someone else's
+uncommitted edits".
+
+**Decision:**
+
+- **A blocking finding is carried, not filed.** On a run that belongs to an initiative, a
+  follow-up task is filed only when its finding is `non_blocking` or the task carries an
+  `assignee`. A blocking finding is by the closeout's own definition work the goal still needs;
+  the review reads it from the closeout and names it in the next run's `task`, which is where the
+  team will meet it. An assignee keeps a blocking task on the board because it is a call only
+  the owner can make, and nothing in a run would make it. The rule rides fields the closeout
+  already carries, so the closeout and review assignments say it and nothing new is parsed. A
+  run with no initiative files every task, as before.
+- **Isotopy commits its own board writes.** When the run works on an initiative's branch and the
+  closeout created or moved a task, Isotopy stages `.tasks` and commits it there with a message
+  naming the tasks, through the project's own hooks — ShareTravel's pre-commit hook bumps its
+  version, and that bump lands in the same commit. Isotopy commits only what it wrote: before
+  touching the board it checks that the checkout is on the initiative's branch, that nothing is
+  staged and that `.tasks` is clean, because `git commit` records the whole index. If any of
+  that fails, or a hook refuses, the reason is recorded on the closeout and the edits stay
+  uncommitted rather than ship someone else's half-done work. This is the one exception to the branch decision's
+  "the agent owns the commits": those are the server's writes, made after the agent handed off,
+  and no agent is left to commit them.
+
+**Rejected: let the agent decide scope through a new task field.** It adds a field to a strict
+contract for a judgement severity already makes. **Rejected: file everything and let the review
+close the duplicates.** The board would churn twice for every finding, and the next brief would
+still be reading tasks the run is about to do. **Rejected: commit the board edits with the
+agent's next commit.** The closeout is the run's last stage; the next commit is another run's,
+which would be told to leave them alone.
+
+---
+
+## 2026-10-22 — A review that cannot be read gets one repair turn before it waits on the owner
+
+**Context:** run `693e1716`'s review said in prose "starting another run from implementation"
+but carried no `isotopy-orchestrator-decision` block, so the initiative parked on its owner for a
+formatting slip. The only record of what the Orchestrator wrote was a `stage.log` event cut at
+1000 characters.
+
+**Decision:** when the review turn succeeds but a block it owes is missing or invalid, the
+Orchestrator is asked once more — in its own session, or with its assignment and answer replayed
+on a CLI that cannot resume — for only the blocks named, with the validation issues quoted. The
+repair is read before the original answer, so a corrected block wins and a block that was
+already fine still counts. Only when the repair cannot be read either does the initiative park on
+its owner, as before. Both answers are kept whole under `.isotopy/runs/<run>/review-run/`
+(`output.md`, `repair.md`). A decision that parses but cannot be acted on is not repaired: that
+is a judgement the owner's answer corrects, not a slip.
+
+**Rejected: retry until a block parses.** A model that cannot produce the block twice is not
+helped by a third ask, and each turn costs the owner money.
+
+---
+
 ## 2026-10-15 — An initiative's changes ride the project stream
 
 **Context:** the server changes an initiative where no run event announces it. A decision acted
@@ -77,7 +137,8 @@ the work goes on.
 
 **Rejected: Isotopy commits a run's changes when it settles.** A hook that fails would have
 nobody to fix it, a file holding both the owner's uncommitted edits and the agent's could not
-be split, and every message would be mechanical. **Rejected: a worktree per initiative.**
+be split, and every message would be mechanical. Isotopy's own board writes at closeout are
+the exception, decided on 2026-10-22. **Rejected: a worktree per initiative.**
 Isotopy starts the product and keeps its data from the project root, so the preview would
 show the base, not the work. **Rejected: the Release Manager commits.** Most teams the
 Orchestrator composes have none.

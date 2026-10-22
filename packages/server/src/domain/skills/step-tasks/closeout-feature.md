@@ -63,6 +63,14 @@ which platform was tested and any Windows/macOS gap. Return exactly one
 
 `severity` is exactly `blocking` or `non_blocking` — those two spellings only.
 
+A follow-up task is filed on the board and committed to the initiative's branch,
+so write one only for work the next run of this initiative will not do: a problem
+outside the goal, or a decision only the owner holds. A blocking finding is the
+goal's own open work; a task for it is not filed unless it carries an assignee,
+because your review carries the finding into the next run's task instead. A small
+fix to this run's own changes is not a follow-up either: make it blocking if the
+goal is not met without it, and leave it out otherwise.
+
 `assignee` is optional, and `owner` is the value to use. Set it on work the team may
 propose but must not start by itself: anything that spends money, needs a credential,
 takes a destructive action, or settles a preference only the user holds. A task
