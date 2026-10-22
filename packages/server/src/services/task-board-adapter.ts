@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type {
   CreatedTaskReference,
+  RunBranch,
   FollowUpTaskDraft,
   Milestone,
   MilestoneProposal,
@@ -10,7 +11,10 @@ import type {
 } from "@isotopy/core";
 import { Priority, boardExists, openBoard, renderBoardDigest } from "@smekai/taskplanner";
 import type { OpenedBoard, Task, TaskPlannerConfig } from "@smekai/taskplanner";
+import { runSubprocess } from "../engines/subprocess.ts";
+import type { SubprocessResult } from "../engines/subprocess.ts";
 import type { ProjectPath } from "../paths.ts";
+import { gitCommand } from "../utils/git.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { nowIso } from "../utils/time.ts";
 
@@ -27,6 +31,8 @@ export interface TransitionTasksOptions {
 const BOARD_DIR = ".tasks";
 
 const BACKLOG_STATE = "Backlog";
+
+const COMMIT_HOOK_TIMEOUT_MS = 120_000;
 
 const SOURCE_ATTRIBUTE = "Isotopy source";
 
@@ -136,6 +142,30 @@ export class TaskBoardAdapter {
       }
     }
     return moved;
+  }
+
+  async commit(branch: RunBranch, message: string): Promise<void> {
+    const head = await this.git(["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    if (head.stdout.trim() !== branch.name) {
+      throw new Error(`${this.projectPath.root} is not on ${branch.name}, so the board edits stay uncommitted`);
+    }
+    await this.requireGit(["add", "--all", "--", BOARD_DIR]);
+    if ((await this.git(["diff", "--cached", "--quiet", "--", BOARD_DIR])).success) {
+      return;
+    }
+    await this.requireGit(["commit", "--message", message]);
+  }
+
+  private async requireGit(args: string[]): Promise<void> {
+    const result = await this.git(args);
+    if (!result.success) {
+      const detail = result.stderrTail.join("\n").trim() || result.errorMessage || "git gave no reason";
+      throw new Error(`git ${args[0]} failed: ${detail}`);
+    }
+  }
+
+  private git(args: string[]): Promise<SubprocessResult> {
+    return runSubprocess({ ...gitCommand(this.projectPath.root, args), timeoutMs: COMMIT_HOOK_TIMEOUT_MS });
   }
 
   private upsert(board: OpenedBoard, origin: string, build: () => Omit<Task, "id">): string {

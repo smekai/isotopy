@@ -112,3 +112,25 @@ export async function untrackedPaths(cwd: string): Promise<string[]> {
     .map((entry) => entry.slice(3))
     .sort();
 }
+
+export async function dirtyPaths(cwd: string): Promise<string[]> {
+  const result = await runSubprocess({
+    command: "git",
+    args: ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    cwd,
+    timeoutMs: GIT_TIMEOUT_MS,
+  });
+  if (!result.success) {
+    throw new Error(`git status failed: ${result.stderrTail.join("\n")}`);
+  }
+  return result.stdout
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => entry.slice(3))
+    .sort();
+}
+
+// Git runs hooks through its own sh on Windows too; the mode is what lets it run elsewhere.
+export async function installHook(cwd: string, name: string, script: string): Promise<void> {
+  await writeFile(path.join(cwd, ".git", "hooks", name), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+}

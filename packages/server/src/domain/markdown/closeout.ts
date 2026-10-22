@@ -2,6 +2,7 @@ import type {
   CleanupResult,
   CloseoutFinding,
   CloseoutReport,
+  CreatedTaskReference,
 } from "@isotopy/core";
 import {
   bullet,
@@ -144,4 +145,18 @@ export function renderMilestoneSummary(
     ],
     true,
   );
+}
+
+export function renderBoardCommitMessage(
+  runId: string,
+  created: CreatedTaskReference[],
+  completedIds: string[],
+): string {
+  return markdownBlocks([
+    `Close out Isotopy run ${runId} on the task board`,
+    created.length > 0
+      ? `Files follow-up tasks: ${created.map((task) => task.id).join(", ")}.`
+      : undefined,
+    completedIds.length > 0 ? `Moves to Done: ${completedIds.join(", ")}.` : undefined,
+  ]);
 }

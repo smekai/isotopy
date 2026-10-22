@@ -289,3 +289,13 @@ export function validateSourceTaskOutcome(
       : [];
   return { contradictions, recoveries };
 }
+
+export function boardFollowUps(run: RunState, report: CloseoutReport): FollowUpTaskDraft[] {
+  if (run.orchestrationId === undefined) {
+    return report.tasks;
+  }
+  const carried = new Set(
+    report.findings.filter((finding) => finding.severity === "blocking").map((finding) => finding.id),
+  );
+  return report.tasks.filter((task) => task.assignee !== undefined || !carried.has(task.findingId));
+}

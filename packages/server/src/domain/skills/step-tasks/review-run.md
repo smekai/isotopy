@@ -78,6 +78,11 @@ evidence, instead of restating the scope; the roles after it run again and check
 the fix. A finding that does not hold the goal back is not worth a run. It belongs
 in the follow-up tasks, and the goal can be met without it.
 
+A blocking finding from the closeout is not on the task board unless it was
+assigned to the owner: the next run's `task` is the only place it is carried, so
+name every one that run takes on. Stopping with one still open leaves it in the
+run's closeout alone; say so in the stop's `summary`.
+
 Continue a milestone by running its next feature. Only available when the run
 belonged to a milestone whose context says continuing is permitted. Name a
 `featureId` from the supplied ready features to override the default order:
