@@ -22,6 +22,7 @@ import {
   dirtyPaths,
   fileAt,
   initGitRepository,
+  stageFile,
   installHook,
   switchToNewBranch,
 } from "../support/git-project.ts";
@@ -424,6 +425,53 @@ test("a project switched off the initiative's branch keeps its board edits uncom
 
   // Assert
   expect(record.validationErrors.join("\n")).toContain(INITIATIVE_BRANCH.name);
+  expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).not.toContain("Index the archive");
+});
+
+// A plain `git commit` records the whole index, so a half-done change someone had
+// staged would ship inside Isotopy's board commit when the branch is merged.
+test("work already staged before the closeout keeps the board edits uncommitted rather than ride along", async () => {
+  // Arrange
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await ensureProjectDataDir(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+  await switchToNewBranch(project.root, INITIATIVE_BRANCH.name);
+  await stageFile(project.root, "src/app.ts", "export const halfDone = true;\n");
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors.join("\n")).toContain("staged");
+  expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).not.toContain("Index the archive");
+  expect(await dirtyPaths(project.root)).toContain("src/app.ts");
+});
+
+test("board edits someone left uncommitted before the closeout keep it from committing the board", async () => {
+  // Arrange
+  const project = await makeProject();
+  await writeTaskBoard(project);
+  await ensureProjectDataDir(project);
+  await initGitRepository(project.root);
+  await commitEverything(project.root, "Initial");
+  await switchToNewBranch(project.root, INITIATIVE_BRANCH.name);
+  await writeFile(path.join(project.root, ".tasks", "NOTES.md"), "The owner's draft\n");
+
+  // Act
+  const { record } = await applyCloseoutReport(
+    project,
+    initiativeRun({ branch: INITIATIVE_BRANCH }),
+    closeoutOutput(OUTSIDE_SCOPE_DELIVERY, "PASS"),
+  );
+
+  // Assert
+  expect(record.validationErrors.join("\n")).toContain("uncommitted edits");
   expect(await fileAt(project.root, "HEAD", ".tasks/BACKLOG.md")).not.toContain("Index the archive");
 });
 

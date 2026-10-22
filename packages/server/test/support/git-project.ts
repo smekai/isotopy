@@ -59,6 +59,12 @@ export async function commitEverything(cwd: string, message: string): Promise<vo
   await git(cwd, ["commit", "--no-verify", "-m", message]);
 }
 
+export async function stageFile(cwd: string, file: string, content: string): Promise<void> {
+  await mkdir(path.dirname(path.join(cwd, file)), { recursive: true });
+  await writeFile(path.join(cwd, file), content);
+  await git(cwd, ["add", "--", file]);
+}
+
 export async function createBranch(cwd: string, name: string): Promise<void> {
   await git(cwd, ["branch", name]);
 }

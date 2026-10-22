@@ -37,9 +37,11 @@ uncommitted edits".
 - **Isotopy commits its own board writes.** When the run works on an initiative's branch and the
   closeout created or moved a task, Isotopy stages `.tasks` and commits it there with a message
   naming the tasks, through the project's own hooks — ShareTravel's pre-commit hook bumps its
-  version, and that bump lands in the same commit. A hook that refuses, or a checkout no longer
-  on the initiative's branch, is recorded on the closeout and leaves the edits uncommitted
-  rather than commit them anywhere else. This is the one exception to the branch decision's
+  version, and that bump lands in the same commit. Isotopy commits only what it wrote: before
+  touching the board it checks that the checkout is on the initiative's branch, that nothing is
+  staged and that `.tasks` is clean, because `git commit` records the whole index. If any of
+  that fails, or a hook refuses, the reason is recorded on the closeout and the edits stay
+  uncommitted rather than ship someone else's half-done work. This is the one exception to the branch decision's
   "the agent owns the commits": those are the server's writes, made after the agent handed off,
   and no agent is left to commit them.
 

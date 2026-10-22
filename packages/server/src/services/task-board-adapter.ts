@@ -144,11 +144,22 @@ export class TaskBoardAdapter {
     return moved;
   }
 
-  async commit(branch: RunBranch, message: string): Promise<void> {
+  async commitRefusal(branch: RunBranch): Promise<string | undefined> {
     const head = await this.git(["symbolic-ref", "--quiet", "--short", "HEAD"]);
     if (head.stdout.trim() !== branch.name) {
-      throw new Error(`${this.projectPath.root} is not on ${branch.name}, so the board edits stay uncommitted`);
+      return `${this.projectPath.root} is not on ${branch.name}`;
     }
+    if (!(await this.git(["diff", "--cached", "--quiet"])).success) {
+      return "the index already holds staged changes Isotopy did not make";
+    }
+    const board = await this.git(["status", "--porcelain", "--untracked-files=all", "--", BOARD_DIR]);
+    if (!board.success || board.stdout.trim() !== "") {
+      return `${BOARD_DIR} already had uncommitted edits Isotopy did not make`;
+    }
+    return undefined;
+  }
+
+  async commit(message: string): Promise<void> {
     await this.requireGit(["add", "--all", "--", BOARD_DIR]);
     if ((await this.git(["diff", "--cached", "--quiet", "--", BOARD_DIR])).success) {
       return;

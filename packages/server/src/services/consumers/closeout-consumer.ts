@@ -65,6 +65,9 @@ export async function applyCloseoutReport(
   const reportErrors = [...parsed.validationErrors, ...review.contradictions];
   const sideEffectErrors: string[] = [];
   const taskBoard = taskBoardFor(projectPath);
+  const commitRefusal = run.branch === undefined
+    ? undefined
+    : await taskBoard.commitRefusal(run.branch).catch(messageOf);
   const createdTasks = await taskBoard
     .createFollowUpTasks(run, boardFollowUps(run, parsed.report))
     .catch((error: unknown) => {
@@ -82,11 +85,12 @@ export async function applyCloseoutReport(
       return [];
     });
   if (run.branch !== undefined && (createdTasks.length > 0 || completedTaskIds.length > 0)) {
-    await taskBoard
-      .commit(run.branch, renderBoardCommitMessage(run.id, createdTasks, completedTaskIds))
-      .catch((error: unknown) => {
-        sideEffectErrors.push(`Task board commit failed: ${messageOf(error)}`);
-      });
+    const commitError = commitRefusal ?? await taskBoard
+      .commit(renderBoardCommitMessage(run.id, createdTasks, completedTaskIds))
+      .then(() => undefined, messageOf);
+    if (commitError !== undefined) {
+      sideEffectErrors.push(`Task board edits left uncommitted: ${commitError}`);
+    }
   }
   const cleanup = await cleanupRunTemp(
     projectPath,
