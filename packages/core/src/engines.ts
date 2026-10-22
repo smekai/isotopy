@@ -354,7 +354,7 @@ export function resolveTier(
   tier: ModelTier,
   roster: EngineModelRoster,
 ): ResolvedModel {
-  const offered = new Set(roster.options.map((option) => option.id));
+  const offered = idsTheLadderMayUse(roster);
   for (const candidate of tierLadderFor(engineId, tier)) {
     if (candidate.model === AUTO_MODEL_ID || offered.has(candidate.model)) {
       return {
@@ -365,6 +365,15 @@ export function resolveTier(
     }
   }
   return { model: AUTO_MODEL_ID, degraded: true };
+}
+
+function idsTheLadderMayUse(roster: EngineModelRoster): Set<string> {
+  const listedByCli = roster.options.some((option) => option.origin === "live");
+  return new Set(
+    roster.options
+      .filter((option) => !listedByCli || isVerifiedModel(option))
+      .map((option) => option.id),
+  );
 }
 
 export function resolvedModelLabel(resolved: ResolvedModel): string {
@@ -439,6 +448,16 @@ export const CURSOR_STATIC_MODELS: StaticModelRoster = {
     { id: "gpt-5.6-sol-high", label: "GPT-5.6 Sol 1M High", hint: "OpenAI" },
     { id: "grok-4.7-high", label: "Grok 4.7 High", hint: "xAI" },
     { id: "gemini-4-argon-high", label: "Gemini 4 Argon High", hint: "Google" },
+    { id: "claude-sonnet-5-thinking-high", label: "Sonnet 5 1M Thinking", hint: "Anthropic" },
+    { id: "claude-opus-5-thinking-high", label: "Opus 5 1M Thinking", hint: "Anthropic" },
+    {
+      id: "claude-opus-5-thinking-xhigh",
+      label: "Opus 5 1M Extra High Thinking",
+      hint: "Anthropic",
+    },
+    { id: "gpt-5.3-codex", label: "Codex 5.3", hint: "OpenAI" },
+    { id: "gpt-5.2", label: "GPT-5.2", hint: "OpenAI" },
+    { id: "cursor-grok-4.5-high", label: "Cursor Grok 4.5", hint: "xAI" },
   ],
 };
 
@@ -470,6 +489,7 @@ export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
     "claude-opus-4-8": "opus",
     "claude-sonnet-4-6": "sonnet",
     "claude-haiku-4-5": "haiku",
+    "sonnet[1m]": "sonnet",
   },
   cursor: {
     "composer-1": AUTO_MODEL_ID,

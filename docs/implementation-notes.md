@@ -720,7 +720,13 @@ the workspace is the source of truth, the reports only add what a box *said*.
   Three layers, same order for every engine: `live` (a CLI listing command — only
   Cursor's `agent models` today) → `config` (the engine's own config file) →
   `static` (bundled, always). First occurrence wins, so an id the user's own CLI
-  names outranks the bundled guess and is marked verified. `ModelRosterService`
+  names outranks the bundled guess and is marked verified. **Once the CLI has
+  listed its models, a preset resolves against that list and the config entry
+  only** (`resolveTier`): the bundled list is always appended, so counting it
+  would make a rung the account lacks look offered, and the ladder's fallback
+  could never win. The bundled list still feeds the picker and run-start
+  validation, where it is the only evidence an engine without a listing has.
+  `ModelRosterService`
   caches per engine with no TTL; the Setup Re-check (`?refresh=1`), a successful
   install and a successful login are the only invalidations, so editing
   `~/.codex/config.toml` mid-session needs a Re-check.
@@ -739,8 +745,13 @@ the workspace is the source of truth, the reports only add what a box *said*.
   same per-version answer is why the file is not a live layer: a desktop app
   and an older CLI on `PATH` overwrite it in turn. Every rung's first candidate must
   be in its own bundled roster and no two priced presets may resolve alike —
-  `tier-ladders.check.ts` fails otherwise — and a retired id a user may have
-  stored goes to `LEGACY_MODEL_ALIASES`.
+  `tier-ladders.check.ts` fails otherwise. **A refresh never drops an id the
+  previous bundled list offered while the CLI still lists it**: a user may have
+  pinned it, and where no listing answers, the bundled list is all run start
+  checks a pin against — so the next run would be refused. An id that is
+  genuinely gone, or no longer means anything (`sonnet[1m]` once Sonnet 5.5
+  carried 1M itself), moves to `LEGACY_MODEL_ALIASES` instead, which migrates the
+  stored pin on read.
 - **The config files are read, never written.** `~/.claude/settings.json` names a
   plain-string `model`; `~/.codex/config.toml` names one in its root table only
   (the scan stops at the first `[`, so a profile's model is not the CLI's);
