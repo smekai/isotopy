@@ -15,6 +15,27 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-22 — A review that cannot be read gets one repair turn before it waits on the owner
+
+**Context:** run `693e1716`'s review said in prose "starting another run from implementation"
+but carried no `isotopy-orchestrator-decision` block, so the initiative parked on its owner for a
+formatting slip. The only record of what the Orchestrator wrote was a `stage.log` event cut at
+1000 characters.
+
+**Decision:** when the review turn succeeds but a block it owes is missing or invalid, the
+Orchestrator is asked once more — in its own session, or with its assignment and answer replayed
+on a CLI that cannot resume — for only the blocks named, with the validation issues quoted. The
+repair is read before the original answer, so a corrected block wins and a block that was
+already fine still counts. Only when the repair cannot be read either does the initiative park on
+its owner, as before. Both answers are kept whole under `.isotopy/runs/<run>/review-run/`
+(`output.md`, `repair.md`). A decision that parses but cannot be acted on is not repaired: that
+is a judgement the owner's answer corrects, not a slip.
+
+**Rejected: retry until a block parses.** A model that cannot produce the block twice is not
+helped by a third ask, and each turn costs the owner money.
+
+---
+
 ## 2026-10-15 — An initiative's changes ride the project stream
 
 **Context:** the server changes an initiative where no run event announces it. A decision acted

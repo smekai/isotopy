@@ -135,3 +135,12 @@ export function persistProjectDeploymentArtifacts(
     logLines,
   );
 }
+
+export async function persistReviewOutput(
+  project: ProjectPath,
+  runId: string,
+  fileName: string,
+  output: string,
+): Promise<void> {
+  await writeTextFile(path.join(runsDir(project), runId, "review-run", fileName), output);
+}

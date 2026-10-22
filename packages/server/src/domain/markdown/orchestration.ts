@@ -160,6 +160,21 @@ export function renderTaskAfterRejection({
   return markdownBlocks([task, renderRejectedDecision(error)]);
 }
 
+export interface ReviewRepairContext {
+  errors: string[];
+  replay?: { prompt: string; answer: string };
+}
+
+export function renderReviewRepair({ errors, replay }: ReviewRepairContext): string {
+  return markdownBlocks([
+    replay?.prompt,
+    replay === undefined ? undefined : `## Your review\n\n${markdownBody(replay.answer)}`,
+    "## Your review could not be acted on",
+    errors.map((error) => bullet(markdownBody(error))).join("\n"),
+    "Everything else in your review stands. Reply with only the fenced block or blocks named above, corrected — no prose, no other block. Nothing runs and the initiative waits on its owner if this reply cannot be read either.",
+  ]);
+}
+
 function renderRejectedDecision(error: string): string {
   return markdownBlocks([
     "## Your last decision was rejected",

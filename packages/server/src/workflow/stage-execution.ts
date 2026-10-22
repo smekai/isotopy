@@ -41,8 +41,10 @@ import { extractOrchestratorContext } from "../schemas/orchestrator-context.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { extractRunArtifacts } from "../schemas/run-artifacts.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
+import { renderReviewRepair } from "../domain/markdown/orchestration.ts";
 import { runArtifactsDir, toolCacheDir } from "../paths.ts";
 import { capturePersonaNotes } from "../services/persona-notes-store.ts";
+import { persistReviewOutput } from "../services/run-evidence.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { toPosixPath } from "../utils/posix-path.ts";
 import { nowIso } from "../utils/time.ts";
@@ -497,28 +499,50 @@ export async function runOrchestratorReviewWork(
     message: `Orchestrator reviewing the run · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
     activity: { kind: "engine", name: engineLabel(run) },
   });
-  const outcome = await runAdapter(
-    deps,
-    input,
-    run,
-    run.engine,
-    stageId,
-    buildStagePrompt(
-      context.prompt,
-      [],
-      await deps.agents.stepTask(deps.registry.resolve(run.projectId), "review-run"),
-    ),
-    (await deps.agents.persona(deps.registry.resolve(run.projectId), "orchestrator"))?.text,
-    undefined,
+  const projectPath = deps.registry.resolve(run.projectId);
+  const prompt = buildStagePrompt(
+    context.prompt,
+    [],
+    await deps.agents.stepTask(projectPath, "review-run"),
   );
-  if (outcome.usage) {
-    await orchestration.recordDecisionUsage(context.orchestrationId, outcome.usage);
-  }
+  const persona = (await deps.agents.persona(projectPath, "orchestrator"))?.text;
+  const engine = run.engine;
+  const reviewTurn = async (turnPrompt: string, resumeSessionId?: string) => {
+    const outcome = await runAdapter(deps, input, run, engine, stageId, turnPrompt, persona, resumeSessionId);
+    if (outcome.usage) {
+      await orchestration.recordDecisionUsage(context.orchestrationId, outcome.usage);
+    }
+    return outcome;
+  };
+  const outcome = await reviewTurn(prompt);
   if (deps.isCancelled(run.id)) {
     return null;
   }
+  const output = outcome.result ?? outcome.errorMessage ?? "";
+  await persistReviewOutput(projectPath, run.id, REVIEW_OUTPUT_FILE, output);
   const closedOut = deps.projection.getRun(run.id)?.closeout !== undefined;
-  const review = readReview(outcome, !closedOut);
+  let review = readReview(outcome, output, !closedOut);
+  if (outcome.success && review.errors.length > 0) {
+    deps.projection.log(run.id, stageId, {
+      level: "warn",
+      message: `Orchestrator review could not be acted on, asking once for a repair — ${review.errors.join("; ")}`,
+    });
+    const repair = await reviewTurn(
+      renderReviewRepair({
+        errors: review.errors,
+        replay: outcome.sessionId === undefined ? { prompt, answer: output } : undefined,
+      }),
+      outcome.sessionId,
+    );
+    if (deps.isCancelled(run.id)) {
+      return null;
+    }
+    const repairOutput = repair.result ?? repair.errorMessage ?? "";
+    await persistReviewOutput(projectPath, run.id, REVIEW_REPAIR_FILE, repairOutput);
+    review = repair.success
+      ? readReview(repair, `${repairOutput}\n\n${output}`, !closedOut)
+      : { ...review, errors: [...review.errors, repair.errorMessage ?? "The review repair failed"] };
+  }
   if (!closedOut && review.artifacts) {
     await deps.projection.captureRunCloseout(run.id, review.artifacts);
   }
@@ -536,11 +560,14 @@ export async function runOrchestratorReviewWork(
   return null;
 }
 
-function readReview(outcome: EngineRunResult, artifactsExpected: boolean): RunReview {
+const REVIEW_OUTPUT_FILE = "output.md";
+
+const REVIEW_REPAIR_FILE = "repair.md";
+
+function readReview(outcome: EngineRunResult, output: string, artifactsExpected: boolean): RunReview {
   if (!outcome.success) {
     return { errors: [outcome.errorMessage ?? "Orchestrator review failed"] };
   }
-  const output = outcome.result ?? "";
   const artifacts = extractRunArtifacts(output);
   const decision = extractOrchestratorDecision(output);
   const review: RunReview = {

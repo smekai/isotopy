@@ -33,6 +33,8 @@ const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
 const DEVELOPER_SESSION = "2aa7153f-d094-44c2-bec1-92fc7e4307e2";
 
+const REVIEW_SESSION = "6c1f0e52-3a8d-4f57-9b0e-5d2c7a9e41b3";
+
 /** The Developer is where the thinking happens; QA is left on whatever the run chose. */
 const TIERED_TEAM_PROPOSAL: OrchestratorDecision = {
   action: "propose_team",
@@ -923,12 +925,80 @@ test("a start_run review with no approved team records the error instead of laun
   ctx.engine.verify();
 });
 
-test("a malformed review leaves the run terminal and the initiative waiting on its owner, saying why", async () => {
-  // Anticipate — the Orchestrator answers with prose and no blocks at all.
+// Initiative bdd1c288 parked on its owner over a review whose prose plainly said
+// "starting another run from implementation" but carried no decision block.
+test("a review missing its decision block is repaired in its own session, so the initiative goes on without its owner", async () => {
+  // Anticipate
   ctx.engine.anticipate({ as: "Developer" }).reports("done");
   ctx.engine
     .anticipate({ as: "Orchestrator review" })
-    .reports("Looks fine to me, nothing structured to add.");
+    .parks(
+      `${artifactsBlock(REVIEW_ARTIFACTS)}\n\nThe goal is met, so I am stopping here.`,
+      REVIEW_SESSION,
+    );
+  ctx.engine
+    .anticipate({
+      as: "repair asking for the missing block alone",
+      resumeSessionId: REVIEW_SESSION,
+      prompt: /Missing fenced isotopy-orchestrator-decision JSON block/,
+    })
+    .reports(fenced(STOP));
+
+  // Act
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+
+  // Assert
+  const finished = await waitForRunStatus(ctx.app, run.id, "completed");
+  expect(finished.closeout?.report.summary).toBe(REVIEW_ARTIFACTS.summary);
+  const stopped = await waitForOrchestration(
+    ctx.app,
+    run.orchestrationId ?? "",
+    ({ status }) => status === "stopped",
+  );
+  expect(stopped.turns).toMatchObject([{ runId: run.id, decision: STOP }]);
+  expect(stopped.decisionError).toBeUndefined();
+  ctx.engine.verify();
+});
+
+test("a review on a CLI that cannot resume is repaired from a replay of its own assignment and answer", async () => {
+  // Anticipate
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine
+    .anticipate({ as: "Orchestrator review" })
+    .reports(`${artifactsBlock(REVIEW_ARTIFACTS)}\n\nMARKER-PROSE: the goal is met.`);
+  ctx.engine
+    .anticipate({
+      as: "repair replaying the review",
+      prompt: /# Assignment: Review a settled run[\s\S]*MARKER-PROSE[\s\S]*Missing fenced isotopy-orchestrator-decision/,
+    })
+    .reports(fenced(STOP));
+
+  // Act
+  const run = await startRun(ctx.app, {
+    pipelineId: "solo",
+    task: "Add search to the product",
+    engine: "claude-code",
+  });
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  await waitForOrchestration(ctx.app, run.orchestrationId ?? "", ({ status }) => status === "stopped");
+  ctx.engine.verify();
+});
+
+test("a review whose repair cannot be read either leaves the initiative waiting on its owner, saying why", async () => {
+  // Anticipate — the Orchestrator answers with prose and no blocks at all, twice.
+  ctx.engine.anticipate({ as: "Developer" }).reports("done");
+  ctx.engine
+    .anticipate({ as: "Orchestrator review" })
+    .parks("Looks fine to me, nothing structured to add.", REVIEW_SESSION);
+  ctx.engine
+    .anticipate({ as: "repair", resumeSessionId: REVIEW_SESSION })
+    .reports("Still fine, really.");
 
   // Act
   const run = await startRun(ctx.app, {
@@ -947,6 +1017,12 @@ test("a malformed review leaves the run terminal and the initiative waiting on i
   expect(orchestration.decisionError).toContain("isotopy-run-artifacts");
   expect(orchestration.decisionError).toContain("isotopy-orchestrator-decision");
   expect(orchestration.turns).toEqual([]);
+  // A `stage.log` line keeps the first 1000 characters; the failure is only
+  // diagnosable from what the Orchestrator actually wrote, both times.
+  expect(await readReviewOutput(ctx.home, run.id, "output.md")).toContain(
+    "Looks fine to me, nothing structured to add.",
+  );
+  expect(await readReviewOutput(ctx.home, run.id, "repair.md")).toContain("Still fine, really.");
   // TASK-157 left an initiative here reading `running` with nothing in flight,
   // and nothing in the operator log said otherwise.
   expect(orchestration.status).toBe("awaiting_user");
@@ -977,6 +1053,16 @@ test("an owner's answer to an unusable review opens a fresh Orchestrator turn th
         task: "Fix the search endpoint",
         team: { ...TEAM, roles: [{ id: "implementation", label: "Developer", persona: "developer" }] },
       })}`,
+    );
+  ctx.engine
+    .anticipate({ as: "review repair repeating the invalid team" })
+    .reports(
+      fenced({
+        action: "propose_team",
+        rationale: "A fresh pair",
+        task: "Fix the search endpoint",
+        team: { ...TEAM, roles: [{ id: "implementation", label: "Developer", persona: "developer" }] },
+      }),
     );
   ctx.engine
     .anticipate({
@@ -1017,6 +1103,7 @@ test("a turn opened by an answer that is refused again waits on the owner again"
   ctx.engine
     .anticipate({ as: "Orchestrator review" })
     .reports("Looks fine to me, nothing structured to add.");
+  ctx.engine.anticipate({ as: "review repair" }).reports("Still fine, really.");
   ctx.engine
     .anticipate({ as: "Orchestrator turn after the answer", persona: /# Role: Orchestrator/ })
     .reports("Still nothing structured, sorry.");
@@ -1606,6 +1693,10 @@ test("an answer sent to the initiative reaches the stage that is still asking", 
   expect(orchestration.runIds).toEqual([conversation.id]);
   ctx.engine.verify();
 });
+
+function readReviewOutput(home: string, runId: string, file: string): Promise<string> {
+  return readFile(path.join(home, "runs", runId, "review-run", file), "utf8");
+}
 
 function readCloseout(home: string, runId: string): Promise<string> {
   return readFile(path.join(home, "runs", runId, "closeout", "closeout.md"), "utf8");
