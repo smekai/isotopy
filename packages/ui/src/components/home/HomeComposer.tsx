@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { Flag, FolderOpen, Play, Sparkles, SlidersHorizontal } from "lucide-react";
 import { ENGINES, HOME_PROJECT_ID, modelOverrideFor, pipelineUsesEngineById } from "@isotopy/core";
 import type { CatalogAgent, Project } from "@isotopy/core";
+import { useEngineRoster } from "../../hooks/useEngineRoster";
 import type { SettingsController } from "../../hooks/useSettings";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, MOTION, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
@@ -150,6 +151,7 @@ export function HomeComposer({
   const usesEngine = orchestrating || pipelineUsesEngineById(pipelineId);
   const engine = ENGINES[settings.preferences.engine];
   const pinnedModel = modelOverrideFor(settings.preferences, engine.id);
+  const { roster } = useEngineRoster(engine.id);
 
   function start() {
     if (!armed) {
@@ -252,6 +254,7 @@ export function HomeComposer({
           d={d}
           engine={engine.id}
           modelTier={settings.preferences.modelTier}
+          roster={roster}
           onChange={(nextEngine, nextTier) =>
             settings.update({
               engine: nextEngine,

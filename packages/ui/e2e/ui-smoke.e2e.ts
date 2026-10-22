@@ -143,7 +143,7 @@ test("Setup → AI Harness lists engines, status, models, and permission modes",
   await expect(page.getByRole("button", { name: /Balanced the everyday default/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Deep more reasoning/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Max most reasoning/ })).toBeVisible();
-  await expect(page.getByText(/^→ /)).toBeVisible();
+  await expect(page.getByTestId("tier-resolution-max")).toHaveText(/^→ /);
 
   // The exact roster is still reachable, one disclosure away, for the expert case.
   await expect(page.getByTestId("model-select")).toHaveCount(0);
@@ -180,7 +180,7 @@ test("selecting Cursor keeps the preset and re-resolves it against that harness"
   await page.goto("/");
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
-  const resolution = page.getByText(/^→ /);
+  const resolution = page.getByTestId("tier-resolution-deep");
   const onClaude = await resolution.textContent();
 
   // Act
@@ -224,7 +224,7 @@ test("pipeline, model, and permission mode persist across a reload", async ({ pa
   // Setup shows the stored preset and what it resolves to here
   await page.getByRole("button", { name: "Setup" }).click();
   await page.getByRole("button", { name: "AI Harness" }).click();
-  await expect(page.getByText("→ haiku · effort medium")).toBeVisible();
+  await expect(page.getByTestId("tier-resolution-fast")).toHaveText("→ haiku · effort medium");
 
   // permission mode is stored server-side (UI selection is style-only)
   expect((await readPreferences(page)).permissionMode).toBe("acceptEdits");

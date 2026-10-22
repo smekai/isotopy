@@ -340,15 +340,16 @@ interface TranscriptRowProps {
 
 function TranscriptRow({ item, spend, orchestrator, d }: TranscriptRowProps) {
   if (item.kind === "proposal") {
-    return (
+    return orchestrator === undefined ? null : (
       <TeamProposalCard
         team={item.team}
         awaitingApproval={item.awaitingApproval}
-        busy={orchestrator?.busy ?? false}
-        roleTiers={orchestrator?.roleTiers ?? {}}
+        busy={orchestrator.busy}
+        harness={orchestrator.harness}
+        roleTiers={orchestrator.roleTiers}
         d={d}
-        onApprove={() => orchestrator?.onApprove()}
-        onRoleTierChange={(roleId, tier) => orchestrator?.onRoleTierChange(roleId, tier)}
+        onApprove={orchestrator.onApprove}
+        onRoleTierChange={orchestrator.onRoleTierChange}
       />
     );
   }

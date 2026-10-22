@@ -158,6 +158,22 @@ test("a legacy model id stored on disk is migrated on read, onto the preset that
   expect(body.preferences.engineModels).toEqual({});
 });
 
+test("a stored 1M Sonnet pin reads back as plain Sonnet, which now carries the 1M window itself", async () => {
+  // Arrange — `sonnet[1m]` was offered until 2026-10-21; Claude Code cannot list models, so
+  // the built-in list is all a run is checked against.
+  await writeUserSettings(ctx.userHome, {
+    version: 1,
+    defaults: { engines: {} },
+    projects: { home: { engines: {}, preferences: { modelTier: "deep", engineModels: { "claude-code": "sonnet[1m]" } } } },
+  });
+
+  // Act
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+
+  // Assert
+  expect(body.preferences.engineModels).toEqual({ "claude-code": "sonnet" });
+});
+
 test("a retired model an older browser still sends is stored as Auto, not carried into a run", async () => {
   // Act
   await put<SettingsView>(ctx.app, "/settings/preferences", {

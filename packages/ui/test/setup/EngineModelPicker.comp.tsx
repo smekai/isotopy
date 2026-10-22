@@ -4,7 +4,7 @@
 // did not expect, so every test here is about what the choice actually resolves to.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { resolveTier } from "@isotopy/core";
+import { resolveTier, resolvedModelLabel } from "@isotopy/core";
 import type { EngineModelRoster } from "@isotopy/core";
 import { EngineModelPicker } from "../../src/components/setup/EngineModelPicker";
 import type { EngineModelPickerProps } from "../../src/components/setup/EngineModelPicker";
@@ -62,17 +62,18 @@ test("the choice offered is an intent, not a roster of ids", async () => {
   expect(screen.getByText("Deep")).toBeTruthy();
 });
 
-test("a preset says which model and effort it resolved to", async () => {
+test("every preset names the model and effort it resolves to, not only the selected one", async () => {
   // Arrange
   served(CLAUDE_ROSTER);
-  const resolved = resolveTier("claude-code", "deep", CLAUDE_ROSTER);
-  const resolution = `→ ${resolved.model || "the harness's own default"}${resolved.effort ? ` · effort ${resolved.effort}` : ""}`;
+  const deep = resolvedModelLabel(resolveTier("claude-code", "deep", CLAUDE_ROSTER));
 
   // Act
-  render(<EngineModelPicker {...pickerProps({ tier: "deep" })} />);
+  render(<EngineModelPicker {...pickerProps({ tier: "balanced" })} />);
 
   // Assert
-  await waitFor(() => expect(screen.getByText(resolution)).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByTestId("tier-resolution-deep").textContent).toBe(`→ ${deep}`),
+  );
 });
 
 test("choosing a preset reports the tier, not a model id", async () => {
@@ -122,7 +123,7 @@ test("revealing the roster groups verified entries apart from guesses", async ()
   fireEvent.click(screen.getByText(REVEAL_ROSTER));
 
   // Assert
-  expect(screen.getByRole("group", { name: /checked 2026-08-23/ })).toBeTruthy();
+  expect(screen.getByRole("group", { name: `Unverified — built-in list, checked ${CLAUDE_ROSTER.staticCheckedOn}` })).toBeTruthy();
 });
 
 test("picking an exact model reports the id the harness will be given", async () => {
@@ -161,6 +162,7 @@ test("a roster that cannot be reached says so rather than showing a resolution i
   // Assert
   await waitFor(() => expect(screen.getByText(/Model list unavailable/)).toBeTruthy());
   expect(screen.queryByText(/falls back to/)).toBeNull();
+  expect(screen.queryByTestId("tier-resolution-max")).toBeNull();
 });
 
 test("opening Setup reads the cached roster rather than re-probing the harness", async () => {

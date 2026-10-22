@@ -1,5 +1,22 @@
 # Backlog
 
+## TASK-204: Rethink the main interface from the best of competitors: agents as free-standing blocks, recurring work shown differently
+**Priority:** P3 | **Tags:** ui
+**Updated:** 2026-10-21 20:29
+
+The current UI grew one feature at a time: a run is a graph of connected stages, and recurring work lives in the schedule components (`packages/ui/src/components/schedule/*`) and the `RunRail`. Before the next round of UI work, step back and choose a direction deliberately.
+
+**Research:** review how the products in [`docs/competitor-matrix.md`](../docs/competitor-matrix.md) present their work — the direct orchestrators (Mastra, Bernstein), the parallel-agent multiplexers (Cline and the rest of that category) and the agent-workforce platforms. Two questions for each: how they show many agents at once, and how they show recurring or scheduled work.
+
+**Directions the user already wants explored:**
+- Agents as independent blocks without connecting edges, instead of the stage graph — and more of them visible on one screen.
+- Recurring tasks presented differently from one-off runs.
+
+**Outcome:** a comparison and the chosen direction written up in `docs/`, a mock-up of the main screens, and implementation tasks split out of it. This task does not change product code.
+
+Cross-platform: n/a — research and design; any implementation task it spawns carries its own line.
+
+---
 ## TASK-202: The server is organised by concept, and a boundary schema is the domain type
 **Priority:** P2 | **Tags:** server, infra
 **Updated:** 2026-10-12 19:51

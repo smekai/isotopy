@@ -5,7 +5,8 @@ import type {
   RunSummary,
   ScheduleView,
 } from "@isotopy/core";
-import { HOME_PROJECT_ID } from "@isotopy/core";
+import { HOME_PROJECT_ID, bundledRosterFor } from "@isotopy/core";
+import type { RunHarness } from "../../src/orchestration";
 import { summary } from "./run-fixtures";
 
 const CREATED_AT = "2026-08-01T09:00:00.000Z";
@@ -29,6 +30,16 @@ export function team(
     name: overrides.name ?? "Delivery trio",
     summary: overrides.summary ?? "A PM, a Developer and a QA Engineer.",
     roles: overrides.roles ?? [role()],
+  };
+}
+
+export function runHarness(overrides: Partial<RunHarness> = {}): RunHarness {
+  const engine = overrides.engine ?? "claude-code";
+  return {
+    ...overrides,
+    engine,
+    modelTier: overrides.modelTier ?? "fast",
+    roster: overrides.roster ?? bundledRosterFor(engine),
   };
 }
 

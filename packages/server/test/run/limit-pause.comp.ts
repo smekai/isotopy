@@ -24,7 +24,7 @@ const TESTER_REPORT = "Verified it.\n\nVERDICT: PASS";
 const SESSION_LIMIT = "You've hit your session limit · resets 4:30pm (Europe/Tallinn)";
 const SHORT_LIMIT = "You've hit your session limit · try again in 2 seconds";
 
-const CURSOR_PIN = "cursor-grok-4.5-high";
+const CURSOR_PIN = "grok-4.7-high";
 
 describe("plan limit", () => {
   let ctx: TestApp;

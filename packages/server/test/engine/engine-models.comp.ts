@@ -1,11 +1,25 @@
 // A roster is what Setup offers and what a run is checked against, so both go
 // through this route. These tests drive it over the real service and merge, with
 // the engine itself scripted — the one thing a component test must never spawn.
-import { afterEach, beforeEach, expect, test } from "vitest";
-import { staticModelsFor } from "@isotopy/core";
+import { afterEach, assert, beforeEach, expect, test } from "vitest";
+import { staticModelsFor, tierLadderFor } from "@isotopy/core";
 import type { EngineModelRoster } from "@isotopy/core";
-import { createTestApp, get } from "../support/harness.ts";
+import { addTestProject, createTestApp, get, startRun, waitForRunStatus } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
+
+const TASK = "add a greet function";
+
+// Every id an earlier built-in Cursor list offered and the CLI still lists: a user
+// may have pinned any of them, and with no live listing the built-in list is all a
+// run is checked against.
+const PREVIOUSLY_BUNDLED_CURSOR_IDS = [
+  "gpt-5.3-codex",
+  "gpt-5.2",
+  "claude-opus-5-thinking-high",
+  "claude-opus-5-thinking-xhigh",
+  "claude-sonnet-5-thinking-high",
+  "cursor-grok-4.5-high",
+];
 
 let ctx: TestApp;
 
@@ -92,3 +106,53 @@ test("a re-check probes the CLI again", async () => {
   expect(ctx.engine.liveModelLookups).toBe(2);
 });
 
+test("a preset takes its fallback when the CLI's own list leaves out the first choice, even though the built-in list names it", async () => {
+  // Arrange — an account without the newest generation lists only the older id.
+  const [preferred, fallback] = tierLadderFor("cursor", "deep");
+  assert(preferred && fallback, "the Deep ladder has a first choice and a fallback");
+  expect(
+    staticModelsFor("cursor").options.map((option) => option.id),
+    "the built-in list names the first choice",
+  ).toContain(preferred.model);
+  const project = await addTestProject(ctx.registry, "live-fallback");
+  ctx.engine.offersLiveModels([{ id: fallback.model, label: fallback.model, hint: "" }]);
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Agent", model: fallback.model }).reports("Done.");
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(
+    ctx.app,
+    { pipelineId: "solo", task: TASK, engine: "cursor", modelTier: "deep" },
+    project.headers,
+  );
+
+  // Assert
+  await waitForRunStatus(ctx.app, run.id, "completed");
+  ctx.engine.verify();
+});
+
+test.each(PREVIOUSLY_BUNDLED_CURSOR_IDS)(
+  "a Cursor pin an earlier built-in list offered (%s) still runs when the CLI cannot list models",
+  async (model) => {
+    // Arrange
+    const project = await addTestProject(ctx.registry, "previously-bundled-pin");
+    ctx.engine.failsLiveModels("agent: command not found");
+
+    // Anticipate
+    ctx.engine.anticipate({ as: "Agent", model }).reports("Done.");
+    ctx.engine.anticipateRunReview();
+
+    // Act
+    const run = await startRun(
+      ctx.app,
+      { pipelineId: "solo", task: TASK, engine: "cursor", model },
+      project.headers,
+    );
+
+    // Assert
+    await waitForRunStatus(ctx.app, run.id, "completed");
+    ctx.engine.verify();
+  },
+);

@@ -1711,8 +1711,9 @@ assignment (`TASK-115`) would gain nothing to reason about.
 
 **Known limits, stated rather than papered over:** the ladder is a maintained snapshot too,
 just 3 engines × 4 rungs instead of 194 ids, and a wrong rung silently spends more than
-intended — which is why the resolved model is always on screen. Codex's accepted effort
-values above `high` are unconfirmed, so Max shares Deep's effort there. Cursor's config
+intended — which is why the resolved model is always on screen. (Codex's efforts above
+`high` were unconfirmed until 2026-10-21, when its own model cache listed them; since then
+Max is GPT-6 Astra and no two presets resolve alike on any engine.) Cursor's config
 file holds a CLI-managed object with a `"default"` sentinel, so hand-pinning an unlisted id
 there is not a real escape hatch — it is unnecessary exactly where it does not work, since
 Cursor is the one engine with a complete live roster.

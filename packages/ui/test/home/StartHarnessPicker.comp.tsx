@@ -2,9 +2,11 @@
 // money with, and until now neither was ever put to the user — both were copied
 // silently from Setup. What is worth guarding is that a choice made here leaves
 // nothing stale behind it: a tier belonging to the previous harness, or an exact
-// model pinned earlier that would outrank the tier just chosen.
-import { cleanup, fireEvent, render } from "@testing-library/react";
+// model pinned earlier that would outrank the tier just chosen. A preset is only
+// an intent, so each one must also say which model it stands for on this harness.
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+import { bundledRosterFor, resolveTier, resolvedModelLabel } from "@isotopy/core";
 import { StartHarnessPicker } from "../../src/components/home/StartHarnessPicker";
 import type { StartHarnessPickerProps } from "../../src/components/home/StartHarnessPicker";
 import { DIRS } from "../../src/theme";
@@ -41,13 +43,27 @@ test("changing the model keeps the harness rather than re-defaulting it", () => 
   expect(onChange).toHaveBeenCalledWith("claude-code", "deep");
 });
 
+test("each preset on offer names the model it resolves to on the chosen harness", () => {
+  // Arrange — Codex, so a model from the default harness would be the wrong answer.
+  const roster = bundledRosterFor("codex");
+  const max = resolvedModelLabel(resolveTier("codex", "max", roster));
+
+  // Act
+  render(<StartHarnessPicker {...pickerProps({ engine: "codex", roster })} />);
+
+  // Assert
+  expect(screen.getByRole("option", { name: `Max — ${max}` })).toBeDefined();
+});
+
 function pickerProps(
   overrides: Partial<StartHarnessPickerProps> = {},
 ): StartHarnessPickerProps {
+  const engine = overrides.engine ?? "claude-code";
   return {
     d,
-    engine: overrides.engine ?? "claude-code",
+    engine,
     modelTier: overrides.modelTier ?? "fast",
+    roster: overrides.roster ?? bundledRosterFor(engine),
     onChange: overrides.onChange ?? vi.fn(),
   };
 }

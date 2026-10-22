@@ -6,10 +6,11 @@
 // which is also why an already-approved proposal must stop offering approval.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+import { bundledRosterFor, resolveTier, resolvedModelLabel } from "@isotopy/core";
 import { TeamProposalCard } from "../../src/components/run/TeamProposalCard";
 import type { TeamProposalCardProps } from "../../src/components/run/TeamProposalCard";
 import { DIRS } from "../../src/theme";
-import { role, team } from "../support/orchestration-fixtures";
+import { role, runHarness, team } from "../support/orchestration-fixtures";
 
 const d = DIRS.indigo;
 
@@ -105,6 +106,42 @@ test("an approved team reads back as what was agreed, not as an editable form", 
   expect(screen.queryByTestId("role-tier-design")).toBeNull();
 });
 
+test("each preset offered for a role names the model it would run on this harness", () => {
+  // Arrange — Codex, so a model from the default harness would be the wrong answer.
+  const roster = bundledRosterFor("codex");
+  const deep = resolvedModelLabel(resolveTier("codex", "deep", roster));
+
+  // Act
+  render(<TeamProposalCard {...cardProps({ harness: runHarness({ engine: "codex", roster }) })} />);
+
+  // Assert
+  const control = screen.getByTestId("role-tier-implementation");
+  expect(within(control).getByRole("option", { name: `Deep — ${deep}` })).toBeDefined();
+});
+
+test("the run default names the preset and model a role inherits when left alone", () => {
+  // Arrange
+  const harness = runHarness({ modelTier: "balanced" });
+  const balanced = resolvedModelLabel(resolveTier("claude-code", "balanced", harness.roster));
+
+  // Act
+  render(<TeamProposalCard {...cardProps({ harness })} />);
+
+  // Assert
+  const control = screen.getByTestId("role-tier-implementation");
+  expect(
+    within(control).getByRole("option", { name: `Run default (Balanced) — ${balanced}` }),
+  ).toBeDefined();
+});
+
+test("a model pinned in Setup is named on the card, because it outranks every role's preset", () => {
+  // Act
+  render(<TeamProposalCard {...cardProps({ harness: runHarness({ pinnedModel: "opus" }) })} />);
+
+  // Assert
+  expect(screen.getByTestId("team-pinned-model").textContent).toContain("opus");
+});
+
 function cardProps(overrides: Partial<TeamProposalCardProps> = {}): TeamProposalCardProps {
   return {
     d,
@@ -116,6 +153,7 @@ function cardProps(overrides: Partial<TeamProposalCardProps> = {}): TeamProposal
     }),
     awaitingApproval: overrides.awaitingApproval ?? true,
     busy: overrides.busy ?? false,
+    harness: overrides.harness ?? runHarness(),
     roleTiers: overrides.roleTiers ?? {},
     onApprove: overrides.onApprove ?? vi.fn(),
     onRoleTierChange: overrides.onRoleTierChange ?? vi.fn(),

@@ -8,7 +8,7 @@ import type {
   RunSummary,
   ScheduleView,
 } from "@isotopy/core";
-import { formatUsage, preferredRunOptions } from "@isotopy/core";
+import { formatUsage, modelOverrideFor, preferredRunOptions } from "@isotopy/core";
 import {
   abortRun,
   answerOrchestrator,
@@ -39,6 +39,7 @@ import type { LiveInitiative } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useAgentCatalog } from "./hooks/useAgentCatalog";
+import { useEngineRoster } from "./hooks/useEngineRoster";
 import { useMilestones } from "./hooks/useMilestones";
 import { useSchedules } from "./hooks/useSchedules";
 import { useOrchestration } from "./hooks/useOrchestration";
@@ -179,6 +180,7 @@ export function App() {
   const schedules = useSchedules(projectId, projects.ready);
   const agentCatalog = useAgentCatalog(projectId, projects.ready);
   const product = useProduct(projectId);
+  const { roster: harnessRoster } = useEngineRoster(settings.preferences.engine);
   const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -459,6 +461,12 @@ export function App() {
     orchestration: activeOrchestration,
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
+    harness: {
+      engine: settings.preferences.engine,
+      modelTier: settings.preferences.modelTier,
+      pinnedModel: modelOverrideFor(settings.preferences, settings.preferences.engine),
+      roster: harnessRoster,
+    },
     roleTiers: pendingTiersFor(pendingTiers, activeOrchestration),
     onApprove: () => void handleApproveTeam(activeOrchestration.id),
     onRoleTierChange: handleRoleTierChange,

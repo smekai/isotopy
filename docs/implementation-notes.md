@@ -679,22 +679,30 @@ the workspace is the source of truth, the reports only add what a box *said*.
 ## Core — model rosters & pipelines (`core/engines.ts`, `core/pipelines.ts`)
 
 - **What a user picks is a preset, not an id.** `MODEL_TIERS`
-  (`auto·fast·balanced·deep·max`) is one axis borrowed from the CLIs' own effort
+  (`auto·economy·fast·balanced·deep·max`) is one axis borrowed from the CLIs' own effort
   vocabulary, which turns over far more slowly than model names do — Cursor's live
   roster alone is ~194 entries. `resolveTier` walks that engine's ordered
   `TIER_LADDERS` candidates and takes the first the resolved roster still offers,
   falling back to Auto with `degraded: true` rather than failing: the user asked
   for an intent, so substituting is legitimate in a way substituting an id is not.
-  Setup always renders what a preset resolved to, so it is never a black box.
+  Every place a preset is chosen — Setup, the Home start picker, a team card's
+  per-role control — names the model each preset resolves to on the current
+  harness (`resolvedModelLabel`), so it is never a black box. Setup reads the
+  roster itself; the Home picker and the team card are handed it by their
+  containers (`HomeComposer`, `App` via `OrchestratorView.harness`). A model
+  pinned in Setup outranks every preset, so the team card names it instead.
 - **Effort is a separate axis on two of three CLIs.** Claude takes
   `--effort low|medium|high|xhigh|max`, Codex takes
-  `-c model_reasoning_effort="…"`, and Cursor bakes it into the id
-  (`claude-opus-5-thinking-xhigh`), so it ignores `EngineRunContext.effort` and
-  its rungs are whole model ids. Cursor's ladder crosses vendors — Composer at the
-  cheap end, Sonnet 5 and Opus 5 above it — because one family across every rung
-  was a poor default, not because the family mattered. Codex's accepted values
-  above `high` are unconfirmed, which is why Max shares Deep's effort there, and
-  is the one place two presets still resolve alike.
+  `-c model_reasoning_effort="…"` (its model cache lists `low` to `max`, plus
+  `ultra`, which delegates sub-tasks rather than reasoning longer and is not
+  offered), and Cursor bakes it into the id (`claude-opus-5-5-xhigh`), so it
+  ignores `EngineRunContext.effort` and its rungs are whole model ids. Cursor's
+  ladder crosses vendors — Composer at the cheap end, Sonnet 5.5 and Opus 5.5
+  above it, each falling back to its generation-5 id for an account that lacks
+  5.5 — because one family across every rung was a poor default, not because the
+  family mattered. No two priced presets resolve alike on any engine: Codex's Max
+  is GPT-6 Astra at `xhigh`, while Deep stays on GPT-6.1 Sol, which is close on
+  coding at a fifth of the price.
 - **`MODEL_TIER_OPTIONS` order is a price ladder, not a display order.**
   `LimitModal` slices it to find the rungs *cheaper* than the one that hit a
   limit, and drops `auto` from that list because "whatever the CLI is set to" has
@@ -712,10 +720,38 @@ the workspace is the source of truth, the reports only add what a box *said*.
   Three layers, same order for every engine: `live` (a CLI listing command — only
   Cursor's `agent models` today) → `config` (the engine's own config file) →
   `static` (bundled, always). First occurrence wins, so an id the user's own CLI
-  names outranks the bundled guess and is marked verified. `ModelRosterService`
+  names outranks the bundled guess and is marked verified. **Once the CLI has
+  listed its models, a preset resolves against that list and the config entry
+  only** (`resolveTier`): the bundled list is always appended, so counting it
+  would make a rung the account lacks look offered, and the ladder's fallback
+  could never win. The bundled list still feeds the picker and run-start
+  validation, where it is the only evidence an engine without a listing has.
+  `ModelRosterService`
   caches per engine with no TTL; the Setup Re-check (`?refresh=1`), a successful
   install and a successful login are the only invalidations, so editing
   `~/.codex/config.toml` mid-session needs a Re-check.
+- **Refreshing the bundled rosters is a hand job against each CLI's own word**,
+  and `STATIC_ROSTER_CHECKED_ON` moves with it. Claude: the alias table in Claude
+  Code's model-config docs — the aliases float, so the hints name today's model
+  and the ladder rarely changes. Cursor: `agent models`. Codex: the entries with
+  `"visibility": "list"` in `~/.codex/models_cache.json` — but **Codex serves
+  its model list by client version**, and the file holds whatever the last
+  client to fetch was given (its `client_version` says which). On 2026-10-21
+  CLI 0.144.6 was offered only `gpt-5.6-*` and refused `gpt-6-astra` ("requires a
+  newer version of Codex") and `gpt-6-luna` ("not supported when using Codex
+  with a ChatGPT account"); 0.163.0 ran Luna, 6.1 Sol and Astra at `xhigh` on
+  the same account. Read the file after the newest CLI has run, and expect a
+  Codex user on an older CLI to need `codex update` once the ladder moves. The
+  same per-version answer is why the file is not a live layer: a desktop app
+  and an older CLI on `PATH` overwrite it in turn. Every rung's first candidate must
+  be in its own bundled roster and no two priced presets may resolve alike —
+  `tier-ladders.check.ts` fails otherwise. **A refresh never drops an id the
+  previous bundled list offered while the CLI still lists it**: a user may have
+  pinned it, and where no listing answers, the bundled list is all run start
+  checks a pin against — so the next run would be refused. An id that is
+  genuinely gone, or no longer means anything (`sonnet[1m]` once Sonnet 5.5
+  carried 1M itself), moves to `LEGACY_MODEL_ALIASES` instead, which migrates the
+  stored pin on read.
 - **The config files are read, never written.** `~/.claude/settings.json` names a
   plain-string `model`; `~/.codex/config.toml` names one in its root table only
   (the scan stops at the first `[`, so a profile's model is not the CLI's);

@@ -1,6 +1,12 @@
 import type { CSSProperties } from "react";
-import { ENGINES, MODEL_TIER_OPTIONS, defaultModelTierFor } from "@isotopy/core";
-import type { EngineId, ModelTier } from "@isotopy/core";
+import {
+  ENGINES,
+  MODEL_TIER_OPTIONS,
+  defaultModelTierFor,
+  resolveTier,
+  resolvedModelLabel,
+} from "@isotopy/core";
+import type { EngineId, EngineModelRoster, ModelTier } from "@isotopy/core";
 import { FONT, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import type { Dir } from "../../theme";
 
@@ -54,6 +60,7 @@ export interface StartHarnessPickerProps {
   d: Dir;
   engine: EngineId;
   modelTier: ModelTier;
+  roster: EngineModelRoster;
   onChange: (engine: EngineId, modelTier: ModelTier) => void;
 }
 
@@ -61,6 +68,7 @@ export function StartHarnessPicker({
   d,
   engine,
   modelTier,
+  roster,
   onChange,
 }: StartHarnessPickerProps) {
   const hint = MODEL_TIER_OPTIONS.find((option) => option.id === modelTier)?.hint;
@@ -98,7 +106,7 @@ export function StartHarnessPicker({
         >
           {MODEL_TIER_OPTIONS.map((option) => (
             <option key={option.id} value={option.id}>
-              {option.label}
+              {option.label} — {resolvedModelLabel(resolveTier(engine, option.id, roster))}
             </option>
           ))}
         </select>

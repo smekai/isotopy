@@ -214,7 +214,6 @@ export interface ModelOptionDraft {
   id: string;
   label: string;
   hint: string;
-  requiresUsageCredits?: boolean;
 }
 
 export interface EngineModelOption extends ModelOptionDraft {
@@ -317,23 +316,26 @@ const TIER_LADDERS: Record<EngineId, Record<ModelTier, TierCandidate[]>> = {
     auto: AUTO_LADDER,
     economy: [{ model: "auto" }, { model: "composer-2.5" }],
     fast: [{ model: "composer-2.5" }, { model: "auto" }],
-    balanced: [{ model: "claude-sonnet-5-thinking-high" }, { model: "composer-2.5" }],
-    deep: [
-      { model: "claude-opus-5-thinking-high" },
+    balanced: [
+      { model: "claude-sonnet-5-5-medium" },
       { model: "claude-sonnet-5-thinking-high" },
     ],
-    max: [
-      { model: "claude-opus-5-thinking-xhigh" },
+    deep: [
+      { model: "claude-opus-5-5-high" },
       { model: "claude-opus-5-thinking-high" },
+    ],
+    max: [
+      { model: "claude-opus-5-5-xhigh" },
+      { model: "claude-opus-5-thinking-xhigh" },
     ],
   },
   codex: {
     auto: AUTO_LADDER,
-    economy: [{ model: "gpt-5.6-luna", effort: "low" }],
-    fast: [{ model: "gpt-5.6-luna", effort: "medium" }],
-    balanced: [{ model: "gpt-5.6-sol", effort: "medium" }],
-    deep: [{ model: "gpt-5.6-sol", effort: "high" }],
-    max: [{ model: "gpt-5.6-sol", effort: "high" }],
+    economy: [{ model: "gpt-6-luna", effort: "low" }],
+    fast: [{ model: "gpt-6-luna", effort: "medium" }],
+    balanced: [{ model: "gpt-6.1-sol", effort: "medium" }],
+    deep: [{ model: "gpt-6.1-sol", effort: "high" }],
+    max: [{ model: "gpt-6-astra", effort: "xhigh" }],
   },
 };
 
@@ -352,7 +354,7 @@ export function resolveTier(
   tier: ModelTier,
   roster: EngineModelRoster,
 ): ResolvedModel {
-  const offered = new Set(roster.options.map((option) => option.id));
+  const offered = idsTheLadderMayUse(roster);
   for (const candidate of tierLadderFor(engineId, tier)) {
     if (candidate.model === AUTO_MODEL_ID || offered.has(candidate.model)) {
       return {
@@ -363,6 +365,20 @@ export function resolveTier(
     }
   }
   return { model: AUTO_MODEL_ID, degraded: true };
+}
+
+function idsTheLadderMayUse(roster: EngineModelRoster): Set<string> {
+  const listedByCli = roster.options.some((option) => option.origin === "live");
+  return new Set(
+    roster.options
+      .filter((option) => !listedByCli || isVerifiedModel(option))
+      .map((option) => option.id),
+  );
+}
+
+export function resolvedModelLabel(resolved: ResolvedModel): string {
+  const model = resolved.model || "the harness's own default";
+  return resolved.effort === undefined ? model : `${model} · effort ${resolved.effort}`;
 }
 
 export interface ModelLayers {
@@ -408,21 +424,15 @@ export function bundledRosterFor(engineId: EngineId): EngineModelRoster {
   return roster;
 }
 
-const STATIC_ROSTER_CHECKED_ON = "2026-08-23";
+const STATIC_ROSTER_CHECKED_ON = "2026-10-21";
 
 export const CLAUDE_STATIC_MODELS: StaticModelRoster = {
   checkedOn: STATIC_ROSTER_CHECKED_ON,
   options: [
-    { id: "fable", label: "Fable", hint: "newest frontier alias" },
-    { id: "opus", label: "Opus", hint: "most capable" },
-    { id: "sonnet", label: "Sonnet", hint: "balanced (default)" },
-    { id: "haiku", label: "Haiku", hint: "fastest" },
-    {
-      id: "sonnet[1m]",
-      label: "Sonnet · 1M context",
-      hint: "requires usage credits or API billing",
-      requiresUsageCredits: true,
-    },
+    { id: "fable", label: "Fable", hint: "Fable 5.1 — frontier, only when picked" },
+    { id: "opus", label: "Opus", hint: "Opus 5.5 — the CLI's default" },
+    { id: "sonnet", label: "Sonnet", hint: "Sonnet 5.5 — balanced" },
+    { id: "haiku", label: "Haiku", hint: "Haiku 5.5 — fastest" },
   ],
 };
 
@@ -431,16 +441,22 @@ export const CURSOR_STATIC_MODELS: StaticModelRoster = {
   options: [
     { id: "auto", label: "Cursor Auto", hint: "Cursor's own model router" },
     { id: "composer-2.5", label: "Composer 2.5", hint: "Cursor's fast agent model" },
-    { id: "gpt-5.3-codex", label: "Codex 5.3", hint: "OpenAI" },
-    { id: "gpt-5.2", label: "GPT-5.2", hint: "OpenAI" },
+    { id: "claude-sonnet-5-5-medium", label: "Sonnet 5.5 Medium", hint: "Anthropic" },
+    { id: "claude-opus-5-5-high", label: "Opus 5.5 1M High", hint: "Anthropic" },
+    { id: "claude-opus-5-5-xhigh", label: "Opus 5.5 1M Extra High", hint: "Anthropic" },
+    { id: "claude-fable-5-1-high", label: "Fable 5.1 1M", hint: "Anthropic · no ZDR" },
     { id: "gpt-5.6-sol-high", label: "GPT-5.6 Sol 1M High", hint: "OpenAI" },
+    { id: "grok-4.7-high", label: "Grok 4.7 High", hint: "xAI" },
+    { id: "gemini-4-argon-high", label: "Gemini 4 Argon High", hint: "Google" },
+    { id: "claude-sonnet-5-thinking-high", label: "Sonnet 5 1M Thinking", hint: "Anthropic" },
     { id: "claude-opus-5-thinking-high", label: "Opus 5 1M Thinking", hint: "Anthropic" },
     {
       id: "claude-opus-5-thinking-xhigh",
       label: "Opus 5 1M Extra High Thinking",
       hint: "Anthropic",
     },
-    { id: "claude-sonnet-5-thinking-high", label: "Sonnet 5 1M Thinking", hint: "Anthropic" },
+    { id: "gpt-5.3-codex", label: "Codex 5.3", hint: "OpenAI" },
+    { id: "gpt-5.2", label: "GPT-5.2", hint: "OpenAI" },
     { id: "cursor-grok-4.5-high", label: "Cursor Grok 4.5", hint: "xAI" },
   ],
 };
@@ -448,8 +464,13 @@ export const CURSOR_STATIC_MODELS: StaticModelRoster = {
 export const CODEX_STATIC_MODELS: StaticModelRoster = {
   checkedOn: STATIC_ROSTER_CHECKED_ON,
   options: [
-    { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "most capable" },
-    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "faster, cheaper" },
+    { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", hint: "workhorse for coding and everyday work" },
+    { id: "gpt-6-astra", label: "GPT-6 Astra", hint: "frontier — the most demanding work" },
+    { id: "gpt-6-luna", label: "GPT-6 Luna", hint: "fast and affordable" },
+    { id: "gpt-6-sol", label: "GPT-6 Sol", hint: "previous workhorse" },
+    { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", hint: "older generation" },
+    { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", hint: "older generation, balanced" },
+    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", hint: "older generation, fast" },
   ],
 };
 
@@ -468,6 +489,7 @@ export const LEGACY_MODEL_ALIASES: Record<EngineId, Record<string, string>> = {
     "claude-opus-4-8": "opus",
     "claude-sonnet-4-6": "sonnet",
     "claude-haiku-4-5": "haiku",
+    "sonnet[1m]": "sonnet",
   },
   cursor: {
     "composer-1": AUTO_MODEL_ID,

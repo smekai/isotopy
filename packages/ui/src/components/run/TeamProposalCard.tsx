@@ -1,12 +1,18 @@
 import type { CSSProperties } from "react";
 import { Users } from "lucide-react";
-import type { ModelTier, OrchestratorRole, OrchestratorTeamProposal } from "@isotopy/core";
-import { MODEL_TIER_OPTIONS, modelTierLabel } from "@isotopy/core";
+import type {
+  ModelTier,
+  ModelTierDefinition,
+  OrchestratorRole,
+  OrchestratorTeamProposal,
+} from "@isotopy/core";
+import { MODEL_TIER_OPTIONS, modelTierLabel, resolveTier, resolvedModelLabel } from "@isotopy/core";
+import type { RunHarness } from "../../orchestration";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 
 const RUN_DEFAULT_TIER = "";
-const TIER_SELECT_MAX_WIDTH = 260;
+const TIER_SELECT_MAX_WIDTH = 320;
 
 function card(d: Dir): CSSProperties {
   return {
@@ -94,15 +100,33 @@ function shownTier(
   return role.modelTier ?? RUN_DEFAULT_TIER;
 }
 
+function tierModel(harness: RunHarness, tier: ModelTier): string {
+  return resolvedModelLabel(resolveTier(harness.engine, tier, harness.roster));
+}
+
+function runDefaultText(harness: RunHarness): string {
+  const label = `Run default (${modelTierLabel(harness.modelTier)})`;
+  return harness.pinnedModel === undefined
+    ? `${label} — ${tierModel(harness, harness.modelTier)}`
+    : label;
+}
+
+function tierOptionText(harness: RunHarness, option: ModelTierDefinition): string {
+  return harness.pinnedModel === undefined
+    ? `${option.label} — ${tierModel(harness, option.id)}`
+    : option.label;
+}
+
 interface RoleListProps {
   roles: OrchestratorRole[];
   roleTiers: Record<string, ModelTier | null>;
+  harness: RunHarness;
   editable: boolean;
   d: Dir;
   onRoleTierChange: (roleId: string, tier: ModelTier | null) => void;
 }
 
-function RoleList({ roles, roleTiers, editable, d, onRoleTierChange }: RoleListProps) {
+function RoleList({ roles, roleTiers, harness, editable, d, onRoleTierChange }: RoleListProps) {
   return (
     <>
       {roles.map((role) => (
@@ -126,10 +150,10 @@ function RoleList({ roles, roleTiers, editable, d, onRoleTierChange }: RoleListP
               }
               style={tierSelect(d)}
             >
-              <option value={RUN_DEFAULT_TIER}>Run default</option>
+              <option value={RUN_DEFAULT_TIER}>{runDefaultText(harness)}</option>
               {MODEL_TIER_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label} — {option.hint}
+                <option key={option.id} value={option.id} title={option.hint}>
+                  {tierOptionText(harness, option)}
                 </option>
               ))}
             </select>
@@ -147,6 +171,7 @@ export interface TeamProposalCardProps {
   team: OrchestratorTeamProposal;
   awaitingApproval: boolean;
   busy: boolean;
+  harness: RunHarness;
   roleTiers: Record<string, ModelTier | null>;
   d: Dir;
   onApprove: () => void;
@@ -157,6 +182,7 @@ export function TeamProposalCard({
   team,
   awaitingApproval,
   busy,
+  harness,
   roleTiers,
   d,
   onApprove,
@@ -168,9 +194,16 @@ export function TeamProposalCard({
         <Users size={ICON.sm} /> {team.name}
       </span>
       <span style={mutedText(d)}>{team.summary}</span>
+      {awaitingApproval && harness.pinnedModel !== undefined && (
+        <span style={mutedText(d)} data-testid="team-pinned-model">
+          Every role runs on {harness.pinnedModel}: it is pinned in Setup, so the presets below
+          do not apply.
+        </span>
+      )}
       <RoleList
         roles={team.roles}
         roleTiers={roleTiers}
+        harness={harness}
         editable={awaitingApproval && !busy}
         d={d}
         onRoleTierChange={onRoleTierChange}
