@@ -9,7 +9,9 @@ import type {
   OrchestratorDecision,
   StageLogDraft,
   PipelineDefinition,
+  RunArtifacts,
   RunCloseoutRecord,
+  RunPullRequest,
   RunState,
   StageDefinition,
   StageOutcome,
@@ -27,6 +29,7 @@ import type { ModelRosterService } from "../services/model-roster-service.ts";
 import type { OrchestrationService } from "../services/orchestration-service.ts";
 import type { ProductProcessService } from "../services/product-process-service.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
+import type { PullRequestRelease } from "../services/pull-request-release.ts";
 import type { SettingsStore } from "../services/settings-store.ts";
 
 export type { RunCompletionStatus };
@@ -110,6 +113,7 @@ export interface RunProjection {
     logLines: string[],
   ): Promise<void>;
   captureRunCloseout(runId: string, record: RunCloseoutRecord): Promise<void>;
+  recordPullRequest(runId: string, pullRequest: RunPullRequest): void;
   runCompleted(runId: string, status: RunCompletionStatus): Promise<void>;
 }
 
@@ -144,6 +148,12 @@ export interface RunReview {
   errors: string[];
 }
 
+export interface ReleaseContext {
+  goal: string;
+  summary?: string;
+  closeout?: RunArtifacts;
+}
+
 export interface RecordedReview {
   contextRefusal?: string;
 }
@@ -156,6 +166,7 @@ export interface WorkflowDeps {
   rosters: ModelRosterService;
   automation: AutomationConfigStore;
   deployment: DeploymentRunner;
+  release: PullRequestRelease;
   orchestration(): OrchestrationService | undefined;
   product?: ProductProcessService;
   beginEngineStage(runId: string): AbortController;

@@ -9,6 +9,7 @@ import { ModelRosterService } from "./services/model-roster-service.ts";
 import { OrchestrationService } from "./services/orchestration-service.ts";
 import { ProductProcessService } from "./services/product-process-service.ts";
 import { ProjectRegistry } from "./services/project-registry.ts";
+import { PullRequestRelease } from "./services/pull-request-release.ts";
 import { RunService } from "./services/run/run-service.ts";
 import { ScheduleService } from "./services/schedule-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
@@ -24,6 +25,7 @@ const deployment = new DeploymentRunner();
 const databases = new ProjectDatabases(logger);
 const product = new ProductProcessService(automation, logger);
 const agents = new AgentCatalog(logger);
+const release = new PullRequestRelease(logger);
 const runs = new RunService(
   registry,
   settings,
@@ -32,6 +34,7 @@ const runs = new RunService(
   deployment,
   databases,
   agents,
+  release,
   logger,
   product,
 );
@@ -41,6 +44,7 @@ const orchestrations = new OrchestrationService(
   settings,
   databases,
   agents,
+  release,
   logger,
 );
 const schedules = new ScheduleService(

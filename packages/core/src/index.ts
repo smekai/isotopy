@@ -7,6 +7,7 @@ export * from "./orchestration.ts";
 export * from "./pipelines.ts";
 export * from "./product.ts";
 export * from "./projects.ts";
+export * from "./pull-request.ts";
 export * from "./run-artifacts.ts";
 export * from "./run-changes.ts";
 export * from "./run-events.ts";

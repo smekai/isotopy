@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import {
   DEFAULT_PERMISSION_MODE,
   ORCHESTRATION_PIPELINE,
+  isReleaseRun,
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
@@ -472,6 +473,10 @@ function reviewRecord(artifacts: RunArtifacts): RunCloseoutRecord {
 }
 
 
+function isMergedRelease(run: RunState, status: RunState["status"]): boolean {
+  return isReleaseRun(run) && status === "completed";
+}
+
 export async function runOrchestratorReviewWork(
   deps: WorkflowDeps,
   input: StageWorkContext,
@@ -480,7 +485,13 @@ export async function runOrchestratorReviewWork(
   const run = deps.projection.getRun(input.runId);
   const orchestration = deps.orchestration();
   const stageId = run?.stages.at(-1)?.id;
-  if (!run || !run.engine || !orchestration || stageId === undefined) {
+  if (
+    !run ||
+    !run.engine ||
+    !orchestration ||
+    stageId === undefined ||
+    isMergedRelease(run, status)
+  ) {
     return null;
   }
   const request: RunReviewRequest = { runId: run.id, status };

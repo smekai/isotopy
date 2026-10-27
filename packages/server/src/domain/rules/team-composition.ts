@@ -1,6 +1,7 @@
 import { STAGE_EXECUTION_POLICIES, flattenPipelineStages } from "@isotopy/core";
 import type {
   ModelTier,
+  Orchestration,
   OrchestratorRole,
   OrchestratorTeamProposal,
   PipelineDefinition,
@@ -96,6 +97,14 @@ const COMPOSED_PIPELINE_ID = /^team-[0-9a-f]{8}-(\d+)$/;
 export function generationOf(pipelineId: string | undefined): number {
   const trailing = pipelineId?.match(COMPOSED_PIPELINE_ID)?.[1];
   return trailing === undefined ? 0 : Number(trailing);
+}
+
+export function currentGeneration(orchestration: Orchestration): number {
+  return Math.max(generationOf(orchestration.composedPipeline?.id), 1);
+}
+
+export function nextGeneration(orchestration: Orchestration): number {
+  return generationOf(orchestration.composedPipeline?.id) + 1;
 }
 
 export function sameComposition(

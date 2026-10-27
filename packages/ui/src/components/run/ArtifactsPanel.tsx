@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { ClipboardCheck, FileDiff, FileText, FolderOpen } from "lucide-react";
+import { ClipboardCheck, FileDiff, FileText, FolderOpen, GitPullRequest } from "lucide-react";
 import { stageAgent } from "@isotopy/core";
 import type { RunState } from "@isotopy/core";
 import { fetchRunFiles } from "../../api";
@@ -9,6 +9,7 @@ import { useWorkspaceFile } from "../../hooks/useWorkspaceFile";
 import { ChangedFilesPanel } from "./ChangedFilesPanel";
 import { CloseoutPanel } from "./CloseoutPanel";
 import { FileReadingPane } from "./FileReadingPane";
+import { PullRequestPanel } from "./PullRequestPanel";
 import type { Dir } from "../../theme";
 import { FONT, ICON, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import {
@@ -26,12 +27,13 @@ import {
   sidebar,
 } from "./run-styles";
 
-export type ArtifactView = "changes" | "workflow" | "closeout" | "files";
+export type ArtifactView = "changes" | "workflow" | "closeout" | "pull-request" | "files";
 
 const VIEW_LABEL: Record<ArtifactView, string> = {
   changes: "What changed",
   workflow: "Handoffs",
   closeout: "Closeout",
+  "pull-request": "Pull request",
   files: "Solution folder",
 };
 
@@ -207,6 +209,7 @@ function viewIcon(view: ArtifactView) {
   if (view === "changes") return <FileDiff size={ICON.sm} />;
   if (view === "workflow") return <FileText size={ICON.sm} />;
   if (view === "closeout") return <ClipboardCheck size={ICON.sm} />;
+  if (view === "pull-request") return <GitPullRequest size={ICON.sm} />;
   return <FolderOpen size={ICON.sm} />;
 }
 
@@ -223,6 +226,7 @@ export function ArtifactsPanel({
     ...(run.changes ? (["changes"] as const) : []),
     "workflow",
     ...(run.closeout ? (["closeout"] as const) : []),
+    ...(run.pullRequest ? (["pull-request"] as const) : []),
     ...(run.workspacePath != null ? (["files"] as const) : []),
   ];
   const active = views.includes(view) ? view : "workflow";
@@ -249,6 +253,8 @@ export function ArtifactsPanel({
         <ChangedFilesPanel runId={run.id} changes={run.changes} d={d} />
       ) : active === "closeout" && run.closeout ? (
         <CloseoutPanel closeout={run.closeout} d={d} />
+      ) : active === "pull-request" && run.pullRequest ? (
+        <PullRequestPanel pullRequest={run.pullRequest} d={d} />
       ) : active === "files" ? (
         <WorkspaceBrowser runId={run.id} runStatus={run.status} d={d} />
       ) : (

@@ -2,11 +2,13 @@ import { TaskFailedError, task, workflow } from "@aikirun/workflow";
 import type { EventWaiter, WorkflowRun, WorkflowRunHandle, WorkflowVersion } from "@aikirun/workflow";
 import {
   ORCHESTRATION_PIPELINE,
+  PULL_REQUEST_STEP_TASK,
   STAGE_EXECUTION_POLICIES,
   STAGE_OUTCOMES,
   stageAgent,
 } from "@isotopy/core";
 import type {
+  CiResult,
   EngineLimit,
   LimitChoice,
   PipelineGroup,
@@ -400,12 +402,51 @@ async function runStageToOutcome(
   }
 }
 
+const CI_CHECK_SLEEP = "ci-checks";
+
+async function awaitChecks(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+  url: string,
+): Promise<CiResult> {
+  const { run, tasks, deps, input } = ctx;
+  const context = workContext(input);
+  for (let poll = 0; poll < deps.release.checkPolls; poll += 1) {
+    const state = await tasks.releaseChecks.start(run, { context, stageDef, url, poll });
+    if (state !== "pending") {
+      return state;
+    }
+    await run.sleep(CI_CHECK_SLEEP, { milliseconds: deps.release.checkIntervalMs });
+  }
+  return "timed_out";
+}
+
+async function runReleaseStage(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+): Promise<StageOutcome> {
+  const { run, tasks, input } = ctx;
+  const work = { context: workContext(input), stageDef };
+  const opened = await tasks.releaseOpen.start(run, work);
+  if (opened.url === undefined) {
+    return opened.outcome;
+  }
+  const ci = await awaitChecks(ctx, stageDef, opened.url);
+  return tasks.releaseSettle.start(run, { ...work, url: opened.url, ci });
+}
+
+function runStage(ctx: PipelineContext, stageDef: StageDefinition): Promise<StageOutcome> {
+  return stageDef.stepTask === PULL_REQUEST_STEP_TASK
+    ? runReleaseStage(ctx, stageDef)
+    : runStageToOutcome(ctx, stageDef);
+}
+
 async function failStageOnTaskFailure(
   ctx: PipelineContext,
   stageDef: StageDefinition,
 ): Promise<StageOutcome> {
   try {
-    return await runStageToOutcome(ctx, stageDef);
+    return await runStage(ctx, stageDef);
   } catch (error) {
     if (!(error instanceof TaskFailedError)) {
       throw error;

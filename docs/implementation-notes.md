@@ -579,6 +579,40 @@ The transient row that `consume()` may write before `start()` finishes carries a
 empty `runIds`; the write at the end of `start()` supersedes it, and the upsert
 makes the ordering harmless.
 
+**A `stop` with `merge: true` from the Orchestrator's own conversation waits for
+`settle()`.** `consume()` reads it while the conversation run still holds the
+project's admission, so a release run started there would be refused as a second
+active run. The turn is recorded, and `settle()` acts on it once the run is done,
+as it does for every review decision.
+
+---
+
+## Releasing through a pull request (`services/pull-request-release.ts`, `workflow/release-stage.ts`)
+
+- **`gh` missing is `exitCode: null`.** `runSubprocess` reports a spawn failure
+  (`ENOENT`) with no exit code; a `gh auth status` that ran and failed has one.
+  That is how "not installed" and "not signed in" are told apart without a
+  separate `PATH` probe, on Windows (WinGet's `gh.exe`) and macOS (Homebrew) alike.
+- **`gh pr checks` exits non-zero for pending (8) and failing (1) checks**, so its
+  JSON on stdout is read whatever the exit code; only an empty stdout is an error.
+- **`--required` fails on a repository with no branch protection** ("no required
+  checks reported"); the release then reads every check instead.
+- **"No checks reported" right after a push is not green.** CI may not have
+  registered its runs yet, so it counts as pending for the first three polls and
+  only then as passed — a repository with no CI at all still merges.
+- **The poll is a task, the wait is `run.sleep`.** Each `gh pr checks` call is its
+  own `isotopy.release-checks` task with the poll index in its input, so a restart
+  replays the recorded answers and resumes the sleep; the poll budget is
+  `ceil(timeout / interval)`, both from `PullRequestRelease` (30 s and 60 min by
+  default, milliseconds in the tests).
+- **The release run inherits the completing run's engine** but never calls it for
+  the stage; the engine is there for the Orchestrator's review of a red or
+  timed-out release. A merged release skips the review: `settle()` stops the
+  initiative with the PR's URL.
+- **A team stage named `release` already exists** (Full Delivery's
+  `prepare-release`), so the deterministic stage is found by its step task,
+  `open-pull-request`, not its id.
+
 ---
 
 ## Run orchestration (`services/run/run-service.ts`)

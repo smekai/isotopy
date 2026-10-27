@@ -4,17 +4,16 @@ import type {
   DeploymentResult,
   EngineId,
   EngineLimit,
-  EnginePermissionMode,
   LimitChoice,
   LimitResolution,
   MessageKind,
   MessageRole,
-  ModelTier,
   PipelineDefinition,
   RunBranch,
   RunCloseoutRecord,
   RunEvent,
   RunMessage,
+  RunPullRequest,
   RunState,
   RunSummary,
   StageDefinition,
@@ -76,6 +75,7 @@ import type { OrchestrationService } from "../orchestration-service.ts";
 import { stageAgentsOf } from "../../domain/rules/agent-catalog.ts";
 import type { AgentCatalog } from "../agent-catalog.ts";
 import type { ProductProcessService } from "../product-process-service.ts";
+import type { PullRequestRelease } from "../pull-request-release.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
 import type { Logger } from "../../utils/logger.ts";
@@ -96,7 +96,7 @@ import {
   resetStagesForRestart,
   seedFromRestart,
 } from "../../domain/rules/run-seeding.ts";
-import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
+import type { SeededStage } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
 import { RunStore } from "./run-store.ts";
 import {
@@ -104,22 +104,7 @@ import {
   reclaimReleasedSourceTasks,
   releaseUnfinishedSourceTasks,
 } from "./source-task-claim.ts";
-
-export interface InheritedRunOptions {
-  engine?: string;
-  model?: string;
-  modelTier?: ModelTier;
-  permissionMode?: EnginePermissionMode;
-}
-
-export interface StartRunOptions extends InheritedRunOptions {
-  task?: string;
-  milestoneId?: string;
-  featureId?: string;
-  orchestrationId?: string;
-  sourceTaskIds?: string[];
-  seeded?: SeededStart;
-}
+import type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 
 export class RunService implements RunProjection {
   readonly store: RunStore;
@@ -142,6 +127,7 @@ export class RunService implements RunProjection {
     private readonly deployment: DeploymentRunner,
     databases: ProjectDatabases,
     private readonly agents: AgentCatalog,
+    private readonly release: PullRequestRelease,
     logger: Logger,
     private readonly product?: ProductProcessService,
   ) {
@@ -162,6 +148,7 @@ export class RunService implements RunProjection {
       rosters: this.rosters,
       automation: this.automation,
       deployment: this.deployment,
+      release: this.release,
       orchestration: () => this.orchestration,
       product: this.product,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
@@ -841,6 +828,13 @@ export class RunService implements RunProjection {
     if (!run) return;
     run.closeout = record;
     await persistRunCloseout(this.registry.resolve(run.projectId), runId, record);
+    void this.store.flushPersist(runId);
+  }
+
+  recordPullRequest(runId: string, pullRequest: RunPullRequest): void {
+    const run = this.live(runId);
+    if (!run) return;
+    run.pullRequest = { ...run.pullRequest, ...pullRequest };
     void this.store.flushPersist(runId);
   }
 

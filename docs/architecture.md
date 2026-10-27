@@ -935,11 +935,23 @@ that is not a repository root, a detached HEAD or a repository with no commit ge
 and its runs work where they are. Every team stage on a branch is told it and to commit its
 own work there (`buildCommitRule`); without a branch, no stage is told to commit. Every ending
 goes through `OrchestrationService.end`: it aborts what still runs, then `stop` with
-`merge: true` switches to the base and merges `--no-ff`, deleting the branch, and a merge git
-refuses parks the initiative on its owner with git's reason; any other ending (a `stop`
-without it, the owner's Stop, a superseded initiative) switches back to the base and keeps
-the branch. A restarted run works on whatever is checked out. Isotopy never pushes. The git
-work is `InitiativeBranches`, through `runSubprocess` and `utils/git.ts`.
+`merge: true` asks `PullRequestRelease.channel` how the work leaves. With a GitHub `origin`
+and a signed-in `gh` it starts a release run (`RELEASE_PIPELINE`, one deterministic stage
+routed in `pipeline-workflow.ts` by its `open-pull-request` step task): the
+`isotopy.release-open` task pushes, deploys the `preview` target if configured and opens or
+updates the PR with a body file under the run's artifacts; `isotopy.release-checks` reads
+`gh pr checks` once per poll between durable `run.sleep`s until the checks settle or the poll
+budget runs out; `isotopy.release-settle` merges and fast-forwards the base, or records the
+failing checks as the stage's output so the run settles `needs_attention` and the review
+sends them back as a fix run. A merged release is not reviewed; `settle` stops the initiative
+with the PR's URL. Without a GitHub remote or a signed-in `gh`, `InitiativeBranches` switches
+to the base and merges `--no-ff`, deleting the branch, logging why on the run, and a merge git
+refuses parks the initiative on its owner with git's reason. Any other ending (a `stop`
+without merge, the owner's Stop, a superseded initiative) switches back to the base and keeps
+the branch. A restarted run works on whatever is checked out. Only Isotopy pushes; the
+release run is the one place it does. `git` and `gh` run through `runSubprocess` with argument
+arrays, `utils/git.ts` for git; the release's runner is injectable, which is how the tests
+stand in for `origin` and `gh`.
 
 **Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by
