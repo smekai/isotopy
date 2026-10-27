@@ -654,6 +654,7 @@ export class OrchestrationService implements StageOutputConsumer {
         task: decision.task,
         orchestrationId: orchestration.id,
         seeded: seeded?.value,
+        reviewContextGrant: decision.reviewContext,
       });
     }
     if (decision.action === "propose_team") {

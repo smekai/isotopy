@@ -18,20 +18,29 @@ import { z } from "zod";
 import { projectPreferencesUpdateSchema } from "./request-schemas.ts";
 
 const engineIdSchema = z.enum(ENGINE_IDS);
-const storedPreferencesSchema = projectPreferencesUpdateSchema.catch({});
+export const storedPreferencesSchema = projectPreferencesUpdateSchema
+  .extend({ engine: engineIdSchema.optional() })
+  .strict()
+  .transform(({ engine, ...stored }): ProjectPreferencesUpdate => ({
+    ...stored,
+    primaryEngine: stored.primaryEngine ?? engine,
+  }));
+
+const lenientStoredPreferencesSchema = storedPreferencesSchema.catch({});
 
 function currentModelId(engineId: EngineId, stored: string): string {
   return LEGACY_MODEL_ALIASES[engineId][stored] ?? stored;
 }
 
 export function normalizeProjectPreferences(raw: unknown): ProjectPreferences {
-  const stored = storedPreferencesSchema.parse(raw);
+  const stored = lenientStoredPreferencesSchema.parse(raw);
   const defaults = defaultProjectPreferences();
-  const engine = stored.engine ?? defaults.engine;
+  const engine = stored.primaryEngine ?? defaults.primaryEngine;
   const pinned = pinnedModels(stored);
   const preTierFile = stored.modelTier === undefined;
   return {
-    engine,
+    primaryEngine: engine,
+    secondaryEngine: stored.secondaryEngine ?? undefined,
     modelTier: stored.modelTier ?? adoptedTier(engine, pinned) ?? defaultModelTierFor(engine),
     engineModels: Object.fromEntries(preTierFile ? unladderedPins(pinned) : pinned),
     permissionMode: stored.permissionMode ?? defaults.permissionMode,

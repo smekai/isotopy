@@ -5,6 +5,7 @@ import {
   PERMISSION_MODE_IDS,
   RUN_STATUSES,
   pipelineDefinitionSchema,
+  reviewContextGrantSchema,
   STAGE_STATUSES,
   STAGE_VERDICTS,
   requiredText,
@@ -37,6 +38,8 @@ const stageSchema = z
     title: text.optional(),
     glyph: text.optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
+    engine: z.enum(ENGINE_IDS).optional(),
+    model: z.string().optional(),
     verdict: z.enum(STAGE_VERDICTS).optional(),
     status: z.enum(STAGE_STATUSES),
     sessionId: text.optional(),
@@ -47,7 +50,7 @@ const stageSchema = z
   })
   .strict();
 
-const runStateSchema = z
+const runStateFieldsSchema = z
   .object({
     id: text,
     number: z.number().int().positive(),
@@ -67,7 +70,9 @@ const runStateSchema = z
     task: z.string().optional(),
     engine: z.enum(ENGINE_IDS).optional(),
     model: z.string().optional(),
+    secondaryEngine: z.enum(ENGINE_IDS).optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
+    reviewContextGrant: reviewContextGrantSchema.optional(),
     limit: runLimitSchema.optional(),
     result: z.string().optional(),
     stageOutputs: z.record(z.string(), z.string()).optional(),
@@ -79,6 +84,23 @@ const runStateSchema = z
     completedAt: timestamp.optional(),
   })
   .strict();
+
+type PersistedRunState = z.output<typeof runStateFieldsSchema>;
+
+const runStateSchema = runStateFieldsSchema.transform(withStageEngines);
+
+function withStageEngines(run: PersistedRunState): PersistedRunState {
+  const engine = run.engine;
+  if (engine === undefined) {
+    return run;
+  }
+  return {
+    ...run,
+    stages: run.stages.map((stage) =>
+      stage.engine === undefined ? { ...stage, engine, model: run.model } : stage,
+    ),
+  };
+}
 
 const persistedRunSchema = z
   .object({

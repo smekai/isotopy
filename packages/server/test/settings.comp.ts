@@ -42,7 +42,7 @@ test("a project with nothing stored reports the built-in defaults", async () => 
 test("a preference set through the API is visible to a second server over the same user home", async () => {
   // Arrange — one browser stores its choices.
   await put<SettingsView>(ctx.app, "/settings/preferences", {
-    engine: "codex",
+    primaryEngine: "codex",
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
     pipelineId: "solo",
@@ -54,7 +54,7 @@ test("a preference set through the API is visible to a second server over the sa
 
   // Assert
   expect(body.preferences).toEqual({
-    engine: "codex",
+    primaryEngine: "codex",
     modelTier: defaultProjectPreferences().modelTier,
     engineModels: { codex: "gpt-5.1-codex-max" },
     permissionMode: "acceptEdits",
@@ -68,7 +68,7 @@ test("a preference set through the API is visible to a second server over the sa
 test("an update touches only the fields it carries", async () => {
   // Arrange
   await put<SettingsView>(ctx.app, "/settings/preferences", {
-    engine: "codex",
+    primaryEngine: "codex",
     engineModels: { codex: "gpt-5.1-codex-max" },
   });
 
@@ -78,7 +78,7 @@ test("an update touches only the fields it carries", async () => {
   });
 
   // Assert
-  expect(body.preferences.engine).toBe("codex");
+  expect(body.preferences.primaryEngine).toBe("codex");
   expect(body.preferences.engineModels).toEqual({ codex: "gpt-5.1-codex-max" });
   expect(body.preferences.pipelineId).toBe("pm-dev-test");
 });
@@ -200,6 +200,44 @@ test("a retired model already stored on disk reads back as Auto rather than refu
   expect(body.preferences.engineModels).toEqual({ cursor: "" });
 });
 
+test("a settings file written before the primary engine had a name keeps its engine as the primary", async () => {
+  // Arrange — files from before TASK-207 store the single harness as `engine`.
+  await writeUserSettings(ctx.userHome, {
+    version: 1,
+    defaults: { engines: {} },
+    projects: { home: { engines: {}, preferences: { engine: "codex", modelTier: "balanced" } } },
+  });
+
+  // Act
+  const { body } = await get<SettingsView>(ctx.app, "/settings");
+
+  // Assert
+  expect(body.preferences.primaryEngine).toBe("codex");
+});
+
+test("a secondary engine is stored beside the primary", async () => {
+  // Act
+  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", {
+    secondaryEngine: "codex",
+  });
+
+  // Assert
+  expect(body.preferences).toMatchObject({ primaryEngine: "claude-code", secondaryEngine: "codex" });
+});
+
+test("clearing the secondary engine leaves reviews on the primary", async () => {
+  // Arrange
+  await put<SettingsView>(ctx.app, "/settings/preferences", { secondaryEngine: "codex" });
+
+  // Act
+  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", {
+    secondaryEngine: null,
+  });
+
+  // Assert
+  expect(body.preferences.secondaryEngine).toBeUndefined();
+});
+
 test("a settings file written before presets adopts its own engine's economical default", async () => {
   // Arrange — Cursor's cheap path is its own routing, which `economy` names, not Claude Code's `fast`.
   await writeUserSettings(ctx.userHome, {
@@ -235,12 +273,12 @@ test("an unknown engine is rejected and nothing is stored", async () => {
   const { status, body } = await put<{
     error: string;
     issues: { path: (string | number)[]; message: string }[];
-  }>(ctx.app, "/settings/preferences", { engine: "gemini" });
+  }>(ctx.app, "/settings/preferences", { primaryEngine: "gemini" });
 
   // Assert
   expect(status).toBe(400);
   expect(body.error).toBe("Invalid request");
-  expect(body.issues[0]).toMatchObject({ path: ["engine"] });
+  expect(body.issues[0]).toMatchObject({ path: ["primaryEngine"] });
 });
 
 test("storing preferences leaves the engine connection untouched", async () => {
@@ -248,7 +286,7 @@ test("storing preferences leaves the engine connection untouched", async () => {
   await put<SettingsView>(ctx.app, "/settings/engines/claude-code", { apiKey: "sk-ant-test" });
 
   // Act
-  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", { engine: "codex" });
+  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", { primaryEngine: "codex" });
 
   // Assert
   expect(body.engines["claude-code"]?.apiKeyConfigured).toBe(true);

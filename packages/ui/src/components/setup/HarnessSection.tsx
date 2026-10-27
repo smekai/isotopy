@@ -8,6 +8,7 @@ import type { Dir } from "../../theme";
 import { EngineConnection } from "./EngineConnection";
 import { EngineModelPicker } from "./EngineModelPicker";
 import { EngineStatusCard } from "./EngineStatusCard";
+import { SecondaryEngineChoice } from "./SecondaryEngineChoice";
 import {
   FLEX_FILL,
   OPTION_STACK,
@@ -39,7 +40,7 @@ export interface HarnessSectionProps {
 
 export function HarnessSection({ d, projectName, settings }: HarnessSectionProps) {
   const { preferences } = settings;
-  const harness = preferences.engine;
+  const harness = preferences.primaryEngine;
   const permissionMode = preferences.permissionMode;
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -48,7 +49,10 @@ export function HarnessSection({ d, projectName, settings }: HarnessSectionProps
   }
 
   function selectEngine(engineId: EngineId) {
-    settings.update({ engine: engineId });
+    settings.update({
+      primaryEngine: engineId,
+      secondaryEngine: preferences.secondaryEngine === engineId ? null : undefined,
+    });
   }
 
   function selectTier(tier: ModelTier) {
@@ -90,6 +94,8 @@ export function HarnessSection({ d, projectName, settings }: HarnessSectionProps
         refreshKey={refreshKey}
         onSelectTier={selectTier}
         onSelectModel={selectModelOverride} />
+      <SecondaryEngineChoice d={d} projectName={projectName} settings={settings} refreshKey={refreshKey}
+        onRefresh={refreshEngine} />
       <div style={fieldLabel(d)}>Permissions</div>
       <div style={OPTION_STACK}>
         {PERMISSION_MODES.map((opt) => {

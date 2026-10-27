@@ -5,6 +5,7 @@ import { ENGINE_IDS, ENGINES, engineCapability } from "./engines.ts";
 import type { EngineId, ModelTier } from "./engines.ts";
 import type { DeploymentResult, RunReleaseRecord } from "./automation.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
+import type { ReviewContextGrant } from "./orchestration.ts";
 import type { RunChangeSet } from "./run-changes.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
 import { findPipeline, flattenPipelineStages } from "./pipelines.ts";
@@ -181,6 +182,8 @@ export interface StageState {
   title?: string;
   glyph?: string;
   modelTier?: ModelTier;
+  engine?: EngineId;
+  model?: string;
   verdict?: StageVerdict;
   status: StageStatus;
   sessionId?: string;
@@ -215,7 +218,9 @@ export interface RunState {
   task?: string;
   engine?: EngineId;
   model?: string;
+  secondaryEngine?: EngineId;
   modelTier?: ModelTier;
+  reviewContextGrant?: ReviewContextGrant;
   limit?: RunLimit;
   result?: string;
   stageOutputs?: Record<string, string>;

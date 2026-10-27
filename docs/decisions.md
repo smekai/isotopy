@@ -15,6 +15,40 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-27 — A stage runs on the primary or the secondary engine, and a reviewer judges in isolation
+
+**Context:** the Standing team epic (`TASK-206`). On ShareTravel one engine ran every run
+(`run.engine`, set once), and the reviewer read the Developer's full handoff, so a review was the
+same model re-reading its own account of its own work.
+
+**Decision:**
+
+- **Two named slots, not a free engine per role.** A project chooses a `primaryEngine` and an
+  optional `secondaryEngine`; a role or stage says `engine: "primary" | "secondary"`. A role
+  that named an engine id directly would bake one machine's installs into a team: the same
+  team must run on a machine with Codex and one with only Claude Code. The run records the
+  resolved engine id and pinned model on each stage, so history does not change when settings
+  do. A pinned model belongs to its engine and never reaches a stage on the other. With no
+  secondary configured, a secondary stage runs on the primary and its log says so. Every engine
+  a run will use is checked before it starts, including login, so a run never stalls halfway on
+  an engine nobody logged in. A limit parks only the stage that hit it; switching engines moves
+  that stage and the pending stages on the same engine.
+- **An isolated reviewer sees the task, the plan and the diff.** A stage with
+  `context: "isolated"` receives the task, the output of the plan stage (`plan-feature`), and the
+  initiative branch with its base so it runs `git diff <base>...<branch>` itself. It does not
+  receive the Developer's handoff or any other implementation-side report. The plan stays
+  visible because it states what was agreed and the acceptance criteria; without it the
+  reviewer judges against its own guess at the scope. `review-implementation` defaults to the
+  secondary engine and to isolation, in the bundled pipeline and in every composed team.
+- **The Orchestrator may grant the handoffs for one run.** `start_run` carries
+  `reviewContext: { context: "handoffs", rationale }`; the rationale is logged on each isolated
+  stage it opens. It exists for a fix run whose reviewer must know why the last review failed.
+
+**Rejected:** a per-role free engine id (above), and hiding the plan as well — a reviewer with
+only the task and the diff re-litigates scope the owner already approved.
+
+---
+
 ## 2026-10-22 — A closeout files only what the initiative will not do, and commits what it files
 
 **Context:** dogfooding on ShareTravel, initiative `bdd1c288` ended two runs of one feature with

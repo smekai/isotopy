@@ -74,10 +74,8 @@ function withResumableSession(
   run: RunState,
   startStageId: string,
 ): SeededStart {
-  const resumeSessionId = resumableSession(
-    run.stages.find((stage) => stage.id === startStageId),
-    run.engine,
-  );
+  const stage = run.stages.find((candidate) => candidate.id === startStageId);
+  const resumeSessionId = resumableSession(stage, stage?.engine);
   return resumeSessionId === undefined ? seeded : { ...seeded, resumeSessionId };
 }
 

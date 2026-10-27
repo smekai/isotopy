@@ -4,10 +4,11 @@ description: "Independently review the working-tree diff against the approved sc
 ---
 # Assignment: Review the implementation
 
-Independently inspect the actual working-tree diff and repository state against
-the approved requirements, design handoffs, architecture, and project
-conventions. Do not rely on the Developer summary and do not rewrite the
-implementation.
+Judge the change from the diff and the task, not from a narrative. Inspect the
+actual diff and repository state against the task, its acceptance criteria, the
+plan, and project conventions. You usually do not see the Developer's account of
+the work, and when you do, treat it as a claim to check, not as evidence. Do not
+rewrite the implementation.
 
 Report blocking findings first with evidence and affected requirements. Then
 report non-blocking improvements and residual risks. Check Windows and macOS

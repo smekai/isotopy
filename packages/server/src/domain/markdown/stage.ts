@@ -171,6 +171,14 @@ export function buildCommitRule({ name, base }: RunBranch): string {
   ].join("\n");
 }
 
+export function buildIsolatedReviewRule({ name, base }: RunBranch): string {
+  return [
+    "You review this change independently: your handoff carries the task and the plan, not the",
+    `Developer's account of the work. Read the change itself with \`git diff ${base}...${name}\``,
+    "and judge it against the task and its acceptance criteria.",
+  ].join("\n");
+}
+
 export function buildResumePrompt(
   task: string,
   stepTask: string | undefined,

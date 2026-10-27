@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MODEL_TIERS } from "./engines.ts";
+import { ENGINE_SLOTS, MODEL_TIERS } from "./engines.ts";
 import { requiredText } from "./schema.ts";
 
 export const STAGE_OUTPUT_PROTOCOLS = {
@@ -20,6 +20,14 @@ export const STAGE_EXECUTION_POLICIES = {
 export type StageExecutionPolicy =
   (typeof STAGE_EXECUTION_POLICIES)[keyof typeof STAGE_EXECUTION_POLICIES];
 
+export const STAGE_CONTEXTS = ["handoffs", "isolated"] as const;
+
+export type StageContext = (typeof STAGE_CONTEXTS)[number];
+
+export const PLAN_FEATURE_STEP_TASK = "plan-feature";
+
+export const REVIEW_IMPLEMENTATION_STEP_TASK = "review-implementation";
+
 export const stageDefinitionSchema = z
   .object({
     id: requiredText,
@@ -29,6 +37,8 @@ export const stageDefinitionSchema = z
     skill: requiredText.optional(),
     stepTask: requiredText.optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
+    engine: z.enum(ENGINE_SLOTS).optional(),
+    context: z.enum(STAGE_CONTEXTS).optional(),
     executionPolicy: z.enum(STAGE_EXECUTION_POLICIES).optional(),
     outputProtocol: z.enum(STAGE_OUTPUT_PROTOCOLS).optional(),
     maxTurns: z.number().int().positive().optional(),
@@ -80,7 +90,7 @@ export const PM_DEV_TEST_PIPELINE: PipelineDefinition = {
           id: "intake",
           label: "Scoping",
           skill: "project-manager",
-          stepTask: "plan-feature",
+          stepTask: PLAN_FEATURE_STEP_TASK,
           interactive: true,
           gateAfter: true,
         },
@@ -114,7 +124,7 @@ export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
           id: "intake",
           label: "Scoping",
           skill: "project-manager",
-          stepTask: "plan-feature",
+          stepTask: PLAN_FEATURE_STEP_TASK,
           interactive: true,
           gateAfter: true,
         },
@@ -140,7 +150,9 @@ export const FULL_DELIVERY_PIPELINE: PipelineDefinition = {
           id: "review",
           label: "Reviewing",
           skill: "software-architect",
-          stepTask: "review-implementation",
+          stepTask: REVIEW_IMPLEMENTATION_STEP_TASK,
+          engine: "secondary",
+          context: "isolated",
           executionPolicy: STAGE_EXECUTION_POLICIES.QUALITY,
         },
         {

@@ -13,7 +13,8 @@ export interface EngineConnectionSettingsView {
 }
 
 export interface ProjectPreferences {
-  engine: EngineId;
+  primaryEngine: EngineId;
+  secondaryEngine?: EngineId;
   modelTier: ModelTier;
   engineModels: Partial<Record<EngineId, string>>;
   permissionMode: EnginePermissionMode;
@@ -23,8 +24,9 @@ export interface ProjectPreferences {
 }
 
 export type ProjectPreferencesUpdate = Partial<
-  Omit<ProjectPreferences, "engineModels" | "gates">
+  Omit<ProjectPreferences, "secondaryEngine" | "engineModels" | "gates">
 > & {
+  secondaryEngine?: EngineId | null;
   engineModels?: Partial<Record<EngineId, string | null>>;
   gates?: Record<string, boolean | null>;
 };
@@ -36,7 +38,7 @@ export interface SettingsView {
 
 export function defaultProjectPreferences(): ProjectPreferences {
   return {
-    engine: DEFAULT_ENGINE_ID,
+    primaryEngine: DEFAULT_ENGINE_ID,
     modelTier: DEFAULT_MODEL_TIER,
     engineModels: {},
     permissionMode: DEFAULT_PERMISSION_MODE,
@@ -53,6 +55,8 @@ export function mergeProjectPreferences(
   return {
     ...base,
     ...update,
+    secondaryEngine:
+      update.secondaryEngine === null ? undefined : update.secondaryEngine ?? base.secondaryEngine,
     engineModels: withoutClearedOverrides({ ...base.engineModels, ...update.engineModels }),
     gates: withoutClearedGates({ ...base.gates, ...update.gates }),
   };
@@ -91,9 +95,9 @@ export interface PreferredRunOptions {
 }
 
 export function preferredRunOptions(preferences: ProjectPreferences): PreferredRunOptions {
-  const model = modelOverrideFor(preferences, preferences.engine);
+  const model = modelOverrideFor(preferences, preferences.primaryEngine);
   return {
-    engine: preferences.engine,
+    engine: preferences.primaryEngine,
     modelTier: preferences.modelTier,
     model,
     permissionMode: preferences.permissionMode,

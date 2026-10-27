@@ -11,7 +11,6 @@ import {
 import type {
   DeploymentAutomation,
   EffortLevel,
-  EngineId,
   OrchestratorBrokerDecision,
   OrchestratorDecision,
   RunCloseoutRecord,
@@ -27,14 +26,17 @@ import { buildProductEnvironment } from "../domain/markdown/product-environment.
 import {
   buildArtifactsRule,
   buildCommitRule,
+  buildIsolatedReviewRule,
   buildContinuationPrompt,
   buildProcessRule,
   buildResumePrompt,
   buildStagePrompt,
   buildTimeBudget,
 } from "../domain/markdown/stage.ts";
-import type { UpstreamOutput } from "../domain/markdown/stage.ts";
-import { engineLabel } from "../domain/rules/engine-label.ts";
+import { engineLabel, engineWithModel } from "../domain/rules/engine-label.ts";
+import { secondaryFallbackNote } from "../domain/rules/stage-engines.ts";
+import { seesHandoffs, upstreamFor } from "../domain/rules/review-context.ts";
+import type { StageEngine } from "../domain/rules/stage-engines.ts";
 import { interpretEngineResult } from "../domain/rules/stage-context.ts";
 import type { EngineStageOutcome } from "../domain/rules/stage-context.ts";
 import { extractOrchestratorContext } from "../schemas/orchestrator-context.ts";
@@ -85,7 +87,7 @@ function turnPrompt(
   if (turn.resumeSessionId !== undefined) {
     return turn.answer ?? buildResumePrompt(task, stepTask, environment);
   }
-  const upstream = upstreamFor(run, stageDef.id);
+  const upstream = upstreamFor(run, stageDef);
   return turn.exchanges === undefined || turn.exchanges.length === 0
     ? buildStagePrompt(task, upstream, stepTask, environment)
     : buildContinuationPrompt({ task, upstream, exchanges: turn.exchanges, stepTask, environment });
@@ -103,10 +105,17 @@ async function stageEnvironment(
     buildTimeBudget(config.engineTimeoutMs),
     buildProcessRule({ pid: process.pid, port: config.port }),
     ...(await teamWorkRules(deps, run)),
+    isolatedReviewRule(run, stageDef),
     product,
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function isolatedReviewRule(run: RunState, stageDef: StageDefinition): string | undefined {
+  return run.branch === undefined || seesHandoffs(run, stageDef)
+    ? undefined
+    : buildIsolatedReviewRule(run.branch);
 }
 
 async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[]> {
@@ -138,17 +147,6 @@ async function productEnvironment(
   });
 }
 
-function upstreamFor(run: RunState, stageId: string): UpstreamOutput[] {
-  const index = run.stages.findIndex((stage) => stage.id === stageId);
-  if (index <= 0) {
-    return [];
-  }
-  const outputs = run.stageOutputs ?? {};
-  return run.stages
-    .slice(0, index)
-    .map((stage) => ({ label: stage.label, output: outputs[stage.id] ?? "" }))
-    .filter((entry) => entry.output !== "");
-}
 
 export const PREVIEW_DEPLOY_STEP_TASK = "deploy-preview";
 
@@ -273,16 +271,17 @@ async function runAdapter(
   deps: WorkflowDeps,
   input: StageWorkContext,
   run: RunState,
-  engine: EngineId,
+  target: StageEngine,
   stageId: string,
   prompt: string,
   persona: string | undefined,
   resumeSessionId: string | undefined,
 ): Promise<EngineRunResult> {
+  const { engine } = target;
   const controller = deps.beginEngineStage(run.id);
   try {
     const adapter = getEngineAdapter(engine);
-    const selection = await selectModel(deps, run, stageId, engine);
+    const selection = await selectModel(deps, run, stageId, target);
     const cwd = run.workspacePath ?? process.cwd();
     return await adapter.run({
       runId: run.id,
@@ -318,10 +317,10 @@ async function selectModel(
   deps: WorkflowDeps,
   run: RunState,
   stageId: string,
-  engine: EngineId,
+  { engine, model }: StageEngine,
 ): Promise<ModelSelection> {
-  if (run.model !== undefined) {
-    return { model: run.model };
+  if (model !== undefined) {
+    return { model };
   }
   const tier = run.stages.find((stage) => stage.id === stageId)?.modelTier ?? run.modelTier;
   if (tier === undefined) {
@@ -402,15 +401,15 @@ export async function runQuestionMediationWork(
   const stepTask = await deps.agents.stepTask(projectPath, "mediate-question");
   deps.projection.log(run.id, stageDef.id, {
     level: "run",
-    message: `Orchestrator mediating · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
-    activity: { kind: "engine", name: engineLabel(run) },
+    message: `Orchestrator mediating · ${engineWithModel(run.engine, run.model)}`,
+    activity: { kind: "engine", name: engineLabel(run.engine) },
   });
   const prompt = buildStagePrompt(context.prompt, [], stepTask);
   const outcome = await runAdapter(
     deps,
     input,
     run,
-    run.engine,
+    { engine: run.engine, model: run.model },
     stageDef.id,
     prompt,
     persona?.text,
@@ -496,8 +495,8 @@ export async function runOrchestratorReviewWork(
   }
   deps.projection.log(run.id, stageId, {
     level: "run",
-    message: `Orchestrator reviewing the run · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
-    activity: { kind: "engine", name: engineLabel(run) },
+    message: `Orchestrator reviewing the run · ${engineWithModel(run.engine, run.model)}`,
+    activity: { kind: "engine", name: engineLabel(run.engine) },
   });
   const projectPath = deps.registry.resolve(run.projectId);
   const prompt = buildStagePrompt(
@@ -506,7 +505,7 @@ export async function runOrchestratorReviewWork(
     await deps.agents.stepTask(projectPath, "review-run"),
   );
   const persona = (await deps.agents.persona(projectPath, "orchestrator"))?.text;
-  const engine = run.engine;
+  const engine = { engine: run.engine, model: run.model };
   const reviewTurn = async (turnPrompt: string, resumeSessionId?: string) => {
     const outcome = await runAdapter(deps, input, run, engine, stageId, turnPrompt, persona, resumeSessionId);
     if (outcome.usage) {
@@ -590,6 +589,35 @@ function readReview(outcome: EngineRunResult, output: string, artifactsExpected:
   return review;
 }
 
+function stageEngineOf(run: RunState, stageId: string): StageEngine | undefined {
+  const stage = run.stages.find((candidate) => candidate.id === stageId);
+  return stage?.engine === undefined ? undefined : { engine: stage.engine, model: stage.model };
+}
+
+function logStageOnline(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+  profession: string,
+  target: StageEngine,
+): void {
+  deps.projection.log(run.id, stageDef.id, {
+    level: "run",
+    message: `${profession} online · ${engineWithModel(target.engine, target.model)}`,
+    activity: { kind: "engine", name: engineLabel(target.engine) },
+  });
+  const fallback = run.engine && secondaryFallbackNote(stageDef, run.secondaryEngine, run.engine);
+  if (fallback) {
+    deps.projection.log(run.id, stageDef.id, { level: "warn", message: fallback });
+  }
+  if (stageDef.context === "isolated" && run.reviewContextGrant !== undefined) {
+    deps.projection.log(run.id, stageDef.id, {
+      level: "info",
+      message: `The Orchestrator granted the earlier handoffs: ${run.reviewContextGrant.rationale}`,
+    });
+  }
+}
+
 export async function runStageWork(
   deps: WorkflowDeps,
   input: StageWorkContext,
@@ -606,7 +634,8 @@ export async function runStageWork(
   if (isDeterministicPreviewDeploy(stageDef, turn)) {
     return runPreviewDeployment(deps, run, stageDef, startedAt);
   }
-  if (!run.engine) {
+  const target = stageEngineOf(run, stageDef.id);
+  if (!run.engine || !target) {
     return { outcome: STAGE_OUTCOMES.PASSED, startedAt, completedAt: nowIso() };
   }
   const profession = stageTitleIn(run, stageDef.id);
@@ -616,11 +645,7 @@ export async function runStageWork(
     projection.stageAnswered(runId, stageDef.id);
   } else {
     projection.stageStarted(runId, stageDef.id);
-    projection.log(runId, stageDef.id, {
-      level: "run",
-      message: `${profession} online · ${engineLabel(run)}${run.model ? ` · ${run.model}` : ""}`,
-      activity: { kind: "engine", name: engineLabel(run) },
-    });
+    logStageOnline(deps, run, stageDef, profession, target);
   }
 
   const projectPath = registry.resolve(run.projectId);
@@ -656,7 +681,7 @@ export async function runStageWork(
     deps,
     input,
     run,
-    run.engine,
+    target,
     stageDef.id,
     prompt,
     persona?.text,

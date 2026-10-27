@@ -180,7 +180,7 @@ export function App() {
   const schedules = useSchedules(projectId, projects.ready);
   const agentCatalog = useAgentCatalog(projectId, projects.ready);
   const product = useProduct(projectId);
-  const { roster: harnessRoster } = useEngineRoster(settings.preferences.engine);
+  const { roster: harnessRoster } = useEngineRoster(settings.preferences.primaryEngine);
   const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -462,9 +462,9 @@ export function App() {
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
     harness: {
-      engine: settings.preferences.engine,
+      engine: settings.preferences.primaryEngine,
       modelTier: settings.preferences.modelTier,
-      pinnedModel: modelOverrideFor(settings.preferences, settings.preferences.engine),
+      pinnedModel: modelOverrideFor(settings.preferences, settings.preferences.primaryEngine),
       roster: harnessRoster,
     },
     roleTiers: pendingTiersFor(pendingTiers, activeOrchestration),

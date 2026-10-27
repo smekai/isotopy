@@ -171,7 +171,7 @@ export function ProjectDrawer({
 
   const { preferences } = settings;
   const scratch = projectId === HOME_PROJECT_ID;
-  const engineId = preferences.engine;
+  const engineId = preferences.primaryEngine;
   const engine = ENGINES[engineId];
   const connection = settings.view?.engines[engineId];
   const pipeline = findPipeline(preferences.pipelineId);
