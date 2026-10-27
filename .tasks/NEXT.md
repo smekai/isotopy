@@ -1,5 +1,156 @@
 # Next
 
+## TASK-211: Restart ShareTravel on the standing team, and prove the epic with one task
+**Priority:** P2 | **Tags:** setup, testing | **Epic:** Standing team
+**Updated:** 2026-10-27 12:46
+
+Child of `TASK-206`. Depends on `TASK-207`, `TASK-208`, `TASK-209` and `TASK-210`. This is the epic's live evidence.
+
+**Setup.**
+
+1. Update the `isotopy_travel` copy (`C:\Development\smekai\isotopy_travel`, ports 9577/5273, user home `~/.isotopy-travel`) to `main`.
+2. ShareTravel fork (`C:\Development\smekai\sharetravel_ai`, `smekai/sharetravel_ai`): primary engine Claude Code, secondary Codex (installed and logged in through ChatGPT). Write its `team.md` from the template, adding a `discovery` flow with the project's `product-strategist`.
+3. Get the work already done onto GitHub: the fork's local `main` is 35 commits ahead of `origin/main` (`TASK-107`, `TASK-104`, `TASK-147`, the discovery reports). Put them on a branch, open a PR, let the fork's CI (`.github/workflows/ci.yml`) run, and merge it by the new rule.
+
+**Proof run.** One initiative for the fork's `TASK-138` (redeem an invite code in the same transaction as the sign-up). Expected path, with no owner approval: the Orchestrator picks the `delivery` flow → plan → implement on Claude → review on Codex with isolated context → verify against the local stack (`bun run init`) → release opens a PR in `smekai/sharetravel_ai` → CI green → Isotopy merges.
+
+**Done when** that run completes as expected, and a short record under `docs/dogfood/` says what happened, what the owner had to do (target: nothing), and every gap found, each filed as its own task.
+
+Cross-platform: a live Windows run; macOS is not exercised here and the record says so.
+
+---
+## TASK-210: Release through a pull request: push, PR, preview deploy, CI, merge
+**Priority:** P1 | **Tags:** server, infra | **Epic:** Standing team
+**Updated:** 2026-10-27 12:46
+
+Child of `TASK-206`. Independent of the other children. Supersedes the 2026-10-15 decision line "Isotopy never pushes".
+
+**Today.** `stop` with `merge: true` makes `InitiativeBranches.merge` (`packages/server/src/services/initiative-branches.ts`) switch to the base, `git merge --no-ff` and delete the branch — locally. No source calls `git push` or `gh`. On ShareTravel this put 35 unreviewed, CI-less commits on the fork's `main`.
+
+**Wanted.** A deterministic `release` stage with no engine, modelled on `runPreviewDeployment` / `isDeterministicPreviewDeploy` in `packages/server/src/workflow/stage-execution.ts`:
+
+1. `git push -u origin isotopy/<orchestration>`.
+2. `gh pr create --base <base> --head <branch> --title … --body-file <file>`: the body is built from the closeout (summary, delivered scope, open findings) plus the per-category table of lines changed that the `create-pr` skill requires; the file lives under `.isotopy/runs/<run>/artifacts/`.
+3. When the project's automation config has a `preview` target (`packages/core/src/automation.ts`, `packages/server/src/schemas/automation-file.ts`), deploy it for the PR and put its URL in the PR. Staging is configured as the preview target; no third target.
+4. Wait for CI with `gh pr checks` until every required check settles, as a durable wait inside the workflow with a timeout (no cron, no external poller — cron stays the only trigger).
+5. Green CI and a passed review → `gh pr merge --merge`, then `git switch <base>` and `git pull --ff-only`. Red CI → the failing checks' output goes back to the Developer as a fix run (the `TASK-183` route); the PR stays open and gets the fix commits.
+6. A repository with no GitHub remote, or `gh` not authenticated, keeps today's local merge: that is a different case, not a second path for the same one. The run log says which happened.
+7. The PR URL, CI result and merge commit are recorded on the run and shown in the run view.
+
+Agents keep "Do not push" (`buildCommitRule`, `packages/server/src/domain/markdown/stage.ts`): only Isotopy pushes. Production deploy stays `POST /automation/deploy/production`, the owner's.
+
+**Done when** component tests with a substituted `runSubprocess` prove: green CI merges and syncs the base; red CI starts a fix run and leaves the PR open; a preview target deploys and its URL lands in the body; no remote falls back to the local merge; `gh` missing is reported, not fatal. `docs/decisions.md` gets the superseding entry, merged into the 2026-10-15 one as the survivor.
+
+Cross-platform: `git` and `gh` run through `runSubprocess` with argument arrays, never a shell string; the PR body goes through `--body-file`, so no quoting differs between PowerShell and zsh; `gh` is found on `PATH` on both OSes (WinGet links on Windows, Homebrew on macOS). Tested on Windows; macOS reasoned through.
+
+---
+## TASK-209: The reviewer does not see the Developer's handoff unless the Orchestrator grants it
+**Priority:** P1 | **Tags:** server, core | **Epic:** Standing team
+**Updated:** 2026-10-27 12:46
+
+Child of `TASK-206`. Independent of the other children.
+
+**Today.** `upstreamFor` in `packages/server/src/workflow/stage-execution.ts` (~139–149) gives every stage every earlier stage's full output under "Handoff from previous steps" (`buildStagePrompt`, `packages/server/src/domain/markdown/stage.ts`). A reviewer therefore reads the Developer's own account of what it did and why — the framing an independent review should not start from. Persona notes are already private to each persona.
+
+**Wanted.**
+
+1. A stage declares `context: "handoffs" | "isolated"` (`stageDefinitionSchema` in `packages/core/src/pipelines.ts`, the role schema, run stages). `upstreamFor` filters by it.
+2. `isolated` shows the task, its acceptance criteria and the plan stage's output, plus the initiative branch and its base so the reviewer reads `git diff <base>...<branch>` itself — but not the Developer's handoff or any other implementation-side markdown.
+3. `review-implementation` defaults to `isolated`, in the bundled pipelines and in `TASK-208`'s template.
+4. The Orchestrator may grant full context for one run: `start_run` takes `reviewContext: "handoffs"` with a required rationale, logged on the stage. The `review-run` and `orchestrate` steps say when that is worth it (e.g. a fix run whose reviewer must see why the previous review failed).
+5. The review step task (`packages/server/src/domain/skills/step-tasks/review-implementation.md`) tells the reviewer to judge from the diff and the task, not from a narrative.
+
+**Done when** component tests prove: an isolated reviewer's prompt has no Developer handoff and does name the branch and base; the plan output is present; a granted run includes the handoffs and logs the rationale; non-review stages are unchanged byte for byte. `docs/decisions.md` records what an isolated reviewer sees and why the plan stays visible.
+
+Cross-platform: the diff command is the agent's to run; the prompt names refs, not paths, so nothing here differs between Windows and macOS. Tested on Windows.
+
+---
+## TASK-208: One team per project: team.md with named flows, changed only by an approved proposal
+**Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
+**Updated:** 2026-10-27 12:46
+
+Child of `TASK-206`. Depends on `TASK-207` (a role's `engine`).
+
+**Today.** The Orchestrator composes a team for every initiative (`propose_team` in `packages/server/src/domain/skills/step-tasks/orchestrate.md`), the owner approves it (`OrchestrationService.approveTeam`, `packages/server/src/services/orchestration-service.ts` ~246–291), and it lives only on that orchestration (`approvedTeam`, `composedPipeline`). Schedules and duties pin a team of their own (`packages/core/src/schedules.ts` `team?`, duty front matter in `packages/server/src/schemas/agent-definition.ts`). Nothing persists a project's team.
+
+**Wanted.**
+
+1. **`<project>/.isotopy/team.md`**: YAML front matter parsed once at the boundary with a strict zod schema (a new file under `packages/server/src/schemas/`, modelled on `agent-definition.ts`), body free text for the owner. Visible to git like `agents/` and `steps/`.
+   - `roster`: roles with `id`, `label`, `agent`, `engine` (`primary`/`secondary`), `modelTier`, `executionPolicy`.
+   - `flows`: named, ordered lists of `{ role, step }`. The bundled template has `delivery` (plan → implement → review on secondary → verify → release → closeout) and `discovery` (research roles, no Developer).
+2. **Seeding.** A project without `team.md` gets the bundled template the first time a team is needed, committed on the base like any other `.isotopy/` file the owner authors. The template replaces `FULL_DELIVERY_PIPELINE` and `PM_DEV_TEST_PIPELINE` as the source of team runs (`packages/core/src/pipelines.ts`).
+3. **The Orchestrator picks a flow, not a team.** `start_run` names a `flow` from `team.md`, with no owner approval. `propose_team` is **replaced** by `propose_team_change`: a full new `team.md` plus a rationale. The owner approves it once; Isotopy writes and commits it, and it holds for every later initiative.
+4. **Replace, don't accumulate:** in the same change remove `approvedTeam`, the team half of `approveTeam`, per-initiative composition in `orchestrate.md`, and the pinned `team` on schedules and duties (they name a `flow` instead). Keep `composeTeamPipeline` and `roleIssues` in `packages/server/src/domain/rules/team-composition.ts`, now building a pipeline from a flow.
+5. Setup shows the team and its flows, read-only plus "edit team.md"; a pending `propose_team_change` shows as a diff to approve.
+6. An invalid `team.md` refuses team runs with the validation issues, never a silent default.
+
+**Done when** component tests prove: seeding and committing the template; a run started from a named flow without approval; a `propose_team_change` approved, written, committed and used by the next initiative; a schedule naming a flow; an invalid file refused. `docs/decisions.md` records "one team per project" and the rejected alternative (a default team with per-initiative edits); `docs/architecture.md` gains the team component.
+
+Cross-platform: CRLF front matter (split on `\r?\n`), the team file path joined with `path.join`, ids validated before they reach a path; case-insensitive file systems on both Windows and macOS mean `Team.md` and `team.md` are the same file — read exactly `team.md`. Tested on Windows; macOS reasoned through.
+
+---
+## TASK-207: Each role runs on the primary or the secondary engine
+**Priority:** P1 | **Tags:** core, server, engine | **Epic:** Standing team
+**Updated:** 2026-10-27 12:46
+
+Child of `TASK-206`. The foundation for an independent review: today one engine runs a whole run.
+
+**Today.** `RunService.startRunWith` (`packages/server/src/services/run/run-service.ts`, ~386–416) sets `run.engine` once, falling back to `"claude-code"`, and `requireEngineReady` checks only that engine. Every caller of `runAdapter` in `packages/server/src/workflow/stage-execution.ts` (`runStageWork`, `runQuestionMediationWork`, `runOrchestratorReviewWork`) passes `run.engine`. Only `modelTier` varies per stage (`stageDefinitionSchema` in `packages/core/src/pipelines.ts`, `orchestratorRoleSchema` in `packages/core/src/orchestration.ts`, `withRoleTiers`). `selectModel` lets a pinned `run.model` override every stage.
+
+**Wanted.**
+
+1. Project preferences (`ProjectPreferences` in `packages/core/src/settings.ts`) hold a `primaryEngine` and an optional `secondaryEngine`, each with its model from `engineModels`. `preferredRunOptions` and Setup follow. Replace the single `engine` preference rather than keeping both.
+2. A role and a stage declare `engine: "primary" | "secondary"` (default `primary`): `orchestratorRoleSchema`, `stageDefinitionSchema`, run stages in `packages/core/src/runs.ts` and `packages/server/src/schemas/run-persistence.ts`, copied by `toStage` in `packages/server/src/domain/rules/team-composition.ts`. The run records the resolved engine id on each stage, so history does not change when settings do.
+3. Without a configured secondary engine, a `secondary` stage runs on the primary one and its log says so.
+4. `runStageWork` runs a stage on its own engine; `selectModel` resolves the tier against that engine's roster, and a pinned model applies only to stages on the engine it belongs to.
+5. `requireEngineReady` checks every distinct engine the pipeline uses before the run starts; an engine that is not logged in refuses the run with its name.
+6. Engine labels, the "online" line, handoff metadata, usage and limit handling (`run-service.ts` ~653–696) are per stage. A limit on the secondary engine parks only that stage.
+7. The bundled `review-implementation` role in `FULL_DELIVERY_PIPELINE` defaults to `secondary`.
+
+**Done when** component tests (FakeEngine for two engine ids) prove: a stage on the secondary engine; the fallback to primary with its log line; readiness refused for an unready secondary; a pinned model not leaking to the other engine; a resumed turn staying on its stage's engine. `docs/decisions.md` records primary/secondary over a free per-role engine id, and why.
+
+Cross-platform: engine discovery already differs per OS (`ISOTOPY_CLAUDE_PATH`, `ISOTOPY_CODEX_PATH`, `ISOTOPY_CURSOR_PATH`); this task adds no new path handling, only routing. Tested on Windows; macOS reasoned through.
+
+---
+## TASK-206: Standing team — one team per project, review by a second model, release through a pull request
+**Priority:** P1 | **Tags:** core, server, engine | **Epic:** Standing team
+**Updated:** 2026-10-27 12:45
+
+The umbrella of the **Standing team** epic. Filed 2026-10-27 with the owner, from the ShareTravel dogfood.
+
+**What the dogfood showed.** Isotopy delivered real features on ShareTravel (`TASK-107`, `TASK-104`, `TASK-147` in the fork), but:
+
+- **No pull request, ever.** An initiative merges its branch into the local base (`InitiativeBranches.merge`, `--no-ff`; decision 2026-10-15 "Isotopy never pushes"). 35 commits reached the fork's `main` without CI or a human seeing them, and none of them is on GitHub.
+- **A new team for every initiative.** `propose_team` → `approveTeam` → `composeTeamPipeline` keeps the team on the orchestration only (`approvedTeam`, `composedPipeline`). Membership, models and order differ each time, and each time the owner is asked to approve.
+- **Review is not independent.** One engine runs the whole run (`run.engine`, set once in `startRunWith`), and the reviewer reads the Developer's full handoff (`upstreamFor` passes every earlier output).
+
+**Owner decisions, 2026-10-27.**
+
+1. Isotopy merges its own pull request when review passed and CI is green.
+2. Review runs on a **secondary engine** (Codex or Cursor) by default. Without one, the same engine reviews, but with isolated context: the reviewer does not see the Developer's markdown handoff unless the Orchestrator grants it.
+3. A project has **one team**, like a real team. It changes only through a proposal the owner approves once.
+4. Release is push, pull request, preview or staging deploy when configured, and waiting for CI. Production deploys stay the owner's.
+5. Fewer owner approvals is a goal in itself: a run with an unchanged team needs none.
+
+**Children, in order.**
+
+| Task | What | Depends on |
+| --- | --- | --- |
+| `TASK-207` | Each role runs on the primary or the secondary engine | — |
+| `TASK-208` | One team per project: `team.md` with named flows | `TASK-207` |
+| `TASK-209` | The reviewer does not see the Developer's handoff | — |
+| `TASK-210` | Release through a pull request: push, PR, preview, CI, merge | — |
+| `TASK-211` | Restart ShareTravel on the standing team | 207–210 |
+
+`TASK-209` and `TASK-210` can run in parallel with `207 → 208`; each child is its own branch and PR.
+
+**Done when** `TASK-211`'s live run passes: a ShareTravel task goes plan → implement (Claude) → review (Codex, without the handoff) → verify → release, a PR appears in `smekai/sharetravel_ai`, CI is green, Isotopy merges it, and the owner approved nothing.
+
+**Not this:** production deploy by Isotopy; a marketplace of teams; changing what `TASK-196`'s agents and steps are.
+
+Cross-platform: every child carries its own line; the shared hazards are `git`/`gh` subprocesses (argument arrays through `runSubprocess`, never a shell string), CRLF in `team.md` front matter, and paths in PR bodies.
+
+---
 ## TASK-196: Shared agents — a team can be more than a dev team, and a project brings its own
 **Priority:** P1 | **Tags:** core, server | **Epic:** Shared agents
 **Updated:** 2026-10-11 18:20
