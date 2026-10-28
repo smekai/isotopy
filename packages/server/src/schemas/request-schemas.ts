@@ -34,9 +34,10 @@ const engineModelsSchema = z
     ) as Partial<Record<EngineId, string | null>>,
   );
 
-export const projectPreferencesUpdateSchema: z.ZodType<ProjectPreferencesUpdate> = z
+export const projectPreferencesUpdateSchema = z
   .object({
-    engine: engineIdSchema.optional(),
+    primaryEngine: engineIdSchema.optional(),
+    secondaryEngine: engineIdSchema.nullable().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
     engineModels: engineModelsSchema.optional(),
     permissionMode: permissionModeSchema.optional(),
@@ -44,7 +45,7 @@ export const projectPreferencesUpdateSchema: z.ZodType<ProjectPreferencesUpdate>
     gates: z.record(z.string(), z.boolean().nullable()).optional(),
     builtInSchedules: z.boolean().optional(),
   })
-  .strict();
+  .strict() satisfies z.ZodType<ProjectPreferencesUpdate>;
 
 export const engineConnectionUpdateSchema = z
   .object({

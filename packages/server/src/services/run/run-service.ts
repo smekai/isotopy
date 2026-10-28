@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { TerminalWorkflowRunStatus } from "@aikirun/types/workflow/run";
 import type {
   DeploymentResult,
-  EngineId,
   EngineLimit,
   EnginePermissionMode,
   LimitChoice,
@@ -11,6 +10,7 @@ import type {
   MessageRole,
   ModelTier,
   PipelineDefinition,
+  ReviewContextGrant,
   RunBranch,
   RunCloseoutRecord,
   RunEvent,
@@ -26,14 +26,13 @@ import type {
 import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
-  ENGINES,
   ORCHESTRATION_PIPELINE,
   addUsage,
   applyGatePreferences,
   createInitialRunState,
+  flattenPipelineStages,
   isTerminalRunStatus,
   pipelineUsesEngine,
-  rosterAccepts,
   stageAgent,
   stageTitleIn,
   stampStageAgents,
@@ -54,13 +53,13 @@ import { RunChangeCollector } from "../run-change-collector.ts";
 import { renderDeploymentResult } from "../../domain/markdown/release.ts";
 import type { StageOutputRejection } from "../../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "../consumers/stage-output-consumer.ts";
-import { assertEngineId, getEngineAdapter } from "../../engines/registry.ts";
 import { ensureProjectDataDir, resolveWorkspace } from "../../paths.ts";
 import type { ProjectPath } from "../../paths.ts";
 import type { ProjectDatabases } from "../../db/project-databases.ts";
 import type { ProjectRegistry } from "../project-registry.ts";
 import type { ModelRosterService } from "../model-roster-service.ts";
 import { engineLabel } from "../../domain/rules/engine-label.ts";
+import { stagesAfterEngineSwitch, withStageEngines } from "../../domain/rules/stage-engines.ts";
 import { isPlanningRun, resolveOwningOrchestration } from "../../domain/rules/run-start.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import { WorkflowRuntimeRegistry } from "../../workflow/workflow-runtime.ts";
@@ -98,6 +97,7 @@ import {
 } from "../../domain/rules/run-seeding.ts";
 import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
+import { RunEngineReadiness } from "./run-engine-readiness.ts";
 import { RunStore } from "./run-store.ts";
 import {
   claimSourceTasks,
@@ -119,6 +119,7 @@ export interface StartRunOptions extends InheritedRunOptions {
   orchestrationId?: string;
   sourceTaskIds?: string[];
   seeded?: SeededStart;
+  reviewContextGrant?: ReviewContextGrant;
 }
 
 export class RunService implements RunProjection {
@@ -127,6 +128,7 @@ export class RunService implements RunProjection {
   private readonly engineAborts = new Map<string, AbortController>();
   private shuttingDown = false;
   private readonly changes: RunChangeCollector;
+  private readonly engines: RunEngineReadiness;
   private readonly logger: Logger;
   private readonly runtimes: WorkflowRuntimeRegistry;
   private readonly stageOutputConsumers: StageOutputConsumer[];
@@ -146,6 +148,7 @@ export class RunService implements RunProjection {
     private readonly product?: ProductProcessService,
   ) {
     this.logger = logger.child("RunService");
+    this.engines = new RunEngineReadiness(settings, rosters);
     this.changes = new RunChangeCollector(logger);
     this.store = new RunStore(registry, databases, logger);
     this.milestones = new MilestoneService(registry, () => this, databases, logger);
@@ -320,25 +323,6 @@ export class RunService implements RunProjection {
     return this.startRunWith(projectPath, pipeline, options);
   }
 
-  private async requireEngineReady(
-    projectPath: ProjectPath,
-    engineId: string,
-    model: string | undefined,
-  ): Promise<void> {
-    getEngineAdapter(engineId);
-    assertEngineId(engineId);
-    const connection = this.settings.getEngineConnection(projectPath.id, engineId);
-    const mode = ENGINES[engineId].connections.find((m) => m.id === connection.mode);
-    if (mode?.requiresApiKey && !connection.apiKey) {
-      throw new Error(
-        `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
-      );
-    }
-    if (model !== undefined) {
-      await this.requireOfferedModel(engineId, model);
-    }
-  }
-
   private async admitRun(projectPath: ProjectPath): Promise<string> {
     await ensureProjectDataDir(projectPath);
     const runId = randomUUID().slice(0, 8);
@@ -367,6 +351,7 @@ export class RunService implements RunProjection {
       orchestrationId: requestedOrchestrationId,
       sourceTaskIds,
       seeded,
+      reviewContextGrant,
     } = options;
     const activeOrchestrationId = await this.owningOrchestrationId(
       projectPath,
@@ -383,9 +368,11 @@ export class RunService implements RunProjection {
       milestoneId,
       featureId,
     );
-    const usesEngine = pipelineUsesEngine(pipeline);
-    if (usesEngine) {
-      await this.requireEngineReady(projectPath, engine ?? "claude-code", model);
+    const assignment = pipelineUsesEngine(pipeline)
+      ? this.engines.assignment(projectPath.id, engine, model)
+      : undefined;
+    if (assignment) {
+      await this.engines.requireReady(projectPath, pipeline, assignment);
     }
     const runId = await this.admitRun(projectPath);
     const run = createInitialRunState({
@@ -400,13 +387,12 @@ export class RunService implements RunProjection {
       sourceTaskIds,
       agents: stageAgentsOf(await this.agents.catalog(projectPath)),
     });
-    if (usesEngine) {
-      const engineId = engine ?? "claude-code";
-      assertEngineId(engineId);
-      run.engine = engineId;
-      if (model !== undefined) {
-        run.model = model;
-      }
+    if (assignment) {
+      run.engine = assignment.primary;
+      run.model = assignment.primaryModel;
+      run.secondaryEngine = assignment.secondary;
+      run.stages = withStageEngines(run.stages, flattenPipelineStages(pipeline), assignment);
+      run.reviewContextGrant = reviewContextGrant;
       if (modelTier !== undefined) {
         run.modelTier = modelTier;
       }
@@ -650,12 +636,12 @@ export class RunService implements RunProjection {
   stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void {
     const run = this.live(runId);
     const stage = this.findStage(runId, stageId);
-    if (!run || !stage || !run.engine) return;
+    if (!run || !stage || !stage.engine) return;
     const ts = nowIso();
     stage.status = "blocked";
     run.status = "blocked";
     run.limit = {
-      stageId, engine: run.engine, model: run.model, raw: limit.raw,
+      stageId, engine: stage.engine, model: stage.model, raw: limit.raw,
       resetAt: limit.resetAt, detectedAt: ts, attempt,
     };
     const profession = stageAgent(stage).title;
@@ -685,31 +671,26 @@ export class RunService implements RunProjection {
     const parkedAt = run.limit.detectedAt;
     const durableRunId = this.store.durableRunIds.get(runId);
     if (!durableRunId) throw new Error(LIMIT_ERRORS.noDurableRun(runId));
-    const current = { engine: run.engine, model: run.model, modelTier: run.modelTier };
+    const limited = run.limit.engine;
+    const current = { engine: limited, model: stage.model, modelTier: run.modelTier };
     const pins = this.settings.getPreferences(run.projectId).engineModels;
     const selection = selectionAfterLimit(current, resolution, pins);
-    run.engine = selection.engine;
-    if (selection.model === undefined) delete run.model;
-    else run.model = selection.model;
+    const switched = { engine: selection.engine ?? limited, model: selection.model };
+    if (resolution.choice === "switch-tier") stage.modelTier = resolution.tier;
+    run.stages = stagesAfterEngineSwitch(run.stages, stageId, limited, switched);
+    if (run.engine === limited) {
+      run.engine = switched.engine;
+      run.model = switched.model;
+    }
+    if (run.secondaryEngine === limited) run.secondaryEngine = switched.engine;
     if (selection.modelTier === undefined) delete run.modelTier;
     else run.modelTier = selection.modelTier;
-    if (resolution.choice === "switch-tier") stage.modelTier = resolution.tier;
     this.limitResolved(runId, stageId, resolution.choice);
     void this.store.flushPersist(runId);
     this.runtimes
       .forProject(run.projectId)
       .resolveLimit(durableRunId, stageId, resolution.choice, parkedAt);
     return structuredClone(run);
-  }
-
-  private async requireOfferedModel(engineId: EngineId, modelId: string): Promise<void> {
-    const roster = await this.rosters.roster(engineId);
-    if (!rosterAccepts(roster, modelId)) {
-      throw new Error(
-        `Model "${modelId}" isn't offered by ${ENGINES[engineId].label} on this machine — ` +
-          "pick one in Setup → AI Harness. An unlisted id has to be set in the CLI's own config file first.",
-      );
-    }
   }
 
   private gateApproved(runId: string, stageId: string): void {
@@ -792,6 +773,7 @@ export class RunService implements RunProjection {
     if (output.trim() !== "") {
       run.stageOutputs = { ...run.stageOutputs, [stageDef.id]: output };
       run.result = output;
+      const stage = this.findStage(runId, stageDef.id);
       await this.store.repositoryForRun(runId).writeHandoff(
         runId,
         stageDef.id,
@@ -799,8 +781,8 @@ export class RunService implements RunProjection {
           {
             stageLabel: stageDef.label,
             profession: stageTitleIn(run, stageDef.id),
-            engine: engineLabel(run),
-            model: run.model,
+            engine: engineLabel(stage?.engine),
+            model: stage?.model,
             completedAt: nowIso(),
           },
           output,

@@ -5,7 +5,8 @@ import type { Page } from "@playwright/test";
 import type { ProjectPreferences, ProjectPreferencesUpdate, SettingsView } from "@isotopy/core";
 
 export const DEFAULT_PREFERENCES: ProjectPreferencesUpdate = {
-  engine: "claude-code",
+  primaryEngine: "claude-code",
+  secondaryEngine: null,
   modelTier: "balanced",
   engineModels: { "claude-code": null, cursor: null, codex: null },
   permissionMode: "skip",

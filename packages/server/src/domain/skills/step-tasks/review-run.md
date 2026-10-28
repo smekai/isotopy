@@ -60,9 +60,15 @@ same team can do:
   "action": "start_run",
   "rationale": "Why this is the next run",
   "task": "Decision-complete scope for this run",
-  "fromStage": "optional role id to begin at"
+  "fromStage": "optional role id to begin at",
+  "reviewContext": { "context": "handoffs", "rationale": "optional — why the reviewer needs the handoffs" }
 }
 ```
+
+A reviewing role normally does not see the Developer's handoff. Add
+`reviewContext` only when the next run's reviewer must know why the last review
+failed and what was done about it, and the `task` cannot say it; the `rationale`
+is logged where the user sees it.
 
 Name `fromStage` when the roles before it have nothing left to do — their output
 from this run is carried into the next one, and they do not run again. A run that

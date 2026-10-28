@@ -175,6 +175,20 @@ test("AI Harness lists the Claude connection modes inline", async ({ page }) => 
   await expect(page.getByRole("button", { name: /Anthropic API key/ })).toBeVisible();
 });
 
+test("choosing a second engine for reviews stores it beside the primary", async ({ page }) => {
+  // Arrange
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup" }).click();
+  await page.getByRole("button", { name: "AI Harness" }).click();
+
+  // Act
+  await page.getByRole("button", { name: /Review on Codex/ }).click();
+
+  // Assert — the primary is untouched, and the choice is server state.
+  await expect.poll(async () => (await readPreferences(page)).secondaryEngine).toBe("codex");
+  expect((await readPreferences(page)).primaryEngine).toBe("claude-code");
+});
+
 test("selecting Cursor keeps the preset and re-resolves it against that harness", async ({ page }) => {
   // Arrange
   await page.goto("/");

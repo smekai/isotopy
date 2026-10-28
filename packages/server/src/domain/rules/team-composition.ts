@@ -1,4 +1,8 @@
-import { STAGE_EXECUTION_POLICIES, flattenPipelineStages } from "@isotopy/core";
+import {
+  REVIEW_IMPLEMENTATION_STEP_TASK,
+  STAGE_EXECUTION_POLICIES,
+  flattenPipelineStages,
+} from "@isotopy/core";
 import type {
   ModelTier,
   OrchestratorRole,
@@ -68,6 +72,10 @@ function duplicateIdIssues(roles: OrchestratorRole[]): ValidationIssue[] {
   });
 }
 
+function reviewsImplementation(role: OrchestratorRole): boolean {
+  return role.stepTask === REVIEW_IMPLEMENTATION_STEP_TASK;
+}
+
 function toStage(role: OrchestratorRole): StageDefinition {
   return {
     id: role.id,
@@ -75,6 +83,8 @@ function toStage(role: OrchestratorRole): StageDefinition {
     skill: role.skill,
     stepTask: role.stepTask,
     modelTier: role.modelTier,
+    engine: role.engine ?? (reviewsImplementation(role) ? "secondary" : undefined),
+    context: role.context ?? (reviewsImplementation(role) ? "isolated" : undefined),
     executionPolicy:
       role.stepTask === CLOSEOUT_STEP_TASK
         ? STAGE_EXECUTION_POLICIES.CLOSEOUT
