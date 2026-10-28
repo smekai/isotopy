@@ -10,6 +10,7 @@ import {
   post,
   proposedTeam,
   stageOf,
+  waitForOrchestrationRun,
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
@@ -20,6 +21,7 @@ const PLAN_REPORT = "Plan: a share button on the trip page. MARKER-PLAN";
 const DEV_REPORT = "Added the share button and why it is fine. MARKER-DEVELOPER";
 const REVIEW_PASS = "The diff matches the plan.\n\nVERDICT: PASS";
 const QA_PASS = "Checked the share button.\n\nVERDICT: PASS";
+const CUT_OFF_SESSION = "5d0c7a2e-61f4-4b8e-9a43-0f2e9c7b1d55";
 const GRANT_RATIONALE = "the previous review failed on a migration the Developer has since explained";
 
 const REVIEW_TEAM_PROPOSAL: OrchestratorDecision = {
@@ -34,6 +36,21 @@ const REVIEW_TEAM_PROPOSAL: OrchestratorDecision = {
       { id: "review", label: "Reviewer", skill: "software-architect", stepTask: "review-implementation" },
     ],
   },
+};
+
+const GRANTED_REVIEW_AGAIN: OrchestratorDecision = {
+  action: "start_run",
+  rationale: "The review never reached a verdict",
+  task: TASK,
+  fromStage: "review",
+  reviewContext: { context: "handoffs", rationale: GRANT_RATIONALE },
+};
+
+const ISOLATED_REVIEW_AGAIN: OrchestratorDecision = {
+  action: "start_run",
+  rationale: "The review never reached a verdict",
+  task: TASK,
+  fromStage: "review",
 };
 
 const REVIEWED_TEAM: PipelineDefinition = {
@@ -134,4 +151,55 @@ test("a run the Orchestrator grants the handoffs gives its reviewer the Develope
   const finished = await waitForRunStatus(ctx.app, run.id, "completed");
   expect(stageOf(finished, "review").logs.map((entry) => entry.message).join("\n")).toContain(GRANT_RATIONALE);
   ctx.engine.verify();
+});
+
+test("a review restarted with the handoffs newly granted starts cold, so the grant reaches it", async () => {
+  // Anticipate — the isolated review is cut off; the Orchestrator restarts it with the
+  // handoffs granted. Resuming would skip the prompt that carries them.
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(REVIEW_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
+  ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  ctx.engine.anticipate({ as: "Isolated reviewer, cut off" }).timesOut(CUT_OFF_SESSION);
+  ctx.engine.anticipateRunReview({ as: "review granting the handoffs", decision: GRANTED_REVIEW_AGAIN });
+  ctx.engine.anticipate({ as: "Granted reviewer", prompt: /MARKER-DEVELOPER/ }).reports(REVIEW_PASS);
+  ctx.engine.anticipateRunReview({ as: "review of the granted run" });
+  const conversation = await proposedTeam(ctx.app);
+
+  // Act
+  await post<RunState>(ctx.app, `/orchestrations/${conversation.orchestrationId}/approve`, {
+    engine: "claude-code",
+  });
+
+  // Assert
+  const granted = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 3);
+  await waitForRunStatus(ctx.app, granted, "completed");
+  ctx.engine.verify();
+  expect(ctx.engine.callAt(5).resumeSessionId).toBeUndefined();
+});
+
+test("a review restarted without the grant its last run had starts cold, so it forgets the Developer's handoff", async () => {
+  // Anticipate — the granted review is cut off; the next run is isolated again.
+  // Resuming would carry a conversation that already read the Developer's handoff.
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(REVIEW_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
+  ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  ctx.engine.anticipate({ as: "Isolated reviewer" }).reports(REVIEW_PASS);
+  ctx.engine.anticipateRunReview({ as: "review granting the handoffs", decision: GRANTED_REVIEW_AGAIN });
+  ctx.engine.anticipate({ as: "Granted reviewer, cut off" }).timesOut(CUT_OFF_SESSION);
+  ctx.engine.anticipateRunReview({ as: "review revoking the grant", decision: ISOLATED_REVIEW_AGAIN });
+  ctx.engine.anticipate({ as: "Isolated reviewer again" }).reports(REVIEW_PASS);
+  ctx.engine.anticipateRunReview({ as: "review of the isolated run" });
+  const conversation = await proposedTeam(ctx.app);
+
+  // Act
+  await post<RunState>(ctx.app, `/orchestrations/${conversation.orchestrationId}/approve`, {
+    engine: "claude-code",
+  });
+
+  // Assert
+  const isolated = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 4);
+  await waitForRunStatus(ctx.app, isolated, "completed");
+  ctx.engine.verify();
+  expect(ctx.engine.callAt(7).resumeSessionId).toBeUndefined();
+  expect(ctx.engine.callAt(7).prompt).not.toContain("MARKER-DEVELOPER");
 });

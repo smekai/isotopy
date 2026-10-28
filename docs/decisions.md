@@ -30,8 +30,9 @@ same model re-reading its own account of its own work.
   resolved engine id and pinned model on each stage, so history does not change when settings
   do. A pinned model belongs to its engine and never reaches a stage on the other. With no
   secondary configured, a secondary stage runs on the primary and its log says so. Every engine
-  a run will use is checked before it starts, including login, so a run never stalls halfway on
-  an engine nobody logged in. A limit parks only the stage that hit it; switching engines moves
+  a run will use is checked before it starts — installed, and logged in unless it connects with
+  an API key — so a run never stalls halfway on an engine that cannot run. A project never holds
+  the same engine in both slots: promoting the secondary to primary clears the secondary. A limit parks only the stage that hit it; switching engines moves
   that stage and the pending stages on the same engine.
 - **An isolated reviewer sees the task, the plan and the diff.** A stage with
   `context: "isolated"` receives the task, the output of the plan stage (`plan-feature`), and the
@@ -42,7 +43,10 @@ same model re-reading its own account of its own work.
   secondary engine and to isolation, in the bundled pipeline and in every composed team.
 - **The Orchestrator may grant the handoffs for one run.** `start_run` carries
   `reviewContext: { context: "handoffs", rationale }`; the rationale is logged on each isolated
-  stage it opens. It exists for a fix run whose reviewer must know why the last review failed.
+  stage it opens. It exists for a fix run whose reviewer must know why the last review failed. An isolated stage
+  whose grant differs from the run it is restarted from starts cold instead of resuming: a
+  resumed session would keep handoffs that were revoked, or skip the prompt that carries newly
+  granted ones.
 
 **Rejected:** a per-role free engine id (above), and hiding the plan as well — a reviewer with
 only the task and the diff re-litigates scope the owner already approved.

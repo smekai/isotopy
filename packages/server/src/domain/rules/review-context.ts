@@ -1,5 +1,5 @@
 import { PLAN_FEATURE_STEP_TASK, findPipeline, flattenPipelineStages } from "@isotopy/core";
-import type { RunState, StageDefinition } from "@isotopy/core";
+import type { ReviewContextGrant, RunState, StageDefinition } from "@isotopy/core";
 import type { UpstreamOutput } from "../markdown/stage.ts";
 
 export function seesHandoffs(run: RunState, stageDef: StageDefinition): boolean {
@@ -28,4 +28,12 @@ export function upstreamFor(run: RunState, stageDef: StageDefinition): UpstreamO
   return visible
     .map((stage) => ({ label: stage.label, output: outputs[stage.id] ?? "" }))
     .filter((entry) => entry.output !== "");
+}
+
+export function reviewContextChanged(
+  stageDef: StageDefinition,
+  previous: ReviewContextGrant | undefined,
+  next: ReviewContextGrant | undefined,
+): boolean {
+  return stageDef.context === "isolated" && (previous === undefined) !== (next === undefined);
 }

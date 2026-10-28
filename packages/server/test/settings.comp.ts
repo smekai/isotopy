@@ -225,6 +225,20 @@ test("a secondary engine is stored beside the primary", async () => {
   expect(body.preferences).toMatchObject({ primaryEngine: "claude-code", secondaryEngine: "codex" });
 });
 
+test("promoting the secondary engine to primary clears the secondary, so reviews never share the author's engine", async () => {
+  // Arrange
+  await put<SettingsView>(ctx.app, "/settings/preferences", { secondaryEngine: "codex" });
+
+  // Act
+  const { body } = await put<SettingsView>(ctx.app, "/settings/preferences", {
+    primaryEngine: "codex",
+  });
+
+  // Assert
+  expect(body.preferences).toMatchObject({ primaryEngine: "codex" });
+  expect(body.preferences.secondaryEngine).toBeUndefined();
+});
+
 test("clearing the secondary engine leaves reviews on the primary", async () => {
   // Arrange
   await put<SettingsView>(ctx.app, "/settings/preferences", { secondaryEngine: "codex" });

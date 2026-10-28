@@ -2,11 +2,13 @@ import { STAGE_OUTCOMES, engineCapability, flattenPipelineStages } from "@isotop
 import type {
   EngineId,
   PipelineDefinition,
+  ReviewContextGrant,
   RunState,
   StageOutcome,
   StageState,
 } from "@isotopy/core";
 import type { ValidationResult } from "../validation.ts";
+import { reviewContextChanged } from "./review-context.ts";
 import { outcomeForRestart } from "./run-lifecycle.ts";
 
 export interface SeededStart {
@@ -84,9 +86,11 @@ export function seedFromSettledRun(
   settled: RunState,
   startStageId: string,
   from: string,
+  grant: ReviewContextGrant | undefined,
 ): ValidationResult<SeededStart> {
   const stages = flattenPipelineStages(pipeline);
-  if (!stages.some((stage) => stage.id === startStageId)) {
+  const startStage = stages.find((stage) => stage.id === startStageId);
+  if (startStage === undefined) {
     return issue(
       `Unknown stage id: ${startStageId} — the approved team has ${stages.map((stage) => stage.id).join(", ")}`,
     );
@@ -107,7 +111,9 @@ export function seedFromSettledRun(
     output: settled.stageOutputs?.[stage.id],
   }));
   const seeded: SeededStart = { ...seedStages(carried, startStageId), from };
-  return { ok: true, value: withResumableSession(seeded, settled, startStageId) };
+  return reviewContextChanged(startStage, settled.reviewContextGrant, grant)
+    ? { ok: true, value: seeded }
+    : { ok: true, value: withResumableSession(seeded, settled, startStageId) };
 }
 
 function issue(message: string): ValidationResult<SeededStart> {

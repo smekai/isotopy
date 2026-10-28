@@ -321,6 +321,12 @@ QUESTION: ${question}`,
     return this;
   }
 
+  /** The CLI is not on this machine at all. */
+  isNotInstalled(): FakeEngine {
+    this.detect = () => Promise.resolve({ engine: this.id, installed: false });
+    return this;
+  }
+
   /** Declare the model this engine's own config file names. */
   hasConfiguredModel(draft: ModelOptionDraft): FakeEngine {
     this.configured = draft;

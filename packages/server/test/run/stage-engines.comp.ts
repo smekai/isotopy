@@ -105,6 +105,23 @@ test("a secondary engine that is not logged in refuses the run before any stage 
   codex.verify();
 });
 
+test("a secondary engine that is not installed refuses the run even when it connects with an API key", async () => {
+  // Arrange — an API key skips the login question, but not whether the CLI exists.
+  await put(ctx.app, "/settings/preferences", { secondaryEngine: "codex" });
+  await put(ctx.app, "/settings/engines/codex", { connectionMode: "api-key", apiKey: "sk-test" });
+  codex.isNotInstalled();
+
+  // Anticipate — none: the primary stages must not run only to fail at the review.
+
+  // Act
+  const started = ctx.orchestrator.startComposedRun(ctx.registry.resolve(), TEAM, { task: TASK });
+
+  // Assert
+  await expect(started).rejects.toThrow(/Codex/);
+  ctx.engine.verify();
+  codex.verify();
+});
+
 test("a model pinned for one engine never reaches a stage on the other engine", async () => {
   // Arrange
   await put(ctx.app, "/settings/preferences", {

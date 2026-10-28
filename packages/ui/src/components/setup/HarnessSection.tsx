@@ -49,10 +49,7 @@ export function HarnessSection({ d, projectName, settings }: HarnessSectionProps
   }
 
   function selectEngine(engineId: EngineId) {
-    settings.update({
-      primaryEngine: engineId,
-      secondaryEngine: preferences.secondaryEngine === engineId ? null : undefined,
-    });
+    settings.update({ primaryEngine: engineId });
   }
 
   function selectTier(tier: ModelTier) {

@@ -100,6 +100,8 @@ export interface ApproveTeamOptions extends StartOrchestrationOptions {
   roleTiers?: Record<string, ModelTier | null>;
 }
 
+type StartRunDecision = Extract<OrchestratorDecision, { action: "start_run" }>;
+
 export class OrchestrationService implements StageOutputConsumer {
   private readonly orchestrations = new Map<string, Orchestration>();
   private readonly repositories = new Map<string, JsonRecordRepository<Orchestration>>();
@@ -640,12 +642,7 @@ export class OrchestrationService implements StageOutputConsumer {
       if (!pipeline) {
         throw new Error(NO_APPROVED_TEAM);
       }
-      const seeded = this.seedFrom(
-        pipeline,
-        orchestration,
-        run,
-        decision.fromStage,
-      );
+      const seeded = this.seedFrom(pipeline, orchestration, run, decision);
       if (seeded && !seeded.ok) {
         throw new Error(formatValidationIssues(seeded.issues));
       }
@@ -749,12 +746,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (!pipeline) {
       return NO_APPROVED_TEAM;
     }
-    const seeded = this.seedFrom(
-      pipeline,
-      orchestration,
-      settled,
-      decision.fromStage,
-    );
+    const seeded = this.seedFrom(pipeline, orchestration, settled, decision);
     if (seeded && !seeded.ok) {
       return formatValidationIssues(seeded.issues);
     }
@@ -768,12 +760,12 @@ export class OrchestrationService implements StageOutputConsumer {
     pipeline: PipelineDefinition,
     orchestration: Orchestration,
     settled: RunState,
-    fromStage: string | undefined,
+    { fromStage, reviewContext }: StartRunDecision,
   ): ValidationResult<SeededStart> | undefined {
     const source = this.seedSource(orchestration, settled);
     return fromStage === undefined
       ? undefined
-      : seedFromSettledRun(pipeline, source, fromStage, runLabel(source));
+      : seedFromSettledRun(pipeline, source, fromStage, runLabel(source), reviewContext);
   }
 
   private seedSource(orchestration: Orchestration, settled: RunState): RunState {

@@ -48,10 +48,21 @@ export function defaultProjectPreferences(): ProjectPreferences {
   };
 }
 
+export function withDistinctEngines(
+  current: ProjectPreferences,
+  update: ProjectPreferencesUpdate,
+): ProjectPreferencesUpdate {
+  const primary = update.primaryEngine ?? current.primaryEngine;
+  const secondary =
+    update.secondaryEngine === undefined ? current.secondaryEngine : update.secondaryEngine;
+  return secondary === primary ? { ...update, secondaryEngine: null } : update;
+}
+
 export function mergeProjectPreferences(
   base: ProjectPreferences,
-  update: ProjectPreferencesUpdate,
+  requested: ProjectPreferencesUpdate,
 ): ProjectPreferences {
+  const update = withDistinctEngines(base, requested);
   return {
     ...base,
     ...update,

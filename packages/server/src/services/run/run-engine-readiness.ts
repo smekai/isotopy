@@ -60,7 +60,13 @@ export class RunEngineReadiness {
         `Connection mode "${mode.label}" needs an API key — add one in Setup → Connection, or switch back to subscription.`,
       );
     }
-    if (!mode?.requiresApiKey && (await adapter.detect?.())?.loggedIn === false) {
+    const status = await adapter.detect?.();
+    if (status?.installed === false) {
+      throw new Error(
+        `${ENGINES[engineId].label} is not installed on this machine — install it from Setup → AI Harness before starting a run that uses it.`,
+      );
+    }
+    if (!mode?.requiresApiKey && status?.loggedIn === false) {
       throw new Error(
         `${ENGINES[engineId].label} is not logged in — log in from Setup → AI Harness before starting a run that uses it.`,
       );
