@@ -1,38 +1,25 @@
 import type {
-  EngineId,
-  EngineModelRoster,
-  ModelTier,
   Orchestration,
   OrchestrationStatus,
   OrchestratorDecision,
-  OrchestratorTeamProposal,
   RunState,
   RunSummary,
 } from "@isotopy/core";
 import { isTerminalRunStatus, parkedQuestion } from "@isotopy/core";
 
-export interface RunHarness {
-  engine: EngineId;
-  modelTier: ModelTier;
-  pinnedModel?: string;
-  roster: EngineModelRoster;
-}
-
 export interface OrchestratorView {
   orchestration: Orchestration;
   runs: RunSummary[];
   busy: boolean;
-  harness: RunHarness;
-  roleTiers: Record<string, ModelTier | null>;
+  currentTeam?: string;
   onApprove: () => void;
-  onRoleTierChange: (roleId: string, tier: ModelTier | null) => void;
   onOpenRun: (runId: string) => void;
 }
 
 const STATUS_LABELS: Record<OrchestrationStatus, string> = {
   conversing: "Thinking",
   awaiting_user: "Needs your answer",
-  awaiting_approval: "Team awaiting approval",
+  awaiting_approval: "Team change awaiting approval",
   running: "Running",
   stopped: "Stopped",
 };
@@ -54,43 +41,19 @@ export function answerableQuestion(
     : undefined;
 }
 
-export function teamAwaitingApproval(
-  orchestration: Orchestration,
-): OrchestratorTeamProposal | undefined {
-  const decision = orchestration.latestDecision;
-  return orchestration.status === "awaiting_approval" &&
-    decision?.action === "propose_team"
-    ? decision.team
-    : undefined;
-}
-
-export interface PendingRoleTiers {
-  orchestrationId: string;
-  tiers: Record<string, ModelTier | null>;
-}
-
-export function pendingTiersFor(
-  pending: PendingRoleTiers | null,
-  orchestration: Orchestration | undefined,
-): Record<string, ModelTier | null> {
-  const team = orchestration && teamAwaitingApproval(orchestration);
-  if (!pending || !orchestration || pending.orchestrationId !== orchestration.id || !team) {
-    return {};
-  }
-  const proposed = new Set(team.roles.map((role) => role.id));
-  return Object.fromEntries(
-    Object.entries(pending.tiers).filter(([roleId]) => proposed.has(roleId)),
+export function teamRevision(orchestrations: Orchestration[]): string | undefined {
+  return orchestrations.reduce<string | undefined>(
+    (latest, orchestration) =>
+      latest === undefined || orchestration.updatedAt > latest ? orchestration.updatedAt : latest,
+    undefined,
   );
 }
 
-export function withPendingTier(
-  pending: PendingRoleTiers | null,
-  orchestrationId: string,
-  roleId: string,
-  tier: ModelTier | null,
-): PendingRoleTiers {
-  const kept = pending?.orchestrationId === orchestrationId ? pending.tiers : {};
-  return { orchestrationId, tiers: { ...kept, [roleId]: tier } };
+export function teamChangeAwaitingApproval(orchestration: Orchestration): string | undefined {
+  const decision = orchestration.latestDecision;
+  return orchestration.status === "awaiting_approval" && decision?.action === "propose_team_change"
+    ? decision.team
+    : undefined;
 }
 
 export interface DecisionPresentation {
@@ -102,8 +65,8 @@ export function decisionPresentation(
   decision: OrchestratorDecision,
 ): DecisionPresentation {
   switch (decision.action) {
-    case "propose_team":
-      return { title: `Proposed the team "${decision.team.name}"`, detail: decision.rationale };
+    case "propose_team_change":
+      return { title: "Proposed a change to the team", detail: decision.rationale };
     case "delegate_milestone_planning":
       return { title: "Delegated milestone planning", detail: decision.rationale };
     case "start_run":
@@ -128,9 +91,7 @@ export function decisionPresentation(
 }
 
 function launchRationale(decision: OrchestratorDecision): string | undefined {
-  return decision.action === "start_run" || decision.action === "propose_team"
-    ? decision.rationale
-    : undefined;
+  return decision.action === "start_run" ? decision.rationale : undefined;
 }
 
 export function startReasonFor(

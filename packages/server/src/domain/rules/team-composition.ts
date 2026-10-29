@@ -1,204 +1,155 @@
-import {
-  REVIEW_IMPLEMENTATION_STEP_TASK,
-  STAGE_EXECUTION_POLICIES,
-  flattenPipelineStages,
-} from "@isotopy/core";
+import { REVIEW_IMPLEMENTATION_STEP_TASK, STAGE_EXECUTION_POLICIES } from "@isotopy/core";
 import type {
-  ModelTier,
-  Orchestration,
-  OrchestratorRole,
-  OrchestratorTeamProposal,
   PipelineDefinition,
   StageDefinition,
+  TeamDefinition,
+  TeamFlowStep,
+  TeamRole,
 } from "@isotopy/core";
 import type { ValidationIssue, ValidationResult } from "../validation.ts";
 import type { KnownAgentIds } from "./agent-catalog.ts";
 import { SKILL_ID } from "./persona-notes.ts";
 
-function roleIssues(
-  role: OrchestratorRole,
-  index: number,
-  known: KnownAgentIds,
-): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  if (!SKILL_ID.test(role.id)) {
-    issues.push({
-      path: ["roles", index, "id"],
-      message: "Role id must contain only lowercase letters, digits, and hyphens",
-    });
-  }
-  if (!known.personas.has(role.skill)) {
-    issues.push({
-      path: ["roles", index, "skill"],
-      message: `Unknown persona: ${role.skill}`,
-    });
-  }
-  if (!known.steps.has(role.stepTask)) {
-    issues.push({
-      path: ["roles", index, "stepTask"],
-      message: `Unknown step task: ${role.stepTask}`,
-    });
-  }
-  if (role.skill === ORCHESTRATOR_PERSONA && role.stepTask !== CLOSEOUT_STEP_TASK) {
-    issues.push({
-      path: ["roles", index, "skill"],
-      message: `The Orchestrator composes the team and closes it out; it cannot take ${role.stepTask}`,
-    });
-  }
-  if (role.stepTask === CLOSEOUT_STEP_TASK && role.skill !== ORCHESTRATOR_PERSONA) {
-    issues.push({
-      path: ["roles", index, "skill"],
-      message: `Only the Orchestrator closes a run out; ${role.skill} saw one step of it`,
-    });
-  }
-  return issues;
-}
-
-const VALIDATION_ORCHESTRATION_ID = "00000000";
-
 const ORCHESTRATOR_PERSONA = "orchestrator";
 
 const CLOSEOUT_STEP_TASK = "closeout-feature";
 
-function duplicateIdIssues(roles: OrchestratorRole[]): ValidationIssue[] {
+const ID_MESSAGE = "must contain only lowercase letters, digits, and hyphens";
+
+export function flowPipelineId(flowId: string): string {
+  return `flow-${flowId}`;
+}
+
+function roleIssues(role: TeamRole, index: number, known: KnownAgentIds): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!SKILL_ID.test(role.id)) {
+    issues.push({ path: ["roster", index, "id"], message: `Role id ${ID_MESSAGE}` });
+  }
+  if (!known.personas.has(role.agent)) {
+    issues.push({ path: ["roster", index, "agent"], message: `Unknown agent: ${role.agent}` });
+  }
+  return issues;
+}
+
+function duplicateRoleIssues(roster: TeamRole[]): ValidationIssue[] {
   const seen = new Set<string>();
-  return roles.flatMap((role, index) => {
+  return roster.flatMap((role, index) => {
     if (seen.has(role.id)) {
-      return [
-        { path: ["roles", index, "id"], message: `Duplicate role id: ${role.id}` },
-      ];
+      return [{ path: ["roster", index, "id"], message: `Duplicate role id: ${role.id}` }];
     }
     seen.add(role.id);
     return [];
   });
 }
 
-function reviewsImplementation(role: OrchestratorRole): boolean {
-  return role.stepTask === REVIEW_IMPLEMENTATION_STEP_TASK;
+function stepIssues(
+  roles: ReadonlyMap<string, TeamRole>,
+  entry: TeamFlowStep,
+  path: (string | number)[],
+  known: KnownAgentIds,
+): ValidationIssue[] {
+  const role = roles.get(entry.role);
+  if (role === undefined) {
+    return [{ path: [...path, "role"], message: `No role on the roster is called ${entry.role}` }];
+  }
+  if (!known.steps.has(entry.step)) {
+    return [{ path: [...path, "step"], message: `Unknown step: ${entry.step}` }];
+  }
+  if (role.agent === ORCHESTRATOR_PERSONA && entry.step !== CLOSEOUT_STEP_TASK) {
+    return [{ path: [...path, "step"], message: `The Orchestrator only closes a run out; it cannot take ${entry.step}` }];
+  }
+  if (entry.step === CLOSEOUT_STEP_TASK && role.agent !== ORCHESTRATOR_PERSONA) {
+    return [{ path: [...path, "role"], message: `Only the Orchestrator closes a run out; ${role.agent} saw one step of it` }];
+  }
+  return [];
 }
 
-function toStage(role: OrchestratorRole): StageDefinition {
+function flowIssues(
+  roles: ReadonlyMap<string, TeamRole>,
+  flowId: string,
+  steps: TeamFlowStep[],
+  known: KnownAgentIds,
+): ValidationIssue[] {
+  const path = ["flows", flowId];
+  const idIssues = SKILL_ID.test(flowId) ? [] : [{ path, message: `Flow name ${ID_MESSAGE}` }];
+  const seen = new Set<string>();
+  const repeats = steps.flatMap((entry, index) => {
+    const repeated = seen.has(entry.role);
+    seen.add(entry.role);
+    return repeated
+      ? [{ path: [...path, index, "role"], message: `${entry.role} already has a step in this flow` }]
+      : [];
+  });
+  return [
+    ...idIssues,
+    ...steps.flatMap((entry, index) => stepIssues(roles, entry, [...path, index], known)),
+    ...repeats,
+  ];
+}
+
+function rosterById(team: TeamDefinition): Map<string, TeamRole> {
+  return new Map(team.roster.map((role) => [role.id, role]));
+}
+
+export function teamIssues(team: TeamDefinition, known: KnownAgentIds): ValidationIssue[] {
+  const roles = rosterById(team);
+  return [
+    ...team.roster.flatMap((role, index) => roleIssues(role, index, known)),
+    ...duplicateRoleIssues(team.roster),
+    ...Object.entries(team.flows).flatMap(([flowId, steps]) => flowIssues(roles, flowId, steps, known)),
+  ];
+}
+
+function reviewsImplementation(step: string): boolean {
+  return step === REVIEW_IMPLEMENTATION_STEP_TASK;
+}
+
+function toStage(role: TeamRole, step: string): StageDefinition {
   return {
     id: role.id,
     label: role.label,
-    skill: role.skill,
-    stepTask: role.stepTask,
+    skill: role.agent,
+    stepTask: step,
     modelTier: role.modelTier,
-    engine: role.engine ?? (reviewsImplementation(role) ? "secondary" : undefined),
-    context: role.context ?? (reviewsImplementation(role) ? "isolated" : undefined),
+    engine: role.engine ?? (reviewsImplementation(step) ? "secondary" : undefined),
+    context: reviewsImplementation(step) ? "isolated" : undefined,
     executionPolicy:
-      role.stepTask === CLOSEOUT_STEP_TASK
+      step === CLOSEOUT_STEP_TASK
         ? STAGE_EXECUTION_POLICIES.CLOSEOUT
         : role.executionPolicy ?? STAGE_EXECUTION_POLICIES.STANDARD,
-    gateAfter: role.gateAfter,
     interactive: role.interactive,
   };
 }
 
-export function composedPipelineId(orchestrationId: string, generation: number): string {
-  return `team-${orchestrationId}-${generation}`;
-}
-
-// Anchored to the whole composed shape, not just a trailing number: an
-// orchestration id is eight hex characters and can be all digits, so a legacy
-// `team-12345678` would otherwise read as generation 12345678.
-const COMPOSED_PIPELINE_ID = /^team-[0-9a-f]{8}-(\d+)$/;
-
-export function generationOf(pipelineId: string | undefined): number {
-  const trailing = pipelineId?.match(COMPOSED_PIPELINE_ID)?.[1];
-  return trailing === undefined ? 0 : Number(trailing);
-}
-
-export function currentGeneration(orchestration: Orchestration): number {
-  return Math.max(generationOf(orchestration.composedPipeline?.id), 1);
-}
-
-export function nextGeneration(orchestration: Orchestration): number {
-  return generationOf(orchestration.composedPipeline?.id) + 1;
-}
-
-export function sameComposition(
-  left: PipelineDefinition | undefined,
-  right: PipelineDefinition | undefined,
-): boolean {
-  if (left === undefined || right === undefined) {
-    return false;
-  }
-  const shape = (pipeline: PipelineDefinition): string =>
-    JSON.stringify(flattenPipelineStages(pipeline));
-  return shape(left) === shape(right);
-}
-
-export function withRoleTiers(
-  team: OrchestratorTeamProposal,
-  roleTiers: Record<string, ModelTier | null> | undefined,
-): ValidationResult<OrchestratorTeamProposal> {
-  if (roleTiers === undefined) {
-    return { ok: true, value: team };
-  }
-  const known = new Set(team.roles.map((role) => role.id));
-  const issues = Object.keys(roleTiers)
-    .filter((id) => !known.has(id))
-    .map((id) => ({ path: ["roleTiers", id], message: `Unknown role id: ${id}` }));
-  if (issues.length > 0) {
-    return { ok: false, issues };
-  }
-  return {
-    ok: true,
-    value: {
-      ...team,
-      roles: team.roles.map((role) => ({
-        ...role,
-        modelTier: chosenTier(roleTiers, role),
-      })),
-    },
-  };
-}
-
-function chosenTier(
-  roleTiers: Record<string, ModelTier | null>,
-  role: OrchestratorRole,
-): ModelTier | undefined {
-  const chosen = roleTiers[role.id];
-  if (chosen === undefined) {
-    return role.modelTier;
-  }
-  return chosen ?? undefined;
-}
-
-export function composeTeamPipeline(
-  team: OrchestratorTeamProposal,
+export function composeFlowPipeline(
+  team: TeamDefinition,
+  flowId: string,
   known: KnownAgentIds,
-  orchestrationId: string,
-  generation = 1,
 ): ValidationResult<PipelineDefinition> {
-  const issues = [
-    ...team.roles.flatMap((role, index) => roleIssues(role, index, known)),
-    ...duplicateIdIssues(team.roles),
-  ];
+  const steps = team.flows[flowId];
+  if (steps === undefined) {
+    const named = Object.keys(team.flows).join(", ");
+    return { ok: false, issues: [{ path: ["flow"], message: `team.md has no flow called ${flowId}; it has ${named}` }] };
+  }
+  const issues = teamIssues(team, known);
   if (issues.length > 0) {
     return { ok: false, issues };
   }
+  const roles = rosterById(team);
   return {
     ok: true,
     value: {
-      id: composedPipelineId(orchestrationId, generation),
-      name: generation > 1 ? `${team.name} (team ${generation})` : team.name,
-      description: team.summary,
-      groups: [{ stages: team.roles.map(toStage) }],
+      id: flowPipelineId(flowId),
+      name: `The team's ${flowId} flow`,
+      description: steps.map((entry) => `${entry.role}: ${entry.step}`).join(" → "),
+      groups: [
+        {
+          stages: steps.flatMap((entry) => {
+            const role = roles.get(entry.role);
+            return role === undefined ? [] : [toStage(role, entry.step)];
+          }),
+        },
+      ],
     },
   };
-}
-
-export function teamProposalIssues(
-  team: OrchestratorTeamProposal,
-  known: KnownAgentIds,
-): ValidationIssue[] {
-  const composed = composeTeamPipeline(team, known, VALIDATION_ORCHESTRATION_ID);
-  return composed.ok
-    ? []
-    : composed.issues.map((issue) => ({
-        path: ["team", ...issue.path],
-        message: issue.message,
-      }));
 }

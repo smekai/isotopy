@@ -28,18 +28,7 @@ const SEEDED: ScheduleView = {
   cron: "0 9 * * *",
   timezone: "UTC",
   task: "Take the next task off the board",
-  team: {
-    name: "Board reader",
-    summary: "One persona, one step.",
-    roles: [
-      {
-        id: "reader",
-        label: "Project Manager",
-        skill: "project-manager",
-        stepTask: "plan-feature",
-      },
-    ],
-  },
+  flow: "board",
   enabled: true,
   nextFireAt: anHourFromNow(),
   createdAt: "2026-08-01T09:00:00.000Z",

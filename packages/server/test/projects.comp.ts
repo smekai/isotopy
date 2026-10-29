@@ -36,6 +36,7 @@ const OWNER_FILES = [
   "agents/growth-marketer/agent.md",
   "agents/growth-marketer/knowledge/launch-checklist.md",
   "steps/plan-campaign.md",
+  "team.md",
 ];
 
 const ISOTOPY_FILES = ["runs/r1/state.json", "skills/growth-marketer.notes.md", "aiki.db"];
@@ -94,6 +95,20 @@ test("registering a project whose .isotopy still ignores everything lets the own
 
   // Assert
   expect(await untrackedPaths(root)).toEqual(OWNER_FILES.map((file) => `.isotopy/${file}`).sort());
+});
+
+test("registering a project whose .isotopy predates team.md lets the team through as well", async () => {
+  // Arrange — the gitignore Isotopy wrote before the standing team existed.
+  const root = await mkdtemp(path.join(inject("testTempRoot"), "upgrade-team-"));
+  await initGitRepository(root);
+  await writeDataFiles(root, OWNER_FILES);
+  await writeFile(path.join(root, ".isotopy", ".gitignore"), "*\n!/agents/\n!/agents/**\n!/steps/\n!/steps/**\n");
+
+  // Act
+  await post(ctx.app, "/projects", { root });
+
+  // Assert
+  expect(await untrackedPaths(root)).toContain(".isotopy/team.md");
 });
 
 test("an .isotopy/.gitignore the owner wrote is never rewritten", async () => {

@@ -6,9 +6,10 @@ import type { CreateScheduleInput, ScheduleView } from "@isotopy/core";
 import type { Dir } from "../../theme";
 import { FONT, ICON, MONO, RADIUS, SANS, SPACE, WEIGHT } from "../../theme";
 import { ERROR_RED, fieldLabel, mutedCaption } from "../setup/setup-styles";
-import { SOLO_READER } from "./schedule-team";
 
 const DIALOG_WIDTH = 520;
+
+const ORCHESTRATOR_CHOOSES = "";
 
 function dialog(d: Dir): CSSProperties {
   return {
@@ -90,13 +91,14 @@ const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontSize: FONT.md, fontFam
 
 export interface ScheduleModalProps {
   schedule?: ScheduleView;
+  flows: string[];
   error: string | null;
   d: Dir;
   onSave: (body: CreateScheduleInput) => void;
   onDismiss: () => void;
 }
 
-export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: ScheduleModalProps) {
+export function ScheduleModal({ schedule, flows, error, d, onSave, onDismiss }: ScheduleModalProps) {
   const [name, setName] = useState(schedule?.name ?? "");
   const [cron, setCron] = useState(schedule?.cron ?? "0 9 * * *");
   const [timezone, setTimezone] = useState(
@@ -104,7 +106,7 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
   );
   const [task, setTask] = useState(schedule?.task ?? "");
   const title = schedule ? "Edit schedule" : "New schedule";
-  const team = schedule === undefined ? SOLO_READER : schedule.team;
+  const [flow, setFlow] = useState(schedule?.flow ?? ORCHESTRATOR_CHOOSES);
 
   return (
     <Dialog
@@ -161,10 +163,27 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
           />
         </label>
 
+        <label style={field(d)}>
+          Flow of the team
+          <select
+            value={flow}
+            onChange={(event) => setFlow(event.target.value)}
+            data-testid="schedule-flow"
+            style={input(d)}
+          >
+            <option value={ORCHESTRATOR_CHOOSES}>Let the Orchestrator choose</option>
+            {flows.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div style={mutedCaption(d)}>
           {schedule
             ? "The next run time is computed by the server and shown in your own zone."
-            : "One persona, one step. The Orchestrator reviews each run as it settles."}
+            : "The Orchestrator reviews each run as it settles."}
         </div>
 
         {error !== null && (
@@ -181,7 +200,7 @@ export function ScheduleModal({ schedule, error, d, onSave, onDismiss }: Schedul
             type="button"
             data-testid="schedule-save"
             onClick={() =>
-              onSave({ name, cron, timezone, task, team })
+              onSave({ name, cron, timezone, task, flow: flow === ORCHESTRATOR_CHOOSES ? undefined : flow })
             }
             style={primaryButton(d)}
           >

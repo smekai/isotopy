@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { orchestratorTeamProposalSchema } from "@isotopy/core";
-import type { OrchestratorTeamProposal } from "@isotopy/core";
 import type { ZodType } from "zod";
 import { splitFrontMatter } from "../domain/markdown/front-matter.ts";
 import { SKILL_ID } from "../domain/rules/persona-notes.ts";
@@ -66,7 +64,7 @@ const dutyFrontMatterSchema = z
     title: text,
     cron: text,
     timezone: text,
-    team: orchestratorTeamProposalSchema.optional(),
+    flow: agentId.optional(),
   })
   .strict();
 
@@ -74,7 +72,7 @@ export interface DutyDefinition {
   title: string;
   cron: string;
   timezone: string;
-  team?: OrchestratorTeamProposal;
+  flow?: string;
   task: string;
 }
 

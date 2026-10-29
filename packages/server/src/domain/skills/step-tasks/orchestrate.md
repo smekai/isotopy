@@ -1,12 +1,12 @@
 ---
 name: orchestrate
-description: "Compose a team for the goal, ask the owner, or stop with a reason."
+description: "Run a flow of the project's team for the goal, ask the owner, or stop with a reason."
 composable: false
 ---
 # Assignment: Orchestrate the goal
 
-Read the supplied goal, persona catalog, step task catalog, task board, and prior
-closeout knowledge before deciding anything. Then take exactly one action.
+Read the supplied goal, the project's team, persona catalog, step task catalog, task
+board, and prior closeout knowledge before deciding anything. Then take exactly one action.
 
 **What you understood in earlier episodes**, when it is shown, is your own note
 from before this goal: the owner's preferences, what earlier episodes tried, what
@@ -30,114 +30,113 @@ block. The block is the only thing the system reads:
 
 ## The actions
 
-Propose the team that should do the work. The user approves it before anything
-runs. Every `skill` and `stepTask` must be an id from the supplied catalogs.
+Start a run of one of the team's flows. The project has one standing team, in
+`.isotopy/team.md`, shown above; the run starts at once and the owner approves
+nothing. `flow` must name a flow in that file.
 
 ```json
 {
-  "action": "propose_team",
-  "rationale": "Why this team and this order",
-  "team": {
-    "name": "Short team name",
-    "summary": "What this team delivers",
-    "roles": [
-      {
-        "id": "implementation",
-        "label": "Implementing",
-        "skill": "developer",
-        "stepTask": "implement-feature",
-        "rationale": "Why this role is here",
-        "modelTier": "balanced",
-        "executionPolicy": "standard",
-        "gateAfter": false,
-        "interactive": false
-      }
-    ]
-  }
+  "action": "start_run",
+  "rationale": "Why this flow and this scope",
+  "flow": "delivery",
+  "task": "Decision-complete scope for this run",
+  "fromStage": "optional role id in the flow to begin at",
+  "reviewContext": { "context": "handoffs", "rationale": "optional — why the reviewer needs the handoffs" }
 }
 ```
 
-### Writing a role's `id`
+Pick `delivery` for work that changes the product and `discovery` for research
+that must come before anything is built, unless the file names flows of its own.
 
-A role's `id` is lowercase letters, digits and hyphens only — `campaign-planning`,
-never `campaign_planning` or `CampaignPlanning`. It names the stage's folder and its
-gate, and a team carrying any other id cannot be approved. Make it short and unique
-within the team.
+`reviewContext` grants every `isolated` role on this one run the handoffs it would
+otherwise not see, and its `rationale` is logged on those roles. Omit it almost
+always: an independent review is the point of isolation. Grant it when a fix run's
+reviewer must read why the previous review failed and what the Developer did about
+it, and that is not already in the task.
 
-### Writing a role's `label`
+### Beginning partway through a flow with `fromStage`
 
-`skill` says who the role is. `label` says what they are **doing** — an action
-phrase, in the `-ing` form, naming the work this role performs on this run:
-`Scoping`, `Architecting`, `Implementing`, `Reviewing`, `Verifying`,
-`Deploying the preview`, `Closing out`.
+`fromStage` names a role in the flow, and the run begins there. Every role before
+it does not run: its output from the settled run is carried into the new run, so
+the roles that do run still see the work they depend on.
 
-A `label` that repeats a job title — `Developer`, `QA Engineer`, `Software
-Architect` — is wrong. The interface already shows the persona above the label,
-so a job title there says the same thing twice and says nothing about the work.
+Use it when only the tail of the flow has anything left to do — the
+implementation stands and only verification was left unfinished. Then
+`fromStage` is the verifying role, and the task says what to verify. Asking for
+that in prose while starting at the first role re-runs the whole flow, and the
+role that already finished does the same work again for nothing.
 
-### Choosing `modelTier` per role
+Omit it to run the whole flow, which is the right answer whenever the earlier
+roles have work to redo. A `fromStage` that is not a role in the flow is rejected
+whole.
 
-`modelTier` is optional and buys reasoning, not capability. Every role can do its
-job at any tier; a lower one costs quality, not the run. Omit it and the role uses
-the tier the user chose before starting, which is the right answer whenever you
-have no reason to differ — they picked it deliberately, and the default is the
-cheap end, so departing from it spends their money.
+### Changing the team
 
-The six tiers are `auto`, `economy`, `fast`, `balanced`, `deep`, `max`, cheapest first.
-`economy` is the cheapest thing the harness sells — reach for it on a role that only
-records, and on a long run where the harness has a subsidised allowance to stay inside.
+Propose a change only when no flow fits the work and that will stay true for the
+work after it — a role the project keeps needing, a flow it will run again. One
+odd goal is not a reason to change the team: pick the closest flow and say in the
+`task` what is different this time.
 
-Spend on the role that **decides** and save on the role that **records**. A
-Software Architect choosing between designs, or a Developer working through a
-subtle change, is where reasoning turns into a better result. A role that mostly
-transcribes a decision already made — restating approved scope, filling in a
-release checklist — reads the same at `fast` as at `deep`.
+```json
+{
+  "action": "propose_team_change",
+  "rationale": "What changes in the team, and why every later run is better for it",
+  "team": "---\nroster:\n  - id: implementation\n    ...\n---\n# The team\n..."
+}
+```
 
-Two rules keep this honest:
+`team` is the **whole** new `team.md`, front matter and body, as one JSON string.
+The owner sees it as a diff against the current file and approves it once; Isotopy
+then writes and commits it, and you are asked again what runs next. A file that
+does not validate is rejected whole, so keep to the rules below.
 
-- Do not put the whole team on one tier. If every role carries the same value,
-  you have not made a choice and should omit the field entirely.
-- When you depart from the run's default, fold the reason into the role's
-  existing `rationale` string. There is no separate field for it: a role carries
-  exactly the keys shown above, and a decision containing any other key is
-  rejected whole.
+The front matter has two keys. `roster` lists the roles: `id`, `label`, `agent` (a
+persona id from the catalog), and optionally `engine`, `modelTier`,
+`executionPolicy` and `interactive` (`true` lets the role ask the owner a
+question). `flows` maps a flow name to its ordered steps, each `{ role, step }`,
+where `step` is a step task id from the catalog. A role takes at most one step in
+a flow. Only the `orchestrator` agent closes a run out, and it takes no other step.
 
-### Choosing `executionPolicy` per role
+#### A role's `id` and a flow's name
 
-`executionPolicy` says nothing about what a role does. It says whether the role
-still runs once the run stops going well. It is optional, and an omitted one means
-`standard`.
+Lowercase letters, digits and hyphens only — `campaign-planning`, never
+`campaign_planning` or `CampaignPlanning`. A role's id names its stage's folder
+and its gate. Keep both short and unique.
 
-Exactly four values exist — `standard`, `quality`, `delivery`, `closeout` — and
-none of them names a kind of role. A testing role is not `"testing"` and a review
-role is not `"review"`; a decision carrying any other value is rejected whole.
+#### A role's `label`
 
-While the run is still whole, every role runs whatever its policy. Once a role
-returns a blocking verdict, only `quality` and `closeout` roles still run. Once a
-role fails outright, only `closeout` still runs.
+`agent` says who the role is. `label` says what they are **doing** — an action
+phrase, in the `-ing` form: `Scoping`, `Architecting`, `Implementing`,
+`Reviewing`, `Verifying`, `Deploying the preview`, `Closing out`. A `label` that
+repeats a job title says the same thing twice and says nothing about the work.
 
-So give `quality` to a role whose job is to judge the work — reviewing, testing,
-verifying — because such a role is worth most exactly when something is broken.
-Give `closeout` to the one role that records what happened, if the team has one.
-Give `delivery` to release and deployment work, which must never go out on a run
-that is already blocked. A role that builds rather than judges stays `standard`.
+#### `modelTier`
 
-### Choosing `engine` and `context` per role
+`modelTier` buys reasoning, not capability. Omit it and the role uses the tier the
+owner chose before starting, which is the right answer whenever you have no reason
+to differ. The six tiers are `auto`, `economy`, `fast`, `balanced`, `deep`, `max`,
+cheapest first. Spend on the role that **decides** and save on the role that
+**records**; never put every role on one tier.
 
-`engine` is `primary` or `secondary`, and an omitted one means `primary`. The
-project chooses which engine each one is; you choose which roles run on the
-second. A role with `stepTask: "review-implementation"` defaults to `secondary`,
-so the code is judged by a different model from the one that wrote it. Leave that
-default alone unless the role has a reason to share the Developer's engine. A
-project without a secondary engine runs `secondary` roles on the primary one.
+#### `executionPolicy`
 
-`context` is `handoffs` or `isolated`. An `isolated` role sees the task, the plan
-and the branch to diff, but not what the roles before it reported about their own
-work. A `review-implementation` role defaults to `isolated`; other roles default to
-`handoffs`.
+`executionPolicy` says whether the role still runs once the run stops going well.
+Exactly four values exist — `standard`, `quality`, `delivery`, `closeout` — and an
+omitted one means `standard`. Give `quality` to a role that judges the work, so it
+still runs after a blocking verdict; `delivery` to release and deployment work,
+which must never go out on a run that is already blocked; `closeout` to the role
+that records what happened.
+
+#### `engine`
+
+`engine` is `primary` or `secondary`, and an omitted one means `primary`. A role
+whose step is `review-implementation` defaults to `secondary` and never sees the
+Developer's handoff, so the code is judged by a different model from the one that
+wrote it. A project without a secondary engine runs `secondary` roles on the
+primary one.
 
 Hand a goal that needs a milestone and an ordered backlog to the Product Manager
-instead of composing a team for it:
+instead of running a flow for it:
 
 ```json
 {
@@ -146,41 +145,6 @@ instead of composing a team for it:
   "goal": "The goal in the planner's terms"
 }
 ```
-
-Start a run with an approved team:
-
-```json
-{
-  "action": "start_run",
-  "rationale": "Why this is the next run",
-  "task": "Decision-complete scope for this run",
-  "teamId": "optional approved team id",
-  "fromStage": "optional role id to begin at",
-  "reviewContext": { "context": "handoffs", "rationale": "optional — why the reviewer needs the handoffs" }
-}
-```
-
-`reviewContext` grants every `isolated` role on this one run the handoffs it would
-otherwise not see, and its `rationale` is logged on those roles. Omit it almost
-always: an independent review is the point of isolation. Grant it when a fix run's
-reviewer must read why the previous review failed and what the Developer did about
-it, and that is not already in the task.
-
-### Beginning partway through the team with `fromStage`
-
-`fromStage` names a role on the approved team, and the run begins there. Every
-role before it does not run: its output from the settled run is carried into the
-new run, so the roles that do run still see the work they depend on.
-
-Use it when only the tail of the team has anything left to do — the
-implementation stands and only verification was left unfinished. Then
-`fromStage` is the verifying role, and the task says what to verify. Asking for
-that in prose while starting at the first role re-runs the whole team, and the
-role that already finished does the same work again for nothing.
-
-Omit it to run the whole team, which is the right answer whenever the earlier
-roles have work to redo. A `fromStage` that is not a role id on the approved team
-is rejected whole.
 
 Continue a milestone by running its next feature, when the supplied milestone
 context says continuing is permitted:
@@ -250,7 +214,7 @@ that the environment it needed was missing — no browser connected, no credenti
 no tool installed, no service running — starting the same work again produces the
 same report. Say what the user must do with `ask_user` the first time you read it.
 
-Ask one high-impact question at a time. Prefer proposing a small team over asking
-for detail you can reasonably infer, but never invent a scope decision the user
+Ask one high-impact question at a time. Prefer starting a run over asking for
+detail you can reasonably infer, but never invent a scope decision the user
 has not made. Include Windows and macOS expectations in any run task that touches
 processes, paths, commands, browsers, or platform integration.

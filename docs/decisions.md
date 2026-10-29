@@ -15,6 +15,46 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-29 — One team per project, in team.md, changed only by an approved proposal
+
+**Context:** the Orchestrator composed a team for every initiative (`propose_team`), the owner
+approved it, and it lived on that orchestration alone (`approvedTeam`, `composedPipeline`, a
+generation number when a review re-composed it). On ShareTravel this meant a different team
+each time and an approval before almost every run. Schedules and duties pinned teams of their
+own. Nothing a project could read, version or edit said who its team was. (TASK-208, epic
+TASK-206.)
+
+**Decision:** a project has one team, in `<project>/.isotopy/team.md` — a `roster` of roles
+(agent, engine, tier, policy) and named `flows` of `{ role, step }`. A project without one gets
+the bundled template (`delivery`, `discovery`), committed on the branch it is on the first time
+a team is needed. `start_run` names a flow and runs it without approval. `propose_team` is
+replaced by `propose_team_change`, which carries the whole new file; the owner approves it
+once, Isotopy writes and commits it on the checkout's branch and on the initiative's base, and
+it holds for every later initiative. Schedules and duties name a flow. An invalid `team.md`
+refuses team runs with its issues. Removed with it: `approvedTeam`, `composedPipeline`, team
+generations and the re-composition path, per-role tier edits at approval, and the pinned team
+on schedules and duties. Orchestrations stored with a `propose_team` turn no longer parse and
+are skipped, as the 2026-07-23 entry allows before 1.0.
+
+**It also retires per-run composition (2026-08-19, TASK-150).** That answer let a review propose a
+new team when a run needed another shape, approved only when the composition differed, and
+numbered the generations so runs stayed attributable. The need it met — TASK-141's run 3 carrying a
+five-role team to fix one function — is now met by flows: a continuation picks the flow that fits,
+and `fromStage` runs only the tail. A flow's pipeline id is `flow-<name>`, so runs of one flow are
+attributable across initiatives without a generation.
+
+**Rejected:** a default team with per-initiative edits. It keeps the approval on every
+initiative that edits it, so the owner keeps approving the same team with one role changed,
+and it leaves two sources of truth — the default and whatever this initiative did to it — that
+a review, a schedule and the UI must each reconcile. One file, changed deliberately, is what a
+real team is.
+
+**Not yet:** the Home composer's fixed pipelines (`pm-dev-test`, `full-delivery`, `solo`)
+still start direct runs, and Setup's gates list those pipelines rather than the team's flows.
+Both move to the team in `TASK-214` rather than doubling this change.
+
+---
+
 ## 2026-10-29 — An agent can wait: durable deferred checks, not a polling loop per integration
 
 **Context:** TASK-210 first waited for CI with `gh pr checks` polled from inside Isotopy. The owner
@@ -657,16 +697,16 @@ record and the UI badge.
 
 ---
 
-## 2026-08-25 — A scheduled task is a prompt, and the team it pins is optional
+## 2026-08-25 — A scheduled task is a prompt, and the flow it names is optional
 
 **Context:** `TASK-161` specified the board poller as a bespoke feature: a server-side board
 reader with a documented pick order, wired to its own preference. The owner's direction was that
 the poller is **one instance of a general mechanism**, and that there may be many.
 
-**Decision: a scheduled task carries a prompt, and may or may not pin a team.** With a team it
-starts that team, unchanged from `TASK-159`. Without one it hands its prompt to
-`OrchestrationService.start`, and the Orchestrator decides what to do — including composing a team
-for it. `schedulePinsTeam` is the fork.
+**Decision: a scheduled task carries a prompt, and may or may not name a flow.** With a flow of
+the project's team it starts that flow (since 2026-10-29; before, a schedule pinned a team of its
+own). Without one it hands its prompt to `OrchestrationService.start`, and the Orchestrator decides
+what to do — including which flow runs. `scheduleNamesFlow` is the fork.
 
 **This removed roughly half of what the task asked for.** `orchestrations.start` is the same entry
 point the UI's *Start Orchestrator* uses, and `goalContext` already renders the whole board into the
@@ -1108,13 +1148,9 @@ should not sink because it started days ago. Runs *inside* an initiative run old
 `runsForOrchestration` already made for the thread.
 
 **A run says why it exists, and the first one says nothing.** `startReasonFor` pairs a run with the
-latest **launch-producing** turn at or before its `createdAt`. That is `start_run` *and*
-`propose_team`, because a proposal starts a run on two paths — `approveTeam`, and the auto-approve
-`launchUnchangedTeam` that `TASK-150` added — and neither records a turn of its own. Reading only
-`start_run` was wrong twice over: the first work run of every initiative comes from an approved
-proposal and so had no reason at all, and a proposal-started run that followed an earlier
-`start_run` inherited that stale rationale on timestamp alone. Caught in PR review. A turn that
-launches nothing — a question, a verdict — leaves the reason standing rather than blanking it.
+latest **launch-producing** turn at or before its `createdAt`. Since the standing team (2026-10-29)
+that is `start_run` alone, the one decision that starts a team run. A turn that launches nothing — a
+question, a verdict, a proposed team change — leaves the reason standing rather than blanking it.
 `orchestration-service.ts` starts the composed run in the same handler that records the decision, so
 the launching turn always precedes the run it produced. The run an initiative *began* as is the
 Orchestrator conversation, which no decision started — it gets `undefined` and renders no reason
@@ -1130,54 +1166,6 @@ someone does, `SettingsStore` is where it goes.
 runs, not a property of one, and `RunCard` is also rendered for runs that belong to no initiative.
 Giving it a second reason to change bought nothing, so the line renders in `InitiativeGroup` between
 the cards instead.
-
----
-
-## 2026-08-19 — A team is composed per run, and only a real change asks the user
-
-**Context:** an initiative approved one team and reused it forever. `launch` read
-`orchestration.composedPipeline` and re-ran the same roles, so a continuation needing a different
-shape had only two levers: the task text, and `fromStage`. `TASK-141` watched run 3 exist purely to
-fix one function while carrying the whole five-role team, skipping planning and design by *seeding*
-rather than by being composed without them. Skipping is a workaround for composing.
-
-**The code was never the obstacle.** `propose_team` is a full member of the decision union,
-`extractOrchestratorDecision` parses a review's output against that same union, `refusalFor` refuses
-only `start_run`, and a settle-time proposal already parked the initiative at `awaiting_approval`
-without launching anything. What stopped it was one sentence of prompt: *"Do not propose a new team
-here; the approved team is already composed."* The fix is mostly telling the model the truth.
-
-**Approval happens only when the composition actually differs.** A settle-time proposal is composed
-and compared against the running pipeline; identical means the run starts immediately, different
-means the user approves first. This keeps the "approve the team, then let it run" model that the
-dogfood validated and `TASK-148`'s scope note protects, while putting the human back in front of
-composition whenever composition changes. Identical means identical where composition is concerned — a changed model tier is a real change,
-because it changes what the run costs. A *rename* is not: `sameComposition` compares stages, so
-identical roles under a new label run as the team already approved rather than quietly renaming it.
-
-**A settle-time proposal carries a task.** On the opening turn the task is the goal; on a
-re-composition it is "run *this* next, with *this* team". Without the field an auto-approved
-proposal would have nothing to run, and `approveTeam` would have started the new team against the
-initiative's original goal — which is what it did before this change, and would have been silently
-wrong for every re-composition. A proposal that omits it is refused with a message saying so, the
-way `NO_APPROVED_TEAM` already teaches.
-
-**Teams are numbered so runs stay attributable.** `composedPipelineId` was `team-<orchestrationId>`
-for every generation, so two teams' runs were indistinguishable. It now carries a generation, and
-the name gains a `(team n)` suffix for the second onward — which means `run.pipelineName`, already
-rendered on every run card, the status bar, the project drawer and child-run links, tells them apart
-with no new UI. Each composed run already embedded its full `PipelineDefinition`, so the roles were
-never lost, only unlabelled.
-
-**Seeding across a team change stays refused.** `seedFromSettledRun` validates `fromStage` against
-the pipeline being launched and refuses when the settled run never ran a preceding stage. A
-re-composed team's ids do not line up, so `fromStage` fails — correctly. A new team starts from the
-top, which is precisely the honesty run 3 lacked when it seeded past planning instead of being
-composed without it. The prompt now says so rather than leaving the model to discover the refusal.
-
-**`TASK-111` is not answered here.** Reusable *saved* teams is the same question from the other
-side, and this composes fresh rather than recalling. It stays P3 and feedback-gated on `TASK-135`;
-`start_run.teamId` remains declared and unread rather than half-wired to look like progress.
 
 ---
 

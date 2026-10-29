@@ -20,7 +20,7 @@ const RUN_ID = "e2eorch1";
 const ORCHESTRATION_ID = "orch-e2e";
 const GOAL = "seeded orchestrator initiative";
 
-test("a proposed team is presented with its roles and can be approved", async ({ page }) => {
+test("a proposed team change is shown as a diff of team.md and can be approved", async ({ page }) => {
   // Arrange
   await anticipate(page, awaitingApproval());
 
@@ -28,27 +28,14 @@ test("a proposed team is presented with its roles and can be approved", async ({
   await attachSeededRun(page);
 
   // Assert
-  await expect(page.getByTestId("orchestrator-status")).toHaveText("Team awaiting approval");
-  const team = page.getByTestId("orchestrator-team");
-  await expect(team).toContainText("Delivery pair");
-  await expect(team).toContainText("Implementing");
-  await expect(team).toContainText("Verifying");
-  await expect(page.getByTestId("approve-team")).toBeEnabled();
+  await expect(page.getByTestId("orchestrator-status")).toHaveText("Team change awaiting approval");
+  const change = page.getByTestId("orchestrator-team-change");
+  await expect(change).toContainText("Verification keeps coming back on its own");
+  await expect(change.locator('[data-kind="added"]')).toContainText(["verify:"]);
+  await expect(page.getByTestId("approve-team-change")).toBeEnabled();
 });
 
-test("each role's model preset is on the card, so the cost is visible before approval", async ({ page }) => {
-  // Arrange
-  await anticipate(page, awaitingApproval());
-
-  // Act
-  await attachSeededRun(page);
-
-  // Assert — the Developer carries the Orchestrator's choice, QA falls back to the run's.
-  await expect(page.getByTestId("role-tier-implementation")).toHaveValue("deep");
-  await expect(page.getByTestId("role-tier-test")).toHaveValue("");
-});
-
-test("an initiative waiting on the user says so, and offers no team to approve", async ({ page }) => {
+test("an initiative waiting on the user says so, and offers no team change to approve", async ({ page }) => {
   // Arrange
   await anticipate(page, awaitingUser());
 
@@ -57,7 +44,7 @@ test("an initiative waiting on the user says so, and offers no team to approve",
 
   // Assert
   await expect(page.getByTestId("orchestrator-status")).toHaveText("Needs your answer");
-  await expect(page.getByTestId("approve-team")).toHaveCount(0);
+  await expect(page.getByTestId("approve-team-change")).toHaveCount(0);
 });
 
 test("the Orchestrator's question is answered in the thread it was asked in", async ({ page }) => {
@@ -195,23 +182,12 @@ function initiative(overrides: Partial<Orchestration>): Orchestration {
   };
 }
 
+const CURRENT_TEAM = ["---", "roster: []", "flows:", "  pair: []", "---", ""].join("\n");
+
 const PROPOSAL: OrchestratorDecision = {
-  action: "propose_team",
-  rationale: "One Developer and one QA Engineer cover this",
-  team: {
-    name: "Delivery pair",
-    summary: "Build it and verify it",
-    roles: [
-      {
-        id: "implementation",
-        label: "Implementing",
-        skill: "developer",
-        stepTask: "implement-feature",
-        modelTier: "deep",
-      },
-      { id: "test", label: "Verifying", skill: "tester", stepTask: "verify-feature" },
-    ],
-  },
+  action: "propose_team_change",
+  rationale: "Verification keeps coming back on its own",
+  team: ["---", "roster: []", "flows:", "  pair: []", "  verify: []", "---", ""].join("\n"),
 };
 
 const QUESTION: OrchestratorDecision = { action: "ask_user", question: "Which database?" };
@@ -257,6 +233,10 @@ async function anticipate(
   await page.route(
     (url) => url.pathname === "/orchestrations",
     (route) => route.fulfill({ json: [orchestration] }),
+  );
+  await page.route(
+    (url) => url.pathname === "/team",
+    (route) => route.fulfill({ json: { state: "invalid", source: "project", text: CURRENT_TEAM, issues: ["roster: too small"] } }),
   );
   await page.route(
     (url) => url.pathname === "/runs",

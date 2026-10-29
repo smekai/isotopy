@@ -63,7 +63,7 @@ export interface DutyFileFields {
   title: string;
   cron: string;
   timezone: string;
-  team?: unknown;
+  flow?: string;
   task: string;
 }
 
@@ -73,11 +73,11 @@ export function dutyFile(overrides: Partial<DutyFileFields> = {}): string {
     cron: overrides.cron ?? "0 8 * * 1",
     timezone: overrides.timezone ?? "UTC",
   };
-  const team = overrides.team === undefined ? [] : [`team: ${JSON.stringify(overrides.team)}`];
+  const flow = overrides.flow === undefined ? [] : [`flow: ${overrides.flow}`];
   return [
     "---",
     ...Object.entries(fields).map(([key, value]) => `${key}: ${JSON.stringify(value)}`),
-    ...team,
+    ...flow,
     "---",
     overrides.task ?? "Read last week's numbers and propose the next experiment.",
   ].join("\n");

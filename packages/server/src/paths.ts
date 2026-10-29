@@ -87,16 +87,21 @@ export function toolCacheDir(projectPath: ProjectPath, workspacePath: string): s
     : path.join(projectPath.dataDir, "cache");
 }
 
+const GITIGNORE_BEFORE_TEAM_FILE = ["*", "!/agents/", "!/agents/**", "!/steps/", "!/steps/**", ""].join("\n");
+
 const DATA_DIR_GITIGNORE = [
   "*",
   "!/agents/",
   "!/agents/**",
   "!/steps/",
   "!/steps/**",
+  "!/team.md",
   "",
 ].join("\n");
 
 const SELF_IGNORING_GITIGNORE = "*\n";
+
+const EARLIER_ISOTOPY_GITIGNORES = new Set([SELF_IGNORING_GITIGNORE, GITIGNORE_BEFORE_TEAM_FILE]);
 
 export async function ensureProjectDataDir(projectPath: ProjectPath): Promise<void> {
   await mkdir(projectPath.dataDir, { recursive: true });
@@ -107,7 +112,7 @@ export async function ensureProjectDataDir(projectPath: ProjectPath): Promise<vo
 }
 
 function isIsotopyGitignore(existing: string | undefined): boolean {
-  return existing === undefined || existing.replace(/\r\n/g, "\n") === SELF_IGNORING_GITIGNORE;
+  return existing === undefined || EARLIER_ISOTOPY_GITIGNORES.has(existing.replace(/\r\n/g, "\n"));
 }
 
 async function ensureRunWorkspace(projectPath: ProjectPath, runId: string): Promise<string> {

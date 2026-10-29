@@ -29,12 +29,11 @@ export interface SettledLaunch {
   status?: RunState["status"];
 }
 
-export const NO_APPROVED_TEAM =
-  "The Orchestrator asked to start a run before a team was approved";
+export const TEAM_CHANGE_QUESTION = "You proposed a change to the project's team.";
 
-export const PROPOSAL_NEEDS_TASK =
-  "A team proposed after a run has settled must carry the task its run will do — " +
-  "add a `task` field, or use start_run to reuse the team already composed";
+export const TEAM_CHANGE_APPROVED =
+  "The owner approved it. team.md now reads as you proposed and is committed, and it holds for " +
+  "every later run. Decide the next step, picking a flow from the new team.";
 
 export const BLOCKED_LAUNCH_LIMIT = 3;
 

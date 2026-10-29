@@ -4,11 +4,10 @@ import { FolderOpen, Settings } from "lucide-react";
 import type {
   CreateScheduleInput,
   LimitResolution,
-  ModelTier,
   RunSummary,
   ScheduleView,
 } from "@isotopy/core";
-import { formatUsage, modelOverrideFor, preferredRunOptions } from "@isotopy/core";
+import { formatUsage, preferredRunOptions } from "@isotopy/core";
 import {
   abortRun,
   answerOrchestrator,
@@ -39,7 +38,7 @@ import type { LiveInitiative } from "./components/TeamController";
 import { cycleVS } from "./components/VoiceControls";
 import type { VoiceState } from "./components/VoiceControls";
 import { useAgentCatalog } from "./hooks/useAgentCatalog";
-import { useEngineRoster } from "./hooks/useEngineRoster";
+import { useProjectTeam } from "./hooks/useProjectTeam";
 import { useMilestones } from "./hooks/useMilestones";
 import { useSchedules } from "./hooks/useSchedules";
 import { useOrchestration } from "./hooks/useOrchestration";
@@ -62,10 +61,9 @@ import {
   answerableQuestion,
   orchestrationNeedsUser,
   orchestrationStatusLabel,
-  pendingTiersFor,
-  withPendingTier,
+  teamRevision,
 } from "./orchestration";
-import type { OrchestratorView, PendingRoleTiers } from "./orchestration";
+import type { OrchestratorView } from "./orchestration";
 import {
   firstActiveRunId,
   milestoneRefreshKey,
@@ -180,8 +178,7 @@ export function App() {
   const schedules = useSchedules(projectId, projects.ready);
   const agentCatalog = useAgentCatalog(projectId, projects.ready);
   const product = useProduct(projectId);
-  const { roster: harnessRoster } = useEngineRoster(settings.preferences.primaryEngine);
-  const [pendingTiers, setPendingTiers] = useState<PendingRoleTiers | null>(null);
+  const team = useProjectTeam(projectId, projects.ready, teamRevision(orchestration.orchestrations));
   const [resubKey, setResubKey] = useState(0);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const attachedProject = useRef<string | null>(null);
@@ -299,24 +296,11 @@ export function App() {
     }
   }
 
-  async function handleApproveTeam(orchestrationId: string) {
-    const created = await orchestration.approveTeam(orchestrationId, {
-      ...currentRunOptions(),
-      roleTiers: pendingTiersFor(pendingTiers, orchestration.find(orchestrationId)),
-    });
+  async function handleApproveTeamChange(orchestrationId: string) {
+    const created = await orchestration.approveTeamChange(orchestrationId, currentRunOptions());
     if (created) {
-      setPendingTiers(null);
       attachRun(created.id);
     }
-  }
-
-  function handleRoleTierChange(roleId: string, tier: ModelTier | null) {
-    if (activeOrchestration === undefined) {
-      return;
-    }
-    setPendingTiers((current) =>
-      withPendingTier(current, activeOrchestration.id, roleId, tier),
-    );
   }
 
   function handleSelectProject(id: string) {
@@ -461,15 +445,8 @@ export function App() {
     orchestration: activeOrchestration,
     runs: runsForOrchestration(runs.runs, activeOrchestration),
     busy: orchestration.busy,
-    harness: {
-      engine: settings.preferences.primaryEngine,
-      modelTier: settings.preferences.modelTier,
-      pinnedModel: modelOverrideFor(settings.preferences, settings.preferences.primaryEngine),
-      roster: harnessRoster,
-    },
-    roleTiers: pendingTiersFor(pendingTiers, activeOrchestration),
-    onApprove: () => void handleApproveTeam(activeOrchestration.id),
-    onRoleTierChange: handleRoleTierChange,
+    currentTeam: team?.text,
+    onApprove: () => void handleApproveTeamChange(activeOrchestration.id),
     onOpenRun: attachRun,
   };
   const initiativeChrome: InitiativeChrome | undefined = activeOrchestration && {
@@ -670,6 +647,7 @@ export function App() {
         <ScheduleModal
           d={d}
           schedule={editingSchedule.schedule}
+          flows={team?.state === "valid" ? Object.keys(team.team.flows) : []}
           error={schedules.error}
           onSave={(body) => void saveSchedule(body)}
           onDismiss={() => setEditingSchedule(null)}
@@ -682,6 +660,7 @@ export function App() {
           projectName={projects.active?.name ?? "Home"}
           settings={settings}
           agents={agentCatalog}
+          team={team}
           section={setupSection}
           onClose={() => setSetupSection(null)}
         />

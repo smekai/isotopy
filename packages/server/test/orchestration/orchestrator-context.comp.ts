@@ -7,7 +7,14 @@ import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { Orchestration, RunState } from "@isotopy/core";
 import { orchestratorContextPath } from "../../src/services/skills.ts";
-import { createTestApp, get, post, stageOf, startRun, waitForRunStatus } from "../support/harness.ts";
+import {
+  createTestApp,
+  get,
+  post,
+  stageOf,
+  startRun,
+  waitForRunStatus,
+} from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 
 const TASK = "add a greet function";
@@ -82,7 +89,7 @@ test("a revision over the cap is refused on the run's own log, and the context i
 });
 
 test("a review whose decision is refused leaves the context as it was", async () => {
-  // Arrange — nothing was ever approved, so a start_run decision is refused and
+  // Arrange — the team has no such flow, so a start_run decision is refused and
   // the initiative waits on its owner. A revision from that review is not one the
   // next episode should trust.
   await writeContext(`${KEPT_LINE}\n`);
@@ -90,7 +97,7 @@ test("a review whose decision is refused leaves the context as it was", async ()
   // Anticipate
   ctx.engine.anticipate({ as: "Agent" }).reports(AGENT_REPORT);
   ctx.engine.anticipateRunReview({
-    decision: { action: "start_run", rationale: "There is more to do", task: "Do the rest" },
+    decision: { action: "start_run", rationale: "There is more to do", flow: "launch", task: "Do the rest" },
     context: NEW_LINE,
   });
 
@@ -100,7 +107,7 @@ test("a review whose decision is refused leaves the context as it was", async ()
   // Assert
   await waitForRunStatus(ctx.app, run.id, "completed");
   const { body: orchestration } = await get<Orchestration>(ctx.app, `/orchestrations/${run.orchestrationId ?? ""}`);
-  expect(orchestration.decisionError).toContain("before a team was approved");
+  expect(orchestration.decisionError).toContain("no flow called launch");
   expect(await readContext()).toBe(`${KEPT_LINE}\n`);
 });
 

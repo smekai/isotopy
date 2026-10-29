@@ -1,15 +1,9 @@
 import { z } from "zod";
-import { ENGINE_SLOTS, MODEL_TIERS } from "./engines.ts";
-import {
-  STAGE_CONTEXTS,
-  STAGE_EXECUTION_POLICIES,
-  pipelineDefinitionSchema,
-} from "./pipelines.ts";
 import { runBranchSchema, stageUsageSchema } from "./runs.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const ORCHESTRATOR_ACTIONS = [
-  "propose_team",
+  "propose_team_change",
   "delegate_milestone_planning",
   "start_run",
   "continue_milestone",
@@ -22,39 +16,11 @@ export const ORCHESTRATOR_ACTIONS = [
 
 export type OrchestratorAction = (typeof ORCHESTRATOR_ACTIONS)[number];
 
-export const orchestratorRoleSchema = z
-  .object({
-    id: requiredText,
-    label: requiredText,
-    skill: requiredText,
-    stepTask: requiredText,
-    rationale: requiredText.optional(),
-    modelTier: z.enum(MODEL_TIERS).optional(),
-    engine: z.enum(ENGINE_SLOTS).optional(),
-    context: z.enum(STAGE_CONTEXTS).optional(),
-    executionPolicy: z.enum(STAGE_EXECUTION_POLICIES).optional(),
-    gateAfter: z.boolean().optional(),
-    interactive: z.boolean().optional(),
-  })
-  .strict();
-
-export type OrchestratorRole = z.infer<typeof orchestratorRoleSchema>;
-
 export const reviewContextGrantSchema = z
   .object({ context: z.literal("handoffs"), rationale: requiredText })
   .strict();
 
 export type ReviewContextGrant = z.infer<typeof reviewContextGrantSchema>;
-
-export const orchestratorTeamProposalSchema = z
-  .object({
-    name: requiredText,
-    summary: requiredText,
-    roles: z.array(orchestratorRoleSchema).min(1),
-  })
-  .strict();
-
-export type OrchestratorTeamProposal = z.infer<typeof orchestratorTeamProposalSchema>;
 
 const answerAgentDecisionSchema = z
   .object({
@@ -95,10 +61,9 @@ export type OrchestratorBrokerDecision = z.infer<
 export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
   z
     .object({
-      action: z.literal("propose_team"),
+      action: z.literal("propose_team_change"),
       rationale: requiredText,
-      team: orchestratorTeamProposalSchema,
-      task: requiredText.optional(),
+      team: requiredText,
     })
     .strict(),
   z
@@ -113,7 +78,7 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       action: z.literal("start_run"),
       rationale: requiredText,
       task: requiredText,
-      teamId: requiredText.optional(),
+      flow: requiredText,
       fromStage: requiredText.optional(),
       reviewContext: reviewContextGrantSchema.optional(),
     })
@@ -192,8 +157,6 @@ export const orchestrationSchema = z
     brokerTurns: z.array(orchestratorBrokerTurnSchema).optional(),
     latestDecision: orchestratorDecisionSchema.optional(),
     decisionError: requiredText.optional(),
-    approvedTeam: orchestratorTeamProposalSchema.optional(),
-    composedPipeline: pipelineDefinitionSchema.optional(),
     branch: runBranchSchema.optional(),
     runIds: requiredTexts,
     usage: stageUsageSchema.optional(),
@@ -231,7 +194,7 @@ export function orchestrationStatusFor(
   decision: OrchestratorDecision,
 ): OrchestrationStatus {
   switch (decision.action) {
-    case "propose_team":
+    case "propose_team_change":
       return "awaiting_approval";
     case "ask_user":
     case "escalate_to_user":

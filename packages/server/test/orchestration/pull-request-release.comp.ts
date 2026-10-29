@@ -24,15 +24,20 @@ import {
   addTestProject,
   createTestApp,
   getRun,
-  post,
-  proposedTeam,
   put,
+  startOrchestration,
+  teamRunOf,
   waitForOrchestration,
 } from "../support/harness.ts";
-import type { TestApp, TestHeaders } from "../support/harness.ts";
+import type { TestApp } from "../support/harness.ts";
 import { startHealthServer } from "../support/health-server.ts";
 import type { HealthServer } from "../support/health-server.ts";
-import { TEAM_PROPOSAL, fenced } from "../support/orchestration-fixtures.ts";
+import {
+  fenced,
+  projectDataDir,
+  START_PAIR,
+  writeTeam,
+} from "../support/orchestration-fixtures.ts";
 
 test("a Release Manager pushes only the initiative's branch, waits for CI in its session, and the merge stops the initiative", async () => {
   // Arrange
@@ -46,10 +51,9 @@ test("a Release Manager pushes only the initiative's branch, waits for CI in its
   ctx.engine
     .anticipate({ as: "Release Manager, woken by CI", resumeSessionId: RELEASE_SESSION })
     .reports(released(MERGED));
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await approve(conversation.orchestrationId, project.headers);
+  const conversation = await startOrchestration(ctx.app, project.headers);
 
   // Assert
   const stopped = await waitForOrchestration(
@@ -80,10 +84,10 @@ test("red CI sends the failing checks back to the Developer as a fix run and lea
   ctx.engine
     .anticipate({ as: "fixing Developer", prompt: /Make the failing search test pass/ })
     .hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  const { body: delivery } = await approve(conversation.orchestrationId, project.headers);
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  const delivery = await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   const { runIds } = await waitForOrchestration(
@@ -107,10 +111,9 @@ test("merging again after CI failed is refused, because the same commits would f
   anticipateDeliveryReviewedForMerge();
   ctx.engine.anticipate({ as: "Release Manager" }).reports(heldOnRedCi(RED));
   ctx.engine.anticipateRunReview({ as: "review that ignores the red CI", decision: MERGE });
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await approve(conversation.orchestrationId, project.headers);
+  const conversation = await startOrchestration(ctx.app, project.headers);
 
   // Assert
   const parked = await waitForOrchestration(
@@ -130,10 +133,9 @@ test("a release that passes without a merge commit waits on the owner instead of
   // Anticipate
   anticipateDeliveryReviewedForMerge();
   ctx.engine.anticipate({ as: "Release Manager" }).reports(released(OPENED));
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await approve(conversation.orchestrationId, project.headers);
+  const conversation = await startOrchestration(ctx.app, project.headers);
 
   // Assert
   const parked = await waitForOrchestration(
@@ -157,10 +159,9 @@ test("a preview target is deployed before the pull request, and the Release Mana
   ctx.engine
     .anticipate({ as: "Release Manager", prompt: new RegExp(escaped(healthy.url)) })
     .reports(released({ ...MERGED, previewUrl: healthy.url }));
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await approve(conversation.orchestrationId, project.headers);
+  const conversation = await startOrchestration(ctx.app, project.headers);
 
   // Assert
   await waitForOrchestration(
@@ -178,10 +179,10 @@ test("a repository with no origin keeps the local merge, and the run log says wh
 
   // Anticipate — no Release Manager: nothing is pushed.
   anticipateDeliveryReviewedForMerge();
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  const { body: delivery } = await approve(conversation.orchestrationId, project.headers);
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  const delivery = await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   await waitForOrchestration(
@@ -221,6 +222,7 @@ const MERGE: OrchestratorDecision = {
 const FIX_CI: OrchestratorDecision = {
   action: "start_run",
   rationale: "CI fails the search test",
+  flow: "pair",
   task: "Make the failing search test pass",
   fromStage: "implementation",
 };
@@ -253,6 +255,7 @@ function heldOnRedCi(pullRequest: RunPullRequest): string {
 
 async function gitProject(name: string) {
   const project = await addTestProject(ctx.registry, name);
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# shop\n", "Start the shop");
   return project;
@@ -265,21 +268,12 @@ async function gitProjectWithOrigin(name: string) {
 }
 
 function anticipateDeliveryReviewedForMerge(): void {
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine
     .anticipate({ as: "Developer" })
     .commits({ "search.ts": SEARCH }, "Built search.\n\nVERDICT: PASS");
   ctx.engine.anticipate({ as: "QA Engineer" }).reports("Search works.\n\nVERDICT: PASS");
   ctx.engine.anticipateRunReview({ as: "review that ships it", decision: MERGE });
-}
-
-function approve(orchestrationId: string | undefined, headers: TestHeaders) {
-  return post<RunState>(
-    ctx.app,
-    `/orchestrations/${orchestrationId}/approve`,
-    { engine: "claude-code" },
-    headers,
-  );
 }
 
 function logMessagesOf(run: RunState): string[] {

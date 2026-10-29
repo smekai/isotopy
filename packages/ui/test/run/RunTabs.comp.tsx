@@ -10,12 +10,7 @@ import { RunTabs } from "../../src/components/run/RunTabs";
 import type { RunTabsProps } from "../../src/components/run/RunTabs";
 import type { ProductController } from "../../src/hooks/useProduct";
 import { DIRS } from "../../src/theme";
-import {
-  orchestratedRun,
-  orchestration,
-  runHarness,
-  team,
-} from "../support/orchestration-fixtures";
+import { orchestratedRun, orchestration, teamChange } from "../support/orchestration-fixtures";
 import { changes, log, run, started } from "../support/run-fixtures";
 
 vi.mock("../../src/api", () => ({
@@ -174,14 +169,14 @@ test("an orchestration run is one dialog — the initiative has no tab of its ow
   expect(screen.getByTestId("chat-thread")).toBeDefined();
 });
 
-test("the awaited team is offered for approval inside the thread that proposed it", () => {
+test("the awaited team change is offered for approval inside the thread that proposed it", () => {
   // Act
   render(<RunTabs {...tabsProps(orchestrationOverrides())} />);
 
   // Assert
   const thread = screen.getByTestId("chat-thread");
-  expect(within(thread).getByTestId("orchestrator-team").textContent).toContain("Delivery trio");
-  expect(within(thread).getByTestId("approve-team")).toBeDefined();
+  expect(within(thread).getByTestId("orchestrator-team-change").textContent).toContain("Small scope.");
+  expect(within(thread).getByTestId("approve-team-change")).toBeDefined();
 });
 
 test("each child run is linked in the thread at the point it was started", () => {
@@ -195,13 +190,13 @@ test("each child run is linked in the thread at the point it was started", () =>
   ]);
 });
 
-test("approving the team reports the decision rather than acting on it", () => {
+test("approving the team change reports the decision rather than acting on it", () => {
   // Arrange
   const props = tabsProps(orchestrationOverrides());
   render(<RunTabs {...props} />);
 
   // Act
-  fireEvent.click(screen.getByTestId("approve-team"));
+  fireEvent.click(screen.getByTestId("approve-team-change"));
 
   // Assert
   expect(props.orchestrator?.onApprove).toHaveBeenCalledTimes(1);
@@ -218,7 +213,7 @@ test("the proposal joins a thread already rendered, without remounting the turns
   rerender(<RunTabs {...tabsProps({ ...runOnly, orchestrator })} />);
 
   // Assert
-  expect(screen.getByTestId("orchestrator-team")).toBeDefined();
+  expect(screen.getByTestId("orchestrator-team-change")).toBeDefined();
 });
 
 test("a finished run says what it changed where the composer used to apologise", () => {
@@ -335,11 +330,7 @@ function changedRun(): RunState {
 }
 
 function orchestrationOverrides(): Partial<RunTabsProps> {
-  const proposal: OrchestratorDecision = {
-    action: "propose_team",
-    rationale: "Small scope.",
-    team: team({ name: "Delivery trio" }),
-  };
+  const proposal: OrchestratorDecision = teamChange({ rationale: "Small scope." });
   const awaiting = orchestration({
     status: "awaiting_approval",
     runIds: ["earlier", "later"],
@@ -355,9 +346,6 @@ function orchestrationOverrides(): Partial<RunTabsProps> {
         orchestratedRun("later", "2026-08-01T12:00:00.000Z"),
       ],
       busy: false,
-      harness: runHarness(),
-      roleTiers: {},
-      onRoleTierChange: vi.fn(),
       onApprove: vi.fn(),
       onOpenRun: vi.fn(),
     },
@@ -379,9 +367,6 @@ function awaitingAnswerOverrides(): Partial<RunTabsProps> {
       }),
       runs: [orchestratedRun("earlier", "2026-08-01T09:00:00.000Z")],
       busy: false,
-      harness: runHarness(),
-      roleTiers: {},
-      onRoleTierChange: vi.fn(),
       onApprove: vi.fn(),
       onOpenRun: vi.fn(),
     },

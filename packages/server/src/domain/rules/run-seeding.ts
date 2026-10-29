@@ -92,7 +92,7 @@ export function seedFromSettledRun(
   const startStage = stages.find((stage) => stage.id === startStageId);
   if (startStage === undefined) {
     return issue(
-      `Unknown stage id: ${startStageId} — the approved team has ${stages.map((stage) => stage.id).join(", ")}`,
+      `Unknown stage id: ${startStageId} — the flow has ${stages.map((stage) => stage.id).join(", ")}`,
     );
   }
   const preceding = stagesBefore(stages, startStageId).map((stage) => ({

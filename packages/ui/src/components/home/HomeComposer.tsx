@@ -17,8 +17,8 @@ type ComposerMode = "orchestrator" | "pipeline";
 
 const ORCHESTRATOR_HEADLINE = "What are we building?";
 const ORCHESTRATOR_SUBTITLE =
-  "Describe the goal. The Orchestrator talks it through with you, composes the " +
-  "right team from the persona catalog, and decides what runs next.";
+  "Describe the goal. The Orchestrator talks it through with you, runs the " +
+  "project's team flow by flow, and decides what runs next.";
 
 function workspaceChipStyle(d: Dir): CSSProperties {
   return {
@@ -227,7 +227,7 @@ export function HomeComposer({
               onClick={() => setMode("orchestrator")}
               style={linkButton(true, d)}
             >
-              <Sparkles size={ICON.sm} /> Let the Orchestrator compose the team
+              <Sparkles size={ICON.sm} /> Let the Orchestrator run the team
             </button>
           </>
         )}

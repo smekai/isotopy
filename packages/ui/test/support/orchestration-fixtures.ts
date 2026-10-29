@@ -1,45 +1,22 @@
-import type {
-  Orchestration,
-  OrchestratorRole,
-  OrchestratorTeamProposal,
-  RunSummary,
-  ScheduleView,
-} from "@isotopy/core";
-import { HOME_PROJECT_ID, bundledRosterFor } from "@isotopy/core";
-import type { RunHarness } from "../../src/orchestration";
+import type { Orchestration, OrchestratorDecision, RunSummary, ScheduleView } from "@isotopy/core";
+import { HOME_PROJECT_ID } from "@isotopy/core";
 import { summary } from "./run-fixtures";
 
 const CREATED_AT = "2026-08-01T09:00:00.000Z";
 
 export const ORCHESTRATION_ID = "o1";
 
-export function role(overrides: Partial<OrchestratorRole> = {}): OrchestratorRole {
-  return {
-    ...overrides,
-    id: overrides.id ?? "implementation",
-    label: overrides.label ?? "Developer",
-    skill: overrides.skill ?? "developer",
-    stepTask: overrides.stepTask ?? "implement",
-  };
-}
+export const CURRENT_TEAM = "---\nroster:\n  - id: implementation\n---\n";
 
-export function team(
-  overrides: Partial<OrchestratorTeamProposal> = {},
-): OrchestratorTeamProposal {
-  return {
-    name: overrides.name ?? "Delivery trio",
-    summary: overrides.summary ?? "A PM, a Developer and a QA Engineer.",
-    roles: overrides.roles ?? [role()],
-  };
-}
+export const PROPOSED_TEAM = "---\nroster:\n  - id: implementation\n  - id: test\n---\n";
 
-export function runHarness(overrides: Partial<RunHarness> = {}): RunHarness {
-  const engine = overrides.engine ?? "claude-code";
+export type TeamChangeDecision = Extract<OrchestratorDecision, { action: "propose_team_change" }>;
+
+export function teamChange(overrides: Partial<TeamChangeDecision> = {}): TeamChangeDecision {
   return {
-    ...overrides,
-    engine,
-    modelTier: overrides.modelTier ?? "fast",
-    roster: overrides.roster ?? bundledRosterFor(engine),
+    action: "propose_team_change",
+    rationale: overrides.rationale ?? "Verification keeps coming back on its own",
+    team: overrides.team ?? PROPOSED_TEAM,
   };
 }
 
@@ -76,7 +53,7 @@ export function scheduleView(overrides: Partial<ScheduleView> = {}): ScheduleVie
     cron: overrides.cron ?? "0 9 * * *",
     timezone: overrides.timezone ?? "UTC",
     task: overrides.task ?? "Take the next task off the board",
-    team: "team" in overrides ? overrides.team : team(),
+    flow: overrides.flow,
     enabled: overrides.enabled ?? true,
     createdAt: overrides.createdAt ?? CREATED_AT,
     updatedAt: overrides.updatedAt ?? CREATED_AT,

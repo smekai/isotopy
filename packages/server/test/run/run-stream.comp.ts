@@ -16,7 +16,10 @@ import {
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
-import { TEAM_PROPOSAL, fenced } from "../support/orchestration-fixtures.ts";
+import {
+  fenced,
+  TEAM_CHANGE,
+} from "../support/orchestration-fixtures.ts";
 
 const TASK = "add a greet function";
 const DEV_REPORT = "Implemented it. MARKER-DEVELOPER";
@@ -130,7 +133,7 @@ test("the project stream carries an initiative's decision as it is recorded, so 
   // Anticipate
   engine
     .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
-    .reports(fenced(TEAM_PROPOSAL));
+    .reports(fenced(TEAM_CHANGE));
 
   // Act
   const conversation = await startOrchestration(app);
@@ -144,7 +147,7 @@ test("the project stream carries an initiative's decision as it is recorded, so 
   expect(orchestrationsOf(events).at(-1)).toMatchObject({
     id: conversation.orchestrationId,
     status: "awaiting_approval",
-    latestDecision: { action: "propose_team" },
+    latestDecision: { action: "propose_team_change" },
   });
   engine.verify();
 });

@@ -6,7 +6,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { PROJECT_HEADER } from "@isotopy/core";
-import type { OrchestratorDecision, RunState } from "@isotopy/core";
+import type { OrchestratorDecision } from "@isotopy/core";
 import { NOTHING_TO_MERGE } from "../../src/domain/rules/initiative-branch.ts";
 import { activeRunOf } from "../support/active-runs.ts";
 import {
@@ -23,32 +23,34 @@ import {
   createTestApp,
   getRun,
   post,
-  proposedTeam,
   startOrchestration,
+  teamRunOf,
   waitForOrchestration,
   waitForOrchestrationRun,
+  waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
-import { TEAM_PROPOSAL, fenced } from "../support/orchestration-fixtures.ts";
+import {
+  fenced,
+  projectDataDir,
+  START_PAIR,
+  writeTeam,
+} from "../support/orchestration-fixtures.ts";
 
 test("the first team run of an initiative cuts its own branch from the one checked out", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "cuts");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate — the Developer is told the branch it works on.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer", prompt: INITIATIVE_BRANCH }).hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  const { body: run } = await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  const run = await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   const branch = `isotopy/${conversation.orchestrationId}`;
@@ -61,6 +63,7 @@ test("the first team run of an initiative cuts its own branch from the one check
 test("an initiative that never ran a team leaves no branch behind", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "talks");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
@@ -84,24 +87,30 @@ test("an initiative that never ran a team leaves no branch behind", async () => 
 test("a branch that cannot be entered refuses the run and frees the project for the next one", async () => {
   // Arrange — a branch of the initiative's name already exists, so it cannot be cut.
   const project = await addTestProject(ctx.registry, "blocked");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
-  // Anticipate
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
-  const conversation = await proposedTeam(ctx.app, project.headers);
+  // Anticipate — the Orchestrator asks first, so the branch can be taken before it decides.
+  ctx.engine.anticipate({ as: "Orchestrator" }).parks(fenced(ASK), ORCHESTRATOR_SESSION);
+  ctx.engine
+    .anticipate({ as: "Orchestrator, answered", resumeSessionId: ORCHESTRATOR_SESSION })
+    .reports(fenced(START_PAIR));
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  await waitForStageStatus(ctx.app, conversation.id, "orchestrate", "asking");
   await createBranch(project.root, `isotopy/${conversation.orchestrationId}`);
 
   // Act
-  const refused = await post<{ error: string }>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  await post(ctx.app, `/runs/${conversation.id}/messages`, { text: "Postgres" }, project.headers);
 
   // Assert
-  expect(refused.status).not.toBe(201);
+  const parked = await waitForOrchestration(
+    ctx.app,
+    conversation.orchestrationId,
+    ({ decisionError }) => decisionError !== undefined,
+    project.headers,
+  );
+  expect(parked.status).toBe("awaiting_user");
   expect(await activeRunOf(ctx.registry, project.id)).toBeUndefined();
   ctx.engine.verify();
 });
@@ -110,24 +119,25 @@ test("a new initiative will not cut its branch from one an earlier initiative le
   // Arrange — a Stop that could not switch back leaves the checkout on the old
   // initiative's branch; cutting from it would merge the new work into the old.
   const project = await addTestProject(ctx.registry, "leftover");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
   await switchToNewBranch(project.root, LEFTOVER_BRANCH);
 
   // Anticipate
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
-  const conversation = await proposedTeam(ctx.app, project.headers);
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
 
   // Act
-  const refused = await post<{ error: string }>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
 
   // Assert
-  expect(refused.status).not.toBe(201);
+  const parked = await waitForOrchestration(
+    ctx.app,
+    conversation.orchestrationId,
+    ({ decisionError }) => decisionError !== undefined,
+    project.headers,
+  );
+  expect(parked.decisionError).toContain(LEFTOVER_BRANCH);
   expect(await branchNames(project.root)).toEqual([LEFTOVER_BRANCH, "main"]);
   ctx.engine.verify();
 });
@@ -135,24 +145,20 @@ test("a new initiative will not cut its branch from one an earlier initiative le
 test("a fix run of the same initiative works on the branch the first run cut", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "fixes");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).commits({ "search.ts": SEARCH }, BUILT);
   ctx.engine.anticipate({ as: "QA Engineer" }).reports("Search finds nothing.\n\nVERDICT: FAIL");
   ctx.engine.anticipateRunReview({ as: "review sending the fix back", decision: FIX_RUN });
   ctx.engine.anticipate({ as: "fixing Developer" }).hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  const { body: first } = await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  const first = await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   const fix = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 3, project.headers);
@@ -165,25 +171,22 @@ test("a fix run of the same initiative works on the branch the first run cut", a
 test("a project folder inside another repository is not branched, so that repository is left alone", async () => {
   // Arrange — git would happily branch the enclosing repository from a subfolder.
   const outer = await addTestProject(ctx.registry, "outer");
+  await writeTeam(projectDataDir(outer.root));
   await initGitRepository(outer.root);
   await commitFile(outer.root, "README.md", "# outer\n", "Start the outer repository");
   const nestedRoot = path.join(outer.root, "app");
   await mkdir(nestedRoot);
   const nested = await ctx.registry.add(nestedRoot);
+  await writeTeam(projectDataDir(nestedRoot));
   const headers = { [PROJECT_HEADER]: nested.id };
 
   // Anticipate
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, headers);
 
   // Act
-  const { body: run } = await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    headers,
-  );
+  const conversation = await startOrchestration(ctx.app, headers);
+  const run = await teamRunOf(ctx.app, conversation, headers);
 
   // Assert
   expect(run.branch).toBeUndefined();
@@ -193,11 +196,12 @@ test("a project folder inside another repository is not branched, so that reposi
 test("stopping with merge lands the initiative's commits on its base and deletes the branch", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "merges");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).commits({ "search.ts": SEARCH }, BUILT);
   ctx.engine.anticipate({ as: "QA Engineer" }).reports(VERIFIED);
   ctx.engine.anticipateRunReview({
@@ -205,15 +209,10 @@ test("stopping with merge lands the initiative's commits on its base and deletes
     prompt: INITIATIVE_BRANCH,
     decision: MERGE,
   });
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   await waitForOrchestration(
@@ -231,24 +230,20 @@ test("stopping with merge lands the initiative's commits on its base and deletes
 test("a merge git refuses parks the initiative on its owner, still on its branch", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "refused");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate — QA leaves an edit uncommitted over the Developer's commit, so
   // checking out the base would overwrite it and git refuses.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).commits({ "README.md": "# app, searchable\n" }, BUILT);
   ctx.engine.anticipate({ as: "QA Engineer" }).writes({ "README.md": "# app, half-edited\n" }, VERIFIED);
   ctx.engine.anticipateRunReview({ as: "review that ships it", decision: MERGE });
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   await waitForOrchestration(
@@ -264,23 +259,19 @@ test("a merge git refuses parks the initiative on its owner, still on its branch
 test("stopping without merge returns to the base and keeps the branch for the owner", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "keeps");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).commits({ "search.ts": SEARCH }, BUILT);
   ctx.engine.anticipate({ as: "QA Engineer" }).reports(VERIFIED);
   ctx.engine.anticipateRunReview({ as: "review that holds it back", decision: STOP });
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   await waitForOrchestration(
@@ -297,19 +288,15 @@ test("stopping without merge returns to the base and keeps the branch for the ow
 test("the owner's Stop returns the checkout to the branch the initiative was cut from", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "owner-stops");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate — the Developer is still working when the owner stops it all.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, project.headers);
-  await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  await teamRunOf(ctx.app, conversation, project.headers);
   await ctx.engine.waitForCall(2);
 
   // Act
@@ -323,20 +310,16 @@ test("the owner's Stop returns the checkout to the branch the initiative was cut
 test("an initiative superseded by a new one returns the checkout to the branch it was cut from", async () => {
   // Arrange
   const project = await addTestProject(ctx.registry, "superseded");
+  await writeTeam(projectDataDir(project.root));
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
 
   // Anticipate — the owner starts a new goal while the first team is still working.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).hangsUntilAborted();
   ctx.engine.anticipate({ as: "the next Orchestrator" }).hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, project.headers);
-  await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  await teamRunOf(ctx.app, conversation, project.headers);
   await ctx.engine.waitForCall(2);
 
   // Act
@@ -347,17 +330,17 @@ test("an initiative superseded by a new one returns the checkout to the branch i
 });
 
 test("a merge asked for where the initiative has no branch is refused, and the owner is asked", async () => {
+  // Arrange
+  await writeTeam(ctx.home);
+
   // Anticipate — the home project runs in a scratch folder that is no repository.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_PAIR));
   ctx.engine.anticipate({ as: "Developer" }).reports(BUILT);
   ctx.engine.anticipate({ as: "QA Engineer" }).reports(VERIFIED);
   ctx.engine.anticipateRunReview({ as: "review that ships it", decision: MERGE });
-  const conversation = await proposedTeam(ctx.app);
 
   // Act
-  await post<RunState>(ctx.app, `/orchestrations/${conversation.orchestrationId}/approve`, {
-    engine: "claude-code",
-  });
+  const conversation = await startOrchestration(ctx.app);
 
   // Assert
   const parked = await waitForOrchestration(
@@ -379,6 +362,10 @@ const INITIATIVE_BRANCH = /isotopy\/[0-9a-f]{8}/;
 
 const LEFTOVER_BRANCH = "isotopy/0ld0ld00";
 
+const ORCHESTRATOR_SESSION = "orchestrator-session";
+
+const ASK: OrchestratorDecision = { action: "ask_user", question: "Which database?" };
+
 const NOTHING_TO_DO: OrchestratorDecision = {
   action: "stop",
   reason: "Search already exists",
@@ -387,6 +374,7 @@ const NOTHING_TO_DO: OrchestratorDecision = {
 const FIX_RUN: OrchestratorDecision = {
   action: "start_run",
   rationale: "Search returns nothing for the seeded rows",
+  flow: "pair",
   task: "Make search find the seeded rows",
   fromStage: "implementation",
 };

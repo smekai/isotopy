@@ -6,8 +6,8 @@ import {
   post,
   put,
   restartApp,
-  startRun,
   stageOf,
+  startRun,
   waitForRunStatus,
   waitForStageStatus,
 } from "../support/harness.ts";

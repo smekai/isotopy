@@ -149,12 +149,11 @@ export const startOrchestrationSchema = z
   })
   .strict();
 
-export const approveTeamSchema = z
+export const approveTeamChangeSchema = z
   .object({
     engine: optionalText,
     model: z.string().optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
-    roleTiers: z.record(z.string(), z.enum(MODEL_TIERS).nullable()).optional(),
     permissionMode: permissionModeSchema.optional(),
   })
   .strict();

@@ -5,7 +5,7 @@ composable: false
 ---
 # Assignment: Review a settled run and decide what happens next
 
-A run you own has finished. Read the orchestration goal, the approved team, the
+A run you own has finished. Read the orchestration goal, the project's team, the
 run's terminal status, its stage outputs, its closeout if the pipeline carried a
 closeout stage, and any milestone context. Then do two things in one turn, and a
 third when it is worth it.
@@ -52,13 +52,13 @@ Return exactly one fenced `isotopy-orchestrator-decision` JSON block. The availa
 actions are the ones in your orchestration assignment. For a settled run these
 five are the ones that apply:
 
-Start another run with the approved team, when the goal needs more work that the
-same team can do:
+Start another run of one of the team's flows, when the goal needs more work:
 
 ```json
 {
   "action": "start_run",
   "rationale": "Why this is the next run",
+  "flow": "delivery",
   "task": "Decision-complete scope for this run",
   "fromStage": "optional role id to begin at",
   "reviewContext": { "context": "handoffs", "rationale": "optional — why the reviewer needs the handoffs" }
@@ -166,30 +166,13 @@ A failed or needs-attention run is not automatically a reason to stop — decide
 from the findings whether the work can continue. Do not answer or route a
 specialist question in this turn — no specialist is waiting.
 
-### Composing a different team
+### Changing the team
 
-`propose_team` is available here, and it takes a `task` as well as a `team`:
+`propose_team_change` is available here too, with the whole new `team.md` as
+`team`, as your orchestration assignment describes. Reach for it only when the
+work ahead keeps needing a shape no flow has. A different task is not a different
+team: `start_run` with the closest flow, and `fromStage` where only the tail has
+work left, is cheaper and does not interrupt the owner.
 
-```json
-{
-  "action": "propose_team",
-  "rationale": "Why this shape, and why the current one is wrong for the work ahead",
-  "task": "What the next run will do",
-  "team": { "name": "...", "summary": "...", "roles": [] }
-}
-```
-
-Reach for it when the work ahead needs a **different shape**, not merely a
-different task — a one-function bug fix that needs a Developer and a Tester and
-nothing else, or work that turns out to need an architect nobody picked at the
-start. `start_run` remains the right answer whenever the composed team still
-fits; it is cheaper and it does not interrupt the user.
-
-Compose the team the work needs rather than a smaller edit of the current one.
-If the roles you propose are identical to the team already running, the run
-starts immediately; if they differ, the user is asked to approve the new shape
-before anything runs, so say in the `rationale` what changed and why.
-
-Do not reach for `start_run` with `fromStage` as a way to skip roles you did not
-want. Seeding carries work a previous run actually did; a team that should not
-have had those roles should be composed without them.
+Do not reach for `fromStage` as a way to skip roles you did not want. Seeding
+carries work a previous run actually did.

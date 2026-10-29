@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 import type { OrchestratorDecision } from "@isotopy/core";
 import { runThread } from "../../src/run-thread";
 import { RUN_ID, log, run, started } from "../support/run-fixtures";
-import { orchestratedRun, orchestration, role, team } from "../support/orchestration-fixtures";
+import { orchestratedRun, orchestration, teamChange } from "../support/orchestration-fixtures";
 
 const STAGE_AT = "2026-08-01T09:00:00.000Z";
 const SPOKE_AT = "2026-08-01T09:00:01.000Z";
@@ -69,44 +69,6 @@ test("only the newest proposal is still open, so an earlier one cannot be approv
   expect(
     items.map((item) => item.kind === "proposal" && item.awaitingApproval),
   ).toEqual([false, true]);
-});
-
-test("an approved proposal reads back as the team approved, not the team proposed", () => {
-  // Arrange — approval merges the user's tier edits into approvedTeam, so the
-  // original decision.team would show Deep for a role the user dropped to Fast.
-  const proposed = team({ roles: [role({ id: "implementation", modelTier: "deep" })] });
-  const approved = team({ roles: [role({ id: "implementation", modelTier: "fast" })] });
-  const live = orchestration({
-    status: "running",
-    turns: [turn({ action: "propose_team", rationale: "Small scope", team: proposed }, PROPOSED_AT)],
-    approvedTeam: approved,
-  });
-
-  // Act
-  const items = runThread(run([]), live, []);
-
-  // Assert
-  expect(items.map((item) => item.kind === "proposal" && item.team.roles[0]?.modelTier)).toEqual([
-    "fast",
-  ]);
-});
-
-test("a proposal still open shows what was proposed, because approval has not merged yet", () => {
-  // Arrange — a stale approvedTeam from an earlier round must not leak forward.
-  const live = orchestration({
-    status: "awaiting_approval",
-    latestDecision: proposeTeam(),
-    turns: [turn(proposeTeam(), PROPOSED_AT)],
-    approvedTeam: team({ roles: [role({ id: "implementation", modelTier: "max" })] }),
-  });
-
-  // Act
-  const items = runThread(run([]), live, []);
-
-  // Assert
-  expect(items.map((item) => item.kind === "proposal" && item.team.roles[0]?.modelTier)).toEqual([
-    undefined,
-  ]);
 });
 
 test("a question escalated from a child run stays reachable instead of vanishing", () => {
@@ -191,34 +153,9 @@ function turn(decision: OrchestratorDecision, at: string) {
 }
 
 function proposeTeam(): OrchestratorDecision {
-  return { action: "propose_team", rationale: "Two specialists cover it", team: team() };
+  return teamChange();
 }
 
 function askUser(question: string): OrchestratorDecision {
   return { action: "ask_user", question };
 }
-
-// TASK-150 lets an initiative compose more than one team, so the thread now holds
-// several proposals. `approvedTeam` is singular and holds only the newest, which is
-// exactly right for the newest proposal and must not be pinned onto the older ones.
-test("an earlier proposal keeps what it proposed, because the newest approval is not its own", () => {
-  // Arrange — two proposals; approvedTeam belongs to the second.
-  const first = team({ roles: [role({ id: "implementation", modelTier: "deep" })] });
-  const second = team({ roles: [role({ id: "implementation", modelTier: "fast" })] });
-  const live = orchestration({
-    status: "running",
-    turns: [
-      turn({ action: "propose_team", rationale: "Full team", team: first }, PROPOSED_AT),
-      turn({ action: "propose_team", rationale: "Smaller", team: second }, PROPOSED_AT),
-    ],
-    approvedTeam: second,
-  });
-
-  // Act
-  const items = runThread(run([]), live, []);
-
-  // Assert
-  expect(
-    items.flatMap((item) => (item.kind === "proposal" ? [item.team.roles[0]?.modelTier] : [])),
-  ).toEqual(["deep", "fast"]);
-});

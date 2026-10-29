@@ -1,11 +1,5 @@
-import type {
-  Orchestration,
-  OrchestratorDecision,
-  OrchestratorTeamProposal,
-  RunState,
-  RunSummary,
-} from "@isotopy/core";
-import { teamAwaitingApproval } from "./orchestration.ts";
+import type { Orchestration, OrchestratorDecision, RunState, RunSummary } from "@isotopy/core";
+import { teamChangeAwaitingApproval } from "./orchestration.ts";
 import type { ConversationItem } from "./transcript.ts";
 import { buildTranscript, conversationOnly } from "./transcript.ts";
 
@@ -14,7 +8,8 @@ export type OrchestrationItem =
       kind: "proposal";
       key: string;
       ts: string;
-      team: OrchestratorTeamProposal;
+      rationale: string;
+      proposed: string;
       awaitingApproval: boolean;
     }
   | { kind: "child-run"; key: string; ts: string; run: RunSummary }
@@ -53,9 +48,9 @@ function orchestrationItems(
   runs: RunSummary[],
   threadRunId: string,
 ): OrchestrationItem[] {
-  const openProposal = teamAwaitingApproval(orchestration) !== undefined;
+  const openProposal = teamChangeAwaitingApproval(orchestration) !== undefined;
   const lastProposal = orchestration.turns.reduce(
-    (latest, turn, index) => (turn.decision.action === "propose_team" ? index : latest),
+    (latest, turn, index) => (turn.decision.action === "propose_team_change" ? index : latest),
     -1,
   );
   const byId = new Map(runs.map((run) => [run.id, run]));
@@ -66,7 +61,6 @@ function orchestrationItems(
         askedOnThisRun: turn.runId === threadRunId,
         askedOnRunId: turn.runId,
         awaitingApproval: openProposal && index === lastProposal,
-        settledTeam: index === lastProposal ? orchestration.approvedTeam : undefined,
       }),
     ),
     ...orchestration.runIds
@@ -80,7 +74,6 @@ interface DecisionContext {
   askedOnThisRun: boolean;
   askedOnRunId: string;
   awaitingApproval: boolean;
-  settledTeam: OrchestratorTeamProposal | undefined;
 }
 
 function childRunItem(run: RunSummary | undefined): OrchestrationItem[] {
@@ -92,16 +85,17 @@ function childRunItem(run: RunSummary | undefined): OrchestrationItem[] {
 function itemForDecision(
   decision: OrchestratorDecision,
   key: string,
-  { ts, askedOnThisRun, askedOnRunId, awaitingApproval, settledTeam }: DecisionContext,
+  { ts, askedOnThisRun, askedOnRunId, awaitingApproval }: DecisionContext,
 ): OrchestrationItem[] {
   switch (decision.action) {
-    case "propose_team":
+    case "propose_team_change":
       return [
         {
           kind: "proposal",
           key,
           ts,
-          team: awaitingApproval ? decision.team : (settledTeam ?? decision.team),
+          rationale: decision.rationale,
+          proposed: decision.team,
           awaitingApproval,
         },
       ];

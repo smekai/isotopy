@@ -1,6 +1,6 @@
 import type {
   OrchestratorBrokerPhase,
-  OrchestratorTeamProposal,
+  ProjectTeam,
   CloseoutReport,
   RunBranch,
 } from "@isotopy/core";
@@ -12,6 +12,7 @@ import { bullet, markdownBlocks, markdownBody, structuralText } from "./format.t
 
 export interface OrchestrationContext {
   goal: string;
+  team: ProjectTeam;
   personas: CatalogEntry[];
   stepTasks: CatalogEntry[];
   tasksContext: string;
@@ -22,15 +23,9 @@ export interface OrchestrationContext {
 }
 
 export interface OrchestrationFollowUpContext extends OrchestrationContext {
-  team?: OrchestratorTeamProposal;
   question: string;
   answer: string;
   artifacts: QuestionMediationArtifact[];
-}
-
-export interface ComposedRunContext {
-  goal: string;
-  team: OrchestratorTeamProposal;
 }
 
 export interface QuestionMediationArtifact {
@@ -41,7 +36,7 @@ export interface QuestionMediationArtifact {
 
 export interface QuestionMediationMarkdownContext {
   goal: string;
-  team?: OrchestratorTeamProposal;
+  team: ProjectTeam;
   phase: OrchestratorBrokerPhase;
   originStageId: string;
   question: string;
@@ -58,6 +53,7 @@ function renderCatalog(heading: string, entries: CatalogEntry[]): string {
 
 export function renderOrchestrationContext({
   goal,
+  team,
   personas,
   stepTasks,
   tasksContext,
@@ -69,6 +65,7 @@ export function renderOrchestrationContext({
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
     orchestratorContext === undefined ? undefined : renderOwnContext(orchestratorContext),
+    renderProjectTeam(team),
     renderCatalog("Persona catalog", personas),
     renderCatalog("Step task catalog", stepTasks),
     gatePreference === undefined
@@ -120,17 +117,15 @@ export function renderGatePreference(gates: Record<string, boolean>): string | u
     return undefined;
   }
   return markdownBlocks([
-    "On its fixed pipelines this project has asked for approval after some steps and not others.",
-    "Each entry is `pipeline:stage`, because the same stage name can be gated in one pipeline and",
-    "not another. Treat it as a preference and not a rule: you own `gateAfter` for the team you",
-    "compose, and a role whose work the user has said they want to see is a good candidate for one.",
+    "This project has asked for approval after some steps and not others. Each entry is",
+    "`pipeline:stage`; a flow of the team runs as the pipeline `flow-<name>`. Isotopy applies",
+    "these gates itself, so a run you start stops where the owner asked it to.",
     wanted.length === 0 ? undefined : `Approval wanted after: ${wanted.join(", ")}.`,
     waived.length === 0 ? undefined : `Approval waived after: ${waived.join(", ")}.`,
   ]);
 }
 
 export function renderOrchestrationFollowUp({
-  team,
   question,
   answer,
   artifacts,
@@ -138,9 +133,6 @@ export function renderOrchestrationFollowUp({
 }: OrchestrationFollowUpContext): string {
   return markdownBlocks([
     renderOrchestrationContext(context),
-    team === undefined
-      ? undefined
-      : `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}`,
     renderArtifactSections("Prior run artifacts", artifacts),
     `## The question you asked\n\n${markdownBody(question)}`,
     `## The user's answer\n\n${markdownBody(answer)}`,
@@ -183,21 +175,15 @@ function renderRejectedDecision(error: string): string {
   ]);
 }
 
-function renderRoles(team: OrchestratorTeamProposal): string {
-  return team.roles
-    .map((role) =>
-      bullet(
-        `**${role.label}** (\`${role.id}\`) — ${role.rationale ?? role.stepTask}`,
-      ),
-    )
-    .join("\n");
-}
-
-export function renderComposedRunTask({ goal, team }: ComposedRunContext): string {
+export function renderProjectTeam(team: ProjectTeam): string {
+  const standing =
+    team.state === "valid"
+      ? "Every team run is one of these flows, named by `flow`. It starts without asking the owner."
+      : `team.md is not valid, so no team run can start until it is fixed or replaced: ${team.issues.join("; ")}`;
   return markdownBlocks([
-    `## Goal\n\n${markdownBody(goal)}`,
-    `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}`,
-    renderRoles(team),
+    "## The project's team — `.isotopy/team.md`",
+    standing,
+    `\`\`\`\`markdown\n${team.text.trimEnd()}\n\`\`\`\``,
   ]);
 }
 
@@ -230,7 +216,7 @@ export interface RunReviewFeature {
 
 export interface RunReviewMarkdownContext {
   goal: string;
-  team?: OrchestratorTeamProposal;
+  team: ProjectTeam;
   runLabel: string;
   runStatus: string;
   closeout?: CloseoutReport;
@@ -290,9 +276,7 @@ export function renderRunReviewContext({
 }: RunReviewMarkdownContext): string {
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
-    team
-      ? `## Team currently composed: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}\n\nThis is the team that just ran. Keep it, or propose a different one if the work ahead needs another shape.`
-      : "## Team currently composed\n\nNo team has been approved yet.",
+    renderProjectTeam(team),
     `## Settled run\n\n${structuralText(runLabel)} finished as \`${runStatus}\`.`,
     renderInitiativeBranch(branch),
     closeout
@@ -331,9 +315,7 @@ export function renderQuestionMediationContext({
       : `Route the user's reply back to \`${originStageId}\` with \`route_to_agent\`.`;
   return markdownBlocks([
     `## Orchestration goal\n\n${markdownBody(goal)}`,
-    team
-      ? `## Approved team: ${team.name}\n\n${markdownBody(team.summary)}\n\n${renderRoles(team)}`
-      : "## Approved team\n\nNo team has been approved yet.",
+    renderProjectTeam(team),
     `## Specialist question\n\nOrigin: \`${originStageId}\`\n\n${markdownBody(question)}`,
     userAnswer === undefined
       ? undefined

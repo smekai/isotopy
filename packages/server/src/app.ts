@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { config } from "./config.ts";
 import { createAgentRoutes } from "./routes/agents.ts";
+import { createTeamRoutes } from "./routes/team.ts";
 import { createAutomationRoutes } from "./routes/automation.ts";
 import { createEngineRoutes } from "./routes/engines.ts";
 import { fsRoutes } from "./routes/fs.ts";
@@ -13,6 +14,7 @@ import { createRunRoutes } from "./routes/runs.ts";
 import { createScheduleRoutes } from "./routes/schedules.ts";
 import { createSettingsRoutes } from "./routes/settings.ts";
 import type { AgentCatalog } from "./services/agent-catalog.ts";
+import type { TeamService } from "./services/team-service.ts";
 import type { AutomationConfigStore } from "./services/automation-config-store.ts";
 import type { DeploymentRunner } from "./services/deployment-runner.ts";
 import type { MilestoneService } from "./services/milestone-service.ts";
@@ -38,6 +40,7 @@ export interface AppDependencies {
   deployment: DeploymentRunner;
   product: ProductProcessService;
   agents: AgentCatalog;
+  teams: TeamService;
   logger: Logger;
 }
 
@@ -53,6 +56,7 @@ export function createApp({
   deployment,
   product,
   agents,
+  teams,
   logger,
 }: AppDependencies): Hono {
   const app = new Hono();
@@ -80,6 +84,7 @@ export function createApp({
   app.route("/runs", createRunRoutes(runs, orchestrations, registry));
   app.route("/schedules", createScheduleRoutes(schedules, registry));
   app.route("/agents", createAgentRoutes(agents, registry));
+  app.route("/team", createTeamRoutes(teams, registry));
   app.route("/fs", fsRoutes);
 
   return app;
