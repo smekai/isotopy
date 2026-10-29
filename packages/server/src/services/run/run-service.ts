@@ -12,7 +12,6 @@ import type {
   RunCloseoutRecord,
   RunEvent,
   RunMessage,
-  RunPullRequest,
   RunState,
   RunSummary,
   StageDefinition,
@@ -38,6 +37,7 @@ import {
 } from "@isotopy/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
+import { PullRequestConsumer } from "../consumers/pull-request-consumer.ts";
 import { ReleaseConsumer } from "../consumers/release-consumer.ts";
 import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
 import type { AutomationConfigStore } from "../automation-config-store.ts";
@@ -73,7 +73,6 @@ import type { OrchestrationService } from "../orchestration-service.ts";
 import { stageAgentsOf } from "../../domain/rules/agent-catalog.ts";
 import type { AgentCatalog } from "../agent-catalog.ts";
 import type { ProductProcessService } from "../product-process-service.ts";
-import type { PullRequestRelease } from "../pull-request-release.ts";
 import { MilestoneService } from "../milestone-service.ts";
 import { ListenerRegistry } from "../../utils/listener-registry.ts";
 import type { Logger } from "../../utils/logger.ts";
@@ -129,7 +128,6 @@ export class RunService implements RunProjection {
     private readonly deployment: DeploymentRunner,
     databases: ProjectDatabases,
     private readonly agents: AgentCatalog,
-    private readonly release: PullRequestRelease,
     logger: Logger,
     private readonly product?: ProductProcessService,
   ) {
@@ -141,6 +139,7 @@ export class RunService implements RunProjection {
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
       new ReleaseConsumer(this.registry),
+      new PullRequestConsumer(),
       new CloseoutConsumer(this.registry),
     ];
     const deps: WorkflowDeps = {
@@ -151,7 +150,6 @@ export class RunService implements RunProjection {
       rosters: this.rosters,
       automation: this.automation,
       deployment: this.deployment,
-      release: this.release,
       orchestration: () => this.orchestration,
       product: this.product,
       beginEngineStage: (runId) => this.beginEngineStage(runId),
@@ -821,13 +819,6 @@ export class RunService implements RunProjection {
     if (!run) return;
     run.closeout = record;
     await persistRunCloseout(this.registry.resolve(run.projectId), runId, record);
-    void this.store.flushPersist(runId);
-  }
-
-  recordPullRequest(runId: string, pullRequest: RunPullRequest): void {
-    const run = this.live(runId);
-    if (!run) return;
-    run.pullRequest = { ...run.pullRequest, ...pullRequest };
     void this.store.flushPersist(runId);
   }
 

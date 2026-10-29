@@ -20,8 +20,6 @@ import { ProductProcessService } from "../../src/services/product-process-servic
 import type { ProductProcessDependencies } from "../../src/services/product-process-service.ts";
 import type { SubprocessResult } from "../../src/engines/subprocess.ts";
 import { ProjectRegistry } from "../../src/services/project-registry.ts";
-import { PullRequestRelease } from "../../src/services/pull-request-release.ts";
-import type { SubprocessRunner } from "../../src/services/pull-request-release.ts";
 import { RunService } from "../../src/services/run/run-service.ts";
 import { SettingsStore } from "../../src/services/settings-store.ts";
 import { FakeEngine } from "./fake-engine.ts";
@@ -50,19 +48,6 @@ export interface TestApp {
 
 export interface TestAppOptions {
   engineId?: EngineId;
-  /** Stands in for `git`/`gh` behind the pull-request release; real git otherwise. */
-  subprocess?: SubprocessRunner;
-}
-
-const CI_CHECK_INTERVAL_MS = 5;
-const CI_CHECK_TIMEOUT_MS = 200;
-
-function testRelease(logger: RecordingLogger, subprocess?: SubprocessRunner): PullRequestRelease {
-  return new PullRequestRelease(logger, {
-    run: subprocess,
-    checkIntervalMs: CI_CHECK_INTERVAL_MS,
-    checkTimeoutMs: CI_CHECK_TIMEOUT_MS,
-  });
 }
 
 /**
@@ -116,7 +101,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const databases = new ProjectDatabases(logger);
   const product = new ProductProcessService(automation, logger, unspawnedProduct());
   const agents = new AgentCatalog(logger);
-  const release = testRelease(logger, options.subprocess);
   const orchestrator = new RunService(
     registry,
     settings,
@@ -125,7 +109,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     deployment,
     databases,
     agents,
-    release,
     logger,
     product,
   );
@@ -135,7 +118,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     settings,
     databases,
     agents,
-    release,
     logger,
   );
   const schedules = new ScheduleService(
@@ -218,7 +200,6 @@ export async function restartApp(): Promise<RestartedApp> {
   const databases = new ProjectDatabases(logger);
   const product = new ProductProcessService(automation, logger, unspawnedProduct());
   const agents = new AgentCatalog(logger);
-  const release = testRelease(logger);
   const orchestrator = new RunService(
     registry,
     settings,
@@ -227,7 +208,6 @@ export async function restartApp(): Promise<RestartedApp> {
     deployment,
     databases,
     agents,
-    release,
     logger,
     product,
   );
@@ -237,7 +217,6 @@ export async function restartApp(): Promise<RestartedApp> {
     settings,
     databases,
     agents,
-    release,
     logger,
   );
   const schedules = new ScheduleService(

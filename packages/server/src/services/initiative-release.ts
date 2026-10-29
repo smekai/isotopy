@@ -2,15 +2,17 @@ import { RELEASE_PIPELINE, isReleaseRun, isTeamRun } from "@isotopy/core";
 import type { Orchestration, RunState, StopDecision } from "@isotopy/core";
 import { NOTHING_TO_MERGE } from "../domain/rules/initiative-branch.ts";
 import {
+  NO_ORIGIN,
   RELEASE_NEEDS_FIX,
   localMergeNotice,
   releasedStopReason,
-} from "../domain/rules/pull-request-release.ts";
+} from "../domain/rules/initiative-release.ts";
+import { renderReleaseTask } from "../domain/markdown/release-task.ts";
+import type { ReleaseContext } from "../domain/markdown/release-task.ts";
 import { messageOf } from "../utils/message-of.ts";
 import type { Logger } from "../utils/logger.ts";
-import type { ReleaseContext } from "../workflow/types.ts";
+import type { InitiativeBranches } from "./initiative-branches.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
-import type { PullRequestRelease } from "./pull-request-release.ts";
 import type { RunService } from "./run/run-service.ts";
 
 export type ReleaseBeginning =
@@ -24,7 +26,7 @@ export class InitiativeRelease {
   constructor(
     private readonly registry: ProjectRegistry,
     private readonly runs: RunService,
-    private readonly release: PullRequestRelease,
+    private readonly branches: InitiativeBranches,
     logger: Logger,
   ) {
     this.logger = logger.child("InitiativeRelease");
@@ -32,9 +34,8 @@ export class InitiativeRelease {
 
   async begin(orchestration: Orchestration, completingRunId?: string): Promise<ReleaseBeginning> {
     const projectPath = this.registry.resolve(orchestration.projectId);
-    const channel = await this.release.channel(projectPath.root);
-    if (channel.kind === "local") {
-      this.noteOnRun(completingRunId, localMergeNotice(channel.reason));
+    if (!(await this.branches.hasOrigin(projectPath.root))) {
+      this.noteOnRun(completingRunId, localMergeNotice(NO_ORIGIN));
       return { kind: "local" };
     }
     const inherited =
@@ -42,7 +43,7 @@ export class InitiativeRelease {
     try {
       const run = await this.runs.startComposedRun(projectPath, RELEASE_PIPELINE, {
         ...inherited,
-        task: orchestration.goal,
+        task: renderReleaseTask(this.contextFor(orchestration)),
         orchestrationId: orchestration.id,
       });
       return { kind: "started", run };
@@ -54,7 +55,7 @@ export class InitiativeRelease {
     }
   }
 
-  contextFor(orchestration: Orchestration): ReleaseContext {
+  private contextFor(orchestration: Orchestration): ReleaseContext {
     const delivered = this.latestTeamRun(orchestration, (run) => run.closeout !== undefined);
     const decision = orchestration.latestDecision;
     return {

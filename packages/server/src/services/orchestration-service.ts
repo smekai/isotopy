@@ -76,7 +76,6 @@ import { InitiativeBranches } from "./initiative-branches.ts";
 import { InitiativeRelease } from "./initiative-release.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
-import type { PullRequestRelease } from "./pull-request-release.ts";
 import { readOrchestratorContext, writeOrchestratorContext } from "./skills.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { AgentCatalog } from "./agent-catalog.ts";
@@ -89,7 +88,6 @@ import type {
   QuestionMediationContext,
   QuestionMediationRequest,
   RecordedReview,
-  ReleaseContext,
   RunReview,
   RunReviewContext,
   RunReviewRequest,
@@ -125,12 +123,11 @@ export class OrchestrationService implements StageOutputConsumer {
     private readonly settings: SettingsStore,
     private readonly databases: ProjectDatabases,
     private readonly agents: AgentCatalog,
-    release: PullRequestRelease,
     logger: Logger,
   ) {
     this.logger = logger.child("OrchestrationService");
     this.branches = new InitiativeBranches(logger);
-    this.releases = new InitiativeRelease(registry, runs, release, logger);
+    this.releases = new InitiativeRelease(registry, runs, this.branches, logger);
   }
 
   async init(): Promise<void> {
@@ -520,12 +517,6 @@ export class OrchestrationService implements StageOutputConsumer {
         branch: orchestration.branch,
       }),
     };
-  }
-
-  releaseContextFor(runId: string): ReleaseContext | undefined {
-    const orchestrationId = this.runs.getRun(runId)?.orchestrationId;
-    const orchestration = orchestrationId ? this.orchestrations.get(orchestrationId) : undefined;
-    return orchestration && this.releases.contextFor(orchestration);
   }
 
   async recordDecisionUsage(orchestrationId: string, usage: StageUsage): Promise<void> {

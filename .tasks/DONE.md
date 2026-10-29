@@ -1,5 +1,40 @@
 # Done
 
+## TASK-210: Release through a pull request: push, PR, preview deploy, CI, merge
+**Priority:** P1 | **Tags:** server, infra | **Epic:** Standing team
+**Updated:** 2026-10-29 09:54
+
+Child of `TASK-206`. Closed 2026-10-29, 0.14.40. Supersedes the 2026-10-15 decision line "Isotopy never pushes". `docs/decisions.md` carries one 2026-10-27 entry that absorbs it, revised 2026-10-29.
+
+**Before.** `stop` with `merge: true` merged `isotopy/<orchestration>` into its base locally with `--no-ff`. On ShareTravel that put 35 unreviewed, CI-less commits on the fork's `main`.
+
+**First version, replaced in the same PR.** The first cut (0.14.35) had Isotopy push, call `gh` and poll `gh pr checks` itself. The owner rejected it on 2026-10-28: `gh` is not on every machine, and waiting should be a general mechanism. That mechanism became `TASK-212`; the `gh` code (`PullRequestRelease`, `release-stage.ts`, `github-cli.ts`, `FakeGitHub`) was deleted.
+
+**After.** When the repository has an `origin`, `OrchestrationService.end` starts a **release run** (`RELEASE_PIPELINE`) through `InitiativeRelease`. It has two stages:
+1. `preview`: the deterministic `deploy-preview` stage. It skips when the project has no preview target.
+2. `pull-request`: the Release Manager on the `open-pull-request` step task. The run's task is rendered from the stop decision and the closeout. The stage's rule (`buildReleaseRule`) lets it push the initiative's branch and nothing else, and merge only through the PR. The Release Manager:
+   - pushes the branch;
+   - opens the PR with whatever the machine has, writing a body with the lines-changed table;
+   - waits for CI with an `isotopy-wait` block;
+   - merges and fast-forwards the base;
+   - reports an `isotopy-pull-request` block, which `PullRequestConsumer` stores as `run.pullRequest`.
+
+Red CI is `VERDICT: FAIL` with the failing checks. The Orchestrator's review sends them back as a fix run (the `TASK-183` route), and a `merge` straight after it is refused (`RELEASE_NEEDS_FIX`). A merged release is not reviewed: `settle` stops the initiative with the PR URL. With no `origin` the local merge stays, and the run log says why. Every other stage keeps "Do not push".
+
+**Tests.** `pull-request-release.comp.ts` uses a real bare repository as `origin` and covers:
+- the Release Manager's push rule;
+- a CI wait that resumes its session;
+- the merge stopping the initiative;
+- red CI starting a fix run with the PR left open;
+- the refused re-merge;
+- the preview URL reaching the Release Manager;
+- no origin falling back to the local merge.
+
+The release-rule and origin guards were mutation-checked. `PullRequestPanel.comp.tsx` still covers the view.
+
+Cross-platform: the Release Manager runs the forge CLI or API from its own session, with whatever exists on the machine. Isotopy's only git call here, `remote get-url origin`, is an argument array through `runSubprocess`. Tested on Windows; macOS reasoned through.
+
+---
 ## TASK-212: An agent can wait: durable deferred checks with attempts and backoff
 **Priority:** P1 | **Tags:** server, core | **Epic:** Standing team
 **Updated:** 2026-10-29 09:46

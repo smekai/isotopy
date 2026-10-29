@@ -64,23 +64,29 @@ work goes on. Shipping means a pull request whenever the repository can have one
   ending other than a merge (`stop` without it, the owner's Stop, a superseded initiative)
   aborts what is still running, then switches back to the base and keeps the branch for the
   owner.
-- **`stop` with `merge: true` releases through a pull request.** When `origin` is a GitHub
-  remote and `gh` is signed in, Isotopy starts a release run: one deterministic stage, no
-  agent. It pushes the branch, deploys the project's `preview` target when one is configured,
-  opens the PR (or updates the open one) with a body built from the closeout and the
-  per-category table of lines changed, and waits for the required checks as a durable sleep
-  inside the workflow, bounded by a timeout. Green checks merge the PR and fast-forward the
-  local base. The Orchestrator's merge decision is the review the PR needed.
-- **Red CI goes back as a fix run.** The failing checks and their log tails become the release
-  stage's output and the run settles `needs_attention`; the Orchestrator's review sends them to
+- **`stop` with `merge: true` releases through a pull request.** When the repository has an
+  `origin`, Isotopy starts a release run (revised 2026-10-29). The run deploys the project's
+  `preview` target first, when one is configured. A Release Manager then:
+  - pushes the branch;
+  - opens the PR, or updates the open one, with whatever the machine has (`gh`, `glab`, the
+    forge's API). The body carries the closeout and the per-category table of lines changed;
+  - waits for CI with an `isotopy-wait` block (2026-10-29, "An agent can wait");
+  - on green, merges the PR and fast-forwards the local base.
+
+  It reports the URL, the CI result and the merge commit in an `isotopy-pull-request` block. The
+  Orchestrator's merge decision is the review the PR needed.
+- **Red CI goes back as a fix run.** The Release Manager reports the failing checks and their
+  log tails with `VERDICT: FAIL`, and the run settles `needs_attention`; the Orchestrator's review sends them to
   the implementing role exactly as a review FAIL does (2026-10-15, "A finding goes back to the
   Developer as a new run"). The PR stays open and collects the fix commits; the next `merge`
   pushes them and waits again. A `merge` straight after red CI is refused.
-- **No GitHub remote, or no signed-in `gh`, keeps the local merge.** That is a different
-  repository, not a second path for the same one: `--no-ff` into the base and delete the branch,
+- **No `origin` keeps the local merge.** That is a different repository, not a second path for
+  the same one: `--no-ff` into the base and delete the branch,
   and a merge git refuses parks the initiative on its owner with git's reason. The run log says
   which happened and why.
-- **Only Isotopy pushes.** Agents keep "Do not push" in their commit rule. Production deploy
+- **Only the release stage pushes, and only its branch.** Every other stage keeps "Do not
+  push" in its commit rule; the Release Manager's rule names the one branch it may push and
+  says it merges only through the pull request. Production deploy
   stays the owner's `POST /automation/deploy/production`; staging is configured as the preview
   target, and there is no third target.
 - **An initiative branch is never a base.** When a switch back could not happen (a dirty tree
@@ -101,10 +107,11 @@ nobody to fix it, a file holding both the owner's uncommitted edits and the agen
 be split, and every message would be mechanical. Isotopy's own board writes at closeout are
 the exception, decided on 2026-10-22. **Rejected: a worktree per initiative.**
 Isotopy starts the product and keeps its data from the project root, so the preview would
-show the base, not the work. **Rejected: the Release Manager commits or pushes.** Most teams the
-Orchestrator composes have none, and an agent that can push can push anywhere. **Rejected:
-polling CI from a cron schedule.** Cron starts work; it does not resume a run that is waiting.
-The wait is the release run's own durable sleep, so a restart resumes it where it was.
+show the base, not the work. **Rejected: Isotopy pushes and calls `gh` itself** (the first version of `TASK-210`). `gh` is
+not on every machine, and each forge would be one more CLI Isotopy depends on; the release
+needs judgement anyway: writing the description and reading a red log. The agent picks the tool;
+Isotopy keeps the branch boundary in the rule and the durable wait. **Rejected: polling CI from
+a cron schedule.** Cron starts work; it does not resume a run that is waiting.
 **Rejected: keeping the local merge as an option beside the PR.** One repository, one way out;
 the local merge exists only where no PR can.
 

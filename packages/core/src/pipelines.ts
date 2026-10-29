@@ -241,11 +241,17 @@ export const RELEASE_PIPELINE: PipelineDefinition = {
   id: "release",
   name: "Release",
   description:
-    "Isotopy pushes the initiative's branch, opens its pull request, waits for CI and merges it.",
+    "The Release Manager pushes the initiative's branch, opens its pull request, waits for CI and merges it.",
   internal: true,
   groups: [
     {
       stages: [
+        {
+          id: "preview",
+          label: "Deploying the preview",
+          skill: "sre",
+          stepTask: "deploy-preview",
+        },
         {
           id: "pull-request",
           label: "Releasing through a pull request",

@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import {
   DEFAULT_PERMISSION_MODE,
   ORCHESTRATION_PIPELINE,
+  PULL_REQUEST_STEP_TASK,
   isReleaseRun,
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
@@ -16,6 +17,7 @@ import type {
   OrchestratorDecision,
   RunCloseoutRecord,
   RunArtifacts,
+  RunBranch,
   RunState,
   StageDefinition,
   StageVerdict,
@@ -28,6 +30,7 @@ import { buildWaitRule } from "../domain/markdown/stage-wait.ts";
 import {
   buildArtifactsRule,
   buildCommitRule,
+  buildReleaseRule,
   buildIsolatedReviewRule,
   buildContinuationPrompt,
   buildProcessRule,
@@ -106,7 +109,7 @@ async function stageEnvironment(
   return [
     buildTimeBudget(config.engineTimeoutMs),
     buildProcessRule({ pid: process.pid, port: config.port }),
-    ...(await teamWorkRules(deps, run)),
+    ...(await teamWorkRules(deps, run, stageDef)),
     isolatedReviewRule(run, stageDef),
     product,
   ]
@@ -120,7 +123,17 @@ function isolatedReviewRule(run: RunState, stageDef: StageDefinition): string | 
     : buildIsolatedReviewRule(run.branch);
 }
 
-async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[]> {
+function branchRule(branch: RunBranch, stageDef: StageDefinition): string {
+  return stageDef.stepTask === PULL_REQUEST_STEP_TASK
+    ? buildReleaseRule(branch)
+    : buildCommitRule(branch);
+}
+
+async function teamWorkRules(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+): Promise<string[]> {
   if (run.pipelineId === ORCHESTRATION_PIPELINE.id) {
     return [];
   }
@@ -130,7 +143,7 @@ async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[
   const waitRule = buildWaitRule(config.waitMinIntervalMs);
   return run.branch === undefined
     ? [artifactsRule, waitRule]
-    : [artifactsRule, buildCommitRule(run.branch), waitRule];
+    : [artifactsRule, branchRule(run.branch, stageDef), waitRule];
 }
 
 async function productEnvironment(

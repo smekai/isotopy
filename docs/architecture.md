@@ -380,7 +380,7 @@ functions only.
 | `src/config.ts` | All environment-driven configuration (reads root `.env`) |
 | `src/routes/` | Controllers — one file per resource, thin HTTP mapping only |
 | `src/schemas/` | Boundary parse layer — Zod schemas and extractors for HTTP, persisted blobs, settings files, and LLM fenced blocks. Pure; no I/O |
-| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the Orchestrator's closeout, `ReleaseConsumer` the release handoff), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, `agent-catalog.ts` (who may be on a team: bundled agents and steps plus what the project brings), settings, skills; no HTTP awareness |
+| `src/services/` | I/O and lifecycle — `run/` (`RunService`, `RunStore`), `milestone-service.ts`, `consumers/` (`CloseoutConsumer` owns the Orchestrator's closeout, `ReleaseConsumer` the release handoff, `PullRequestConsumer` the pull request report), `orchestration-service.ts`, `schedule-service.ts`, `model-roster-service.ts`, `milestone-closeout.ts`, `run-evidence.ts` (every reader and writer of a run's on-disk evidence), `run-change-collector.ts` (what a run created, edited and deleted), `automation-config-store.ts`, `deployment-runner.ts`, `task-board-adapter.ts`, `agent-catalog.ts` (who may be on a team: bundled agents and steps plus what the project brings), settings, skills; no HTTP awareness |
 | `src/domain/` | Server-only **pure** logic: `rules/`, `markdown/`, `skills/`, plus `validation.ts`. No I/O — the thin-service/fat-domain split (A3) |
 | `src/utils/` | Product-neutral helpers (`listener-registry`, `directory-browser`, `workspace-files`, `reveal-folder`, `time`) |
 | `src/engines/` | Engine adapters (subprocess integration) behind `EngineAdapter` |
@@ -935,23 +935,19 @@ that is not a repository root, a detached HEAD or a repository with no commit ge
 and its runs work where they are. Every team stage on a branch is told it and to commit its
 own work there (`buildCommitRule`); without a branch, no stage is told to commit. Every ending
 goes through `OrchestrationService.end`: it aborts what still runs, then `stop` with
-`merge: true` asks `PullRequestRelease.channel` how the work leaves. With a GitHub `origin`
-and a signed-in `gh` it starts a release run (`RELEASE_PIPELINE`, one deterministic stage
-routed in `pipeline-workflow.ts` by its `open-pull-request` step task): the
-`isotopy.release-open` task pushes, deploys the `preview` target if configured and opens or
-updates the PR with a body file under the run's artifacts; `isotopy.release-checks` reads
-`gh pr checks` once per poll between durable `run.sleep`s until the checks settle or the poll
-budget runs out; `isotopy.release-settle` merges and fast-forwards the base, or records the
-failing checks as the stage's output so the run settles `needs_attention` and the review
-sends them back as a fix run. A merged release is not reviewed; `settle` stops the initiative
-with the PR's URL. Without a GitHub remote or a signed-in `gh`, `InitiativeBranches` switches
-to the base and merges `--no-ff`, deleting the branch, logging why on the run, and a merge git
-refuses parks the initiative on its owner with git's reason. Any other ending (a `stop`
-without merge, the owner's Stop, a superseded initiative) switches back to the base and keeps
-the branch. A restarted run works on whatever is checked out. Only Isotopy pushes; the
-release run is the one place it does. `git` and `gh` run through `runSubprocess` with argument
-arrays, `utils/git.ts` for git; the release's runner is injectable, which is how the tests
-stand in for `origin` and `gh`.
+`merge: true` hands over to `InitiativeRelease`. With an `origin` it starts a release run
+(`RELEASE_PIPELINE`): the deterministic `preview` stage deploys the preview target if one is
+configured. Then a Release Manager stage, told by `buildReleaseRule` that it may push this
+one branch, opens the PR with the project's own tooling, waits for CI through an
+`isotopy-wait` block, and merges, reporting through an `isotopy-pull-request` block that
+`PullRequestConsumer` records as `run.pullRequest`. Red CI is a `FAIL` the review sends back
+as a fix run. A merged release is not reviewed; `settle` stops the initiative with the PR's
+URL. Without an `origin`, `InitiativeBranches` switches to the base and merges `--no-ff`,
+deleting the branch, logging why on the run, and a merge git refuses parks the initiative on
+its owner with git's reason. Any other ending (a `stop` without merge, the owner's Stop, a
+superseded initiative) switches back to the base and keeps the branch. A restarted run works
+on whatever is checked out. Isotopy's own git calls go through `runSubprocess` with argument
+arrays (`utils/git.ts`).
 
 **Secrets never enter a project folder.** `<project>/.isotopy/` sits in the user's
 git working tree, so credentials live only in the user-level store, keyed by

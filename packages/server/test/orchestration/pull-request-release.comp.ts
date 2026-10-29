@@ -1,22 +1,24 @@
 // An initiative that is merged leaves through a pull request when the project
-// has a GitHub remote and a signed-in `gh`: Isotopy pushes, opens the PR, waits
-// for CI and merges. Without either, it merges locally as before. `origin` and
-// `gh` are the substituted boundary (FakeGitHub); git itself is real.
+// has an `origin`: a Release Manager pushes, opens the PR with whatever the
+// machine has, waits for CI with an isotopy-wait block and merges. Without an
+// origin it merges locally as before. `origin` is a real bare repository; the
+// Release Manager's own pushing and forge calls are the scripted engine's.
+import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type {
   DeploymentAutomation,
   OrchestratorDecision,
   ProjectAutomationConfig,
+  RunPullRequest,
   RunState,
 } from "@isotopy/core";
 import {
+  NO_ORIGIN,
   RELEASE_NEEDS_FIX,
-  cliRefusal,
   localMergeNotice,
-  remoteRefusal,
-} from "../../src/domain/rules/pull-request-release.ts";
-import { FakeGitHub } from "../support/fake-github.ts";
-import { commitFile, currentBranch, fileAt, initGitRepository } from "../support/git-project.ts";
+} from "../../src/domain/rules/initiative-release.ts";
+import { fencedBlock } from "../support/fake-engine.ts";
+import { addBareOrigin, commitFile, fileAt, initGitRepository } from "../support/git-project.ts";
 import {
   addTestProject,
   createTestApp,
@@ -31,15 +33,18 @@ import { startHealthServer } from "../support/health-server.ts";
 import type { HealthServer } from "../support/health-server.ts";
 import { TEAM_PROPOSAL, fenced } from "../support/orchestration-fixtures.ts";
 
-test("green CI merges the pull request and brings the local base up to date", async () => {
+test("a Release Manager pushes only the initiative's branch, waits for CI in its session, and the merge stops the initiative", async () => {
   // Arrange
-  const project = await gitProject("green");
-  github.hasOrigin(ORIGIN).isSignedIn().acceptsPush().opensPullRequest(PR_URL);
-  github.reportsChecks([{ name: "test", bucket: "pending" }], [{ name: "test", bucket: "pass" }]);
-  github.mergesAs(MERGE_COMMIT);
+  const project = await gitProjectWithOrigin("green");
 
   // Anticipate — the merged release is not reviewed: nothing is left to decide.
   anticipateDeliveryReviewedForMerge();
+  ctx.engine
+    .anticipate({ as: "Release Manager, opening the PR", prompt: /push `isotopy\/[^`]+` to `origin` — that branch and no other/ })
+    .parks(CI_WAIT, RELEASE_SESSION);
+  ctx.engine
+    .anticipate({ as: "Release Manager, woken by CI", resumeSessionId: RELEASE_SESSION })
+    .reports(released(MERGED));
   const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
@@ -53,22 +58,19 @@ test("green CI merges the pull request and brings the local base up to date", as
     project.headers,
   );
   const release = await getRun(ctx.app, stopped.runIds[2] ?? "");
-  expect(release.pullRequest).toEqual({ url: PR_URL, ci: "passed", mergeCommit: MERGE_COMMIT });
-  expect(github.ran("gh", "pr", "merge", PR_URL, "--merge")).toBe(true);
-  expect(github.ran("git", "pull", "--ff-only", "origin", "main")).toBe(true);
-  expect(await currentBranch(project.root)).toBe("main");
+  expect(release.pullRequest).toEqual(MERGED);
+  expect(stopped.stopReason).toContain(PR_URL);
+  expect(ctx.engine.callAt(4).prompt).not.toContain("Do not push");
   ctx.engine.verify();
 });
 
 test("red CI sends the failing checks back to the Developer as a fix run and leaves the pull request open", async () => {
   // Arrange
-  const project = await gitProject("red");
-  github.hasOrigin(ORIGIN).isSignedIn().acceptsPush().opensPullRequest(PR_URL);
-  github.reportsChecks([{ name: "test", bucket: "fail", link: FAILED_RUN_LINK }]);
-  github.printsFailedLog(FAILED_LOG);
+  const project = await gitProjectWithOrigin("red");
 
   // Anticipate — the review of the release reads the failing log and sends it back.
   anticipateDeliveryReviewedForMerge();
+  ctx.engine.anticipate({ as: "Release Manager" }).reports(heldOnRedCi(RED));
   ctx.engine.anticipateRunReview({
     as: "review of the red release",
     prompt: /search finds nothing for "tea"/,
@@ -90,21 +92,19 @@ test("red CI sends the failing checks back to the Developer as a fix run and lea
     project.headers,
   );
   const [, , release, fix] = await Promise.all(runIds.map((runId) => getRun(ctx.app, runId)));
-  expect(release?.pullRequest).toEqual({ url: PR_URL, ci: "failed", failingChecks: ["test"] });
-  expect(github.ran("gh", "pr", "merge")).toBe(false);
+  expect(release?.pullRequest).toEqual(RED);
   expect(fix?.branch).toEqual(delivery.branch);
-  await ctx.engine.waitForCall(6);
+  await ctx.engine.waitForCall(7);
   ctx.engine.verify();
 });
 
 test("merging again after CI failed is refused, because the same commits would fail the same way", async () => {
   // Arrange
-  const project = await gitProject("remerge");
-  github.hasOrigin(ORIGIN).isSignedIn().acceptsPush().opensPullRequest(PR_URL);
-  github.reportsChecks([{ name: "test", bucket: "fail" }]);
+  const project = await gitProjectWithOrigin("remerge");
 
   // Anticipate — the review of the red release asks to merge regardless.
   anticipateDeliveryReviewedForMerge();
+  ctx.engine.anticipate({ as: "Release Manager" }).reports(heldOnRedCi(RED));
   ctx.engine.anticipateRunReview({ as: "review that ignores the red CI", decision: MERGE });
   const conversation = await proposedTeam(ctx.app, project.headers);
 
@@ -119,20 +119,20 @@ test("merging again after CI failed is refused, because the same commits would f
     project.headers,
   );
   expect(parked.decisionError).toBe(RELEASE_NEEDS_FIX);
-  expect(github.ran("gh", "pr", "merge")).toBe(false);
   ctx.engine.verify();
 });
 
-test("a preview target is deployed for the pull request and its URL is in the description", async () => {
+test("a preview target is deployed before the pull request, and the Release Manager is handed its URL", async () => {
   // Arrange
-  const project = await gitProject("preview");
+  const project = await gitProjectWithOrigin("preview");
   healthy = await startHealthServer(200);
   await put(ctx.app, "/automation", previewConfig(reportingTarget(healthy.url)), project.headers);
-  github.hasOrigin(ORIGIN).isSignedIn().acceptsPush().opensPullRequest(PR_URL);
-  github.reportsChecks([{ name: "test", bucket: "pass" }]).mergesAs(MERGE_COMMIT);
 
   // Anticipate
   anticipateDeliveryReviewedForMerge();
+  ctx.engine
+    .anticipate({ as: "Release Manager", prompt: new RegExp(escaped(healthy.url)) })
+    .reports(released({ ...MERGED, previewUrl: healthy.url }));
   const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
@@ -145,15 +145,14 @@ test("a preview target is deployed for the pull request and its URL is in the de
     ({ status }) => status === "stopped",
     project.headers,
   );
-  expect(await github.pullRequestBody()).toContain(healthy.url);
   ctx.engine.verify();
 });
 
-test("a repository with no remote keeps the local merge, and the run log says why", async () => {
-  // Arrange — no origin is scripted, so real git finds none.
+test("a repository with no origin keeps the local merge, and the run log says why", async () => {
+  // Arrange
   const project = await gitProject("no-remote");
 
-  // Anticipate
+  // Anticipate — no Release Manager: nothing is pushed.
   anticipateDeliveryReviewedForMerge();
   const conversation = await proposedTeam(ctx.app, project.headers);
 
@@ -168,50 +167,24 @@ test("a repository with no remote keeps the local merge, and the run log says wh
     project.headers,
   );
   expect(await fileAt(project.root, "main", "search.ts")).toBe(SEARCH);
-  expect(logMessagesOf(await getRun(ctx.app, delivery.id))).toContain(
-    localMergeNotice(remoteRefusal(undefined) ?? ""),
-  );
-  expect(github.ran("git", "push")).toBe(false);
+  expect(logMessagesOf(await getRun(ctx.app, delivery.id))).toContain(localMergeNotice(NO_ORIGIN));
   ctx.engine.verify();
 });
-
-test("gh missing is reported on the run and the initiative still merges locally", async () => {
-  // Arrange — a GitHub remote, but no `gh` answers.
-  const project = await gitProject("no-gh");
-  github.hasOrigin(ORIGIN);
-
-  // Anticipate
-  anticipateDeliveryReviewedForMerge();
-  const conversation = await proposedTeam(ctx.app, project.headers);
-
-  // Act
-  const { body: delivery } = await approve(conversation.orchestrationId, project.headers);
-
-  // Assert
-  await waitForOrchestration(
-    ctx.app,
-    conversation.orchestrationId,
-    ({ status }) => status === "stopped",
-    project.headers,
-  );
-  expect(await fileAt(project.root, "main", "search.ts")).toBe(SEARCH);
-  expect(logMessagesOf(await getRun(ctx.app, delivery.id))).toContain(
-    localMergeNotice(cliRefusal("missing") ?? ""),
-  );
-  ctx.engine.verify();
-});
-
-const ORIGIN = "git@github.com:acme/shop.git";
 
 const PR_URL = "https://github.com/acme/shop/pull/7";
 
-const MERGE_COMMIT = "4d3c2b1a";
-
-const FAILED_RUN_LINK = "https://github.com/acme/shop/actions/runs/42/job/1";
-
-const FAILED_LOG = 'FAIL search.test.ts > search finds nothing for "tea"';
+const RELEASE_SESSION = "sess-release-1";
 
 const SEARCH = "export const search = 1;";
+
+const MERGED: RunPullRequest = { url: PR_URL, ci: "passed", mergeCommit: "4d3c2b1a" };
+
+const RED: RunPullRequest = { url: PR_URL, ci: "failed", failingChecks: ["test"] };
+
+const CI_WAIT = `Opened ${PR_URL}; CI is running.\n\n${fencedBlock("isotopy-wait", {
+  until: "CI on the pull request has settled",
+  every: "1ms",
+})}`;
 
 const MERGE: OrchestratorDecision = {
   action: "stop",
@@ -227,12 +200,10 @@ const FIX_CI: OrchestratorDecision = {
 };
 
 let ctx: TestApp;
-let github: FakeGitHub;
 let healthy: HealthServer | undefined;
 
 beforeEach(async () => {
-  github = new FakeGitHub();
-  ctx = await createTestApp({ subprocess: github.runner });
+  ctx = await createTestApp();
 });
 
 afterEach(async () => {
@@ -241,10 +212,29 @@ afterEach(async () => {
   await ctx.dispose();
 });
 
+function released(pullRequest: RunPullRequest): string {
+  return `Merged ${PR_URL}.\n\n${fencedBlock("isotopy-pull-request", pullRequest)}\n\nVERDICT: PASS`;
+}
+
+function heldOnRedCi(pullRequest: RunPullRequest): string {
+  return [
+    `CI failed on ${PR_URL}; the pull request stays open.`,
+    'FAIL search.test.ts > search finds nothing for "tea"',
+    fencedBlock("isotopy-pull-request", pullRequest),
+    "VERDICT: FAIL",
+  ].join("\n\n");
+}
+
 async function gitProject(name: string) {
   const project = await addTestProject(ctx.registry, name);
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# shop\n", "Start the shop");
+  return project;
+}
+
+async function gitProjectWithOrigin(name: string) {
+  const project = await gitProject(name);
+  await addBareOrigin(project.root, path.join(ctx.home, `${name}-origin.git`));
   return project;
 }
 
@@ -268,6 +258,10 @@ function approve(orchestrationId: string | undefined, headers: TestHeaders) {
 
 function logMessagesOf(run: RunState): string[] {
   return run.stages.flatMap((stage) => stage.logs.map((log) => log.message));
+}
+
+function escaped(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function previewConfig(preview: DeploymentAutomation): ProjectAutomationConfig {

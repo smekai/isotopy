@@ -612,31 +612,26 @@ as it does for every review decision.
 
 ---
 
-## Releasing through a pull request (`services/pull-request-release.ts`, `workflow/release-stage.ts`)
+## Releasing through a pull request (`services/initiative-release.ts`, `services/consumers/pull-request-consumer.ts`)
 
-- **`gh` missing is `exitCode: null`.** `runSubprocess` reports a spawn failure
-  (`ENOENT`) with no exit code; a `gh auth status` that ran and failed has one.
-  That is how "not installed" and "not signed in" are told apart without a
-  separate `PATH` probe, on Windows (WinGet's `gh.exe`) and macOS (Homebrew) alike.
-- **`gh pr checks` exits non-zero for pending (8) and failing (1) checks**, so its
-  JSON on stdout is read whatever the exit code; only an empty stdout is an error.
-- **`--required` fails on a repository with no branch protection** ("no required
-  checks reported"); the release then reads every check instead.
-- **"No checks reported" right after a push is not green.** CI may not have
-  registered its runs yet, so it counts as pending for the first three polls and
-  only then as passed — a repository with no CI at all still merges.
-- **The poll is a task, the wait is `run.sleep`.** Each `gh pr checks` call is its
-  own `isotopy.release-checks` task with the poll index in its input, so a restart
-  replays the recorded answers and resumes the sleep; the poll budget is
-  `ceil(timeout / interval)`, both from `PullRequestRelease` (30 s and 60 min by
-  default, milliseconds in the tests).
-- **The release run inherits the completing run's engine** but never calls it for
-  the stage; the engine is there for the Orchestrator's review of a red or
-  timed-out release. A merged release skips the review: `settle()` stops the
-  initiative with the PR's URL.
-- **A team stage named `release` already exists** (Full Delivery's
-  `prepare-release`), so the deterministic stage is found by its step task,
-  `open-pull-request`, not its id.
+- **The release run is two stages.** `preview` is the deterministic
+  `deploy-preview` stage, which skips without a target. `pull-request` is the
+  Release Manager, which gets the preview's output as its handoff. Its task is
+  rendered from the stop decision and the latest team run's closeout
+  (`renderReleaseTask`). The completing run's engine and model carry over.
+- **The choice is `git remote get-url origin`, nothing else.** Isotopy does not
+  ask which forge `origin` is or which CLI is installed; the Release Manager finds
+  out. No origin keeps the local `--no-ff` merge, with the reason on the
+  completing run's log.
+- **`buildReleaseRule` replaces `buildCommitRule` for the `open-pull-request`
+  step task only.** Every other stage, in every pipeline, is still told not to
+  push.
+- **The `isotopy-pull-request` block is the only way `run.pullRequest` is set.**
+  A passing stage without it needs attention. A failing one may omit it when the
+  push or the PR itself failed. `ci: "failed"` on that record is what refuses a
+  second `merge` (`RELEASE_NEEDS_FIX`).
+- **A merged release is not reviewed:** `settle()` stops the initiative with the
+  PR's URL. A red one is reviewed like any `needs_attention` run.
 
 ---
 
