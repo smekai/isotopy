@@ -1,5 +1,56 @@
 # Next
 
+## TASK-214: Home and Setup gates run the team's flows, not the fixed pipelines
+**Priority:** P2 | **Tags:** core, ui, server | **Epic:** Standing team
+**Updated:** 2026-10-29 17:01
+
+Child of `TASK-206`. Follows `TASK-208`, which left this out on purpose so as not to double its size.
+
+**Today.** Team runs from the Orchestrator, schedules and duties come from `.isotopy/team.md`. Two places still use the bundled pipelines in `packages/core/src/pipelines.ts`:
+
+- The Home composer's "Run a fixed pipeline instead" (`PipelineHeader`, `DEMO_PIPELINES`, `DEFAULT_PIPELINE_ID` = `pm-dev-test`) starts `pm-dev-test`, `full-delivery` or `solo` directly.
+- Setup → Gates lists `CONFIGURABLE_PIPELINES` (those same pipelines), so a gate on a team flow (`flow-<name>:<stage>`) cannot be set from the UI, although `applyGatePreferences` would honour it.
+
+**Wanted.**
+
+1. Direct runs pick a flow of the team (plus `solo`, which is not a team). `POST /runs` takes `flow`; the server composes it through `TeamService.flowPipeline`.
+2. Gates list the team's flows and their stages.
+3. Replace, don't accumulate: delete `FULL_DELIVERY_PIPELINE` and `PM_DEV_TEST_PIPELINE`, and move the ~30 tests that use them as fixtures onto a team written with `writeTeam` (server) or a seeded `/team` route (e2e).
+
+**Done when** a direct run of a named flow and a gate set on a flow stage are both proven by component tests, and no source file names `pm-dev-test` or `full-delivery`.
+
+Cross-platform: no new platform surface; tested on Windows, macOS in CI.
+
+---
+## TASK-213: Refactor the Standing team code: one path per concern, no duplication, shorter services
+**Priority:** P2 | **Tags:** core, server | **Epic:** Standing team
+**Updated:** 2026-10-29 13:13
+
+Child of `TASK-206`. Depends on `TASK-208`; goes before `TASK-211`, so the live proof runs on the code that stays.
+
+**Why.** `TASK-207`, `209`, `210`, `212` and `208` each added a path of their own, in a hurry and in separate PRs. The result works, but the hot files grew and the same ideas are spelled more than once. Owner's ask (2026-10-29): remove duplication, make the logic direct and readable, and pull shared code out. No behaviour change.
+
+**Where to look first** (the epic's diff since `5cc417c`):
+
+- **Three services near 1000 lines each:** `services/orchestration-service.ts` (~990), `services/run/run-service.ts` (~980) and `workflow/stage-execution.ts` (~850). Split them by concern: the settle, act and refuse paths of an initiative; engine and slot selection; wait and resume. Each new file is named after its class (see "Server file placement").
+- **The release path is in three places.** `services/initiative-release.ts`, `domain/rules/initiative-release.ts` and branches inside `OrchestrationService.settle`, `mergeRefusal` and `stopReason`. Gather it into one place that answers "is this release done, refused, or waiting on the owner?".
+- **Parking on the owner** is spelled several ways (`refuse`, `parkOnOwner` plus `persist`, inline `decisionError` writes). Use one helper.
+- **Rule builders** in `domain/markdown/stage.ts` (`buildCommitRule`, `buildReleaseRule`, `buildIsolatedReviewRule`) and `stage-wait.ts`: their selection lives in `stage-execution.ts`. One function should pick the rules a stage reads.
+- **Fenced-block schemas** (`schemas/*`: `stage-wait`, `pull-request-report`, `orchestrator-decision`, `release-manifest`, …): check that each one goes through `takeFencedBlock` and `parseJson` the same way, with no local re-implementations.
+- **Engine selection** for primary and secondary (`domain/rules/stage-engines.ts`, `run-engine-readiness.ts`, `run-options.ts`): one source of truth for "which engine runs this stage".
+
+**Rules.**
+
+- No behaviour change. The existing comp tests are the safety net. A test changes only when it relies on a file layout that moved.
+- Replace, don't accumulate: old paths are deleted in the same change, not left beside the new ones.
+- Small, reviewable commits: one concern per commit, with gates green on each.
+- Anything that turns out to be a behaviour bug is filed as its own task, not fixed in passing.
+
+**Done when** none of the three services is over ~600 lines, each concern above has one home, and `pnpm lint`, `typecheck`, `test`, `check`, `build` and `e2e` are green with the same test count as before, give or take moved tests.
+
+Cross-platform: no new platform surface. The gates run on Windows locally and on macOS in CI.
+
+---
 ## TASK-211: Restart ShareTravel on the standing team, and prove the epic with one task
 **Priority:** P2 | **Tags:** setup, testing | **Epic:** Standing team
 **Updated:** 2026-10-27 12:46
@@ -17,30 +68,6 @@ Child of `TASK-206`. Depends on `TASK-207`, `TASK-208`, `TASK-209` and `TASK-210
 **Done when** that run completes as expected, and a short record under `docs/dogfood/` says what happened, what the owner had to do (target: nothing), and every gap found, each filed as its own task.
 
 Cross-platform: a live Windows run; macOS is not exercised here and the record says so.
-
----
-## TASK-208: One team per project: team.md with named flows, changed only by an approved proposal
-**Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
-**Updated:** 2026-10-27 12:46
-
-Child of `TASK-206`. Depends on `TASK-207` (a role's `engine`).
-
-**Today.** The Orchestrator composes a team for every initiative (`propose_team` in `packages/server/src/domain/skills/step-tasks/orchestrate.md`), the owner approves it (`OrchestrationService.approveTeam`, `packages/server/src/services/orchestration-service.ts` ~246–291), and it lives only on that orchestration (`approvedTeam`, `composedPipeline`). Schedules and duties pin a team of their own (`packages/core/src/schedules.ts` `team?`, duty front matter in `packages/server/src/schemas/agent-definition.ts`). Nothing persists a project's team.
-
-**Wanted.**
-
-1. **`<project>/.isotopy/team.md`**: YAML front matter parsed once at the boundary with a strict zod schema (a new file under `packages/server/src/schemas/`, modelled on `agent-definition.ts`), body free text for the owner. Visible to git like `agents/` and `steps/`.
-   - `roster`: roles with `id`, `label`, `agent`, `engine` (`primary`/`secondary`), `modelTier`, `executionPolicy`.
-   - `flows`: named, ordered lists of `{ role, step }`. The bundled template has `delivery` (plan → implement → review on secondary → verify → release → closeout) and `discovery` (research roles, no Developer).
-2. **Seeding.** A project without `team.md` gets the bundled template the first time a team is needed, committed on the base like any other `.isotopy/` file the owner authors. The template replaces `FULL_DELIVERY_PIPELINE` and `PM_DEV_TEST_PIPELINE` as the source of team runs (`packages/core/src/pipelines.ts`).
-3. **The Orchestrator picks a flow, not a team.** `start_run` names a `flow` from `team.md`, with no owner approval. `propose_team` is **replaced** by `propose_team_change`: a full new `team.md` plus a rationale. The owner approves it once; Isotopy writes and commits it, and it holds for every later initiative.
-4. **Replace, don't accumulate:** in the same change remove `approvedTeam`, the team half of `approveTeam`, per-initiative composition in `orchestrate.md`, and the pinned `team` on schedules and duties (they name a `flow` instead). Keep `composeTeamPipeline` and `roleIssues` in `packages/server/src/domain/rules/team-composition.ts`, now building a pipeline from a flow.
-5. Setup shows the team and its flows, read-only plus "edit team.md"; a pending `propose_team_change` shows as a diff to approve.
-6. An invalid `team.md` refuses team runs with the validation issues, never a silent default.
-
-**Done when** component tests prove: seeding and committing the template; a run started from a named flow without approval; a `propose_team_change` approved, written, committed and used by the next initiative; a schedule naming a flow; an invalid file refused. `docs/decisions.md` records "one team per project" and the rejected alternative (a default team with per-initiative edits); `docs/architecture.md` gains the team component.
-
-Cross-platform: CRLF front matter (split on `\r?\n`), the team file path joined with `path.join`, ids validated before they reach a path; case-insensitive file systems on both Windows and macOS mean `Team.md` and `team.md` are the same file — read exactly `team.md`. Tested on Windows; macOS reasoned through.
 
 ---
 ## TASK-206: Standing team — one team per project, review by a second model, release through a pull request
