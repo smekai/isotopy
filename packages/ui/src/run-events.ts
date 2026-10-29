@@ -83,6 +83,11 @@ function applyStageEvent(next: RunState, event: StageEvent): RunState {
       next.status = "asking";
       return next;
 
+    case "stage.waiting":
+      stage.status = "waiting";
+      next.status = "waiting";
+      return next;
+
     case "stage.answered":
       stage.status = "running";
       next.status = "running";

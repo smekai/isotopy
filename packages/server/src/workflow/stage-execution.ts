@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import {
   DEFAULT_PERMISSION_MODE,
   ORCHESTRATION_PIPELINE,
+  PULL_REQUEST_STEP_TASK,
+  isReleaseRun,
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
   STAGE_VERDICTS,
@@ -15,6 +17,7 @@ import type {
   OrchestratorDecision,
   RunCloseoutRecord,
   RunArtifacts,
+  RunBranch,
   RunState,
   StageDefinition,
   StageVerdict,
@@ -23,9 +26,11 @@ import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
+import { buildWaitRule } from "../domain/markdown/stage-wait.ts";
 import {
   buildArtifactsRule,
   buildCommitRule,
+  buildReleaseRule,
   buildIsolatedReviewRule,
   buildContinuationPrompt,
   buildProcessRule,
@@ -104,7 +109,7 @@ async function stageEnvironment(
   return [
     buildTimeBudget(config.engineTimeoutMs),
     buildProcessRule({ pid: process.pid, port: config.port }),
-    ...(await teamWorkRules(deps, run)),
+    ...(await teamWorkRules(deps, run, stageDef)),
     isolatedReviewRule(run, stageDef),
     product,
   ]
@@ -118,14 +123,27 @@ function isolatedReviewRule(run: RunState, stageDef: StageDefinition): string | 
     : buildIsolatedReviewRule(run.branch);
 }
 
-async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[]> {
+function branchRule(branch: RunBranch, stageDef: StageDefinition): string {
+  return stageDef.stepTask === PULL_REQUEST_STEP_TASK
+    ? buildReleaseRule(branch)
+    : buildCommitRule(branch);
+}
+
+async function teamWorkRules(
+  deps: WorkflowDeps,
+  run: RunState,
+  stageDef: StageDefinition,
+): Promise<string[]> {
   if (run.pipelineId === ORCHESTRATION_PIPELINE.id) {
     return [];
   }
   const artifacts = runArtifactsDir(deps.registry.resolve(run.projectId), run.id);
   await mkdir(artifacts, { recursive: true });
   const artifactsRule = buildArtifactsRule(toPosixPath(artifacts));
-  return run.branch === undefined ? [artifactsRule] : [artifactsRule, buildCommitRule(run.branch)];
+  const waitRule = buildWaitRule(config.waitMinIntervalMs);
+  return run.branch === undefined
+    ? [artifactsRule, waitRule]
+    : [artifactsRule, branchRule(run.branch, stageDef), waitRule];
 }
 
 async function productEnvironment(
@@ -471,6 +489,10 @@ function reviewRecord(artifacts: RunArtifacts): RunCloseoutRecord {
 }
 
 
+function isMergedRelease(run: RunState, status: RunState["status"]): boolean {
+  return isReleaseRun(run) && status === "completed";
+}
+
 export async function runOrchestratorReviewWork(
   deps: WorkflowDeps,
   input: StageWorkContext,
@@ -479,7 +501,13 @@ export async function runOrchestratorReviewWork(
   const run = deps.projection.getRun(input.runId);
   const orchestration = deps.orchestration();
   const stageId = run?.stages.at(-1)?.id;
-  if (!run || !run.engine || !orchestration || stageId === undefined) {
+  if (
+    !run ||
+    !run.engine ||
+    !orchestration ||
+    stageId === undefined ||
+    isMergedRelease(run, status)
+  ) {
     return null;
   }
   const request: RunReviewRequest = { runId: run.id, status };
@@ -703,6 +731,7 @@ export async function runStageWork(
     profession,
     canAsk: canAsk(stageDef, turn.index),
     protocol: stageDef.outputProtocol,
+    waitMinIntervalMs: config.waitMinIntervalMs,
   });
 
   if (decision.outcome === STAGE_OUTCOMES.LIMITED && decision.limit !== undefined) {
@@ -721,6 +750,17 @@ export async function runStageWork(
     return {
       outcome: STAGE_OUTCOMES.ASKING,
       question: decision.question,
+      sessionId: outcome.sessionId,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
+
+  if (decision.outcome === STAGE_OUTCOMES.WAITING && decision.wait !== undefined) {
+    return {
+      outcome: STAGE_OUTCOMES.WAITING,
+      wait: decision.wait,
+      output: decision.output,
       sessionId: outcome.sessionId,
       startedAt,
       completedAt: nowIso(),

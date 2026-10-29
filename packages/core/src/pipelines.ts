@@ -235,12 +235,49 @@ export const ORCHESTRATION_PIPELINE: PipelineDefinition = {
   ],
 };
 
+export const PULL_REQUEST_STEP_TASK = "open-pull-request";
+
+export const RELEASE_PIPELINE: PipelineDefinition = {
+  id: "release",
+  name: "Release",
+  description:
+    "The Release Manager pushes the initiative's branch, opens its pull request, waits for CI and merges it.",
+  internal: true,
+  groups: [
+    {
+      stages: [
+        {
+          id: "preview",
+          label: "Deploying the preview",
+          skill: "sre",
+          stepTask: "deploy-preview",
+        },
+        {
+          id: "pull-request",
+          label: "Releasing through a pull request",
+          skill: "release-manager",
+          stepTask: PULL_REQUEST_STEP_TASK,
+        },
+      ],
+    },
+  ],
+};
+
+export function isReleaseRun(run: { pipelineId: string }): boolean {
+  return run.pipelineId === RELEASE_PIPELINE.id;
+}
+
+export function isTeamRun(run: { pipelineId: string }): boolean {
+  return run.pipelineId !== ORCHESTRATION_PIPELINE.id && !isReleaseRun(run);
+}
+
 export const DEMO_PIPELINES: PipelineDefinition[] = [
   FULL_DELIVERY_PIPELINE,
   PM_DEV_TEST_PIPELINE,
   SOLO_PIPELINE,
   MILESTONE_PLANNING_PIPELINE,
   ORCHESTRATION_PIPELINE,
+  RELEASE_PIPELINE,
 ];
 
 export function flattenPipelineStages(

@@ -121,6 +121,13 @@ because the goal cannot proceed; the branch stays unmerged for the owner. A
 role's report that the work is not ready is a reason to start another run
 instead, not to merge. Without a branch, `merge` cannot be set.
 
+Where the repository has a GitHub remote, a merge opens a pull request and waits
+for its CI; the run you then review is that **Release**. When its CI failed, its
+output names the failing checks and their logs: start the team again from the
+implementing role with a `task` that quotes them. The pull request stays open and
+takes the fix commits, and the next merge pushes them. Do not merge again before
+a fix run — that is refused.
+
 ## Third, when it is worth it: revise your own context
 
 "Your context so far" above is yours: a short note you keep across episodes,

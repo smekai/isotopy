@@ -140,3 +140,9 @@ export async function dirtyPaths(cwd: string): Promise<string[]> {
 export async function installHook(cwd: string, name: string, script: string): Promise<void> {
   await writeFile(path.join(cwd, ".git", "hooks", name), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
 }
+
+export async function addBareOrigin(cwd: string, originDir: string): Promise<void> {
+  await mkdir(originDir, { recursive: true });
+  await git(originDir, ["init", "--bare", "--initial-branch=main"]);
+  await git(cwd, ["remote", "add", "origin", originDir]);
+}

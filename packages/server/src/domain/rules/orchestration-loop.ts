@@ -29,6 +29,13 @@ export interface SettledLaunch {
   status?: RunState["status"];
 }
 
+export const NO_APPROVED_TEAM =
+  "The Orchestrator asked to start a run before a team was approved";
+
+export const PROPOSAL_NEEDS_TASK =
+  "A team proposed after a run has settled must carry the task its run will do — " +
+  "add a `task` field, or use start_run to reuse the team already composed";
+
 export const BLOCKED_LAUNCH_LIMIT = 3;
 
 export function blockedLaunchStreak(launches: SettledLaunch[]): number {

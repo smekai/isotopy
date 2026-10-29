@@ -34,7 +34,8 @@ import type { ProjectRegistry } from "./project-registry.ts";
 import { getOrCreate } from "../utils/get-or-create.ts";
 import { messageOf } from "../utils/message-of.ts";
 import { taskBoardFor } from "./task-board-adapter.ts";
-import type { RunService, StartRunOptions } from "./run/run-service.ts";
+import type { RunService } from "./run/run-service.ts";
+import type { StartRunOptions } from "./run/run-options.ts";
 import type { Logger } from "../utils/logger.ts";
 
 export class MilestoneService {

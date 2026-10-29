@@ -1,11 +1,14 @@
 import { task } from "@aikirun/workflow";
 import type { Task } from "@aikirun/workflow";
 import type { StageDefinition } from "@isotopy/core";
+import type { WaitCheckResult } from "../domain/rules/stage-wait.ts";
 import {
   runOrchestratorReviewWork,
   runQuestionMediationWork,
   runStageWork,
 } from "./stage-execution.ts";
+import { runWaitCheckWork } from "./wait-check.ts";
+import type { WaitCheckWork } from "./wait-check.ts";
 import type {
   QuestionMediationRequest,
   QuestionMediationResult,
@@ -38,6 +41,7 @@ export interface PipelineTasks {
   stageTurn: Task<StageTurnWork, StageResult>;
   mediation: Task<MediationWork, QuestionMediationResult>;
   review: Task<ReviewWork, null>;
+  waitCheck: Task<WaitCheckWork, WaitCheckResult>;
 }
 
 export function createPipelineTasks(deps: WorkflowDeps): PipelineTasks {
@@ -54,6 +58,10 @@ export function createPipelineTasks(deps: WorkflowDeps): PipelineTasks {
     review: task<ReviewWork, null>({
       name: "isotopy.orchestrator-review",
       handler: ({ context, status }) => runOrchestratorReviewWork(deps, context, status),
+    }),
+    waitCheck: task<WaitCheckWork, WaitCheckResult>({
+      name: "isotopy.stage-wait-check",
+      handler: (work) => runWaitCheckWork(deps, work),
     }),
   };
 }

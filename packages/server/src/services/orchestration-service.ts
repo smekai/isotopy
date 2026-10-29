@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
+  ORCHESTRATION_PIPELINE,
   addUsage,
+  isReleaseRun,
   isTerminalRunStatus,
   orchestrationSchema,
   orchestrationStatusFor,
@@ -21,7 +23,7 @@ import type {
   StopDecision,
 } from "@isotopy/core";
 import { reviseOrchestratorContext } from "../domain/rules/orchestrator-context.ts";
-import { NOTHING_TO_MERGE } from "../domain/rules/initiative-branch.ts";
+import { RELEASE_NOT_MERGED } from "../domain/rules/initiative-release.ts";
 import {
   renderComposedRunTask,
   renderGatePreference,
@@ -49,6 +51,8 @@ import {
   SUPERSEDED,
   activeOrchestrations,
   blockedLaunchRefusal,
+  NO_APPROVED_TEAM,
+  PROPOSAL_NEEDS_TASK,
 } from "../domain/rules/orchestration-loop.ts";
 import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
@@ -57,7 +61,8 @@ import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts
 import { catalogLines } from "../domain/rules/agent-catalog.ts";
 import {
   composeTeamPipeline,
-  generationOf,
+  currentGeneration,
+  nextGeneration,
   sameComposition,
   withRoleTiers,
 } from "../domain/rules/team-composition.ts";
@@ -69,6 +74,7 @@ import type { ProjectDatabases } from "../db/project-databases.ts";
 import { JsonRecordRepository } from "../repository/json-record-repository.ts";
 import { nowIso } from "../utils/time.ts";
 import { InitiativeBranches } from "./initiative-branches.ts";
+import { InitiativeRelease } from "./initiative-release.ts";
 import { milestoneCloseoutContext } from "./milestone-closeout.ts";
 import { personaNotesByRole } from "./persona-notes-store.ts";
 import { readOrchestratorContext, writeOrchestratorContext } from "./skills.ts";
@@ -78,7 +84,7 @@ import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
 import type { StageOutputConsumer } from "./consumers/stage-output-consumer.ts";
-import type { InheritedRunOptions } from "./run/run-service.ts";
+import type { InheritedRunOptions } from "./run/run-options.ts";
 import type {
   QuestionMediationContext,
   QuestionMediationRequest,
@@ -110,6 +116,7 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private readonly logger: Logger;
   private readonly branches: InitiativeBranches;
+  private readonly releases: InitiativeRelease;
 
   constructor(
     private readonly registry: ProjectRegistry,
@@ -121,6 +128,7 @@ export class OrchestrationService implements StageOutputConsumer {
   ) {
     this.logger = logger.child("OrchestrationService");
     this.branches = new InitiativeBranches(logger);
+    this.releases = new InitiativeRelease(registry, runs, this.branches, logger);
   }
 
   async init(): Promise<void> {
@@ -230,7 +238,7 @@ export class OrchestrationService implements StageOutputConsumer {
     const orchestration = this.newOrchestration(projectPath.id, goal, "conversing");
     this.orchestrations.set(orchestration.id, orchestration);
     try {
-      const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
+      const run = await this.runs.startRun(projectPath, ORCHESTRATION_PIPELINE.id, {
         ...options,
         task: await this.buildTask(projectPath, goal),
         orchestrationId: orchestration.id,
@@ -317,7 +325,7 @@ export class OrchestrationService implements StageOutputConsumer {
       throw new Error("The Orchestrator is not waiting on an answer");
     }
     const lastRunId = orchestration.runIds.at(-1);
-    const run = await this.runs.startRun(projectPath, PIPELINE_ID, {
+    const run = await this.runs.startRun(projectPath, ORCHESTRATION_PIPELINE.id, {
       ...(lastRunId ? this.runs.inheritedRunOptions(lastRunId) : {}),
       ...options,
       task: await this.followUpTask(projectPath, orchestration, question, text),
@@ -336,7 +344,7 @@ export class OrchestrationService implements StageOutputConsumer {
     output: string,
   ): Promise<StageOutputRejection | undefined> {
     if (
-      run.pipelineId !== PIPELINE_ID ||
+      run.pipelineId !== ORCHESTRATION_PIPELINE.id ||
       stageDef.id !== STAGE_ID ||
       !run.orchestrationId
     ) {
@@ -373,11 +381,13 @@ export class OrchestrationService implements StageOutputConsumer {
     });
     orchestration.latestDecision = parsed.value;
     delete orchestration.decisionError;
-    if (parsed.value.action === "stop") {
+    if (parsed.value.action === "stop" && parsed.value.merge !== true) {
       await this.end(orchestration, parsed.value, run.id);
       return undefined;
     }
-    orchestration.status = orchestrationStatusFor(parsed.value);
+    if (parsed.value.action !== "stop") {
+      orchestration.status = orchestrationStatusFor(parsed.value);
+    }
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return undefined;
@@ -481,7 +491,7 @@ export class OrchestrationService implements StageOutputConsumer {
       ? this.orchestrations.get(run.orchestrationId)
       : undefined;
     const error = orchestration?.decisionError;
-    if (run.pipelineId !== PIPELINE_ID || run.task === undefined || error === undefined) {
+    if (run.pipelineId !== ORCHESTRATION_PIPELINE.id || run.task === undefined || error === undefined) {
       return undefined;
     }
     return renderTaskAfterRejection({ task: run.task, error });
@@ -594,6 +604,15 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     const orchestration = this.activeFor(run.projectId);
     const decision = orchestration?.turns.at(-1);
+    if (orchestration && isReleaseRun(run) && run.status === "completed") {
+      this.settledRuns.add(runId);
+      if (run.pullRequest?.mergeCommit === undefined) {
+        await this.refuse(orchestration, runId, RELEASE_NOT_MERGED, RELEASE_NOT_MERGED);
+        return;
+      }
+      await this.markStopped(orchestration, this.releases.stopReason(orchestration, run));
+      return;
+    }
     if (!orchestration || decision?.runId !== runId) {
       return;
     }
@@ -730,9 +749,7 @@ export class OrchestrationService implements StageOutputConsumer {
     decision: OrchestratorDecision,
   ): string | undefined {
     if (decision.action === "stop") {
-      return decision.merge === true && orchestration.branch === undefined
-        ? NOTHING_TO_MERGE
-        : undefined;
+      return this.releases.mergeRefusal(orchestration, settled, decision);
     }
     if (decision.action === "propose_team") {
       return decision.task === undefined && orchestration.composedPipeline !== undefined
@@ -762,25 +779,10 @@ export class OrchestrationService implements StageOutputConsumer {
     settled: RunState,
     { fromStage, reviewContext }: StartRunDecision,
   ): ValidationResult<SeededStart> | undefined {
-    const source = this.seedSource(orchestration, settled);
+    const source = this.releases.seedSource(orchestration, settled);
     return fromStage === undefined
       ? undefined
       : seedFromSettledRun(pipeline, source, fromStage, runLabel(source), reviewContext);
-  }
-
-  private seedSource(orchestration: Orchestration, settled: RunState): RunState {
-    if (settled.pipelineId !== PIPELINE_ID) {
-      return settled;
-    }
-    return (
-      [...orchestration.runIds]
-        .reverse()
-        .map((runId) => this.runs.getRun(runId))
-        .find(
-          (candidate): candidate is RunState =>
-            candidate !== undefined && candidate.pipelineId !== PIPELINE_ID,
-        ) ?? settled
-    );
   }
 
   private settledLaunches(orchestration: Orchestration): SettledLaunch[] {
@@ -915,12 +917,19 @@ export class OrchestrationService implements StageOutputConsumer {
     }
     for (const runId of orchestration.runIds) {
       const run = this.runs.getRun(runId);
-      if (
-        run &&
-        run.id !== completingRunId &&
-        !isTerminalRunStatus(run.status)
-      ) {
+      if (run && run.id !== completingRunId && !isTerminalRunStatus(run.status)) {
         await this.runs.abortRun(run.id);
+      }
+    }
+    if (stop.merge === true && orchestration.branch !== undefined) {
+      const release = await this.releases.begin(orchestration, completingRunId);
+      if (release.kind === "refused") {
+        await this.refuse(orchestration, completingRunId, release.refusal, release.refusal);
+        return;
+      }
+      if (release.kind === "started") {
+        await this.track(orchestration, release.run);
+        return;
       }
     }
     const root = this.registry.resolve(orchestration.projectId).root;
@@ -929,18 +938,29 @@ export class OrchestrationService implements StageOutputConsumer {
       await this.refuse(orchestration, completingRunId, ending.refusal, ending.refusal);
       return;
     }
+    await this.markStopped(orchestration, ending.reason);
+  }
+
+  private async track(orchestration: Orchestration, run: RunState): Promise<void> {
+    if (!orchestration.runIds.includes(run.id)) {
+      orchestration.runIds.push(run.id);
+    }
+    orchestration.status = "running";
+    orchestration.updatedAt = nowIso();
+    await this.persist(orchestration);
+  }
+
+  private async markStopped(orchestration: Orchestration, reason: string): Promise<void> {
     const stoppedAt = nowIso();
     orchestration.status = "stopped";
     orchestration.stoppedAt = stoppedAt;
-    orchestration.stopReason = ending.reason;
+    orchestration.stopReason = reason;
     orchestration.updatedAt = stoppedAt;
     await this.persist(orchestration);
   }
 
   private async persist(orchestration: Orchestration): Promise<void> {
-    await this.repositoryFor(
-      this.registry.resolve(orchestration.projectId),
-    ).write(orchestration);
+    await this.repositoryFor(this.registry.resolve(orchestration.projectId)).write(orchestration);
     this.projectListeners.emit(orchestration.projectId, structuredClone(orchestration));
   }
 
@@ -965,21 +985,4 @@ interface ReviewedDecision {
   errors: string[];
 }
 
-const NO_APPROVED_TEAM =
-  "The Orchestrator asked to start a run before a team was approved";
-
-const PROPOSAL_NEEDS_TASK =
-  "A team proposed after a run has settled must carry the task its run will do — " +
-  "add a `task` field, or use start_run to reuse the team already composed";
-
-const PIPELINE_ID = "orchestration";
-
 const STAGE_ID = "orchestrate";
-
-function currentGeneration(orchestration: Orchestration): number {
-  return Math.max(generationOf(orchestration.composedPipeline?.id), 1);
-}
-
-function nextGeneration(orchestration: Orchestration): number {
-  return generationOf(orchestration.composedPipeline?.id) + 1;
-}

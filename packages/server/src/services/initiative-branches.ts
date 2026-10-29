@@ -131,6 +131,10 @@ export class InitiativeBranches {
     await this.require(root, ["switch", name], `Could not check out the initiative's branch ${name}`);
   }
 
+  async hasOrigin(root: string): Promise<boolean> {
+    return (await this.git(root, ["remote", "get-url", "origin"])).success;
+  }
+
   private async hasCommit(root: string): Promise<boolean> {
     return (await this.git(root, ["rev-parse", "--verify", "--quiet", "HEAD"])).success;
   }

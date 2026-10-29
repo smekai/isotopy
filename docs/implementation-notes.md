@@ -579,6 +579,60 @@ The transient row that `consume()` may write before `start()` finishes carries a
 empty `runIds`; the write at the end of `start()` supersedes it, and the upsert
 makes the ordering harmless.
 
+**A `stop` with `merge: true` from the Orchestrator's own conversation waits for
+`settle()`.** `consume()` reads it while the conversation run still holds the
+project's admission, so a release run started there would be refused as a second
+active run. The turn is recorded, and `settle()` acts on it once the run is done,
+as it does for every review decision.
+
+---
+
+## Waiting (`schemas/stage-wait.ts`, `workflow/pipeline-workflow.ts`, `workflow/wait-check.ts`)
+
+- **A wait is a turn, like a question.** `interpretEngineResult` reads an
+  `isotopy-wait` block after a `QUESTION:` line and before the verdict, and the
+  stage returns `WAITING`. `runStageTurns` sleeps, then builds the next turn with
+  `nextTurn`, so the wake-up resumes the same CLI session on the stage's own
+  engine, or replays the exchange for a CLI that cannot resume.
+- **Each check is its own `isotopy.stage-wait-check` task** between `run.sleep`
+  calls. A restart replays the recorded check results and resumes the sleep;
+  nothing polls from outside the workflow.
+- **The schedule is fixed when the wait starts.** `retryDelays` drops attempts
+  that would end past the overall timeout, and the schema refuses a wait left with
+  no attempt at all. Without a `check` the policy is one attempt: the agent is
+  woken once and may wait again.
+- **Exit 0 is the only signal.** Isotopy does not read the check's output; it
+  hands the last 40 lines to the agent. A check that cannot start (`ENOENT`) is
+  just another failed attempt, and its spawn error is in that output.
+- **The minimum interval comes from `ISOTOPY_WAIT_MIN_INTERVAL_MS`** (30 s by
+  default). The node test project sets it to `0` in `vitest.config.ts`, so tests
+  wait milliseconds — which is why durations accept `ms`.
+- **A waiting run holds the project's admission.** Its checkout stays on the
+  initiative branch, so another run could not work there anyway.
+
+---
+
+## Releasing through a pull request (`services/initiative-release.ts`, `services/consumers/pull-request-consumer.ts`)
+
+- **The release run is two stages.** `preview` is the deterministic
+  `deploy-preview` stage, which skips without a target. `pull-request` is the
+  Release Manager, which gets the preview's output as its handoff. Its task is
+  rendered from the stop decision and the latest team run's closeout
+  (`renderReleaseTask`). The completing run's engine and model carry over.
+- **The choice is `git remote get-url origin`, nothing else.** Isotopy does not
+  ask which forge `origin` is or which CLI is installed; the Release Manager finds
+  out. No origin keeps the local `--no-ff` merge, with the reason on the
+  completing run's log.
+- **`buildReleaseRule` replaces `buildCommitRule` for the `open-pull-request`
+  step task only.** Every other stage, in every pipeline, is still told not to
+  push.
+- **The `isotopy-pull-request` block is the only way `run.pullRequest` is set.**
+  A passing stage without it needs attention. A failing one may omit it when the
+  push or the PR itself failed. `ci: "failed"` on that record is what refuses a
+  second `merge` (`RELEASE_NEEDS_FIX`).
+- **A merged release is not reviewed:** `settle()` stops the initiative with the
+  PR's URL. A red one is reviewed like any `needs_attention` run.
+
 ---
 
 ## Run orchestration (`services/run/run-service.ts`)
@@ -1103,7 +1157,8 @@ the next run; directories are listed again on every call, because a folder's mti
 does not change when a file inside a subfolder is edited. Nothing lives at module
 scope, which keeps the catalog safe under the test runner's shared workers.
 
-**Front matter splits on `/?
+**Front matter splits on `/
+?
 /` after a byte-order mark is dropped,** so a CRLF
 checkout and a file saved by an editor that writes a BOM parse the same. The first
 `---` line after the opening fence closes the block; any later `---` is a

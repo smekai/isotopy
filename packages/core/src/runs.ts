@@ -5,6 +5,7 @@ import { ENGINE_IDS, ENGINES, engineCapability } from "./engines.ts";
 import type { EngineId, ModelTier } from "./engines.ts";
 import type { DeploymentResult, RunReleaseRecord } from "./automation.ts";
 import type { RunCloseoutRecord } from "./closeout.ts";
+import type { RunPullRequest } from "./pull-request.ts";
 import type { ReviewContextGrant } from "./orchestration.ts";
 import type { RunChangeSet } from "./run-changes.ts";
 import type { PipelineDefinition } from "./pipelines.ts";
@@ -18,6 +19,7 @@ export const STAGE_STATUSES = [
   "failed",
   "awaiting",
   "asking",
+  "waiting",
   "blocked",
   "skipped",
 ] as const;
@@ -29,6 +31,7 @@ export const RUN_STATUSES = [
   "running",
   "awaiting",
   "asking",
+  "waiting",
   "blocked",
   "completed",
   "needs_attention",
@@ -102,6 +105,7 @@ export const STAGE_OUTCOMES = {
   SKIPPED: "skipped",
   CANCELLED: "cancelled",
   ASKING: "asking",
+  WAITING: "waiting",
   LIMITED: "limited",
 } as const;
 
@@ -210,6 +214,7 @@ export interface RunState {
   closeout?: RunCloseoutRecord;
   release?: RunReleaseRecord;
   deployment?: DeploymentResult;
+  pullRequest?: RunPullRequest;
   changes?: RunChangeSet;
   pipelineId: string;
   pipelineName: string;

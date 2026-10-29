@@ -3,14 +3,11 @@ import type { TerminalWorkflowRunStatus } from "@aikirun/types/workflow/run";
 import type {
   DeploymentResult,
   EngineLimit,
-  EnginePermissionMode,
   LimitChoice,
   LimitResolution,
   MessageKind,
   MessageRole,
-  ModelTier,
   PipelineDefinition,
-  ReviewContextGrant,
   RunBranch,
   RunCloseoutRecord,
   RunEvent,
@@ -40,6 +37,7 @@ import {
 } from "@isotopy/core";
 import { CloseoutConsumer } from "../consumers/closeout-consumer.ts";
 import { MilestonePlanConsumer } from "../consumers/milestone-plan-consumer.ts";
+import { PullRequestConsumer } from "../consumers/pull-request-consumer.ts";
 import { ReleaseConsumer } from "../consumers/release-consumer.ts";
 import { firstRejectionFrom } from "../consumers/stage-output-consumer.ts";
 import type { AutomationConfigStore } from "../automation-config-store.ts";
@@ -95,8 +93,10 @@ import {
   resetStagesForRestart,
   seedFromRestart,
 } from "../../domain/rules/run-seeding.ts";
-import type { SeededStage, SeededStart } from "../../domain/rules/run-seeding.ts";
+import type { SeededStage } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
+import { describeWait } from "../../domain/markdown/stage-wait.ts";
+import type { StageWait } from "../../domain/rules/stage-wait.ts";
 import { RunEngineReadiness } from "./run-engine-readiness.ts";
 import { RunStore } from "./run-store.ts";
 import {
@@ -104,23 +104,7 @@ import {
   reclaimReleasedSourceTasks,
   releaseUnfinishedSourceTasks,
 } from "./source-task-claim.ts";
-
-export interface InheritedRunOptions {
-  engine?: string;
-  model?: string;
-  modelTier?: ModelTier;
-  permissionMode?: EnginePermissionMode;
-}
-
-export interface StartRunOptions extends InheritedRunOptions {
-  task?: string;
-  milestoneId?: string;
-  featureId?: string;
-  orchestrationId?: string;
-  sourceTaskIds?: string[];
-  seeded?: SeededStart;
-  reviewContextGrant?: ReviewContextGrant;
-}
+import type { InheritedRunOptions, StartRunOptions } from "./run-options.ts";
 
 export class RunService implements RunProjection {
   readonly store: RunStore;
@@ -155,6 +139,7 @@ export class RunService implements RunProjection {
     this.stageOutputConsumers = [
       new MilestonePlanConsumer(this.milestones),
       new ReleaseConsumer(this.registry),
+      new PullRequestConsumer(),
       new CloseoutConsumer(this.registry),
     ];
     const deps: WorkflowDeps = {
@@ -631,6 +616,17 @@ export class RunService implements RunProjection {
       ts: nowIso(), type: "stage.answered", runId, stageId, status: "running",
       message: `${stageAgent(stage).title} is continuing`,
     });
+  }
+
+  stageWaiting(runId: string, stageId: string, wait: StageWait): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage) return;
+    stage.status = "waiting";
+    run.status = "waiting";
+    const message = `${stageAgent(stage).title} is waiting: ${describeWait(wait)}`;
+    this.log(runId, stageId, { level: "info", message });
+    this.emit({ ts: nowIso(), type: "stage.waiting", runId, stageId, status: "waiting", message });
   }
 
   stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void {

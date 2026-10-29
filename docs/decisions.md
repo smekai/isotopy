@@ -15,6 +15,108 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-29 — An agent can wait: durable deferred checks, not a polling loop per integration
+
+**Context:** TASK-210 first waited for CI with `gh pr checks` polled from inside Isotopy. The owner
+rejected it on 2026-10-28: `gh` is not on every machine, and waiting is a general need — CI, a
+deployment going live, a job someone else runs — not a GitHub feature.
+
+**Decision:** any team stage may end its turn with an `isotopy-wait` block naming what it waits
+for, an optional check command, attempts, an interval and a backoff (`fixed`, `linear`,
+`exponential`, with a ceiling and an overall timeout). Isotopy sleeps durably inside the pipeline
+workflow, runs the check as an argument array in the project root, and wakes the same agent in its
+own session — on its stage's engine — with the last check's output. Exit 0 ends the wait early.
+Isotopy never interprets what the check means; the agent does, once woken. Interval, attempts,
+total time, check duration and waits per stage are capped at the boundary. The run reads
+`waiting` meanwhile and keeps its admission.
+
+**Why the check does not widen what an agent may do:** the agent could run the same command in its
+own session. The wait only moves the sleeping out of an engine session, where it would burn tokens
+and die with a restart.
+
+**Rejected: a cron schedule that polls.** Cron starts work; it does not resume a run in flight.
+**Rejected: an integration per forge** (`gh`, `glab`, Azure). Each would be one more CLI Isotopy
+depends on and one more code path; the agent already knows which tool the project uses.
+**Rejected: waking the agent on every attempt.** It would spend an engine turn per poll; a check
+command costs nothing.
+
+---
+
+## 2026-10-27 — An initiative works on its own branch and leaves through a pull request
+
+*Supersedes and absorbs the 2026-10-15 entry "An initiative works on its own branch, and the
+Orchestrator decides the merge", whose "Isotopy never pushes" no longer holds.*
+
+**Context:** in `TASK-157` neither team committed anything, QA left reports and test output at
+the arcade's root, and both targets ended as untracked changes over the baseline. An
+unattended stretch with no commits has no history to evolve, and every run after the first
+started on a dirty tree (`TASK-185`). ShareTravel, the next dogfood, is a product in
+production, where work cannot land on the branch it deploys from. The first answer (2026-10-15)
+merged the branch locally with `--no-ff`; on ShareTravel that put 35 unreviewed commits on the
+fork's `main` with no CI having seen them (`TASK-210`).
+
+**Decision, with the owner:** each initiative works on a branch of its own, each stage commits
+its own work there, and the Orchestrator decides at the end whether the branch ships or the
+work goes on. Shipping means a pull request whenever the repository can have one.
+
+- **Isotopy owns the branch.** The first team run of an initiative cuts
+  `isotopy/<orchestration>` from the checked-out branch; later runs check it out again. Every
+  ending other than a merge (`stop` without it, the owner's Stop, a superseded initiative)
+  aborts what is still running, then switches back to the base and keeps the branch for the
+  owner.
+- **`stop` with `merge: true` releases through a pull request.** When the repository has an
+  `origin`, Isotopy starts a release run (revised 2026-10-29). The run deploys the project's
+  `preview` target first, when one is configured. A Release Manager then:
+  - pushes the branch;
+  - opens the PR, or updates the open one, with whatever the machine has (`gh`, `glab`, the
+    forge's API). The body carries the closeout and the per-category table of lines changed;
+  - waits for CI with an `isotopy-wait` block (2026-10-29, "An agent can wait");
+  - on green, merges the PR and fast-forwards the local base.
+
+  It reports the URL, the CI result and the merge commit in an `isotopy-pull-request` block. The
+  Orchestrator's merge decision is the review the PR needed.
+- **Red CI goes back as a fix run.** The Release Manager reports the failing checks and their
+  log tails with `VERDICT: FAIL`, and the run settles `needs_attention`; the Orchestrator's review sends them to
+  the implementing role exactly as a review FAIL does (2026-10-15, "A finding goes back to the
+  Developer as a new run"). The PR stays open and collects the fix commits; the next `merge`
+  pushes them and waits again. A `merge` straight after red CI is refused.
+- **No `origin` keeps the local merge.** That is a different repository, not a second path for
+  the same one: `--no-ff` into the base and delete the branch,
+  and a merge git refuses parks the initiative on its owner with git's reason. The run log says
+  which happened and why.
+- **Only the release stage pushes, and only its branch.** Every other stage keeps "Do not
+  push" in its commit rule; the Release Manager's rule names the one branch it may push and
+  says it merges only through the pull request. Production deploy
+  stays the owner's `POST /automation/deploy/production`; staging is configured as the preview
+  target, and there is no third target.
+- **An initiative branch is never a base.** When a switch back could not happen (a dirty tree
+  is enough) the checkout stays on the old branch, and a new initiative cut from it would merge
+  into it. Isotopy refuses to start that run and says which branch to leave.
+- **The agent owns the commits.** Every team stage working on an initiative's branch is told
+  to commit what it changed there before handing off, to leave out what was already
+  uncommitted, and to fix a failing hook rather than bypass it. It writes what its checks
+  produce under `.isotopy/runs/<run>/artifacts/`, which git ignores.
+- **Where git has nothing to say, Isotopy stays out.** A folder that is not a repository root
+  (including one nested inside another repository), a detached HEAD and a repository with no
+  commit get no branch; their runs work where they are, as before, and no stage is told to
+  commit, since nothing would merge those commits anywhere. A restarted run works on whatever
+  is checked out.
+
+**Rejected: Isotopy commits a run's changes when it settles.** A hook that fails would have
+nobody to fix it, a file holding both the owner's uncommitted edits and the agent's could not
+be split, and every message would be mechanical. Isotopy's own board writes at closeout are
+the exception, decided on 2026-10-22. **Rejected: a worktree per initiative.**
+Isotopy starts the product and keeps its data from the project root, so the preview would
+show the base, not the work. **Rejected: Isotopy pushes and calls `gh` itself** (the first version of `TASK-210`). `gh` is
+not on every machine, and each forge would be one more CLI Isotopy depends on; the release
+needs judgement anyway: writing the description and reading a red log. The agent picks the tool;
+Isotopy keeps the branch boundary in the rule and the durable wait. **Rejected: polling CI from
+a cron schedule.** Cron starts work; it does not resume a run that is waiting.
+**Rejected: keeping the local merge as an option beside the PR.** One repository, one way out;
+the local merge exists only where no PR can.
+
+---
+
 ## 2026-10-27 — A stage runs on the primary or the secondary engine, and a reviewer judges in isolation
 
 **Context:** the Standing team epic (`TASK-206`). On ShareTravel one engine ran every run
@@ -139,47 +241,6 @@ nobody is short of. **Rejected: a finer refresh key derived from runs.** No run 
 changes that were missed, so no key built from runs can see them. **Rejected: `RunService` as the
 publisher.** It would make the run read model know what an initiative is; each service publishes
 what it owns, and the route joins them.
-
----
-
-## 2026-10-15 — An initiative works on its own branch, and the Orchestrator decides the merge
-
-**Context:** in `TASK-157` neither team committed anything, QA left reports and test output at
-the arcade's root, and both targets ended as untracked changes over the baseline. An
-unattended stretch with no commits has no history to evolve, and every run after the first
-started on a dirty tree (`TASK-185`). ShareTravel, the next dogfood, is a product in
-production, where work cannot land on the branch it deploys from.
-
-**Decision, with the owner:** each initiative works on a branch of its own, each stage commits
-its own work there, and the Orchestrator decides at the end whether the branch is merged or
-the work goes on.
-
-- **Isotopy owns the branch.** The first team run of an initiative cuts
-  `isotopy/<orchestration>` from the checked-out branch; later runs check it out again.
-  `stop` with `merge: true` merges it into that base with `--no-ff` and deletes it. Every other
-  ending (`stop` without it, the owner's Stop, a superseded initiative) aborts what is still
-  running, then switches back to the base and keeps the branch for the owner. A merge git
-  refuses parks the initiative on its owner with git's reason. Isotopy never pushes.
-- **An initiative branch is never a base.** When a switch back could not happen (a dirty tree
-  is enough) the checkout stays on the old branch, and a new initiative cut from it would merge
-  into it. Isotopy refuses to start that run and says which branch to leave.
-- **The agent owns the commits.** Every team stage working on an initiative's branch is told
-  to commit what it changed there before handing off, to leave out what was already
-  uncommitted, and to fix a failing hook rather than bypass it. It writes what its checks
-  produce under `.isotopy/runs/<run>/artifacts/`, which git ignores.
-- **Where git has nothing to say, Isotopy stays out.** A folder that is not a repository root
-  (including one nested inside another repository), a detached HEAD and a repository with no
-  commit get no branch; their runs work where they are, as before, and no stage is told to
-  commit, since nothing would merge those commits anywhere. A restarted run works on whatever
-  is checked out.
-
-**Rejected: Isotopy commits a run's changes when it settles.** A hook that fails would have
-nobody to fix it, a file holding both the owner's uncommitted edits and the agent's could not
-be split, and every message would be mechanical. Isotopy's own board writes at closeout are
-the exception, decided on 2026-10-22. **Rejected: a worktree per initiative.**
-Isotopy starts the product and keeps its data from the project root, so the preview would
-show the base, not the work. **Rejected: the Release Manager commits.** Most teams the
-Orchestrator composes have none.
 
 ---
 

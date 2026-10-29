@@ -8,6 +8,7 @@ const CANCELLABLE_STAGE_STATUSES: StageStatus[] = [
   "running",
   "awaiting",
   "asking",
+  "waiting",
   "blocked",
 ];
 
@@ -15,6 +16,7 @@ const INTERRUPTIBLE_STAGE_STATUSES: StageStatus[] = [
   "running",
   "awaiting",
   "asking",
+  "waiting",
   "blocked",
 ];
 

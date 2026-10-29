@@ -19,31 +19,6 @@ Child of `TASK-206`. Depends on `TASK-207`, `TASK-208`, `TASK-209` and `TASK-210
 Cross-platform: a live Windows run; macOS is not exercised here and the record says so.
 
 ---
-## TASK-210: Release through a pull request: push, PR, preview deploy, CI, merge
-**Priority:** P1 | **Tags:** server, infra | **Epic:** Standing team
-**Updated:** 2026-10-27 12:46
-
-Child of `TASK-206`. Independent of the other children. Supersedes the 2026-10-15 decision line "Isotopy never pushes".
-
-**Today.** `stop` with `merge: true` makes `InitiativeBranches.merge` (`packages/server/src/services/initiative-branches.ts`) switch to the base, `git merge --no-ff` and delete the branch — locally. No source calls `git push` or `gh`. On ShareTravel this put 35 unreviewed, CI-less commits on the fork's `main`.
-
-**Wanted.** A deterministic `release` stage with no engine, modelled on `runPreviewDeployment` / `isDeterministicPreviewDeploy` in `packages/server/src/workflow/stage-execution.ts`:
-
-1. `git push -u origin isotopy/<orchestration>`.
-2. `gh pr create --base <base> --head <branch> --title … --body-file <file>`: the body is built from the closeout (summary, delivered scope, open findings) plus the per-category table of lines changed that the `create-pr` skill requires; the file lives under `.isotopy/runs/<run>/artifacts/`.
-3. When the project's automation config has a `preview` target (`packages/core/src/automation.ts`, `packages/server/src/schemas/automation-file.ts`), deploy it for the PR and put its URL in the PR. Staging is configured as the preview target; no third target.
-4. Wait for CI with `gh pr checks` until every required check settles, as a durable wait inside the workflow with a timeout (no cron, no external poller — cron stays the only trigger).
-5. Green CI and a passed review → `gh pr merge --merge`, then `git switch <base>` and `git pull --ff-only`. Red CI → the failing checks' output goes back to the Developer as a fix run (the `TASK-183` route); the PR stays open and gets the fix commits.
-6. A repository with no GitHub remote, or `gh` not authenticated, keeps today's local merge: that is a different case, not a second path for the same one. The run log says which happened.
-7. The PR URL, CI result and merge commit are recorded on the run and shown in the run view.
-
-Agents keep "Do not push" (`buildCommitRule`, `packages/server/src/domain/markdown/stage.ts`): only Isotopy pushes. Production deploy stays `POST /automation/deploy/production`, the owner's.
-
-**Done when** component tests with a substituted `runSubprocess` prove: green CI merges and syncs the base; red CI starts a fix run and leaves the PR open; a preview target deploys and its URL lands in the body; no remote falls back to the local merge; `gh` missing is reported, not fatal. `docs/decisions.md` gets the superseding entry, merged into the 2026-10-15 one as the survivor.
-
-Cross-platform: `git` and `gh` run through `runSubprocess` with argument arrays, never a shell string; the PR body goes through `--body-file`, so no quoting differs between PowerShell and zsh; `gh` is found on `PATH` on both OSes (WinGet links on Windows, Homebrew on macOS). Tested on Windows; macOS reasoned through.
-
----
 ## TASK-208: One team per project: team.md with named flows, changed only by an approved proposal
 **Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
 **Updated:** 2026-10-27 12:46

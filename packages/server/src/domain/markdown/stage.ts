@@ -171,6 +171,16 @@ export function buildCommitRule({ name, base }: RunBranch): string {
   ].join("\n");
 }
 
+export function buildReleaseRule({ name, base }: RunBranch): string {
+  return [
+    `This initiative's work is committed on \`${name}\`, cut from \`${base}\`, and it is checked out.`,
+    `You release it: push \`${name}\` to \`origin\` — that branch and no other — and merge it into`,
+    `\`${base}\` only through its pull request, once CI has passed. Use whatever this machine has for`,
+    "the forge: `gh`, `glab`, the forge's API. Never push to the base, never force-push, and do not",
+    "change the code to make CI pass: a red check goes back to the team as a fix run.",
+  ].join("\n");
+}
+
 export function buildIsolatedReviewRule({ name, base }: RunBranch): string {
   return [
     "You review this change independently: your handoff carries the task and the plan, not the",

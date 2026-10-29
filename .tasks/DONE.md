@@ -1,5 +1,82 @@
 # Done
 
+## TASK-210: Release through a pull request: push, PR, preview deploy, CI, merge
+**Priority:** P1 | **Tags:** server, infra | **Epic:** Standing team
+**Updated:** 2026-10-29 09:54
+
+Child of `TASK-206`. Closed 2026-10-29, 0.14.40. Supersedes the 2026-10-15 decision line "Isotopy never pushes". `docs/decisions.md` carries one 2026-10-27 entry that absorbs it, revised 2026-10-29.
+
+**Before.** `stop` with `merge: true` merged `isotopy/<orchestration>` into its base locally with `--no-ff`. On ShareTravel that put 35 unreviewed, CI-less commits on the fork's `main`.
+
+**First version, replaced in the same PR.** The first cut (0.14.35) had Isotopy push, call `gh` and poll `gh pr checks` itself. The owner rejected it on 2026-10-28: `gh` is not on every machine, and waiting should be a general mechanism. That mechanism became `TASK-212`; the `gh` code (`PullRequestRelease`, `release-stage.ts`, `github-cli.ts`, `FakeGitHub`) was deleted.
+
+**After.** When the repository has an `origin`, `OrchestrationService.end` starts a **release run** (`RELEASE_PIPELINE`) through `InitiativeRelease`. It has two stages:
+1. `preview`: the deterministic `deploy-preview` stage. It skips when the project has no preview target.
+2. `pull-request`: the Release Manager on the `open-pull-request` step task. The run's task is rendered from the stop decision and the closeout. The stage's rule (`buildReleaseRule`) lets it push the initiative's branch and nothing else, and merge only through the PR. The Release Manager:
+   - pushes the branch;
+   - opens the PR with whatever the machine has, writing a body with the lines-changed table;
+   - waits for CI with an `isotopy-wait` block;
+   - merges and fast-forwards the base;
+   - reports an `isotopy-pull-request` block, which `PullRequestConsumer` stores as `run.pullRequest`.
+
+Red CI is `VERDICT: FAIL` with the failing checks. The Orchestrator's review sends them back as a fix run (the `TASK-183` route), and a `merge` straight after it is refused (`RELEASE_NEEDS_FIX`). A merged release is not reviewed: `settle` stops the initiative with the PR URL. With no `origin` the local merge stays, and the run log says why. Every other stage keeps "Do not push".
+
+**Tests.** `pull-request-release.comp.ts` uses a real bare repository as `origin` and covers:
+- the Release Manager's push rule;
+- a CI wait that resumes its session;
+- the merge stopping the initiative;
+- red CI starting a fix run with the PR left open;
+- the refused re-merge;
+- the preview URL reaching the Release Manager;
+- no origin falling back to the local merge.
+
+The release-rule and origin guards were mutation-checked. `PullRequestPanel.comp.tsx` still covers the view.
+
+Cross-platform: the Release Manager runs the forge CLI or API from its own session, with whatever exists on the machine. Isotopy's only git call here, `remote get-url origin`, is an argument array through `runSubprocess`. Tested on Windows; macOS reasoned through.
+
+---
+## TASK-212: An agent can wait: durable deferred checks with attempts and backoff
+**Priority:** P1 | **Tags:** server, core | **Epic:** Standing team
+**Updated:** 2026-10-29 09:46
+
+Split out of `TASK-210` on 2026-10-28 with the owner: waiting for CI should not be a `gh`-only path inside Isotopy, but a general mechanism any agent can use. Closed 2026-10-29, 0.14.39.
+
+**Delivered.** A team stage may end its turn with a fenced `isotopy-wait` block instead of a verdict:
+
+```json
+{ "until": "CI on PR #7 settled",
+  "check": { "executable": "gh", "args": ["pr", "checks", "7"] },
+  "attempts": 10, "every": "5m", "backoff": "exponential", "maxEvery": "1h", "timeout": "6h" }
+```
+
+- `schemas/stage-wait.ts` parses the block once and turns durations (`ms`, `s`, `m`, `h`) into milliseconds. It refuses a wait that:
+  - checks more often than `ISOTOPY_WAIT_MIN_INTERVAL_MS` (30 s);
+  - runs a check longer than 10 minutes;
+  - is left with no attempt inside its timeout.
+
+  Total time is capped at 48 hours. Without a `check` the policy is a single wake-up.
+- `interpretEngineResult` returns the new `WAITING` outcome. `runStageTurns` loops over `run.sleep` and the `isotopy.stage-wait-check` task. It stops on exit 0 or when the attempts run out, then resumes the same agent through `nextTurn`, in its own session and on its stage's engine. The agent gets a report with the last 40 lines of the check's output. More than 12 waits in one stage fail the stage as needs-attention.
+- Stage and run status `waiting`, with a `stage.waiting` event. The UI gets a teal pill and an hourglass icon. A log line says what the stage waits for and when it next checks.
+- Every team stage's environment carries `buildWaitRule`, so agents learn the protocol from the prompt.
+- Utilities: `utils/backoff.ts` (`retryDelays`) and `utils/duration.ts`.
+- Docs:
+  - decision entry 2026-10-29;
+  - "Waiting" section in `implementation-notes.md`.
+
+**Tests.** `test/run/stage-wait.comp.ts` uses real `node -e` checks and covers:
+- success on the third attempt;
+- a give-up report;
+- a wake-up with no check;
+- `waiting` status and its log line;
+- surviving a restart;
+- the per-stage wait limit;
+- an unusable block.
+
+`backoff.spec.ts` and `stage-wait.spec.ts` cover the schedule and the schema limits. The exit-0, wait-limit, min-interval and check-cap guards were mutation-checked.
+
+Cross-platform: the check is an argument array through `runSubprocess`, never a shell string. The agent picks a command that exists on its machine. Tested on Windows; macOS reasoned through.
+
+---
 ## TASK-209: The reviewer does not see the Developer's handoff unless the Orchestrator grants it
 **Priority:** P1 | **Tags:** server, core | **Epic:** Standing team
 **Updated:** 2026-10-27 20:19
