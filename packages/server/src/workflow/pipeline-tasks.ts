@@ -2,6 +2,7 @@ import { task } from "@aikirun/workflow";
 import type { Task } from "@aikirun/workflow";
 import type { StageDefinition, StageOutcome } from "@isotopy/core";
 import type { CiState } from "../domain/rules/pull-request-release.ts";
+import type { WaitCheckResult } from "../domain/rules/stage-wait.ts";
 import { openPullRequestWork, readChecksWork, settleReleaseWork } from "./release-stage.ts";
 import type { ChecksWork, ReleaseOpened, ReleaseWork, SettleWork } from "./release-stage.ts";
 import {
@@ -9,6 +10,8 @@ import {
   runQuestionMediationWork,
   runStageWork,
 } from "./stage-execution.ts";
+import { runWaitCheckWork } from "./wait-check.ts";
+import type { WaitCheckWork } from "./wait-check.ts";
 import type {
   QuestionMediationRequest,
   QuestionMediationResult,
@@ -41,6 +44,7 @@ export interface PipelineTasks {
   stageTurn: Task<StageTurnWork, StageResult>;
   mediation: Task<MediationWork, QuestionMediationResult>;
   review: Task<ReviewWork, null>;
+  waitCheck: Task<WaitCheckWork, WaitCheckResult>;
   releaseOpen: Task<ReleaseWork, ReleaseOpened>;
   releaseChecks: Task<ChecksWork, CiState>;
   releaseSettle: Task<SettleWork, StageOutcome>;
@@ -60,6 +64,10 @@ export function createPipelineTasks(deps: WorkflowDeps): PipelineTasks {
     review: task<ReviewWork, null>({
       name: "isotopy.orchestrator-review",
       handler: ({ context, status }) => runOrchestratorReviewWork(deps, context, status),
+    }),
+    waitCheck: task<WaitCheckWork, WaitCheckResult>({
+      name: "isotopy.stage-wait-check",
+      handler: (work) => runWaitCheckWork(deps, work),
     }),
     releaseOpen: task<ReleaseWork, ReleaseOpened>({
       name: "isotopy.release-open",

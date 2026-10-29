@@ -58,4 +58,5 @@ export const config = {
         .filter(Boolean)
     : [`http://localhost:${uiPort}`, `http://localhost:${port}`],
   engineTimeoutMs: envNumber("ISOTOPY_ENGINE_TIMEOUT_MS", 600_000),
+  waitMinIntervalMs: envNumber("ISOTOPY_WAIT_MIN_INTERVAL_MS", 30_000),
 } as const;

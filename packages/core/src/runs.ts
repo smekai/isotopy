@@ -19,6 +19,7 @@ export const STAGE_STATUSES = [
   "failed",
   "awaiting",
   "asking",
+  "waiting",
   "blocked",
   "skipped",
 ] as const;
@@ -30,6 +31,7 @@ export const RUN_STATUSES = [
   "running",
   "awaiting",
   "asking",
+  "waiting",
   "blocked",
   "completed",
   "needs_attention",
@@ -103,6 +105,7 @@ export const STAGE_OUTCOMES = {
   SKIPPED: "skipped",
   CANCELLED: "cancelled",
   ASKING: "asking",
+  WAITING: "waiting",
   LIMITED: "limited",
 } as const;
 

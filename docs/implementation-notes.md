@@ -587,6 +587,31 @@ as it does for every review decision.
 
 ---
 
+## Waiting (`schemas/stage-wait.ts`, `workflow/pipeline-workflow.ts`, `workflow/wait-check.ts`)
+
+- **A wait is a turn, like a question.** `interpretEngineResult` reads an
+  `isotopy-wait` block after a `QUESTION:` line and before the verdict, and the
+  stage returns `WAITING`. `runStageTurns` sleeps, then builds the next turn with
+  `nextTurn`, so the wake-up resumes the same CLI session on the stage's own
+  engine, or replays the exchange for a CLI that cannot resume.
+- **Each check is its own `isotopy.stage-wait-check` task** between `run.sleep`
+  calls. A restart replays the recorded check results and resumes the sleep;
+  nothing polls from outside the workflow.
+- **The schedule is fixed when the wait starts.** `retryDelays` drops attempts
+  that would end past the overall timeout, and the schema refuses a wait left with
+  no attempt at all. Without a `check` the policy is one attempt: the agent is
+  woken once and may wait again.
+- **Exit 0 is the only signal.** Isotopy does not read the check's output; it
+  hands the last 40 lines to the agent. A check that cannot start (`ENOENT`) is
+  just another failed attempt, and its spawn error is in that output.
+- **The minimum interval comes from `ISOTOPY_WAIT_MIN_INTERVAL_MS`** (30 s by
+  default). The node test project sets it to `0` in `vitest.config.ts`, so tests
+  wait milliseconds — which is why durations accept `ms`.
+- **A waiting run holds the project's admission.** Its checkout stays on the
+  initiative branch, so another run could not work there anyway.
+
+---
+
 ## Releasing through a pull request (`services/pull-request-release.ts`, `workflow/release-stage.ts`)
 
 - **`gh` missing is `exitCode: null`.** `runSubprocess` reports a spawn failure
@@ -1137,7 +1162,8 @@ the next run; directories are listed again on every call, because a folder's mti
 does not change when a file inside a subfolder is edited. Nothing lives at module
 scope, which keeps the catalog safe under the test runner's shared workers.
 
-**Front matter splits on `/?
+**Front matter splits on `/
+?
 /` after a byte-order mark is dropped,** so a CRLF
 checkout and a file saved by an editor that writes a BOM parse the same. The first
 `---` line after the opening fence closes the block; any later `---` is a

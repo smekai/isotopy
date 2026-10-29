@@ -15,6 +15,33 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-10-29 — An agent can wait: durable deferred checks, not a polling loop per integration
+
+**Context:** TASK-210 first waited for CI with `gh pr checks` polled from inside Isotopy. The owner
+rejected it on 2026-10-28: `gh` is not on every machine, and waiting is a general need — CI, a
+deployment going live, a job someone else runs — not a GitHub feature.
+
+**Decision:** any team stage may end its turn with an `isotopy-wait` block naming what it waits
+for, an optional check command, attempts, an interval and a backoff (`fixed`, `linear`,
+`exponential`, with a ceiling and an overall timeout). Isotopy sleeps durably inside the pipeline
+workflow, runs the check as an argument array in the project root, and wakes the same agent in its
+own session — on its stage's engine — with the last check's output. Exit 0 ends the wait early.
+Isotopy never interprets what the check means; the agent does, once woken. Interval, attempts,
+total time, check duration and waits per stage are capped at the boundary. The run reads
+`waiting` meanwhile and keeps its admission.
+
+**Why the check does not widen what an agent may do:** the agent could run the same command in its
+own session. The wait only moves the sleeping out of an engine session, where it would burn tokens
+and die with a restart.
+
+**Rejected: a cron schedule that polls.** Cron starts work; it does not resume a run in flight.
+**Rejected: an integration per forge** (`gh`, `glab`, Azure). Each would be one more CLI Isotopy
+depends on and one more code path; the agent already knows which tool the project uses.
+**Rejected: waking the agent on every attempt.** It would spend an engine turn per poll; a check
+command costs nothing.
+
+---
+
 ## 2026-10-27 — An initiative works on its own branch and leaves through a pull request
 
 *Supersedes and absorbs the 2026-10-15 entry "An initiative works on its own branch, and the

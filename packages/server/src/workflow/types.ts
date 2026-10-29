@@ -21,6 +21,7 @@ import type {
 import type { StageExchange } from "../domain/markdown/stage.ts";
 import type { RunCompletionStatus } from "../domain/rules/run-lifecycle.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
+import type { StageWait } from "../domain/rules/stage-wait.ts";
 import type { SeededStage, SeededStart } from "../domain/rules/run-seeding.ts";
 import type { AgentCatalog } from "../services/agent-catalog.ts";
 import type { AutomationConfigStore } from "../services/automation-config-store.ts";
@@ -61,6 +62,7 @@ export interface StageResult {
   verdict?: StageVerdict;
   question?: string;
   limit?: EngineLimit;
+  wait?: StageWait;
   sessionId?: string;
   startedAt: string;
   completedAt: string;
@@ -92,6 +94,7 @@ export interface RunProjection {
   stageQuestion(runId: string, stageId: string, question: string): void;
   stageMediatedAnswer(runId: string, stageId: string, answer: string): void;
   stageAnswered(runId: string, stageId: string): void;
+  stageWaiting(runId: string, stageId: string, wait: StageWait): void;
   stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void;
   limitResolved(runId: string, stageId: string, choice?: LimitChoice): void;
   stagePassed(runId: string, stageId: string): void;

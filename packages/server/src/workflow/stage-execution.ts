@@ -24,6 +24,7 @@ import { config } from "../config.ts";
 import { getEngineAdapter } from "../engines/registry.ts";
 import type { EngineRunResult } from "../engines/types.ts";
 import { buildProductEnvironment } from "../domain/markdown/product-environment.ts";
+import { buildWaitRule } from "../domain/markdown/stage-wait.ts";
 import {
   buildArtifactsRule,
   buildCommitRule,
@@ -126,7 +127,10 @@ async function teamWorkRules(deps: WorkflowDeps, run: RunState): Promise<string[
   const artifacts = runArtifactsDir(deps.registry.resolve(run.projectId), run.id);
   await mkdir(artifacts, { recursive: true });
   const artifactsRule = buildArtifactsRule(toPosixPath(artifacts));
-  return run.branch === undefined ? [artifactsRule] : [artifactsRule, buildCommitRule(run.branch)];
+  const waitRule = buildWaitRule(config.waitMinIntervalMs);
+  return run.branch === undefined
+    ? [artifactsRule, waitRule]
+    : [artifactsRule, buildCommitRule(run.branch), waitRule];
 }
 
 async function productEnvironment(
@@ -714,6 +718,7 @@ export async function runStageWork(
     profession,
     canAsk: canAsk(stageDef, turn.index),
     protocol: stageDef.outputProtocol,
+    waitMinIntervalMs: config.waitMinIntervalMs,
   });
 
   if (decision.outcome === STAGE_OUTCOMES.LIMITED && decision.limit !== undefined) {
@@ -732,6 +737,17 @@ export async function runStageWork(
     return {
       outcome: STAGE_OUTCOMES.ASKING,
       question: decision.question,
+      sessionId: outcome.sessionId,
+      startedAt,
+      completedAt: nowIso(),
+    };
+  }
+
+  if (decision.outcome === STAGE_OUTCOMES.WAITING && decision.wait !== undefined) {
+    return {
+      outcome: STAGE_OUTCOMES.WAITING,
+      wait: decision.wait,
+      output: decision.output,
       sessionId: outcome.sessionId,
       startedAt,
       completedAt: nowIso(),

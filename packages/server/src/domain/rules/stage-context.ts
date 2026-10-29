@@ -8,7 +8,10 @@ import type {
 } from "@isotopy/core";
 import type { EngineRunResult } from "../../engines/types.ts";
 import { extractOrchestratorDecision } from "../../schemas/orchestrator-decision.ts";
+import { takeStageWait } from "../../schemas/stage-wait.ts";
 import { formatValidationIssues } from "../validation.ts";
+import { STAGE_WAIT_FENCE } from "./stage-wait.ts";
+import type { StageWait } from "./stage-wait.ts";
 
 const VERDICT_LINE = new RegExp(
   `^[*\`_\\s]*VERDICT:\\s*(${Object.values(STAGE_VERDICTS).join("|")})[*\`_\\s]*$`,
@@ -53,6 +56,7 @@ export interface EngineStageOutcome {
   question?: string;
   failureMessage?: string;
   limit?: EngineLimit;
+  wait?: StageWait;
 }
 
 export interface StageOutputRejection {
@@ -63,6 +67,7 @@ export interface InterpretOptions {
   profession: string;
   canAsk: boolean;
   protocol?: StageOutputProtocol;
+  waitMinIntervalMs?: number;
 }
 
 function userQuestionIn(decision: OrchestratorDecision): string | undefined {
@@ -120,6 +125,14 @@ export function interpretEngineResult(
     };
   }
 
+  const waiting =
+    output === undefined || options.waitMinIntervalMs === undefined
+      ? undefined
+      : interpretWait(output, profession, options.waitMinIntervalMs);
+  if (waiting !== undefined) {
+    return waiting;
+  }
+
   const verdict = parseStageVerdict(result.result);
   if (verdict === STAGE_VERDICTS.FAIL) {
     return {
@@ -141,4 +154,23 @@ export function interpretEngineResult(
     output,
     verdict,
   };
+}
+
+function interpretWait(
+  output: string,
+  profession: string,
+  minIntervalMs: number,
+): EngineStageOutcome | undefined {
+  const taken = takeStageWait(output, minIntervalMs);
+  if (taken === undefined) {
+    return undefined;
+  }
+  if (!taken.wait.ok) {
+    return {
+      outcome: STAGE_OUTCOMES.NEEDS_ATTENTION,
+      output: taken.report,
+      failureMessage: `${profession} asked to wait with an unusable ${STAGE_WAIT_FENCE} block — ${formatValidationIssues(taken.wait.issues)}`,
+    };
+  }
+  return { outcome: STAGE_OUTCOMES.WAITING, output: taken.report, wait: taken.wait.value };
 }

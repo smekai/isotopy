@@ -1,41 +1,45 @@
 # Done
 
-## TASK-210: Release through a pull request: push, PR, preview deploy, CI, merge
-**Priority:** P1 | **Tags:** server, infra | **Epic:** Standing team
-**Updated:** 2026-10-27 20:42
+## TASK-212: An agent can wait: durable deferred checks with attempts and backoff
+**Priority:** P1 | **Tags:** server, core | **Epic:** Standing team
+**Updated:** 2026-10-29 09:46
 
-Child of `TASK-206`. Closed 2026-10-27, 0.14.35. Supersedes the 2026-10-15 decision line "Isotopy never pushes"; `docs/decisions.md` now carries one 2026-10-27 entry that absorbs it.
+Split out of `TASK-210` on 2026-10-28 with the owner: waiting for CI should not be a `gh`-only path inside Isotopy, but a general mechanism any agent can use. Closed 2026-10-29, 0.14.39.
 
-**Before.** `stop` with `merge: true` merged `isotopy/<orchestration>` into its base locally with `--no-ff`. On ShareTravel that put 35 unreviewed, CI-less commits on the fork's `main`.
+**Delivered.** A team stage may end its turn with a fenced `isotopy-wait` block instead of a verdict:
 
-**After.** When `origin` is a GitHub remote and `gh` is signed in, `OrchestrationService.end` starts a **release run** (`RELEASE_PIPELINE`). It has one deterministic stage, found by its `open-pull-request` step task, and no agent turn. Three Aiki tasks do the work:
-- `isotopy.release-open` pushes the branch, deploys the `preview` target when one is configured, and writes the PR body under `.isotopy/runs/<run>/artifacts/pull-request.md`. The body holds the goal, the stop summary, the closeout summary, delivered scope, open findings, the preview URL and the per-category lines-changed table. It then runs `gh pr create --body-file`, or `gh pr edit` when a PR is already open.
-- `isotopy.release-checks` reads `gh pr checks --required` once per poll, between durable `run.sleep`s. The poll budget is `timeout / interval`; there is no cron and no poller.
-- `isotopy.release-settle` handles the result. Green: `gh pr merge --merge`, then switch to the base, `git pull --ff-only origin <base>`, and `git branch -d`. Red or timed out: the failing checks and their `gh run view --log-failed` tails become the stage output, and the run settles `needs_attention`.
+```json
+{ "until": "CI on PR #7 settled",
+  "check": { "executable": "gh", "args": ["pr", "checks", "7"] },
+  "attempts": 10, "every": "5m", "backoff": "exponential", "maxEvery": "1h", "timeout": "6h" }
+```
 
-Red CI then takes the `TASK-183` route. The Orchestrator's review starts a fix run from the implementing role, and the PR stays open to collect the fix. A `merge` straight after red CI is refused (`RELEASE_NEEDS_FIX`). A merged release is not reviewed: `settle` stops the initiative with the PR URL. With no GitHub remote, or `gh` missing or signed out, the local merge stays, and the completing run's log says why.
+- `schemas/stage-wait.ts` parses the block once and turns durations (`ms`, `s`, `m`, `h`) into milliseconds. It refuses a wait that:
+  - checks more often than `ISOTOPY_WAIT_MIN_INTERVAL_MS` (30 s);
+  - runs a check longer than 10 minutes;
+  - is left with no attempt inside its timeout.
 
-`run.pullRequest` records the URL, CI result, failing checks, preview URL and merge commit. The run view shows them under Artifacts → Pull request. Agents keep "Do not push". `git` and `gh` go through an injectable `SubprocessRunner` on `PullRequestRelease`.
+  Total time is capped at 48 hours. Without a `check` the policy is a single wake-up.
+- `interpretEngineResult` returns the new `WAITING` outcome. `runStageTurns` loops over `run.sleep` and the `isotopy.stage-wait-check` task. It stops on exit 0 or when the attempts run out, then resumes the same agent through `nextTurn`, in its own session and on its stage's engine. The agent gets a report with the last 40 lines of the check's output. More than 12 waits in one stage fail the stage as needs-attention.
+- Stage and run status `waiting`, with a `stage.waiting` event. The UI gets a teal pill and an hourglass icon. A log line says what the stage waits for and when it next checks.
+- Every team stage's environment carries `buildWaitRule`, so agents learn the protocol from the prompt.
+- Utilities: `utils/backoff.ts` (`retryDelays`) and `utils/duration.ts`.
+- Docs:
+  - decision entry 2026-10-29;
+  - "Waiting" section in `implementation-notes.md`.
 
-**Structure.** The new code pushed `orchestration-service.ts` and `run-service.ts` past the 1000-line check. The release lifecycle moved to `InitiativeRelease` and the run-start option types to `run/run-options.ts`; two refusal constants and the generation helpers moved to their domain files.
+**Tests.** `test/run/stage-wait.comp.ts` uses real `node -e` checks and covers:
+- success on the third attempt;
+- a give-up report;
+- a wake-up with no check;
+- `waiting` status and its log line;
+- surviving a restart;
+- the per-stage wait limit;
+- an unusable block.
 
-**Tests.** `pull-request-release.comp.ts` uses `FakeGitHub`, a substituted runner: unscripted git runs for real, and unscripted `gh` behaves as not installed. It covers:
-- green CI merges and syncs the base;
-- red CI starts a fix run and leaves the PR open;
-- merging again after red CI is refused;
-- a preview URL lands in the body;
-- no remote falls back to the local merge, with the reason logged;
-- `gh` missing is reported, not fatal.
+`backoff.spec.ts` and `stage-wait.spec.ts` cover the schedule and the schema limits. The exit-0, wait-limit, min-interval and check-cap guards were mutation-checked.
 
-A spec covers the CI-state and change-category rules, and `PullRequestPanel.comp.tsx` covers the view. The refusal and review-skip guards were mutation-checked.
-
-**Verified:**
-- lint, typecheck, check (76), build: pass;
-- test: 1054 passed, 4 skipped;
-- gen:skills: no diff;
-- e2e: 77 of 78 passed. The milestone-dashboard rail test timed out once, then the whole milestone file passed 8 of 8 on rerun.
-
-Cross-platform: argument arrays only, the body goes through `--body-file`, and `gh` is found on `PATH` (WinGet on Windows, Homebrew on macOS). Tested on Windows; macOS reasoned through.
+Cross-platform: the check is an argument array through `runSubprocess`, never a shell string. The agent picks a command that exists on its machine. Tested on Windows; macOS reasoned through.
 
 ---
 ## TASK-209: The reviewer does not see the Developer's handoff unless the Orchestrator grants it

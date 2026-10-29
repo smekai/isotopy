@@ -96,6 +96,8 @@ import {
 } from "../../domain/rules/run-seeding.ts";
 import type { SeededStage } from "../../domain/rules/run-seeding.ts";
 import { nowIso } from "../../utils/time.ts";
+import { describeWait } from "../../domain/markdown/stage-wait.ts";
+import type { StageWait } from "../../domain/rules/stage-wait.ts";
 import { RunEngineReadiness } from "./run-engine-readiness.ts";
 import { RunStore } from "./run-store.ts";
 import {
@@ -616,6 +618,17 @@ export class RunService implements RunProjection {
       ts: nowIso(), type: "stage.answered", runId, stageId, status: "running",
       message: `${stageAgent(stage).title} is continuing`,
     });
+  }
+
+  stageWaiting(runId: string, stageId: string, wait: StageWait): void {
+    const run = this.live(runId);
+    const stage = this.findStage(runId, stageId);
+    if (!run || !stage) return;
+    stage.status = "waiting";
+    run.status = "waiting";
+    const message = `${stageAgent(stage).title} is waiting: ${describeWait(wait)}`;
+    this.log(runId, stageId, { level: "info", message });
+    this.emit({ ts: nowIso(), type: "stage.waiting", runId, stageId, status: "waiting", message });
   }
 
   stageBlocked(runId: string, stageId: string, limit: EngineLimit, attempt: number): void {

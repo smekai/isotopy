@@ -119,6 +119,15 @@ export const stageAskingEventSchema = z
   })
   .strict();
 
+export const stageWaitingEventSchema = z
+  .object({
+    ...stageEventBase,
+    type: z.literal("stage.waiting"),
+    status: z.literal("waiting"),
+    message: z.string(),
+  })
+  .strict();
+
 export const stageAnsweredEventSchema = z
   .object({
     ...stageEventBase,
@@ -167,6 +176,7 @@ export const runEventSchema = z.discriminatedUnion("type", [
   stageApprovedEventSchema,
   stageSkippedEventSchema,
   stageAskingEventSchema,
+  stageWaitingEventSchema,
   stageAnsweredEventSchema,
   stageBlockedEventSchema,
   stageUnblockedEventSchema,

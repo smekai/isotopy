@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Circle,
+  Hourglass,
   Loader2,
   PauseCircle,
   SkipForward,
@@ -26,6 +27,7 @@ export function StatusIcon({ s, size = ICON.md }: StatusIconProps) {
   if (s === "needs_attention") return <AlertTriangle style={style} />;
   if (s === "running") return <Loader2 style={{ ...style, animation: SPIN }} />;
   if (s === "awaiting") return <UserCheck style={style} />;
+  if (s === "waiting") return <Hourglass style={style} />;
   if (s === "blocked") return <PauseCircle style={style} />;
   if (s === "skipped") return <SkipForward style={style} />;
   return <Circle style={style} />;

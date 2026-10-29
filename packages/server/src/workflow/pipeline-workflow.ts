@@ -6,6 +6,7 @@ import {
   STAGE_EXECUTION_POLICIES,
   STAGE_OUTCOMES,
   stageAgent,
+  stageTitleIn,
 } from "@isotopy/core";
 import type {
   CiResult,
@@ -19,6 +20,10 @@ import { limitWaitMs } from "../domain/rules/engine-limit.ts";
 import { suppressionReason } from "../domain/rules/run-lifecycle.ts";
 import type { SeededStage } from "../domain/rules/run-seeding.ts";
 import type { StageExchange } from "../domain/markdown/stage.ts";
+import { buildWaitReport } from "../domain/markdown/stage-wait.ts";
+import { WAIT_LIMITS, tooManyWaits } from "../domain/rules/stage-wait.ts";
+import type { StageWait, WaitCheckResult } from "../domain/rules/stage-wait.ts";
+import { retryDelays } from "../utils/backoff.ts";
 import { PIPELINE_EVENTS } from "./pipeline-events.ts";
 import type { PipelineEvents } from "./pipeline-events.ts";
 import { createPipelineTasks } from "./pipeline-tasks.ts";
@@ -352,6 +357,61 @@ function nextTurn(turn: StageTurn, exchange: StageExchange, sessionId: string | 
   return next;
 }
 
+const STAGE_WAIT_SLEEP = "stage-wait";
+
+interface StageWaitNotice extends StageRef {
+  wait: StageWait;
+}
+
+async function waitOut(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+  wait: StageWait,
+): Promise<string> {
+  const { run, tasks, deps, input } = ctx;
+  await task({
+    name: "isotopy.stage-waiting",
+    handler: async (notice: StageWaitNotice) =>
+      deps.projection.stageWaiting(notice.runId, notice.stageId, notice.wait),
+  }).start(run, { ...stageRef(ctx, stageDef), wait });
+  const delays = retryDelays(wait.policy);
+  let last: WaitCheckResult | undefined;
+  let attemptsMade = 0;
+  for (const [attempt, delay] of delays.entries()) {
+    await run.sleep(STAGE_WAIT_SLEEP, { milliseconds: delay });
+    if (wait.check === undefined) {
+      break;
+    }
+    attemptsMade = attempt + 1;
+    last = await tasks.waitCheck.start(run, {
+      context: workContext(input),
+      stageDef,
+      check: wait.check,
+      attempt,
+      attempts: delays.length,
+    });
+    if (last.met) {
+      break;
+    }
+  }
+  return buildWaitReport(wait, { attemptsMade, plannedAttempts: delays.length, last });
+}
+
+async function failOnTooManyWaits(
+  ctx: PipelineContext,
+  stageDef: StageDefinition,
+): Promise<StageTurnsResult> {
+  await task({
+    name: "isotopy.stage-wait-exhausted",
+    handler: async (exhausted: StageRef) => {
+      const recorded = ctx.deps.projection.getRun(exhausted.runId);
+      const profession = recorded === undefined ? "The stage" : stageTitleIn(recorded, exhausted.stageId);
+      ctx.deps.projection.stageFailed(exhausted.runId, exhausted.stageId, tooManyWaits(profession));
+    },
+  }).start(ctx.run, stageRef(ctx, stageDef));
+  return { outcome: STAGE_OUTCOMES.NEEDS_ATTENTION };
+}
+
 async function runStageTurns(
   ctx: PipelineContext,
   stageDef: StageDefinition,
@@ -359,6 +419,7 @@ async function runStageTurns(
 ): Promise<StageTurnsResult> {
   const { run, tasks, input } = ctx;
   let turn: StageTurn = firstTurn(input, stageDef, attempt);
+  let waits = 0;
 
   for (;;) {
     const result = await tasks.stageTurn.start(run, {
@@ -370,6 +431,19 @@ async function runStageTurns(
       return result.limit
         ? { outcome: STAGE_OUTCOMES.LIMITED, limit: result.limit }
         : { outcome: STAGE_OUTCOMES.FAILED };
+    }
+    if (result.outcome === STAGE_OUTCOMES.WAITING && result.wait !== undefined) {
+      waits += 1;
+      if (waits > WAIT_LIMITS.maxWaitsPerStage) {
+        return failOnTooManyWaits(ctx, stageDef);
+      }
+      const report = await waitOut(ctx, stageDef, result.wait);
+      const exchange: StageExchange = { question: `Wait until: ${result.wait.until}`, answer: report };
+      if (result.output !== undefined) {
+        exchange.output = result.output;
+      }
+      turn = nextTurn(turn, exchange, result.sessionId);
+      continue;
     }
     if (result.outcome !== STAGE_OUTCOMES.ASKING) {
       return { outcome: result.outcome };
