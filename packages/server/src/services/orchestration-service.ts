@@ -23,6 +23,7 @@ import type {
   StopDecision,
 } from "@isotopy/core";
 import { reviseOrchestratorContext } from "../domain/rules/orchestrator-context.ts";
+import { RELEASE_NOT_MERGED } from "../domain/rules/initiative-release.ts";
 import {
   renderComposedRunTask,
   renderGatePreference,
@@ -605,6 +606,10 @@ export class OrchestrationService implements StageOutputConsumer {
     const decision = orchestration?.turns.at(-1);
     if (orchestration && isReleaseRun(run) && run.status === "completed") {
       this.settledRuns.add(runId);
+      if (run.pullRequest?.mergeCommit === undefined) {
+        await this.refuse(orchestration, runId, RELEASE_NOT_MERGED, RELEASE_NOT_MERGED);
+        return;
+      }
       await this.markStopped(orchestration, this.releases.stopReason(orchestration, run));
       return;
     }

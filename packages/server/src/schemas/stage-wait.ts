@@ -37,7 +37,7 @@ function stageWaitSchema(minIntervalMs: number) {
     })
     .strict()
     .transform((block, context): StageWait => {
-      if (block.every < minIntervalMs) {
+      if (Math.min(block.every, block.maxEvery ?? block.every) < minIntervalMs) {
         context.addIssue({
           code: "custom",
           path: ["every"],

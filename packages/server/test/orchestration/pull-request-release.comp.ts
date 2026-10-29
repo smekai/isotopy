@@ -15,6 +15,7 @@ import type {
 import {
   NO_ORIGIN,
   RELEASE_NEEDS_FIX,
+  RELEASE_NOT_MERGED,
   localMergeNotice,
 } from "../../src/domain/rules/initiative-release.ts";
 import { fencedBlock } from "../support/fake-engine.ts";
@@ -122,6 +123,29 @@ test("merging again after CI failed is refused, because the same commits would f
   ctx.engine.verify();
 });
 
+test("a release that passes without a merge commit waits on the owner instead of stopping as merged", async () => {
+  // Arrange — e.g. branch protection blocked the merge, yet the agent still said PASS.
+  const project = await gitProjectWithOrigin("unmerged");
+
+  // Anticipate
+  anticipateDeliveryReviewedForMerge();
+  ctx.engine.anticipate({ as: "Release Manager" }).reports(released(OPENED));
+  const conversation = await proposedTeam(ctx.app, project.headers);
+
+  // Act
+  await approve(conversation.orchestrationId, project.headers);
+
+  // Assert
+  const parked = await waitForOrchestration(
+    ctx.app,
+    conversation.orchestrationId,
+    ({ status }) => status === "awaiting_user",
+    project.headers,
+  );
+  expect(parked.decisionError).toBe(RELEASE_NOT_MERGED);
+  ctx.engine.verify();
+});
+
 test("a preview target is deployed before the pull request, and the Release Manager is handed its URL", async () => {
   // Arrange
   const project = await gitProjectWithOrigin("preview");
@@ -178,6 +202,8 @@ const RELEASE_SESSION = "sess-release-1";
 const SEARCH = "export const search = 1;";
 
 const MERGED: RunPullRequest = { url: PR_URL, ci: "passed", mergeCommit: "4d3c2b1a" };
+
+const OPENED: RunPullRequest = { url: PR_URL, ci: "passed" };
 
 const RED: RunPullRequest = { url: PR_URL, ci: "failed", failingChecks: ["test"] };
 

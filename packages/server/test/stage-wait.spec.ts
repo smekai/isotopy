@@ -30,6 +30,12 @@ test("a wait that would check more often than the minimum interval is refused", 
   expect(taken?.wait.ok).toBe(false);
 });
 
+test("a ceiling below the minimum interval is refused, since it would cap every delay under it", () => {
+  const taken = takeStageWait(block({ check: { executable: "gh" }, attempts: 3, every: "5m", maxEvery: "1s" }), 30_000);
+
+  expect(taken?.wait.ok).toBe(false);
+});
+
 test("a wait without a check is woken once, whatever attempts it names", () => {
   const taken = takeStageWait(block({ attempts: 9, every: "10m" }), 30_000);
 

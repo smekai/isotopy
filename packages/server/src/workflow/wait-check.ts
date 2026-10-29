@@ -34,7 +34,7 @@ export async function runWaitCheckWork(
   const result = await runSubprocess({
     command: check.executable,
     args: check.args,
-    cwd: deps.registry.resolve(run.projectId).root,
+    cwd: run.workspacePath ?? deps.registry.resolve(run.projectId).root,
     timeoutMs: check.timeoutMs,
   });
   const exit = result.exitCode ?? "none";

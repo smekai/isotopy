@@ -80,6 +80,22 @@ test("a check that succeeds on its third attempt wakes the agent in its own sess
   expect(ctx.engine.callAt(1).prompt).toContain("succeeded on attempt 3 of 5");
 });
 
+test("a check runs in the run's workspace, where the agent's own files are", async () => {
+  // Arrange — a Home run works in a per-run workspace, not in the Home project root.
+  const printsCwd = nodeCheck("console.log('CHECK-CWD ' + process.cwd())");
+  ctx.engine.anticipate({ as: "waiting" }).parks(waitBlock({ check: printsCwd, every: "1ms" }), SESSION);
+  ctx.engine.anticipate({ as: "woken", resumeSessionId: SESSION }).reports(DONE);
+  ctx.engine.anticipateRunReview();
+
+  // Act
+  const run = await startRun(ctx.app, { pipelineId: "solo", task: TASK, engine: "claude-code" });
+
+  // Assert
+  const completed = await waitForRunStatus(ctx.app, run.id, "completed");
+  expect(completed.workspacePath).toBeDefined();
+  expect(ctx.engine.callAt(1).prompt).toContain(`CHECK-CWD ${completed.workspacePath}`);
+});
+
 test("a wait whose check never succeeds gives up after its attempts and says so", async () => {
   // Arrange
   ctx.engine
