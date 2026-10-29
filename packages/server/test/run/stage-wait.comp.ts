@@ -2,6 +2,7 @@
 // sleeps durably, runs the agent's own check on a schedule, and wakes the same
 // agent in its session with what the last check printed. Checks here are real
 // subprocesses — `node -e` scripts — so exit codes and output are not faked.
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { fencedBlock } from "../support/fake-engine.ts";
@@ -82,7 +83,8 @@ test("a check that succeeds on its third attempt wakes the agent in its own sess
 
 test("a check runs in the run's workspace, where the agent's own files are", async () => {
   // Arrange — a Home run works in a per-run workspace, not in the Home project root.
-  const printsCwd = nodeCheck("console.log('CHECK-CWD ' + process.cwd())");
+  // Both sides are realpaths: on macOS the temp dir under /var is a symlink to /private/var.
+  const printsCwd = nodeCheck("console.log('CHECK-CWD ' + require('node:fs').realpathSync(process.cwd()))");
   ctx.engine.anticipate({ as: "waiting" }).parks(waitBlock({ check: printsCwd, every: "1ms" }), SESSION);
   ctx.engine.anticipate({ as: "woken", resumeSessionId: SESSION }).reports(DONE);
   ctx.engine.anticipateRunReview();
@@ -92,8 +94,7 @@ test("a check runs in the run's workspace, where the agent's own files are", asy
 
   // Assert
   const completed = await waitForRunStatus(ctx.app, run.id, "completed");
-  expect(completed.workspacePath).toBeDefined();
-  expect(ctx.engine.callAt(1).prompt).toContain(`CHECK-CWD ${completed.workspacePath}`);
+  expect(ctx.engine.callAt(1).prompt).toContain(`CHECK-CWD ${realpathSync(completed.workspacePath ?? "")}`);
 });
 
 test("a wait whose check never succeeds gives up after its attempts and says so", async () => {
