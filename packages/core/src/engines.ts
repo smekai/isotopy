@@ -4,6 +4,10 @@ export type EngineId = (typeof ENGINE_IDS)[number];
 
 export const DEFAULT_ENGINE_ID: EngineId = "claude-code";
 
+export const ENGINE_SLOTS = ["primary", "secondary"] as const;
+
+export type EngineSlot = (typeof ENGINE_SLOTS)[number];
+
 export const PERMISSION_MODE_IDS = ["skip", "acceptEdits", "autoReview"] as const;
 
 export type EnginePermissionMode = (typeof PERMISSION_MODE_IDS)[number];

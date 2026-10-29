@@ -19,27 +19,6 @@ Child of `TASK-206`. Depends on `TASK-207`, `TASK-208`, `TASK-209` and `TASK-210
 Cross-platform: a live Windows run; macOS is not exercised here and the record says so.
 
 ---
-## TASK-209: The reviewer does not see the Developer's handoff unless the Orchestrator grants it
-**Priority:** P1 | **Tags:** server, core | **Epic:** Standing team
-**Updated:** 2026-10-27 12:46
-
-Child of `TASK-206`. Independent of the other children.
-
-**Today.** `upstreamFor` in `packages/server/src/workflow/stage-execution.ts` (~139–149) gives every stage every earlier stage's full output under "Handoff from previous steps" (`buildStagePrompt`, `packages/server/src/domain/markdown/stage.ts`). A reviewer therefore reads the Developer's own account of what it did and why — the framing an independent review should not start from. Persona notes are already private to each persona.
-
-**Wanted.**
-
-1. A stage declares `context: "handoffs" | "isolated"` (`stageDefinitionSchema` in `packages/core/src/pipelines.ts`, the role schema, run stages). `upstreamFor` filters by it.
-2. `isolated` shows the task, its acceptance criteria and the plan stage's output, plus the initiative branch and its base so the reviewer reads `git diff <base>...<branch>` itself — but not the Developer's handoff or any other implementation-side markdown.
-3. `review-implementation` defaults to `isolated`, in the bundled pipelines and in `TASK-208`'s template.
-4. The Orchestrator may grant full context for one run: `start_run` takes `reviewContext: "handoffs"` with a required rationale, logged on the stage. The `review-run` and `orchestrate` steps say when that is worth it (e.g. a fix run whose reviewer must see why the previous review failed).
-5. The review step task (`packages/server/src/domain/skills/step-tasks/review-implementation.md`) tells the reviewer to judge from the diff and the task, not from a narrative.
-
-**Done when** component tests prove: an isolated reviewer's prompt has no Developer handoff and does name the branch and base; the plan output is present; a granted run includes the handoffs and logs the rationale; non-review stages are unchanged byte for byte. `docs/decisions.md` records what an isolated reviewer sees and why the plan stays visible.
-
-Cross-platform: the diff command is the agent's to run; the prompt names refs, not paths, so nothing here differs between Windows and macOS. Tested on Windows.
-
----
 ## TASK-208: One team per project: team.md with named flows, changed only by an approved proposal
 **Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
 **Updated:** 2026-10-27 12:46
@@ -62,29 +41,6 @@ Child of `TASK-206`. Depends on `TASK-207` (a role's `engine`).
 **Done when** component tests prove: seeding and committing the template; a run started from a named flow without approval; a `propose_team_change` approved, written, committed and used by the next initiative; a schedule naming a flow; an invalid file refused. `docs/decisions.md` records "one team per project" and the rejected alternative (a default team with per-initiative edits); `docs/architecture.md` gains the team component.
 
 Cross-platform: CRLF front matter (split on `\r?\n`), the team file path joined with `path.join`, ids validated before they reach a path; case-insensitive file systems on both Windows and macOS mean `Team.md` and `team.md` are the same file — read exactly `team.md`. Tested on Windows; macOS reasoned through.
-
----
-## TASK-207: Each role runs on the primary or the secondary engine
-**Priority:** P1 | **Tags:** core, server, engine | **Epic:** Standing team
-**Updated:** 2026-10-27 12:46
-
-Child of `TASK-206`. The foundation for an independent review: today one engine runs a whole run.
-
-**Today.** `RunService.startRunWith` (`packages/server/src/services/run/run-service.ts`, ~386–416) sets `run.engine` once, falling back to `"claude-code"`, and `requireEngineReady` checks only that engine. Every caller of `runAdapter` in `packages/server/src/workflow/stage-execution.ts` (`runStageWork`, `runQuestionMediationWork`, `runOrchestratorReviewWork`) passes `run.engine`. Only `modelTier` varies per stage (`stageDefinitionSchema` in `packages/core/src/pipelines.ts`, `orchestratorRoleSchema` in `packages/core/src/orchestration.ts`, `withRoleTiers`). `selectModel` lets a pinned `run.model` override every stage.
-
-**Wanted.**
-
-1. Project preferences (`ProjectPreferences` in `packages/core/src/settings.ts`) hold a `primaryEngine` and an optional `secondaryEngine`, each with its model from `engineModels`. `preferredRunOptions` and Setup follow. Replace the single `engine` preference rather than keeping both.
-2. A role and a stage declare `engine: "primary" | "secondary"` (default `primary`): `orchestratorRoleSchema`, `stageDefinitionSchema`, run stages in `packages/core/src/runs.ts` and `packages/server/src/schemas/run-persistence.ts`, copied by `toStage` in `packages/server/src/domain/rules/team-composition.ts`. The run records the resolved engine id on each stage, so history does not change when settings do.
-3. Without a configured secondary engine, a `secondary` stage runs on the primary one and its log says so.
-4. `runStageWork` runs a stage on its own engine; `selectModel` resolves the tier against that engine's roster, and a pinned model applies only to stages on the engine it belongs to.
-5. `requireEngineReady` checks every distinct engine the pipeline uses before the run starts; an engine that is not logged in refuses the run with its name.
-6. Engine labels, the "online" line, handoff metadata, usage and limit handling (`run-service.ts` ~653–696) are per stage. A limit on the secondary engine parks only that stage.
-7. The bundled `review-implementation` role in `FULL_DELIVERY_PIPELINE` defaults to `secondary`.
-
-**Done when** component tests (FakeEngine for two engine ids) prove: a stage on the secondary engine; the fallback to primary with its log line; readiness refused for an unready secondary; a pinned model not leaking to the other engine; a resumed turn staying on its stage's engine. `docs/decisions.md` records primary/secondary over a free per-role engine id, and why.
-
-Cross-platform: engine discovery already differs per OS (`ISOTOPY_CLAUDE_PATH`, `ISOTOPY_CODEX_PATH`, `ISOTOPY_CURSOR_PATH`); this task adds no new path handling, only routing. Tested on Windows; macOS reasoned through.
 
 ---
 ## TASK-206: Standing team — one team per project, review by a second model, release through a pull request

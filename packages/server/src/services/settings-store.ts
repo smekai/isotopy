@@ -1,6 +1,7 @@
 import {
   ENGINES,
   defaultConnectionMode,
+  withDistinctEngines,
   withoutClearedGates,
   withoutClearedOverrides,
 } from "@isotopy/core";
@@ -89,7 +90,8 @@ export class SettingsStore {
   updatePreferences(projectId: string, update: ProjectPreferencesUpdate): SettingsView {
     const settings = this.read();
     const project = settings.projects[projectId] ?? emptyProjectSettings();
-    project.preferences = mergedPreferenceOverride(project.preferences, update);
+    const distinct = withDistinctEngines(resolvedPreferences(settings, projectId), update);
+    project.preferences = mergedPreferenceOverride(project.preferences, distinct);
     settings.projects[projectId] = project;
     this.write(settings);
     return this.getSettingsView(projectId);

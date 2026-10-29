@@ -1,7 +1,7 @@
 import { ENGINES, ENGINE_IDS } from "@isotopy/core";
 import type { EngineId } from "@isotopy/core";
 import { z } from "zod";
-import { projectPreferencesUpdateSchema } from "./request-schemas.ts";
+import { storedPreferencesSchema } from "./preferences.ts";
 
 const connectionSchema = z
   .object({
@@ -36,7 +36,7 @@ export type EngineSettings = z.infer<typeof engineSettingsSchema>;
 const projectSettingsSchema = z
   .object({
     engines: engineSettingsSchema,
-    preferences: projectPreferencesUpdateSchema.optional(),
+    preferences: storedPreferencesSchema.optional(),
   })
   .strict();
 

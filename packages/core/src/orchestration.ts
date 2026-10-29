@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { MODEL_TIERS } from "./engines.ts";
-import { STAGE_EXECUTION_POLICIES, pipelineDefinitionSchema } from "./pipelines.ts";
+import { ENGINE_SLOTS, MODEL_TIERS } from "./engines.ts";
+import {
+  STAGE_CONTEXTS,
+  STAGE_EXECUTION_POLICIES,
+  pipelineDefinitionSchema,
+} from "./pipelines.ts";
 import { runBranchSchema, stageUsageSchema } from "./runs.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
@@ -26,6 +30,8 @@ export const orchestratorRoleSchema = z
     stepTask: requiredText,
     rationale: requiredText.optional(),
     modelTier: z.enum(MODEL_TIERS).optional(),
+    engine: z.enum(ENGINE_SLOTS).optional(),
+    context: z.enum(STAGE_CONTEXTS).optional(),
     executionPolicy: z.enum(STAGE_EXECUTION_POLICIES).optional(),
     gateAfter: z.boolean().optional(),
     interactive: z.boolean().optional(),
@@ -33,6 +39,12 @@ export const orchestratorRoleSchema = z
   .strict();
 
 export type OrchestratorRole = z.infer<typeof orchestratorRoleSchema>;
+
+export const reviewContextGrantSchema = z
+  .object({ context: z.literal("handoffs"), rationale: requiredText })
+  .strict();
+
+export type ReviewContextGrant = z.infer<typeof reviewContextGrantSchema>;
 
 export const orchestratorTeamProposalSchema = z
   .object({
@@ -103,6 +115,7 @@ export const orchestratorDecisionSchema = z.discriminatedUnion("action", [
       task: requiredText,
       teamId: requiredText.optional(),
       fromStage: requiredText.optional(),
+      reviewContext: reviewContextGrantSchema.optional(),
     })
     .strict(),
   z

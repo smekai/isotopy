@@ -122,6 +122,20 @@ Give `closeout` to the one role that records what happened, if the team has one.
 Give `delivery` to release and deployment work, which must never go out on a run
 that is already blocked. A role that builds rather than judges stays `standard`.
 
+### Choosing `engine` and `context` per role
+
+`engine` is `primary` or `secondary`, and an omitted one means `primary`. The
+project chooses which engine each one is; you choose which roles run on the
+second. A role with `stepTask: "review-implementation"` defaults to `secondary`,
+so the code is judged by a different model from the one that wrote it. Leave that
+default alone unless the role has a reason to share the Developer's engine. A
+project without a secondary engine runs `secondary` roles on the primary one.
+
+`context` is `handoffs` or `isolated`. An `isolated` role sees the task, the plan
+and the branch to diff, but not what the roles before it reported about their own
+work. A `review-implementation` role defaults to `isolated`; other roles default to
+`handoffs`.
+
 Hand a goal that needs a milestone and an ordered backlog to the Product Manager
 instead of composing a team for it:
 
@@ -141,9 +155,16 @@ Start a run with an approved team:
   "rationale": "Why this is the next run",
   "task": "Decision-complete scope for this run",
   "teamId": "optional approved team id",
-  "fromStage": "optional role id to begin at"
+  "fromStage": "optional role id to begin at",
+  "reviewContext": { "context": "handoffs", "rationale": "optional — why the reviewer needs the handoffs" }
 }
 ```
+
+`reviewContext` grants every `isolated` role on this one run the handoffs it would
+otherwise not see, and its `rationale` is logged on those roles. Omit it almost
+always: an independent review is the point of isolation. Grant it when a fix run's
+reviewer must read why the previous review failed and what the Developer did about
+it, and that is not already in the task.
 
 ### Beginning partway through the team with `fromStage`
 

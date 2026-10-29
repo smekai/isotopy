@@ -1,4 +1,4 @@
-import type { EnginePermissionMode, ModelTier } from "@isotopy/core";
+import type { EnginePermissionMode, ModelTier, ReviewContextGrant } from "@isotopy/core";
 import type { SeededStart } from "../../domain/rules/run-seeding.ts";
 
 export interface InheritedRunOptions {
@@ -15,4 +15,5 @@ export interface StartRunOptions extends InheritedRunOptions {
   orchestrationId?: string;
   sourceTaskIds?: string[];
   seeded?: SeededStart;
+  reviewContextGrant?: ReviewContextGrant;
 }

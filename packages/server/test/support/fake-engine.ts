@@ -11,6 +11,7 @@ import path from "node:path";
 import { assert, expect } from "vitest";
 import type {
   EngineId,
+  EngineStatus,
   ModelOptionDraft,
   OrchestratorDecision,
   RunArtifacts,
@@ -154,6 +155,8 @@ export class FakeEngine implements EngineAdapter {
   private unexpected = 0;
   private liveModelScript: () => Promise<LiveModelLayer> = () => Promise.resolve({ options: [] });
   private configured: ModelOptionDraft | undefined;
+  /** Absent until a test declares the CLI's install and login state. */
+  detect?: () => Promise<EngineStatus>;
 
   constructor(id: EngineId = "claude-code") {
     this.id = id;
@@ -309,6 +312,18 @@ QUESTION: ${question}`,
   /** The CLI is present but its model listing fails — a broken install, a timeout. */
   failsLiveModels(message: string): FakeEngine {
     this.liveModelScript = () => Promise.reject(new Error(message));
+    return this;
+  }
+
+  /** The CLI is installed but nobody has logged it in. */
+  isLoggedOut(): FakeEngine {
+    this.detect = () => Promise.resolve({ engine: this.id, installed: true, loggedIn: false });
+    return this;
+  }
+
+  /** The CLI is not on this machine at all. */
+  isNotInstalled(): FakeEngine {
+    this.detect = () => Promise.resolve({ engine: this.id, installed: false });
     return this;
   }
 

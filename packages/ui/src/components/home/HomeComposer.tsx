@@ -149,7 +149,7 @@ export function HomeComposer({
   const scratch = projectId === HOME_PROJECT_ID;
   const armed = input.trim().length > 0 && !starting;
   const usesEngine = orchestrating || pipelineUsesEngineById(pipelineId);
-  const engine = ENGINES[settings.preferences.engine];
+  const engine = ENGINES[settings.preferences.primaryEngine];
   const pinnedModel = modelOverrideFor(settings.preferences, engine.id);
   const { roster } = useEngineRoster(engine.id);
 
@@ -175,7 +175,7 @@ export function HomeComposer({
         <PipelineHeader
           d={d}
           pipelineId={pipelineId}
-          engineId={settings.preferences.engine}
+          engineId={settings.preferences.primaryEngine}
           agents={agents}
           onSelectPipeline={(id) => settings.update({ pipelineId: id })}
         />
@@ -257,7 +257,7 @@ export function HomeComposer({
           roster={roster}
           onChange={(nextEngine, nextTier) =>
             settings.update({
-              engine: nextEngine,
+              primaryEngine: nextEngine,
               modelTier: nextTier,
               engineModels: { [nextEngine]: null },
             })
