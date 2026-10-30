@@ -1,25 +1,148 @@
 # Backlog
 
-## TASK-204: Rethink the main interface from the best of competitors: agents as free-standing blocks, recurring work shown differently
-**Priority:** P3 | **Tags:** ui
-**Updated:** 2026-10-21 20:29
+## TASK-220: Research: parallel agents — one instance holds one task, two developers are two instances
+**Priority:** P1 | **Tags:** core, server, engine | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:39
+
+Child of `TASK-215`. Owner's rule (2026-10-29): one agent is busy with only one task at a time; two developers means two agents started.
+
+Deepen [`docs/research/parallel-agents.md`](../docs/research/parallel-agents.md):
+
+- Answer the preview question that made the 2026-10-27 decision reject worktrees: an integration checkout for the preview, or a preview per instance on its own port.
+- Compare isolation options: worktree per instance, parallel readers only, clone per instance.
+- Define admission limits (per project, per engine, per subscription) and how usage-limit parks become per engine.
+- Who starts a second instance (a seat count in `team.md`, the Orchestrator, or both), and who resolves merge conflicts between instances.
+- Measure on ShareTravel: two developers on two tasks against one subscription, against the same tasks in sequence.
+
+**Outcome:** a `decisions.md` entry (revisiting 2026-10-27 if worktrees win) and implementation tasks, or "not now, because…".
+
+Cross-platform: worktree removal with files locked by a running process on Windows, `core.longpaths`, per-instance ports and process-tree kill on both.
+
+---
+## TASK-219: Research: storage — a database, or markdown plus a metadata index, possibly as a separate project
+**Priority:** P2 | **Tags:** core, server, infra | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:39
+
+Child of `TASK-215`; after `TASK-216` (modules).
+
+Deepen [`docs/research/storage.md`](../docs/research/storage.md):
+
+- List the queries Isotopy lacks today over its markdown (team, agents, board, memory). Without them, an index has no user.
+- Evaluate MarkdownDB and one or two others from the table (activity, licence, Node on Windows and macOS without a native build, strict schema validation, writes that keep a person's formatting).
+- Ask whether TaskPlanner would share the store — it keeps its board as markdown with an id counter too.
+- Consider concurrent writers once several agent instances run (`TASK-220`).
+
+**Outcome:** a `decisions.md` entry — keep the split, adopt a library, or start a separate project — or "not now, because…".
+
+Cross-platform: file watching and file locking differ on Windows and macOS; any candidate is checked on both.
+
+---
+## TASK-218: Research: observational memory — does a team-wide observer belong in Isotopy
+**Priority:** P2 | **Tags:** core, server | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:39
+
+Child of `TASK-215`.
+
+Deepen [`docs/research/observational-memory.md`](../docs/research/observational-memory.md):
+
+- Find two or three cases in dogfood runs where an agent repeated a mistake or lost a fact across runs — the cases an observer would fix.
+- Choose the scope (team, role, instance) and trigger (after each run, on a schedule) to evaluate.
+- Prototype on paper: an observer stage on the cheap tier reads one real ShareTravel run and writes the observation log; measure its size and what the next Orchestrator episode would gain.
+- Decide which existing memory it would replace (`orchestrator.context.md`, persona notes) — replace, don't accumulate.
+
+**Outcome:** a `decisions.md` entry and implementation tasks, or "not now, because…".
+
+Cross-platform: n/a for the research.
+
+---
+## TASK-217: Research: agent configuration — tools/MCP, skills, permissions per agent; copy Mastra, reuse it, or build our own
+**Priority:** P2 | **Tags:** core, server, engine | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:39
+
+Child of `TASK-215`; after `TASK-216` (modules).
+
+Deepen [`docs/research/agent-configuration.md`](../docs/research/agent-configuration.md):
+
+- Verify the per-CLI capability table (MCP servers, allowed/denied tools, skills, permissions) against the installed `claude`, `codex` and `cursor-agent` `--help` and docs. For each gap, the fallback.
+- Collect two or three real cases per missing capability from `docs/dogfood/` and ShareTravel runs: an agent that lacked a tool, had too much power, or needed a skill.
+- Weigh the three options (own module, Mastra as runtime through `@mastra/claude`/ACP, borrow standard formats only) against "never calls a model API", Aiki, and markdown in git.
+- Check what per-run skills or MCP on disk means for the 2026-07-22 decision "never seed a project's `.claude/skills`".
+- Sketch the agent file format the agents module would own.
+
+**Outcome:** a `decisions.md` entry and implementation tasks, or "not now, because…".
+
+Cross-platform: the CLI flags and config paths must be verified on Windows and macOS; config file locations differ.
+
+---
+## TASK-216: Research: split Isotopy into modules — map, boundaries, order of moves
+**Priority:** P1 | **Tags:** core, server, infra | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:39
+
+Child of `TASK-215`. **Goes first**: the other research topics land on this map. Related: `TASK-202` (server organised by concept), `TASK-213` (split the big services), `TASK-201` (document reader).
+
+Deepen [`docs/research/modules.md`](../docs/research/modules.md):
+
+- Check the candidate module table against the real import graph (e.g. dependency-cruiser or madge on `packages/server/src`); record every cycle.
+- For each module: owner, public surface, allowed dependencies.
+- Choose a boundary option per module: folder per concept, workspace package, or separate project. A separate project only where a module would be useful on its own (see `TASK-219`, storage).
+- Answer the open questions: one or two agent modules (definition vs engine translation), shared code, routes, the future of `packages/core`, what enforces the boundary, and the order against `TASK-213` and `TASK-201` so no file moves twice.
+
+**Outcome:** a `decisions.md` entry with the module map, and implementation tasks per move (one PR per concept, no behaviour change). `TASK-202` is then either replaced by them or narrowed.
+
+Cross-platform: n/a for the research; each move task carries its own line.
+
+---
+## TASK-215: Epic: Research — modules, agent configuration, memory, storage, parallel agents, Home redesign
+**Priority:** P1 | **Tags:** core, server, ui | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:39
+
+Raised by the owner on 2026-10-29 after comparing Isotopy with Mastra (tools, skills, schedules, memory, Studio's agent editor). **Research only — nothing is decided yet.** Each child task deepens one file under [`docs/research/`](../docs/research/README.md) until a decision can be taken; the decision itself goes to `docs/decisions.md` and spawns its own implementation tasks.
+
+Order: **modules first** — the other topics land on that map.
+
+1. Modules: what Isotopy is made of and where the boundaries go — `docs/research/modules.md`.
+2. Agent configuration: tools/MCP, skills, permissions, schedules, memory per agent; copy Mastra, reuse it, or build our own — `docs/research/agent-configuration.md`.
+3. Observational memory — `docs/research/observational-memory.md`.
+4. Storage: a database, or markdown plus metadata, possibly as a separate project — `docs/research/storage.md`.
+5. Parallel agents: one instance holds one task — `docs/research/parallel-agents.md`.
+6. Home watches the team at work — `docs/research/ui-team-home.md`, together with `TASK-204`.
+
+**Done when** each child has either a `decisions.md` entry or a recorded "not now, because…", and the implementation tasks are filed.
+
+Cross-platform: n/a for the research; each implementation task it spawns carries its own line.
+
+---
+## TASK-204: Rethink the main interface: Home watches the team at work, agents as free-standing blocks, recurring work shown apart
+**Priority:** P3 | **Tags:** ui | **Epic:** Research: modules, agents, memory, storage, UI
+**Updated:** 2026-10-30 10:40
+
+Child of `TASK-215`. Working notes: [`docs/research/ui-team-home.md`](../docs/research/ui-team-home.md).
 
 The current UI grew one feature at a time: a run is a graph of connected stages, and recurring work lives in the schedule components (`packages/ui/src/components/schedule/*`) and the `RunRail`. Before the next round of UI work, step back and choose a direction deliberately.
 
-**Research:** review how the products in [`docs/competitor-matrix.md`](../docs/competitor-matrix.md) present their work — the direct orchestrators (Mastra, Bernstein), the parallel-agent multiplexers (Cline and the rest of that category) and the agent-workforce platforms. Two questions for each: how they show many agents at once, and how they show recurring or scheduled work.
+**Owner's direction (2026-10-29).** Isotopy started as a very simple tool; it now needs many manual settings and ways to intervene when something goes wrong — close to Mastra Studio, ChatGPT or Claude, without copying them. Two things stay fixed:
+- **The team is at the top, and Home is watching what the team and its agents are doing right now.**
+- **One agent holds one task**; two developers are two agent instances (see `TASK-220`).
 
-**Directions the user already wants explored:**
+**Research:** review how the products in [`docs/competitor-matrix.md`](../docs/competitor-matrix.md) present their work — the direct orchestrators (Mastra Studio and Factory, Bernstein), the parallel-agent multiplexers (Cline and the rest of that category), the agent-workforce platforms, and ChatGPT/Claude for the conversation panel. Three questions for each: how they show many agents at once, how they show recurring or scheduled work, and how much a person can change by hand.
+
+**Directions to explore:**
 - Agents as independent blocks without connecting edges, instead of the stage graph — and more of them visible on one screen.
 - Recurring tasks presented differently from one-off runs.
+- A "needs you" strip across all instances; the Orchestrator as a chat panel beside the board.
+- An agent page (prompt, model, tools, skills, permissions, memory, duties, history) and a team page, editable from the UI (`TASK-217` for what an agent can carry).
+- The list of manual actions the owner needs, ranked from dogfood runs.
 
-**Outcome:** a comparison and the chosen direction written up in `docs/`, a mock-up of the main screens, and implementation tasks split out of it. This task does not change product code.
+**Outcome:** a comparison and the chosen direction written up in `docs/`, a mock-up of Home, the agent page and the team page, and implementation tasks split out of it. This task does not change product code.
 
 Cross-platform: n/a — research and design; any implementation task it spawns carries its own line.
 
 ---
 ## TASK-202: The server is organised by concept, and a boundary schema is the domain type
 **Priority:** P2 | **Tags:** server, infra
-**Updated:** 2026-10-12 19:51
+**Updated:** 2026-10-30 10:40
+
+**Waits on `TASK-216`** (2026-10-29): the module map for the whole product is researched there first ([`docs/research/modules.md`](../docs/research/modules.md)); this task is then replaced by its move tasks or narrowed to the server's part.
 
 Raised by the owner on 2026-10-12, reviewing `schemas/agent-definition.ts` in the Shared agents PR (#86). **Think first**: the shape below is a starting point to discuss, not a decision.
 
