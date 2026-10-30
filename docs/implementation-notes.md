@@ -287,6 +287,10 @@ A project's team lives in `.isotopy/team.md`, and git is what carries a change t
   the owner edited.
 - **The template is read from `domain/skills/team/team.md`**, copied to `dist/` by
   `copy-skill-assets.mjs` like the personas and step tasks.
+- **Bundled prompts are LF in every checkout** (`.gitattributes`: `eol=lf` on
+  `domain/skills/**`). With `core.autocrlf=true` a Windows checkout would otherwise hold the
+  template as CRLF, so the `team.md` Isotopy writes into a project would differ from the
+  committed one by line endings alone, and the seeding test would compare unequal text.
 
 ## What an initiative cost (`services/orchestration-service.ts`)
 
