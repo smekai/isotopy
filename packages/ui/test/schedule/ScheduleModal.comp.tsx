@@ -114,9 +114,20 @@ test("editing a prompt-only schedule keeps it prompt-only, rather than attaching
   fireEvent.click(screen.getByTestId("schedule-save"));
 
   // Assert
-  expect(props.onSave).toHaveBeenCalledWith(
-    expect.objectContaining({ flow: undefined }),
-  );
+  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ flow: null }));
+});
+
+test("letting the Orchestrator choose on a schedule that names a flow saves an explicit clear", () => {
+  // Arrange — an omitted flow means "unchanged" to the server, so the old flow would survive.
+  const props = modalProps({ schedule: scheduleView({ flow: "board" }), flows: ["board"] });
+  render(<ScheduleModal {...props} />);
+  fireEvent.change(screen.getByTestId("schedule-flow"), { target: { value: "" } });
+
+  // Act
+  fireEvent.click(screen.getByTestId("schedule-save"));
+
+  // Assert
+  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ flow: null }));
 });
 
 test("a flow picked in the dialog is what the schedule is saved with", () => {

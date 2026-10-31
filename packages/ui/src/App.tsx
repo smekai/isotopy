@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { FolderOpen, Settings } from "lucide-react";
 import type {
-  CreateScheduleInput,
   LimitResolution,
   RunSummary,
   ScheduleView,
@@ -28,6 +27,7 @@ import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { RunRail } from "./components/RunRail";
 import { ScheduleDashboard } from "./components/schedule/ScheduleDashboard";
 import { ScheduleModal } from "./components/schedule/ScheduleModal";
+import type { ScheduleForm } from "./components/schedule/ScheduleModal";
 import { RunStatusBar } from "./components/RunStatusBar";
 import type { InitiativeChrome } from "./components/RunStatusBar";
 import { RunTabs } from "./components/run/RunTabs";
@@ -246,11 +246,11 @@ export function App() {
     setFocusedId(null);
   }
 
-  async function saveSchedule(body: CreateScheduleInput) {
+  async function saveSchedule(form: ScheduleForm) {
     const editing = editingSchedule?.schedule;
     const saved = editing
-      ? await schedules.update(editing.id, body)
-      : await schedules.create(body);
+      ? await schedules.update(editing.id, form)
+      : await schedules.create({ ...form, flow: form.flow ?? undefined });
     if (!saved) {
       return;
     }

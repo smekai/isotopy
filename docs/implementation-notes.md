@@ -287,6 +287,16 @@ A project's team lives in `.isotopy/team.md`, and git is what carries a change t
   the owner edited.
 - **The template is read from `domain/skills/team/team.md`**, copied to `dist/` by
   `copy-skill-assets.mjs` like the personas and step tasks.
+- **A flow's gates come from preferences like any pipeline's.** `startComposedRun` applies
+  `applyGatePreferences` to the composed `flow-<name>` pipeline, so an Orchestrator launch and
+  a scheduled fire both honour `gates["flow-<name>:<role>"]`. `toStage` sets no `gateAfter`
+  of its own; the owner's preference is the only source.
+- **Work carries between flows only when the step is the same.** A role can take different
+  steps in different flows, so `seedFromSettledRun` compares the source run's stage
+  definition (agent and step task) with the target's. A preceding stage that differs refuses
+  the `fromStage`; a start stage that differs starts cold instead of resuming its session.
+- **Clearing a schedule's flow is `flow: null`.** A PATCH merges over the stored schedule, so
+  an omitted `flow` means "unchanged"; `null` is the explicit clear (`mergeScheduleUpdate`).
 - **Bundled prompts are LF in every checkout** (`.gitattributes`: `eol=lf` on
   `domain/skills/**`). With `core.autocrlf=true` a Windows checkout would otherwise hold the
   template as CRLF, so the `team.md` Isotopy writes into a project would differ from the

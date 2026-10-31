@@ -20,6 +20,7 @@ import {
   put,
   restartApp,
   waitForRunStatus,
+  waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 import { HOME_PROJECT_ID } from "@isotopy/core";
@@ -155,6 +156,48 @@ test("a scheduled run uses the model the project pinned for its engine", async (
   // Assert
   await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   ctx.engine.verify();
+});
+
+test("a gate the project saved on a flow's stage parks a scheduled run of that flow", async () => {
+  // Arrange — the board flow ships without a gate; the owner added one in preferences.
+  await put(ctx.app, "/settings/preferences", { gates: { "flow-board:reader": true } });
+  const created = await createSchedule();
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
+
+  // Act
+  const outcome = await ctx.schedules.fire(created.id);
+
+  // Assert — nobody approves, so an ungated run would complete instead.
+  const waiting = await waitForStageStatus(ctx.app, firedRunId(outcome), "reader", "awaiting");
+  expect(waiting.status).toBe("awaiting");
+  ctx.engine.verify();
+});
+
+test("an edit that clears a schedule's flow hands its prompt to the Orchestrator from then on", async () => {
+  // Arrange
+  const created = await createSchedule({ flow: "board" });
+
+  // Act
+  const response = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, { flow: null });
+
+  // Assert
+  expect(response.status).toBe(200);
+  expect(response.body.flow).toBeUndefined();
+});
+
+test("an edit that leaves the flow out keeps the flow the schedule names", async () => {
+  // Arrange
+  const created = await createSchedule({ flow: "board" });
+
+  // Act
+  const response = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    name: "Renamed poller",
+  });
+
+  // Assert
+  expect(response.body.flow).toBe("board");
 });
 
 test("an enabled schedule is fired by its own cron, with nobody calling it", async () => {

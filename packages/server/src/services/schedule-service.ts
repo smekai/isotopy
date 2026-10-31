@@ -14,6 +14,7 @@ import type {
 import { SCHEDULES_TABLE } from "../db/json-records-table.ts";
 import type { ProjectDatabases } from "../db/project-databases.ts";
 import { nextFireForSchedule } from "../domain/rules/schedule-timing.ts";
+import { mergeScheduleUpdate } from "../domain/rules/schedule-update.ts";
 import { scheduleIssues } from "../domain/rules/schedule-validity.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationIssue } from "../domain/validation.ts";
@@ -156,7 +157,7 @@ export class ScheduleService implements ScheduleFiring {
     projectId?: string,
   ): Promise<ScheduleView> {
     const current = this.requireSchedule(scheduleId, projectId);
-    const merged: Schedule = { ...current, ...patch, updatedAt: nowIso() };
+    const merged = mergeScheduleUpdate(current, patch, nowIso());
     return this.store(this.registry.resolve(current.projectId), merged);
   }
 

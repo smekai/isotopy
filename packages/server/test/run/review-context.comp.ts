@@ -39,6 +39,26 @@ const REVIEW_TEAM: TeamDefinition = {
   },
 };
 
+const RECHECK_TEAM: TeamDefinition = {
+  ...REVIEW_TEAM,
+  flows: {
+    ...REVIEW_TEAM.flows,
+    rechecked: [
+      { role: "plan", step: "plan-feature" },
+      { role: "implementation", step: "implement-feature" },
+      { role: "review", step: "verify-feature" },
+    ],
+  },
+};
+
+const RECHECK_FROM_REVIEW: OrchestratorDecision = {
+  action: "start_run",
+  rationale: "The review never reached a verdict; check the feature instead",
+  flow: "rechecked",
+  task: TASK,
+  fromStage: "review",
+};
+
 const START_REVIEWED: OrchestratorDecision = {
   action: "start_run",
   rationale: "Plan, build and review independently",
@@ -177,6 +197,30 @@ test("a review restarted with the handoffs newly granted starts cold, so the gra
   // Assert
   const granted = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 3);
   await waitForRunStatus(ctx.app, granted, "completed");
+  ctx.engine.verify();
+  expect(ctx.engine.callAt(5).resumeSessionId).toBeUndefined();
+});
+
+test("a stage restarted in a flow where its role takes another step starts cold, so it does not continue another assignment", async () => {
+  // Arrange — in `rechecked` the review role verifies instead of reviewing.
+  await writeTeam(ctx.home, RECHECK_TEAM);
+
+  // Anticipate — the review is cut off; the Orchestrator restarts that role in the
+  // other flow. Resuming would carry the cut-off review's conversation into a check.
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_REVIEWED));
+  ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
+  ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  ctx.engine.anticipate({ as: "Isolated reviewer, cut off" }).timesOut(CUT_OFF_SESSION);
+  ctx.engine.anticipateRunReview({ as: "review restarting the role in another flow", decision: RECHECK_FROM_REVIEW });
+  ctx.engine.anticipate({ as: "Same role, verifying" }).reports(QA_PASS);
+  ctx.engine.anticipateRunReview({ as: "review of the re-check" });
+
+  // Act
+  const conversation = await startOrchestration(ctx.app);
+
+  // Assert
+  const recheck = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 3);
+  await waitForRunStatus(ctx.app, recheck, "completed");
   ctx.engine.verify();
   expect(ctx.engine.callAt(5).resumeSessionId).toBeUndefined();
 });

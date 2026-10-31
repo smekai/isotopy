@@ -63,7 +63,10 @@ export const createScheduleSchema = z
 
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 
-export const updateScheduleSchema = createScheduleSchema.partial().strict();
+export const updateScheduleSchema = createScheduleSchema
+  .partial()
+  .extend({ flow: inputText.nullable().optional() })
+  .strict();
 
 export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
 

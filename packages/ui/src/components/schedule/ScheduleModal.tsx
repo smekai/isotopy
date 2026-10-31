@@ -89,12 +89,14 @@ function secondaryButton(d: Dir): CSSProperties {
 
 const ERROR_TEXT: CSSProperties = { color: ERROR_RED, fontSize: FONT.md, fontFamily: SANS };
 
+export type ScheduleForm = Omit<CreateScheduleInput, "flow"> & { flow: string | null };
+
 export interface ScheduleModalProps {
   schedule?: ScheduleView;
   flows: string[];
   error: string | null;
   d: Dir;
-  onSave: (body: CreateScheduleInput) => void;
+  onSave: (form: ScheduleForm) => void;
   onDismiss: () => void;
 }
 
@@ -200,7 +202,7 @@ export function ScheduleModal({ schedule, flows, error, d, onSave, onDismiss }: 
             type="button"
             data-testid="schedule-save"
             onClick={() =>
-              onSave({ name, cron, timezone, task, flow: flow === ORCHESTRATOR_CHOOSES ? undefined : flow })
+              onSave({ name, cron, timezone, task, flow: flow === ORCHESTRATOR_CHOOSES ? null : flow })
             }
             style={primaryButton(d)}
           >

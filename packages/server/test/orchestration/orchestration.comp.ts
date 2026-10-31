@@ -67,6 +67,18 @@ const INVENTED_POLICY_CHANGE = {
   team: teamFileText({ ...PAIR_TEAM, roster: [DEVELOPER_ROLE, { ...QA_ROLE, executionPolicy: "testing" }] } as TeamDefinition),
 };
 
+/** The same roles, but in `audit` the Developer's role takes a review step instead of building. */
+const AUDIT_TEAM: TeamDefinition = {
+  ...PAIR_TEAM,
+  flows: {
+    ...PAIR_TEAM.flows,
+    audit: [
+      { role: "implementation", step: "review-implementation" },
+      { role: "test", step: "verify-feature" },
+    ],
+  },
+};
+
 /** One role, so a spinning loop costs two engine turns a run instead of three. */
 const SOLO_TEAM: TeamDefinition = {
   roster: [DEVELOPER_ROLE],
@@ -1309,6 +1321,38 @@ test("a start_run naming a stage nobody was hired for is refused, not quietly st
     `/orchestrations/${orchestrationId}`,
   );
   expect(orchestration.runIds).toEqual([conversation.id, composed.id]);
+  ctx.engine.verify();
+});
+
+test("a start_run cannot carry a stage whose role took another step in the settled run, so no review is credited that nobody ran", async () => {
+  // Arrange — in `audit` the implementation role reviews rather than builds.
+  await writeTeam(ctx.home, AUDIT_TEAM);
+
+  // Anticipate — no second run: the build cannot stand in for the review.
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .reports(fenced(START_PAIR));
+  ctx.engine.anticipate({ as: "Developer" }).reports("Built it.\n\nVERDICT: PASS");
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("Checked it.\n\nVERDICT: PASS");
+  ctx.engine.anticipateRunReview({
+    as: "review carrying the build into the audit's review step",
+    decision: {
+      action: "start_run",
+      rationale: "Audit what the pair delivered",
+      flow: "audit",
+      task: "Audit the search endpoint",
+      fromStage: "test",
+    },
+  });
+
+  // Act
+  const conversation = await startOrchestration(ctx.app);
+  const composed = await teamRunOf(ctx.app, conversation);
+
+  // Assert
+  await waitForRunStatus(ctx.app, composed.id, "completed");
+  const orchestrationId = conversation.orchestrationId ?? "";
+  expect((await waitForOrchestration(ctx.app, orchestrationId, ({ decisionError }) => decisionError !== undefined)).decisionError).toContain("never ran implementation");
   ctx.engine.verify();
 });
 
