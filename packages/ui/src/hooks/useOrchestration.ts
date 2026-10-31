@@ -1,13 +1,13 @@
 import { useCallback, useState } from "react";
 import type { Orchestration, RunState } from "@isotopy/core";
 import {
-  approveOrchestratorTeam,
+  approveTeamChange as approveTeamChangeRequest,
   fetchOrchestrations,
   startOrchestration,
   stopOrchestration,
   subscribeOrchestrations,
 } from "../api";
-import type { ApproveTeamOptions, OrchestrationRunOptions } from "../api";
+import type { OrchestrationRunOptions } from "../api";
 import { messageOf, useProjectCollection } from "./useProjectCollection";
 
 export interface OrchestrationController {
@@ -17,9 +17,9 @@ export interface OrchestrationController {
   busy: boolean;
   find(orchestrationId: string): Orchestration | undefined;
   start(goal: string, options: OrchestrationRunOptions): Promise<RunState | undefined>;
-  approveTeam(
+  approveTeamChange(
     orchestrationId: string,
-    options: ApproveTeamOptions,
+    options: OrchestrationRunOptions,
   ): Promise<RunState | undefined>;
   stop(orchestrationId: string): Promise<void>;
 }
@@ -59,11 +59,11 @@ export function useOrchestration(projectId: string, enabled: boolean): Orchestra
     [act],
   );
 
-  const approveTeam = useCallback(
-    (orchestrationId: string, options: ApproveTeamOptions) =>
+  const approveTeamChange = useCallback(
+    (orchestrationId: string, options: OrchestrationRunOptions) =>
       act(
-        () => approveOrchestratorTeam(orchestrationId, options),
-        "Failed to approve the team",
+        () => approveTeamChangeRequest(orchestrationId, options),
+        "Failed to approve the team change",
       ),
     [act],
   );
@@ -81,5 +81,5 @@ export function useOrchestration(projectId: string, enabled: boolean): Orchestra
     [orchestrations],
   );
 
-  return { orchestrations, ready, error, busy, find, start, approveTeam, stop };
+  return { orchestrations, ready, error, busy, find, start, approveTeamChange, stop };
 }

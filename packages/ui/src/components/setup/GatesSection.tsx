@@ -91,7 +91,7 @@ export function GatesSection({ d, settings, agents }: GatesSectionProps) {
       <div style={sectionTitle(d)}>Human Gates</div>
       <div style={sectionSubtitle(d)}>
         Approval checkpoints that pause the pipeline until a human reviews. A gate can go after any
-        stage; a composed team decides its own.
+        stage.
       </div>
       <div style={PIPELINE_STACK}>
         {CONFIGURABLE_PIPELINES.map((pipeline) => (

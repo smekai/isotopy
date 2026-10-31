@@ -10,7 +10,6 @@ import {
   stageTitleIn,
 } from "@isotopy/core";
 import type {
-  ModelTier,
   Orchestration,
   OrchestrationStatus,
   OrchestratorBrokerDecision,
@@ -25,7 +24,6 @@ import type {
 import { reviseOrchestratorContext } from "../domain/rules/orchestrator-context.ts";
 import { RELEASE_NOT_MERGED } from "../domain/rules/initiative-release.ts";
 import {
-  renderComposedRunTask,
   renderGatePreference,
   renderOrchestrationContext,
   renderOrchestrationFollowUp,
@@ -51,21 +49,14 @@ import {
   SUPERSEDED,
   activeOrchestrations,
   blockedLaunchRefusal,
-  NO_APPROVED_TEAM,
-  PROPOSAL_NEEDS_TASK,
+  TEAM_CHANGE_APPROVED,
+  TEAM_CHANGE_QUESTION,
 } from "../domain/rules/orchestration-loop.ts";
 import type { SettledLaunch } from "../domain/rules/orchestration-loop.ts";
 import { seedFromSettledRun } from "../domain/rules/run-seeding.ts";
 import type { SeededStart } from "../domain/rules/run-seeding.ts";
 import { extractOrchestratorDecision } from "../schemas/orchestrator-decision.ts";
 import { catalogLines } from "../domain/rules/agent-catalog.ts";
-import {
-  composeTeamPipeline,
-  currentGeneration,
-  nextGeneration,
-  sameComposition,
-  withRoleTiers,
-} from "../domain/rules/team-composition.ts";
 import { formatValidationIssues } from "../domain/validation.ts";
 import type { ValidationResult } from "../domain/validation.ts";
 import type { ProjectPath } from "../paths.ts";
@@ -80,6 +71,7 @@ import { personaNotesByRole } from "./persona-notes-store.ts";
 import { readOrchestratorContext, writeOrchestratorContext } from "./skills.ts";
 import type { ProjectRegistry } from "./project-registry.ts";
 import type { AgentCatalog } from "./agent-catalog.ts";
+import type { TeamService } from "./team-service.ts";
 import type { RunService } from "./run/run-service.ts";
 import type { SettingsStore } from "./settings-store.ts";
 import type { StageOutputRejection } from "../domain/rules/stage-context.ts";
@@ -102,10 +94,6 @@ import type { Logger } from "../utils/logger.ts";
 
 export type StartOrchestrationOptions = InheritedRunOptions;
 
-export interface ApproveTeamOptions extends StartOrchestrationOptions {
-  roleTiers?: Record<string, ModelTier | null>;
-}
-
 type StartRunDecision = Extract<OrchestratorDecision, { action: "start_run" }>;
 
 export class OrchestrationService implements StageOutputConsumer {
@@ -124,6 +112,7 @@ export class OrchestrationService implements StageOutputConsumer {
     private readonly settings: SettingsStore,
     private readonly databases: ProjectDatabases,
     private readonly agents: AgentCatalog,
+    private readonly teams: TeamService,
     logger: Logger,
   ) {
     this.logger = logger.child("OrchestrationService");
@@ -235,6 +224,7 @@ export class OrchestrationService implements StageOutputConsumer {
     if (active) {
       await this.end(active, SUPERSEDED);
     }
+    await this.teams.seed(projectPath);
     const orchestration = this.newOrchestration(projectPath.id, goal, "conversing");
     this.orchestrations.set(orchestration.id, orchestration);
     try {
@@ -253,11 +243,11 @@ export class OrchestrationService implements StageOutputConsumer {
     }
   }
 
-  async approveTeam(
+  async approveTeamChange(
     projectPath: ProjectPath,
     orchestrationId: string,
-    options: ApproveTeamOptions,
-  ): Promise<ValidationResult<RunState>> {
+    options: StartOrchestrationOptions,
+  ): Promise<RunState> {
     const orchestration = this.orchestrations.get(orchestrationId);
     if (!orchestration || orchestration.projectId !== projectPath.id) {
       throw new Error("Orchestration not found");
@@ -265,39 +255,12 @@ export class OrchestrationService implements StageOutputConsumer {
     const decision = orchestration.latestDecision;
     if (
       orchestration.status !== "awaiting_approval" ||
-      decision?.action !== "propose_team"
+      decision?.action !== "propose_team_change"
     ) {
-      throw new Error("No team is awaiting approval on this orchestration");
+      throw new Error("No team change is awaiting approval on this orchestration");
     }
-    const approved = withRoleTiers(decision.team, options.roleTiers);
-    if (!approved.ok) {
-      return approved;
-    }
-    const composed = composeTeamPipeline(
-      approved.value,
-      await this.agents.knownIds(projectPath),
-      orchestration.id,
-      nextGeneration(orchestration),
-    );
-    if (!composed.ok) {
-      return composed;
-    }
-    const run = await this.runs.startComposedRun(projectPath, composed.value, {
-      ...options,
-      task:
-        decision.task ??
-        renderComposedRunTask({ goal: orchestration.goal, team: approved.value }),
-      orchestrationId: orchestration.id,
-    });
-    orchestration.approvedTeam = approved.value;
-    orchestration.composedPipeline = composed.value;
-    if (!orchestration.runIds.includes(run.id)) {
-      orchestration.runIds.push(run.id);
-    }
-    orchestration.status = "running";
-    orchestration.updatedAt = nowIso();
-    await this.persist(orchestration);
-    return { ok: true, value: run };
+    await this.teams.apply(projectPath, decision.team, decision.rationale, orchestration.branch);
+    return this.converse(projectPath, orchestration, TEAM_CHANGE_QUESTION, TEAM_CHANGE_APPROVED, options);
   }
 
   async answer(
@@ -324,6 +287,16 @@ export class OrchestrationService implements StageOutputConsumer {
     if (question === undefined) {
       throw new Error("The Orchestrator is not waiting on an answer");
     }
+    return this.converse(projectPath, orchestration, question, text, options);
+  }
+
+  private async converse(
+    projectPath: ProjectPath,
+    orchestration: Orchestration,
+    question: string,
+    text: string,
+    options: StartOrchestrationOptions,
+  ): Promise<RunState> {
     const lastRunId = orchestration.runIds.at(-1);
     const run = await this.runs.startRun(projectPath, ORCHESTRATION_PIPELINE.id, {
       ...(lastRunId ? this.runs.inheritedRunOptions(lastRunId) : {}),
@@ -365,7 +338,7 @@ export class OrchestrationService implements StageOutputConsumer {
         `${profession} produced no usable decision — ${cause}`,
       );
     }
-    const refusal = this.refusalFor(orchestration, run, run.status, parsed.value);
+    const refusal = await this.refusalFor(orchestration, run, run.status, parsed.value);
     if (refusal !== undefined) {
       return this.refuse(
         orchestration,
@@ -449,7 +422,7 @@ export class OrchestrationService implements StageOutputConsumer {
       orchestrationId: orchestration.id,
       prompt: renderQuestionMediationContext({
         goal: orchestration.goal,
-        team: orchestration.approvedTeam,
+        team: await this.teams.view(this.registry.resolve(run.projectId)),
         phase: request.phase,
         originStageId: request.stageId,
         question: request.question,
@@ -502,12 +475,16 @@ export class OrchestrationService implements StageOutputConsumer {
       request.runId,
       "review this run",
     );
-    const orchestratorContext = await readOrchestratorContext(this.registry.resolve(run.projectId));
+    const projectPath = this.registry.resolve(run.projectId);
+    const [orchestratorContext, team] = await Promise.all([
+      readOrchestratorContext(projectPath),
+      this.teams.view(projectPath),
+    ]);
     return {
       orchestrationId: orchestration.id,
       prompt: renderRunReviewContext({
         goal: orchestration.goal,
-        team: orchestration.approvedTeam,
+        team,
         runLabel: runLabel(run),
         runStatus: request.status,
         closeout: run.closeout?.report,
@@ -542,7 +519,7 @@ export class OrchestrationService implements StageOutputConsumer {
       );
     }
     const recorded: RecordedReview = {};
-    const decision = this.actionableDecision(orchestration, request, review);
+    const decision = await this.actionableDecision(orchestration, request, review);
     if (decision.value && !this.hasTurnFor(orchestration, request.runId)) {
       if (review.contextRevision !== undefined) {
         recorded.contextRefusal = await this.reviseOwnContext(orchestration, request.runId, review.contextRevision);
@@ -657,24 +634,21 @@ export class OrchestrationService implements StageOutputConsumer {
     options: StartOrchestrationOptions,
   ): Promise<RunState | undefined> {
     if (decision.action === "start_run") {
-      const pipeline = orchestration.composedPipeline;
-      if (!pipeline) {
-        throw new Error(NO_APPROVED_TEAM);
+      const pipeline = await this.teams.flowPipeline(projectPath, decision.flow);
+      if (!pipeline.ok) {
+        throw new Error(formatValidationIssues(pipeline.issues));
       }
-      const seeded = this.seedFrom(pipeline, orchestration, run, decision);
+      const seeded = this.seedFrom(pipeline.value, orchestration, run, decision);
       if (seeded && !seeded.ok) {
         throw new Error(formatValidationIssues(seeded.issues));
       }
-      return this.runs.startComposedRun(projectPath, pipeline, {
+      return this.runs.startComposedRun(projectPath, pipeline.value, {
         ...options,
         task: decision.task,
         orchestrationId: orchestration.id,
         seeded: seeded?.value,
         reviewContextGrant: decision.reviewContext,
       });
-    }
-    if (decision.action === "propose_team") {
-      return this.launchUnchangedTeam(projectPath, orchestration, decision, options);
     }
     if (decision.action === "delegate_milestone_planning") {
       return this.runs.milestones.startMilestonePlanning(projectPath, decision.goal, options);
@@ -685,53 +659,16 @@ export class OrchestrationService implements StageOutputConsumer {
     return undefined;
   }
 
-  private async launchUnchangedTeam(
-    projectPath: ProjectPath,
-    orchestration: Orchestration,
-    decision: Extract<OrchestratorDecision, { action: "propose_team" }>,
-    options: StartOrchestrationOptions,
-  ): Promise<RunState | undefined> {
-    if (decision.task === undefined) {
-      return undefined;
-    }
-    const running = orchestration.composedPipeline;
-    const approved = withRoleTiers(decision.team, undefined);
-    const composed = approved.ok
-      ? composeTeamPipeline(
-          approved.value,
-          await this.agents.knownIds(projectPath),
-          orchestration.id,
-          currentGeneration(orchestration),
-        )
-      : undefined;
-    if (!running || !composed?.ok || !sameComposition(composed.value, running)) {
-      return undefined;
-    }
-    // The roles are unchanged, so this is the team already approved — run it under
-    // its own name rather than the one the proposal happened to use, or the card
-    // would say one thing while the stored team and the next review say another.
-    const run = await this.runs.startComposedRun(projectPath, running, {
-      ...options,
-      task: decision.task,
-      orchestrationId: orchestration.id,
-    });
-    if (!orchestration.runIds.includes(run.id)) {
-      orchestration.runIds.push(run.id);
-    }
-    orchestration.status = "running";
-    return run;
-  }
-
-  private actionableDecision(
+  private async actionableDecision(
     orchestration: Orchestration,
     request: RunReviewRequest,
     review: RunReview,
-  ): ReviewedDecision {
+  ): Promise<ReviewedDecision> {
     const settled = this.runs.getRun(request.runId);
     if (!review.decision || !settled) {
       return { value: review.decision, errors: [] };
     }
-    const refusal = this.refusalFor(
+    const refusal = await this.refusalFor(
       orchestration,
       settled,
       request.status,
@@ -742,28 +679,28 @@ export class OrchestrationService implements StageOutputConsumer {
       : { errors: [refusal] };
   }
 
-  private refusalFor(
+  private async refusalFor(
     orchestration: Orchestration,
     settled: RunState,
     settledStatus: RunState["status"],
     decision: OrchestratorDecision,
-  ): string | undefined {
+  ): Promise<string | undefined> {
+    const projectPath = this.registry.resolve(orchestration.projectId);
     if (decision.action === "stop") {
       return this.releases.mergeRefusal(orchestration, settled, decision);
     }
-    if (decision.action === "propose_team") {
-      return decision.task === undefined && orchestration.composedPipeline !== undefined
-        ? PROPOSAL_NEEDS_TASK
-        : undefined;
+    if (decision.action === "propose_team_change") {
+      const proposed = await this.teams.validate(projectPath, decision.team);
+      return proposed.ok ? undefined : `The proposed team.md is not valid: ${formatValidationIssues(proposed.issues)}`;
     }
     if (decision.action !== "start_run") {
       return undefined;
     }
-    const pipeline = orchestration.composedPipeline;
-    if (!pipeline) {
-      return NO_APPROVED_TEAM;
+    const pipeline = await this.teams.flowPipeline(projectPath, decision.flow);
+    if (!pipeline.ok) {
+      return formatValidationIssues(pipeline.issues);
     }
-    const seeded = this.seedFrom(pipeline, orchestration, settled, decision);
+    const seeded = this.seedFrom(pipeline.value, orchestration, settled, decision);
     if (seeded && !seeded.ok) {
       return formatValidationIssues(seeded.issues);
     }
@@ -838,7 +775,6 @@ export class OrchestrationService implements StageOutputConsumer {
   ): Promise<string> {
     return renderOrchestrationFollowUp({
       ...(await this.goalContext(projectPath, orchestration.goal)),
-      team: orchestration.approvedTeam,
       question,
       answer,
       artifacts: priorArtifactsOf(orchestration, this.runs.listRuns(orchestration.projectId)),
@@ -849,16 +785,18 @@ export class OrchestrationService implements StageOutputConsumer {
     projectPath: ProjectPath,
     goal: string,
   ): Promise<OrchestrationContext> {
-    const [tasksContext, closeoutContext, personaNotes, orchestratorContext, catalog] =
+    const [tasksContext, closeoutContext, personaNotes, orchestratorContext, catalog, team] =
       await Promise.all([
         taskBoardFor(projectPath).tasksContext(),
         milestoneCloseoutContext(projectPath),
         personaNotesByRole(projectPath),
         readOrchestratorContext(projectPath),
         this.agents.catalog(projectPath),
+        this.teams.view(projectPath),
       ]);
     return {
       goal,
+      team,
       ...catalogLines(catalog),
       tasksContext,
       closeoutContext,

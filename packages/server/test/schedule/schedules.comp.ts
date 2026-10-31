@@ -4,22 +4,23 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, assert, beforeEach, expect, test, vi } from "vitest";
 import type {
   Orchestration,
-  OrchestratorTeamProposal,
   RunState,
   ScheduleOutcome,
   ScheduleView,
+  TeamDefinition,
 } from "@isotopy/core";
 import {
   addTestProject,
   createTestApp,
   del,
   get,
+  getRun,
   patch,
   post,
   put,
-  getRun,
   restartApp,
   waitForRunStatus,
+  waitForStageStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
 import { HOME_PROJECT_ID } from "@isotopy/core";
@@ -27,7 +28,7 @@ import { JsonRecordsTable, SCHEDULES_TABLE } from "../../src/db/json-records-tab
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import { RecordingLogger } from "../support/recording-logger.ts";
-import { writeProjectAgent } from "../support/agent-files.ts";
+import { projectDataDir, writeTeam } from "../support/orchestration-fixtures.ts";
 
 // A schedule that a test fires by hand must not also fire on its own while the
 // test runs, so it waits for midnight on a leap day.
@@ -39,23 +40,16 @@ const EVERY_SECOND = "* * * * * *";
 // Which pipeline a scheduled run lands on is how the two paths are told apart.
 const ORCHESTRATION_PIPELINE = "orchestration";
 
-const BOARD_READER: OrchestratorTeamProposal = {
-  name: "Board reader",
-  summary: "One persona, one step: read the board and name what is next.",
-  roles: [
-    {
-      id: "reader",
-      label: "Project Manager",
-      skill: "project-manager",
-      stepTask: "plan-feature",
-    },
-  ],
+const BOARD_TEAM: TeamDefinition = {
+  roster: [{ id: "reader", label: "Reading the board", agent: "project-manager" }],
+  flows: { board: [{ role: "reader", step: "plan-feature" }] },
 };
 
 let ctx: TestApp;
 
 beforeEach(async () => {
   ctx = await createTestApp();
+  await writeTeam(ctx.home, BOARD_TEAM);
 });
 
 afterEach(async () => {
@@ -79,39 +73,20 @@ test("an expression that cannot be parsed is refused when the schedule is saved,
   ctx.engine.verify();
 });
 
-test("a team naming a persona that does not exist is refused when the schedule is saved", async () => {
-  // Arrange
-  const unknownPersona = { ...BOARD_READER.roles[0]!, skill: "wizard" };
-
+test("a schedule naming a flow the team does not have is refused when it is saved, not when it fires", async () => {
   // Anticipate — none.
 
   // Act
-  const response = await post<{ issues: { message: string }[] }>(
+  const response = await post<{ issues: { path: string[] }[] }>(
     ctx.app,
     "/schedules",
-    scheduleBody({ team: { ...BOARD_READER, roles: [unknownPersona] } }),
+    scheduleBody({ flow: "nightly" }),
   );
 
   // Assert
   expect(response.status).toBe(400);
-  expect(response.body.issues[0]?.message).toContain("wizard");
+  expect(response.body.issues[0]?.path).toEqual(["flow"]);
   ctx.engine.verify();
-});
-
-test("a team naming an agent the project brings is accepted when the schedule is saved", async () => {
-  // Arrange
-  await writeProjectAgent(ctx.home);
-  const marketer = { ...BOARD_READER.roles[0]!, skill: "growth-marketer" };
-
-  // Act
-  const response = await post(
-    ctx.app,
-    "/schedules",
-    scheduleBody({ team: { ...BOARD_READER, roles: [marketer] } }),
-  );
-
-  // Assert
-  expect(response.status).toBe(200);
 });
 
 test("an edit that would leave a schedule unable to fire is refused, and the stored one is untouched", async () => {
@@ -142,11 +117,11 @@ test("the server sends the next fire time, so the browser never parses a cron ex
   expect(new Date(created.nextFireAt).getTime()).toBeGreaterThan(Date.now());
 });
 
-test("a fired schedule starts exactly one run, and that run carries the team pinned to the schedule", async () => {
+test("a fired schedule starts exactly one run, and that run is the flow the schedule names", async () => {
   // Arrange
   const created = await createSchedule();
 
-  // Anticipate — the pinned team is one Project Manager, not the project default.
+  // Anticipate — the board flow is one Project Manager, not the whole team.
   ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
   ctx.engine.anticipateRunReview();
 
@@ -181,6 +156,48 @@ test("a scheduled run uses the model the project pinned for its engine", async (
   // Assert
   await waitForRunStatus(ctx.app, firedRunId(outcome), "completed");
   ctx.engine.verify();
+});
+
+test("a gate the project saved on a flow's stage parks a scheduled run of that flow", async () => {
+  // Arrange — the board flow ships without a gate; the owner added one in preferences.
+  await put(ctx.app, "/settings/preferences", { gates: { "flow-board:reader": true } });
+  const created = await createSchedule();
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "Project Manager" }).reports("Next: TASK-999.");
+
+  // Act
+  const outcome = await ctx.schedules.fire(created.id);
+
+  // Assert — nobody approves, so an ungated run would complete instead.
+  const waiting = await waitForStageStatus(ctx.app, firedRunId(outcome), "reader", "awaiting");
+  expect(waiting.status).toBe("awaiting");
+  ctx.engine.verify();
+});
+
+test("an edit that clears a schedule's flow hands its prompt to the Orchestrator from then on", async () => {
+  // Arrange
+  const created = await createSchedule({ flow: "board" });
+
+  // Act
+  const response = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, { flow: null });
+
+  // Assert
+  expect(response.status).toBe(200);
+  expect(response.body.flow).toBeUndefined();
+});
+
+test("an edit that leaves the flow out keeps the flow the schedule names", async () => {
+  // Arrange
+  const created = await createSchedule({ flow: "board" });
+
+  // Act
+  const response = await patch<ScheduleView>(ctx.app, `/schedules/${created.id}`, {
+    name: "Renamed poller",
+  });
+
+  // Assert
+  expect(response.body.flow).toBe("board");
 });
 
 test("an enabled schedule is fired by its own cron, with nobody calling it", async () => {
@@ -415,6 +432,7 @@ test("a run that fails to start is recorded as failed rather than left reading a
 test("a schedule whose project was removed does not run somewhere else instead", async () => {
   // Arrange — a schedule in its own project, which is then unregistered.
   const other = await addTestProject(ctx.registry, "removed");
+  await writeTeam(projectDataDir(other.root), BOARD_TEAM);
   const orphan = await createSchedule({}, other.headers);
   ctx.registry.unregister(other.id);
 
@@ -431,6 +449,7 @@ test("a schedule whose project was removed does not run somewhere else instead",
 test("removing a project takes its schedules with it, so a restart cannot adopt them", async () => {
   // Arrange
   const other = await addTestProject(ctx.registry, "removed");
+  await writeTeam(projectDataDir(other.root), BOARD_TEAM);
   const orphan = await createSchedule({}, other.headers);
 
   // Act
@@ -462,9 +481,9 @@ test("an outcome that cannot be recorded is reported to whoever runs the server"
   ]);
 });
 
-test("a schedule with no team hands its prompt to the Orchestrator rather than a fixed team", async () => {
+test("a schedule that names no flow hands its prompt to the Orchestrator rather than a fixed flow", async () => {
   // Arrange — a scheduled task that says what it wants, not who does it.
-  const created = await createSchedule({ team: undefined });
+  const created = await createSchedule({ flow: undefined });
 
   // Anticipate — the Orchestrator opens the conversation; no composed team runs.
   ctx.engine.anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ }).parks("Thinking.");
@@ -483,7 +502,7 @@ test("the Orchestrator's opening turn carries the board, so the prompt need not 
   // Arrange — a project that actually has a board to carry.
   const boarded = await addTestProject(ctx.registry, "boarded");
   await seedBoard(boarded.root, "## TASK-421: Rename the widget\n**Priority:** P1\n\n---\n");
-  const created = await createSchedule({ team: undefined }, boarded.headers);
+  const created = await createSchedule({ flow: undefined }, boarded.headers);
 
   // Anticipate — the board reaches the prompt the Orchestrator is handed.
   ctx.engine.anticipate({ as: "Orchestrator", prompt: /TASK-421/ }).parks("Thinking.");
@@ -496,8 +515,8 @@ test("the Orchestrator's opening turn carries the board, so the prompt need not 
   ctx.engine.verify();
 });
 
-test("a schedule that pins a team still runs that team, not a conversation", async () => {
-  // Arrange — the regression: pinning a team must not have become a prompt.
+test("a schedule that names a flow still runs that flow, not a conversation", async () => {
+  // Arrange — the regression: naming a flow must not have become a prompt.
   const created = await createSchedule();
 
   // Anticipate
@@ -518,7 +537,7 @@ test("a schedule that pins a team still runs that team, not a conversation", asy
 test("a prompt-only schedule waits rather than superseding a conversation someone is mid-way through", async () => {
   // Arrange — orchestrations.start() terminates an active Orchestrator, and a
   // parked conversation is not a run, so admitRun cannot see it.
-  const created = await createSchedule({ team: undefined });
+  const created = await createSchedule({ flow: undefined });
   ctx.engine.anticipate({ as: "Orchestrator" }).reports("Still weighing it up.");
   const { body: conversation } = await post<RunState>(ctx.app, "/orchestrations", {
     goal: "Ship the settings screen",
@@ -566,7 +585,7 @@ function scheduleBody(overrides: Record<string, unknown> = {}): Record<string, u
     cron: LEAP_DAY,
     timezone: "UTC",
     task: "Take the next task off the board",
-    team: BOARD_READER,
+    flow: "board",
     ...overrides,
   };
 }

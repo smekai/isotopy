@@ -16,6 +16,7 @@ import { DeploymentRunner } from "../../src/services/deployment-runner.ts";
 import { ModelRosterService } from "../../src/services/model-roster-service.ts";
 import { OrchestrationService } from "../../src/services/orchestration-service.ts";
 import { ScheduleService } from "../../src/services/schedule-service.ts";
+import { TeamService } from "../../src/services/team-service.ts";
 import { ProductProcessService } from "../../src/services/product-process-service.ts";
 import type { ProductProcessDependencies } from "../../src/services/product-process-service.ts";
 import type { SubprocessResult } from "../../src/engines/subprocess.ts";
@@ -101,6 +102,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const databases = new ProjectDatabases(logger);
   const product = new ProductProcessService(automation, logger, unspawnedProduct());
   const agents = new AgentCatalog(logger);
+  const teams = new TeamService(agents, logger);
   const orchestrator = new RunService(
     registry,
     settings,
@@ -118,6 +120,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     settings,
     databases,
     agents,
+    teams,
     logger,
   );
   const schedules = new ScheduleService(
@@ -127,6 +130,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     databases,
     settings,
     agents,
+    teams,
     logger,
   );
   orchestrator.registerOrchestration(orchestrations);
@@ -144,6 +148,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     deployment,
     product,
     agents,
+    teams,
     logger,
   });
 
@@ -200,6 +205,7 @@ export async function restartApp(): Promise<RestartedApp> {
   const databases = new ProjectDatabases(logger);
   const product = new ProductProcessService(automation, logger, unspawnedProduct());
   const agents = new AgentCatalog(logger);
+  const teams = new TeamService(agents, logger);
   const orchestrator = new RunService(
     registry,
     settings,
@@ -217,6 +223,7 @@ export async function restartApp(): Promise<RestartedApp> {
     settings,
     databases,
     agents,
+    teams,
     logger,
   );
   const schedules = new ScheduleService(
@@ -226,6 +233,7 @@ export async function restartApp(): Promise<RestartedApp> {
     databases,
     settings,
     agents,
+    teams,
     logger,
   );
   orchestrator.registerOrchestration(orchestrations);
@@ -245,6 +253,7 @@ export async function restartApp(): Promise<RestartedApp> {
       deployment,
       product,
       agents,
+      teams,
       logger,
     }),
     orchestrator,
@@ -399,6 +408,22 @@ export async function waitForOrchestrationRun(
   return runId;
 }
 
+export async function teamRunOf(
+  app: Hono,
+  conversation: RunState,
+  headers: TestHeaders = {},
+): Promise<RunState> {
+  const { runIds } = await waitForOrchestration(
+    app,
+    conversation.orchestrationId,
+    (orchestration) => orchestration.runIds.length >= 2,
+    headers,
+  );
+  const runId = runIds[1];
+  assert(runId, `Orchestration ${conversation.orchestrationId} started no team run`);
+  return getRun(app, runId);
+}
+
 /**
  * The project stream carries a run only as a summary, so a wait on the full
  * state reads until it holds. It returns on the first read that does; the
@@ -437,12 +462,6 @@ export async function startOrchestration(
 }
 
 /** The Orchestrator's conversation, settled — its team proposal awaits approval. */
-export async function proposedTeam(app: Hono, headers: TestHeaders = {}): Promise<RunState> {
-  const conversation = await startOrchestration(app, headers);
-  await waitForRunStatus(app, conversation.id, "completed");
-  return conversation;
-}
-
 export function waitForRunStatus(
   app: Hono,
   runId: string,

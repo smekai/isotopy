@@ -132,6 +132,6 @@ function bodyOf(schedule: typeof SCHEDULE) {
     cron: schedule.cron,
     timezone: schedule.timezone,
     task: schedule.task,
-    team: schedule.team,
+    flow: schedule.flow,
   };
 }

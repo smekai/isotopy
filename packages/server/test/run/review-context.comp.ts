@@ -2,19 +2,19 @@
 // the diff — never from the Developer's own account of what it did — unless the
 // Orchestrator grants the handoffs for one run.
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { OrchestratorDecision, PipelineDefinition, RunState } from "@isotopy/core";
+import type { OrchestratorDecision, PipelineDefinition, TeamDefinition } from "@isotopy/core";
 import { commitFile, initGitRepository } from "../support/git-project.ts";
 import {
   addTestProject,
   createTestApp,
-  post,
-  proposedTeam,
   stageOf,
+  startOrchestration,
+  teamRunOf,
   waitForOrchestrationRun,
   waitForRunStatus,
 } from "../support/harness.ts";
 import type { TestApp } from "../support/harness.ts";
-import { fenced } from "../support/orchestration-fixtures.ts";
+import { fenced, projectDataDir, writeTeam } from "../support/orchestration-fixtures.ts";
 
 const TASK = "add a share button";
 const PLAN_REPORT = "Plan: a share button on the trip page. MARKER-PLAN";
@@ -24,23 +24,52 @@ const QA_PASS = "Checked the share button.\n\nVERDICT: PASS";
 const CUT_OFF_SESSION = "5d0c7a2e-61f4-4b8e-9a43-0f2e9c7b1d55";
 const GRANT_RATIONALE = "the previous review failed on a migration the Developer has since explained";
 
-const REVIEW_TEAM_PROPOSAL: OrchestratorDecision = {
-  action: "propose_team",
-  rationale: "Plan, build and review independently",
-  team: {
-    name: "Reviewed delivery",
-    summary: "Plan, build and review the share button",
-    roles: [
-      { id: "plan", label: "Product Manager", skill: "project-manager", stepTask: "plan-feature" },
-      { id: "implementation", label: "Developer", skill: "developer", stepTask: "implement-feature" },
-      { id: "review", label: "Reviewer", skill: "software-architect", stepTask: "review-implementation" },
+const REVIEW_TEAM: TeamDefinition = {
+  roster: [
+    { id: "plan", label: "Planning", agent: "project-manager" },
+    { id: "implementation", label: "Implementing", agent: "developer" },
+    { id: "review", label: "Reviewing", agent: "software-architect" },
+  ],
+  flows: {
+    reviewed: [
+      { role: "plan", step: "plan-feature" },
+      { role: "implementation", step: "implement-feature" },
+      { role: "review", step: "review-implementation" },
     ],
   },
+};
+
+const RECHECK_TEAM: TeamDefinition = {
+  ...REVIEW_TEAM,
+  flows: {
+    ...REVIEW_TEAM.flows,
+    rechecked: [
+      { role: "plan", step: "plan-feature" },
+      { role: "implementation", step: "implement-feature" },
+      { role: "review", step: "verify-feature" },
+    ],
+  },
+};
+
+const RECHECK_FROM_REVIEW: OrchestratorDecision = {
+  action: "start_run",
+  rationale: "The review never reached a verdict; check the feature instead",
+  flow: "rechecked",
+  task: TASK,
+  fromStage: "review",
+};
+
+const START_REVIEWED: OrchestratorDecision = {
+  action: "start_run",
+  rationale: "Plan, build and review independently",
+  flow: "reviewed",
+  task: TASK,
 };
 
 const GRANTED_REVIEW_AGAIN: OrchestratorDecision = {
   action: "start_run",
   rationale: "The review never reached a verdict",
+  flow: "reviewed",
   task: TASK,
   fromStage: "review",
   reviewContext: { context: "handoffs", rationale: GRANT_RATIONALE },
@@ -49,6 +78,7 @@ const GRANTED_REVIEW_AGAIN: OrchestratorDecision = {
 const ISOLATED_REVIEW_AGAIN: OrchestratorDecision = {
   action: "start_run",
   rationale: "The review never reached a verdict",
+  flow: "reviewed",
   task: TASK,
   fromStage: "review",
 };
@@ -79,6 +109,7 @@ let ctx: TestApp;
 
 beforeEach(async () => {
   ctx = await createTestApp();
+  await writeTeam(ctx.home, REVIEW_TEAM);
 });
 
 afterEach(async () => {
@@ -90,21 +121,17 @@ test("a composed team's reviewer sees the plan and the branch to diff, not the D
   const project = await addTestProject(ctx.registry, "isolated");
   await initGitRepository(project.root);
   await commitFile(project.root, "README.md", "# app\n", "Start the app");
+  await writeTeam(projectDataDir(project.root), REVIEW_TEAM);
 
   // Anticipate — the reviewer is the fourth call; it hangs so the prompt can be read.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(REVIEW_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_REVIEWED));
   ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
   ctx.engine.anticipate({ as: "Developer", prompt: /MARKER-PLAN/ }).reports(DEV_REPORT);
   ctx.engine.anticipate({ as: "Reviewer", prompt: /MARKER-PLAN/ }).hangsUntilAborted();
-  const conversation = await proposedTeam(ctx.app, project.headers);
 
   // Act
-  const { body: run } = await post<RunState>(
-    ctx.app,
-    `/orchestrations/${conversation.orchestrationId}/approve`,
-    { engine: "claude-code" },
-    project.headers,
-  );
+  const conversation = await startOrchestration(ctx.app, project.headers);
+  const run = await teamRunOf(ctx.app, conversation, project.headers);
 
   // Assert
   const reviewer = await ctx.engine.waitForCall(4);
@@ -156,19 +183,16 @@ test("a run the Orchestrator grants the handoffs gives its reviewer the Develope
 test("a review restarted with the handoffs newly granted starts cold, so the grant reaches it", async () => {
   // Anticipate — the isolated review is cut off; the Orchestrator restarts it with the
   // handoffs granted. Resuming would skip the prompt that carries them.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(REVIEW_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_REVIEWED));
   ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
   ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   ctx.engine.anticipate({ as: "Isolated reviewer, cut off" }).timesOut(CUT_OFF_SESSION);
   ctx.engine.anticipateRunReview({ as: "review granting the handoffs", decision: GRANTED_REVIEW_AGAIN });
   ctx.engine.anticipate({ as: "Granted reviewer", prompt: /MARKER-DEVELOPER/ }).reports(REVIEW_PASS);
   ctx.engine.anticipateRunReview({ as: "review of the granted run" });
-  const conversation = await proposedTeam(ctx.app);
 
   // Act
-  await post<RunState>(ctx.app, `/orchestrations/${conversation.orchestrationId}/approve`, {
-    engine: "claude-code",
-  });
+  const conversation = await startOrchestration(ctx.app);
 
   // Assert
   const granted = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 3);
@@ -177,10 +201,34 @@ test("a review restarted with the handoffs newly granted starts cold, so the gra
   expect(ctx.engine.callAt(5).resumeSessionId).toBeUndefined();
 });
 
+test("a stage restarted in a flow where its role takes another step starts cold, so it does not continue another assignment", async () => {
+  // Arrange — in `rechecked` the review role verifies instead of reviewing.
+  await writeTeam(ctx.home, RECHECK_TEAM);
+
+  // Anticipate — the review is cut off; the Orchestrator restarts that role in the
+  // other flow. Resuming would carry the cut-off review's conversation into a check.
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_REVIEWED));
+  ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
+  ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
+  ctx.engine.anticipate({ as: "Isolated reviewer, cut off" }).timesOut(CUT_OFF_SESSION);
+  ctx.engine.anticipateRunReview({ as: "review restarting the role in another flow", decision: RECHECK_FROM_REVIEW });
+  ctx.engine.anticipate({ as: "Same role, verifying" }).reports(QA_PASS);
+  ctx.engine.anticipateRunReview({ as: "review of the re-check" });
+
+  // Act
+  const conversation = await startOrchestration(ctx.app);
+
+  // Assert
+  const recheck = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 3);
+  await waitForRunStatus(ctx.app, recheck, "completed");
+  ctx.engine.verify();
+  expect(ctx.engine.callAt(5).resumeSessionId).toBeUndefined();
+});
+
 test("a review restarted without the grant its last run had starts cold, so it forgets the Developer's handoff", async () => {
   // Anticipate — the granted review is cut off; the next run is isolated again.
   // Resuming would carry a conversation that already read the Developer's handoff.
-  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(REVIEW_TEAM_PROPOSAL));
+  ctx.engine.anticipate({ as: "Orchestrator" }).reports(fenced(START_REVIEWED));
   ctx.engine.anticipate({ as: "Product Manager" }).reports(PLAN_REPORT);
   ctx.engine.anticipate({ as: "Developer" }).reports(DEV_REPORT);
   ctx.engine.anticipate({ as: "Isolated reviewer" }).reports(REVIEW_PASS);
@@ -189,12 +237,9 @@ test("a review restarted without the grant its last run had starts cold, so it f
   ctx.engine.anticipateRunReview({ as: "review revoking the grant", decision: ISOLATED_REVIEW_AGAIN });
   ctx.engine.anticipate({ as: "Isolated reviewer again" }).reports(REVIEW_PASS);
   ctx.engine.anticipateRunReview({ as: "review of the isolated run" });
-  const conversation = await proposedTeam(ctx.app);
 
   // Act
-  await post<RunState>(ctx.app, `/orchestrations/${conversation.orchestrationId}/approve`, {
-    engine: "claude-code",
-  });
+  const conversation = await startOrchestration(ctx.app);
 
   // Assert
   const isolated = await waitForOrchestrationRun(ctx.app, conversation.orchestrationId, 4);

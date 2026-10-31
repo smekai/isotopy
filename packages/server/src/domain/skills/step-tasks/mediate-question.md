@@ -5,7 +5,7 @@ composable: false
 ---
 # Assignment: Mediate a specialist question
 
-Read the orchestration goal, approved team, specialist question, and prior run
+Read the orchestration goal, the project's team, specialist question, and prior run
 artifacts. Take exactly the action named by the current assignment.
 
 For a new specialist question, either answer from the supplied context:

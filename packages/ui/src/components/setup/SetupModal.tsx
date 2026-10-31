@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { X } from "lucide-react";
+import type { ProjectTeam } from "@isotopy/core";
 import type { AgentCatalogController } from "../../hooks/useAgentCatalog";
 import type { SettingsController } from "../../hooks/useSettings";
 import { FONT, ICON, MOTION, RADIUS, SANS, SPACE, WEIGHT, Z } from "../../theme";
@@ -10,12 +11,14 @@ import { AppearanceSection } from "./AppearanceSection";
 import { AutomationSection } from "./AutomationSection";
 import { GatesSection } from "./GatesSection";
 import { HarnessSection } from "./HarnessSection";
+import { TeamSection } from "./TeamSection";
 import { FLEX_FILL, WHITE, mutedCaption } from "./setup-styles";
 
-export type SetupSection = "harness" | "agents" | "gates" | "appearance" | "automation";
+export type SetupSection = "harness" | "team" | "agents" | "gates" | "appearance" | "automation";
 
 const SECTIONS: { id: SetupSection; label: string }[] = [
   { id: "harness", label: "AI Harness" },
+  { id: "team", label: "Team" },
   { id: "agents", label: "Agents" },
   { id: "gates", label: "Gates" },
   { id: "appearance", label: "Appearance" },
@@ -110,6 +113,7 @@ export interface SetupModalProps {
   projectName: string;
   settings: SettingsController;
   agents: AgentCatalogController;
+  team?: ProjectTeam;
   section?: SetupSection;
   onClose: () => void;
 }
@@ -120,6 +124,7 @@ export function SetupModal({
   projectName,
   settings,
   agents,
+  team,
   section = "harness",
   onClose,
 }: SetupModalProps) {
@@ -146,6 +151,7 @@ export function SetupModal({
 
         <div style={BODY}>
           {sec === "appearance" && <AppearanceSection d={d} />}
+          {sec === "team" && <TeamSection d={d} team={team} />}
           {sec === "agents" && <AgentsSection d={d} catalog={agents} />}
           {sec === "gates" && <GatesSection d={d} settings={settings} agents={agents.agents} />}
           {sec === "harness" && (

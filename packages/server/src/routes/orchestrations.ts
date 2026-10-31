@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import {
-  approveTeamSchema,
+  approveTeamChangeSchema,
   postRunMessageSchema,
   startOrchestrationSchema,
 } from "../schemas/request-schemas.ts";
@@ -47,7 +47,7 @@ export function createOrchestrationRoutes(
         : c.json(orchestration);
     })
     .post("/:id/approve", async (c) => {
-      const parsed = await parseRequestBody(c.req, approveTeamSchema);
+      const parsed = await parseRequestBody(c.req, approveTeamChangeSchema);
       if (!parsed.ok) {
         return c.json(invalidRequest(parsed.issues), 400);
       }
@@ -58,20 +58,13 @@ export function createOrchestrationRoutes(
       }
       const body = parsed.value;
       try {
-        const started = await orchestrations.approveTeam(
-          project,
-          orchestration.id,
-          {
-            engine: body.engine,
-            model: body.model,
-            modelTier: body.modelTier,
-            roleTiers: body.roleTiers,
-            permissionMode: body.permissionMode,
-          },
-        );
-        return started.ok
-          ? c.json(started.value, 201)
-          : c.json(invalidRequest(started.issues), 400);
+        const started = await orchestrations.approveTeamChange(project, orchestration.id, {
+          engine: body.engine,
+          model: body.model,
+          modelTier: body.modelTier,
+          permissionMode: body.permissionMode,
+        });
+        return c.json(started, 201);
       } catch (error) {
         return c.json({ error: messageOf(error) }, 400);
       }

@@ -491,7 +491,7 @@ accepted it and over which open findings, rather than silently flipping a status
 ### 2c. Orchestration — the entry point above milestones
 
 An **orchestration** is one initiative: a conversation with the Orchestrator that
-decides what the team is, what runs, and what happens next. It owns runs the way a
+decides which of the project's flows runs, and what happens next. It owns runs the way a
 milestone owns features, and `RunState.orchestrationId` is what traces a run back
 to the conversation that asked for it.
 
@@ -501,8 +501,9 @@ to the conversation that asked for it.
 | Boundary schema | `server/src/schemas/orchestrator-decision.ts` — one fenced block in, a validated decision or path-aware issues out |
 | Persistence | `server/src/repository/orchestration-repository.ts` over `db/orchestrations-table.ts` |
 | Lifecycle | `OrchestrationService` — the single writer of the aggregate, as `RunService` is for runs |
-| Composition | `server/src/domain/rules/team-composition.ts` — an approved proposal and the project's known agent ids in, a `PipelineDefinition` or path-aware issues out; pure |
-| API | `server/src/routes/orchestrations.ts` — start, list, read, approve, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
+| The standing team | `<project>/.isotopy/team.md`, parsed by `server/src/schemas/team-file.ts`; read, seeded, validated and committed by `services/team-service.ts` (`TeamService`); `GET /team` serves it as a `ProjectTeam` |
+| Composition | `server/src/domain/rules/team-composition.ts` — a team, one flow name and the project's known agent ids in, a `PipelineDefinition` or path-aware issues out; pure |
+| API | `server/src/routes/orchestrations.ts` — start, list, read, approve a team change, stop. There is no message endpoint: the conversation is answered through `POST /runs/:id/messages` like any other parked stage. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 
 **The Orchestrator is an ordinary persona.** Same markdown under
 `domain/skills/personas/`, same user-override and project-addendum layering, same
@@ -543,14 +544,32 @@ stage no consumer claims is unaffected. And the closeout separates report errors
 side-effect errors: a report that would not parse fails the stage, while a task-board write
 that failed afterwards is recorded on the record and does not.
 
-**An approved team becomes a pipeline, and the run keeps it.** `composeTeamPipeline`
-validates every `skill` and `stepTask` against the project's catalog —
-which is also what stops the Orchestrator composing itself, since `orchestrate` is
-not a composable step — requires unique role ids matching
-`/^[a-z0-9-]+$/`, and gives every composed stage an explicit `executionPolicy` so
-the quality, delivery and closeout suppression rules apply to a composed run exactly
-as they do to `full-delivery`. The id guard is not tidiness: a stage id becomes a
-directory name in `persistHandoff`.
+**A project has one team, and every team run is one of its flows.** `team.md` holds a
+`roster` (each role is one agent on the `primary` or `secondary` engine, with an optional
+tier, execution policy and `interactive`) and named `flows` — ordered `{ role, step }`
+lists. The bundled template (`domain/skills/team/team.md`) has `delivery` and
+`discovery`, and is written and committed on the branch the project is on the first time
+a team is needed: when an initiative starts, or when a schedule fires a flow. `start_run`
+names a `flow` and starts at once; nobody approves it.
+
+**A flow becomes a pipeline at launch, and the run keeps it.** `composeFlowPipeline`
+validates the whole file before it composes one flow — every `agent` and `step` against
+the project's catalog (which is also what stops the Orchestrator taking a specialist's
+step, since `orchestrate` is not a composable step), role and flow ids matching
+`/^[a-z0-9-]+$/`, unique roles, at most one step per role in a flow, and the closeout
+taken by the Orchestrator alone. It gives every stage an explicit `executionPolicy` so the
+quality, delivery and closeout suppression rules apply to a flow exactly as they do to
+`full-delivery`. The id guard is not tidiness: a stage id becomes a directory name in
+`persistHandoff`. A flow's pipeline id is `flow-<name>`, stable across initiatives, so a
+gate preference set on it holds. An invalid `team.md` refuses every team run with its
+issues; there is no fallback team.
+
+**The team changes only through an approved proposal.** `propose_team_change` carries the
+whole new `team.md`. It is validated when the decision is consumed, so a file that would
+not run never reaches the owner. Approval writes it and commits it on the branch the
+checkout is on, and — when the initiative has a branch — on its base as well, so the next
+initiative runs on it whether or not this one is ever merged. The Orchestrator is then
+asked what runs next.
 
 Because a composed pipeline exists in no constant, the run carries it —
 `RunState.pipeline` is written only when `findPipeline` cannot resolve the id, and
@@ -579,15 +598,15 @@ into a review. `RunState.task` itself is never rewritten: the record keeps sayin
 the run began as, and only the workflow input differs (`InputExtras.task`). There is no
 automatic retry; a rejection is terminal for the turn and informative for the next one.
 
-**`start_run` may begin partway through the approved team.** The decision's optional
+**`start_run` may begin partway through a flow.** The decision's optional
 `fromStage` names a role; `seedFromSettledRun` (`domain/rules/run-seeding.ts`) validates
-it against the composed pipeline and carries the settled run's outputs and outcomes for
+it against the flow's pipeline and carries the settled run's outputs and outcomes for
 every stage before it into a **fresh** run, which starts there. The settled run is left
 untouched as evidence. When a user answer opens a separate Orchestration conversation,
 the source is the newest non-Orchestration run the initiative discussed rather than that
 one-stage conversation. Two things are rejected with path-aware issues rather than
 started anyway: an id no role has, and a stage the source run never ran — that source is
-not always of the composed pipeline, and seeding an absent stage would credit a role with
+not always of that flow, and seeding an absent stage would credit a role with
 work nobody did. `applySeededStage` marks a carried stage `skipped` with a log line naming
 the run it came from — but only when it is still `pending`, which is what keeps a restart's
 own upstream statuses intact.
@@ -605,13 +624,13 @@ the run-level one cannot serve: a lifecycle review parks the initiative on the u
 run it reviewed is terminal, so there is no `asking` stage to release. `answer` routes to
 that stage when one exists — an answer meant for a parked specialist is not a new turn — and
 otherwise starts a fresh `orchestration` run whose task is `renderOrchestrationFollowUp`:
-the goal context, the approved team, prior run digests, the question, and the answer. The
+the goal context and the project's team, prior run digests, the question, and the answer. The
 initiative goes back to `conversing` and the ordinary loop resumes. It does not supersede,
 which is what separates it from `POST /orchestrations`.
 
 **A decision that cannot be acted on is never accepted.** `refusalFor` runs at both places
 a decision is taken — `consume` for a conversation turn, `recordReview` for a lifecycle
-review — and covers the reasons acting would fail: no approved team, a `fromStage`
+review — and covers the reasons acting would fail: a flow `team.md` does not have or cannot run, a `team.md` change that does not validate, a `fromStage`
 that does not validate, the blocked-launch ceiling, and a merge with no branch to merge. A refused decision records
 `decisionError` and **no turn**, which is what keeps the loop open: `hasTurnFor` would
 otherwise discard the corrected decision of a re-review, and `settle` would find the run
@@ -641,7 +660,7 @@ carries `kind: "question"` — the specialist's raw wording is ordinary chat, be
 never parks the run and may be answered without the user ever seeing it.
 
 `Orchestration.brokerTurns` stores these decisions separately from lifecycle `turns`.
-Its context is deliberately narrow: active goal, approved team, current upstream
+Its context is deliberately narrow: active goal, the project's team, current upstream
 outputs, and prior outputs owned by the active Orchestrator. Raw transcripts, logs,
 and stopped Orchestrators are excluded. There is no broker queue, secondary workflow
 worker, admission lane, or direct-user fallback when the invariant is broken.
@@ -658,7 +677,7 @@ capped, and read when the next episode opens (`TASK-178`).
 
 | Layer | Where |
 | --- | --- |
-| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `schedulePinsTeam` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
+| Model and pure predicates | `@isotopy/core` `schedules.ts` — the record, `scheduleNamesFlow` and `scheduleIsBuiltIn`. Cron is **not** parsed here: core is aliased straight into the browser build |
 | Clock | Aiki — each enabled schedule is a cron activation on its project's runtime, reconciled through the `DurableSchedules` seam (`workflow/durable-schedules.ts`, implemented by `WorkflowRuntimeRegistry`) and firing the `isotopy-schedule` workflow (`workflow/schedule-workflow.ts`), whose one task calls `ScheduleService.fire` |
 | Timing | `server/src/domain/rules/schedule-timing.ts` over `utils/recurrence.ts` — validation and `nextFireForSchedule` with `cron-parser`, the parser Aiki fires with, so the preview and the clock cannot disagree. The API sends the next fire, so the UI never parses an expression |
 | Duties | `AgentCatalog.duties` — the bundled `domain/skills/duties/board-poller.md` and every `agents/<id>/duties/*.md` the project's agents bring, keyed `board-poller` and `<agent>/<duty>`. `ScheduleService.seedDuties` writes each once, switched off, after `scheduleIssues`; one that fails is logged and left out. The project's `builtInSchedules` switch covers all of them |
@@ -669,15 +688,14 @@ capped, and read when the next episode opens (`TASK-178`).
 | API | `server/src/routes/schedules.ts` — CRUD plus enable/disable. Keep the prefix in `ui/vite.config.ts`'s proxy list or the browser never reaches it |
 | UI | a rail section plus `#/schedules/:id` → `ScheduleDashboard`, fed by `useSchedules` |
 
-**A scheduled task is a prompt, and the team is optional.** Pin a team and the schedule starts it;
-omit one and the prompt goes to `OrchestrationService.start`, which is how the Orchestrator gets to
-decide. A prompt-only schedule skips while an Orchestrator is mid-conversation, because
+**A scheduled task is a prompt, and the flow is optional.** Name a flow of the team and the
+schedule starts it; omit one and the prompt goes to `OrchestrationService.start`, which is how the
+Orchestrator gets to decide. A prompt-only schedule skips while an Orchestrator is mid-conversation, because
 `start` supersedes an active one and `admitRun` cannot see a parked conversation.
 
-**A schedule stores an `OrchestratorTeamProposal`, not a composed pipeline.**
-`composedPipelineId` bakes the orchestration id into the pipeline id, and a schedule
-outlives every orchestration it starts. The proposal is validated when saved and
-composed at fire time against that episode's fresh id.
+**A schedule stores a flow name, not a team.** The team is the project's; a schedule or a
+duty only says which of its flows to run. The name is checked against `team.md` when the
+schedule is saved and composed at fire time, so a team change reaches every schedule.
 
 **Firing is a check, not a catch.** `admitRun` already refuses a second concurrent run
 per project, so a fired schedule that finds one active records a skip and waits for its
@@ -852,7 +870,7 @@ the bundled personas and step tasks under `server/src/domain/skills/`, then what
 the project brings: `<project>/.isotopy/agents/<id>/agent.md` and
 `<project>/.isotopy/steps/<id>.md`. A project entry with a bundled id replaces it.
 That merged catalog is what the Orchestrator is told it can choose from and what
-`composeTeamPipeline` and `scheduleIssues` accept — both take the known ids as a
+`composeFlowPipeline` and `teamIssues` accept — both take the known ids as a
 parameter, so the pure rules never read the disk. A file that does not parse, or
 whose `name` is not its own id, is left out and reported once on the operator
 channel; the rest of the catalog survives it. The pure merge lives in

@@ -4,7 +4,7 @@ import { Send } from "lucide-react";
 import { formatUsage, isTerminalRunStatus, summariseChanges } from "@isotopy/core";
 import type { LogLevel, RunState, RunSummary, StageState, StageStatus } from "@isotopy/core";
 import { OpenProjectFolder } from "./OpenProjectFolder";
-import { TeamProposalCard } from "./TeamProposalCard";
+import { TeamChangeCard } from "./TeamChangeCard";
 import { answerableQuestion } from "../../orchestration";
 import type { OrchestratorView } from "../../orchestration";
 import { renderInlineMarkdown } from "../../inline-md";
@@ -341,15 +341,14 @@ interface TranscriptRowProps {
 function TranscriptRow({ item, spend, orchestrator, d }: TranscriptRowProps) {
   if (item.kind === "proposal") {
     return orchestrator === undefined ? null : (
-      <TeamProposalCard
-        team={item.team}
+      <TeamChangeCard
+        rationale={item.rationale}
+        proposed={item.proposed}
+        current={orchestrator.currentTeam}
         awaitingApproval={item.awaitingApproval}
         busy={orchestrator.busy}
-        harness={orchestrator.harness}
-        roleTiers={orchestrator.roleTiers}
         d={d}
         onApprove={orchestrator.onApprove}
-        onRoleTierChange={orchestrator.onRoleTierChange}
       />
     );
   }

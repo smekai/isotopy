@@ -7,7 +7,7 @@ import type {
   EngineModelRoster,
   EngineStatus,
   LimitResolution,
-  ModelTier,
+  ProjectTeam,
   CreateScheduleInput,
   Orchestration,
   ProductProcessStatus,
@@ -128,6 +128,10 @@ export function deleteSchedule(scheduleId: string): Promise<void> {
 
 export function fetchAgentCatalog(): Promise<AgentCatalogEntry[]> {
   return requestJson<AgentCatalogEntry[]>("/agents");
+}
+
+export function fetchProjectTeam(): Promise<ProjectTeam> {
+  return requestJson<ProjectTeam>("/team");
 }
 
 export function fetchSettings(): Promise<SettingsView> {
@@ -252,13 +256,9 @@ export function startOrchestration(
   return postJson<RunState>("/orchestrations", options);
 }
 
-export interface ApproveTeamOptions extends OrchestrationRunOptions {
-  roleTiers?: Record<string, ModelTier | null>;
-}
-
-export function approveOrchestratorTeam(
+export function approveTeamChange(
   orchestrationId: string,
-  options: ApproveTeamOptions = {},
+  options: OrchestrationRunOptions = {},
 ): Promise<RunState> {
   return postJson<RunState>(`/orchestrations/${orchestrationId}/approve`, options);
 }

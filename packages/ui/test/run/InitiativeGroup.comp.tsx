@@ -25,6 +25,7 @@ const INITIATIVE = orchestration({
       decision: {
         action: "start_run",
         rationale: "Run two failed on accessibility.",
+        flow: "delivery",
         task: "Announce the timer state.",
       },
     },

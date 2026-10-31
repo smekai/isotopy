@@ -65,6 +65,16 @@ export async function stageFile(cwd: string, file: string, content: string): Pro
   await git(cwd, ["add", "--", file]);
 }
 
+export async function commitStagedFile(
+  cwd: string,
+  file: string,
+  content: string,
+  message: string,
+): Promise<void> {
+  await stageFile(cwd, file, content);
+  await git(cwd, ["commit", "--no-verify", "-m", message]);
+}
+
 export async function createBranch(cwd: string, name: string): Promise<void> {
   await git(cwd, ["branch", name]);
 }

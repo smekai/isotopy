@@ -67,9 +67,9 @@ test("saving sends the edited expression rather than the one the field started w
   expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ cron: "*/30 * * * *" }));
 });
 
-test("editing an existing schedule keeps the team it was pinned to rather than resetting it", () => {
-  // Arrange — the team is the whole point of a schedule; a blind save must not lose it.
-  const pinned = scheduleView({ team: { name: "Duo", summary: "Two", roles: [] } });
+test("editing an existing schedule keeps the flow it names rather than resetting it", () => {
+  // Arrange — the flow is the whole point of a schedule; a blind save must not lose it.
+  const pinned = scheduleView({ flow: "board" });
   const props = modalProps({ schedule: pinned });
   render(<ScheduleModal {...props} />);
 
@@ -77,7 +77,7 @@ test("editing an existing schedule keeps the team it was pinned to rather than r
   fireEvent.click(screen.getByTestId("schedule-save"));
 
   // Assert
-  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ team: pinned.team }));
+  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ flow: "board" }));
 });
 
 test("a rejected expression is shown in the dialog, not swallowed on the way back", () => {
@@ -103,10 +103,10 @@ test("a parent re-render does not steal focus from the field being edited", () =
   expect(document.activeElement).toBe(cron);
 });
 
-test("editing a prompt-only schedule keeps it prompt-only, rather than attaching a starter team", () => {
-  // Arrange — the built-in poller has no team on purpose: its prompt goes to the
-  // Orchestrator. Saving an edit must not quietly move it to the fixed-team path.
-  const promptOnly = scheduleView({ team: undefined, builtIn: "board-poller" });
+test("editing a prompt-only schedule keeps it prompt-only, rather than attaching a flow", () => {
+  // Arrange — the built-in poller names no flow on purpose: its prompt goes to the
+  // Orchestrator. Saving an edit must not quietly move it to the fixed-flow path.
+  const promptOnly = scheduleView({ builtIn: "board-poller" });
   const props = modalProps({ schedule: promptOnly });
   render(<ScheduleModal {...props} />);
 
@@ -114,28 +114,39 @@ test("editing a prompt-only schedule keeps it prompt-only, rather than attaching
   fireEvent.click(screen.getByTestId("schedule-save"));
 
   // Assert
-  expect(props.onSave).toHaveBeenCalledWith(
-    expect.objectContaining({ team: undefined }),
-  );
+  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ flow: null }));
 });
 
-test("a brand new schedule still gets a starter team, since the dialog offers no team picker", () => {
-  // Arrange
-  const props = modalProps();
+test("letting the Orchestrator choose on a schedule that names a flow saves an explicit clear", () => {
+  // Arrange — an omitted flow means "unchanged" to the server, so the old flow would survive.
+  const props = modalProps({ schedule: scheduleView({ flow: "board" }), flows: ["board"] });
   render(<ScheduleModal {...props} />);
+  fireEvent.change(screen.getByTestId("schedule-flow"), { target: { value: "" } });
 
   // Act
   fireEvent.click(screen.getByTestId("schedule-save"));
 
   // Assert
-  expect(props.onSave).toHaveBeenCalledWith(
-    expect.objectContaining({ team: expect.objectContaining({ roles: expect.any(Array) }) }),
-  );
+  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ flow: null }));
+});
+
+test("a flow picked in the dialog is what the schedule is saved with", () => {
+  // Arrange
+  const props = modalProps({ flows: ["delivery", "discovery"] });
+  render(<ScheduleModal {...props} />);
+  fireEvent.change(screen.getByTestId("schedule-flow"), { target: { value: "discovery" } });
+
+  // Act
+  fireEvent.click(screen.getByTestId("schedule-save"));
+
+  // Assert
+  expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ flow: "discovery" }));
 });
 
 function modalProps(overrides: Partial<ScheduleModalProps> = {}): ScheduleModalProps {
   return {
     schedule: overrides.schedule,
+    flows: overrides.flows ?? [],
     error: overrides.error ?? null,
     d: overrides.d ?? DIRS.indigo,
     onSave: overrides.onSave ?? vi.fn(),

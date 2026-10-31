@@ -38,7 +38,7 @@ by accident and nobody defends them past their usefulness.
 [`decisions.md`](./decisions.md) naming which row above it invalidates.
 
 `vite.config.ts` reads the repo-root `.env` via `loadEnv` so the UI and server agree
-on ports, and proxies `/projects /runs /milestones /orchestrations /schedules /health
+on ports, and proxies `/projects /runs /milestones /orchestrations /schedules /team /health
 /settings /engines /automation /fs /agents` to the server. **That proxy list must stay in sync with the routes
 mounted in `packages/server/src/app.ts`** — a new server route is invisible to the
 dev UI until it is added there.
@@ -59,7 +59,8 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`run-list.ts`](../packages/ui/src/run-list.ts) | Pure rail helpers — `firstActiveRunId`, `runsForFeature`, `milestoneRefreshKey`, `runsForOrchestration`, `runsForSchedule`, `railItems` (groups an initiative's runs under it, and every episode of one schedule under that schedule). Unit-tested. |
 | [`merge-by-id.ts`](../packages/ui/src/merge-by-id.ts) | `mergeById` — replace in place, or prepend what the list has never seen. The one rule a snapshot and its live updates are merged by. Unit-tested. |
 | [`schedule-view.ts`](../packages/ui/src/schedule-view.ts) | Pure schedule view rules — the next fire time rendered **in the reader's own zone**, the on/paused label, and what a skipped window reads as. The server computes the instant; this only formats it. Unit-tested. |
-| [`orchestration.ts`](../packages/ui/src/orchestration.ts) | Pure orchestrator view rules — `teamAwaitingApproval` (status **and** decision must agree before Approve is offered), `decisionPresentation`, status labels. Unit-tested. |
+| [`orchestration.ts`](../packages/ui/src/orchestration.ts) | Pure orchestrator view rules — `teamChangeAwaitingApproval` (status **and** decision must agree before Approve is offered), `decisionPresentation`, status labels. Unit-tested. |
+| [`line-diff.ts`](../packages/ui/src/line-diff.ts) | `lineDiff` — the line diff a proposed `team.md` is shown as. Unit-tested. |
 | [`transcript.ts`](../packages/ui/src/transcript.ts) | Pure `buildTranscript(run)` — stage logs + `run.messages` → one ordered thread. Unit-tested. |
 | [`theme.ts`](../packages/ui/src/theme.ts) | Design tokens: palettes and status colours. Pure data + pure lookups. §7. |
 | [`ThemeContext.tsx`](../packages/ui/src/ThemeContext.tsx) | The app's only React context — the selected palette, persisted to `localStorage`. |
@@ -67,7 +68,7 @@ barrel `index.ts` anywhere (**A2**), named exports only.
 | [`run-utils.ts`](../packages/ui/src/run-utils.ts) | Pure run helpers (`isScratchWorkspace`, `childPath`, `resumeStageId`, `stagePresentation`). Unit-tested. |
 | [`run-events.ts`](../packages/ui/src/run-events.ts) | `applyEvent` — the pure reducer that advances `RunState`. Kept out of the hook so it needs no DOM to test. §5. |
 | [`inline-md.tsx`](../packages/ui/src/inline-md.tsx) | Pure inline-markdown tokeniser → `ReactNode[]`. Unit-testable, no state. |
-| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useSchedules`, `useAgentCatalog`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
+| `hooks/` | `useProjects`, `useSettings`, `useRunEvents`, `useRunList`, `useMilestones`, `useSchedules`, `useAgentCatalog`, `useProjectTeam`, `useOrchestration`, `useRoute`, `useFollowScroll`, `useElapsed`. §5, §6. |
 | `components/` | 14 flat component files, plus four feature folders — `setup/`, `run/`, `home/` and `schedule/`. §3. |
 | `test/` | Vitest unit specs. Never inside `src/` — `src/` is what ships, and a colocated spec lands in `dist/`. |
 | `e2e/` | Playwright. Its own runner, own config, own ports. §9. |
@@ -241,9 +242,10 @@ definition in `@isotopy/core`.
 **An orchestration run earns no tab at all: the initiative *is* the conversation.**
 `runThread(run, orchestration, runs)` layers the orchestration's turns over
 `conversationOnly(buildTranscript(run))` and sorts the union by timestamp, breaking ties
-by kind. A `propose_team` turn becomes an inline `TeamProposalCard` carrying its own
-**Approve & start**, and stays in the scrollback afterwards as what was agreed — read-only
-once approved. Each of `orchestration.runIds` becomes a link at the point that run was
+by kind. A `propose_team_change` turn becomes an inline `TeamChangeCard`: its rationale,
+a line diff of the proposed `team.md` against the file as it stands (`line-diff.ts`, pure),
+and its own **Approve & commit**. It stays in the scrollback afterwards as its rationale
+alone. Each of `orchestration.runIds` becomes a link at the point that run was
 started, minus the thread's own run, which would otherwise link to itself.
 
 **A question is suppressed only where it already reached this thread.** A turn carries the
@@ -255,12 +257,6 @@ to **that** run, and the initiative goes `awaiting_user` with nothing here to ac
 therefore renders as a link to the run that can answer it. `start_run` still returns
 nothing, because the child-run link already says it. The switch is exhaustive against
 `never`, so a new decision action is a compile error rather than a silently dropped turn.
-
-**An approved proposal shows the team that was approved.** Approval merges the user's tier
-edits into `orchestration.approvedTeam`, while the turn keeps the team as originally
-proposed — so a settled card reading `decision.team` would claim a tier the run is not
-using. The most recent `propose_team` turn renders `approvedTeam` once it is no longer
-awaiting approval, and the proposal itself while it still is.
 
 **Run chrome belongs to `RunStatusBar`, not to a scroll region.** The initiative's status
 pill, stop reason and decision error are the same question asked about the initiative that

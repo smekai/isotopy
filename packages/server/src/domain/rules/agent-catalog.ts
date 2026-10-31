@@ -1,7 +1,6 @@
 import type {
   AgentCatalogEntry,
   AgentOrigin,
-  OrchestratorTeamProposal,
   StageAgents,
 } from "@isotopy/core";
 
@@ -32,7 +31,7 @@ export interface CatalogDuty {
   title: string;
   cron: string;
   timezone: string;
-  team?: OrchestratorTeamProposal;
+  flow?: string;
   task: string;
 }
 

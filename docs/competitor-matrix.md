@@ -110,6 +110,12 @@ and Slack intake. A Review board that reviews *any* incoming pull request, a hum
 where we review only our own runs. Concurrent sessions in cloud VM sandboxes, where we run one
 active run per project. A shared team dashboard with WorkOS auth and audit.
 
+What it would take to close some of these gaps is open research, not a plan:
+per-agent tools, skills and a Studio-like editor in
+[`research/agent-configuration.md`](research/agent-configuration.md), observational memory in
+[`research/observational-memory.md`](research/observational-memory.md), concurrent agents in
+[`research/parallel-agents.md`](research/parallel-agents.md).
+
 **Where the difference is structural:**
 
 1. **Factory ends at the merge.** It adds triage and planning in front of the diff, which §8

@@ -1,5 +1,42 @@
 # Done
 
+## TASK-208: One team per project: team.md with named flows, changed only by an approved proposal
+**Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
+**Updated:** 2026-10-29 17:01
+
+Child of `TASK-206`. Depends on `TASK-207` (a role's `engine`).
+
+**Today.** The Orchestrator composes a team for every initiative (`propose_team` in `packages/server/src/domain/skills/step-tasks/orchestrate.md`), the owner approves it (`OrchestrationService.approveTeam`, `packages/server/src/services/orchestration-service.ts` ~246–291), and it lives only on that orchestration (`approvedTeam`, `composedPipeline`). Schedules and duties pin a team of their own (`packages/core/src/schedules.ts` `team?`, duty front matter in `packages/server/src/schemas/agent-definition.ts`). Nothing persists a project's team.
+
+**Wanted.**
+
+1. **`<project>/.isotopy/team.md`**: YAML front matter parsed once at the boundary with a strict zod schema (a new file under `packages/server/src/schemas/`, modelled on `agent-definition.ts`), body free text for the owner. Visible to git like `agents/` and `steps/`.
+   - `roster`: roles with `id`, `label`, `agent`, `engine` (`primary`/`secondary`), `modelTier`, `executionPolicy`.
+   - `flows`: named, ordered lists of `{ role, step }`. The bundled template has `delivery` (plan → implement → review on secondary → verify → release → closeout) and `discovery` (research roles, no Developer).
+2. **Seeding.** A project without `team.md` gets the bundled template the first time a team is needed, committed on the base like any other `.isotopy/` file the owner authors. The template replaces `FULL_DELIVERY_PIPELINE` and `PM_DEV_TEST_PIPELINE` as the source of team runs (`packages/core/src/pipelines.ts`).
+3. **The Orchestrator picks a flow, not a team.** `start_run` names a `flow` from `team.md`, with no owner approval. `propose_team` is **replaced** by `propose_team_change`: a full new `team.md` plus a rationale. The owner approves it once; Isotopy writes and commits it, and it holds for every later initiative.
+4. **Replace, don't accumulate:** in the same change remove `approvedTeam`, the team half of `approveTeam`, per-initiative composition in `orchestrate.md`, and the pinned `team` on schedules and duties (they name a `flow` instead). Keep `composeTeamPipeline` and `roleIssues` in `packages/server/src/domain/rules/team-composition.ts`, now building a pipeline from a flow.
+5. Setup shows the team and its flows, read-only plus "edit team.md"; a pending `propose_team_change` shows as a diff to approve.
+6. An invalid `team.md` refuses team runs with the validation issues, never a silent default.
+
+**Done when** component tests prove: seeding and committing the template; a run started from a named flow without approval; a `propose_team_change` approved, written, committed and used by the next initiative; a schedule naming a flow; an invalid file refused. `docs/decisions.md` records "one team per project" and the rejected alternative (a default team with per-initiative edits); `docs/architecture.md` gains the team component.
+
+Cross-platform: CRLF front matter (split on `\r?\n`), the team file path joined with `path.join`, ids validated before they reach a path; case-insensitive file systems on both Windows and macOS mean `Team.md` and `team.md` are the same file — read exactly `team.md`. Tested on Windows; macOS reasoned through.
+
+### Plan
+
+Done 2026-10-29.
+
+- `<project>/.isotopy/team.md`: `roster` (id, label, agent, engine, modelTier, executionPolicy, interactive) and named `flows` of `{ role, step }`, parsed by `schemas/team-file.ts` against `teamDefinitionSchema` in core; `.isotopy/.gitignore` lets it through, upgrading the earlier Isotopy-written one in place.
+- Bundled template `domain/skills/team/team.md` (`delivery`, `discovery`), seeded and committed on the current branch by `TeamService.seed` when an initiative starts or a schedule fires a flow.
+- `start_run` names a `flow` and runs without approval; `composeFlowPipeline` validates the whole file and builds `flow-<name>`. An invalid file refuses team runs with its issues.
+- `propose_team` replaced by `propose_team_change` (whole file + rationale), validated on consume; approval writes it, commits it on the checkout's branch and on the initiative's base (temporary-index `commit-tree`), then asks the Orchestrator what runs next.
+- Removed: `approvedTeam`, `composedPipeline`, generations and re-composition, per-role tier edits at approval, pinned teams on schedules and duties (they name a `flow`).
+- UI: `TeamChangeCard` with a line diff and Approve & commit; Setup → Team shows roster and flows; schedule dialog picks a flow; `GET /team`.
+- Tests: `standing-team.comp.ts` (seed + commit, change committed on base and used by the next initiative, invalid change refused, invalid file refused, team readable before seeding), flow composition spec, schedule naming a flow, gitignore upgrade; e2e for the change card. Base commit and gitignore guards mutation-checked.
+- Not done here: Home's fixed pipelines and Setup's gates still list `pm-dev-test`/`full-delivery` rather than the team's flows (recorded in decisions.md).
+
+---
 ## TASK-210: Release through a pull request: push, PR, preview deploy, CI, merge
 **Priority:** P1 | **Tags:** server, infra | **Epic:** Standing team
 **Updated:** 2026-10-29 09:54

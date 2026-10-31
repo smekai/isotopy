@@ -15,3 +15,4 @@ export * from "./runs.ts";
 export * from "./schedules.ts";
 export * from "./schema.ts";
 export * from "./settings.ts";
+export * from "./team.ts";

@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { orchestratorTeamProposalSchema } from "./orchestration.ts";
-import type { OrchestratorTeamProposal } from "./orchestration.ts";
 import { requiredText, timestamp } from "./schema.ts";
 
 export const SCHEDULE_REFRESH_MS = 30_000;
@@ -29,7 +27,7 @@ export const scheduleSchema = z
     cron: requiredText,
     timezone: requiredText,
     task: requiredText,
-    team: orchestratorTeamProposalSchema.optional(),
+    flow: requiredText.optional(),
     builtIn: requiredText.optional(),
     enabled: z.boolean(),
     lastFiredAt: timestamp.optional(),
@@ -58,14 +56,17 @@ export const createScheduleSchema = z
     cron: inputText,
     timezone: inputText,
     task: inputText,
-    team: orchestratorTeamProposalSchema.optional(),
+    flow: inputText.optional(),
     enabled: z.boolean().optional(),
   })
   .strict();
 
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 
-export const updateScheduleSchema = createScheduleSchema.partial().strict();
+export const updateScheduleSchema = createScheduleSchema
+  .partial()
+  .extend({ flow: inputText.nullable().optional() })
+  .strict();
 
 export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
 
@@ -78,8 +79,8 @@ export function scheduleBroughtBy(schedule: Schedule): string | undefined {
   return duty === undefined ? undefined : agent;
 }
 
-export function schedulePinsTeam(
+export function scheduleNamesFlow(
   schedule: Schedule,
-): schedule is Schedule & { team: OrchestratorTeamProposal } {
-  return schedule.team !== undefined;
+): schedule is Schedule & { flow: string } {
+  return schedule.flow !== undefined;
 }

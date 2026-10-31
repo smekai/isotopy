@@ -11,6 +11,7 @@ import { ProductProcessService } from "./services/product-process-service.ts";
 import { ProjectRegistry } from "./services/project-registry.ts";
 import { RunService } from "./services/run/run-service.ts";
 import { ScheduleService } from "./services/schedule-service.ts";
+import { TeamService } from "./services/team-service.ts";
 import { SettingsStore } from "./services/settings-store.ts";
 import { serverLogPath } from "./paths.ts";
 import { PinoLogger } from "./utils/pino-logger.ts";
@@ -24,6 +25,7 @@ const deployment = new DeploymentRunner();
 const databases = new ProjectDatabases(logger);
 const product = new ProductProcessService(automation, logger);
 const agents = new AgentCatalog(logger);
+const teams = new TeamService(agents, logger);
 const runs = new RunService(
   registry,
   settings,
@@ -41,6 +43,7 @@ const orchestrations = new OrchestrationService(
   settings,
   databases,
   agents,
+  teams,
   logger,
 );
 const schedules = new ScheduleService(
@@ -50,6 +53,7 @@ const schedules = new ScheduleService(
   databases,
   settings,
   agents,
+  teams,
   logger,
 );
 runs.registerOrchestration(orchestrations);
@@ -72,6 +76,7 @@ serve(
       deployment,
       product,
       agents,
+      teams,
       logger,
     }).fetch,
     hostname: config.host,

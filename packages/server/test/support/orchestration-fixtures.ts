@@ -1,16 +1,14 @@
-import { orchestrationSchema } from "@isotopy/core";
-import type {
-  Orchestration,
-  OrchestratorDecision,
-  OrchestratorRole,
-  OrchestratorTeamProposal,
-} from "@isotopy/core";
+import path from "node:path";
+import { stringify } from "yaml";
+import { TEAM_FILE, orchestrationSchema } from "@isotopy/core";
+import type { Orchestration, OrchestratorDecision, TeamDefinition, TeamRole } from "@isotopy/core";
 import { ORCHESTRATIONS_TABLE } from "../../src/db/json-records-table.ts";
 import { ProjectDatabases } from "../../src/db/project-databases.ts";
 import { JsonRecordRepository } from "../../src/repository/json-record-repository.ts";
 import type { ProjectRegistry } from "../../src/services/project-registry.ts";
 import { fencedBlock } from "./fake-engine.ts";
 import { RecordingLogger } from "./recording-logger.ts";
+import { writeTextFile } from "../../src/utils/text-file.ts";
 
 const AT = "2026-08-05T00:00:00.000Z";
 
@@ -44,32 +42,62 @@ export async function seedOrchestration(
   await databases.settleAll();
 }
 
-export const DEVELOPER_ROLE: OrchestratorRole = {
+export const DEVELOPER_ROLE: TeamRole = {
   id: "implementation",
-  label: "Developer",
-  skill: "developer",
-  stepTask: "implement-feature",
+  label: "Implementing",
+  agent: "developer",
 };
 
-export const QA_ROLE: OrchestratorRole = {
+export const QA_ROLE: TeamRole = {
   id: "test",
-  label: "QA Engineer",
-  skill: "tester",
-  stepTask: "verify-feature",
+  label: "Verifying",
+  agent: "tester",
   executionPolicy: "quality",
 };
 
-export const TEAM: OrchestratorTeamProposal = {
-  name: "Delivery pair",
-  summary: "Build the search endpoint and verify it",
-  roles: [DEVELOPER_ROLE, QA_ROLE],
+export const PAIR_TEAM: TeamDefinition = {
+  roster: [DEVELOPER_ROLE, QA_ROLE],
+  flows: {
+    pair: [
+      { role: "implementation", step: "implement-feature" },
+      { role: "test", step: "verify-feature" },
+    ],
+  },
 };
 
-export const TEAM_PROPOSAL: OrchestratorDecision = {
-  action: "propose_team",
+export const START_PAIR: OrchestratorDecision = {
+  action: "start_run",
   rationale: "One Developer and one QA Engineer cover this",
-  team: TEAM,
+  flow: "pair",
+  task: "Build the search endpoint and verify it",
 };
+
+export function teamFileText(team: TeamDefinition, body = "# The team\n"): string {
+  return `---\n${stringify(team)}---\n${body}`;
+}
+
+export const VERIFYING_TEAM: TeamDefinition = {
+  ...PAIR_TEAM,
+  flows: { ...PAIR_TEAM.flows, verify: [{ role: "test", step: "verify-feature" }] },
+};
+
+export const TEAM_CHANGE: OrchestratorDecision = {
+  action: "propose_team_change",
+  rationale: "Verification keeps coming back on its own",
+  team: teamFileText(VERIFYING_TEAM),
+};
+
+export async function writeTeam(dataDir: string, team: TeamDefinition = PAIR_TEAM): Promise<void> {
+  await writeTeamText(dataDir, teamFileText(team));
+}
+
+export async function writeTeamText(dataDir: string, text: string): Promise<void> {
+  await writeTextFile(path.join(dataDir, TEAM_FILE), text);
+}
+
+export function projectDataDir(root: string): string {
+  return path.join(root, ".isotopy");
+}
 
 export function fenced(decision: unknown): string {
   return `Here is what I propose.\n\n${fencedBlock("isotopy-orchestrator-decision", decision)}`;

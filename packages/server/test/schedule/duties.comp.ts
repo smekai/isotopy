@@ -5,12 +5,13 @@
 // unattended loop that turns itself on is the failure this file exists to prevent.
 import { afterEach, assert, beforeEach, describe, expect, inject, test } from "vitest";
 import { HOME_PROJECT_ID } from "@isotopy/core";
-import type { ScheduleView, SettingsView } from "@isotopy/core";
+import type { ScheduleView, SettingsView, TeamDefinition } from "@isotopy/core";
 import path from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { vi } from "vitest";
 import type { ProjectPath } from "../../src/paths.ts";
 import { writeProjectAgent, writeProjectDuty, writeProjectStep } from "../support/agent-files.ts";
+import { writeTeam } from "../support/orchestration-fixtures.ts";
 import {
   createTestApp,
   del,
@@ -187,11 +188,12 @@ describe("duties an agent brings", () => {
   beforeEach(async () => {
     await writeProjectAgent(ctx.home);
     await writeProjectStep(ctx.home);
+    await writeTeam(ctx.home, METRICS_TEAM);
   });
 
-  test("a duty an agent brings is seeded switched off, with its cron, timezone and pinned team", async () => {
+  test("a duty an agent brings is seeded switched off, with its cron, timezone and the flow it names", async () => {
     // Arrange
-    await writeProjectDuty(ctx.home, { team: METRICS_TEAM });
+    await writeProjectDuty(ctx.home, { flow: "metrics" });
     await ctx.orchestrator.shutdown();
 
     // Act
@@ -202,7 +204,7 @@ describe("duties an agent brings", () => {
       name: "Weekly metrics",
       cron: "0 8 * * 1",
       timezone: "UTC",
-      team: METRICS_TEAM,
+      flow: "metrics",
       enabled: false,
     });
     await restarted.shutdown();
@@ -251,9 +253,9 @@ describe("duties an agent brings", () => {
     expect(dutyIn(schedules)?.blockedBy).toBe("built_ins_disabled");
   });
 
-  test("an enabled duty, with the switch on, runs the team it pins", async () => {
+  test("an enabled duty, with the switch on, runs the flow it names", async () => {
     // Arrange
-    await writeProjectDuty(ctx.home, { team: METRICS_TEAM });
+    await writeProjectDuty(ctx.home, { flow: "metrics" });
     await ctx.schedules.seedDuties(home());
     await put<SettingsView>(ctx.app, "/settings/preferences", { builtInSchedules: true });
     await enable(seededDuty().id);
@@ -276,17 +278,9 @@ describe("duties an agent brings", () => {
 
 const DUTY_KEY = "growth-marketer/weekly-metrics";
 
-const METRICS_TEAM = {
-  name: "Metrics reader",
-  summary: "Read the numbers and propose the next experiment",
-  roles: [
-    {
-      id: "metrics",
-      label: "Reading the numbers",
-      skill: "growth-marketer",
-      stepTask: "plan-campaign",
-    },
-  ],
+const METRICS_TEAM: TeamDefinition = {
+  roster: [{ id: "metrics", label: "Reading the numbers", agent: "growth-marketer" }],
+  flows: { metrics: [{ role: "metrics", step: "plan-campaign" }] },
 };
 
 function home(): ProjectPath {
