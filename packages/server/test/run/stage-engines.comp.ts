@@ -100,7 +100,7 @@ test("a secondary engine that is not logged in refuses the run before any stage 
   const started = ctx.orchestrator.startComposedRun(ctx.registry.resolve(), TEAM, { task: TASK });
 
   // Assert
-  await expect(started).rejects.toThrow(/Codex/);
+  await expect(started).rejects.toThrow(/Codex.*`codex login`/);
   ctx.engine.verify();
   codex.verify();
 });

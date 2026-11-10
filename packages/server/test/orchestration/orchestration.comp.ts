@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import type { Orchestration, OrchestratorDecision, RunState, TeamDefinition } from "@isotopy/core";
+import { parkedQuestion } from "@isotopy/core";
 import {
   createTestApp,
   get,
@@ -31,6 +32,8 @@ import {
   teamFileText,
   writeTeam,
 } from "../support/orchestration-fixtures.ts";
+
+const TURN_CRASH = "Claude Code exited with code 1";
 
 const CUT_OFF_SESSION = "d0280d10-d76c-4703-a0ce-0ab42acdc2be";
 
@@ -416,6 +419,84 @@ test("a turn with no decision block needs attention and records why, rather than
   expect(orchestration.decisionError).toContain(
     "Missing fenced isotopy-orchestrator-decision JSON block",
   );
+  ctx.engine.verify();
+});
+
+test("an Orchestrator turn that fails before deciding asks its owner, naming the failure", async () => {
+  // Anticipate — the engine crashes on the Orchestrator's first turn (TASK-223).
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .fails(TURN_CRASH);
+
+  // Act
+  const run = await startOrchestration(ctx.app);
+
+  // Assert
+  const parked = await waitForOrchestration(
+    ctx.app,
+    run.orchestrationId,
+    ({ status }) => status === "awaiting_user",
+  );
+  expect(parked).toMatchObject({ turns: [], runIds: [run.id] });
+  expect(parked.turnFailure).toContain(TURN_CRASH);
+  expect(parkedQuestion(parked)).toContain(TURN_CRASH);
+  ctx.engine.verify();
+});
+
+test("the owner's reply to a failed turn starts a new Orchestrator turn that carries the reply", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator, crashing", persona: /# Role: Orchestrator/ })
+    .fails(TURN_CRASH);
+  ctx.engine
+    .anticipate({ as: "Orchestrator, after the fix", prompt: /The cause is fixed/ })
+    .reports(fenced({ action: "ask_user", question: "Which database?" }));
+
+  // Arrange
+  const run = await startOrchestration(ctx.app);
+  await waitForOrchestration(ctx.app, run.orchestrationId, ({ status }) => status === "awaiting_user");
+
+  // Act
+  const replied = await post<RunState>(ctx.app, `/orchestrations/${run.orchestrationId}/messages`, {
+    text: "The cause is fixed; please continue.",
+  });
+
+  // Assert
+  expect(replied.status).toBe(201);
+  const asked = await waitForOrchestration(
+    ctx.app,
+    run.orchestrationId,
+    ({ latestDecision }) => latestDecision?.action === "ask_user",
+  );
+  expect(asked.turnFailure).toBeUndefined();
+  expect(asked.runIds).toEqual([run.id, replied.body.id]);
+  ctx.engine.verify();
+});
+
+test("a failed turn after an answered question asks about the failure, not the old question", async () => {
+  // Anticipate
+  ctx.engine
+    .anticipate({ as: "Orchestrator question", persona: /# Role: Orchestrator/ })
+    .parks(fenced({ action: "ask_user", question: "Which database?" }), "orchestration-session");
+  ctx.engine
+    .anticipate({ as: "Orchestrator, crashing on the answer", resumeSessionId: "orchestration-session" })
+    .fails(TURN_CRASH);
+
+  // Arrange
+  const run = await startOrchestration(ctx.app);
+  await waitForStageStatus(ctx.app, run.id, "orchestrate", "asking");
+
+  // Act
+  await post(ctx.app, `/orchestrations/${run.orchestrationId}/messages`, { text: "Postgres" });
+
+  // Assert
+  const parked = await waitForOrchestration(
+    ctx.app,
+    run.orchestrationId,
+    (orchestration) => orchestration.turnFailure !== undefined,
+  );
+  expect(parked.status).toBe("awaiting_user");
+  expect(parkedQuestion(parked)).toContain(TURN_CRASH);
   ctx.engine.verify();
 });
 

@@ -132,6 +132,7 @@ export interface EngineDefinition {
   id: EngineId;
   label: string;
   description: string;
+  loginCommand: string;
   available: boolean;
   connections: EngineConnectionDefinition[];
 }
@@ -141,12 +142,13 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     id: "claude-code",
     label: "Claude Code",
     description: "Anthropic's agentic coding CLI",
+    loginCommand: "claude auth login",
     available: true,
     connections: [
       {
         id: "subscription",
         label: "Claude subscription",
-        description: "Uses your Claude Code CLI login (claude /login). Billed to your Pro/Max plan.",
+        description: "Uses your Claude Code CLI login (run `claude auth login` once in a terminal). Billed to your Pro/Max plan.",
         requiresApiKey: false,
       },
       {
@@ -162,6 +164,7 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     id: "cursor",
     label: "Cursor",
     description: "Cursor CLI agent",
+    loginCommand: "agent login",
     available: true,
     connections: [
       {
@@ -184,6 +187,7 @@ export const ENGINES: Record<EngineId, EngineDefinition> = {
     id: "codex",
     label: "Codex",
     description: "OpenAI Codex CLI",
+    loginCommand: "codex login",
     available: true,
     connections: [
       {

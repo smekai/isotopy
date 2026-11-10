@@ -11,6 +11,8 @@ const RESET_REASON = "the plan limit reset";
 export const LIMIT_LOG = {
   blocked: (profession: string, wait: string): string =>
     `${profession} hit a plan limit — waiting ${wait} for the reset`,
+  signedOut: (profession: string, loginCommand: string, wait: string): string =>
+    `${profession} stopped because the harness is signed out — run \`${loginCommand}\` in a terminal, then Retry now (it retries on its own in ${wait})`,
   resuming: (profession: string, choice: LimitChoice | undefined): string =>
     `${profession} is resuming — ${choice === undefined ? RESET_REASON : CHOICE_REASONS[choice]}`,
 } as const;

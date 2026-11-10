@@ -68,7 +68,7 @@ export class RunEngineReadiness {
     }
     if (!mode?.requiresApiKey && status?.loggedIn === false) {
       throw new Error(
-        `${ENGINES[engineId].label} is not logged in — log in from Setup → AI Harness before starting a run that uses it.`,
+        `${ENGINES[engineId].label} is not logged in — run \`${ENGINES[engineId].loginCommand}\` in a terminal, then start again.`,
       );
     }
     if (model !== undefined) {

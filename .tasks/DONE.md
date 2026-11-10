@@ -1,5 +1,29 @@
 # Done
 
+## TASK-223: An initiative starts only on a logged-in engine, and a sign-in that expires mid-run waits on the owner
+**Priority:** P1 | **Tags:** engine, server | **Epic:** Standing team
+**Updated:** 2026-11-10 18:20
+
+Found in `TASK-211` (2026-11-10). The Claude Code CLI's OAuth session expired overnight. Isotopy started the
+initiative anyway; the Orchestrator's first turn failed with "Failed to authenticate: OAuth session expired
+and could not be refreshed", and the initiative sat in `conversing` with nothing asking the owner to act.
+`/engines/claude-code/status` said "auth status unknown" rather than "logged out".
+
+**Wanted:** before a run starts, the engines its stages use are checked the same way Setup checks them; a
+logged-out engine refuses the start with the command that fixes it. An authentication failure mid-run is a
+wait on the owner, like a plan limit, not a failed stage: once the owner signs in, the stage resumes.
+
+Cross-platform: the login check already runs each CLI's own `auth status`; the hint names the command for
+the user's shell. Found on Windows; macOS untested.
+
+**Done (0.14.51):**
+- `claude auth status` exits 1 when the CLI is signed out. Its JSON is now read regardless of the exit code, so Setup and the start check see `loggedIn: false`.
+- A refused start names the engine's new `loginCommand` (`claude auth login`, `codex login`, `agent login`).
+- `SIGNED_OUT_PATTERNS` turns a mid-run authentication failure into a limit with `cause: "signed-out"`. The run parks, the log and the popup name the login command, and Retry now resumes the stage.
+- An Orchestrator turn that fails before deciding moves the initiative to `awaiting_user`.
+- Tests: `engine-sign-in.comp.ts`, `sign-in-pause.comp.ts`, the orchestration case and the `stage-engines` assertion. Each guard was mutation-checked.
+
+---
 ## TASK-211: Restart ShareTravel on the standing team, and prove the epic with one task
 **Priority:** P2 | **Tags:** setup, testing | **Epic:** Standing team
 **Updated:** 2026-11-10 13:35
