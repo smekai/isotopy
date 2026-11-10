@@ -612,6 +612,16 @@ as it does for every review decision.
 - **The minimum interval comes from `ISOTOPY_WAIT_MIN_INTERVAL_MS`** (30 s by
   default). The node test project sets it to `0` in `vitest.config.ts`, so tests
   wait milliseconds — which is why durations accept `ms`.
+- **No durable sleep is shorter than 100 ms (`SHORTEST_DURABLE_SLEEP_MS`).** Aiki
+  0.44 computes a sleep's wake-up from the request's start but stamps its row's
+  `createdAt` at insert, and reports a completed sleep's `durationMs` as
+  `completedAt - createdAt`. A sleep shorter than the insert can wake in the very
+  millisecond its row was written, get `durationMs: 0`, and fail Aiki's own output
+  schema (`number.integer > 0`): every later fetch of the run answers "Output
+  validation failed", the worker logs "Failed to fetch workflow run", and the run
+  never wakes. Only millisecond test waits were short enough to hit it, about one
+  sleep in a hundred, which is what made `stage-wait.comp.ts` flaky on CI.
+  Production waits start at 30 s and are untouched by the floor.
 - **A waiting run holds the project's admission.** Its checkout stays on the
   initiative branch, so another run could not work there anyway.
 
