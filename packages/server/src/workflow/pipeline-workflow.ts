@@ -357,6 +357,9 @@ function nextTurn(turn: StageTurn, exchange: StageExchange, sessionId: string | 
 
 const STAGE_WAIT_SLEEP = "stage-wait";
 
+// Aiki stores a sleep that ends in the millisecond its row was written as 0 ms, then cannot read the run back.
+const SHORTEST_DURABLE_SLEEP_MS = 100;
+
 interface StageWaitNotice extends StageRef {
   wait: StageWait;
 }
@@ -376,7 +379,7 @@ async function waitOut(
   let last: WaitCheckResult | undefined;
   let attemptsMade = 0;
   for (const [attempt, delay] of delays.entries()) {
-    await run.sleep(STAGE_WAIT_SLEEP, { milliseconds: delay });
+    await run.sleep(STAGE_WAIT_SLEEP, { milliseconds: Math.max(delay, SHORTEST_DURABLE_SLEEP_MS) });
     if (wait.check === undefined) {
       break;
     }

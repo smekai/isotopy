@@ -241,7 +241,7 @@ export const RELEASE_PIPELINE: PipelineDefinition = {
   id: "release",
   name: "Release",
   description:
-    "The Release Manager pushes the initiative's branch, opens its pull request, waits for CI and merges it.",
+    "The Release Manager pushes the initiative's branch, opens its pull request, runs its CI once if the project has CI, and merges it.",
   internal: true,
   groups: [
     {

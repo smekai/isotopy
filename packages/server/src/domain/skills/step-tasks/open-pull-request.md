@@ -1,6 +1,6 @@
 ---
 name: open-pull-request
-description: "Push the initiative's branch, open its pull request, wait for CI and merge it."
+description: "Push the initiative's branch, open its pull request, run its CI once if it has CI, and merge it."
 ---
 # Assignment: Release the initiative through a pull request
 
@@ -18,12 +18,24 @@ decided to ship it. Your environment names the branch and its base.
    - a table of lines changed per category, built from
      `git diff --numstat <base>...<branch>`. The categories are Source, Tests,
      Task board (`.tasks/`), Docs (other `.md`) and Other.
-3. **Wait for CI.** Do not poll in this session. End your turn with an
-   `isotopy-wait` block whose check exits 0 once every check has finished,
-   whether they passed or failed. Isotopy wakes you here with the check's output.
+3. **Run CI once.** Nothing was pushed before this point, so this is the one CI
+   run the initiative pays for. Find how the repository runs CI
+   (`.github/workflows/`, or the forge's equivalent):
+   - a workflow that runs on pull requests started when you opened yours;
+   - a workflow that runs only on demand (`workflow_dispatch`) does not start
+     by itself: start it on the branch, for example
+     `gh workflow run <workflow> --ref <branch>`;
+   - with no workflow, or none that can run for this branch (the forge has its
+     CI turned off, or starting it is refused), the project has no CI. Skip the
+     wait and settle with `"ci": "none"`: the team's review and verification
+     already passed before the release began.
+
+   Once a run has started, do not poll in this session. End your turn with an
+   `isotopy-wait` block whose check exits 0 once that run has finished, whether
+   it passed or failed. Isotopy wakes you here with the check's output.
 4. **Settle it.**
-   - **Green:** merge the pull request with a merge commit. Then switch to the
-     base and pull it with `--ff-only`.
+   - **Green, or no CI:** merge the pull request with a merge commit. Then
+     switch to the base and pull it with `--ff-only`.
    - **Red:** do not merge, and do not change the code. Name the failing checks
      and quote the end of their logs, so the team can fix them in a new run. The
      pull request stays open for the fix.
@@ -36,8 +48,8 @@ otherwise.
   "ci": "passed", "mergeCommit": "4d3c2b1a" }
 ```
 
-`ci` is `passed`, `failed` or `timed_out`. Add `failingChecks` as a list of check
-names when it is not `passed`. Leave out `mergeCommit` when nothing was merged,
+`ci` is `passed`, `failed`, `timed_out` or `none`. Add `failingChecks` as a list
+of check names when it is `failed` or `timed_out`. Leave out `mergeCommit` when nothing was merged,
 and `previewUrl` when there is no preview.
 
 If the push or the pull request itself fails, say why and report `FAIL` without

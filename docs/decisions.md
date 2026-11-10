@@ -110,8 +110,16 @@ work goes on. Shipping means a pull request whenever the repository can have one
   - pushes the branch;
   - opens the PR, or updates the open one, with whatever the machine has (`gh`, `glab`, the
     forge's API). The body carries the closeout and the per-category table of lines changed;
-  - waits for CI with an `isotopy-wait` block (2026-10-29, "An agent can wait");
-  - on green, merges the PR and fast-forwards the local base.
+  - runs the project's CI once, with an `isotopy-wait` block for the run (2026-10-29, "An agent
+    can wait"). Nothing is pushed before the release, so this is the one CI run an initiative
+    pays for: a workflow on pull requests starts with the PR, an on-demand one the Release
+    Manager starts on the branch;
+  - on green, or when the project has no CI, merges the PR and fast-forwards the local base.
+
+  **CI is optional (revised 2026-11-10, `TASK-222`).** A project with no CI for the branch
+  merges on the team's own gates, the review on the secondary engine and the Tester's
+  verification, and the release reports `ci: "none"`. Rejected: requiring CI, which on a fork
+  with Actions off left the release waiting out its six hours and merging nothing.
 
   It reports the URL, the CI result and the merge commit in an `isotopy-pull-request` block. The
   Orchestrator's merge decision is the review the PR needed.

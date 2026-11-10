@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { requiredText, requiredTexts } from "./schema.ts";
 
-export const CI_RESULTS = ["passed", "failed", "timed_out"] as const;
+export const CI_RESULTS = ["passed", "failed", "timed_out", "none"] as const;
 
 export type CiResult = (typeof CI_RESULTS)[number];
 
