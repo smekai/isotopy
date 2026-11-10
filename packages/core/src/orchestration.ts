@@ -157,6 +157,7 @@ export const orchestrationSchema = z
     brokerTurns: z.array(orchestratorBrokerTurnSchema).optional(),
     latestDecision: orchestratorDecisionSchema.optional(),
     decisionError: requiredText.optional(),
+    turnFailure: requiredText.optional(),
     branch: runBranchSchema.optional(),
     runIds: requiredTexts,
     usage: stageUsageSchema.optional(),
@@ -180,6 +181,9 @@ export function latestOrchestratorDecision(
 export function parkedQuestion(orchestration: Orchestration): string | undefined {
   if (orchestration.status !== "awaiting_user") {
     return undefined;
+  }
+  if (orchestration.turnFailure !== undefined) {
+    return `The Orchestrator's turn failed before it decided — ${orchestration.turnFailure}. Fix the cause, then reply and it takes a new turn.`;
   }
   const decision = orchestration.latestDecision;
   if (decision?.action === "ask_user" || decision?.action === "escalate_to_user") {

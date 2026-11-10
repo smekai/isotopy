@@ -306,6 +306,7 @@ export class OrchestrationService implements StageOutputConsumer {
     });
     orchestration.runIds.push(run.id);
     orchestration.status = "conversing";
+    delete orchestration.turnFailure;
     orchestration.updatedAt = nowIso();
     await this.persist(orchestration);
     return run;
@@ -354,6 +355,7 @@ export class OrchestrationService implements StageOutputConsumer {
     });
     orchestration.latestDecision = parsed.value;
     delete orchestration.decisionError;
+    delete orchestration.turnFailure;
     if (parsed.value.action === "stop" && parsed.value.merge !== true) {
       await this.end(orchestration, parsed.value, run.id);
       return undefined;
@@ -573,6 +575,7 @@ export class OrchestrationService implements StageOutputConsumer {
 
   private async awaitOwnerAfterFailedTurn(orchestration: Orchestration, run: RunState): Promise<void> {
     orchestration.status = "awaiting_user";
+    orchestration.turnFailure = failureOf(run);
     orchestration.updatedAt = nowIso();
     this.logger.error(
       `Orchestration ${orchestration.id} is waiting on its owner: the Orchestrator's turn failed before deciding — restart it once the cause is fixed`,
@@ -600,7 +603,7 @@ export class OrchestrationService implements StageOutputConsumer {
       await this.markStopped(orchestration, this.releases.stopReason(orchestration, run));
       return;
     }
-    if (orchestration && decision?.runId !== runId && isFailedTurnOf(orchestration, run)) {
+    if (orchestration && isFailedTurnOf(orchestration, run)) {
       await this.awaitOwnerAfterFailedTurn(orchestration, run);
       return;
     }
@@ -945,4 +948,12 @@ function isFailedTurnOf(orchestration: Orchestration, run: RunState): boolean {
     run.orchestrationId === orchestration.id &&
     run.status === "failed"
   );
+}
+
+function failureOf(run: RunState): string {
+  const failure = run.stages
+    .flatMap((stage) => stage.logs)
+    .filter((entry) => entry.level === "fail")
+    .at(-1);
+  return failure?.message.replace(/^✗\s*/, "") ?? `its run ended ${run.status}`;
 }

@@ -560,8 +560,10 @@ signing in, so it stays a failure with a hint. Before a run starts,
 `claude auth status` is read even when it exits 1, because a signed-out CLI exits 1
 and still prints `{"loggedIn": false}`. Reading only on exit 0 is what made Setup
 say "auth status unknown" and let the start through. When the Orchestrator's own
-turn fails before it decides, `OrchestrationService.settle` moves the initiative to
-`awaiting_user`, because nothing is thinking any more.
+turn fails, `OrchestrationService.settle` moves the initiative to `awaiting_user`
+and records the failure as `turnFailure`. `parkedQuestion` puts that failure ahead
+of any earlier `ask_user` question, so the owner's reply starts a fresh turn. The
+earlier question already had its answer in the same session.
 
 `EngineRunResult.limit` rides on a result whose `success` is `false`, because the
 process really did fail — the presence of `limit` is what reclassifies it from a
