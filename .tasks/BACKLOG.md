@@ -1,5 +1,66 @@
 # Backlog
 
+## TASK-226: A merged initiative branch is deleted locally and on origin
+**Priority:** P3 | **Tags:** server | **Epic:** Standing team
+**Updated:** 2026-11-10 13:34
+
+Found in `TASK-211` (2026-11-10). After the Release Manager merged ShareTravel's PR #2, `isotopy/ebc04443`
+stayed both in the local repository and on `origin`. The local merge path deletes its branch; the
+pull-request path does not.
+
+**Wanted:** once the release reports a merge commit, the branch is deleted on `origin` and locally, the same
+as the local merge does. A branch that is not merged is kept.
+
+Cross-platform: `git` with argument arrays, the same on both.
+
+---
+## TASK-225: Initiatives stored before team.md are dropped silently at startup
+**Priority:** P3 | **Tags:** server | **Epic:** Standing team
+**Updated:** 2026-11-10 13:34
+
+Found in `TASK-211` (2026-11-10). Starting the ShareTravel copy on 0.14.47 logged "Skipping malformed
+orchestration row in the project database" several times: the October initiatives no longer parse after
+`TASK-208` changed the orchestration shape, so they vanish from Home and their history with them.
+
+**Wanted:** a stored initiative from an earlier shape is migrated, or shown read-only as retired, rather than
+skipped. The log names the row and why. A migration keeps its own test, since it protects data users have.
+
+Cross-platform: n/a — persistence only.
+
+---
+## TASK-224: A closeout may name the task its own run moved to Done
+**Priority:** P2 | **Tags:** server | **Epic:** Standing team
+**Updated:** 2026-11-10 13:34
+
+Found in `TASK-211` (2026-11-10). The Developer moved ShareTravel's `TASK-138` to `DONE.md` as part of the
+work; the closeout then cited `TASK-138` as its source and was refused with "Closeout referenced unknown
+source tasks: TASK-138". The stage ended `failed` with a `PASS` verdict and the run `needs_attention`, though
+the Orchestrator still merged correctly.
+
+**Wanted:** a source task that exists in any board state, Done included, is known to the closeout; only an
+id that is nowhere on the board is refused. A component test closes a run whose task was moved to Done by
+its own Developer.
+
+Cross-platform: n/a — pure logic.
+
+---
+## TASK-223: An initiative starts only on a logged-in engine, and a sign-in that expires mid-run waits on the owner
+**Priority:** P1 | **Tags:** engine, server | **Epic:** Standing team
+**Updated:** 2026-11-10 13:34
+
+Found in `TASK-211` (2026-11-10). The Claude Code CLI's OAuth session expired overnight. Isotopy started the
+initiative anyway; the Orchestrator's first turn failed with "Failed to authenticate: OAuth session expired
+and could not be refreshed", and the initiative sat in `conversing` with nothing asking the owner to act.
+`/engines/claude-code/status` said "auth status unknown" rather than "logged out".
+
+**Wanted:** before a run starts, the engines its stages use are checked the same way Setup checks them; a
+logged-out engine refuses the start with the command that fixes it. An authentication failure mid-run is a
+wait on the owner, like a plan limit, not a failed stage: once the owner signs in, the stage resumes.
+
+Cross-platform: the login check already runs each CLI's own `auth status`; the hint names the command for
+the user's shell. Found on Windows; macOS untested.
+
+---
 ## TASK-220: Research: parallel agents — one instance holds one task, two developers are two instances
 **Priority:** P1 | **Tags:** core, server, engine | **Epic:** Research: modules, agents, memory, storage, UI
 **Updated:** 2026-10-30 10:39
