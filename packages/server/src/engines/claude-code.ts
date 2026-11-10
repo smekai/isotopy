@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EngineLimit, EngineStatus, ModelOptionDraft } from "@isotopy/core";
+import { ENGINES } from "@isotopy/core";
 import { detectEngineLimit } from "../domain/rules/engine-limit.ts";
 import { lookupOnPath } from "../utils/lookup-on-path.ts";
 import type { PermissionStrategy } from "../domain/rules/permission-plan.ts";
@@ -131,12 +132,13 @@ interface ClaudeAuth {
 
 async function claudeAuth(binary: string): Promise<ClaudeAuth> {
   const result = await probeCommand(binary, ["auth", "status"]);
-  const status = result.success ? claudeAuthStatus(result.stdout) : undefined;
+  // `claude auth status` exits 1 when signed out but still prints its JSON.
+  const status = claudeAuthStatus(result.stdout);
   if (status === undefined) {
     return { message: AUTH_UNKNOWN };
   }
   if (!status.loggedIn) {
-    return { loggedIn: false, message: "Not logged in — run `claude auth login` in a terminal" };
+    return { loggedIn: false, message: `Not logged in — run \`${ENGINES["claude-code"].loginCommand}\` in a terminal` };
   }
   return {
     loggedIn: true,
@@ -157,7 +159,7 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /please run \/login|not logged in/i,
     message:
-      "Claude CLI isn't logged in. Run `claude /login` in a terminal, or configure an API key in Setup → Connection.",
+      "Claude CLI isn't logged in. Run `claude auth login` in a terminal, or configure an API key in Setup → Connection.",
   },
   {
     pattern: /credit balance is too low/i,

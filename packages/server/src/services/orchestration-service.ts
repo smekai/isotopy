@@ -571,6 +571,16 @@ export class OrchestrationService implements StageOutputConsumer {
     );
   }
 
+  private async awaitOwnerAfterFailedTurn(orchestration: Orchestration, run: RunState): Promise<void> {
+    orchestration.status = "awaiting_user";
+    orchestration.updatedAt = nowIso();
+    this.logger.error(
+      `Orchestration ${orchestration.id} is waiting on its owner: the Orchestrator's turn failed before deciding — restart it once the cause is fixed`,
+      { runId: run.id },
+    );
+    await this.persist(orchestration);
+  }
+
   async settle(runId: string): Promise<void> {
     if (this.settledRuns.has(runId)) {
       return;
@@ -588,6 +598,10 @@ export class OrchestrationService implements StageOutputConsumer {
         return;
       }
       await this.markStopped(orchestration, this.releases.stopReason(orchestration, run));
+      return;
+    }
+    if (orchestration && decision?.runId !== runId && isFailedTurnOf(orchestration, run)) {
+      await this.awaitOwnerAfterFailedTurn(orchestration, run);
       return;
     }
     if (!orchestration || decision?.runId !== runId) {
@@ -924,3 +938,11 @@ interface ReviewedDecision {
 }
 
 const STAGE_ID = "orchestrate";
+
+function isFailedTurnOf(orchestration: Orchestration, run: RunState): boolean {
+  return (
+    run.pipelineId === ORCHESTRATION_PIPELINE.id &&
+    run.orchestrationId === orchestration.id &&
+    run.status === "failed"
+  );
+}

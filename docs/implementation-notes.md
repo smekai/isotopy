@@ -550,6 +550,19 @@ parked run finishes on the body it started with. The same rule keeps sentences
 out of a task's input — rewording one would change the input — so a failed
 question mediation passes its cause and the handler builds the message.
 
+**A signed-out harness waits the same way (`TASK-223`).** `SIGNED_OUT_PATTERNS`,
+checked before `LIMIT_PATTERNS`, turns "Failed to authenticate: OAuth session
+expired" and its kin into a limit with `cause: "signed-out"` and no `resetAt`. The
+run parks on the default 30 minutes, the log and the limit popup name the engine's
+`loginCommand` (`core/engines.ts`), and the owner's Retry now resumes the stage once
+they have signed in. A bad API key is not in the table: it does not clear by
+signing in, so it stays a failure with a hint. Before a run starts,
+`claude auth status` is read even when it exits 1, because a signed-out CLI exits 1
+and still prints `{"loggedIn": false}`. Reading only on exit 0 is what made Setup
+say "auth status unknown" and let the start through. When the Orchestrator's own
+turn fails before it decides, `OrchestrationService.settle` moves the initiative to
+`awaiting_user`, because nothing is thinking any more.
+
 `EngineRunResult.limit` rides on a result whose `success` is `false`, because the
 process really did fail — the presence of `limit` is what reclassifies it from a
 death into a wait. `withStderr` (`engines/log-text.ts`) exists because each

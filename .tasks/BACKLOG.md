@@ -44,23 +44,6 @@ its own Developer.
 Cross-platform: n/a — pure logic.
 
 ---
-## TASK-223: An initiative starts only on a logged-in engine, and a sign-in that expires mid-run waits on the owner
-**Priority:** P1 | **Tags:** engine, server | **Epic:** Standing team
-**Updated:** 2026-11-10 13:34
-
-Found in `TASK-211` (2026-11-10). The Claude Code CLI's OAuth session expired overnight. Isotopy started the
-initiative anyway; the Orchestrator's first turn failed with "Failed to authenticate: OAuth session expired
-and could not be refreshed", and the initiative sat in `conversing` with nothing asking the owner to act.
-`/engines/claude-code/status` said "auth status unknown" rather than "logged out".
-
-**Wanted:** before a run starts, the engines its stages use are checked the same way Setup checks them; a
-logged-out engine refuses the start with the command that fixes it. An authentication failure mid-run is a
-wait on the owner, like a plan limit, not a failed stage: once the owner signs in, the stage resumes.
-
-Cross-platform: the login check already runs each CLI's own `auth status`; the hint names the command for
-the user's shell. Found on Windows; macOS untested.
-
----
 ## TASK-220: Research: parallel agents — one instance holds one task, two developers are two instances
 **Priority:** P1 | **Tags:** core, server, engine | **Epic:** Research: modules, agents, memory, storage, UI
 **Updated:** 2026-10-30 10:39

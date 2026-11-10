@@ -147,15 +147,21 @@ export const stageUsageSchema = z
 
 export type StageUsage = z.infer<typeof stageUsageSchema>;
 
+export const ENGINE_BLOCK_CAUSES = ["plan-limit", "signed-out"] as const;
+
+export type EngineBlockCause = (typeof ENGINE_BLOCK_CAUSES)[number];
+
 export interface EngineLimit {
   raw: string;
   resetAt?: string;
+  cause?: EngineBlockCause;
 }
 
 export const runLimitSchema = z
   .object({
     raw: z.string(),
     resetAt: timestamp.optional(),
+    cause: z.enum(ENGINE_BLOCK_CAUSES).optional(),
     stageId: requiredText,
     engine: z.enum(ENGINE_IDS),
     model: z.string().optional(),

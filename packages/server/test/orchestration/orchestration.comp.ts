@@ -419,6 +419,25 @@ test("a turn with no decision block needs attention and records why, rather than
   ctx.engine.verify();
 });
 
+test("an Orchestrator turn that fails before deciding leaves the initiative waiting on its owner, not thinking", async () => {
+  // Anticipate — the engine crashes on the Orchestrator's first turn (TASK-223).
+  ctx.engine
+    .anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ })
+    .fails("Claude Code exited with code 1");
+
+  // Act
+  const run = await startOrchestration(ctx.app);
+
+  // Assert
+  const parked = await waitForOrchestration(
+    ctx.app,
+    run.orchestrationId,
+    ({ status }) => status === "awaiting_user",
+  );
+  expect(parked).toMatchObject({ status: "awaiting_user", turns: [], runIds: [run.id] });
+  ctx.engine.verify();
+});
+
 test("a decision carrying an unknown field is rejected whole, not stripped down to what fits", async () => {
   // Anticipate
   ctx.engine

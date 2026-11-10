@@ -25,6 +25,12 @@ const LIMIT_PATTERNS: Record<EngineId, RegExp> = {
   codex: /rate limit|usage limit|usage_limit_reached/i,
 };
 
+const SIGNED_OUT_PATTERNS: Record<EngineId, RegExp> = {
+  "claude-code": /failed to authenticate|oauth session expired|not logged in|please run \/login/i,
+  cursor: /not (?:logged|signed) in|login required|authentication required/i,
+  codex: /not logged in|logged out|please (?:run|use).*login|run `?codex login`?/i,
+};
+
 const RESET_CLOCK =
   /reset(?:s|ting|ted)?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(([^)]+)\))?/i;
 
@@ -130,6 +136,9 @@ export function detectEngineLimit(
   raw: string,
   now: Date = new Date(),
 ): EngineLimit | undefined {
+  if (SIGNED_OUT_PATTERNS[engine].test(raw)) {
+    return { raw, cause: "signed-out" };
+  }
   if (!LIMIT_PATTERNS[engine].test(raw)) {
     return undefined;
   }

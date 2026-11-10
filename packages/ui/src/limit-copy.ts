@@ -3,11 +3,18 @@ import type { RunLimit } from "@isotopy/core";
 
 const FALLBACK_WAIT_MINUTES = DEFAULT_LIMIT_WAIT_MS / 60_000;
 
+function headline(limit: RunLimit): string {
+  const { label, loginCommand } = ENGINES[limit.engine];
+  if (limit.cause === "signed-out") {
+    return `${label} is signed out — run \`${loginCommand}\` in a terminal, then Retry now`;
+  }
+  return limit.attempt > 1
+    ? `${label} hit its plan limit again (${limit.attempt} times on this step)`
+    : `${label} hit its plan limit`;
+}
+
 export const LIMIT_COPY = {
-  headline: (limit: RunLimit): string =>
-    limit.attempt > 1
-      ? `${ENGINES[limit.engine].label} hit its plan limit again (${limit.attempt} times on this step)`
-      : `${ENGINES[limit.engine].label} hit its plan limit`,
+  headline,
   subtitle: (stageLabel: string): string =>
     `${stageLabel} is paused — the run resumes on its own, nothing is lost.`,
   countdownSuffix: (resetLabel: string): string => `until it resets at ${resetLabel}`,

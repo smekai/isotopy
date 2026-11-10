@@ -23,6 +23,7 @@ import type {
 import {
   DEFAULT_PERMISSION_MODE,
   DEMO_PIPELINES,
+  ENGINES,
   ORCHESTRATION_PIPELINE,
   addUsage,
   applyGatePreferences,
@@ -638,10 +639,13 @@ export class RunService implements RunProjection {
     run.status = "blocked";
     run.limit = {
       stageId, engine: stage.engine, model: stage.model, raw: limit.raw,
-      resetAt: limit.resetAt, detectedAt: ts, attempt,
+      resetAt: limit.resetAt, cause: limit.cause, detectedAt: ts, attempt,
     };
     const profession = stageAgent(stage).title;
-    const message = LIMIT_LOG.blocked(profession, formatLimitWait(limitWaitMs(limit)));
+    const wait = formatLimitWait(limitWaitMs(limit));
+    const message = limit.cause === "signed-out"
+      ? LIMIT_LOG.signedOut(profession, ENGINES[stage.engine].loginCommand, wait)
+      : LIMIT_LOG.blocked(profession, wait);
     this.log(runId, stageId, { level: "warn", message });
     this.emit({ ts, type: "stage.blocked", runId, stageId, status: "blocked", message, limit: run.limit });
   }
