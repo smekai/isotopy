@@ -1,5 +1,83 @@
 # Next
 
+## TASK-221: Experiment: Isotopy as a Claude Code plugin — the same proof run without the server
+**Priority:** P1 | **Tags:** core | **Epic:** Plugin experiment
+**Updated:** 2026-11-09 09:20
+
+**Question.** Does what makes Isotopy useful — the prepared team, its flows, review by a second
+pair of eyes, release through a pull request, recurring duties, memory — survive as a **Claude Code
+plugin**, without the server, Aiki, SQLite, the engine adapters and the UI? If it does, the plugin
+replaces the app.
+
+**Why (owner discussion, 2026-11-09).** Developers live in Claude Code, Cursor and Codex. The app
+asks for Node, pnpm, a server, a browser tab and a new vocabulary before it shows anything working.
+The September re-check in `docs/competitor-matrix.md` already conceded three differentiators as
+table stakes. What is left unique is opinion and content — personas, flows, review and release
+rules, memory discipline — and that is markdown. Most of the ~34k source lines duplicate what the
+host now does itself: subagents, skills, hooks, MCP, headless `claude -p`, scheduled runs.
+
+**Scope: Claude Code only.** Keep state as markdown in the repo and the board in TaskPlanner's MCP
+server, so another host could be added later, but build nothing for one now.
+
+**Depends on `TASK-211`.** Its live ShareTravel run is the baseline this experiment is measured
+against: same project, same task, same expected path.
+
+### What moves where
+
+| In the app today | In the plugin |
+| --- | --- |
+| Personas (`agents/<id>/agent.md`, knowledge) | plugin agents (subagents) and skills |
+| Orchestrator, `team.md` and its flows | a `/isotopy:run` command that reads `team.md` and drives one flow |
+| Aiki workflows, SQLite, schedules | the OS scheduler starts `claude -p "/isotopy:tick"`; state lives in markdown in the repo |
+| Three engine adapters, stream parsing | the host is the engine |
+| Review on the secondary engine | the reviewer subagent with no access to the Developer's handoff; it may shell out to `codex exec` for a second model, or use a different Claude model, and the record says which |
+| Release through a PR, waiting on CI | a release skill using `gh`; a CI wait is a later tick that checks, not a resident process |
+| Board | TaskPlanner MCP, unchanged |
+| Persona notes, Orchestrator context | notes files per agent, curated by a duty |
+| The UI | TaskPlanner's board app plus run records as markdown — nothing else |
+
+**A tick is short and idempotent:** read state from the repo, take one step, write state, exit. A
+plan limit fails the tick and the next one retries. Cron stays the only trigger.
+
+### Self-learning, measured
+
+After each task an agent appends a short retro to its notes. A recurring curator duty compacts the
+notes and proposes edits to the agent's own `agent.md` and skills **as a pull request the owner
+approves** — the same rule `team.md` changes follow. The measure across the trial: owner
+interventions and review FAILs per task. Notes that only grow are the failure `TASK-178` already
+found.
+
+### The trial
+
+1. First planning decision: where the plugin lives — a folder here or its own repository.
+2. Build the thinnest plugin that can take one task through `team.md`'s `delivery` flow.
+3. Run `TASK-211`'s scenario through it: ShareTravel's `TASK-138`, plan → implement → isolated
+   review → verify on the local stack → PR → CI green → merge.
+4. Install one duty ("check the board, start the next thing") and leave it unattended for two
+   weeks.
+
+### What decides it
+
+- **The plugin holds** — the scenario passes with the owner doing about nothing, and the duty runs
+  for two weeks: a `docs/decisions.md` entry, README and product brief rewritten around the plugin,
+  and the app's code deleted rather than kept beside it.
+- **The plugin breaks on something only a resident server gives** — durability across a long
+  wait, parallel runs, visibility: record which, in `docs/decisions.md`, as the reason the app
+  exists.
+
+**Given up on purpose for the trial:** the run dashboard, harness-agnosticism, resuming in the
+middle of a stage.
+
+**On hold while this runs:** `TASK-213`, `TASK-214` and the research epic `TASK-215`–`TASK-220`;
+most of their questions depend on this answer.
+
+Cross-platform: the tick is started by the OS scheduler — Task Scheduler on Windows, launchd or
+cron on macOS — and the plugin's install notes give both, in PowerShell and bash. Skills hold no
+shell one-liners; anything platform-specific goes through `gh`, `git` and `claude` alone. Headless
+permissions are set the same way on both. A sleeping laptop is the open risk (`TASK-169`). The trial
+runs on Windows; macOS is untested unless the record says otherwise.
+
+---
 ## TASK-214: Home and Setup gates run the team's flows, not the fixed pipelines
 **Priority:** P2 | **Tags:** core, ui, server | **Epic:** Standing team
 **Updated:** 2026-10-29 17:01
@@ -49,25 +127,6 @@ Child of `TASK-206`. Depends on `TASK-208`; goes before `TASK-211`, so the live 
 **Done when** none of the three services is over ~600 lines, each concern above has one home, and `pnpm lint`, `typecheck`, `test`, `check`, `build` and `e2e` are green with the same test count as before, give or take moved tests.
 
 Cross-platform: no new platform surface. The gates run on Windows locally and on macOS in CI.
-
----
-## TASK-211: Restart ShareTravel on the standing team, and prove the epic with one task
-**Priority:** P2 | **Tags:** setup, testing | **Epic:** Standing team
-**Updated:** 2026-10-27 12:46
-
-Child of `TASK-206`. Depends on `TASK-207`, `TASK-208`, `TASK-209` and `TASK-210`. This is the epic's live evidence.
-
-**Setup.**
-
-1. Update the `isotopy_travel` copy (`C:\Development\smekai\isotopy_travel`, ports 9577/5273, user home `~/.isotopy-travel`) to `main`.
-2. ShareTravel fork (`C:\Development\smekai\sharetravel_ai`, `smekai/sharetravel_ai`): primary engine Claude Code, secondary Codex (installed and logged in through ChatGPT). Write its `team.md` from the template, adding a `discovery` flow with the project's `product-strategist`.
-3. Get the work already done onto GitHub: the fork's local `main` is 35 commits ahead of `origin/main` (`TASK-107`, `TASK-104`, `TASK-147`, the discovery reports). Put them on a branch, open a PR, let the fork's CI (`.github/workflows/ci.yml`) run, and merge it by the new rule.
-
-**Proof run.** One initiative for the fork's `TASK-138` (redeem an invite code in the same transaction as the sign-up). Expected path, with no owner approval: the Orchestrator picks the `delivery` flow → plan → implement on Claude → review on Codex with isolated context → verify against the local stack (`bun run init`) → release opens a PR in `smekai/sharetravel_ai` → CI green → Isotopy merges.
-
-**Done when** that run completes as expected, and a short record under `docs/dogfood/` says what happened, what the owner had to do (target: nothing), and every gap found, each filed as its own task.
-
-Cross-platform: a live Windows run; macOS is not exercised here and the record says so.
 
 ---
 ## TASK-206: Standing team — one team per project, review by a second model, release through a pull request

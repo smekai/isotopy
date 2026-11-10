@@ -956,8 +956,10 @@ goes through `OrchestrationService.end`: it aborts what still runs, then `stop` 
 `merge: true` hands over to `InitiativeRelease`. With an `origin` it starts a release run
 (`RELEASE_PIPELINE`): the deterministic `preview` stage deploys the preview target if one is
 configured. Then a Release Manager stage, told by `buildReleaseRule` that it may push this
-one branch, opens the PR with the project's own tooling, waits for CI through an
-`isotopy-wait` block, and merges, reporting through an `isotopy-pull-request` block that
+one branch, opens the PR with the project's own tooling, runs the project's CI once (the
+workflow the PR started, or an on-demand one it starts itself) and waits for it through an
+`isotopy-wait` block, or reports `ci: "none"` when the project has no CI. It then merges,
+reporting through an `isotopy-pull-request` block that
 `PullRequestConsumer` records as `run.pullRequest`. Red CI is a `FAIL` the review sends back
 as a fix run. A merged release is not reviewed; `settle` stops the initiative with the PR's
 URL. Without an `origin`, `InitiativeBranches` switches to the base and merges `--no-ff`,

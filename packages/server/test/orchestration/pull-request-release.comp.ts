@@ -1,6 +1,7 @@
 // An initiative that is merged leaves through a pull request when the project
 // has an `origin`: a Release Manager pushes, opens the PR with whatever the
-// machine has, waits for CI with an isotopy-wait block and merges. Without an
+// machine has, waits for CI with an isotopy-wait block, or not at all when the
+// project has no CI, and merges. Without an
 // origin it merges locally as before. `origin` is a real bare repository; the
 // Release Manager's own pushing and forge calls are the scripted engine's.
 import path from "node:path";
@@ -66,6 +67,32 @@ test("a Release Manager pushes only the initiative's branch, waits for CI in its
   expect(release.pullRequest).toEqual(MERGED);
   expect(stopped.stopReason).toContain(PR_URL);
   expect(ctx.engine.callAt(4).prompt).not.toContain("Do not push");
+  ctx.engine.verify();
+});
+
+test("a project with no CI merges on the team's own review and verification, and the release records that no CI ran", async () => {
+  // Arrange
+  const project = await gitProjectWithOrigin("no-ci");
+
+  // Anticipate — the Release Manager finds no CI to run, so it never waits.
+  anticipateDeliveryReviewedForMerge();
+  ctx.engine
+    .anticipate({ as: "Release Manager, finding no CI", prompt: /push `isotopy\/[^`]+` to `origin`/ })
+    .reports(released(MERGED_WITHOUT_CI));
+
+  // Act
+  const conversation = await startOrchestration(ctx.app, project.headers);
+
+  // Assert
+  const stopped = await waitForOrchestration(
+    ctx.app,
+    conversation.orchestrationId,
+    ({ status }) => status === "stopped",
+    project.headers,
+  );
+  const release = await getRun(ctx.app, stopped.runIds[2] ?? "");
+  expect(release.pullRequest).toEqual(MERGED_WITHOUT_CI);
+  expect(stopped.stopReason).toContain(PR_URL);
   ctx.engine.verify();
 });
 
@@ -203,6 +230,8 @@ const RELEASE_SESSION = "sess-release-1";
 const SEARCH = "export const search = 1;";
 
 const MERGED: RunPullRequest = { url: PR_URL, ci: "passed", mergeCommit: "4d3c2b1a" };
+
+const MERGED_WITHOUT_CI: RunPullRequest = { url: PR_URL, ci: "none", mergeCommit: "4d3c2b1a" };
 
 const OPENED: RunPullRequest = { url: PR_URL, ci: "passed" };
 

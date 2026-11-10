@@ -1,5 +1,37 @@
 # Done
 
+## TASK-222: CI is optional, and a release runs it once, on demand, before the merge
+**Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
+**Updated:** 2026-11-10 12:30
+
+Found while setting up `TASK-211`. The ShareTravel fork has a workflow file but no CI: GitHub keeps
+a fork's workflows off until the owner enables them, and the owner does not want CI on every push —
+it costs runner minutes, about five per run.
+
+**Today** a project with an `origin` always releases through a pull request whose step waits for
+`gh pr checks` to settle. With no checks that command never succeeds, so the release waits out its
+six hours, reports `timed_out`, and nothing is merged.
+
+**Wanted (owner, 2026-11-10):**
+
+- **CI is optional.** A repository with no CI that runs for the branch releases on the team's own
+  gates: the review on the secondary engine and the Tester's verification, which already come
+  before any merge. The Release Manager reports `"ci": "none"` and merges.
+- **CI runs once, on demand, right before the merge.** Nothing is pushed until the initiative is
+  ready, so CI is not paid for per commit. A workflow that only runs on demand
+  (`workflow_dispatch`) is started on the branch by the Release Manager; one that runs on pull
+  requests has started when the PR opened. Either way the release waits for that one run.
+- **Review still comes before the merge.** Unchanged: the Orchestrator sets `merge` only when the
+  roles that check the work passed.
+
+**Done when** a release with no CI merges and stops the initiative as merged, the step tells the
+Release Manager how to start an on-demand workflow, the run view names the `none` result, and the
+ShareTravel fork's workflow runs on demand only.
+
+Cross-platform: prompt and schema only; `gh` is the same command on both. The component test runs
+on Windows here; macOS untested.
+
+---
 ## TASK-208: One team per project: team.md with named flows, changed only by an approved proposal
 **Priority:** P1 | **Tags:** core, server | **Epic:** Standing team
 **Updated:** 2026-10-29 17:01

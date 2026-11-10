@@ -38,16 +38,18 @@ const CI_LABEL: Record<CiResult, string> = {
   passed: "Passed",
   failed: "Failed",
   timed_out: "Still running when the wait ran out",
+  none: "None — the project runs no CI for this branch",
 };
 
-const CI_COLOR: Record<CiResult, string> = {
-  passed: PASS_GREEN,
-  failed: FAIL_RED,
-  timed_out: SKIP_AMBER,
+const CI_COLOR: Record<CiResult, (d: Dir) => string> = {
+  passed: () => PASS_GREEN,
+  failed: () => FAIL_RED,
+  timed_out: () => SKIP_AMBER,
+  none: (d) => d.textMuted,
 };
 
-function ciText(ci: CiResult): CSSProperties {
-  return { color: CI_COLOR[ci], fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.bold };
+function ciText(ci: CiResult, d: Dir): CSSProperties {
+  return { color: CI_COLOR[ci](d), fontFamily: SANS, fontSize: FONT.md, fontWeight: WEIGHT.bold };
 }
 
 export interface PullRequestPanelProps {
@@ -68,7 +70,7 @@ export function PullRequestPanel({ pullRequest, d }: PullRequestPanelProps) {
         {pullRequest.ci === undefined ? (
           <span style={value(d)}>Waiting for checks</span>
         ) : (
-          <span style={ciText(pullRequest.ci)} data-testid="pull-request-ci">
+          <span style={ciText(pullRequest.ci, d)} data-testid="pull-request-ci">
             {CI_LABEL[pullRequest.ci]}
             {pullRequest.failingChecks && ` — ${pullRequest.failingChecks.join(", ")}`}
           </span>
