@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { permissionPlan } from "../../src/domain/rules/permission-plan.ts";
+import { permissionPlan, productionCheckRefusal } from "../../src/domain/rules/permission-plan.ts";
 
 const POSIX = true;
 const WINDOWS = false;
@@ -44,4 +44,10 @@ test("an engine whose accept-edits is not platform-bound is unaffected by the pl
     "acceptEdits",
   );
   expect(permissionPlan("codex", "acceptEdits", "unknown", WINDOWS).strategy).toBe("acceptEdits");
+});
+
+test("a production check is refused where the harness could only run it unrestricted", () => {
+  expect(productionCheckRefusal("cursor", WINDOWS)).toMatch(/Cursor/);
+  expect(productionCheckRefusal("cursor", POSIX)).toBeUndefined();
+  expect(productionCheckRefusal("claude-code", WINDOWS)).toBeUndefined();
 });

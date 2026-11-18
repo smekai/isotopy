@@ -1,12 +1,14 @@
 import path from "node:path";
 import type {
   AutomationCommand,
+  DeploymentRecord,
   DeploymentResult,
   HealthCheckStatus,
   PlatformCommand,
 } from "@isotopy/core";
 
 const DEPLOY_URL_MARKER = /^ISOTOPY_DEPLOY_URL=(https?:\/\/\S+)$/;
+const DEPLOY_REF_MARKER = /^ISOTOPY_DEPLOY_REF=(\S+)$/;
 
 export function commandForPlatform(
   command: AutomationCommand,
@@ -48,4 +50,30 @@ export function deploymentVerdict(
   healthStatus: HealthCheckStatus,
 ): DeploymentResult["verdict"] {
   return processSucceeded && healthStatus !== "failed" ? "pass" : "fail";
+}
+
+export function reportedDeploymentRef(stdout: string): string | undefined {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => DEPLOY_REF_MARKER.exec(line.trim())?.[1])
+    .filter((value): value is string => value !== undefined)
+    .at(-1);
+}
+
+export function newestFirst(records: DeploymentRecord[]): DeploymentRecord[] {
+  return [...records].sort((a, b) => b.result.startedAt.localeCompare(a.result.startedAt));
+}
+
+function putLive(record: DeploymentRecord): boolean {
+  return record.result.exitCode === 0 && record.result.ref !== undefined;
+}
+
+export function rollbackRefFor(records: DeploymentRecord[]): string | undefined {
+  const [live, ...earlier] = newestFirst(records).filter(putLive);
+  if (live === undefined || live.result.kind === "rollback") {
+    return undefined;
+  }
+  return earlier.find(
+    (record) => record.result.verdict === "pass" && record.result.ref !== live.result.ref,
+  )?.result.ref;
 }

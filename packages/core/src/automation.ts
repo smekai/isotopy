@@ -1,9 +1,12 @@
 import { z } from "zod";
+import type { RunStatus, StageVerdict } from "./runs.ts";
 import { requiredText, requiredTexts, timestamp } from "./schema.ts";
 
 export const AUTOMATION_CONFIG_VERSION = 1 as const;
 
 export const PRODUCTION_DEPLOYMENT_CONFIRMATION = "DEPLOY PRODUCTION" as const;
+
+export const PRODUCTION_ROLLBACK_CONFIRMATION = "ROLLBACK PRODUCTION" as const;
 
 export const DEPLOYMENT_PROVIDERS = ["custom", "vercel", "docker-compose"] as const;
 
@@ -12,6 +15,10 @@ export type DeploymentProvider = (typeof DEPLOYMENT_PROVIDERS)[number];
 export const DEPLOYMENT_ENVIRONMENTS = ["preview", "production"] as const;
 
 export type DeploymentEnvironment = (typeof DEPLOYMENT_ENVIRONMENTS)[number];
+
+export const DEPLOYMENT_KINDS = ["deploy", "rollback"] as const;
+
+export type DeploymentKind = (typeof DEPLOYMENT_KINDS)[number];
 
 export const DEPLOYMENT_VERDICTS = ["pass", "fail"] as const;
 
@@ -45,6 +52,10 @@ export interface UiAutomation {
   readyTimeoutMs: number;
 }
 
+export interface DeploymentVerification {
+  instructions: string;
+}
+
 export interface DeploymentAutomation {
   provider: DeploymentProvider;
   command: AutomationCommand;
@@ -52,7 +63,8 @@ export interface DeploymentAutomation {
   healthUrl?: string;
   healthTimeoutMs: number;
   healthIntervalMs: number;
-  rollbackNotes?: string;
+  rollback?: AutomationCommand;
+  verification?: DeploymentVerification;
 }
 
 export interface ProjectAutomationConfig {
@@ -78,6 +90,7 @@ const platformCommandSchema = z
 export const deploymentResultSchema = z
   .object({
     environment: z.enum(DEPLOYMENT_ENVIRONMENTS),
+    kind: z.enum(DEPLOYMENT_KINDS).optional(),
     provider: z.enum(DEPLOYMENT_PROVIDERS),
     verdict: z.enum(DEPLOYMENT_VERDICTS),
     command: platformCommandSchema,
@@ -85,6 +98,7 @@ export const deploymentResultSchema = z
     exitCode: z.number().int().nullable(),
     durationMs: z.number().int().nonnegative(),
     url: requiredText.optional(),
+    ref: requiredText.optional(),
     healthUrl: requiredText.optional(),
     healthStatus: z.enum(HEALTH_CHECK_STATUSES),
     failureMessage: requiredText.optional(),
@@ -98,6 +112,20 @@ export type DeploymentResult = z.infer<typeof deploymentResultSchema>;
 export interface DeploymentRecord {
   id: string;
   result: DeploymentResult;
+  verificationRunId?: string;
+  verificationRefusal?: string;
+}
+
+export interface ProductionVerificationState {
+  runId: string;
+  status: RunStatus;
+  verdict?: StageVerdict;
+}
+
+export interface ProductionStatus {
+  latest?: DeploymentRecord;
+  verification?: ProductionVerificationState;
+  rollbackRef?: string;
 }
 
 export const releaseManifestSchema = z

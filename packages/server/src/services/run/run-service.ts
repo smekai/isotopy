@@ -29,6 +29,7 @@ import {
   applyGatePreferences,
   createInitialRunState,
   flattenPipelineStages,
+  isProductionVerificationRun,
   isTerminalRunStatus,
   pipelineUsesEngine,
   stageAgent,
@@ -238,7 +239,7 @@ export class RunService implements RunProjection {
     pipelineId: string,
     goal: string,
   ): Promise<string | undefined> {
-    if (pipelineId === ORCHESTRATION_PIPELINE.id) {
+    if (pipelineId === ORCHESTRATION_PIPELINE.id || isProductionVerificationRun({ pipelineId })) {
       return undefined;
     }
     return this.orchestration?.ensureActive(projectPath, goal);

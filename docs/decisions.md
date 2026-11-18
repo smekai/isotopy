@@ -15,6 +15,29 @@ survivor** rather than left as a pair to reconcile.
 
 ---
 
+## 2026-11-18 — Production is checked by an agent that only reads, and rolled back by redeploying an earlier commit
+
+**Context:** after a production deploy Isotopy only polled a health URL. On ShareTravel that URL
+answered ok for months while the messaging service crash-looped and `/account` rendered garbage
+after a second visit. The only rollback aid was `rollbackNotes`, free text nothing read.
+(TASK-228.)
+
+**Decision:** a production target may set `verification.instructions`. A deploy that passes its
+health check then starts an internal **Production check** run: the QA Engineer, read only,
+against the live URL, ending in a verdict. A target may set `rollback`, a command that redeploys
+the commit in `ISOTOPY_ROLLBACK_REF`; the deploy command reports what went live with
+`ISOTOPY_DEPLOY_REF`. Isotopy proposes the commit that was live before the latest release, and
+only the owner's typed `ROLLBACK PRODUCTION` runs it. `rollbackNotes` is removed; files that
+still carry it load without it.
+
+**Rejected:** a rollback by revert commit — it rewrites history the owner reads and needs a
+second release to land, where redeploying a known-good commit is one step and `main` is fixed
+forward afterwards. An automatic rollback on a failed check — a check can be wrong, and putting
+an older build on a live product is the owner's call. A check that may write, e.g. sign up a
+throwaway user — production data belongs to real people.
+
+---
+
 ## 2026-10-29 — One team per project, in team.md, changed only by an approved proposal
 
 **Context:** the Orchestrator composed a team for every initiative (`propose_team`), the owner

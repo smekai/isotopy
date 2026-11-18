@@ -3,6 +3,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   ORCHESTRATION_PIPELINE,
   PULL_REQUEST_STEP_TASK,
+  isProductionVerificationRun,
   isReleaseRun,
   STAGE_OUTCOMES,
   STAGE_OUTPUT_PROTOCOLS,
@@ -506,7 +507,8 @@ export async function runOrchestratorReviewWork(
     !run.engine ||
     !orchestration ||
     stageId === undefined ||
-    isMergedRelease(run, status)
+    isMergedRelease(run, status) ||
+    isProductionVerificationRun(run)
   ) {
     return null;
   }

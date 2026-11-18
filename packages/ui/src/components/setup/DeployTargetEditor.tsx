@@ -11,7 +11,7 @@ import {
 } from "./setup-styles";
 import { DEPLOYMENT_OPTIONS, deploymentPreset, optionalText } from "./automation-config";
 import type { DeploymentOption } from "./automation-config";
-import { FIELD_STACK, inputStyle } from "./automation-styles";
+import { BUTTON_ROW, FIELD_STACK, blockTitle, inputStyle, toggleButton } from "./automation-styles";
 import { CommandFields } from "./CommandFields";
 
 export interface DeployTargetEditorProps {
@@ -42,7 +42,8 @@ export function DeployTargetEditor({
     const next: DeploymentAutomation = { ...target, ...update };
     if (next.url === undefined) delete next.url;
     if (next.healthUrl === undefined) delete next.healthUrl;
-    if (next.rollbackNotes === undefined) delete next.rollbackNotes;
+    if (next.rollback === undefined) delete next.rollback;
+    if (next.verification === undefined) delete next.verification;
     onChange(next);
   }
 
@@ -101,17 +102,50 @@ export function DeployTargetEditor({
                 style={inputStyle(d)}
               />
             </label>
-            <label>
-              <div style={fieldLabel(d)}>Rollback notes</div>
-              <textarea
-                aria-label={`${environment} rollback notes`}
-                value={target.rollbackNotes ?? ""}
-                onChange={(event) => change({ rollbackNotes: optionalText(event.target.value) })}
-                rows={3}
-                style={inputStyle(d)}
-              />
-            </label>
+            {environment === "production" && (
+              <label>
+                <div style={fieldLabel(d)}>Check after deploy</div>
+                <textarea
+                  aria-label={`${environment} verification instructions`}
+                  placeholder="What the QA Engineer checks on the live product, reading only. Empty: no check."
+                  value={target.verification?.instructions ?? ""}
+                  onChange={(event) => {
+                    const instructions = optionalText(event.target.value);
+                    change({ verification: instructions === undefined ? undefined : { instructions } });
+                  }}
+                  rows={3}
+                  style={inputStyle(d)}
+                />
+              </label>
+            )}
           </div>
+          {environment === "production" && (
+            <>
+              <div style={blockTitle(d)}>Rollback</div>
+              <div style={mutedCaption(d)}>
+                Redeploys an earlier commit. It receives the commit in ISOTOPY_ROLLBACK_REF.
+              </div>
+              <div style={BUTTON_ROW}>
+                <button
+                  aria-label={`${environment} rollback command toggle`}
+                  onClick={() =>
+                    change({ rollback: target.rollback === undefined ? { ...target.command } : undefined })
+                  }
+                  style={toggleButton(target.rollback !== undefined, d)}
+                >
+                  {target.rollback === undefined ? "Add a rollback command" : "Remove the rollback command"}
+                </button>
+              </div>
+              {target.rollback !== undefined && (
+                <CommandFields
+                  d={d}
+                  name={`${environment} rollback`}
+                  command={target.rollback}
+                  onChange={(rollback) => change({ rollback })}
+                />
+              )}
+            </>
+          )}
         </>
       )}
     </div>

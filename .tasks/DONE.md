@@ -1,5 +1,23 @@
 # Done
 
+## TASK-228: A production deploy is checked by the QA Engineer afterwards and can be rolled back to an earlier ref
+**Priority:** P1 | **Tags:** server, ui, core
+**Updated:** 2026-11-18 13:32
+
+Found on 2026-11-18 while preparing the first ShareTravel release through Isotopy. After a production deploy Isotopy only polls `healthUrl`. On share.travel that URL said ok while the messaging service had been down for months, and `/account` showed garbage after signing in again. `rollbackNotes` is free text that nothing reads.
+
+**Wanted:**
+- The deploy command may print `ISOTOPY_DEPLOY_REF=<sha>`. Isotopy records the ref with the deployment.
+- A production target may set `verification.instructions`. After a deploy that passes, Isotopy starts an internal one-stage run: the QA Engineer, step `verify-production`, read-only against the deployed URL, ending in `VERDICT: PASS|FAIL`.
+- A production target may set `rollback.command`. `POST /automation/rollback/production` with `{confirmation: "ROLLBACK PRODUCTION", ref?}` runs it with `ISOTOPY_ROLLBACK_REF`, by default the ref of the previous passing deployment. Then it polls health and writes evidence.
+- Setup → Automation shows the last deployment, its verification run, and "Roll back to <sha>" behind the typed confirmation.
+- `rollbackNotes` is removed.
+
+The owner decided: the check after a deploy only reads, Isotopy proposes the rollback and the owner confirms it, and a rollback redeploys an earlier commit instead of reverting it.
+
+Cross-platform: argv commands with no shell, as the deploy already does. Env vars are passed through `runSubprocess`, the same on Windows and macOS.
+
+---
 ## TASK-223: An initiative starts only on a logged-in engine, and a sign-in that expires mid-run waits on the owner
 **Priority:** P1 | **Tags:** engine, server | **Epic:** Standing team
 **Updated:** 2026-11-10 18:20

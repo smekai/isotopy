@@ -263,12 +263,40 @@ export const RELEASE_PIPELINE: PipelineDefinition = {
   ],
 };
 
+export const PRODUCTION_VERIFICATION_PIPELINE: PipelineDefinition = {
+  id: "production-verification",
+  name: "Production check",
+  description:
+    "Right after a production deploy, the QA Engineer checks the live product, reading only, and says whether it passes.",
+  internal: true,
+  groups: [
+    {
+      stages: [
+        {
+          id: "verify-production",
+          label: "Checking production",
+          skill: "tester",
+          stepTask: "verify-production",
+        },
+      ],
+    },
+  ],
+};
+
 export function isReleaseRun(run: { pipelineId: string }): boolean {
   return run.pipelineId === RELEASE_PIPELINE.id;
 }
 
+export function isProductionVerificationRun(run: { pipelineId: string }): boolean {
+  return run.pipelineId === PRODUCTION_VERIFICATION_PIPELINE.id;
+}
+
 export function isTeamRun(run: { pipelineId: string }): boolean {
-  return run.pipelineId !== ORCHESTRATION_PIPELINE.id && !isReleaseRun(run);
+  return (
+    run.pipelineId !== ORCHESTRATION_PIPELINE.id &&
+    !isReleaseRun(run) &&
+    !isProductionVerificationRun(run)
+  );
 }
 
 export const DEMO_PIPELINES: PipelineDefinition[] = [
@@ -278,6 +306,7 @@ export const DEMO_PIPELINES: PipelineDefinition[] = [
   MILESTONE_PLANNING_PIPELINE,
   ORCHESTRATION_PIPELINE,
   RELEASE_PIPELINE,
+  PRODUCTION_VERIFICATION_PIPELINE,
 ];
 
 export function flattenPipelineStages(

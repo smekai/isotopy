@@ -1,16 +1,19 @@
-import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import {
   automationConfigSchema,
   productionDeploymentRequestSchema,
+  productionRollbackRequestSchema,
 } from "../schemas/automation-file.ts";
 import { invalidRequest } from "../domain/validation.ts";
 import { InvalidAutomationConfigError } from "../services/automation-config-store.ts";
 import type { AutomationConfigStore } from "../services/automation-config-store.ts";
-import type { DeploymentRunner } from "../services/deployment-runner.ts";
 import { ProductNotConfiguredError } from "../services/product-process-service.ts";
 import type { ProductProcessService } from "../services/product-process-service.ts";
-import { persistProjectDeploymentArtifacts } from "../services/run-evidence.ts";
+import {
+  NoProductionTargetError,
+  RollbackUnavailableError,
+} from "../services/production-releases.ts";
+import type { ProductionReleases } from "../services/production-releases.ts";
 import type { ProjectRegistry } from "../services/project-registry.ts";
 import { projectScope } from "./project-scope.ts";
 import { parseRequestBody } from "./request-body.ts";
@@ -22,10 +25,17 @@ function invalidConfig(error: unknown) {
   throw error;
 }
 
+function productionRefusal(error: unknown) {
+  if (error instanceof NoProductionTargetError || error instanceof RollbackUnavailableError) {
+    return { status: 409 as const, body: { error: error.message } };
+  }
+  return { status: 422 as const, body: invalidConfig(error) };
+}
+
 export function createAutomationRoutes(
   registry: ProjectRegistry,
   automation: AutomationConfigStore,
-  deployment: DeploymentRunner,
+  production: ProductionReleases,
   product: ProductProcessService,
 ): Hono {
   return new Hono()
@@ -75,32 +85,43 @@ export function createAutomationRoutes(
       }
     })
 
+    .get("/production", async (c) => {
+      try {
+        return c.json(await production.status(projectScope(registry, c)));
+      } catch (error) {
+        return c.json(invalidConfig(error), 422);
+      }
+    })
+
     .post("/deploy/production", async (c) => {
       const parsed = await parseRequestBody(c.req, productionDeploymentRequestSchema);
       if (!parsed.ok) {
         return c.json(invalidRequest(parsed.issues), 400);
       }
-      const project = projectScope(registry, c);
-      let target;
       try {
-        target = (await automation.get(project)).production;
+        const record = await production.deploy(projectScope(registry, c), c.req.raw.signal);
+        return c.json(record, record.result.verdict === "pass" ? 200 : 502);
       } catch (error) {
-        return c.json(invalidConfig(error), 422);
+        const refusal = productionRefusal(error);
+        return c.json(refusal.body, refusal.status);
       }
-      if (target === undefined) {
-        return c.json({ error: "No production deployment target is configured" }, 409);
-      }
+    })
 
-      const id = randomUUID();
-      const logLines: string[] = [];
-      const result = await deployment.run({
-        project,
-        environment: "production",
-        target,
-        signal: c.req.raw.signal,
-        onLine: (stream, line) => logLines.push(`[${stream}] ${line}`),
-      });
-      await persistProjectDeploymentArtifacts(project, id, result, logLines);
-      return c.json({ id, result }, result.verdict === "pass" ? 200 : 502);
+    .post("/rollback/production", async (c) => {
+      const parsed = await parseRequestBody(c.req, productionRollbackRequestSchema);
+      if (!parsed.ok) {
+        return c.json(invalidRequest(parsed.issues), 400);
+      }
+      try {
+        const record = await production.rollback(
+          projectScope(registry, c),
+          parsed.value.ref,
+          c.req.raw.signal,
+        );
+        return c.json(record, record.result.verdict === "pass" ? 200 : 502);
+      } catch (error) {
+        const refusal = productionRefusal(error);
+        return c.json(refusal.body, refusal.status);
+      }
     });
 }

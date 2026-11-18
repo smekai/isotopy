@@ -3,6 +3,7 @@ import {
   AUTOMATION_CONFIG_VERSION,
   DEPLOYMENT_PROVIDERS,
   PRODUCTION_DEPLOYMENT_CONFIRMATION,
+  PRODUCTION_ROLLBACK_CONFIRMATION,
   requiredText,
 } from "@isotopy/core";
 import type {
@@ -86,9 +87,20 @@ const deploymentAutomationSchema: z.ZodType<DeploymentAutomation> = z
     healthUrl: httpUrl.optional(),
     healthTimeoutMs: z.number().int().min(100).max(MAX_READY_TIMEOUT_MS),
     healthIntervalMs: z.number().int().min(50).max(MAX_HEALTH_INTERVAL_MS),
+    rollback: automationCommandSchema.optional(),
+    verification: z.object({ instructions: text }).strict().optional(),
     rollbackNotes: text.optional(),
   })
-  .strict();
+  .strict()
+  .transform(withoutRetiredRollbackNotes);
+
+function withoutRetiredRollbackNotes(
+  target: DeploymentAutomation & { rollbackNotes?: string },
+): DeploymentAutomation {
+  const kept = { ...target };
+  delete kept.rollbackNotes;
+  return kept;
+}
 
 export const automationConfigSchema: z.ZodType<ProjectAutomationConfig> = z
   .object({
@@ -116,6 +128,13 @@ export const automationConfigSchema: z.ZodType<ProjectAutomationConfig> = z
 export const productionDeploymentRequestSchema = z
   .object({
     confirmation: z.literal(PRODUCTION_DEPLOYMENT_CONFIRMATION),
+  })
+  .strict();
+
+export const productionRollbackRequestSchema = z
+  .object({
+    confirmation: z.literal(PRODUCTION_ROLLBACK_CONFIRMATION),
+    ref: text.optional(),
   })
   .strict();
 

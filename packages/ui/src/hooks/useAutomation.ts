@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import type { DeploymentResult, ProjectAutomationConfig } from "@isotopy/core";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ProductionStatus, ProjectAutomationConfig } from "@isotopy/core";
 import {
   deployProduction,
   fetchAutomationConfig,
+  fetchProductionStatus,
+  rollbackProduction,
   updateAutomationConfig,
 } from "../api";
 
@@ -11,10 +13,12 @@ export interface AutomationController {
   error: string | null;
   saved: boolean;
   deploying: boolean;
-  production: DeploymentResult | null;
+  production: ProductionStatus | null;
   edit(next: ProjectAutomationConfig): void;
   save(): Promise<void>;
   deployToProduction(): Promise<void>;
+  rollBackProduction(ref: string): Promise<void>;
+  refreshProduction(): Promise<void>;
 }
 
 function messageOf(reason: unknown, fallback: string): string {
@@ -26,17 +30,20 @@ export function useAutomation(projectId: string): AutomationController {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [deploying, setDeploying] = useState(false);
-  const [production, setProduction] = useState<DeploymentResult | null>(null);
+  const [production, setProduction] = useState<ProductionStatus | null>(null);
+  const shownProject = useRef(projectId);
+  shownProject.current = projectId;
 
   useEffect(() => {
     let stale = false;
     setConfig(null);
     setError(null);
     setProduction(null);
-    void fetchAutomationConfig()
-      .then((value) => {
+    void Promise.all([fetchAutomationConfig(), fetchProductionStatus(projectId)])
+      .then(([value, status]) => {
         if (!stale) {
           setConfig(value);
+          setProduction(status);
         }
       })
       .catch((reason: unknown) => {
@@ -68,23 +75,72 @@ export function useAutomation(projectId: string): AutomationController {
     }
   }, [config]);
 
-  const deployToProduction = useCallback(async () => {
-    if (config === null) {
-      return;
-    }
-    setError(null);
-    setSaved(false);
-    setDeploying(true);
-    setProduction(null);
+  const refreshStatusOf = useCallback(async (project: string) => {
     try {
-      setConfig(await updateAutomationConfig(config));
-      setProduction((await deployProduction()).result);
+      const status = await fetchProductionStatus(project);
+      if (shownProject.current === project) {
+        setProduction(status);
+      }
     } catch (reason) {
-      setError(messageOf(reason, "Production deployment failed"));
-    } finally {
-      setDeploying(false);
+      if (shownProject.current === project) {
+        setError(messageOf(reason, "Could not read the production status"));
+      }
     }
-  }, [config]);
+  }, []);
 
-  return { config, error, saved, deploying, production, edit, save, deployToProduction };
+  const refreshProduction = useCallback(() => refreshStatusOf(projectId), [projectId, refreshStatusOf]);
+
+  const runProductionAction = useCallback(
+    async (action: (project: string) => Promise<unknown>, failure: string) => {
+      if (config === null) {
+        return;
+      }
+      const project = projectId;
+      const stillShown = () => shownProject.current === project;
+      setError(null);
+      setSaved(false);
+      setDeploying(true);
+      try {
+        const savedConfig = await updateAutomationConfig(config, project);
+        if (stillShown()) {
+          setConfig(savedConfig);
+        }
+        await action(project);
+      } catch (reason) {
+        if (stillShown()) {
+          setError(messageOf(reason, failure));
+        }
+      } finally {
+        if (stillShown()) {
+          setDeploying(false);
+        }
+        await refreshStatusOf(project);
+      }
+    },
+    [config, projectId, refreshStatusOf],
+  );
+
+  const deployToProduction = useCallback(
+    () => runProductionAction(deployProduction, "Production deployment failed"),
+    [runProductionAction],
+  );
+
+  const rollBackProduction = useCallback(
+    (ref: string) =>
+      runProductionAction((project) => rollbackProduction(project, ref), "Production rollback failed"),
+    [runProductionAction],
+  );
+
+  return {
+    config,
+    error,
+    saved,
+    deploying,
+    production,
+    edit,
+    save,
+    deployToProduction,
+    rollBackProduction,
+    refreshProduction,
+  };
 }

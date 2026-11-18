@@ -76,3 +76,13 @@ export function permissionPlan(
     }
   }
 }
+
+export const PRODUCTION_CHECK_PERMISSION_MODE: EnginePermissionMode = "acceptEdits";
+
+export function productionCheckRefusal(engineId: EngineId, posix: boolean): string | undefined {
+  const plan = permissionPlan(engineId, PRODUCTION_CHECK_PERMISSION_MODE, "unknown", posix);
+  if (plan.strategy !== "unrestricted") {
+    return undefined;
+  }
+  return `The production check needs a restricted permission mode, and ${ENGINES[engineId].label} has none on this machine: ${plan.notice ?? "it would run unrestricted"}`;
+}

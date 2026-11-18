@@ -17,6 +17,7 @@ import type { AgentCatalog } from "./services/agent-catalog.ts";
 import type { TeamService } from "./services/team-service.ts";
 import type { AutomationConfigStore } from "./services/automation-config-store.ts";
 import type { DeploymentRunner } from "./services/deployment-runner.ts";
+import { ProductionReleases } from "./services/production-releases.ts";
 import type { MilestoneService } from "./services/milestone-service.ts";
 import type { ModelRosterService } from "./services/model-roster-service.ts";
 import type { OrchestrationService } from "./services/orchestration-service.ts";
@@ -80,7 +81,8 @@ export function createApp({
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", createEngineRoutes(rosters));
   app.route("/settings", createSettingsRoutes(registry, settings));
-  app.route("/automation", createAutomationRoutes(registry, automation, deployment, product));
+  const production = new ProductionReleases(automation, deployment, runs, settings);
+  app.route("/automation", createAutomationRoutes(registry, automation, production, product));
   app.route("/runs", createRunRoutes(runs, orchestrations, registry));
   app.route("/schedules", createScheduleRoutes(schedules, registry));
   app.route("/agents", createAgentRoutes(agents, registry));
