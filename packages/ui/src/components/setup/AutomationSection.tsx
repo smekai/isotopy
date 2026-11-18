@@ -20,6 +20,7 @@ import {
 } from "./automation-styles";
 import { DeployTargetEditor } from "./DeployTargetEditor";
 import { ProductStartEditor } from "./ProductStartEditor";
+import { ProductionStatusPanel } from "./ProductionStatusPanel";
 import { ValidationCommandsEditor } from "./ValidationCommandsEditor";
 
 const PRODUCTION_PROMPT =
@@ -113,13 +114,15 @@ export function AutomationSection({ d, projectId }: AutomationSectionProps) {
       </div>
 
       {automation.saved && <div style={statusStyle(OK_GREEN)}>Automation saved.</div>}
-      {automation.production !== null && (
-        <div
-          style={statusStyle(automation.production.verdict === "pass" ? OK_GREEN : ERROR_RED)}
-        >
-          Production deployment {automation.production.verdict === "pass" ? "passed" : "failed"}
-          {automation.production.url === undefined ? "" : ` — ${automation.production.url}`}
-        </div>
+      {environment === "production" && automation.production !== null && (
+        <ProductionStatusPanel
+          d={d}
+          status={automation.production}
+          canRollBack={config.production?.rollback !== undefined}
+          busy={automation.deploying}
+          onRollBack={automation.rollBackProduction}
+          onRefresh={automation.refreshProduction}
+        />
       )}
       {automation.error !== null && (
         <div style={statusStyle(ERROR_RED)}>{automation.error}</div>

@@ -1,6 +1,8 @@
 import type {
+  AutomationCommand,
   DeploymentAutomation,
   DeploymentEnvironment,
+  DeploymentKind,
   DeploymentResult,
   HealthCheckStatus,
 } from "@isotopy/core";
@@ -8,6 +10,7 @@ import {
   commandForPlatform,
   deploymentVerdict,
   deploymentWorkingDirectory,
+  reportedDeploymentRef,
   reportedDeploymentUrl,
 } from "../domain/rules/deployment.ts";
 import { runSubprocess } from "../engines/subprocess.ts";
@@ -34,6 +37,9 @@ export interface RunDeploymentInput {
   project: ProjectPath;
   environment: DeploymentEnvironment;
   target: DeploymentAutomation;
+  kind?: DeploymentKind;
+  command?: AutomationCommand;
+  env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   onLine?: (stream: SubprocessStream, line: string) => void;
 }
@@ -58,17 +64,20 @@ export class DeploymentRunner {
   async run(input: RunDeploymentInput): Promise<DeploymentResult> {
     const { target } = input;
     const startedAt = this.deps.now();
-    const command = commandForPlatform(target.command, this.deps.platform);
-    const cwd = deploymentWorkingDirectory(input.project.root, target.command.cwd);
+    const configured = input.command ?? target.command;
+    const command = commandForPlatform(configured, this.deps.platform);
+    const cwd = deploymentWorkingDirectory(input.project.root, configured.cwd);
     const execution = await this.deps.run({
       command: command.executable,
       args: command.args,
       cwd,
-      timeoutMs: target.command.timeoutMs,
+      env: input.env === undefined ? undefined : { ...process.env, ...input.env },
+      timeoutMs: configured.timeoutMs,
       signal: input.signal,
       onLine: input.onLine,
     });
     const url = reportedDeploymentUrl(execution.stdout, target.url);
+    const ref = reportedDeploymentRef(execution.stdout);
     const healthUrl = target.healthUrl ?? url;
     const healthStatus = await this.checkHealth(target, healthUrl, execution.success, input.signal);
     const failureMessage =
@@ -78,6 +87,7 @@ export class DeploymentRunner {
 
     return {
       environment: input.environment,
+      kind: input.kind,
       provider: target.provider,
       verdict: deploymentVerdict(execution.success, healthStatus),
       command,
@@ -85,6 +95,7 @@ export class DeploymentRunner {
       exitCode: execution.exitCode,
       durationMs: this.deps.now().getTime() - startedAt.getTime(),
       url,
+      ref,
       healthUrl,
       healthStatus,
       failureMessage,

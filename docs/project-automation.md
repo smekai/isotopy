@@ -73,7 +73,7 @@ downstream can read.
 | --- | --- |
 | `.isotopy/runs/<run-id>/release/` | `release.json`, `release.md` |
 | `.isotopy/runs/<run-id>/deploy/` | `deployment.json`, `deployment.md`, `deploy.log` |
-| `.isotopy/deployments/<deployment-id>/` | The same three files, for a production deployment, which belongs to the project rather than to a run |
+| `.isotopy/deployments/<deployment-id>/` | The same three files, for a production deployment or rollback, which belongs to the project rather than to a run; plus `verification.json` naming the run that checked it |
 
 ## Production
 
@@ -82,6 +82,33 @@ It is a separate Setup action that requires a browser confirmation *and* an API
 request carrying the literal string `DEPLOY PRODUCTION`. A confirmed request
 against a project with no production target answers `409` rather than doing
 nothing quietly.
+
+A deploy command may also print `ISOTOPY_DEPLOY_REF=<commit>`; the last such line
+is recorded as the commit that went live. Without it, Isotopy cannot offer a
+rollback, because it does not know what was live before.
+
+### The check after a deploy
+
+With `production.verification.instructions` set, a deploy that passes its health
+check starts an internal one-stage run, **Production check**: the QA Engineer on
+the `verify-production` step, handed the live URL, the commit now live, the
+commit a rollback would return to, and the project's instructions. It only reads
+— production holds real people's data — and ends `VERDICT: PASS` or
+`VERDICT: FAIL`. A health URL only proves the servers answer; this is the check
+that a person can use the product. If another run is active, the check does not
+start and the deployment says why.
+
+### Rollback
+
+Rollback redeploys an earlier commit; it never reverts one. With
+`production.rollback` set, `POST /automation/rollback/production` carrying the
+literal `ROLLBACK PRODUCTION` runs that command with `ISOTOPY_ROLLBACK_REF` set,
+then health-checks it like a deploy. The commit defaults to the one live before
+the latest release; after a rollback no further one is offered, so Isotopy never
+proposes returning to the release it just rolled back from. A named `ref`
+overrides the default. Setup shows the last deployment, its check and the
+**Roll back to …** button, which asks for the phrase typed out. Isotopy proposes;
+the owner confirms.
 
 ## Presets
 

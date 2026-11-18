@@ -1,6 +1,7 @@
 import type {
   AgentCatalogEntry,
   DeploymentRecord,
+  ProductionStatus,
   Milestone,
   MilestonePlan,
   ProjectAutomationConfig,
@@ -29,6 +30,7 @@ import {
   ORCHESTRATION_UPDATED_EVENT,
   PROJECT_HEADER,
   PRODUCTION_DEPLOYMENT_CONFIRMATION,
+  PRODUCTION_ROLLBACK_CONFIRMATION,
   RUN_EVENT_TYPES,
   RUN_SUMMARY_EVENT,
 } from "@isotopy/core";
@@ -178,6 +180,17 @@ export function deployProduction(): Promise<DeploymentRecord> {
   return postJson<DeploymentRecord>("/automation/deploy/production", {
     confirmation: PRODUCTION_DEPLOYMENT_CONFIRMATION,
   });
+}
+
+export function rollbackProduction(ref: string): Promise<DeploymentRecord> {
+  return postJson<DeploymentRecord>("/automation/rollback/production", {
+    confirmation: PRODUCTION_ROLLBACK_CONFIRMATION,
+    ref,
+  });
+}
+
+export function fetchProductionStatus(): Promise<ProductionStatus> {
+  return requestJson<ProductionStatus>("/automation/production");
 }
 
 export interface EngineConnectionUpdate {

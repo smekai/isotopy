@@ -1,5 +1,18 @@
 # Backlog
 
+## TASK-227: A release with red CI goes to the fix path even when its verdict line is missing
+**Priority:** P2 | **Tags:** server, engine
+**Updated:** 2026-11-10 18:43
+
+Found on 2026-11-10 in the ShareTravel deploy initiative e7b2c3c2. Release run 6b657e53 reported `{"ci": "failed", "failingChecks": ["build-and-test / Lint"]}` and ended its answer with a bare `FAIL` instead of `VERDICT: FAIL`. Because of that the `pull-request` stage passed. `settle` then refused the release with `RELEASE_NOT_MERGED` ("merge it, or say why it cannot be") and parked the initiative on its owner. With the right verdict line, red CI would have gone through the review to a fix run on its own.
+
+**Wanted:**
+- A release whose `isotopy-pull-request` block says `ci: "failed"` is treated as red CI whatever its verdict line says, and goes to the same review → fix run path. The owner is not asked.
+- A missing verdict on a release stage is not read as PASS.
+
+Cross-platform: server logic only, nothing platform-specific.
+
+---
 ## TASK-226: A merged initiative branch is deleted locally and on origin
 **Priority:** P3 | **Tags:** server | **Epic:** Standing team
 **Updated:** 2026-11-10 13:34

@@ -3,21 +3,37 @@
 // saved — and that production never deploys without an explicit confirmation.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import type { ProjectAutomationConfig } from "@isotopy/core";
+import type { ProductionStatus, ProjectAutomationConfig } from "@isotopy/core";
 import { AutomationSection } from "../../src/components/setup/AutomationSection";
 import type { AutomationSectionProps } from "../../src/components/setup/AutomationSection";
 import { DIRS } from "../../src/theme";
-import { deployProduction, fetchAutomationConfig, updateAutomationConfig } from "../../src/api";
+import {
+  deployProduction,
+  fetchAutomationConfig,
+  fetchProductionStatus,
+  rollbackProduction,
+  updateAutomationConfig,
+} from "../../src/api";
 
 vi.mock("../../src/api", () => ({
   fetchAutomationConfig: vi.fn(),
+  fetchProductionStatus: vi.fn(),
   updateAutomationConfig: vi.fn(),
   deployProduction: vi.fn(),
+  rollbackProduction: vi.fn(),
 }));
 
 const fetchConfig = vi.mocked(fetchAutomationConfig);
+const fetchStatus = vi.mocked(fetchProductionStatus);
 const saveConfig = vi.mocked(updateAutomationConfig);
 const deploy = vi.mocked(deployProduction);
+const rollBack = vi.mocked(rollbackProduction);
+
+const LIVE: ProductionStatus = {
+  latest: { id: "d2", result: { ...deploymentResult(), ref: "new2222bbbb" } },
+  verification: { runId: "r1", status: "completed", verdict: "FAIL" },
+  rollbackRef: "old1111aaaa",
+};
 
 afterEach(() => {
   cleanup();
@@ -130,14 +146,62 @@ test("confirming the prompt deploys production and reports the URL it returned",
   render(<AutomationSection {...sectionProps()} />);
   await screen.findByText("Deploy targets");
   fireEvent.click(screen.getByText("Production"));
+  fetchStatus.mockResolvedValue({ latest: { id: "d1", result: deploymentResult() } });
 
   // Act
   fireEvent.click(screen.getByText("Deploy production…"));
 
   // Assert
-  expect(
-    await screen.findByText(/Production deployment passed — https:\/\/live\.test/),
-  ).toBeTruthy();
+  expect(await screen.findByText(/Deployment passed — https:\/\/live\.test/)).toBeTruthy();
+});
+
+test("a failed production check offers the rollback, and typing the phrase redeploys the earlier commit", async () => {
+  // Arrange
+  served(automationConfig({ production: rollbackTarget() }), LIVE);
+  saveConfig.mockImplementation((config) => Promise.resolve(config));
+  rollBack.mockResolvedValue({ id: "d3", result: { ...deploymentResult(), kind: "rollback", ref: "old1111aaaa" } });
+  vi.stubGlobal("prompt", vi.fn().mockReturnValue("ROLLBACK PRODUCTION"));
+  render(<AutomationSection {...sectionProps()} />);
+  await screen.findByText("Deploy targets");
+  fireEvent.click(screen.getByText("Production"));
+  expect(await screen.findByText(/Production check: FAIL/)).toBeTruthy();
+
+  // Act
+  fireEvent.click(screen.getByText("Roll back to old1111…"));
+
+  // Assert
+  await waitFor(() => expect(rollBack).toHaveBeenCalledWith("old1111aaaa"));
+});
+
+test("anything but the exact phrase leaves production where it is", async () => {
+  // Arrange
+  served(automationConfig({ production: rollbackTarget() }), LIVE);
+  vi.stubGlobal("prompt", vi.fn().mockReturnValue("rollback"));
+  render(<AutomationSection {...sectionProps()} />);
+  await screen.findByText("Deploy targets");
+  fireEvent.click(screen.getByText("Production"));
+  await screen.findByText("Roll back to old1111…");
+
+  // Act
+  fireEvent.click(screen.getByText("Roll back to old1111…"));
+
+  // Assert — a confirmed rollback saves the form first, synchronously, so no save means no rollback.
+  expect(saveConfig).not.toHaveBeenCalled();
+  expect(rollBack).not.toHaveBeenCalled();
+});
+
+test("no rollback is offered while the target has no rollback command", async () => {
+  // Arrange
+  served(automationConfig({ production: vercelTarget() }), LIVE);
+  render(<AutomationSection {...sectionProps()} />);
+  await screen.findByText("Deploy targets");
+
+  // Act
+  fireEvent.click(screen.getByText("Production"));
+
+  // Assert
+  expect(await screen.findByText(/Production check: FAIL/)).toBeTruthy();
+  expect(screen.queryByText(/Roll back to/)).toBeNull();
 });
 
 test("a Windows override that already differs survives an edit to the base arguments", async () => {
@@ -210,8 +274,16 @@ function sectionProps(overrides: Partial<AutomationSectionProps> = {}): Automati
   };
 }
 
-function served(config: ProjectAutomationConfig): void {
+function served(config: ProjectAutomationConfig, status: ProductionStatus = {}): void {
   fetchConfig.mockResolvedValue(config);
+  fetchStatus.mockResolvedValue(status);
+}
+
+function rollbackTarget() {
+  return {
+    ...vercelTarget(),
+    rollback: { executable: "node", args: ["scripts/rollback-production.mjs"], timeoutMs: 60_000 },
+  };
 }
 
 function automationConfig(
