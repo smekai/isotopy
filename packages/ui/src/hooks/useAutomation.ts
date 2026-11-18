@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProductionStatus, ProjectAutomationConfig } from "@isotopy/core";
 import {
   deployProduction,
@@ -31,13 +31,15 @@ export function useAutomation(projectId: string): AutomationController {
   const [saved, setSaved] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [production, setProduction] = useState<ProductionStatus | null>(null);
+  const shownProject = useRef(projectId);
+  shownProject.current = projectId;
 
   useEffect(() => {
     let stale = false;
     setConfig(null);
     setError(null);
     setProduction(null);
-    void Promise.all([fetchAutomationConfig(), fetchProductionStatus()])
+    void Promise.all([fetchAutomationConfig(), fetchProductionStatus(projectId)])
       .then(([value, status]) => {
         if (!stale) {
           setConfig(value);
@@ -73,33 +75,49 @@ export function useAutomation(projectId: string): AutomationController {
     }
   }, [config]);
 
-  const refreshProduction = useCallback(async () => {
+  const refreshStatusOf = useCallback(async (project: string) => {
     try {
-      setProduction(await fetchProductionStatus());
+      const status = await fetchProductionStatus(project);
+      if (shownProject.current === project) {
+        setProduction(status);
+      }
     } catch (reason) {
-      setError(messageOf(reason, "Could not read the production status"));
+      if (shownProject.current === project) {
+        setError(messageOf(reason, "Could not read the production status"));
+      }
     }
   }, []);
 
+  const refreshProduction = useCallback(() => refreshStatusOf(projectId), [projectId, refreshStatusOf]);
+
   const runProductionAction = useCallback(
-    async (action: () => Promise<unknown>, failure: string) => {
+    async (action: (project: string) => Promise<unknown>, failure: string) => {
       if (config === null) {
         return;
       }
+      const project = projectId;
+      const stillShown = () => shownProject.current === project;
       setError(null);
       setSaved(false);
       setDeploying(true);
       try {
-        setConfig(await updateAutomationConfig(config));
-        await action();
+        const savedConfig = await updateAutomationConfig(config, project);
+        if (stillShown()) {
+          setConfig(savedConfig);
+        }
+        await action(project);
       } catch (reason) {
-        setError(messageOf(reason, failure));
+        if (stillShown()) {
+          setError(messageOf(reason, failure));
+        }
       } finally {
-        setDeploying(false);
-        await refreshProduction();
+        if (stillShown()) {
+          setDeploying(false);
+        }
+        await refreshStatusOf(project);
       }
     },
-    [config, refreshProduction],
+    [config, projectId, refreshStatusOf],
   );
 
   const deployToProduction = useCallback(
@@ -108,7 +126,8 @@ export function useAutomation(projectId: string): AutomationController {
   );
 
   const rollBackProduction = useCallback(
-    (ref: string) => runProductionAction(() => rollbackProduction(ref), "Production rollback failed"),
+    (ref: string) =>
+      runProductionAction((project) => rollbackProduction(project, ref), "Production rollback failed"),
     [runProductionAction],
   );
 

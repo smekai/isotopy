@@ -64,15 +64,16 @@ export function newestFirst(records: DeploymentRecord[]): DeploymentRecord[] {
   return [...records].sort((a, b) => b.result.startedAt.localeCompare(a.result.startedAt));
 }
 
+function putLive(record: DeploymentRecord): boolean {
+  return record.result.exitCode === 0 && record.result.ref !== undefined;
+}
+
 export function rollbackRefFor(records: DeploymentRecord[]): string | undefined {
-  const [latest, ...older] = newestFirst(records).filter((record) => record.result.verdict === "pass");
-  if (latest === undefined || latest.result.kind === "rollback" || latest.result.ref === undefined) {
+  const [live, ...earlier] = newestFirst(records).filter(putLive);
+  if (live === undefined || live.result.kind === "rollback") {
     return undefined;
   }
-  return older.find(
-    (record) =>
-      record.result.kind !== "rollback" &&
-      record.result.ref !== undefined &&
-      record.result.ref !== latest.result.ref,
+  return earlier.find(
+    (record) => record.result.verdict === "pass" && record.result.ref !== live.result.ref,
   )?.result.ref;
 }

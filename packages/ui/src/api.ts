@@ -43,8 +43,8 @@ export function setActiveProjectId(projectId: string): void {
   activeProjectId = projectId;
 }
 
-function projectHeaders(extra?: HeadersInit): HeadersInit {
-  return { ...(extra as Record<string, string>), [PROJECT_HEADER]: activeProjectId };
+function projectHeaders(extra?: HeadersInit, projectId: string = activeProjectId): HeadersInit {
+  return { ...(extra as Record<string, string>), [PROJECT_HEADER]: projectId };
 }
 
 export interface ErrorBody {
@@ -57,10 +57,10 @@ export function failureMessage(body: ErrorBody): string | undefined {
   return issues !== undefined && issues.length > 0 ? issues : body.error;
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(path: string, init?: RequestInit, projectId?: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: projectHeaders(init?.headers),
+    headers: projectHeaders(init?.headers, projectId),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ErrorBody;
@@ -69,12 +69,16 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function postJson<T>(path: string, body?: unknown): Promise<T> {
-  return requestJson<T>(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+function postJson<T>(path: string, body?: unknown, projectId?: string): Promise<T> {
+  return requestJson<T>(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    projectId,
+  );
 }
 
 function patchJson<T>(path: string, body: unknown): Promise<T> {
@@ -156,12 +160,17 @@ export function fetchAutomationConfig(): Promise<ProjectAutomationConfig> {
 
 export function updateAutomationConfig(
   config: ProjectAutomationConfig,
+  projectId?: string,
 ): Promise<ProjectAutomationConfig> {
-  return requestJson<ProjectAutomationConfig>("/automation", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(config),
-  });
+  return requestJson<ProjectAutomationConfig>(
+    "/automation",
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    },
+    projectId,
+  );
 }
 
 export function fetchProductStatus(): Promise<ProductProcessStatus> {
@@ -176,21 +185,24 @@ export function stopProduct(): Promise<ProductProcessStatus> {
   return postJson<ProductProcessStatus>("/automation/product/stop");
 }
 
-export function deployProduction(): Promise<DeploymentRecord> {
-  return postJson<DeploymentRecord>("/automation/deploy/production", {
-    confirmation: PRODUCTION_DEPLOYMENT_CONFIRMATION,
-  });
+export function deployProduction(projectId: string): Promise<DeploymentRecord> {
+  return postJson<DeploymentRecord>(
+    "/automation/deploy/production",
+    { confirmation: PRODUCTION_DEPLOYMENT_CONFIRMATION },
+    projectId,
+  );
 }
 
-export function rollbackProduction(ref: string): Promise<DeploymentRecord> {
-  return postJson<DeploymentRecord>("/automation/rollback/production", {
-    confirmation: PRODUCTION_ROLLBACK_CONFIRMATION,
-    ref,
-  });
+export function rollbackProduction(projectId: string, ref: string): Promise<DeploymentRecord> {
+  return postJson<DeploymentRecord>(
+    "/automation/rollback/production",
+    { confirmation: PRODUCTION_ROLLBACK_CONFIRMATION, ref },
+    projectId,
+  );
 }
 
-export function fetchProductionStatus(): Promise<ProductionStatus> {
-  return requestJson<ProductionStatus>("/automation/production");
+export function fetchProductionStatus(projectId: string): Promise<ProductionStatus> {
+  return requestJson<ProductionStatus>("/automation/production", undefined, projectId);
 }
 
 export interface EngineConnectionUpdate {

@@ -170,7 +170,28 @@ test("a failed production check offers the rollback, and typing the phrase redep
   fireEvent.click(screen.getByText("Roll back to old1111…"));
 
   // Assert
-  await waitFor(() => expect(rollBack).toHaveBeenCalledWith("old1111aaaa"));
+  await waitFor(() => expect(rollBack).toHaveBeenCalledWith("project-1", "old1111aaaa"));
+});
+
+test("a rollback confirmed in one project goes to that project even if the owner switches away while it saves", async () => {
+  // Arrange — the save is held open until the owner has moved to another project.
+  served(automationConfig({ production: rollbackTarget() }), LIVE);
+  let finishSave: (config: ProjectAutomationConfig) => void = () => undefined;
+  saveConfig.mockImplementation(() => new Promise((resolve) => (finishSave = resolve)));
+  rollBack.mockResolvedValue({ id: "d3", result: deploymentResult() });
+  vi.stubGlobal("prompt", vi.fn().mockReturnValue("ROLLBACK PRODUCTION"));
+  const view = render(<AutomationSection {...sectionProps({ projectId: "project-a" })} />);
+  await screen.findByText("Deploy targets");
+  fireEvent.click(screen.getByText("Production"));
+  fireEvent.click(await screen.findByText("Roll back to old1111…"));
+  view.rerender(<AutomationSection {...sectionProps({ projectId: "project-b" })} />);
+
+  // Act
+  finishSave(automationConfig({ production: rollbackTarget() }));
+
+  // Assert
+  await waitFor(() => expect(rollBack).toHaveBeenCalledWith("project-a", "old1111aaaa"));
+  expect(saveConfig).toHaveBeenCalledWith(expect.anything(), "project-a");
 });
 
 test("anything but the exact phrase leaves production where it is", async () => {

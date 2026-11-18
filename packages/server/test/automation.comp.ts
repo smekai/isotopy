@@ -9,7 +9,16 @@ import type {
   ProjectAutomationConfig,
   ValidationCommand,
 } from "@isotopy/core";
-import { createTestApp, get, post, put, stageOf, waitForRunStatus } from "./support/harness.ts";
+import {
+  createTestApp,
+  get,
+  post,
+  put,
+  stageOf,
+  startOrchestration,
+  waitForOrchestration,
+  waitForRunStatus,
+} from "./support/harness.ts";
 import type { TestApp } from "./support/harness.ts";
 import { startHealthServer } from "./support/health-server.ts";
 import type { HealthServer } from "./support/health-server.ts";
@@ -243,11 +252,10 @@ test("a passing deploy with a check configured hands the QA Engineer the live co
     automationConfig({ production: deployingRef("new2222", { verification: { instructions: CHECKLIST } }) }),
   );
 
-  // Anticipate
+  // Anticipate — the check alone: it belongs to no initiative, so no Orchestrator reviews it.
   ctx.engine
     .anticipate({ as: "QA Engineer", prompt: /new2222[\s\S]*old1111[\s\S]*open \/account twice/ })
     .reports("Everything renders.\n\nVERDICT: PASS");
-  ctx.engine.anticipateRunReview();
 
   // Act
   const { body } = await post<DeploymentRecord>(ctx.app, "/automation/deploy/production", CONFIRMED);
@@ -256,6 +264,7 @@ test("a passing deploy with a check configured hands the QA Engineer the live co
   expect(body.verificationRunId).toBeDefined();
   const checked = await waitForRunStatus(ctx.app, body.verificationRunId ?? "", "completed");
   expect(stageOf(checked, "verify-production").verdict).toBe("PASS");
+  expect(checked.orchestrationId).toBeUndefined();
   const { body: production } = await get<ProductionStatus>(ctx.app, "/automation/production");
   expect(production.verification).toMatchObject({ runId: body.verificationRunId, verdict: "PASS" });
   ctx.engine.verify();
@@ -291,6 +300,86 @@ test("a failed deploy is not checked, because nothing new went live", async () =
   // Assert
   expect(body.verificationRunId).toBeUndefined();
   ctx.engine.verify();
+});
+
+test("a production check leaves an initiative that is waiting on its owner exactly as it was", async () => {
+  // Arrange — an initiative parked on its owner after its first turn failed, with no run active.
+  ctx.engine.anticipate({ as: "Orchestrator", persona: /# Role: Orchestrator/ }).fails("Claude Code exited with code 1");
+  const initiativeRun = await startOrchestration(ctx.app);
+  const parked = await waitForOrchestration(
+    ctx.app,
+    initiativeRun.orchestrationId,
+    ({ status }) => status === "awaiting_user",
+  );
+  await put(
+    ctx.app,
+    "/automation",
+    automationConfig({ production: deployingRef("new2222", { verification: { instructions: CHECKLIST } }) }),
+  );
+
+  // Anticipate — the check, and no Orchestrator review that could decide for the initiative.
+  ctx.engine.anticipate({ as: "QA Engineer" }).reports("VERDICT: PASS");
+
+  // Act
+  const { body } = await post<DeploymentRecord>(ctx.app, "/automation/deploy/production", CONFIRMED);
+
+  // Assert
+  await waitForRunStatus(ctx.app, body.verificationRunId ?? "", "completed");
+  const after = await waitForOrchestration(ctx.app, initiativeRun.orchestrationId, () => true);
+  expect(after).toMatchObject({ status: "awaiting_user", runIds: parked.runIds });
+  ctx.engine.verify();
+});
+
+test("a production check never runs unrestricted, even in a project that runs everything else unrestricted", async () => {
+  // Arrange — the project default is "skip", the unrestricted mode.
+  await put(
+    ctx.app,
+    "/automation",
+    automationConfig({ production: deployingRef("new2222", { verification: { instructions: CHECKLIST } }) }),
+  );
+
+  // Anticipate
+  ctx.engine.anticipate({ as: "QA Engineer", permissionMode: "acceptEdits" }).reports("VERDICT: PASS");
+
+  // Act
+  const { body } = await post<DeploymentRecord>(ctx.app, "/automation/deploy/production", CONFIRMED);
+
+  // Assert
+  await waitForRunStatus(ctx.app, body.verificationRunId ?? "", "completed");
+  ctx.engine.verify();
+});
+
+test("after a rollback and a new release, the rollback offered is the commit the rollback restored", async () => {
+  // Arrange — A, B, roll back to A (the command prints no marker), then C.
+  await deployedRefs(["aaa1111", "bbb2222"], { rollback: SILENT_ROLLBACK });
+  await post(ctx.app, "/automation/rollback/production", ROLLBACK_CONFIRMED);
+  await deployedRefs(["ccc3333"], { rollback: SILENT_ROLLBACK });
+
+  // Act
+  const { body } = await get<ProductionStatus>(ctx.app, "/automation/production");
+
+  // Assert
+  expect(body.rollbackRef).toBe("aaa1111");
+});
+
+test("a release that went live but failed its health check can be rolled back to the last healthy one", async () => {
+  // Arrange — B's command succeeds and reports B, then nothing answers its health URL.
+  await deployedRefs(["aaa1111"], { rollback: ECHO_ROLLBACK_REF });
+  const unhealthy = deployingRef("bbb2222", {
+    rollback: ECHO_ROLLBACK_REF,
+    healthUrl: "http://127.0.0.1:9/",
+    healthTimeoutMs: 300,
+    healthIntervalMs: 100,
+  });
+  await put(ctx.app, "/automation", automationConfig({ production: unhealthy }));
+  await post(ctx.app, "/automation/deploy/production", CONFIRMED);
+
+  // Act
+  const { body } = await get<ProductionStatus>(ctx.app, "/automation/production");
+
+  // Assert
+  expect(body.latest?.result).toMatchObject({ ref: "bbb2222", verdict: "fail" });
+  expect(body.rollbackRef).toBe("aaa1111");
 });
 
 test("a rollback without the literal confirmation is refused", async () => {
@@ -410,6 +499,12 @@ function printing(line: string): AutomationCommand {
 function deployingRef(ref: string, overrides: Partial<DeploymentAutomation> = {}): DeploymentAutomation {
   return deploymentTarget({ ...overrides, command: printing(`ISOTOPY_DEPLOY_REF=${ref}`) });
 }
+
+const SILENT_ROLLBACK: AutomationCommand = {
+  executable: process.execPath,
+  args: ["-e", "console.log('redeployed')"],
+  timeoutMs: 30_000,
+};
 
 const ECHO_ROLLBACK_REF: AutomationCommand = {
   executable: process.execPath,

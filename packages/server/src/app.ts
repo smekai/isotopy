@@ -81,7 +81,7 @@ export function createApp({
   app.route("/orchestrations", createOrchestrationRoutes(orchestrations, registry));
   app.route("/engines", createEngineRoutes(rosters));
   app.route("/settings", createSettingsRoutes(registry, settings));
-  const production = new ProductionReleases(automation, deployment, runs);
+  const production = new ProductionReleases(automation, deployment, runs, settings);
   app.route("/automation", createAutomationRoutes(registry, automation, production, product));
   app.route("/runs", createRunRoutes(runs, orchestrations, registry));
   app.route("/schedules", createScheduleRoutes(schedules, registry));

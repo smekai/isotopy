@@ -98,14 +98,28 @@ commit a rollback would return to, and the project's instructions. It only reads
 that a person can use the product. If another run is active, the check does not
 start and the deployment says why.
 
+The check stands outside initiatives: it belongs to none, and no Orchestrator
+reviews it, so it can never act on an initiative that happens to be waiting. It
+runs on the project's own engine and model, but always in accept-edits mode,
+never unrestricted, whatever the project's permission mode is. Where that engine
+has no accept-edits mode on this machine, the check does not start and the
+deployment says so. A browser tool the check needs is allowed through the
+harness's own project settings, not by widening its mode.
+
 ### Rollback
 
 Rollback redeploys an earlier commit; it never reverts one. With
 `production.rollback` set, `POST /automation/rollback/production` carrying the
 literal `ROLLBACK PRODUCTION` runs that command with `ISOTOPY_ROLLBACK_REF` set,
-then health-checks it like a deploy. The commit defaults to the one live before
-the latest release; after a rollback no further one is offered, so Isotopy never
-proposes returning to the release it just rolled back from. A named `ref`
+then health-checks it like a deploy. A command that prints no
+`ISOTOPY_DEPLOY_REF` is recorded as having put the requested commit live.
+
+What a command put live is judged by its exit code, not its health check: a
+release whose command succeeded but whose health check failed is live and
+unhealthy. The commit offered for a rollback is the newest *healthy* one before
+whatever is live now, and a rollback that succeeded counts as putting its commit
+live. After a rollback no further one is offered, so Isotopy never proposes
+returning to the release it just rolled back from. A named `ref`
 overrides the default. Setup shows the last deployment, its check and the
 **Roll back to …** button, which asks for the phrase typed out. Isotopy proposes;
 the owner confirms.
