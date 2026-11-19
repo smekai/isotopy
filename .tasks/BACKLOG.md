@@ -1,5 +1,35 @@
 # Backlog
 
+## TASK-230: A project that deploys on merge gets its production check and rollback offer without pressing Deploy
+**Priority:** P1 | **Tags:** server, ui, core
+**Updated:** 2026-11-18 22:13
+
+Context (2026-11-18): the owner decided ShareTravel releases by merging a PR in `refined/sharetravel`. The push to `main` runs `deploy.yml`, so there is no separate deploy step and no fork. Isotopy's production target command is now `node scripts/watch-production-deploy.mjs`, which only waits for main's deploy run and prints `ISOTOPY_DEPLOY_REF`. Today that record, health check, QA check (TASK-228) and rollback offer still happen only when someone presses "Deploy production…", which is now a misleading name.
+
+**Wanted:**
+- A production target can say it deploys on merge (for example `trigger: "merge"`). For such a target:
+  - after a release run of that project merges its PR, Isotopy runs the target's command itself, records the deployment, health-checks it, starts the production check and offers rollback, exactly as a confirmed deploy does;
+  - a merge Isotopy did not make (the owner merged on GitHub) can be picked up by "Record production deploy" in Setup, the renamed button. It needs no `DEPLOY PRODUCTION` phrase, because it changes nothing live.
+- Rollback stays behind `ROLLBACK PRODUCTION`.
+- Component tests: a merged release on a merge-triggered target records a deployment and starts the check; the same on a manual target does nothing.
+- `docs/project-automation.md` and a `decisions.md` entry: merge is the owner's approval for merge-triggered targets.
+
+Cross-platform: argv commands only, as today.
+
+---
+## TASK-229: An Orchestrator decision with a null optional field is read as the field left out, not rejected
+**Priority:** P2 | **Tags:** server, engine
+**Updated:** 2026-11-18 14:05
+
+Found on 2026-11-18 in ShareTravel initiative 336aec27. The Orchestrator's first turn planned correctly, but its `start_run` decision carried `"reviewContext": null`. `reviewContextGrantSchema.optional()` (`packages/core/src/orchestration.ts:83`) rejected it ("reviewContext: Invalid input: expected object, received null"), and the whole turn failed and parked on the owner. Models often write `null` for "none".
+
+**Wanted:**
+- At the decision boundary, `null` on an optional field of the Orchestrator's decision is treated as absent, in one place: preprocess the parsed fenced block, not per field. Isotopy's own types keep `field?: T`.
+- A component test: a decision with `reviewContext: null` starts the run.
+
+Cross-platform: server parsing only.
+
+---
 ## TASK-227: A release with red CI goes to the fix path even when its verdict line is missing
 **Priority:** P2 | **Tags:** server, engine
 **Updated:** 2026-11-10 18:43
